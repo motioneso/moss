@@ -11,7 +11,7 @@ A user installs **Trail Marker**, enters the URL of their Moss instance, signs i
 
 The app is a native SwiftUI/AppKit menu-bar utility for macOS 14+, supporting Apple silicon and Intel through one universal download. Its descriptor is **A Moss companion**; Moss displays **Trail Marker for Mac**.
 
-This release builds the connection foundation, not the activity feature. It has no screenshot capture, Accessibility content reading, activity classification, model calls, coaching, task access, chat access, files access, or observation uploads. The Python/Swift Jev pilot remains a separate experiment and must not be packaged into the app. It supplied feasibility evidence, not production authentication or privacy architecture.
+This release builds the connection foundation. Amended by the focus judgment spec (`2026-09-20-trail-marker-focus-judgment.md`): the first focus slice adds one observation, the frontmost app name and a shortened window title, read through Accessibility only while a Moss focus block is on, and judged on the server. It still has no screenshot capture, page or selected-text reading, coaching, task access, chat access or files access, and nothing it reads is stored on the server. The Python/Swift Jev pilot remains a separate experiment and must not be packaged into the app. It supplied feasibility evidence, not production authentication or privacy architecture.
 
 One macOS user's app process has one linked account on one instance. There is no account switcher or saved account collection; log out before changing either. An account can link multiple Macs, each with separate credentials and independent revocation. Different macOS users have separate local settings and Keychain items. Do not use hardware serial numbers as device identity.
 
@@ -109,14 +109,15 @@ All preferences are local to this Mac/macOS user unless explicitly identified as
 
 A name edit while disconnected is saved locally with clear “applies when connected” feedback; do not silently contact Moss. Device identity is an opaque installation identifier, not the display name. Relinking after logout gets a new authorization, even if the local installation identity or display name is retained.
 
-No model, API-key, screenshot interval, focus-goal, distraction-threshold, activity-history or coaching settings in this release. No placeholder feature toggles that imply working observation capabilities.
+No screenshot interval, focus-goal, distraction-threshold, activity-history or coaching settings. Amended by the focus judgment spec: the Mac now has a Focus pane, and it holds exactly one image-model endpoint and key (Keychain only). The reasoning model is chosen by an admin on the Moss server, never on the Mac. No placeholder feature toggles that imply capabilities that do not work.
 
 ## 6. Permission setup
 
 Ben explicitly requested permission setup at initial setup/launch, despite observation being deferred.
 
 - Explain Accessibility and Screen Recording, expose the corresponding native request/settings actions, and allow **Skip for Now**. Request each permission after its explanation, not by triggering capture or reading another app's content.
-- Required copy: **These permissions prepare future capabilities. Trail Marker is not observing your activity.**
+- Required copy, amended by the focus judgment spec: the statement of what is observed must always be true for the build the person is running. In a build with focus judgment it says that, while a focus block is on, Trail Marker reads the name of the app in front and a shortened window title and sends them to Moss to judge; it does not say Trail Marker is not observing.
+- The macOS notification permission is required for nudges, which the Mac posts itself.
 - Missing permissions do not block linking, Connected status or any v1 account/device action.
 - Preflight status on subsequent launches; do not repeatedly open system prompts after a skip/denial. Settings always offers the recovery action.
 - Use what the OS can actually report. Do not invent a distinction between “never requested” and “denied” where the native API exposes only granted/not granted; both have a useful settings route.
@@ -177,8 +178,8 @@ A bounded browser-approved device pairing flow must:
 4. Let only the initiating app redeem approval once, with proof of possession of its attempt secret/verifier. Neither a public pairing identifier nor browser approval URL alone may redeem a credential.
 5. Handle pending, approved, denied, cancelled, expired, already-redeemed and network-failed states explicitly. Bound polling/retries and rate-limit both creation and verification.
 6. Exchange credentials directly between app and instance, never through browser query strings, telemetry or logs. A browser callback, if used, carries no long-lived credential and must be bound to the initiating attempt; polling may instead complete linking without a custom URL handler.
-7. Store server-side credential verifiers rather than reusable raw credentials. Authorize only minimal identity, own-device metadata/heartbeat and own-device logout operations. Scope checks and account eligibility are enforced server-side on every call.
-8. Reject companion credentials at unrelated Moss endpoints, including task/chat/file access, other-device management and admin APIs. Browser sessions remain the authority for approving/revoking other devices.
+7. Store server-side credential verifiers rather than reusable raw credentials. Authorize only minimal identity, own-device metadata/heartbeat and own-device logout operations, and, amended by the focus judgment spec, three focus operations for the credential's own account: read the Moss focus block that is on now, submit an observation for judgment, and correct its own judgment. Scope checks and account eligibility are enforced server-side on every call.
+8. Reject companion credentials at every other Moss endpoint (the focus operations in item 7 are the only additions), including task/chat/file access, other-device management and admin APIs. Browser sessions remain the authority for approving/revoking other devices.
 9. Enforce bounded expiry and revocation server-side; return enough machine-readable reason information for correct UI recovery without leaking another user's device existence.
 
 Before the build starts, the implementation plan must select and document the concrete exchange (reuse a suitable maintained auth primitive if available), endpoint schemas, credential expiry/renewal policy and replay protection. Those mechanics were not chosen in the product interview; do not treat illustrative endpoint names or the pilot's API keys as an approved protocol. A general OAuth provider product is out of scope.
@@ -210,26 +211,26 @@ Apple references checked during the interview: [enrollment](https://developer.ap
 - Offline logout does not claim remote revocation. A lingering server row can be removed through Active sessions; it does not mean this Mac retained a credential.
 - Permission denial and login-item registration failure are recoverable settings issues, not reasons to discard a valid account connection.
 - Diagnostics are bounded and categorical. Never include passwords, cookies, bearer tokens, pairing secrets, authorization headers or raw server error bodies. Device names and instance URLs may themselves be sensitive; diagnostic export must be reviewed/redacted.
-- No screenshot bytes, Accessibility text, app/window titles, keyboard input or activity history are collected. Granting OS access does not change this.
+- No screenshot bytes, keyboard input or activity history are collected. Amended by the focus judgment spec: while a focus block is on, the app name and a shortened window title are read and sent to Moss for judgment. The server stores only the label, a reason of at most 140 characters and whether it nudged; it has no column for window text or block title. Granting OS access does not widen this.
 - Update/permission failures must not bypass authentication, reset settings, or silently fall back to an insecure origin.
 
 ## 12. Acceptance and verification
 
-| Area                   | Required evidence                                                                                                                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Install/identity       | Actual Mac build launches from Applications; Trail Marker naming and official mark are correct; no terminal/Python/provider keys required for end-user setup.                                     |
-| Pairing                | Real browser login/approval links the intended account and displays the named Mac in Active sessions; cancellation/denial/expiry leave no usable orphan credential.                               |
-| Restart                | Keychain login and device name persist; Start at login defaults off and works when enabled.                                                                                                       |
-| Disconnect             | Explicit Disconnect survives app/OS restart; mocked/instrumented transport proves no automatic requests; late replies cannot undo it.                                                             |
-| Recovery               | Enabled offline app reconnects after recovery; disabled app remains disabled; revoked/expired credential requires browser sign-in.                                                                |
-| Logout                 | Online revoke succeeds; offline local logout removes credential and explains remote uncertainty; another account/instance can then link.                                                          |
-| Device isolation       | Two Macs with the same display name remain separate. Revoke one without affecting the other; revoke-all-others includes companions and preserves current browser.                                 |
-| Restricted access      | Companion credential can use only intended identity/own-device operations; tasks/chat/files/admin and other-account operations fail. Approval replay and stolen public attempt identifier fail.   |
-| Permissions            | Grant/deny/skip and later recovery work on Mac; setup succeeds without grants; no content read/capture occurs in any state.                                                                       |
-| Settings/menu          | Every setting/action above works; five state labels are accurate; instance/account change requires logout.                                                                                        |
-| Accessibility          | Keyboard, VoiceOver, light/dark, increased contrast, reduced motion/transparency and larger text verified.                                                                                        |
-| Compatibility          | Valid remote HTTPS and literal local HTTP work; insecure remote URL, invalid certificate, redirect escape and unsupported protocol give useful errors.                                            |
-| Updates/public release | User-controlled signed update preserves settings/Disconnect; tampered/incompatible update is rejected; clean-machine notarized install and both CPU architectures verified before public release. |
+| Area                   | Required evidence                                                                                                                                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Install/identity       | Actual Mac build launches from Applications; Trail Marker naming and official mark are correct; no terminal/Python/provider keys required for end-user setup.                                             |
+| Pairing                | Real browser login/approval links the intended account and displays the named Mac in Active sessions; cancellation/denial/expiry leave no usable orphan credential.                                       |
+| Restart                | Keychain login and device name persist; Start at login defaults off and works when enabled.                                                                                                               |
+| Disconnect             | Explicit Disconnect survives app/OS restart; mocked/instrumented transport proves no automatic requests; late replies cannot undo it.                                                                     |
+| Recovery               | Enabled offline app reconnects after recovery; disabled app remains disabled; revoked/expired credential requires browser sign-in.                                                                        |
+| Logout                 | Online revoke succeeds; offline local logout removes credential and explains remote uncertainty; another account/instance can then link.                                                                  |
+| Device isolation       | Two Macs with the same display name remain separate. Revoke one without affecting the other; revoke-all-others includes companions and preserves current browser.                                         |
+| Restricted access      | Companion credential can use only intended identity/own-device and focus operations; tasks/chat/files/admin and other-account operations fail. Approval replay and stolen public attempt identifier fail. |
+| Permissions            | Grant/deny/skip and later recovery work on Mac; setup succeeds without grants; no content read/capture occurs in any state.                                                                               |
+| Settings/menu          | Every setting/action above works; five state labels are accurate; instance/account change requires logout.                                                                                                |
+| Accessibility          | Keyboard, VoiceOver, light/dark, increased contrast, reduced motion/transparency and larger text verified.                                                                                                |
+| Compatibility          | Valid remote HTTPS and literal local HTTP work; insecure remote URL, invalid certificate, redirect escape and unsupported protocol give useful errors.                                                    |
+| Updates/public release | User-controlled signed update preserves settings/Disconnect; tampered/incompatible update is rejected; clean-machine notarized install and both CPU architectures verified before public release.         |
 
 Tests must cover the actual auth boundary, not just UI labels or mocked token acceptance. Security tests must be observed failing when their protection is removed, with evidence recorded on the implementation PR. Use the repository's verify-gate skill for database-touching verification and required full checks. Live-path proof is executable assertions and bounded textual evidence through the actual UI/installed app, following repository standards; Linux tests cannot prove macOS behavior.
 
@@ -239,6 +240,6 @@ Before implementation: review this spec's proposed protocol/operational defaults
 
 The implementation PR must keep the app map truthful, include deployment changes for every newly required setting, and include the release note. No app-map entry should claim an unimplemented feature in this docs-only change.
 
-Not included: the Moss server desktop bundle; Windows/Linux clients; account switching inside one running app; a feature/plugin marketplace; tasks/chat/file integration; model routing; screen observation; historical activity; focus nudges; notification permission setup; background data queues; cross-Mac preference sync; or a general-purpose OAuth platform.
+Not included: the Moss server desktop bundle; Windows/Linux clients; account switching inside one running app; a feature/plugin marketplace; tasks/chat/file integration; screen capture and description (a later focus slice); historical activity; background data queues; cross-Mac preference sync; or a general-purpose OAuth platform.
 
 Success for this round is **an installed, authenticated, controllable Mac identity in Moss**, with local live proof. Public-distribution completion remains a separate gate until signing, notarization and update delivery are verified.

@@ -289,7 +289,8 @@ test("configures chat and email extraction models through settings", async ({ pa
 
   const emailBinding = page.getByLabel("Binding for Email extraction");
   await expect(emailBinding).toHaveValue("");
-  await expect(page.getByText("Needs configuration", { exact: true })).toBeVisible();
+  // Scoped to the row: Focus (#2570) is also unbound here and shows the same text.
+  await expect(emailBinding.locator("xpath=../..").getByText("Needs configuration")).toBeVisible();
 
   await emailBinding.selectOption("model:ai-model-auto");
   await expect(emailBinding).toHaveValue("model:ai-model-auto");

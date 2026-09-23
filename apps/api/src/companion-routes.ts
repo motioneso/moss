@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { CompanionAuthError, type CompanionContext, type MossAuthRuntime } from "@moss/auth";
+import type { DataContextRunner } from "@moss/db";
+import {
+  FOCUS_JUDGE_TIMEOUT_MS,
+  FocusError,
+  type FocusJudgmentService
+} from "@moss/module-registry";
 import {
   cancelPairAttemptRouteSchema,
   companionHeartbeatRouteSchema,
@@ -10,11 +16,16 @@ import {
   COMPANION_PROTOCOL_VERSION,
   createPairAttemptRouteSchema,
   decidePairAttemptRouteSchema,
+  focusContextRouteSchema,
+  focusCorrectRouteSchema,
+  focusJudgeRouteSchema,
   getPairAttemptRouteSchema,
   redeemPairAttemptRouteSchema,
   renameCompanionDeviceRouteSchema,
   type CompanionHeartbeatRequest,
   type CreatePairAttemptRequest,
+  type FocusCorrectRequest,
+  type FocusJudgeRequest,
   type RedeemPairAttemptRequest
 } from "@moss/shared";
 
@@ -58,12 +69,24 @@ function ipRateLimit(max: number) {
   };
 }
 
+/**
+ * Focus routes, keyed on the peer address like the rest (the credential is not yet resolved when
+ * the limiter runs, and a limiter keyed on it would give an attacker a fresh bucket per junk
+ * token). A Mac asks for context about once a minute and judges at most every few minutes; the
+ * limits leave room for several Macs behind one address and for a person pressing Judge now.
+ */
+const FOCUS_CONTEXT_RATE_MAX = 60;
+const FOCUS_JUDGE_RATE_MAX = 30;
+const FOCUS_CORRECT_RATE_MAX = 30;
+
 export interface CompanionRouteDeps {
   readonly authRuntime: MossAuthRuntime;
+  readonly dataContext: DataContextRunner;
+  readonly focus: FocusJudgmentService;
 }
 
 export function registerCompanionRoutes(server: FastifyInstance, deps: CompanionRouteDeps): void {
-  const { authRuntime } = deps;
+  const { authRuntime, dataContext, focus } = deps;
   const pairing = authRuntime.companionPairing;
   const devices = authRuntime.companionDevices;
 
@@ -246,6 +269,96 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
       return reply.code(204).send();
     }
   );
+
+  // ---- Focus judgment (#2570) -------------------------------------------------------------
+  // Platform routes, not module routes: a module route is gated by the module guard, which
+  // resolves the actor with the general resolver and so rejects the companion credential. The
+  // person and the Mac come from the credential only, never from the body, and the work runs on
+  // a connection scoped to that person, so the owner-only row policies decide what is visible.
+  // Nothing here logs a body field: window text must never reach a log.
+
+  function focusAccess(ctx: CompanionContext) {
+    return { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+  }
+
+  // Which block is on, and whether an admin has set up the judgment model. With nothing set up it
+  // answers quietly ("not ready", no block); it never errors, so an unconfigured server does not
+  // strand a linked Mac.
+  server.post(
+    "/api/companion/focus/context",
+    { schema: focusContextRouteSchema, config: ipRateLimit(FOCUS_CONTEXT_RATE_MAX) },
+    async (request, reply) => {
+      const ctx = await requireCompanion(request, reply);
+      if (!ctx) return reply;
+      const result = await dataContext.withDataContext(focusAccess(ctx), (scopedDb) =>
+        focus.currentContext(scopedDb, new Date())
+      );
+      return {
+        block: result.block
+          ? {
+              id: result.block.id,
+              title: result.block.title,
+              startsAt: result.block.startsAt.toISOString(),
+              endsAt: result.block.endsAt.toISOString()
+            }
+          : null,
+        judgmentReady: result.judgmentReady
+      };
+    }
+  );
+
+  server.post<{ Body: FocusJudgeRequest }>(
+    "/api/companion/focus/judge",
+    { schema: focusJudgeRouteSchema, config: ipRateLimit(FOCUS_JUDGE_RATE_MAX) },
+    async (request, reply) => {
+      const ctx = await requireCompanion(request, reply);
+      if (!ctx) return reply;
+
+      const observedAt = new Date(request.body.observedAt);
+      if (Number.isNaN(observedAt.getTime())) {
+        return reply.code(400).send({ error: "observedAt must be a date and time" });
+      }
+
+      try {
+        return await dataContext.withDataContext(focusAccess(ctx), (scopedDb) =>
+          focus.judge(
+            scopedDb,
+            {
+              ownerUserId: ctx.actorUserId,
+              deviceId: ctx.deviceId,
+              blockId: request.body.blockId,
+              appName: request.body.appName,
+              windowTitle: request.body.windowTitle,
+              description: request.body.description,
+              observedAt
+            },
+            new Date(),
+            AbortSignal.timeout(FOCUS_JUDGE_TIMEOUT_MS)
+          )
+        );
+      } catch (error) {
+        if (error instanceof FocusError) {
+          return reply.code(409).send({ error: focusMessageFor(error.code), code: error.code });
+        }
+        throw error;
+      }
+    }
+  );
+
+  server.post<{ Body: FocusCorrectRequest }>(
+    "/api/companion/focus/correct",
+    { schema: focusCorrectRouteSchema, config: ipRateLimit(FOCUS_CORRECT_RATE_MAX) },
+    async (request, reply) => {
+      const ctx = await requireCompanion(request, reply);
+      if (!ctx) return reply;
+      const changed = await dataContext.withDataContext(focusAccess(ctx), (scopedDb) =>
+        focus.recordCorrection(scopedDb, request.body.judgmentId, request.body.verdict)
+      );
+      // Absent and another person's row look the same on purpose.
+      if (!changed) return reply.code(404).send({ error: "That judgment was not found" });
+      return reply.code(204).send();
+    }
+  );
 }
 
 function sendAccessContextFailure(reply: FastifyReply, error: unknown): void {
@@ -259,6 +372,11 @@ function sendAccessContextFailure(reply: FastifyReply, error: unknown): void {
     return;
   }
   reply.code(401).send({ error: "Session is missing or expired" });
+}
+
+function focusMessageFor(code: string): string {
+  if (code === "focus_no_block") return "That block is not on right now";
+  return "Focus judgment is not set up on this Moss";
 }
 
 function messageFor(code: string): string {

@@ -62,6 +62,21 @@ import {
   type AiServiceKey
 } from "@moss/shared";
 
+/**
+ * The example shown in a provider's endpoint and key fields. Each kind shows its own: an example that
+ * names another company's address or key style sends the person hunting for the wrong thing.
+ */
+const CREDENTIAL_EXAMPLES: Readonly<
+  Record<AiProviderKind, { readonly baseUrl: string; readonly apiKey: string }>
+> = {
+  anthropic: { baseUrl: "https://api.anthropic.com", apiKey: "sk-ant-…" },
+  "openai-compatible": { baseUrl: "https://api.openai.com", apiKey: "sk-…" },
+  google: { baseUrl: "https://generativelanguage.googleapis.com", apiKey: "AIza…" },
+  ollama: { baseUrl: "http://localhost:11434", apiKey: "Any value" },
+  custom: { baseUrl: "https://your-endpoint.example.com", apiKey: "Your API key" },
+  "system-one": { baseUrl: "https://api.typesafe.ai", apiKey: "apikey_…" }
+};
+
 const PROVIDER_CATALOG: readonly {
   readonly label: string;
   readonly kind: AiProviderKind;
@@ -73,6 +88,7 @@ const PROVIDER_CATALOG: readonly {
   { label: "Mistral", kind: "openai-compatible", authMethod: "api_key" },
   { label: "Local (Ollama)", kind: "ollama", authMethod: "api_key" },
   { label: "OpenAI-compatible", kind: "openai-compatible", authMethod: "api_key" },
+  { label: "System One (TypeSafe)", kind: "system-one", authMethod: "api_key" },
   { label: "Custom", kind: "custom", authMethod: "api_key" }
 ];
 
@@ -84,6 +100,8 @@ const SERVICE_ROWS: readonly {
   name: string;
   desc: string;
   requireExplicitBinding?: boolean;
+  /** Offer specific models only: no Mode option that would borrow the default provider's model. */
+  modelOnly?: boolean;
 }[] = [
   {
     k: "chat",
@@ -159,7 +177,8 @@ function ProviderCard(props: {
               <Badge tone="amber" dot>
                 Default
               </Badge>
-            ) : (
+            ) : provider.providerKind === "system-one" ? null : (
+              // A System One provider only answers choice questions; it can never be the default.
               <Button variant="quiet" size="sm" onClick={props.onSetInstanceDefault}>
                 Set as default
               </Button>
@@ -276,7 +295,7 @@ function ProviderCard(props: {
                   className="jds-input"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.anthropic.com"
+                  placeholder={CREDENTIAL_EXAMPLES[provider.providerKind].baseUrl}
                   aria-label="Base URL"
                 />
               </Field>
@@ -286,7 +305,11 @@ function ProviderCard(props: {
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={provider.hasCredential ? "•••••••• (stored)" : "sk-…"}
+                  placeholder={
+                    provider.hasCredential
+                      ? "•••••••• (stored)"
+                      : CREDENTIAL_EXAMPLES[provider.providerKind].apiKey
+                  }
                   aria-label="API key"
                 />
                 <Button
@@ -412,6 +435,8 @@ function ServiceRow(props: {
   });
 
   // Active models that can actually serve this service (a "model" binding must be capability-valid).
+  // System One models serve only the Trail Marker judgment, through the Sorting model row, as the
+  // server enforces.
   const capableModels = props.models.filter((model) => {
     const provider = props.providers.find((candidate) => candidate.id === model.providerConfigId);
     const providerReady =
@@ -421,6 +446,7 @@ function ServiceRow(props: {
       model.status === "active" &&
       model.providerStatus === "active" &&
       providerReady &&
+      provider.providerKind !== "system-one" &&
       model.capabilities.includes(props.service.capability)
     );
   });
@@ -471,16 +497,18 @@ function ServiceRow(props: {
         >
           {props.service.requireExplicitBinding && !binding ? (
             <option value="" disabled>
-              Choose a model or mode
+              {props.service.modelOnly ? "Not set: choose a model" : "Choose a model or mode"}
             </option>
           ) : null}
-          <optgroup label="Mode (uses the default provider)">
-            {MODEL_TIERS.map((tier) => (
-              <option key={tier} value={`mode:${tier}`}>
-                {TIERS[tier].label}
-              </option>
-            ))}
-          </optgroup>
+          {props.service.modelOnly ? null : (
+            <optgroup label="Mode (uses the default provider)">
+              {MODEL_TIERS.map((tier) => (
+                <option key={tier} value={`mode:${tier}`}>
+                  {TIERS[tier].label}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {capableModels.length ? (
             <optgroup label="Specific model">
               {capableModels.map((model) => (
@@ -782,7 +810,7 @@ export function AiProvidersPane() {
                     className="jds-input"
                     value={pickBaseUrl}
                     onChange={(e) => setPickBaseUrl(e.target.value)}
-                    placeholder="https://api.anthropic.com"
+                    placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].baseUrl}
                     aria-label="Base URL"
                   />
                 </Field>
@@ -792,7 +820,7 @@ export function AiProvidersPane() {
                     type="password"
                     value={pickApiKey}
                     onChange={(e) => setPickApiKey(e.target.value)}
-                    placeholder="sk-…"
+                    placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].apiKey}
                     aria-label="API key"
                   />
                 </Field>

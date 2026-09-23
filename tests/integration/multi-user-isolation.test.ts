@@ -527,7 +527,7 @@ describe("multi-user isolation", () => {
     // Seed an Alice-owned AI provider config (cross-RLS bootstrap write). Schema:
     // packages/ai/sql/0013_ai_module.sql — app.ai_provider_configs(id [no default], owner_user_id,
     // provider_kind [enum app.ai_provider_kind: 'openai-compatible'|'anthropic'|'google'|'ollama'|
-    // 'custom'], display_name [non-blank], status, encrypted_credential jsonb [must be an object]).
+    // 'custom'|'system-one'], display_name [non-blank], status, encrypted_credential jsonb [must be an object]).
     // owner_user_id = alice.id is load-bearing.
     const aliceConfigId = await seedAsBootstrap(
       `INSERT INTO app.ai_provider_configs (id, owner_user_id, provider_kind, display_name, status, encrypted_credential)

@@ -959,6 +959,9 @@ export class AiRepository {
     // PUT /api/ai/providers/{voiceId}/default would flag the voice row and chat "mode" bindings would
     // resolve INSIDE the voice provider. Returning undefined maps to a 404 at the route.
     if (target.purpose === "voice") return undefined;
+    // #2586: a System One provider answers only named choice questions, so chat and mode bindings
+    // resolved inside it would fail. Refused the same way as voice.
+    if (target.provider_kind === "system-one") return undefined;
 
     await scopedDb.db
       .updateTable("app.ai_provider_configs")
@@ -1352,6 +1355,33 @@ export class AiRepository {
   }
 
   /**
+   * #2570: the Trail Marker focus judge is the admin's sorting model (Ben, 2026-09-22). Unlike
+   * `resolveSortingModel` this accepts a System One model, which answers the judgment as choice
+   * questions, and ignores any pin: the judge is never defaulted, so with no sorting model bound
+   * nothing is judged.
+   */
+  async resolveFocusJudgeModel(scopedDb: DataContextDb): Promise<AiConfiguredModelSafeRow | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.instance_settings")
+      .select("value")
+      .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
+      .executeTakeFirst();
+    const binding = readSortingBinding(row?.value);
+    if (!binding) return null;
+
+    const model = await this.safeModelQuery(scopedDb)
+      .where("models.id", "=", binding.modelId)
+      .where("models.status", "=", "active")
+      .where("providers.status", "=", "active")
+      .where("providers.purpose", "=", "assistant")
+      .where("providers.provider_kind", "in", [...SORTING_PROVIDER_KINDS, "system-one"])
+      .where(sql<boolean>`${"json"} = any(${sql.ref("models.capabilities")})`)
+      .executeTakeFirst();
+    return model ?? null;
+  }
+
+  /**
    * #2594: the sorting model for a job that opted in, or null when today's path must run alone.
    * Null when the job is strict, an admin pin is set, the job has its own module binding, no
    * sorting model is bound, or the bound model no longer qualifies. A module.worker binding is the
@@ -1420,6 +1450,7 @@ export class AiRepository {
         // #874 CRIT-1: this helper only ever searches assistant providers (pinned provider / instance
         // default). Locking it to assistant is defense-in-depth against a voice id ever leaking in.
         .where("providers.purpose", "=", "assistant")
+        .where("providers.provider_kind", "!=", "system-one")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
         // #982/#869 D1: active CLI statics must serve json without outranking the #367 sentinel
@@ -1442,6 +1473,7 @@ export class AiRepository {
         .where("models.status", "=", "active")
         .where("providers.status", "=", "active")
         .where("providers.purpose", "=", "assistant")
+        .where("providers.provider_kind", "!=", "system-one")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         // #982/#869 D1: preserve sentinel-first chat behavior in the single-model fallback too.
         .clearOrderBy()
@@ -1490,6 +1522,9 @@ export class AiRepository {
     }
   }
 
+  // A System One model answers named choice questions, not prompts, so only an explicit model
+  // binding may select it. Every ladder below excludes it, or an added System One provider could win
+  // automatic `json` routing and fail every other structured feature (#2586).
   private async selectAutomaticModelForCapability(
     scopedDb: DataContextDb,
     capability: AiModelCapability,
@@ -1507,6 +1542,7 @@ export class AiRepository {
         // must never be auto-picked for summarization/json/etc. Transcription never reaches here (its
         // dedicated branch returns first), so this guard also asserts that invariant.
         .where("providers.purpose", "=", "assistant")
+        .where("providers.provider_kind", "!=", "system-one")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
         // safeModelQuery already orders by created_at desc; clear that before applying the 0214
@@ -1526,6 +1562,7 @@ export class AiRepository {
       .where("models.status", "=", "active")
       .where("providers.status", "=", "active")
       .where("providers.purpose", "=", "assistant")
+      .where("providers.provider_kind", "!=", "system-one")
       .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
       .clearOrderBy()
       .orderBy(sql`models.released_at desc nulls last`)

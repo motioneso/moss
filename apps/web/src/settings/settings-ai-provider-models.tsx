@@ -34,6 +34,8 @@ export function describeRefreshOutcome(result: RefreshAiProviderModelsResponse):
       return "This provider cannot list its models yet";
     case "unavailable":
       return "The sign-in helper is not running";
+    case "rejected_key":
+      return "The provider rejected the API key";
     case "error":
       return "Could not reach the provider";
   }

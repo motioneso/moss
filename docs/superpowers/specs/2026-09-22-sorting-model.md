@@ -175,7 +175,11 @@ Model for each job
 2. **Pin versus sorting model.** Recommended: the admin pin wins.
 3. **`module.worker` versus sorting model.** Recommended: the sorting model wins; an exact
    per-job binding still beats it.
-4. **Focus judgment.** Recommended: never moved onto the sorting path by this spec.
+4. **Focus judgment.** Decided by Ben, 2026-09-22: the Trail Marker focus judge **is** the
+   sorting model, with no row of its own. The sorting binding therefore also accepts a System One
+   model; the judge runs on it through choice questions, while sorting jobs skip a System One model
+   and use today's path until slice 2. With nothing bound, focus judges nothing (it is never
+   defaulted).
 
 ## 9. Not in this spec
 

@@ -8,7 +8,8 @@ import {
   SORTING_SERVICE_KEY,
   deleteAiServiceBindingRouteSchema,
   isModuleServiceKey,
-  isSortingProviderKind,
+  isPlatformServiceKey,
+  isSortingBindableProviderKind,
   listAiServiceBindingsRouteSchema,
   lookupAiCapabilityRouteRouteSchema,
   putAiServiceBindingRouteSchema,
@@ -113,16 +114,26 @@ export function registerAiServiceRoutes(
             await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
 
             // #915 D6: module-specific keys name installed modules. module.worker is generic.
+            // #2570: a small list of platform-owned namespaces (the Trail Marker focus judgment)
+            // counts as installed. Nothing else about this check changes.
+            const platformOwned = isModuleServiceKey(service) && isPlatformServiceKey(service);
             if (isModuleServiceKey(service) && service !== MODULE_WORKER_SERVICE_KEY) {
               const installedIds = dependencies.listInstalledModuleIds?.() ?? [];
               const namespace = service.slice("module.".length);
               if (
+                !platformOwned &&
                 !installedIds.some(
                   (moduleId) => namespace === moduleId || namespace.startsWith(`${moduleId}.`)
                 )
               ) {
                 throw new HttpError(400, "service does not reference an installed module");
               }
+            }
+
+            // A platform-owned service is never left to a default: it must be bound to one
+            // specific model, not to a mode that borrows the default provider's model.
+            if (platformOwned && binding.kind !== "model") {
+              throw new HttpError(400, "this service must be bound to a specific model");
             }
 
             if (service === SORTING_SERVICE_KEY && binding.kind !== "model") {
@@ -141,7 +152,13 @@ export function registerAiServiceRoutes(
                   model.status === "active" &&
                   model.provider_status === "active" &&
                   model.capabilities.includes(requiredCapability) &&
-                  (service !== SORTING_SERVICE_KEY || isSortingProviderKind(model.provider_kind))
+                  (service !== SORTING_SERVICE_KEY ||
+                    isSortingBindableProviderKind(model.provider_kind)) &&
+                  // System One answers only choice questions, which only the Trail Marker judgment
+                  // asks (through the sorting model); any other service would fail on every call.
+                  (platformOwned ||
+                    service === SORTING_SERVICE_KEY ||
+                    model.provider_kind !== "system-one")
               );
               if (!valid) {
                 throw new HttpError(400, "modelId must reference an active compatible model");

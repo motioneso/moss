@@ -286,7 +286,13 @@ export type ConnectorProviderType = "calendar" | "email" | "google" | "imap";
 export type ConnectorProviderStatus = "available" | "disabled";
 export type ConnectorAccountStatus = "active" | "error" | "revoked";
 export type ConnectorSyncStatus = "success" | "partial" | "failed";
-export type AiProviderKind = "openai-compatible" | "anthropic" | "google" | "ollama" | "custom";
+export type AiProviderKind =
+  | "openai-compatible"
+  | "anthropic"
+  | "google"
+  | "ollama"
+  | "custom"
+  | "system-one";
 export type AiProviderStatus = "active" | "error" | "disabled" | "revoked";
 export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";
@@ -536,6 +542,23 @@ export interface CalendarEventsTable {
   external_metadata: JsonColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
+}
+
+/**
+ * One Trail Marker focus judgment (#2570). Deliberately has no column for a window title, an app
+ * name, an image description or the calendar block's title: what the person was looking at is never
+ * stored. `reason` is the model's short category-level note, the one free-text field kept.
+ */
+export interface FocusJudgmentsTable {
+  id: string;
+  owner_user_id: string;
+  device_id: string | null;
+  block_ref: string;
+  label: string;
+  reason: string;
+  nudged: ColumnType<boolean, boolean | undefined, boolean>;
+  correction: ColumnType<string | null, string | null | undefined, string | null>;
+  created_at: TimestampColumn;
 }
 
 export interface EmailMessagesTable {
@@ -1608,6 +1631,7 @@ export interface MossDatabase {
   "app.connector_accounts": ConnectorAccountsTable;
   "app.connector_oauth_pending": ConnectorOauthPendingTable;
   "app.calendar_events": CalendarEventsTable;
+  "app.focus_judgments": FocusJudgmentsTable;
   "app.day_plans": DayPlansTable;
   "app.day_plan_blocks": DayPlanBlocksTable;
   "app.day_plan_operations": DayPlanOperationsTable;
@@ -1693,6 +1717,7 @@ export type PushSubscription = Selectable<PushSubscriptionsTable>;
 export type PushSigningKeyRow = Selectable<PushSigningKeyTable>;
 export type ConnectorProvider = Selectable<ConnectorDefinitionsTable>;
 export type CalendarEvent = Selectable<CalendarEventsTable>;
+export type FocusJudgment = Selectable<FocusJudgmentsTable>;
 export type DayPlan = Selectable<DayPlansTable>;
 export type DayPlanBlock = Selectable<DayPlanBlocksTable>;
 export type DayPlanOperation = Selectable<DayPlanOperationsTable>;

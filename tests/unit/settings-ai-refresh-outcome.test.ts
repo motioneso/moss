@@ -23,5 +23,8 @@ describe("describeRefreshOutcome", () => {
     expect(describeRefreshOutcome({ models: [], reason: "error", message: "HTTP 503" })).toBe(
       "Could not reach the provider"
     );
+    expect(
+      describeRefreshOutcome({ models: [], reason: "rejected_key", message: "HTTP 401" })
+    ).toBe("The provider rejected the API key");
   });
 });

@@ -44,6 +44,7 @@ const PLATFORM_PACKAGES = new Set([
   "@moss/auth",
   "@moss/datasets", // dataset connector SDK runtime host (host pinning, cache, TTL) — infra, not a product domain
   "@moss/db",
+  "@moss/focus-judgment", // Trail Marker focus judgment (#2570): platform code by the focus spec's D9, not a module
   "@moss/host-fetch", // shared server-only outbound network policy/transport
   "@moss/integrations", // external MCP/OpenAPI connection runtime consumed by the composition root — infra like @moss/datasets
   "@moss/jobs",

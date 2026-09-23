@@ -3,7 +3,7 @@ import { GitCommitHorizontal, MinusCircle } from "lucide-react";
 
 import {
   SORTING_SERVICE_KEY,
-  isSortingProviderKind,
+  isSortingBindableProviderKind,
   type AiConfiguredModelDto,
   type AiProviderConfigDto,
   type AiServiceBinding
@@ -19,15 +19,20 @@ export const SORTING_DISCLOSURE =
   "Story details and your saved story preferences go to this model first, and to your main " +
   "model if it does not answer. Each may charge for the request.";
 
-// Models the sorting path can run: the model and its provider are active, it has the json
-// capability, and its provider kind is one generateStructured executes. The save route applies
-// this same rule.
+export const TRAIL_MARKER_DISCLOSURE = "Trail Marker's app and window titles also go here.";
+
+export const SYSTEM_ONE_SORTING_NOTE =
+  "Trail Marker's app and window titles go to TypeSafe. Sorting keeps using your main model.";
+
+// Models the sorting model may be: the model and its provider are active, it has the json
+// capability, and its provider kind is one generateStructured executes, or System One, which only
+// judges Trail Marker focus. The save route applies this same rule.
 function eligibleSortingModels(models: readonly AiConfiguredModelDto[]): AiConfiguredModelDto[] {
   return models.filter(
     (model) =>
       model.status === "active" &&
       model.providerStatus === "active" &&
-      isSortingProviderKind(model.providerKind) &&
+      isSortingBindableProviderKind(model.providerKind) &&
       model.capabilities.includes("json")
   );
 }
@@ -70,10 +75,15 @@ export function SortingModelRow(props: {
       <div className="rt__main">
         <div className="rt__name">Sorting model</div>
         <div className="rt__desc">
-          A small, fast model for sorting, filtering and picking out details. Leave empty to use
-          your main model.
+          A small, fast model for sorting and filtering. It also judges Trail Marker focus.
         </div>
-        {boundId ? <div className="rt__desc">{SORTING_DISCLOSURE}</div> : null}
+        {bound?.providerKind === "system-one" ? (
+          <div className="rt__desc">{SYSTEM_ONE_SORTING_NOTE}</div>
+        ) : boundId ? (
+          <div className="rt__desc">
+            {SORTING_DISCLOSURE} {TRAIL_MARKER_DISCLOSURE}
+          </div>
+        ) : null}
       </div>
       <div className="rt__pick">
         <Select

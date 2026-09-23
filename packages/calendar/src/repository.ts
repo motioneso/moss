@@ -24,6 +24,8 @@ export interface ListVisibleCalendarEventsOptions {
   readonly startsBefore?: Date;
   /** Events still running at this instant or later — use instead of startsAfter to catch events that started earlier but overlap it. */
   readonly endsAfter?: Date;
+  /** Only the actor's own events. The row policy also lets through events shared with them. */
+  readonly ownedByActor?: boolean;
   readonly limit?: number;
 }
 
@@ -40,6 +42,9 @@ export class CalendarRepository {
       .$if(opts?.startsAfter != null, (qb) => qb.where("starts_at", ">=", opts!.startsAfter!))
       .$if(opts?.startsBefore != null, (qb) => qb.where("starts_at", "<", opts!.startsBefore!))
       .$if(opts?.endsAfter != null, (qb) => qb.where("ends_at", ">", opts!.endsAfter!))
+      .$if(opts?.ownedByActor === true, (qb) =>
+        qb.where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      )
       .orderBy("starts_at", "asc")
       .orderBy("id");
 

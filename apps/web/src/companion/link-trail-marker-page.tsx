@@ -25,6 +25,17 @@ function pickHeading(
 }
 
 /**
+ * What a newly linked Mac may do. Shown on the approval screen so the person agrees to exactly
+ * this, and kept in one place so the copy cannot drift from the screen's test.
+ */
+export const APPROVAL_CAPABILITIES: readonly string[] = [
+  "check in and rename itself",
+  "read which focus block you have on right now",
+  "report which app is in front while a focus block is on",
+  "receive a decision about whether to nudge you"
+];
+
+/**
  * The screen a Mac sends someone to when it wants to link (#2560).
  *
  * The Mac never sees this page and never learns who is signed in here. It holds a secret
@@ -99,13 +110,18 @@ export function LinkTrailMarkerPage() {
                 Approve it only if you started this on that Mac.
               </span>
             </p>
-            <p style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
               <ShieldCheck size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
-              <span>
-                A linked Mac can check in and rename itself. It cannot read your data, and it never
-                gets your password or your browser session.
-              </span>
-            </p>
+              <div>
+                <span>A linked Mac will be able to:</span>
+                <ul style={{ margin: "var(--space-1) 0 0", paddingLeft: "var(--space-4)" }}>
+                  {APPROVAL_CAPABILITIES.map((capability) => (
+                    <li key={capability}>{capability}</li>
+                  ))}
+                </ul>
+                <span>It never gets your password or your browser session.</span>
+              </div>
+            </div>
             <div style={{ display: "flex", gap: "var(--space-2)" }}>
               <Button
                 variant="primary"

@@ -1,0 +1,11 @@
+-- Migration 0241 — System One (TypeSafe) as a provider kind.
+--
+-- WHY: TypeSafe's System One API is not OpenAI-compatible. It serves only `GET /v1/models` and
+-- `POST /v1/systemone` (fixed named questions), so it cannot ride `custom`/`openai-compatible`,
+-- which post chat-completions requests. A dedicated `system-one` value lets model discovery and
+-- the Test button reach the right route and gives the focus judgment's bespoke path a provider
+-- kind to dispatch on. Postgres forbids using a newly added enum value in the same transaction,
+-- so nothing here references 'system-one' in a statement. ADD VALUE IF NOT EXISTS is idempotent
+-- and no data statement runs, which keeps it safe under FORCE RLS + the NOBYPASSRLS migration role
+-- (same precedent as 0130/0212).
+ALTER TYPE app.ai_provider_kind ADD VALUE IF NOT EXISTS 'system-one';

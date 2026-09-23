@@ -189,6 +189,23 @@ export async function resolveTimezone(
 }
 
 /**
+ * Whether the actor is inside their own quiet hours right now. A plain yes/no for callers that must
+ * DROP something in quiet hours rather than defer it (the Trail Marker focus nudge, #2570: a nudge
+ * delivered after quiet hours end would arrive after the moment it was about). `create()` above
+ * defers instead and is deliberately not used for that.
+ */
+export async function isActorInQuietHours(
+  scopedDb: DataContextDb,
+  port: QuietHoursPort,
+  now: Date
+): Promise<boolean> {
+  const settings = parseQuietHoursSettings(await port.getSettings(scopedDb));
+  if (!settings?.enabled) return false;
+  const tz = await resolveTimezone(port, scopedDb, settings.timezone);
+  return isInQuietHours(now, settings, tz);
+}
+
+/**
  * Task 2b (#1283): same rule as worker-rpc-host.ts's `notifyHref` — a same-origin
  * path only, never an absolute URL, a protocol-relative URL, or a scheme. This is
  * the SECOND of the two layers the docblock on `CreateNotificationInput.href`
