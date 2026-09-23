@@ -6,7 +6,7 @@
     <title>Backtrack mockups</title>
     <!--
       Spec mockups for docs/superpowers/specs/2026-09-23-trail-marker-screen-history.md §9.
-      Static; open directly in a browser. For discussion with Ben, not yet agreed.
+      Static; open directly in a browser. Agreed with Ben, 2026-09-23.
 
       Screens A-C are native Trail Marker (SwiftUI). Colours come from the Trail Marker design
       guide's tokens.json (forest, bone, gold, charcoal) and system semantics; system controls are
@@ -257,7 +257,7 @@
         color: #333;
       }
       .sidebar .on {
-        background: #0a84ff;
+        background: var(--tm-forest);
         color: #fff;
       }
       .pane {
@@ -300,7 +300,7 @@
         width: 32px;
         height: 19px;
         border-radius: 10px;
-        background: #0a84ff;
+        background: var(--tm-forest);
         position: relative;
         flex: none;
       }
@@ -637,7 +637,7 @@
       }
       .card__btn {
         margin-top: 16px;
-        background: #0a84ff;
+        background: var(--tm-forest);
         color: #fff;
         text-align: center;
         border-radius: 7px;
@@ -723,7 +723,7 @@
         box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
       }
       .mswitch--on {
-        background: #0a84ff;
+        background: var(--tm-forest);
       }
       .mswitch--on::after {
         left: auto;
@@ -736,7 +736,7 @@
       <header class="doc">
         <h1>Backtrack — screen mockups</h1>
         <p>
-          For discussion, not yet agreed. Backtrack is Trail Marker's text-only day memory: it reads
+          Agreed with Ben, 2026-09-23. Backtrack is Trail Marker's text-only day memory: it reads
           the words in the window in front of you, keeps them in your Moss for 30 days, then folds
           each day into a note. Spec:
           <code>2026-09-23-trail-marker-screen-history.md</code> (#2638).

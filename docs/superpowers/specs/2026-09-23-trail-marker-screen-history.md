@@ -1,8 +1,7 @@
 # Backtrack: Trail Marker screen history
 
-Status: **Draft for Ben's review, 2026-09-23** (#2638). Not approved. The decisions in §2 are Ben's; every
-other choice is a proposal. The mockups in §9 are for discussion and are not yet agreed, so no build
-starts until they are.
+Status: **Approved by Ben, 2026-09-23** (#2638), including the mockups in §9. Two small defaults
+that Ben can still change are marked as such in §12.
 
 Builds on `2026-09-20-trail-marker-mac-companion.md` (the linked Mac) and sits beside
 `2026-09-20-trail-marker-focus-judgment.md` (focus). It is a separate feature with its own consent.
@@ -157,12 +156,18 @@ enough to be worth what it costs in privacy and battery?
   anyway, and the failure is shown in Settings. The person is never left with a silently growing
   store.
 
-## 9. Screens (for discussion, not yet agreed)
+## 9. Screens (agreed with Ben, 2026-09-23)
 
 Mockups: [`mockups/backtrack.html`](mockups/backtrack.html), a static file you can open directly.
 Native screens follow the Trail Marker design guide (§11, settings window). Moss web screens use
 `@moss/ui` and `jds-*` primitives only; the file names the components, and there are no new raw
 colours.
+
+**Colour (Ben, 2026-09-23):** Trail Marker's controls use the Moss brand forest
+(`TrailMarkerTokens.Color.forest`, `#173E2B`), not the system blue. That covers the card's primary
+button, the switches and the Settings sidebar selection. The build sets forest as the app's accent
+colour once, instead of tinting each control, so every existing button that is blue today, such as
+the card's Pause, turns forest too.
 
 - **A. Menu bar:** today's card with **Pause All** / **Resume All**, then Focus and Backtrack rows
   with switches, drawn in three states: both on, Focus off while Backtrack records, and Pause All.
@@ -220,6 +225,12 @@ Each spec gets a dated amendment line pointing here in the PR that approves this
    "screen history" means the mechanism.
 5. **Messages:** reading other people's messages to the person is allowed; the consent sheet says
    so, and any app can be excluded.
+
+Defaults chosen when the spec was approved (Ben can change either):
+
+6. **Moss switch (§9D):** one switch pauses Backtrack on every linked Mac. Turning it on for a Mac
+   still happens on that Mac, with its consent.
+7. **Notes folder:** daily notes go in `Backtrack/` inside the attached notes folder.
 
 ## 13. Slices (for the plan, once approved)
 
