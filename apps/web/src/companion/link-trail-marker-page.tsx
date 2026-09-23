@@ -72,7 +72,7 @@ export function LinkTrailMarkerPage() {
   return (
     <section className="page-stack" aria-label={`Link ${COMPANION_PRODUCT_NAME}`}>
       <Card padding="lg">
-        <h1>{heading}</h1>
+        <h1 className="jds-section-title">{heading}</h1>
 
         {code.length === 0 ? (
           <p>
@@ -122,7 +122,7 @@ export function LinkTrailMarkerPage() {
                 <span>It never gets your password or your browser session.</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
               <Button
                 variant="primary"
                 onClick={() => decide.mutate("approve")}
