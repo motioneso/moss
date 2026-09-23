@@ -41,12 +41,21 @@ describe("second-pass shortcut (bulk mail only)", () => {
     const advert: MaybeOwedGateContext = {
       ...BULK_UNKNOWN,
       subject: "UP TO 60% OFF BEST SELLERS",
-      body: "Shop the sale now."
+      body: "Shop the sale now. New styles added every Friday."
     };
     expect(resolveMaybeOwedGate("noise", advert)).toBe("nothing");
     expect(resolveMaybeOwedGate("fyi", advert)).toBe("maybe_owed");
     expect(resolveMaybeOwedGate("unknown", advert)).toBe("maybe_owed");
     expect(resolveMaybeOwedGate(undefined, advert)).toBe("maybe_owed");
+  });
+
+  it("never takes the shortcut when the body is empty, whatever the verdict", () => {
+    const subjectOnly: MaybeOwedGateContext = {
+      ...BULK_UNKNOWN,
+      subject: "UP TO 60% OFF BEST SELLERS",
+      body: ""
+    };
+    expect(resolveMaybeOwedGate("noise", subjectOnly)).toBe("maybe_owed");
   });
 
   it("keeps a bulk security alert on the closer look even when the first pass called it noise", () => {
@@ -88,7 +97,7 @@ describe("second-pass shortcut through the single-message extraction", () => {
     const r = await extractEmailSignals(
       parsed({
         subject: "UP TO 60% OFF BEST SELLERS",
-        body: "Shop the sale now. Unsubscribe any time.",
+        body: "Shop the sale now. New styles added every Friday. Unsubscribe any time.",
         hasListUnsubscribe: true
       }),
       answer({ gate: "maybe_owed", category: "noise", confidence: 0.7, reason: "A sale." })
@@ -159,7 +168,14 @@ const MUST_REACH_THE_CLOSER_LOOK: ReadonlyArray<readonly [string, string]> = [
   ["wasn&rsquo;t you", ""],
   ["wasn&#39;t you", ""],
   ["didn\u02bct sign in", ""],
-  ["New app password created", "if this wasn't you"]
+  ["New app password created", "if this wasn't you"],
+  ["New passkey added", ""],
+  ["Email forwarding enabled", ""],
+  ["Someone added a new email address", ""],
+  ["Your PIN was changed", ""],
+  ["Alerte de sécurité", ""],
+  ["Neue Anmeldung", ""],
+  ["Alerte de sécurité", "Nouvelle connexion détectée"]
 ];
 
 describe("security and sign-in alerts always reach the closer look", () => {

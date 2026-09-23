@@ -60,7 +60,7 @@ describe("email gate", () => {
     const r = await extractEmailSignals(
       parsed({
         subject: "UP TO 60% OFF BEST SELLERS",
-        body: "Shop the sale now. Unsubscribe any time.",
+        body: "Shop the sale now. New styles added every Friday. Unsubscribe any time.",
         hasListUnsubscribe: true
       }),
       answer({ gate: "maybe_owed", category: "noise", confidence: 0.7, reason: "A sale." })

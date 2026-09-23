@@ -27,13 +27,16 @@ const APOSTROPHE_FOLD = new RegExp(`[${String.fromCharCode(0x2018, 0x2019, 0x02b
 
 /**
  * Decode the apostrophe forms mail bodies arrive in before the veto reads them: the named and
- * numeric HTML entities, then the curly and modifier apostrophes some senders use.
+ * numeric HTML entities, then the curly and modifier apostrophes some senders use. Accents are
+ * folded last, so "sécurite" reads as "securite" and matches the plain veto words.
  */
 function normalizeForSecurityVeto(text: string): string {
   return text
     .replace(/&#8217;|&#8216;|&rsquo;|&lsquo;/gi, "'")
     .replace(/&#39;|&#x27;|&apos;/gi, "'")
-    .replace(APOSTROPHE_FOLD, "'");
+    .replace(APOSTROPHE_FOLD, "'")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 /**
@@ -55,7 +58,16 @@ const SECURITY_VETO_PATTERNS: readonly RegExp[] = [
   /unauthori[sz]ed/i,
   /was this you/i,
   /wasn't you|was not you/i,
-  /didn't sign in|did not sign in/i
+  /didn't sign in|did not sign in/i,
+  /passkey/i,
+  /\bpin\b/i,
+  /forward/i,
+  /authenticat/i,
+  /someone/i,
+  /locked|suspend|compromis|breach/i,
+  /access/i,
+  /email address|phone number/i,
+  /connexion|anmeld|sicherheit|seguridad|sesion/i
 ];
 
 /**
@@ -83,6 +95,12 @@ function looksLikeSecurityOrSignInAlert(subject: string, body: string): boolean 
  * mail from a known sender keeps its closer look too, where `maybe_owed` plus fyi is the
  * expected unsure answer the prompt asks for.
  */
+/**
+ * A shortcut needs a body to judge. Subject-only mail keeps the closer look: that is exactly
+ * the case the word list cannot judge, and a real advert always has a body.
+ */
+const MIN_BODY_CHARS_FOR_SHORTCUT = 40;
+
 export function resolveMaybeOwedGate(
   category: string | undefined,
   context: MaybeOwedGateContext
@@ -91,6 +109,7 @@ export function resolveMaybeOwedGate(
   if (looksLikeSecurityOrSignInAlert(context.subject ?? "", context.body ?? "")) {
     return "maybe_owed";
   }
+  if ((context.body ?? "").trim().length < MIN_BODY_CHARS_FOR_SHORTCUT) return "maybe_owed";
   if (context.bulk && !context.knownSender && category === "noise") return "nothing";
   return "maybe_owed";
 }
