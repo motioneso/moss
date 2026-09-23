@@ -40,7 +40,7 @@ final class MenuBarController: NSObject {
         keepToolTipInSync(with: focus)
 
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(
+        let hosting = NSHostingController(
             rootView: StatusCardView(
                 connection: connection,
                 focus: focus,
@@ -48,6 +48,11 @@ final class MenuBarController: NSObject {
                 dismiss: { [weak self] in self?.popover.performClose(nil) }
             )
         )
+        // The popover follows the card's size as it changes, still hanging from the icon. Without
+        // this the card was placed at its first measured height and, when it grew (focus state,
+        // goal line), its window grew upward under the menu bar.
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
     }
 
     /// Hovering the icon shows the current goal without opening the card.
