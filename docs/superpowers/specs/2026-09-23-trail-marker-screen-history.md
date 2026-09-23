@@ -1,4 +1,4 @@
-# Trail Marker screen history
+# Backtrack: Trail Marker screen history
 
 Status: **Draft for Ben's review, 2026-09-23** (#2638). Not approved. The decisions in §2 are Ben's; every
 other choice is a proposal. The mockups in §9 are for discussion and are not yet agreed, so no build
@@ -13,7 +13,7 @@ amended.
 
 When the person turns it on, Trail Marker reads the text on their screen through the day (the
 message they read, the page they had open, the doc in the meeting) and keeps it as their private,
-searchable **screen history** in Moss. Later they can ask Moss "what was that site I saw in the
+searchable screen history in Moss, called **Backtrack** (Ben, 2026-09-23; "day memory" is its plain description). Later they can ask Moss "what was that site I saw in the
 meeting this morning?" and Moss answers from that history, citing the app, the page and the time.
 
 Whatever the person views, Trail Marker reads, unless the app is on their Never watch list. The
@@ -51,7 +51,7 @@ enough to be worth what it costs in privacy and battery?
   never turns screen history on, and the reverse is also true.
 - It needs Screen Recording (already requested for focus vision). It works with or without Focus.
 - **Always visible.** While screen history is recording, the menu-bar icon shows a small dot, and
-  the menu's status line says "Recording screen history".
+  the menu shows "Backtrack is recording".
 - **The one Pause** in the menu (Ben, 2026-09-23) stops screen history as well; nothing is read
   while paused. A screen lock or sleep also stops it.
 - The person can delete from Moss (§9c): the last hour, today, any day, or everything. Deletion
@@ -95,14 +95,14 @@ enough to be worth what it costs in privacy and battery?
   capped at 24 hours or 20 MB, and the oldest entries are dropped first. It is wiped on log out,
   revoke, or when screen history is turned off. This is the only thing the Mac ever stores, and it
   exists only so an offline hour isn't lost.
-- **Companion route.** A new companion-only platform route, `POST /api/companion/screen-history`.
+- **Companion route.** A new companion-only platform route, `POST /api/companion/backtrack`.
   It follows the focus routes' pattern: `requireCompanion`, then the owner is taken from the
   credential and never from the body. The schema lives in `packages/shared/src/companion-api.ts`
   with hard caps (for example 200 segments per batch and 8 KB of text per segment). It is
   IP-rate-limited like the focus routes. Nothing in the route logs a body field. A companion
   credential still reaches nothing else.
-- **Module.** A new server module, `screen-history`, owns the data:
-  - `app.screen_history_segments`, owner-only with the RLS pattern ENABLE and FORCE plus per-verb
+- **Module.** A new server module, `backtrack`, owns the data:
+  - `app.backtrack_segments`, owner-only with the RLS pattern ENABLE and FORCE plus per-verb
     policies on `app.current_actor_user_id()`, runtime-role grants only, and no `BYPASSRLS`
     anywhere. Columns: device, start and end time, app name, bundle id, window title, address, text,
     text hash, and a generated `tsvector`. Postgres compresses the text out-of-line (TOAST). The
@@ -112,13 +112,13 @@ enough to be worth what it costs in privacy and battery?
     does not write memory's table directly. The embedder is the existing local one.
   - The module declares `dataLifecycle` deletion and export sections, so account deletion and the
     user export include screen history. A cascade test proves it.
-- **Jobs carry IDs only.** Ingest enqueues `screen-history.index` with the actor and segment IDs.
+- **Jobs carry IDs only.** Ingest enqueues `backtrack.index` with the actor and segment IDs.
   The worker reads the text under the actor's data context. No text, title or address ever goes in a
   job payload or a log line.
 
 ## 7. Asking Moss
 
-- A new assistant tool, `screenHistory.search`, takes a question plus an optional time range
+- A new assistant tool, `backtrack.search`, takes a question plus an optional time range
   ("this morning", "during my 10:00 meeting"). It combines full-text and vector search over the
   person's own segments and returns short snippets with the app, title, address and time. Chat
   cites them.
@@ -140,7 +140,7 @@ enough to be worth what it costs in privacy and battery?
   embeddings for that day are deleted only after the note is written successfully.
 - **Where the note goes:**
   - With an attached notes folder (`notes-source-path`), it is written through `VaultContext`
-    (`withVaultContextAt`) as `Screen history/<YYYY-MM-DD>.md`. It carries the same ownership
+    (`withVaultContextAt`) as `Backtrack/<YYYY-MM-DD>.md`. It carries the same ownership
     marker the daily chat archive uses, so it never overwrites the person's own file. Then
     `notes.sync` re-indexes it. Unlike `writeDailyChatArchive`, this uses `VaultContext` and not raw
     `fs`.
@@ -153,64 +153,24 @@ enough to be worth what it costs in privacy and battery?
 
 ## 9. Screens (for discussion, not yet agreed)
 
-Native screens follow the Trail Marker design guide (§11 settings window). Moss web screens use
-`@moss/ui` and `jds-*` primitives only.
+Mockups: [`mockups/backtrack.html`](mockups/backtrack.html), a static file you can open directly.
+Native screens follow the Trail Marker design guide (§11, settings window). Moss web screens use
+`@moss/ui` and `jds-*` primitives only; the file names the components, and there are no new raw
+colours.
 
-**9a. Trail Marker Settings, new "Screen history" tab**
-
-```
-┌ Screen history ───────────────────────────────────────────────┐
-│ [ ] Remember what's on my screen                               │
-│     Trail Marker reads the text in the window you're looking   │
-│     at and keeps it in your Moss for 30 days, so you can ask   │
-│     about it later. No pictures are kept.                      │
-│                                                                │
-│ Status   ● Recording · last sent 2 min ago                     │
-│ Never watch   Uses the same list as Focus  [Edit in Focus…]    │
-│                                                                │
-│ [Open screen history in Moss…]                                 │
-└────────────────────────────────────────────────────────────────┘
-```
-
-**9b. One-time consent sheet (shown when the box is ticked)**
-
-```
-  Remember what's on your screen?
-
-  • Reads the words in the window in front, about every 10 seconds
-    while it changes. Never pictures, sound or typing.
-  • Passwords, card numbers and keys are removed on this Mac first.
-  • Kept in your Moss for 30 days, then turned into a daily note.
-  • Apps on your Never watch list and private windows are skipped.
-  • Only you can see it. Delete any of it from Moss at any time.
-
-                                  [Not now]   [Turn on]
-```
-
-**9c. Moss web, Settings → Screen history**
-
-```
-Screen history                                            On · 1 Mac
-─────────────────────────────────────────────────────────────────────
-Kept for 30 days, then summarized into your notes folder
-("Screen history/…"). Used only when you ask about something you saw.
-
-Storage   38 MB · 27 days
-Delete    [Last hour]  [Today]  [Choose a day…]  [Everything…]
-
-Summaries  Last written Sep 22 · [Open folder]
-```
-
-**9d. Chat answer**
-
-```
-You: what was that site I saw in the meeting this morning?
-
-Moss: During "Design sync" (10:00–10:30) you had
-      figma.com/file/… "Onboarding v3" open, and briefly
-      tailwindcss.com/docs/container-queries.
-      ▸ From your screen history · Chrome · 10:12, 10:21
-```
+- **A. Menu bar:** a gold dot on the Trail Marker icon and a "Backtrack is recording" line while it
+  is on. Both disappear while paused, and with Backtrack off the menu is unchanged.
+- **B. Trail Marker Settings → Backtrack:** a new sidebar tab. It holds the on switch, a status
+  line with last-sent time, the Never watch list (shared with Focus, with a link to edit it there),
+  and "Open in Moss…".
+- **C. One-time consent sheet:** says what is read (including other people's messages), what is
+  removed, where it is kept and for how long, and what is skipped.
+- **D. Moss → Settings → Backtrack:** on/off across all Macs, days and size kept, where the daily
+  notes go, and Delete (last hour, today, choose a day, everything). With no Trail Marker linked it
+  shows an empty state that points to Trail Marker.
+- **E. Delete everything dialog:** daily notes already written to the folder are kept unless the
+  person ticks the box.
+- **F. Chat answer:** cites the meeting, page and time, with a Backtrack source chip.
 
 ## 10. How we know it works (live-path gate)
 
@@ -249,8 +209,8 @@ Each spec gets a dated amendment line pointing here in the PR that approves this
 2. **Email addresses:** kept in screen history; still stripped from focus-judgment text (§5).
 3. **Briefings:** not in the first version; screen history stays ask-only (§7). Follow-up #2640 so
    it isn't forgotten.
-4. **Name:** working name **Day memory**. A product name is still to be chosen; this spec says
-   "screen history" for the mechanism until it is.
+4. **Name:** **Backtrack**, with "day memory" as the plain description under it. In this spec,
+   "screen history" means the mechanism.
 5. **Messages:** reading other people's messages to the person is allowed; the consent sheet says
    so, and any app can be excluded.
 
