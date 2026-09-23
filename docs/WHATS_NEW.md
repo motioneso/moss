@@ -39,6 +39,10 @@ feature that is not present in the image you are running.
 
 - **Trail Marker approval page styling.** The page where you approve a Mac for Trail Marker now uses Moss's usual heading style. [PR #2632](https://github.com/motioneso/moss/pull/2632)
 
+#### Added
+
+- **Choose apps Trail Marker never watches.** You can now pick apps, like your banking app, that Trail Marker never looks at, even when it watches your whole screen. [PR #2634](https://github.com/motioneso/moss/pull/2634)
+
 ### 2026-09-22
 
 #### Fixed
