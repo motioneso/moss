@@ -365,18 +365,38 @@ Order of work, each chain:
   deadline.
 - **Dedupe versus threshold:** the deduper turns lines A B C followed by B C D into D. The machine
   emits for a 3-line change and not for a 1-line change of 10 characters.
-- **Nothing leaves the Mac (round 2 B9).** The guarantee is structural, and the tests check the
-  structure:
-  - Backtrack sources live in `TrailMarker/Backtrack/`.
-  - A source check fails the build if any file there imports `Network` or `WebKit`, or references
-    `URLSession`, `NSURLConnection`, `CompanionClient`, `FileManager`, `FileHandle`, `UserDefaults`
-    (other than `PreferencesStore`'s three keys), `write(to:` or `Data(contentsOf:`.
-  - `BacktrackRuntime`'s only outputs are its injected `BacktrackSink`, which in Phase 1 is the
-    in-memory Debug ring, plus `isRecording`.
-  - Tests: the source check itself, observed failing with a deliberately added `URLSession` call
-    and with a `FileManager` write. An assembled-runtime test runs with a spy sink and asserts
-    segments reach only the sink. This is scoped to Backtrack data; Focus stays network-capable as
-    today.
+- **One way out, and only clean data goes through it (Ben, 2026-09-23; replaces round 2 B9's
+  "nothing leaves" check).** Backtrack exists to send text to Moss, so the property that lasts is
+  not "no network". It is: **every byte of Backtrack data leaves through one boundary,
+  `BacktrackSink`, and only a sanitised, policy-allowed segment reaches it, never while stopped.**
+  - `protocol BacktrackSink { func accept(_ segment: BacktrackSegment) }` is the only output of
+    `BacktrackRuntime` besides `isRecording`. In Phase 1 the sink is the in-memory Debug ring. In
+    Phase 2b it becomes `BacktrackUploader`, the one file allowed to talk to `CompanionClient`, and
+    the buffer. **The check and the tests below carry over unchanged**; only the sink's
+    implementation changes.
+  - **Structural check.** Backtrack sources live in `TrailMarker/Backtrack/`. A source check fails
+    the build if any file there, other than the named sink implementations, imports `Network` or
+    `WebKit`, or references `URLSession`, `NSURLConnection`, `CompanionClient`, `FileManager`,
+    `FileHandle`, `UserDefaults` (other than `PreferencesStore`'s keys), `write(to:` or
+    `Data(contentsOf:`. Observe it failing with a deliberately added `URLSession` call and with a
+    `FileManager` write in a non-sink file.
+  - **What crosses the boundary (spy sink, assembled runtime).** Drive the real `BacktrackRuntime`
+    with fixture captures and a spy sink, and assert:
+    - every accepted segment has passed the sanitiser: fixture secrets appear only masked, in text,
+      title and address;
+    - no segment is accepted for a never-watched app, a private window, or a window with an
+      unlocatable secure field;
+    - nothing is accepted while the menu switch is off, Pause All is on, the screen is locked, the
+      Mac is asleep, consent is below the version the sink requires, or after log out;
+    - a segment that was in flight when a stop fired is not accepted.
+
+    Observe each assertion failing with its guard removed. This is scoped to Backtrack data; Focus
+    stays network-capable as today.
+
+  - **Where it goes (Phase 2b addition).** The uploader sends only to the linked instance's origin,
+    with the companion credential, and it adds nothing. A transport spy asserts that the request
+    body equals the accepted segments. That is observed failing if the uploader adds a field.
+
 - **Release contains no Backtrack:** every file in `TrailMarker/Backtrack/` is wrapped in
   `#if DEBUG` at file level, and a source check enforces that. The Release build succeeds, and
   `strings` on the Release binary finds none of the Backtrack UI strings ("Remember what's on my
@@ -468,8 +488,8 @@ change.
     2 is storage in Moss.
   - Upload requires version 2, so a Debug opt-in never authorises sending. Everyone sees the
     version-2 sheet before anything is sent.
-  - The Phase 1 source checks are relaxed only for the one upload file, which the Phase 2 plan
-    names.
+  - The sink check from §4.5 is unchanged. `BacktrackUploader` is simply added to its named sink
+    implementations, and the spy-sink tests keep running against the uploader.
 - **Web e2e:** Phases 2, 3 and 4 each carry a Playwright test on the dev instance:
   - Phase 2: Settings → Backtrack shows storage, and "Delete today" removes today's rows.
   - Phase 3: a question about a seeded segment's page is answered with the Backtrack source chip,
@@ -528,7 +548,7 @@ Phase 2 gets its detailed plan only after Ben passes this gate.
 - Round 2: REJECT. It rated 5 of the round-1 findings resolved and 8 partial; 1 was still open (#6,
   app map). It raised 9 new findings. All of them are folded into this revision 3 without a third
   round (§9).
-- Whether to run round 3 is Ben's call.
+- Ben accepted two rounds (2026-09-23); no round 3.
 
 ## 9. Rulings ledger
 
@@ -547,7 +567,7 @@ of #8.
 | 8   | Stale baseline and citations; log out doesn't clear                                      | **Partly stale:** `focusPaused` _is_ deleted on current main (`PreferencesStore.swift:13`), and MenuModel lines differ post-#2635. **Valid:** `clearAll()` has no caller → #2643, §3.3. Citations refreshed. |
 | 9   | Budget contradicts immediate switch recognition; no clock; thumbnail outside the machine | **Valid** → §4.1 timestamps in events and a `thumbnailChecked` event; §4.2 one-in-flight, 3 s switch floor; §4.5 rapid-switch test.                                                                          |
 | 10  | Consent copy promises unavailable storage; retention deferred past storage               | **Valid** → Phase 1 is Debug-only with truthful copy; Phases 2 to 4 ship dark behind one flag, turned on with Phase 4; 37-day backstop purge from Phase 2.                                                   |
-| 11  | "Nothing leaves" test doesn't test it                                                    | **Valid** → §4.5 assembled-runtime test with a failing `URLProtocol`, a file-marker scan, and a Release symbol check; each observed failing.                                                                 |
+| 11  | "Nothing leaves" test doesn't test it                                                    | **Valid**, and superseded by Ben's point (2026-09-23) that the data does leave, to Moss → §4.5 tests the one exit (`BacktrackSink`) and what crosses it, and carries unchanged into Phase 2b.                |
 | 12  | Per-phase e2e and verification incomplete; wrong grep path; CPU command unbounded        | **Valid** → XCUITest target (§3.5, §4.5); commands from the repo root with exits (§4.6); bounded `top -l 480`.                                                                                               |
 | 13  | DDL size is characters, not bytes; no time ordering; hash unspecified                    | **Valid** → `octet_length`, `CHECK (ended_at >= started_at)`, SHA-256 with a 32-byte check, idempotent unique key; module SQL directory named.                                                               |
 | 14  | Read-back isn't diff acceptance                                                          | **Valid as a rule gap** → §5 records a deliberate exception, because the approved design is automatic, and replaces it with a grounding validator plus a byte-for-byte read-back.                            |
