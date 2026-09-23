@@ -1,10 +1,44 @@
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import UserNotifications
 
 enum PermissionState: Equatable {
     case granted
     case notGranted
+}
+
+/// Notifications have a third answer the other two permissions lack: macOS only lets an app ask
+/// once, so "never asked" (we can still ask) and "refused" (only System Settings can change it)
+/// need different actions.
+enum NotificationPermissionState: Equatable {
+    case notAsked
+    case allowed
+    case denied
+}
+
+protocol NotificationsOSAdaptor {
+    /// Reports the current answer. Never prompts.
+    func status() async -> NotificationPermissionState
+    /// Asks. macOS shows the prompt only while the answer is still `notAsked`; after that this just
+    /// returns the standing answer.
+    func request() async -> NotificationPermissionState
+}
+
+struct SystemNotificationsAdaptor: NotificationsOSAdaptor {
+    func status() async -> NotificationPermissionState {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .notDetermined: return .notAsked
+        case .denied: return .denied
+        default: return .allowed
+        }
+    }
+
+    func request() async -> NotificationPermissionState {
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        return await status()
+    }
 }
 
 /// Talks to the two system permission APIs. Kept behind a protocol so tests can assert
@@ -33,11 +67,17 @@ struct SystemPermissionsAdaptor: PermissionsOSAdaptor {
 final class PermissionsService: ObservableObject {
     @Published private(set) var accessibility: PermissionState = .notGranted
     @Published private(set) var screenRecording: PermissionState = .notGranted
+    @Published private(set) var notifications: NotificationPermissionState = .notAsked
 
     private let adaptor: PermissionsOSAdaptor
+    private let notificationsAdaptor: NotificationsOSAdaptor
 
-    init(adaptor: PermissionsOSAdaptor = SystemPermissionsAdaptor()) {
+    init(
+        adaptor: PermissionsOSAdaptor = SystemPermissionsAdaptor(),
+        notificationsAdaptor: NotificationsOSAdaptor = SystemNotificationsAdaptor()
+    ) {
         self.adaptor = adaptor
+        self.notificationsAdaptor = notificationsAdaptor
     }
 
     /// Safe to call on every launch and whenever Settings appears: never prompts.
@@ -52,5 +92,14 @@ final class PermissionsService: ObservableObject {
 
     func requestScreenRecording() {
         screenRecording = adaptor.screenRecordingGranted(prompting: true) ? .granted : .notGranted
+    }
+
+    /// Safe whenever a screen appears or the app comes back to the front: never prompts.
+    func refreshNotifications() async {
+        notifications = await notificationsAdaptor.status()
+    }
+
+    func requestNotifications() async {
+        notifications = await notificationsAdaptor.request()
     }
 }

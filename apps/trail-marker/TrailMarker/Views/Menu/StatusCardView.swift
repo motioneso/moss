@@ -5,11 +5,21 @@ import SwiftUI
 /// Content and order come from `MenuModel`; this only draws them.
 struct StatusCardView: View {
     @ObservedObject var connection: ConnectionRuntime
+    @ObservedObject var focus: FocusRuntime
     let perform: (MenuItemDescriptor.Role) -> Void
     let dismiss: () -> Void
 
+    private var focusInfo: FocusMenuInfo {
+        FocusMenuInfo(state: focus.state, goalLine: focus.goalLine, hasLastJudgment: focus.lastJudgment != nil)
+    }
+
     private var items: [MenuItemDescriptor] {
-        MenuModel.items(state: connection.state, identity: connection.identity)
+        MenuModel.items(state: connection.state, identity: connection.identity, focus: focusInfo)
+    }
+
+    /// The Focus state line (goal, "No block right now", "Paused", ...), when Focus is on.
+    private var focusLine: String? {
+        MenuModel.card(state: connection.state, identity: connection.identity, focus: focusInfo).focusLine
     }
 
     var body: some View {
@@ -64,6 +74,12 @@ struct StatusCardView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let focusLine {
+                    Text(focusLine)
+                        .font(.callout.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
             }
         }
         .accessibilityElement(children: .combine)
@@ -71,7 +87,7 @@ struct StatusCardView: View {
 
     /// Everything after the primary action, in the guide's order, minus what the header shows.
     private var rows: [MenuItemDescriptor] {
-        items.filter { $0.kind == .text && ![.status, .instanceInfo, .primaryAction].contains($0.role) }
+        items.filter { $0.kind == .text && ![.status, .focusStatus, .instanceInfo, .primaryAction].contains($0.role) }
     }
 
     private func run(_ role: MenuItemDescriptor.Role) {
