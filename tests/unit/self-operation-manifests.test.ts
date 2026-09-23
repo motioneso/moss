@@ -325,7 +325,7 @@ describe("Calendar automatic planning switches and denial help (R2.3-T06B)", () 
     const remediationRef = denied && "remediationRef" in denied ? denied.remediationRef : undefined;
     const remediation = (status?.remediations ?? []).find((item) => item.id === remediationRef);
     expect(remediation, "expected the denial remediation in the same feature").toBeDefined();
-    expect(remediation?.path).toBe("/settings/modules/calendar");
+    expect(remediation?.path).toBe("/settings?section=modules&module=calendar");
     expect(remediation?.description?.trim().length).toBeLessThanOrEqual(240);
   });
 });

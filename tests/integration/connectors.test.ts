@@ -202,8 +202,8 @@ describe("Connectors encrypted foundation", () => {
       "sql/0215_connector_sync_previous_run.sql"
     ]);
     expect(manifest?.settings?.map((surface) => surface.path)).toEqual([
-      "/settings/connectors",
-      "/settings/admin/connectors"
+      "/settings?section=connected",
+      "/settings?section=oversight"
     ]);
     expect(registration?.queueDefinitions).toEqual([
       ...GOOGLE_SYNC_QUEUE_DEFINITIONS,

@@ -8,6 +8,7 @@ import type { EmailRepository } from "@moss/email";
 import type { PreferencesRepository } from "@moss/structured-state";
 
 import type { GoogleCalendarEvent } from "./google-api-client.js";
+import { isRetryableGoogleError } from "./google-api-client.js";
 import {
   EmailExtractNeedsConfigurationError,
   EmailExtractRetryableError,
@@ -31,6 +32,13 @@ export const GOOGLE_EMAIL_CHUNK_SIZE = 8;
 export const GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE = 500;
 export const GOOGLE_EMAIL_FETCH_CONCURRENCY = 8;
 export const GOOGLE_CALENDAR_CHUNK_SIZE = 100;
+/**
+ * A transient Google failure (rate limit / 5xx) is retried this many times in total before the
+ * sync step gives up; the delay grows a little after each try. A genuine permission refusal is
+ * never retried.
+ */
+export const GOOGLE_READ_RETRY_ATTEMPTS = 3;
+export const DEFAULT_GOOGLE_RETRY_DELAY_MS = 250;
 
 const CALENDAR_WINDOW_PAST_MS = 7 * 24 * 60 * 60 * 1000;
 const CALENDAR_WINDOW_FUTURE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -99,27 +107,70 @@ export async function withSavepoint<T>(
   }
 }
 
-async function withTokenRetry<T>(
+export async function withTokenRetry<T>(
   scopedDb: DataContextDb,
   deps: GoogleSyncDeps,
   holder: TokenHolder,
   op: (token: string) => Promise<T>
 ): Promise<T> {
-  const attemptedToken = holder.token;
-  try {
-    return await op(attemptedToken);
-  } catch (error) {
-    if ((error as { statusCode?: number }).statusCode !== 401) throw error;
-    if (holder.token === attemptedToken) {
-      holder.refreshing ??= deps.getFreshAccessToken(scopedDb, { force: true });
-      try {
-        holder.token = await holder.refreshing;
-      } finally {
-        holder.refreshing = undefined;
+  const retryDelayMs = deps.googleRetryDelayMs ?? DEFAULT_GOOGLE_RETRY_DELAY_MS;
+  let attempt = 0;
+  let refreshed = false;
+  for (;;) {
+    const attemptedToken = holder.token;
+    try {
+      return await op(attemptedToken);
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 401 && !refreshed) {
+        refreshed = true;
+        if (holder.token === attemptedToken) {
+          holder.refreshing ??= deps.getFreshAccessToken(scopedDb, { force: true });
+          try {
+            holder.token = await holder.refreshing;
+          } finally {
+            holder.refreshing = undefined;
+          }
+        }
+        // Loop rather than return: the retried call goes through the same transient handling,
+        // and a second 401 with the refreshed token falls through to the throw below.
+        continue;
       }
+      // A rate limit or a Google server hiccup is transient, not a refusal: back off and try
+      // the same call again rather than failing the whole sync step. A genuine permission
+      // error is not retried and keeps its named operation for the log. Jitter spreads the
+      // retries of the parallel message fetches so they do not all return at the same instant.
+      if (isRetryableGoogleError(error) && attempt + 1 < GOOGLE_READ_RETRY_ATTEMPTS) {
+        attempt += 1;
+        const backoff = retryDelayMs * attempt;
+        const jitter = Math.floor(Math.random() * retryDelayMs);
+        await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
+        continue;
+      }
+      throw error;
     }
-    return op(holder.token);
   }
+}
+
+/**
+ * Bounded, non-secret fields that name a refused Google call: which operation, its status and
+ * Google's own reason code. Never the response body or the request's content. Shared by every
+ * failure log in this file so the operation is always present when there is one (#2300).
+ */
+function googleFailureFields(error: unknown): {
+  name: string;
+  status: number | null;
+  reason: string | null;
+  operation: string | null;
+} {
+  const e = error as
+    | { name?: string; statusCode?: number; reason?: string; operation?: string }
+    | undefined;
+  return {
+    name: e?.name ?? "Error",
+    status: e?.statusCode ?? null,
+    reason: e?.reason ?? null,
+    operation: e?.operation ?? null
+  };
 }
 
 function mapEventInstants(
@@ -489,7 +540,7 @@ export async function runGoogleEmailPhase(
             context.progress.errors.push("email-message-error");
           }
           context.logger.warn(
-            { stage: "email-message", name: "ProviderReadError", status: null },
+            { stage: "email-message", ...googleFailureFields(result.reason) },
             "google-sync email message failed"
           );
         }
@@ -502,11 +553,7 @@ export async function runGoogleEmailPhase(
       progress: context.progress,
       onFailure: (error) => {
         context.logger.warn(
-          {
-            stage: "email-message",
-            name: (error as Error).name,
-            status: (error as { statusCode?: number }).statusCode ?? null
-          },
+          { stage: "email-message", ...googleFailureFields(error) },
           "google-sync email message failed"
         );
       }
@@ -554,11 +601,7 @@ export async function runGoogleEmailPhase(
         progress: context.progress,
         onFailure: (error) => {
           context.logger.warn(
-            {
-              stage: "email-message",
-              name: (error as Error).name,
-              status: (error as { statusCode?: number }).statusCode ?? null
-            },
+            { stage: "email-message", ...googleFailureFields(error) },
             "google-sync email message failed"
           );
         },
@@ -610,12 +653,7 @@ export async function runGoogleEmailPhase(
     const errorLabel =
       error instanceof EmailExtractNeedsConfigurationError ? "email-needs-config" : "email-error";
     const isNeedsConfig = error instanceof EmailExtractNeedsConfigurationError;
-    const logData = {
-      stage: "email",
-      name: (error as Error).name,
-      status: (error as { statusCode?: number }).statusCode ?? null,
-      reason: (error as { reason?: string }).reason ?? null
-    };
+    const logData = { stage: "email", ...googleFailureFields(error) };
     if (isNeedsConfig) {
       context.logger.info(
         logData,
