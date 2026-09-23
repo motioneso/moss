@@ -42,6 +42,10 @@ feature that is not present in the image you are running.
 
 - **Marketing mail sorted straight away.** Marketing mail from senders you do not know is now left out sooner, without the extra review. [PR #2600](https://github.com/motioneso/moss/pull/2600)
 
+#### Added
+
+- **Sorting model.** Pick a small, fast model to sort and filter your news and sports stories. If it does not answer, Moss tries your main model instead. [PR #2623](https://github.com/motioneso/moss/pull/2623)
+
 ### 2026-09-20
 
 #### Added
