@@ -185,51 +185,66 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertEqual(machine.state, .watching(blockId: blockId, title: "Study AI", endsAt: ServerTime.parse("2026-12-01T11:00:00.000Z")!))
     }
 
-    func testAnAppChangeWithinThirtySecondsOfTheLastSendIsNotSentButLaterOneIs() {
+    private func armedForBoth() -> FocusMachine {
         let allowBoth = ObservationPolicy(allowedBundleIds: ["com.apple.Safari", "com.apple.mail"])
         var machine = FocusMachine(policy: allowBoth)
         _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
         _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
         _ = machine.handle(.appChanged(safari), now: at(0))
         _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
-        _ = machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(0)) // sends at 0
-
-        XCTAssertFalse(sends(machine.handle(.appChanged(mail), now: at(29))))
-        XCTAssertTrue(sends(machine.handle(.appChanged(safari), now: at(31))))
+        _ = machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(0)) // sends Safari at 0
+        return machine
     }
 
-    func testAChangeInsideTheSpacingIsJudgedWhenTheSpacingEndsNotAtTheNextSample() {
-        let allowBoth = ObservationPolicy(allowedBundleIds: ["com.apple.Safari", "com.apple.mail"])
-        var machine = FocusMachine(policy: allowBoth)
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
-        _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
-        _ = machine.handle(.appChanged(safari), now: at(0))
-        _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
-        _ = machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(0)) // sends at 0
+    private func dwell(_ effects: [FocusEffect]) -> Int? {
+        for effect in effects {
+            if case .scheduleDwell(let after, _, let change) = effect, after == FocusMachine.dwell { return change }
+        }
+        return nil
+    }
 
-        XCTAssertEqual(
-            machine.handle(.appChanged(mail), now: at(6)),
-            [.scheduleDeferred(after: 24, generation: machine.generation)]
-        )
-        // More changes meanwhile never start a second timer.
-        XCTAssertEqual(machine.handle(.appChanged(safari), now: at(10)), [])
-        XCTAssertEqual(machine.handle(.appChanged(mail), now: at(20)), [])
+    func testAnAppChangeIsJudgedOnlyAfterItStaysInFrontForTheDwell() {
+        var machine = armedForBoth()
+        let effects = machine.handle(.appChanged(mail), now: at(1))
+        XCTAssertFalse(sends(effects))
+        let change = try! XCTUnwrap(dwell(effects))
 
-        let fired = machine.handle(.deferredTimerFired(generation: machine.generation), now: at(30))
+        let fired = machine.handle(.dwellTimerFired(generation: machine.generation, change: change), now: at(6))
         XCTAssertTrue(fired.contains(.sendObservation(mail, blockId: blockId, generation: machine.generation)))
     }
 
-    func testAStaleDeferredTimerSendsNothing() {
-        var machine = armed()
-        XCTAssertEqual(machine.handle(.deferredTimerFired(generation: machine.generation - 1), now: at(40)), [])
+    func testAGlanceIsNeverJudged() {
+        var machine = armedForBoth()
+        let glance = try! XCTUnwrap(dwell(machine.handle(.appChanged(mail), now: at(1))))
+        // Back to the window already judged: nothing new to wait for.
+        XCTAssertEqual(machine.handle(.appChanged(safari), now: at(3)), [])
+        XCTAssertFalse(sends(machine.handle(.dwellTimerFired(generation: machine.generation, change: glance), now: at(6))))
     }
 
-    func testAfterPauseTheDeferredTimerSendsNothing() {
-        var machine = armed()
-        _ = machine.handle(.appChanged(safari), now: at(5))
+    func testOnlyTheNewestChangeIsJudged() {
+        var machine = armedForBoth()
+        let older = try! XCTUnwrap(dwell(machine.handle(.appChanged(mail), now: at(1))))
+        let reddit = Observation(appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Reddit")
+        let newer = try! XCTUnwrap(dwell(machine.handle(.appChanged(reddit), now: at(3))))
+        XCTAssertFalse(sends(machine.handle(.dwellTimerFired(generation: machine.generation, change: older), now: at(6))))
+        let fired = machine.handle(.dwellTimerFired(generation: machine.generation, change: newer), now: at(8))
+        XCTAssertTrue(fired.contains(.sendObservation(reddit, blockId: blockId, generation: machine.generation)))
+    }
+
+    func testSwitchingToADeniedAppCancelsTheWait() {
+        var machine = armedForBoth()
+        let change = try! XCTUnwrap(dwell(machine.handle(.appChanged(mail), now: at(1))))
+        let denied = Observation(appName: "1Password", bundleId: "com.1password.1password", windowTitle: "Vault")
+        XCTAssertEqual(machine.handle(.appChanged(denied), now: at(2)), [])
+        XCTAssertFalse(sends(machine.handle(.dwellTimerFired(generation: machine.generation, change: change), now: at(6))))
+    }
+
+    func testAfterPauseTheDwellTimerSendsNothing() {
+        var machine = armedForBoth()
         let generation = machine.generation
-        _ = machine.handle(.userPause, now: at(6))
-        XCTAssertFalse(sends(machine.handle(.deferredTimerFired(generation: generation), now: at(30))))
+        let change = try! XCTUnwrap(dwell(machine.handle(.appChanged(mail), now: at(1))))
+        _ = machine.handle(.userPause, now: at(2))
+        XCTAssertFalse(sends(machine.handle(.dwellTimerFired(generation: generation, change: change), now: at(6))))
     }
 
     func testASampleTimerSendsAndSchedulesTheNextFiveMinutesOut() {
@@ -315,7 +330,7 @@ final class FocusMachineTests: XCTestCase {
 
     // MARK: Judge now, test nudge, first consent
 
-    func testJudgeNowSendsRightAwayEvenInsideTheThirtySecondSpacing() {
+    func testJudgeNowSendsRightAwayEvenForTheWindowAlreadyJudged() {
         var machine = armed() // sent at 0
         let effects = machine.handle(.userJudgeNow, now: at(5))
         XCTAssertTrue(effects.contains(.sendObservation(safari, blockId: blockId, generation: machine.generation)))

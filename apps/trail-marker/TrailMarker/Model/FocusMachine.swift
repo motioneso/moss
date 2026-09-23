@@ -25,8 +25,9 @@ enum FocusEvent: Equatable {
     case contextFailed(CompanionError, generation: Int)
     case appChanged(Observation?)
     case sampleTimerFired(generation: Int)
-    /// The spacing after the last send is over; judge whatever is in front now.
-    case deferredTimerFired(generation: Int)
+    /// A window has stayed in front for the dwell time. `change` names which app change started
+    /// the wait, so only the newest one counts.
+    case dwellTimerFired(generation: Int, change: Int)
     case contextTimerFired(generation: Int)
     case judged(FocusJudgment, generation: Int)
     case judgeFailed(CompanionError, generation: Int)
@@ -41,8 +42,8 @@ enum FocusEffect: Equatable {
     case scheduleContext(after: TimeInterval, generation: Int)
     case sendObservation(Observation, blockId: String, generation: Int)
     case scheduleSample(after: TimeInterval, generation: Int)
-    /// A change arrived inside the spacing: judge again as soon as it is over.
-    case scheduleDeferred(after: TimeInterval, generation: Int)
+    /// Judge this change if the window is still in front after the dwell time.
+    case scheduleDwell(after: TimeInterval, generation: Int, change: Int)
     case cancelAll
     case persistPaused(Bool)
     case persistConsent(Bool)
@@ -61,7 +62,10 @@ enum FocusEffect: Equatable {
 struct FocusMachine {
     static let contextInterval: TimeInterval = 60
     static let sampleInterval: TimeInterval = 300
-    static let minimumSpacing: TimeInterval = 30
+    /// A window must stay in front this long before it is judged, so glances and cmd-tab passes
+    /// are never sent and a real switch is judged within seconds (Ben, 2026-09-22; replaces a
+    /// 30-second spacing after each send).
+    static let dwell: TimeInterval = 5
 
     private(set) var state: FocusWatchState = .off
     private(set) var generation = 0
@@ -76,10 +80,12 @@ struct FocusMachine {
     private var judgmentReady = false
     private var contextLoadedOnce = false
     private var failed = false
-    private var lastSentAt: Date?
+    /// What was last sent, so returning to the same window after a glance is not judged again.
+    private var lastSent: Observation?
+    /// Counts app changes; a dwell timer from an older change is ignored.
+    private var changeCount = 0
     private var sampledBlockId: String?
     private var sampleChainGeneration: Int?
-    private var deferredPending = false
     private var requestedNotificationPermission = false
 
     init(policy: ObservationPolicy = ObservationPolicy(allowedBundleIds: [])) {
@@ -129,7 +135,7 @@ struct FocusMachine {
 
         case .userJudgeNow:
             if let app = currentApp, let block, canObserve(app, now: now) {
-                lastSentAt = now
+                lastSent = app
                 effects.append(.sendObservation(app, blockId: block.id, generation: generation))
             }
 
@@ -157,24 +163,17 @@ struct FocusMachine {
         case .appChanged(let observation):
             guard let observation else { return [] }
             currentApp = observation
-            guard isActive, let block, canObserve(observation, now: now) else { break }
-            if let lastSentAt, now.timeIntervalSince(lastSentAt) < Self.minimumSpacing {
-                // Not dropped: a tab switch right after a judgment must not wait for the
-                // five-minute sample. One timer, however many changes arrive meanwhile.
-                if !deferredPending {
-                    deferredPending = true
-                    let wait = Self.minimumSpacing - now.timeIntervalSince(lastSentAt)
-                    effects.append(.scheduleDeferred(after: wait, generation: generation))
-                }
-                break
-            }
-            effects += send(observation, block: block, now: now)
+            changeCount += 1
+            guard isActive, block != nil, canObserve(observation, now: now),
+                !observation.isSameWindow(as: lastSent)
+            else { break }
+            effects.append(.scheduleDwell(after: Self.dwell, generation: generation, change: changeCount))
 
-        case .deferredTimerFired(let eventGeneration):
-            guard eventGeneration == generation, isActive else { return [] }
-            deferredPending = false
-            guard let app = currentApp, let block, canObserve(app, now: now) else { break }
-            if let lastSentAt, now.timeIntervalSince(lastSentAt) < Self.minimumSpacing { break }
+        case .dwellTimerFired(let eventGeneration, let change):
+            guard eventGeneration == generation, isActive, change == changeCount else { return [] }
+            guard let app = currentApp, let block, canObserve(app, now: now),
+                !app.isSameWindow(as: lastSent)
+            else { break }
             effects += send(app, block: block, now: now)
 
         case .sampleTimerFired(let eventGeneration):
@@ -184,7 +183,7 @@ struct FocusMachine {
                 break
             }
             if let app = currentApp, canObserve(app, now: now) {
-                lastSentAt = now
+                lastSent = app
                 effects.append(.sendObservation(app, blockId: block.id, generation: generation))
             }
             effects.append(.scheduleSample(after: Self.sampleInterval, generation: generation))
@@ -238,7 +237,7 @@ struct FocusMachine {
         block = nil
         sampledBlockId = nil
         sampleChainGeneration = nil
-        deferredPending = false
+        lastSent = nil
     }
 
     /// Called after a change that may have moved the machine into or out of being active.
@@ -267,7 +266,7 @@ struct FocusMachine {
     private mutating func send(
         _ app: Observation, block: (id: String, title: String, endsAt: Date), now: Date
     ) -> [FocusEffect] {
-        lastSentAt = now
+        lastSent = app
         sampledBlockId = block.id
         var effects: [FocusEffect] = [.sendObservation(app, blockId: block.id, generation: generation)]
         if sampleChainGeneration != generation {

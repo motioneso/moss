@@ -91,6 +91,13 @@ final class FocusDebugLog: ObservableObject {
     }
 }
 
+/// The top edge for a panel: below the menu bar even when it auto-hides (full-screen apps), so the
+/// Trail Marker icon stays clickable and Pause is always reachable.
+@MainActor
+private func topBelowMenuBar(_ screen: NSScreen) -> CGFloat {
+    screen.frame.maxY - NSStatusBar.system.thickness - 12
+}
+
 /// A small always-on-top panel showing `FocusDebugLog`. It never takes focus from the app in
 /// front, so it does not change what is being observed.
 @MainActor
@@ -114,8 +121,10 @@ final class FocusDebugOverlay {
     }
 
     func show() {
-        if let screen = NSScreen.main?.visibleFrame {
-            panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 16, y: screen.maxY - 8))
+        if let screen = NSScreen.main {
+            panel.setFrameTopLeftPoint(
+                NSPoint(x: screen.frame.maxX - panel.frame.width - 16, y: topBelowMenuBar(screen))
+            )
         }
         panel.orderFrontRegardless()
     }
@@ -179,7 +188,7 @@ enum FocusBannerChange: Equatable {
 final class FocusDebugBanner {
     private let panel: NSPanel
     private let model = BannerModel()
-    private var cancellable: AnyCancellable?
+    private var cancellables = Set<AnyCancellable>()
 
     final class BannerModel: ObservableObject {
         @Published var goal = ""
@@ -208,10 +217,22 @@ final class FocusDebugBanner {
             }
         )
 
-        cancellable = focus.$lastJudgment
+        focus.$lastJudgment
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] remembered in self?.apply(remembered) }
+            .store(in: &cancellables)
+
+        // Pause, Focus off, the block ending or no block: the banner points at nothing now.
+        focus.$state
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self, self.panel.isVisible else { return }
+                if case .watching = state { return }
+                self.panel.orderOut(nil)
+                focusDebug("Banner cleared: no longer watching")
+            }
+            .store(in: &cancellables)
     }
 
     private func apply(_ remembered: RememberedJudgment) {
@@ -220,9 +241,9 @@ final class FocusDebugBanner {
             model.goal = remembered.blockTitle
             model.reason = remembered.judgment.reason
             if !panel.isVisible {
-                if let screen = NSScreen.main?.visibleFrame {
+                if let screen = NSScreen.main {
                     panel.setFrameTopLeftPoint(
-                        NSPoint(x: screen.midX - panel.frame.width / 2, y: screen.maxY - 8)
+                        NSPoint(x: screen.frame.midX - panel.frame.width / 2, y: topBelowMenuBar(screen))
                     )
                 }
                 panel.orderFrontRegardless()

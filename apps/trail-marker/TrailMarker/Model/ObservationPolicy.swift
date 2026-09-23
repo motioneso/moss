@@ -8,6 +8,22 @@ struct Observation: Equatable {
     let windowTitle: String
 }
 
+extension Observation {
+    /// Same app and the same title once symbols are ignored, so a terminal title that animates a
+    /// spinner (◐, ✳) is not a new window every frame.
+    func isSameWindow(as other: Observation?) -> Bool {
+        guard let other, bundleId == other.bundleId else { return false }
+        return Self.words(windowTitle) == Self.words(other.windowTitle)
+    }
+
+    private static func words(_ title: String) -> String {
+        let kept = title.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) || CharacterSet.whitespaces.contains($0)
+        }
+        return String(String.UnicodeScalarView(kept)).split(separator: " ").joined(separator: " ")
+    }
+}
+
 /// Decides whether an observation may leave this Mac at all. The person's allowlist starts empty,
 /// so nothing is observed until they choose an app, or choose the whole desktop instead — getting
 /// distracted rarely stays inside one app, so watching everything is a real choice, not a fallback
