@@ -25,6 +25,8 @@ enum FocusEvent: Equatable {
     case contextFailed(CompanionError, generation: Int)
     case appChanged(Observation?)
     case sampleTimerFired(generation: Int)
+    /// The spacing after the last send is over; judge whatever is in front now.
+    case deferredTimerFired(generation: Int)
     case contextTimerFired(generation: Int)
     case judged(FocusJudgment, generation: Int)
     case judgeFailed(CompanionError, generation: Int)
@@ -39,6 +41,8 @@ enum FocusEffect: Equatable {
     case scheduleContext(after: TimeInterval, generation: Int)
     case sendObservation(Observation, blockId: String, generation: Int)
     case scheduleSample(after: TimeInterval, generation: Int)
+    /// A change arrived inside the spacing: judge again as soon as it is over.
+    case scheduleDeferred(after: TimeInterval, generation: Int)
     case cancelAll
     case persistPaused(Bool)
     case persistConsent(Bool)
@@ -75,6 +79,7 @@ struct FocusMachine {
     private var lastSentAt: Date?
     private var sampledBlockId: String?
     private var sampleChainGeneration: Int?
+    private var deferredPending = false
     private var requestedNotificationPermission = false
 
     init(policy: ObservationPolicy = ObservationPolicy(allowedBundleIds: [])) {
@@ -153,8 +158,24 @@ struct FocusMachine {
             guard let observation else { return [] }
             currentApp = observation
             guard isActive, let block, canObserve(observation, now: now) else { break }
-            if let lastSentAt, now.timeIntervalSince(lastSentAt) < Self.minimumSpacing { break }
+            if let lastSentAt, now.timeIntervalSince(lastSentAt) < Self.minimumSpacing {
+                // Not dropped: a tab switch right after a judgment must not wait for the
+                // five-minute sample. One timer, however many changes arrive meanwhile.
+                if !deferredPending {
+                    deferredPending = true
+                    let wait = Self.minimumSpacing - now.timeIntervalSince(lastSentAt)
+                    effects.append(.scheduleDeferred(after: wait, generation: generation))
+                }
+                break
+            }
             effects += send(observation, block: block, now: now)
+
+        case .deferredTimerFired(let eventGeneration):
+            guard eventGeneration == generation, isActive else { return [] }
+            deferredPending = false
+            guard let app = currentApp, let block, canObserve(app, now: now) else { break }
+            if let lastSentAt, now.timeIntervalSince(lastSentAt) < Self.minimumSpacing { break }
+            effects += send(app, block: block, now: now)
 
         case .sampleTimerFired(let eventGeneration):
             guard eventGeneration == generation, isActive else { return [] }
@@ -217,6 +238,7 @@ struct FocusMachine {
         block = nil
         sampledBlockId = nil
         sampleChainGeneration = nil
+        deferredPending = false
     }
 
     /// Called after a change that may have moved the machine into or out of being active.

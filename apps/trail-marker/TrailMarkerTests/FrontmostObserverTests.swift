@@ -69,4 +69,22 @@ final class FrontmostObserverTests: XCTestCase {
 
         XCTAssertTrue(reported.isEmpty)
     }
+
+    func testASpinnerInATerminalTitleIsNotANewWindowButNewWordsAre() {
+        let source = FakeSource()
+        let terminal = { (title: String) in Observation(appName: "Ghostty", bundleId: "com.mitchellh.ghostty", windowTitle: title) }
+        source.current = terminal("◐ Focus-judgment database tests")
+        let observer = FrontmostObserver(source: source)
+        var reported: [Observation?] = []
+        observer.start { reported.append($0) }
+        defer { observer.stop() }
+
+        source.current = terminal("✳ Focus-judgment database tests")
+        observer.poll()
+        XCTAssertTrue(reported.isEmpty)
+
+        source.current = terminal("✳ Keste website build")
+        observer.poll()
+        XCTAssertEqual(reported, [terminal("✳ Keste website build")])
+    }
 }

@@ -198,6 +198,40 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertTrue(sends(machine.handle(.appChanged(safari), now: at(31))))
     }
 
+    func testAChangeInsideTheSpacingIsJudgedWhenTheSpacingEndsNotAtTheNextSample() {
+        let allowBoth = ObservationPolicy(allowedBundleIds: ["com.apple.Safari", "com.apple.mail"])
+        var machine = FocusMachine(policy: allowBoth)
+        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
+        _ = machine.handle(.appChanged(safari), now: at(0))
+        _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
+        _ = machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(0)) // sends at 0
+
+        XCTAssertEqual(
+            machine.handle(.appChanged(mail), now: at(6)),
+            [.scheduleDeferred(after: 24, generation: machine.generation)]
+        )
+        // More changes meanwhile never start a second timer.
+        XCTAssertEqual(machine.handle(.appChanged(safari), now: at(10)), [])
+        XCTAssertEqual(machine.handle(.appChanged(mail), now: at(20)), [])
+
+        let fired = machine.handle(.deferredTimerFired(generation: machine.generation), now: at(30))
+        XCTAssertTrue(fired.contains(.sendObservation(mail, blockId: blockId, generation: machine.generation)))
+    }
+
+    func testAStaleDeferredTimerSendsNothing() {
+        var machine = armed()
+        XCTAssertEqual(machine.handle(.deferredTimerFired(generation: machine.generation - 1), now: at(40)), [])
+    }
+
+    func testAfterPauseTheDeferredTimerSendsNothing() {
+        var machine = armed()
+        _ = machine.handle(.appChanged(safari), now: at(5))
+        let generation = machine.generation
+        _ = machine.handle(.userPause, now: at(6))
+        XCTAssertFalse(sends(machine.handle(.deferredTimerFired(generation: generation), now: at(30))))
+    }
+
     func testASampleTimerSendsAndSchedulesTheNextFiveMinutesOut() {
         var machine = armed()
         let effects = machine.handle(.sampleTimerFired(generation: machine.generation), now: at(300))

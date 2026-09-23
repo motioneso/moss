@@ -102,8 +102,22 @@ final class FrontmostObserver {
     /// tab switch inside one app counts as a change and an unchanged window says nothing.
     func poll() {
         let observation = source.current
-        guard let observation, observation != lastDelivered else { return }
+        guard let observation, !Self.sameWindow(observation, lastDelivered) else { return }
         deliver(observation)
+    }
+
+    /// Same app and the same title once symbols are ignored, so a terminal title that animates a
+    /// spinner (◐, ✳) is not a new window every frame.
+    static func sameWindow(_ a: Observation, _ b: Observation?) -> Bool {
+        guard let b, a.bundleId == b.bundleId else { return false }
+        return words(a.windowTitle) == words(b.windowTitle)
+    }
+
+    private static func words(_ title: String) -> String {
+        let kept = title.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) || CharacterSet.whitespaces.contains($0)
+        }
+        return String(String.UnicodeScalarView(kept)).split(separator: " ").joined(separator: " ")
     }
 
     private func deliver(_ observation: Observation?) {

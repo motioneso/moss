@@ -311,6 +311,9 @@ final class FocusRuntime: ObservableObject {
                 schedule(after: delay) { self.send(.contextTimerFired(generation: generation)) }
             case .scheduleSample(let delay, let generation):
                 schedule(after: delay) { self.send(.sampleTimerFired(generation: generation)) }
+            case .scheduleDeferred(let delay, let generation):
+                focusDebug("Changed within 30 s of the last judgment; judging again in \(Int(delay.rounded(.up))) s")
+                schedule(after: delay) { self.send(.deferredTimerFired(generation: generation)) }
             case .sendObservation(let observation, let blockId, let generation):
                 sendObservation(observation, blockId: blockId, generation: generation)
             case .cancelAll:
