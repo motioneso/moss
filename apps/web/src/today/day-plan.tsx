@@ -27,6 +27,9 @@ export interface DayPlanSectionProps {
   readonly showEditorialHeading?: boolean;
   readonly dateline?: string;
   readonly targetDayKey?: string;
+  /** Forwarded to buildDayItems. Only the morning reader's rail passes
+      this; every other caller leaves it unset. */
+  readonly proposedCaption?: "short";
 }
 
 function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void }) {
@@ -230,7 +233,8 @@ export function DayPlanSection(props: DayPlanSectionProps) {
     events: props.calendarError ? [] : props.events,
     locale: props.locale,
     now: props.now,
-    targetDayKey: props.targetDayKey
+    targetDayKey: props.targetDayKey,
+    proposedCaption: props.proposedCaption
   });
 
   const taskBlocks = (props.dayPlan?.plan?.blocks ?? []).filter((block) => block.taskId !== null);

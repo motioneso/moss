@@ -102,7 +102,14 @@
     max-width: 1120px;
     height: 910px;
   }
+  .brief-reader:has([data-briefing-surface="proposed-read"]) {
+    max-width: 1120px;
+    height: 910px;
+  }
   .brief-reader:has([data-briefing-surface="automatic-read"]) .brief-reader__body {
+    flex: 1 1 auto;
+  }
+  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__body {
     flex: 1 1 auto;
   }
 }
@@ -281,6 +288,29 @@
     grid-column: 1;
     grid-row: auto;
   }
+  /* Proposed Read only: "Back to Today" reads above the link-and-primary
+     row on a narrow phone. Explicit grid rows, not `order`, so DOM and tab
+     order still match what a keyboard user sees, same as the desktop
+     column placement above. */
+  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-back {
+    grid-row: 1;
+  }
+  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-actions {
+    grid-row: 2;
+  }
+  /* When an accept status line is showing, it keeps row 1 (rule above,
+     unscoped by width), so Back and the actions both move down one row
+     instead of sharing row 1 with it. */
+  .brief-reader:has([data-briefing-surface="proposed-read"])
+    .brief-reader__footer--with-status
+    .brief-reader__footer-back {
+    grid-row: 2;
+  }
+  .brief-reader:has([data-briefing-surface="proposed-read"])
+    .brief-reader__footer--with-status
+    .brief-reader__footer-actions {
+    grid-row: 3;
+  }
 }
 @media (min-width: 1081px) {
   /* Desktop schedule starts open beside the report; the toggle stays hidden. */
@@ -312,4 +342,11 @@
 }
 .brief-reader--report .jds-btn[aria-busy="true"] {
   opacity: 1;
+}
+/* Proposed Read footer (P5): the review hand-off reads as an underlined
+   link ahead of the primary action, not a secondary button. */
+.brief-reader__review-link .jds-btn {
+  text-decoration: underline;
+  padding-left: 0;
+  padding-right: 0;
 }

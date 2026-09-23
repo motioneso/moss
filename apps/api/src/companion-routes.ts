@@ -73,7 +73,7 @@ function ipRateLimit(max: number) {
  * Focus routes, keyed on the peer address like the rest (the credential is not yet resolved when
  * the limiter runs, and a limiter keyed on it would give an attacker a fresh bucket per junk
  * token). A Mac asks for context about once a minute and judges at most every few minutes; the
- * limits leave room for several Macs behind one address and for a person pressing Judge now.
+ * limits leave room for several Macs behind one address.
  */
 const FOCUS_CONTEXT_RATE_MAX = 60;
 const FOCUS_JUDGE_RATE_MAX = 30;

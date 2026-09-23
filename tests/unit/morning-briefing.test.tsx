@@ -611,18 +611,48 @@ describe("MorningBriefingReader review footer", () => {
     return [...footer.querySelectorAll("button")].map((node) => node.textContent ?? "");
   }
 
-  it("offers Accept all first when proposed additions are eligible", async () => {
+  it("puts Review proposed blocks first, then Accept all, in the proposed surface", async () => {
     await renderReader(seedClient([]), { dayPlan: acceptPlanResponse() });
+    expect(footerButtons()).toEqual([
+      "Review proposed blocks",
+      "Accept all time blocks",
+      "Back to Today"
+    ]);
+  });
+
+  it("keeps Review proposed blocks first even when a move is pending", async () => {
+    await renderReader(seedClient([]), { dayPlan: moveBlock(acceptPlanResponse(), "b2") });
+    expect(footerButtons()).toEqual(["Review proposed blocks", "Review changes", "Back to Today"]);
+  });
+
+  it("keeps Accept all first, then Review/Adjust task blocks, in the automatic surface", async () => {
+    const proposed = acceptPlanResponse();
+    if (!proposed.plan) throw new Error("plan missing for the automatic-surface case");
+    const withOneCommitted: GetDayPlanResponse = {
+      ...proposed,
+      plan: {
+        ...proposed.plan,
+        blocks: [
+          {
+            ...proposed.plan.blocks[0]!,
+            pendingChange: null,
+            actualPlacement: {
+              startsAt: "2026-09-10T16:00:00.000Z",
+              durationMinutes: 30,
+              calendarEventRef: "evt-1"
+            }
+          },
+          proposed.plan.blocks[1]!,
+          proposed.plan.blocks[2]!
+        ]
+      }
+    };
+    await renderReader(seedClient([]), { dayPlan: withOneCommitted });
     expect(footerButtons()).toEqual([
       "Accept all time blocks",
       "Review task blocks",
       "Back to Today"
     ]);
-  });
-
-  it("offers Review changes instead when a move is pending", async () => {
-    await renderReader(seedClient([]), { dayPlan: moveBlock(acceptPlanResponse(), "b2") });
-    expect(footerButtons()).toEqual(["Review changes", "Review task blocks", "Back to Today"]);
   });
 
   it("announces the applied count and keeps focus on activation", async () => {
@@ -635,8 +665,10 @@ describe("MorningBriefingReader review footer", () => {
       })
     });
     const accept = footerButtons().indexOf("Accept all time blocks");
-    expect(accept).toBe(0);
-    const target = document.body.querySelector(".brief-reader__footer button") as HTMLButtonElement;
+    expect(accept).toBe(1);
+    const target = document.body.querySelector(
+      ".brief-reader__footer-actions .jds-btn--primary"
+    ) as HTMLButtonElement;
     (document.activeElement as HTMLElement | null)?.blur?.();
     await act(async () => {
       target.click();
@@ -706,7 +738,9 @@ describe("MorningBriefingReader review footer", () => {
         outcomes: appliedOutcome("b1", "failed")
       })
     });
-    const target = document.body.querySelector(".brief-reader__footer button") as HTMLButtonElement;
+    const target = document.body.querySelector(
+      ".brief-reader__footer-actions .jds-btn--primary"
+    ) as HTMLButtonElement;
     (document.activeElement as HTMLElement | null)?.blur?.();
     await act(async () => {
       target.click();
@@ -849,7 +883,7 @@ describe("day-plan-review accept-all model", () => {
   });
 });
 
-describe("MorningBriefingReader automatic-read surface", () => {
+describe("MorningBriefingReader Read surface", () => {
   function committedBlock(): DayPlanBlockDto {
     return {
       id: "b-auto",
@@ -881,12 +915,13 @@ describe("MorningBriefingReader automatic-read surface", () => {
     expect(html).toContain('data-briefing-surface="automatic-read"');
   });
 
-  it("keeps proposed-only plans off the automatic-read surface", async () => {
+  it("marks the proposed-read surface when the plan has no committed placement", async () => {
     const run = fullRun();
     const client = seedClient([
       [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
     ]);
     const html = await renderReader(client, { dayPlan: acceptPlanResponse() });
+    expect(html).toContain('data-briefing-surface="proposed-read"');
     expect(html).not.toContain('data-briefing-surface="automatic-read"');
   });
 });

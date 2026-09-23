@@ -16,14 +16,12 @@ final class MenuBarController: NSObject {
         focus: FocusRuntime,
         onShowLastJudgment: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
-        onOpenOnboarding: @escaping () -> Void,
-        onCheckForUpdates: @escaping () -> Void
+        onOpenOnboarding: @escaping () -> Void
     ) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         actions = StatusActions(
             connection: connection, focus: focus, onShowLastJudgment: onShowLastJudgment,
-            onOpenSettings: onOpenSettings, onOpenOnboarding: onOpenOnboarding,
-            onCheckForUpdates: onCheckForUpdates
+            onOpenSettings: onOpenSettings, onOpenOnboarding: onOpenOnboarding
         )
         super.init()
 

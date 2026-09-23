@@ -180,6 +180,10 @@ export const SCHEDULE_TOGGLE_LABEL = "Today's schedule";
 
 /** Bulk acceptance (T19): one activation for every eligible proposed addition. */
 export const ACCEPT_ALL_LABEL = "Accept all time blocks";
+/** Proposed Read footer (P5): the review hand-off reads as a link ahead of
+    the primary action, named for what it opens rather than the generic
+    "Review task blocks" the automatic Read keeps. */
+export const REVIEW_PROPOSED_BLOCKS_LABEL = "Review proposed blocks";
 export const ACCEPTING_LABEL = "Accepting\u2026";
 export const REVIEW_CHANGES_LABEL = "Review changes";
 export const ACCEPT_ALL_NEEDS_REVIEW = "These changes need review.";

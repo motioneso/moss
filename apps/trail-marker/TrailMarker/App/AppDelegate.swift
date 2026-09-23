@@ -56,8 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             focus: focus,
             onShowLastJudgment: { [weak self] in self?.showLastJudgment() },
             onOpenSettings: { [weak self] in self?.showSettings() },
-            onOpenOnboarding: { [weak self] in self?.showOnboarding() },
-            onCheckForUpdates: { [weak self] in self?.updater.checkForUpdates() }
+            onOpenOnboarding: { [weak self] in self?.showOnboarding() }
         )
 
         if case .notLinked = connection.state {

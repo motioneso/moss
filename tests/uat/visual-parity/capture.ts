@@ -210,6 +210,43 @@ export async function captureEntry(
     ...(geometrySidecar ? { geometrySidecar } : {})
   };
 }
+export type StableNewsTopStory = readonly [id: unknown, title: unknown, url: unknown];
+export type StableSportsTopStory = readonly [title: unknown, url: unknown];
+export type StableFollowedCard = readonly [
+  name: unknown,
+  stories: ReadonlyArray<readonly [title: unknown, url: unknown]>
+];
+export interface StableSampleApiProjection {
+  readonly news: ReadonlyArray<StableNewsTopStory>;
+  readonly sports: ReadonlyArray<StableSportsTopStory>;
+  readonly followed: ReadonlyArray<StableFollowedCard>;
+}
+export function projectStableSampleApi(
+  news: { topStories?: Array<{ id?: unknown; title?: unknown; url?: unknown }> } | null | undefined,
+  sports:
+    | {
+        topStories?: Array<{ title?: unknown; url?: unknown }>;
+        followed?: Array<{ name?: unknown; stories?: Array<{ title?: unknown; url?: unknown }> }>;
+      }
+    | null
+    | undefined
+): StableSampleApiProjection {
+  const newsTop = Array.isArray(news?.topStories) ? news.topStories : [];
+  const sportsTop = Array.isArray(sports?.topStories) ? sports.topStories : [];
+  const followed = Array.isArray(sports?.followed) ? sports.followed : [];
+  return {
+    news: newsTop.map((story) => [story?.id ?? null, story?.title ?? null, story?.url ?? null]),
+    sports: sportsTop.map((story) => [story?.title ?? null, story?.url ?? null]),
+    followed: followed.map((card) => [
+      card?.name ?? null,
+      (Array.isArray(card?.stories) ? card.stories : []).map((story) => [
+        story?.title ?? null,
+        story?.url ?? null
+      ])
+    ])
+  };
+}
+
 export async function stableSample(page: Page): Promise<string> {
   return page.evaluate(async (sels: string[]) => {
     const read = async (path: string) => {
@@ -282,7 +319,35 @@ export async function stableSample(page: Page): Promise<string> {
       sports: pane(document.querySelector(".jds-brief--sports")),
       arsenal: pane(arsenal)
     };
-    return JSON.stringify({ news, sports, newsItems, arsenalItems, arsenalText, faces, panes });
+    const api = {
+      news: (Array.isArray((news as { topStories?: unknown })?.topStories)
+        ? (news as { topStories: Array<{ id?: unknown; title?: unknown; url?: unknown }> })
+            .topStories
+        : []
+      ).map((story) => [story?.id ?? null, story?.title ?? null, story?.url ?? null]),
+      sports: (Array.isArray((sports as { topStories?: unknown })?.topStories)
+        ? (sports as { topStories: Array<{ title?: unknown; url?: unknown }> }).topStories
+        : []
+      ).map((story) => [story?.title ?? null, story?.url ?? null]),
+      followed: (Array.isArray((sports as { followed?: unknown })?.followed)
+        ? (
+            sports as {
+              followed: Array<{
+                name?: unknown;
+                stories?: Array<{ title?: unknown; url?: unknown }>;
+              }>;
+            }
+          ).followed
+        : []
+      ).map((card) => [
+        card?.name ?? null,
+        (Array.isArray(card?.stories) ? card.stories : []).map((story) => [
+          story?.title ?? null,
+          story?.url ?? null
+        ])
+      ])
+    };
+    return JSON.stringify({ api, newsItems, arsenalItems, arsenalText, faces, panes });
   }, DISPLAY_TEXT);
 }
 interface RenderedItem {
@@ -296,33 +361,77 @@ function hasRendered(items: readonly RenderedItem[] | undefined, want?: string):
   if (rows.length === 0) return false;
   return want ? rows.some((el) => el.text.includes(want)) : true;
 }
-function isPopulated(sample: string): boolean {
+export interface PopulatedReport {
+  readonly apiLead: boolean;
+  readonly apiArsenal: boolean;
+  readonly newsRendered: boolean;
+  readonly arsenalRendered: boolean;
+  readonly arsenalHeadline: boolean;
+  readonly facesReady: boolean;
+  readonly facesNotReady: readonly string[];
+}
+export function populatedReport(sample: string): PopulatedReport {
   const value = JSON.parse(sample) as {
-    news?: { topStories?: Array<{ id?: string; title?: string; url?: string }> };
-    sports?: {
-      followed?: Array<{ name?: string; stories?: Array<{ title?: string; url?: string }> }>;
+    api?: {
+      news?: Array<readonly [unknown, unknown, unknown]>;
+      followed?: Array<readonly [unknown, ReadonlyArray<readonly [unknown, unknown]>]>;
     };
     newsItems?: RenderedItem[];
     arsenalItems?: RenderedItem[];
     arsenalText?: string;
     faces?: Array<{ sel?: string; ready?: boolean }>;
   };
-  const lead = value.news?.topStories?.[0];
-  const arsenal = value.sports?.followed?.find((card) => card.name === "Arsenal");
-  const apiOk = Boolean(
-    lead?.id && lead.title && lead.url && arsenal?.stories?.some((s) => s.title && s.url)
+  const lead = value.api?.news?.[0];
+  const arsenal = value.api?.followed?.find((card) => card[0] === "Arsenal");
+  const apiLead = Boolean(lead?.[0] && lead[1] && lead[2]);
+  const apiArsenal = Boolean((arsenal?.[1] ?? []).some((s) => Boolean(s[0]) && Boolean(s[1])));
+  const newsRendered = hasRendered(value.newsItems);
+  const arsenalRendered = hasRendered(value.arsenalItems);
+  const arsenalHeadline = (value.arsenalText ?? "").includes(
+    "Arsenal seal late win to stay top of the pile"
   );
-  const arsenalHeadline = "Arsenal seal late win to stay top of the pile";
   const faces = value.faces ?? [];
   const facesReady = faces.length > 0 && faces.every((face) => face.ready === true);
+  const facesNotReady = faces.filter((face) => face.ready !== true).map((face) => face.sel ?? "?");
+  return {
+    apiLead,
+    apiArsenal,
+    newsRendered,
+    arsenalRendered,
+    arsenalHeadline,
+    facesReady,
+    facesNotReady
+  };
+}
+export function isPopulated(sample: string): boolean {
+  const report = populatedReport(sample);
   return Boolean(
-    apiOk &&
-    hasRendered(value.newsItems) &&
-    hasRendered(value.arsenalItems) &&
-    (value.arsenalText ?? "").includes(arsenalHeadline) &&
-    facesReady
+    report.apiLead &&
+    report.apiArsenal &&
+    report.newsRendered &&
+    report.arsenalRendered &&
+    report.arsenalHeadline &&
+    report.facesReady
   );
 }
+export function firstDiffKey(first: string, second: string): string {
+  let a: Record<string, unknown>;
+  let b: Record<string, unknown>;
+  try {
+    a = JSON.parse(first) as Record<string, unknown>;
+    b = JSON.parse(second) as Record<string, unknown>;
+  } catch {
+    return "unparseable";
+  }
+  for (const key of Object.keys(a)) {
+    if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) return key;
+  }
+  for (const key of Object.keys(b)) {
+    if (!(key in a)) return key;
+  }
+  return "none";
+}
+
 export async function waitForStablePopulated(page: Page): Promise<void> {
   await stillPage(page);
   await page.evaluate(async (sels: string[]) => {
@@ -338,14 +447,20 @@ export async function waitForStablePopulated(page: Page): Promise<void> {
       }
     }
   }, DISPLAY_TEXT);
+  let prev = "";
+  let next = "";
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const first = await stableSample(page);
     await page.waitForTimeout(250);
     const second = await stableSample(page);
+    prev = first;
+    next = second;
     if (first === second && isPopulated(first) && isPopulated(second)) return;
   }
   const detail = await stableSample(page);
-  throw new Error(`parity: display face or geometry did not stabilize: ${detail.slice(0, 400)}`);
+  throw new Error(
+    `parity: display face or geometry did not stabilize: ${detail.slice(0, 400)} (changed: ${firstDiffKey(prev, next)}) (populated: ${JSON.stringify(populatedReport(next))})`
+  );
 }
 
 export type RouteName = "tasks" | "calendar" | "settings" | "today" | "evening";
@@ -697,7 +812,7 @@ export async function waitForRoutePopulated(
     if (expected.tomorrowTaskTitle)
       await routeText(
         page,
-        ".cmd-main",
+        ".cmd-wrap",
         expected.tomorrowTaskTitle,
         "seeded tomorrow task",
         matched
@@ -705,7 +820,7 @@ export async function waitForRoutePopulated(
     if (expected.tomorrowEventTitle)
       await routeText(
         page,
-        ".cmd-main",
+        ".cmd-wrap",
         expected.tomorrowEventTitle,
         "seeded tomorrow event",
         matched
@@ -870,7 +985,10 @@ export function compareReferenceCapture(
 export function diffFiles(aPath: string, bPath: string, outPath: string): number {
   const a = PNG.sync.read(readFileSync(aPath));
   const b = PNG.sync.read(readFileSync(bPath));
-  if (a.width !== b.width || a.height !== b.height) return 100;
+  if (a.width !== b.width || a.height !== b.height) {
+    writeFileSync(outPath, PNG.sync.write(a));
+    return 100;
+  }
   const diff = new PNG({ width: a.width, height: a.height });
   const different = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.1 });
   writeFileSync(outPath, PNG.sync.write(diff));

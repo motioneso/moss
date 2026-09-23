@@ -26,6 +26,12 @@ export const DAY_ITEM_STATE_LABELS: Record<DayItemState, string> = {
   event: ""
 };
 
+/** A block Moss is suggesting for the first time (nothing on the calendar
+    yet) reads as the short "Proposed" beside its time, instead of the
+    default "Change pending"/"Proposed, not on the calendar yet" text. Off
+    by default; only the morning reader's rail turns it on. */
+const PROPOSED_WITH_TIME_LABEL = "Proposed";
+
 const KIND_LABELS: Partial<Record<DayPlanBlockKind | "travel" | "task", string>> = {
   prep: "Preparation",
   travel: "Travel"
@@ -55,6 +61,10 @@ export interface BuildDayItemsInput {
   readonly locale: LocaleSettingsDto;
   readonly now: Date;
   readonly targetDayKey?: string;
+  /** Set only by the morning reader's rail: swaps the default caption for
+      a not-yet-committed row to the short "Proposed" beside its time.
+      Never changes which state a row classifies as. */
+  readonly proposedCaption?: "short";
 }
 
 function stateForBlock(input: {
@@ -128,6 +138,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         block.pendingChange !== null && block.pendingChange.kind !== "remove"
           ? block.pendingChange.durationMinutes
           : (block.actualPlacement?.durationMinutes ?? null);
+      const hasActualPlacement = block.actualPlacement?.startsAt != null;
       const state = stateForBlock({
         summary,
         startsAt,
@@ -137,6 +148,13 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         planHasCommittedBlock
       });
       const title = summary !== undefined ? summary.title : (block.title ?? "Untitled block");
+      // A row Moss is suggesting for the first time (nothing on the calendar
+      // yet, but it has a time) gets the short caption only when the caller
+      // opted in; the state itself never changes.
+      const label =
+        input.proposedCaption === "short" && !hasActualPlacement && startsAt !== null
+          ? PROPOSED_WITH_TIME_LABEL
+          : DAY_ITEM_STATE_LABELS[state];
       return {
         order: index,
         item: {
@@ -144,7 +162,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
           kind: block.kind,
           kindLabel: KIND_LABELS[block.kind] ?? null,
           state,
-          label: DAY_ITEM_STATE_LABELS[state],
+          label,
           title,
           startsAt,
           endsAt: null,
