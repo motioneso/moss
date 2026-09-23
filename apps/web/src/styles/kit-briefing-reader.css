@@ -288,6 +288,11 @@
     grid-column: 1;
     grid-row: auto;
   }
+  /* Proposed Read only: "Back to Today" reads above the link-and-primary
+     row on a narrow phone, ahead of the automatic footer's back-last order. */
+  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-back {
+    order: -1;
+  }
 }
 @media (min-width: 1081px) {
   /* Desktop schedule starts open beside the report; the toggle stays hidden. */
