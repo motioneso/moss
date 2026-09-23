@@ -32,6 +32,7 @@ export type StoryRelevancePolicy = (
     readonly moduleId: StoryFeedbackModule;
     readonly candidates: readonly StoryRelevanceCandidate[];
     readonly now: Date;
+    readonly signal?: AbortSignal;
   }
 ) => Promise<StoryRelevanceResult>;
 
@@ -64,7 +65,11 @@ export function createStoryRelevancePolicy(deps: {
     const evaluated = await evaluateStoryRelevance(
       scopedDb,
       { ai: deps.ai },
-      { candidates: input.candidates, rules: ruleRows }
+      {
+        candidates: input.candidates,
+        rules: ruleRows,
+        ...(input.signal ? { signal: input.signal } : {})
+      }
     );
 
     if (!evaluated.ok) {

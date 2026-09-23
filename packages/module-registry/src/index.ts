@@ -782,7 +782,7 @@ export interface BuiltInModuleRegistration {
 const newsRobotsGate = createRobotsGate();
 const newsHostRateLimiter = createHostRateLimiter();
 
-function buildNewsDiscoveryPorts(
+export function buildNewsDiscoveryPorts(
   logger?: Pick<FastifyBaseLogger, "info" | "warn">,
   // #2229: takes the already-built adapter, not a raw engine factory. The route path must pass
   // deps.createCliStructuredAdapter (built from structuredChatEngineFactory, which resolves
@@ -864,6 +864,8 @@ function buildNewsDiscoveryPorts(
           schema: Record<string, unknown>;
           prompt: string;
           maxOutputTokens?: number;
+          sorting?: true;
+          signal?: AbortSignal;
         }
       ) =>
         generateStructured(
@@ -888,7 +890,7 @@ function buildNewsDiscoveryPorts(
 const sportsHostRateLimiter = createHostRateLimiter();
 
 /** #1572: Sports' own discovery ports — URL-only, so no `search` (unlike News). */
-function buildSportsDiscoveryPorts(
+export function buildSportsDiscoveryPorts(
   logger?: Pick<FastifyBaseLogger, "info" | "warn">,
   browser?: SportsBrowserClient
 ) {
@@ -951,6 +953,8 @@ function buildSportsDiscoveryPorts(
           schema: Record<string, unknown>;
           prompt: string;
           maxOutputTokens?: number;
+          sorting?: true;
+          signal?: AbortSignal;
         }
       ) =>
         generateStructured(

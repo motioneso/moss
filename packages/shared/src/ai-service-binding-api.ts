@@ -30,15 +30,16 @@ export const aiServiceBindingSchema = {
   ]
 } as const;
 
-// #874 HIGH-2: Chat is the ONLY bindable user-facing service. Voice/transcription is configured
-// separately. #915 D6 adds module.* admin binding keys; other worker capabilities stay automatic.
+// #874 HIGH-2: Chat is the only bindable user-facing capability. Voice/transcription is configured
+// separately. #915 D6 adds module.* admin binding keys, and #2594 adds the reserved `sorting` key;
+// other worker capabilities stay automatic.
 export const aiServiceParamsSchema = {
   type: "object",
   additionalProperties: false,
   required: ["service"],
   properties: {
     // Keep module part in sync with MODULE_SERVICE_KEY_PATTERN (ai-types.ts).
-    service: { type: "string", pattern: "^(chat|module\\.[a-z0-9][a-z0-9_.-]{0,63})$" }
+    service: { type: "string", pattern: "^(chat|sorting|module\\.[a-z0-9][a-z0-9_.-]{0,63})$" }
   }
 } as const;
 
@@ -46,7 +47,8 @@ export const aiServiceBindingMapSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    chat: aiServiceBindingSchema
+    chat: aiServiceBindingSchema,
+    sorting: aiServiceBindingSchema
   },
   // Dynamic keys must be declared or fast-json-stringify silently strips them (#859/#885).
   patternProperties: {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb } from "../../packages/db/src/index.js";
 import {
+  MAX_STORY_RELEVANCE_VERDICTS,
   STORY_RELEVANCE_RULE_VERSION,
   storyRelevanceResponseSchema,
   type StoryRelevanceCandidate
@@ -271,5 +272,96 @@ describe("story relevance evaluator", () => {
     );
     expect(ai.generateJson).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, verdicts: [] });
+  });
+});
+
+describe("sorting model opt-in (#2594)", () => {
+  function manyCandidates(count: number): StoryRelevanceCandidate[] {
+    const base = candidates();
+    return Array.from({ length: count }, (_, index) => ({
+      ...base[index % base.length]!,
+      storyRef: `${base[index % base.length]!.storyRef}-${index}`
+    }));
+  }
+
+  function recordingPort(servedBy: (call: number) => "sorting" | "main") {
+    const calls: {
+      sorting?: true;
+      signal?: AbortSignal;
+      schema: unknown;
+      prompt: string;
+    }[] = [];
+    const port: StoryRelevanceAiPort = {
+      async generateJson(_db, input) {
+        calls.push(input);
+        return { ok: true, object: { verdicts: [] }, servedBy: servedBy(calls.length) };
+      }
+    };
+    return { port, calls };
+  }
+
+  it("passes sorting with the unchanged schema and prompt", async () => {
+    const { port: plain, prompts } = answeringPort();
+    await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: plain },
+      { candidates: candidates(), rules: [activeRule()] }
+    );
+    const { port, calls } = recordingPort(() => "sorting");
+    await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: candidates(), rules: [activeRule()] }
+    );
+    expect(calls[0]?.sorting).toBe(true);
+    expect(calls[0]?.schema).toBe(storyRelevanceResponseSchema);
+    expect(calls[0]?.prompt).toBe(prompts[0]);
+  });
+
+  it("after the sorting model fails on batch one, later batches skip it", async () => {
+    // Enough candidates to force several batches, so the run has later batches to check.
+    const { port, calls } = recordingPort((call) => (call === 1 ? "main" : "sorting"));
+    await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: manyCandidates(MAX_STORY_RELEVANCE_VERDICTS * 2 + 1), rules: [activeRule()] }
+    );
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[0]?.sorting).toBe(true);
+    for (const later of calls.slice(1)) expect(later.sorting).toBeUndefined();
+  });
+
+  it("keeps using the sorting model while it answers", async () => {
+    const { port, calls } = recordingPort(() => "sorting");
+    await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: manyCandidates(MAX_STORY_RELEVANCE_VERDICTS + 1), rules: [activeRule()] }
+    );
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.every((call) => call.sorting === true)).toBe(true);
+  });
+
+  it("passes the run's signal to every call and stops when it aborts", async () => {
+    const controller = new AbortController();
+    const seen: (AbortSignal | undefined)[] = [];
+    const port: StoryRelevanceAiPort = {
+      generateJson(_db, input) {
+        seen.push(input.signal);
+        return new Promise((resolve) => {
+          input.signal?.addEventListener("abort", () => resolve({ ok: false, error: "aborted" }), {
+            once: true
+          });
+          setTimeout(() => controller.abort(), 10);
+        });
+      }
+    };
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: candidates(), rules: [activeRule()], signal: controller.signal }
+    );
+    expect(result).toEqual({ ok: false, error: "aborted" });
+    expect(seen[0]).toBe(controller.signal);
   });
 });

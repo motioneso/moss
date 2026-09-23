@@ -123,9 +123,16 @@ export interface NewsWebSearchPort {
 export interface NewsAiPort {
   generateJson(
     scopedDb: DataContextDb,
-    input: { schema: Record<string, unknown>; prompt: string; maxOutputTokens?: number }
+    input: {
+      schema: Record<string, unknown>;
+      prompt: string;
+      maxOutputTokens?: number;
+      /** #2594: try the admin's sorting model first. */
+      sorting?: true;
+      signal?: AbortSignal;
+    }
   ): Promise<
-    | { ok: true; object: unknown }
+    | { ok: true; object: unknown; servedBy?: "sorting" | "main" }
     | {
         ok: false;
         error: "needs_config" | "validation_failed" | "provider_error" | "aborted";

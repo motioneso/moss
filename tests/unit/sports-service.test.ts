@@ -1446,6 +1446,33 @@ describe("SportsService story relevance (#2019)", () => {
     expect(shownRefs(overview).every((ref) => ref === undefined)).toBe(true);
   });
 
+  // #2594: a cancelled page load must stop the sorting attempt and its fallback too, so the
+  // request's own abort signal has to reach the relevance policy unchanged.
+  it("passes the request abort signal through to the story relevance policy", async () => {
+    const controller = new AbortController();
+    const seen: (AbortSignal | undefined)[] = [];
+    const recording: SportsStoryRelevancePort = async (_db, input) => {
+      seen.push(input.signal);
+      return {
+        status: "applied",
+        kept: [...input.candidates],
+        boosts: [],
+        suppressedCount: 0,
+        overriddenCount: 0
+      };
+    };
+    const service = new SportsService(
+      makeDeps({
+        source: relevanceSource(),
+        storyRelevance: recording,
+        storyFeedback: recordingFeedbackPort()
+      })
+    );
+    await service.getOverview(userA, controller.signal);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBe(controller.signal);
+  });
+
   // Registration is the authorisation boundary, so it has to cover exactly what the page shows,
   // on both surfaces the page can be read from.
   it("registers every story the page shows, for the Sports page and the Today widget", async () => {
