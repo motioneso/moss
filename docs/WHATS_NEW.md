@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Simpler Trail Marker menu.** The Trail Marker menu no longer has Judge Now or Check for Updates; Trail Marker checks your focus on its own, and updates are in Settings. [PR #2631](https://github.com/motioneso/moss/pull/2631)
 
+#### Fixed
+
+- **Trail Marker approval page styling.** The page where you approve a Mac for Trail Marker now uses Moss's usual heading style. [PR #2632](https://github.com/motioneso/moss/pull/2632)
+
 ### 2026-09-22
 
 #### Fixed
