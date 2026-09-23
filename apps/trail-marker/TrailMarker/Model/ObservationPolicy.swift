@@ -1,11 +1,39 @@
+import CoreGraphics
 import Foundation
 
+/// The window a capture is allowed to take, as Accessibility reported it: the focused window's
+/// frame (screen points, top-left origin, the same space `SCWindow.frame` uses) and its title.
+/// Only ever built when both reads succeeded, so a title that could not be read is never mistaken
+/// for a window that truly has no title (#2643). There is no public API that turns an AX window
+/// into a `CGWindowID`, so this is matched to an on-screen window by process, frame and title.
+struct WindowIdentity: Equatable {
+    let frame: CGRect
+    let title: String
+
+    /// Within a point either way: AX and ScreenCaptureKit round the same window's frame
+    /// independently.
+    static let frameTolerance: CGFloat = 1
+
+    func matches(frame other: CGRect, title otherTitle: String?) -> Bool {
+        guard let otherTitle, otherTitle == title else { return false }
+        return abs(frame.minX - other.minX) <= Self.frameTolerance
+            && abs(frame.minY - other.minY) <= Self.frameTolerance
+            && abs(frame.width - other.width) <= Self.frameTolerance
+            && abs(frame.height - other.height) <= Self.frameTolerance
+    }
+
+    func matches(_ other: WindowIdentity) -> Bool { matches(frame: other.frame, title: other.title) }
+}
+
 /// What the frontmost app looked like at one moment. `windowTitle` is empty when Accessibility is
-/// not granted or the app has no focused window.
+/// not granted or the app has no focused window. `window` is nil unless Accessibility named the
+/// focused window and read its title; a screen capture needs it (`allowsCapture`).
 struct Observation: Equatable {
     let appName: String
     let bundleId: String
     let windowTitle: String
+    var pid: pid_t = 0
+    var window: WindowIdentity?
 }
 
 extension Observation {
@@ -63,6 +91,20 @@ struct ObservationPolicy: Equatable {
         if neverWatches(observation) { return false }
         if watchEntireDesktop { return true }
         return allowedBundleIds.contains(observation.bundleId)
+    }
+
+    /// Whether a picture of this window may be taken for a judgment. Stricter than `allows`: the
+    /// focused window must have been identified, which means Accessibility is granted and its
+    /// title was actually read, so the private-window check above really ran on it. Without that
+    /// nothing is captured; judging by app name alone is unaffected (#2643).
+    func allowsCapture(_ observation: Observation) -> Bool {
+        allows(observation) && observation.window != nil
+    }
+
+    /// Settings' Test vision takes its picture outside any judgment, so it is not limited to the
+    /// chosen apps, but it obeys never-watch and needs the same identified window.
+    func allowsTestCapture(_ observation: Observation) -> Bool {
+        !neverWatches(observation) && observation.window != nil
     }
 
     /// The denylist, the person's exclusions and private windows: never observed, whatever else

@@ -134,8 +134,20 @@ final class PreferencesStore {
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
-            Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
-            Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
+            Key.linkedIdentity, Key.connectionEnabled,
+            Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown
+        ] {
+            defaults.removeObject(forKey: key)
+        }
+        clearAccountData()
+    }
+
+    /// Everything that belongs to the account rather than to this Mac's link to an instance: the
+    /// device name and every Focus choice. Cleared when Moss revokes this Mac, which keeps the
+    /// instance so Sign In can link again, possibly as someone else (#2643).
+    func clearAccountData() {
+        for key in [
+            Key.displayName, Key.pendingDisplayName,
             Key.focusConsent, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
             Key.focusWatchEntireDesktop,
             Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel

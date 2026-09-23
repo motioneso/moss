@@ -85,6 +85,7 @@ final class FocusRuntime: ObservableObject {
     private var lastSent: (appName: String, windowTitle: String, blockTitle: String, description: String?)?
     private var cancellables = Set<AnyCancellable>()
     private var wakeObserver: NSObjectProtocol?
+    private var sleepObserver: NSObjectProtocol?
     private var observing = false
 
     init(
@@ -161,6 +162,42 @@ final class FocusRuntime: ObservableObject {
         ) { _ in
             Task { @MainActor in self.send(.wake) }
         }
+        sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in self.send(.sleep) }
+        }
+
+        // Every time a link ends, forget the account's Focus state, not only its saved keys.
+        connection.$linkEndCount
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.resetForEndedLink() }
+            .store(in: &cancellables)
+    }
+
+    /// The link ended (#2643). The preferences are already cleared; the running Focus must not keep
+    /// the old account's consent, lists, last judgment or in-flight work, or a relink in the same
+    /// run, as a different account, would inherit them.
+    func resetForEndedLink() {
+        cancelAllTasks()
+        consent = preferences.focusConsent
+        allowedBundleIds = preferences.focusAllowedBundleIds
+        excludedBundleIds = preferences.focusExcludedBundleIds
+        watchEntireDesktop = preferences.focusWatchEntireDesktop
+        rung3Enabled = preferences.focusRung3Enabled
+        visionSource = preferences.focusVisionSource
+        visionBaseURL = preferences.focusVisionBaseURL
+        visionModel = preferences.focusVisionModel
+        lastJudgment = nil
+        lastKnownApp = nil
+        lastSent = nil
+        visionTestResult = nil
+        visionTestCapture = nil
+        machine = FocusMachine(policy: currentPolicy)
+        apply(machine.handle(.launched(consent: consent), now: Date()))
+        send(.accessibilityChanged(granted: permissions.accessibility == .granted))
+        send(.connectionChanged(isConnected: isConnected))
     }
 
     // MARK: - What the person can do
@@ -248,6 +285,18 @@ final class FocusRuntime: ObservableObject {
     /// submitted, so Test never silently runs against an empty key the person can see on screen.
     func testVision(enteredAPIKey: String = "") {
         if !enteredAPIKey.isEmpty { setVisionAPIKey(enteredAPIKey) }
+        // A test still takes a picture and sends it to the vision source, so it obeys the pause
+        // and the Focus switch like everything else that sends (#2643).
+        guard !connectionPaused else {
+            visionTestCapture = nil
+            visionTestResult = .failure(.paused)
+            return
+        }
+        guard consent else {
+            visionTestCapture = nil
+            visionTestResult = .failure(.focusOff)
+            return
+        }
         // `observer.current` reads nil while Trail Marker's own Settings window is frontmost,
         // which it is right now — `lastKnownApp` is the real app that was in front just before.
         visionTestCapture = nil
@@ -263,6 +312,13 @@ final class FocusRuntime: ObservableObject {
             )
             return
         }
+        // And only of the exact window Accessibility identified (#2643).
+        guard let window = app.window, currentPolicy.allowsTestCapture(app) else {
+            visionTestResult = .failure(
+                .captureFailed(detail: "Trail Marker couldn't identify \(app.appName)'s window — check Accessibility is granted")
+            )
+            return
+        }
         let describer = visionDescriberFactory(
             visionSource, visionBaseURL, visionModel, keychain.readVisionKey() ?? ""
         )
@@ -270,14 +326,17 @@ final class FocusRuntime: ObservableObject {
             guard let self else { return }
             let image: Data
             do {
-                image = try await self.windowCapture.captureFrontmostWindow(bundleId: app.bundleId)
+                let picture = try await self.windowCapture.capture(
+                    window, pid: app.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
+                )
+                image = try JPEGEncoding.encode(picture)
             } catch let error as ScreenCaptureError {
                 // Distinct from describe() failing below: this never reached the vision source at
                 // all, so it must never be reported as "couldn't reach the vision source".
                 switch error {
-                case .windowNotFound:
+                case .identityMismatch:
                     self.visionTestResult = .failure(
-                        .captureFailed(detail: "\(app.appName) has no window on screen right now")
+                        .captureFailed(detail: "\(app.appName)'s window moved or changed while the picture was taken")
                     )
                 case .captureFailed:
                     self.visionTestResult = .failure(
@@ -289,6 +348,9 @@ final class FocusRuntime: ObservableObject {
                 self.visionTestResult = .failure(.captureFailed(detail: "\(error)"))
                 return
             }
+            // Paused, Focus turned off or the Mac slept while the picture was being taken: it is
+            // dropped here and never reaches the vision source (#2643).
+            guard !Task.isCancelled, !self.connectionPaused, self.consent else { return }
             // Recorded before describe() runs, so a describe failure still shows what was
             // actually captured — the two are separate questions and separate places to be wrong.
             self.visionTestCapture = (appName: app.appName, image: image)
@@ -303,7 +365,9 @@ final class FocusRuntime: ObservableObject {
         }
     }
 
+    /// Sends a correction to Moss, so it is refused while paused or with Focus off (#2643).
     func correct(_ verdict: FocusVerdict) {
+        guard !connectionPaused, consent else { return }
         guard let remembered = lastJudgment, let identity = connection.identity,
             let credential = keychain.read(for: identity)
         else { return }
@@ -314,6 +378,12 @@ final class FocusRuntime: ObservableObject {
             )
         }
     }
+
+    #if DEBUG
+    /// Tests only: a remembered judgment, so "correct is refused while paused" is checked against
+    /// a runtime that would otherwise send one.
+    func seedLastJudgmentForTesting(_ judgment: RememberedJudgment) { lastJudgment = judgment }
+    #endif
 
     /// The line the menu shows and the icon's hover text repeats.
     var goalLine: String? {
@@ -365,8 +435,10 @@ final class FocusRuntime: ObservableObject {
         updateObserving()
     }
 
+    /// Everything that may send is gated on this, and it is checked again after every await.
+    private var shouldObserve: Bool { consent && isConnected }
+
     private func updateObserving() {
-        let shouldObserve = consent && isConnected
         if shouldObserve, !observing {
             observing = true
             observer.start { [weak self] observation in self?.appChanged(observation) }
@@ -445,11 +517,17 @@ final class FocusRuntime: ObservableObject {
                     Rung3Decision.shouldCapture(
                         label: judgment.label, rung3Enabled: self.rung3Enabled,
                         screenRecordingGranted: self.permissions.screenRecording == .granted
-                    )
+                    ),
+                    // Only of the exact window the policy checked (#2643).
+                    let window = observation.window, self.currentPolicy.allowsCapture(observation)
                 else {
                     if judgment.label == .insufficientEvidence {
                         focusDebug(
-                            "No screen capture: " + (self.rung3Enabled ? "Screen Recording not granted" : "screen capture is off")
+                            "No screen capture: " + (
+                                !self.rung3Enabled ? "screen capture is off"
+                                    : self.permissions.screenRecording != .granted ? "Screen Recording not granted"
+                                    : "the focused window couldn't be identified"
+                            )
                         )
                     }
                     self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
@@ -464,9 +542,13 @@ final class FocusRuntime: ObservableObject {
                 let description: String?
                 do {
                     focusDebug("Capturing \(observation.appName)'s window…")
-                    let image = try await self.windowCapture.captureFrontmostWindow(
-                        bundleId: observation.bundleId
+                    let picture = try await self.windowCapture.capture(
+                        window, pid: observation.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
                     )
+                    // Paused, Focus off or asleep while the picture was taken: it never reaches
+                    // the vision source (#2643).
+                    guard !Task.isCancelled, self.shouldObserve else { return }
+                    let image = try JPEGEncoding.encode(picture)
                     focusDebug("Captured \(image.count / 1024) KB, describing…")
                     description = try await describer.describe(image)
                     focusDebug("Screen described: \"\((description ?? "").prefix(200))\"")
@@ -475,7 +557,9 @@ final class FocusRuntime: ObservableObject {
                     description = nil
                 }
 
-                guard let description, !Task.isCancelled else {
+                // And again before the second judge request leaves the Mac.
+                guard !Task.isCancelled, self.shouldObserve else { return }
+                guard let description else {
                     self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
                     self.send(.judged(judgment, generation: generation))
                     return

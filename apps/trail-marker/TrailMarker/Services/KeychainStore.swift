@@ -5,7 +5,12 @@ import Security
 /// credential to a specific instance host and device id, so a leftover item from a previous
 /// instance is never picked up by a new link (§9 client).
 struct KeychainStore {
-    private let service = "com.moss.trailmarker"
+    private let service: String
+
+    /// Tests pass their own service, so they never read or prompt for the person's real items.
+    init(service: String = "com.moss.trailmarker") {
+        self.service = service
+    }
 
     func store(credential: String, for identity: LinkedIdentity) throws {
         let account = Self.account(for: identity)

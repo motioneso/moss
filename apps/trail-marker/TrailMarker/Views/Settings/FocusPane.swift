@@ -324,6 +324,10 @@ struct FocusPane: View {
             return "Trail Marker hasn't seen another app in front yet. Switch to one, then come back and test."
         case .captureFailed(let detail):
             return "Couldn't take the picture (\(detail))."
+        case .paused:
+            return "Paused: resume to test."
+        case .focusOff:
+            return "Turn Focus on to test."
         }
     }
 

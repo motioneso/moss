@@ -51,6 +51,7 @@ final class SinglePauseTests: XCTestCase {
             permissions: PermissionsService(adaptor: NoPermissions()),
             nudges: NoNudges(),
             preferences: preferences,
+            keychain: KeychainStore(service: "com.moss.trailmarker.tests"),
             observer: FrontmostObserver(source: FakeSource())
         )
         focus.start()

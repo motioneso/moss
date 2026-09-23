@@ -22,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // As the unit-test host the app must not start for real: that reads the person's own
+        // linked credential from the Keychain (a password prompt that hangs the test run) and
+        // could send requests with it. Tests build their own runtimes.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
         #if DEBUG
         focusDebugOverlay.show()
         focusDebugBanner = FocusDebugBanner(focus: focus)

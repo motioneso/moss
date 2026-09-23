@@ -37,11 +37,13 @@ final class FocusExclusionTests: XCTestCase {
 
     private final class RecordingCapture: WindowCapturing {
         private(set) var captured: [String] = []
-        func captureFrontmostWindow(bundleId: String) async throws -> Data {
-            captured.append(bundleId)
-            throw ScreenCaptureError.windowNotFound
+        func capture(_ window: WindowIdentity, pid: pid_t, maxDimension: CGFloat) async throws -> CGImage {
+            captured.append(window.title)
+            throw ScreenCaptureError.identityMismatch
         }
     }
+
+    private static let window = WindowIdentity(frame: CGRect(x: 0, y: 0, width: 800, height: 600), title: "Docs")
 
     private func runtime(
         _ preferences: PreferencesStore, source: FakeSource = FakeSource(), capture: WindowCapturing = RecordingCapture()
@@ -51,6 +53,7 @@ final class FocusExclusionTests: XCTestCase {
             permissions: PermissionsService(adaptor: NoPermissions()),
             nudges: NoNudges(),
             preferences: preferences,
+            keychain: KeychainStore(service: "com.moss.trailmarker.tests"),
             observer: FrontmostObserver(source: source),
             windowCapture: capture
         )
@@ -60,9 +63,14 @@ final class FocusExclusionTests: XCTestCase {
     /// of an excluded app. The allowed case below proves the fake would have recorded it.
     func testTestVisionNeverCapturesAnExcludedApp() async {
         let source = FakeSource()
-        source.current = Observation(appName: "Finance", bundleId: "com.example.Finance", windowTitle: "Accounts")
+        source.current = Observation(
+            appName: "Finance", bundleId: "com.example.Finance", windowTitle: "Accounts", pid: 7,
+            window: WindowIdentity(frame: Self.window.frame, title: "Accounts")
+        )
         let capture = RecordingCapture()
-        let focus = runtime(PreferencesStore(defaults: defaults), source: source, capture: capture)
+        let preferences = PreferencesStore(defaults: defaults)
+        preferences.focusConsent = true
+        let focus = runtime(preferences, source: source, capture: capture)
         focus.setExcluded("com.example.Finance", excluded: true)
 
         focus.testVision()
@@ -76,14 +84,18 @@ final class FocusExclusionTests: XCTestCase {
 
     func testTestVisionStillCapturesAnAppThatIsNotExcluded() async {
         let source = FakeSource()
-        source.current = Observation(appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Docs")
+        source.current = Observation(
+            appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Docs", pid: 7, window: Self.window
+        )
         let capture = RecordingCapture()
-        let focus = runtime(PreferencesStore(defaults: defaults), source: source, capture: capture)
+        let preferences = PreferencesStore(defaults: defaults)
+        preferences.focusConsent = true
+        let focus = runtime(preferences, source: source, capture: capture)
 
         focus.testVision()
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertEqual(capture.captured, ["com.apple.Safari"])
+        XCTAssertEqual(capture.captured, ["Docs"])
     }
 
     func testExclusionsSurviveARelaunch() {
