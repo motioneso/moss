@@ -2,10 +2,16 @@ import AppKit
 import ScreenCaptureKit
 
 enum ScreenCaptureError: Error, Equatable {
-    /// No on-screen window is exactly the one the policy checked: none matched, more than one
-    /// matched, or focus moved to another window while the picture was being taken (#2643).
-    /// Nothing is described.
-    case identityMismatch
+    /// No on-screen window of the app is exactly the one Accessibility identified: none matched
+    /// or more than one did (#2643). Nothing is captured.
+    ///
+    /// `debugDetail` lists the identity and every same-process candidate (title, frame,
+    /// on-screen). It is filled only in Debug builds, for the on-screen focus log; a Release build
+    /// leaves it empty, so window titles never reach an error that could be shown or sent.
+    case noMatchingWindow(debugDetail: String)
+    /// A window was captured, but Accessibility's focused window changed while it was taken, so
+    /// the picture is dropped. `debugDetail` (Debug only) has the before and after identities.
+    case focusMovedDuringCapture(debugDetail: String)
     /// Screen Recording was refused between the permission check and the capture, or the capture
     /// itself failed.
     case captureFailed
@@ -15,7 +21,9 @@ enum ScreenCaptureError: Error, Equatable {
 /// only in memory (rung3 spec §4). A protocol so the escalation logic in `FocusRuntime` can be
 /// tested without ever asking the real OS for a screen.
 protocol WindowCapturing {
-    func capture(_ window: WindowIdentity, pid: pid_t, maxDimension: CGFloat) async throws -> CGImage
+    /// `appName` is the owning app's localized name, used only to accept the app-name suffix
+    /// Accessibility adds to some titles (see `WindowIdentity.matchesCaptureWindow`).
+    func capture(_ window: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat) async throws -> CGImage
 }
 
 /// A window candidate reduced to exactly what matching needs. `SCWindow` has no public
@@ -26,16 +34,23 @@ struct CapturableWindow: Equatable {
     let title: String?
     let isOnScreen: Bool
     let frame: CGRect
+    /// `SCRunningApplication.applicationName`, accepted alongside the localized name.
+    var appName: String? = nil
 }
 
 /// The one on-screen window of `pid` whose frame and title match `identity`, or nil when there
 /// isn't exactly one. Replaces "the app's largest window" (#2643): a small ordinary window in
 /// front of a larger private one of the same browser must never authorise a picture of the
 /// private one. Two identical candidates are ambiguous, so neither is taken.
-func matchCaptureWindowIndex(from windows: [CapturableWindow], pid: pid_t, identity: WindowIdentity) -> Int? {
+func matchCaptureWindowIndex(
+    from windows: [CapturableWindow], pid: pid_t, appName: String, identity: WindowIdentity
+) -> Int? {
     let matches = windows.indices.filter {
-        windows[$0].pid == pid && windows[$0].isOnScreen
-            && identity.matches(frame: windows[$0].frame, title: windows[$0].title)
+        let window = windows[$0]
+        return window.pid == pid && window.isOnScreen
+            && identity.matchesCaptureWindow(
+                frame: window.frame, title: window.title, appNames: [appName, window.appName ?? ""]
+            )
     }
     return matches.count == 1 ? matches[0] : nil
 }
@@ -50,17 +65,22 @@ struct ScreenCaptureKitCapture: WindowCapturing {
     /// capture discards it. Injectable for tests; the real one asks Accessibility.
     var focusedWindow: (pid_t) -> WindowIdentity? = { WorkspaceFrontmostSource.focusedWindowIdentity(pid: $0) }
 
-    func capture(_ identity: WindowIdentity, pid: pid_t, maxDimension: CGFloat = Self.maxDimension) async throws -> CGImage {
+    func capture(
+        _ identity: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat = Self.maxDimension
+    ) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true
         )
         let candidates = content.windows.map {
             CapturableWindow(
-                pid: $0.owningApplication?.processID, title: $0.title, isOnScreen: $0.isOnScreen, frame: $0.frame
+                pid: $0.owningApplication?.processID, title: $0.title, isOnScreen: $0.isOnScreen, frame: $0.frame,
+                appName: $0.owningApplication?.applicationName
             )
         }
-        guard let index = matchCaptureWindowIndex(from: candidates, pid: pid, identity: identity) else {
-            throw ScreenCaptureError.identityMismatch
+        guard let index = matchCaptureWindowIndex(from: candidates, pid: pid, appName: appName, identity: identity) else {
+            throw ScreenCaptureError.noMatchingWindow(
+                debugDetail: CaptureDiagnostics.noMatch(identity: identity, pid: pid, candidates: candidates)
+            )
         }
         let window = content.windows[index]
 
@@ -84,10 +104,50 @@ struct ScreenCaptureKitCapture: WindowCapturing {
             throw ScreenCaptureError.captureFailed
         }
 
-        guard let now = focusedWindow(pid), now.matches(identity) else {
-            throw ScreenCaptureError.identityMismatch
+        let after = focusedWindow(pid)
+        guard let after, after.matches(identity) else {
+            throw ScreenCaptureError.focusMovedDuringCapture(
+                debugDetail: CaptureDiagnostics.moved(before: identity, after: after)
+            )
         }
         return image
+    }
+}
+
+/// Text for the Debug focus log only. Every function returns "" in a Release build, so no
+/// window title is ever formatted outside Debug.
+enum CaptureDiagnostics {
+    static func describe(_ identity: WindowIdentity?) -> String {
+        guard let identity else { return "none (Accessibility couldn't read it)" }
+        return "\"\(identity.title)\" \(frameText(identity.frame))"
+    }
+
+    static func noMatch(identity: WindowIdentity, pid: pid_t, candidates: [CapturableWindow]) -> String {
+        #if DEBUG
+        let own = candidates.filter { $0.pid == pid }
+        var lines = [
+            "no single matching window. AX: \(describe(identity)); \(own.count) window(s) of pid \(pid):"
+        ]
+        for window in own {
+            let title = window.title.map { "\"\($0)\"" } ?? "(title unreadable)"
+            lines.append("  \(title) \(frameText(window.frame)) onScreen=\(window.isOnScreen)")
+        }
+        return lines.joined(separator: "\n")
+        #else
+        return ""
+        #endif
+    }
+
+    static func moved(before: WindowIdentity, after: WindowIdentity?) -> String {
+        #if DEBUG
+        return "focus moved during capture. before: \(describe(before)); after: \(describe(after))"
+        #else
+        return ""
+        #endif
+    }
+
+    private static func frameText(_ frame: CGRect) -> String {
+        "(\(Int(frame.minX)), \(Int(frame.minY)), \(Int(frame.width))x\(Int(frame.height)))"
     }
 }
 

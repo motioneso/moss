@@ -19,7 +19,7 @@ final class ScreenCaptureTests: XCTestCase {
         ]
         let identity = WindowIdentity(frame: ordinary, title: "Docs")
 
-        XCTAssertEqual(matchCaptureWindowIndex(from: windows, pid: browser, identity: identity), 1)
+        XCTAssertEqual(matchCaptureWindowIndex(from: windows, pid: browser, appName: "Browser", identity: identity), 1)
     }
 
     /// Ghostty registers a 68pt untitled sliver alongside its real window (seen live); the
@@ -31,21 +31,21 @@ final class ScreenCaptureTests: XCTestCase {
             window(browser, "zsh", real)
         ]
         XCTAssertEqual(
-            matchCaptureWindowIndex(from: windows, pid: browser, identity: WindowIdentity(frame: real, title: "zsh")), 1
+            matchCaptureWindowIndex(from: windows, pid: browser, appName: "Browser", identity: WindowIdentity(frame: real, title: "zsh")), 1
         )
     }
 
     func testTwoIdenticalCandidatesAreAmbiguousSoNeitherIsTaken() {
         let frame = CGRect(x: 10, y: 10, width: 800, height: 600)
         let windows = [window(browser, "Docs", frame), window(browser, "Docs", frame)]
-        XCTAssertNil(matchCaptureWindowIndex(from: windows, pid: browser, identity: WindowIdentity(frame: frame, title: "Docs")))
+        XCTAssertNil(matchCaptureWindowIndex(from: windows, pid: browser, appName: "Browser", identity: WindowIdentity(frame: frame, title: "Docs")))
     }
 
     func testAnUnreadableTitleNeverMatches() {
         let frame = CGRect(x: 10, y: 10, width: 800, height: 600)
         XCTAssertNil(
             matchCaptureWindowIndex(
-                from: [window(browser, nil, frame)], pid: browser, identity: WindowIdentity(frame: frame, title: "Docs")
+                from: [window(browser, nil, frame)], pid: browser, appName: "Browser", identity: WindowIdentity(frame: frame, title: "Docs")
             )
         )
     }
@@ -54,7 +54,7 @@ final class ScreenCaptureTests: XCTestCase {
         let frame = CGRect(x: 10, y: 10, width: 800, height: 600)
         XCTAssertNil(
             matchCaptureWindowIndex(
-                from: [window(999, "Docs", frame)], pid: browser, identity: WindowIdentity(frame: frame, title: "Docs")
+                from: [window(999, "Docs", frame)], pid: browser, appName: "Browser", identity: WindowIdentity(frame: frame, title: "Docs")
             )
         )
     }
@@ -63,7 +63,7 @@ final class ScreenCaptureTests: XCTestCase {
         let frame = CGRect(x: 10, y: 10, width: 800, height: 600)
         XCTAssertNil(
             matchCaptureWindowIndex(
-                from: [window(browser, "Docs", frame, onScreen: false)], pid: browser,
+                from: [window(browser, "Docs", frame, onScreen: false)], pid: browser, appName: "Browser",
                 identity: WindowIdentity(frame: frame, title: "Docs")
             )
         )
@@ -71,14 +71,73 @@ final class ScreenCaptureTests: XCTestCase {
 
     func testFramesWithinAPointStillMatch() {
         let identity = WindowIdentity(frame: CGRect(x: 10, y: 10, width: 800, height: 600), title: "Docs")
-        XCTAssertTrue(identity.matches(frame: CGRect(x: 10.5, y: 9.5, width: 800.8, height: 600), title: "Docs"))
-        XCTAssertFalse(identity.matches(frame: CGRect(x: 12, y: 10, width: 800, height: 600), title: "Docs"))
+        XCTAssertTrue(
+            identity.matchesCaptureWindow(frame: CGRect(x: 10.5, y: 9.5, width: 800.8, height: 600), title: "Docs", appNames: [])
+        )
+        XCTAssertFalse(
+            identity.matchesCaptureWindow(frame: CGRect(x: 12, y: 10, width: 800, height: 600), title: "Docs", appNames: [])
+        )
+    }
+
+    // Measured on Ben's Mac, 2026-09-23: Accessibility and ScreenCaptureKit report the same
+    // Chrome window with the same frame, but only Accessibility adds " - Google Chrome".
+    func testChromeStyleAppNameSuffixMatches() {
+        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
+        let identity = WindowIdentity(frame: frame, title: "Voice - (19) Messages - Google Chrome")
+        XCTAssertEqual(
+            matchCaptureWindowIndex(
+                from: [window(browser, "Voice - (19) Messages", frame)], pid: browser, appName: "Google Chrome",
+                identity: identity
+            ),
+            0
+        )
+    }
+
+    /// An incognito window's Accessibility title ends differently, so it never matches this way.
+    func testADifferentSuffixDoesNotMatch() {
+        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
+        let identity = WindowIdentity(frame: frame, title: "Bank - Google Chrome (Incognito)")
+        XCTAssertNil(
+            matchCaptureWindowIndex(
+                from: [window(browser, "Bank", frame)], pid: browser, appName: "Google Chrome", identity: identity
+            )
+        )
+    }
+
+    func testAnotherAppsNameAsSuffixDoesNotMatch() {
+        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
+        let identity = WindowIdentity(frame: frame, title: "Docs - Safari")
+        XCTAssertNil(
+            matchCaptureWindowIndex(
+                from: [window(browser, "Docs", frame)], pid: browser, appName: "Google Chrome", identity: identity
+            )
+        )
+    }
+
+    /// Only "<capture title> - <app name>" is accepted, never a title that merely starts the same.
+    func testATitleThatOnlySharesAPrefixDoesNotMatch() {
+        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
+        let identity = WindowIdentity(frame: frame, title: "Voice - (19) Messages and more - Google Chrome")
+        XCTAssertNil(
+            matchCaptureWindowIndex(
+                from: [window(browser, "Voice - (19) Messages", frame)], pid: browser, appName: "Google Chrome",
+                identity: identity
+            )
+        )
+    }
+
+    /// The post-capture re-check compares Accessibility with Accessibility, so it stays exact.
+    func testAccessibilityRecheckStaysExact() {
+        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
+        let before = WindowIdentity(frame: frame, title: "Voice - (19) Messages - Google Chrome")
+        XCTAssertFalse(before.matches(WindowIdentity(frame: frame, title: "Voice - (19) Messages")))
+        XCTAssertTrue(before.matches(WindowIdentity(frame: frame, title: "Voice - (19) Messages - Google Chrome")))
     }
 
     func testReturnsNilWithNoMatch() {
         XCTAssertNil(
             matchCaptureWindowIndex(
-                from: [], pid: browser, identity: WindowIdentity(frame: .zero, title: "")
+                from: [], pid: browser, appName: "Browser", identity: WindowIdentity(frame: .zero, title: "")
             )
         )
     }

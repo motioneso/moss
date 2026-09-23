@@ -14,15 +14,27 @@ struct WindowIdentity: Equatable {
     /// independently.
     static let frameTolerance: CGFloat = 1
 
-    func matches(frame other: CGRect, title otherTitle: String?) -> Bool {
-        guard let otherTitle, otherTitle == title else { return false }
-        return abs(frame.minX - other.minX) <= Self.frameTolerance
+    private func sameFrame(_ other: CGRect) -> Bool {
+        abs(frame.minX - other.minX) <= Self.frameTolerance
             && abs(frame.minY - other.minY) <= Self.frameTolerance
             && abs(frame.width - other.width) <= Self.frameTolerance
             && abs(frame.height - other.height) <= Self.frameTolerance
     }
 
-    func matches(_ other: WindowIdentity) -> Bool { matches(frame: other.frame, title: other.title) }
+    /// Accessibility against Accessibility (the post-capture re-check): the title must be equal.
+    func matches(_ other: WindowIdentity) -> Bool { other.title == title && sameFrame(other.frame) }
+
+    /// Accessibility against a ScreenCaptureKit window. The titles are equal, or the AX title is
+    /// exactly the SC title plus " - " and the owning app's name. Measured on Ben's Mac for Chrome
+    /// (2026-09-23): AX "Voice - (19) Messages - Google Chrome", SC "Voice - (19) Messages", same
+    /// frame. Nothing looser: no prefix or contains matching, so an incognito window's different
+    /// suffix, or a window that merely starts the same, never matches. An unreadable SC title
+    /// never matches.
+    func matchesCaptureWindow(frame other: CGRect, title scTitle: String?, appNames: [String]) -> Bool {
+        guard let scTitle, sameFrame(other) else { return false }
+        if scTitle == title { return true }
+        return appNames.contains { !$0.isEmpty && title == scTitle + " - " + $0 }
+    }
 }
 
 /// What the frontmost app looked like at one moment. `windowTitle` is empty when Accessibility is
@@ -34,6 +46,17 @@ struct Observation: Equatable {
     let windowTitle: String
     var pid: pid_t = 0
     var window: WindowIdentity?
+}
+
+extension Observation {
+    /// The same app with its window replaced by a fresh Accessibility read. The title follows the
+    /// fresh window, so the private-window check runs on what is on screen now. A failed read
+    /// leaves no window, and so no capture.
+    func refreshed(window fresh: WindowIdentity?) -> Observation {
+        Observation(
+            appName: appName, bundleId: bundleId, windowTitle: fresh?.title ?? windowTitle, pid: pid, window: fresh
+        )
+    }
 }
 
 extension Observation {

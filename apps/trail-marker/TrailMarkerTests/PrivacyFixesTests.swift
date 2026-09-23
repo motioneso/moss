@@ -67,7 +67,7 @@ final class PrivacyFixesTests: XCTestCase {
         private var continuation: CheckedContinuation<Void, Never>?
         var suspend = true
 
-        func capture(_ window: WindowIdentity, pid: pid_t, maxDimension: CGFloat) async throws -> CGImage {
+        func capture(_ window: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat) async throws -> CGImage {
             calls += 1
             if suspend { await withCheckedContinuation { continuation = $0 } }
             return PrivacyFixesTests.onePixel()
@@ -144,6 +144,7 @@ final class PrivacyFixesTests: XCTestCase {
             connection: connection, permissions: permissions, nudges: NoNudges(), preferences: preferences,
             keychain: keychain, observer: FrontmostObserver(source: source),
             transportFactory: { _ in transport }, windowCapture: capture,
+            freshWindowIdentity: { [weak source] _ in source?.current?.window },
             visionDescriberFactory: { _, _, _, _ in describer }
         )
         focus.start()

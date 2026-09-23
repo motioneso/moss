@@ -73,6 +73,10 @@ final class FocusRuntime: ObservableObject {
     private let nudges: NudgeDelivering
     private let transportFactory: (InstanceURL) -> CompanionTransport
     private let windowCapture: WindowCapturing
+    /// Reads an app's focused window as it is right now. A capture is always bound to a fresh
+    /// read, never to an observation taken seconds earlier: a Chrome title carries a live unread
+    /// count, so a stored snapshot stops matching within minutes (#2643). Injectable for tests.
+    private let freshWindowIdentity: (pid_t) -> WindowIdentity?
     private let visionDescriberFactory: (VisionSource, String, String, String) -> VisionDescribing
 
     /// `observer.current` reads nil whenever Trail Marker's own window is frontmost — which it
@@ -97,6 +101,7 @@ final class FocusRuntime: ObservableObject {
         observer: FrontmostObserver? = nil,
         transportFactory: @escaping (InstanceURL) -> CompanionTransport = { _ in URLSessionTransport() },
         windowCapture: WindowCapturing = ScreenCaptureKitCapture(),
+        freshWindowIdentity: @escaping (pid_t) -> WindowIdentity? = { WorkspaceFrontmostSource.focusedWindowIdentity(pid: $0) },
         visionDescriberFactory: @escaping (VisionSource, String, String, String) -> VisionDescribing = {
             source, baseURL, model, apiKey in
             switch source {
@@ -118,6 +123,7 @@ final class FocusRuntime: ObservableObject {
         self.observer = observer ?? FrontmostObserver()
         self.transportFactory = transportFactory
         self.windowCapture = windowCapture
+        self.freshWindowIdentity = freshWindowIdentity
         self.visionDescriberFactory = visionDescriberFactory
         self.consent = preferences.focusConsent
         self.allowedBundleIds = preferences.focusAllowedBundleIds
@@ -300,10 +306,12 @@ final class FocusRuntime: ObservableObject {
         // `observer.current` reads nil while Trail Marker's own Settings window is frontmost,
         // which it is right now — `lastKnownApp` is the real app that was in front just before.
         visionTestCapture = nil
-        guard let app = lastKnownApp ?? observer.current else {
+        guard let remembered = lastKnownApp ?? observer.current else {
             visionTestResult = .failure(.noAppToCapture)
             return
         }
+        // The window as it is now, not as it was when the app was last in front (#2643).
+        let app = remembered.refreshed(window: freshWindowIdentity(remembered.pid))
         // A test is still a picture sent to the vision source, so it obeys the same never-watch
         // rules as a judgment: an excluded app or a password manager is never captured (#2633).
         if currentPolicy.neverWatches(app) {
@@ -327,16 +335,22 @@ final class FocusRuntime: ObservableObject {
             let image: Data
             do {
                 let picture = try await self.windowCapture.capture(
-                    window, pid: app.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
+                    window, pid: app.pid, appName: app.appName, maxDimension: ScreenCaptureKitCapture.maxDimension
                 )
                 image = try JPEGEncoding.encode(picture)
             } catch let error as ScreenCaptureError {
                 // Distinct from describe() failing below: this never reached the vision source at
                 // all, so it must never be reported as "couldn't reach the vision source".
                 switch error {
-                case .identityMismatch:
+                case .noMatchingWindow(let detail):
+                    if !detail.isEmpty { focusDebug("Test vision: \(detail)") }
                     self.visionTestResult = .failure(
-                        .captureFailed(detail: "\(app.appName)'s window moved or changed while the picture was taken")
+                        .captureFailed(detail: "Trail Marker couldn't match \(app.appName)'s window on screen")
+                    )
+                case .focusMovedDuringCapture(let detail):
+                    if !detail.isEmpty { focusDebug("Test vision: \(detail)") }
+                    self.visionTestResult = .failure(
+                        .captureFailed(detail: "\(app.appName)'s window changed while the picture was taken")
                     )
                 case .captureFailed:
                     self.visionTestResult = .failure(
@@ -518,8 +532,10 @@ final class FocusRuntime: ObservableObject {
                         label: judgment.label, rung3Enabled: self.rung3Enabled,
                         screenRecordingGranted: self.permissions.screenRecording == .granted
                     ),
-                    // Only of the exact window the policy checked (#2643).
-                    let window = observation.window, self.currentPolicy.allowsCapture(observation)
+                    // Only of the exact window the policy checked, read fresh now and checked
+                    // again on its current title (#2643).
+                    case let fresh = observation.refreshed(window: self.freshWindowIdentity(observation.pid)),
+                    let window = fresh.window, self.currentPolicy.allowsCapture(fresh)
                 else {
                     if judgment.label == .insufficientEvidence {
                         focusDebug(
@@ -543,7 +559,8 @@ final class FocusRuntime: ObservableObject {
                 do {
                     focusDebug("Capturing \(observation.appName)'s window…")
                     let picture = try await self.windowCapture.capture(
-                        window, pid: observation.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
+                        window, pid: observation.pid, appName: observation.appName,
+                        maxDimension: ScreenCaptureKitCapture.maxDimension
                     )
                     // Paused, Focus off or asleep while the picture was taken: it never reaches
                     // the vision source (#2643).

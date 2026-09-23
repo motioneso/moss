@@ -37,16 +37,17 @@ final class FocusExclusionTests: XCTestCase {
 
     private final class RecordingCapture: WindowCapturing {
         private(set) var captured: [String] = []
-        func capture(_ window: WindowIdentity, pid: pid_t, maxDimension: CGFloat) async throws -> CGImage {
+        func capture(_ window: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat) async throws -> CGImage {
             captured.append(window.title)
-            throw ScreenCaptureError.identityMismatch
+            throw ScreenCaptureError.noMatchingWindow(debugDetail: "")
         }
     }
 
     private static let window = WindowIdentity(frame: CGRect(x: 0, y: 0, width: 800, height: 600), title: "Docs")
 
     private func runtime(
-        _ preferences: PreferencesStore, source: FakeSource = FakeSource(), capture: WindowCapturing = RecordingCapture()
+        _ preferences: PreferencesStore, source: FakeSource = FakeSource(), capture: WindowCapturing = RecordingCapture(),
+        fresh: ((pid_t) -> WindowIdentity?)? = nil
     ) -> FocusRuntime {
         FocusRuntime(
             connection: ConnectionRuntime(preferences: preferences),
@@ -55,7 +56,8 @@ final class FocusExclusionTests: XCTestCase {
             preferences: preferences,
             keychain: KeychainStore(service: "com.moss.trailmarker.tests"),
             observer: FrontmostObserver(source: source),
-            windowCapture: capture
+            windowCapture: capture,
+            freshWindowIdentity: fresh ?? { [weak source] _ in source?.current?.window }
         )
     }
 
@@ -96,6 +98,64 @@ final class FocusExclusionTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertEqual(capture.captured, ["Docs"])
+    }
+
+    /// The remembered app's title is minutes old (a Chrome unread count moved on); the picture is
+    /// bound to the window as it is now, not refused because the snapshot went stale (#2643).
+    func testTestVisionCapturesTheFreshWindowNotTheStaleSnapshot() async {
+        let source = FakeSource()
+        source.current = Observation(
+            appName: "Google Chrome", bundleId: "com.google.Chrome", windowTitle: "(20) Messages", pid: 7,
+            window: WindowIdentity(frame: Self.window.frame, title: "(20) Messages")
+        )
+        let capture = RecordingCapture()
+        let preferences = PreferencesStore(defaults: defaults)
+        preferences.focusConsent = true
+        let focus = runtime(preferences, source: source, capture: capture) { _ in
+            WindowIdentity(frame: Self.window.frame, title: "(19) Messages")
+        }
+
+        focus.testVision()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(capture.captured, ["(19) Messages"])
+    }
+
+    /// The fresh read is what the private-window check sees: a window that became private since
+    /// the snapshot is never captured.
+    func testTestVisionChecksPrivacyOnTheFreshTitle() async {
+        let source = FakeSource()
+        source.current = Observation(
+            appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Docs", pid: 7, window: Self.window
+        )
+        let capture = RecordingCapture()
+        let preferences = PreferencesStore(defaults: defaults)
+        preferences.focusConsent = true
+        let focus = runtime(preferences, source: source, capture: capture) { _ in
+            WindowIdentity(frame: Self.window.frame, title: "Bank — Private Browsing")
+        }
+
+        focus.testVision()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(capture.captured, [])
+    }
+
+    /// Accessibility can't read the window now: no capture, whatever the snapshot said.
+    func testTestVisionWithNoFreshWindowCapturesNothing() async {
+        let source = FakeSource()
+        source.current = Observation(
+            appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Docs", pid: 7, window: Self.window
+        )
+        let capture = RecordingCapture()
+        let preferences = PreferencesStore(defaults: defaults)
+        preferences.focusConsent = true
+        let focus = runtime(preferences, source: source, capture: capture) { _ in nil }
+
+        focus.testVision()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(capture.captured, [])
     }
 
     func testExclusionsSurviveARelaunch() {
