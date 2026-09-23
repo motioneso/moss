@@ -20,7 +20,7 @@ final class MenuBarController: NSObject {
     ) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         actions = StatusActions(
-            connection: connection, focus: focus, onShowLastJudgment: onShowLastJudgment,
+            connection: connection, onShowLastJudgment: onShowLastJudgment,
             onOpenSettings: onOpenSettings, onOpenOnboarding: onOpenOnboarding
         )
         super.init()

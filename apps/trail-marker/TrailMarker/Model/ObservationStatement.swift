@@ -4,12 +4,9 @@ import Foundation
 /// this setting. Both permission screens use it, so the copy cannot stay "not observing" while
 /// the app is in fact reporting the app in front.
 enum ObservationStatement {
-    static func current(focusEnabled: Bool, paused: Bool, watchEntireDesktop: Bool = false) -> String {
+    static func current(focusEnabled: Bool, watchEntireDesktop: Bool = false) -> String {
         guard focusEnabled else {
             return "These permissions prepare future capabilities. Trail Marker is not observing your activity."
-        }
-        if paused {
-            return "Focus is paused, so nothing is being sent to Moss until you resume."
         }
         let scope = watchEntireDesktop ? "for the entire desktop" : "for the apps you have allowed"
         return "While a Moss calendar block is on, Trail Marker tells Moss the name of the app in front "

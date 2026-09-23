@@ -66,10 +66,12 @@ Persist connection enablement separately from the credential and account identit
 | State            | Meaning                                                   | Primary action                          |
 | ---------------- | --------------------------------------------------------- | --------------------------------------- |
 | Not linked       | No linked account/credential                              | Set Up Trail Marker                     |
-| Connected        | Enabled, authenticated, recent successful contact         | Disconnect                              |
-| Disconnected     | User deliberately disabled communication                  | Connect                                 |
+| Connected        | Enabled, authenticated, recent successful contact         | Disconnect (labelled Pause)             |
+| Disconnected     | User deliberately disabled communication                  | Connect (labelled Resume)               |
 | Reconnecting     | Enabled, temporarily unable to reach Moss                 | Retry Now; Disconnect remains available |
 | Sign-in required | Credential expired/revoked, or account no longer eligible | Sign In or Log Out                      |
+
+Amendment (Ben, 2026-09-23): in the interface, Disconnect is labelled **Pause**, Connect is labelled **Resume**, and the Disconnected state reads **Paused**. The behaviour below is unchanged; this spec keeps the Disconnect / Connect names for it.
 
 Browser approval waiting is a setup state, not a sixth steady connection state. Local credential-access failures must be presented as actionable local errors, not misreported as server revocation.
 

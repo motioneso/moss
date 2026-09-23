@@ -68,6 +68,8 @@ Every connection state includes an icon, a plain-text label, and an appropriate 
 
 Disconnect, Quit, and Log Out have different outcomes and must remain visibly distinct. Manual Disconnect persists across app and Mac restarts.
 
+In the interface, Disconnect is labelled **Pause** and Connect is labelled **Resume**, and the Disconnected state reads **Paused** (Ben, 2026-09-23). The behaviour is unchanged: Pause stops all communication without logging out. This guide keeps the Disconnect / Connect names for the behaviour. It is the only pause: there is no separate Focus pause.
+
 ### Honest about scope
 
 The first release links the account and identifies the device. Permission copy must state that future capabilities remain inactive and that granting access does not begin observation.
@@ -272,8 +274,8 @@ Show the instance, account, device name, and explicit Connected status. The fina
 
 | State            | Meaning                                          | Symbol            | Primary action      |
 | ---------------- | ------------------------------------------------ | ----------------- | ------------------- |
-| Connected        | Linked, authenticated, and reachable             | Check             | Disconnect          |
-| Disconnected     | User deliberately disabled communication         | Pause             | Connect             |
+| Connected        | Linked, authenticated, and reachable             | Check             | Pause               |
+| Paused           | User deliberately disabled communication         | Pause             | Resume              |
 | Reconnecting     | Connection enabled; Moss temporarily unreachable | Circular arrows   | Retry Now           |
 | Sign-in required | Credential expired or access was revoked         | Key or lock       | Sign In             |
 | Not linked       | No account is connected                          | Broken/empty link | Set Up Trail Marker |
@@ -294,11 +296,13 @@ Order items consistently:
 
 1. Status summary.
 2. Connected instance and account.
-3. State-specific primary action: Connect, Disconnect, Retry, or Sign In.
+3. State-specific primary action: Pause, Resume, Retry, or Sign In.
 4. Open Moss.
 5. Settings…
 6. Log Out… when linked.
 7. Quit Trail Marker.
+
+There is one pause, the connection's Pause / Resume above; no separate Pause Focus exists in the menu or in Settings (Ben, 2026-09-23).
 
 Check for Updates lives in Settings, under Updates, not in the menu.
 
@@ -317,7 +321,7 @@ Use one native settings window with sidebar navigation.
 - Instance URL.
 - Account name and email.
 - Current state and last successful contact.
-- Connect/Disconnect or Retry.
+- Pause/Resume or Retry.
 - Log Out.
 
 Changing the instance or account requires Log Out first.
