@@ -408,6 +408,10 @@ export function TodayPage(props: {
     </section>
   );
 
+  const userFirstName = props.me.user.name.trim()
+    ? firstName(props.me.user.name, props.me.user.email)
+    : null;
+
   // The hero stands outside .cmd-wrap: it breaks out of the surface padding
   // to span the content region in both sidebar states, while the wrap below
   // keeps its padded max-width grid.
@@ -417,18 +421,12 @@ export function TodayPage(props: {
         mode={todayMode}
         eyebrow={
           todayMode === "evening"
-            ? eveningHeroKicker(
-                props.me.user.name.trim()
-                  ? firstName(props.me.user.name, props.me.user.email)
-                  : null
-              )
+            ? eveningHeroKicker(userFirstName)
             : morningDefinition?.enabled === true
-              ? morningHeroKicker(
-                  props.me.user.name.trim()
-                    ? firstName(props.me.user.name, props.me.user.email)
-                    : null
-                )
-              : `${greeting()} · ${datelineLabel(now, locale)}`
+              ? morningHeroKicker(userFirstName)
+              : userFirstName
+                ? `${greeting()}, ${userFirstName}`
+                : greeting()
         }
         headline={heroContent.headline}
         summary={heroContent.summary}

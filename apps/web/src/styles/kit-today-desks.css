@@ -86,6 +86,9 @@
 .sp-tksub__morning-star {
   display: none;
 }
+.cmd-grid[data-mode="day"] .nw-twlead__tag-evening {
+  display: none;
+}
 .cmd-grid[data-mode="day"] .nw-twlead__tag-morning {
   display: inline;
 }
