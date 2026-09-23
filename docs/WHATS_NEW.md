@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Assistant knows where settings live again.** The assistant no longer points at settings pages that no longer exist, and now describes Wellness, Memory, Notes, Tasks, Chat and connected accounts according to what they really do today. [PR #2622](https://github.com/motioneso/moss/pull/2622)
 - **Host details show the app version and commit.** The Environment, Version, Commit and Deploy mode fields under Settings > Host > Technical details now show real values instead of being blank, and on a pinned release Moss tells you when a newer version is available. [PR #2601](https://github.com/motioneso/moss/pull/2601)
 
 ### 2026-09-20
