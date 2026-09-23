@@ -234,8 +234,10 @@ Defaults chosen when the spec was approved (Ben can change either):
 
 ## 13. Slices (for the plan, once approved)
 
-1. The Mac captures, recognizes text, dedupes and redacts, with the settings tab and consent sheet,
-   and sends to a stub route that discards. This proves the CPU budget and redaction first.
+1. The Mac captures, recognizes text, dedupes and redacts, with the settings tab, consent sheet and
+   menu row. It sends **nothing**; segments stay in memory in the Debug build only. This proves the
+   CPU budget, recognition quality and redaction first. (Phase 0, Pause All and the Focus switch,
+   ships before it; see the plan.)
 2. The server module: route, table, RLS, index job, `dataLifecycle`, the Moss settings screen and
    deletion.
 3. The chat tool with calendar-aware time ranges.
