@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Pause and Resume in the Trail Marker menu.** The Trail Marker menu now has one Pause / Resume button that stops everything, replacing Disconnect and Pause Focus. [PR #2635](https://github.com/motioneso/moss/pull/2635)
 - **Simpler Trail Marker menu.** The Trail Marker menu no longer has Judge Now or Check for Updates; Trail Marker checks your focus on its own, and updates are in Settings. [PR #2631](https://github.com/motioneso/moss/pull/2631)
 
 #### Fixed
