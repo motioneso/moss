@@ -162,7 +162,7 @@ Tried live on 2026-09-22 as a Debug-only experiment, then chosen by Ben for the 
     as Wrong in Last judgment);
   - the person pauses Trail Marker, or turns Focus off;
   - the block ends, or there is no current block.
-  An `insufficient_evidence` judgment leaves it as it is. There is only ever one banner.
+    An `insufficient_evidence` judgment leaves it as it is. There is only ever one banner.
 - **The distraction gauge** (Ben, 2026-09-22) decides when the banner appears:
   - It **fills** with time spent in front of windows judged `distracted`, from that judgment
     until the window changes or the next judgment. When it is full, the banner appears.
