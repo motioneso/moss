@@ -66,7 +66,8 @@ export type GenerateStructuredDeps = {
   readonly repository: Pick<
     AiRepository,
     "resolveModelForService" | "selectProviderWithCredential"
-  >;
+  > &
+    Partial<Pick<AiRepository, "resolveSortingModel">>;
   readonly cipher: Pick<AiSecretCipher, "decryptJson">;
   readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
   readonly createAdapter?: (
@@ -98,6 +99,8 @@ export type GenerateStructuredInput = {
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  /** #2594: try the admin's sorting model first, then today's path once if it fails. */
+  readonly sorting?: true;
 };
 
 export type GenerateStructuredExplicitModel = {
@@ -107,17 +110,28 @@ export type GenerateStructuredExplicitModel = {
   readonly provider_model_id: string;
 };
 
+export type StructuredServedBy = "sorting" | "main";
+
+type StructuredFailure = "needs_config" | "validation_failed" | "provider_error" | "aborted";
+
 export type GenerateStructuredResult =
   | {
       readonly ok: true;
       readonly object: unknown;
       readonly usage: StructuredUsage;
       readonly sources?: readonly { readonly title: string; readonly url: string }[];
+      /** Always set by generateStructured. Optional so hand-built results in tests compile. */
+      readonly servedBy?: StructuredServedBy;
     }
-  | {
-      readonly ok: false;
-      readonly error: "needs_config" | "validation_failed" | "provider_error" | "aborted";
-    };
+  | { readonly ok: false; readonly error: StructuredFailure };
+
+type SortingFailure = Exclude<StructuredFailure, "aborted">;
+
+type RunOptions = {
+  readonly maxAttempts: number;
+  readonly signal: AbortSignal | undefined;
+  readonly servedBy: StructuredServedBy;
+};
 
 export async function generateStructured(
   scopedDb: DataContextDb,
@@ -126,6 +140,31 @@ export async function generateStructured(
 ): Promise<GenerateStructuredResult> {
   assertBoundedStructuredSchema(input.schema);
   assertBoundedStructuredPrompt(input.prompt);
+
+  let sortingFailure: { readonly modelId: string; readonly error: SortingFailure } | null = null;
+  if (input.sorting) {
+    if (input.signal?.aborted) return { ok: false, error: "aborted" };
+    const sortingModel = input.explicitModel
+      ? null
+      : ((await deps.repository.resolveSortingModel?.(scopedDb, input.service, {
+          requireExplicitBinding: input.requireExplicitBinding
+        })) ?? null);
+    if (sortingModel) {
+      // No time limit of its own, matching the main model. One try, on the caller's signal.
+      const attempt = await runOnModel(scopedDb, input, deps, sortingModel, {
+        maxAttempts: 1,
+        signal: input.signal,
+        servedBy: "sorting"
+      });
+      if (attempt.ok) return { ...attempt, servedBy: "sorting" };
+      if (input.signal?.aborted) return { ok: false, error: "aborted" };
+      // An abort the caller did not ask for came from the provider itself.
+      sortingFailure = {
+        modelId: sortingModel.id,
+        error: attempt.error === "aborted" ? "provider_error" : attempt.error
+      };
+    }
+  }
 
   const model =
     input.explicitModel ??
@@ -136,8 +175,34 @@ export async function generateStructured(
         requireExplicitBinding: input.requireExplicitBinding
       })
     ).model;
+
+  if (sortingFailure) {
+    deps.logger?.info(
+      { service: input.service, servedBy: "main", sortingFailure: sortingFailure.error },
+      "ai.structured sorting fallback"
+    );
+    // Asking the same model twice would only double the wait.
+    if (model?.id === sortingFailure.modelId) {
+      return { ok: false, error: sortingFailure.error };
+    }
+  }
   if (!model) return { ok: false, error: "needs_config" };
 
+  const result = await runOnModel(scopedDb, input, deps, model, {
+    maxAttempts: STRUCTURED_MAX_REPAIR_RETRIES + 1,
+    signal: input.signal,
+    servedBy: "main"
+  });
+  return result.ok ? { ...result, servedBy: "main" } : result;
+}
+
+async function runOnModel(
+  scopedDb: DataContextDb,
+  input: GenerateStructuredInput,
+  deps: GenerateStructuredDeps,
+  model: GenerateStructuredExplicitModel,
+  options: RunOptions
+): Promise<GenerateStructuredResult> {
   const provider = await deps.repository.selectProviderWithCredential(
     scopedDb,
     model.provider_config_id
@@ -182,31 +247,36 @@ export async function generateStructured(
     adapter = createAdapter(providerKind, credential.apiKey, provider.base_url ?? null);
   }
 
+  const signal = options.signal;
   const ajv = new Ajv({ strict: false, validateFormats: false });
   const validate = ajv.compile(input.schema);
   const maxOutputTokens = input.maxOutputTokens ?? STRUCTURED_DEFAULT_MAX_OUTPUT_TOKENS;
   const messages: StructuredChatTurn[] = [{ role: "user", content: input.prompt }];
   const usage = { inputTokens: 0, outputTokens: 0 };
 
-  for (let attempt = 0; attempt <= STRUCTURED_MAX_REPAIR_RETRIES; attempt += 1) {
-    if (input.signal?.aborted) return { ok: false, error: "aborted" };
+  for (let attempt = 0; attempt < options.maxAttempts; attempt += 1) {
+    if (signal?.aborted) return { ok: false, error: "aborted" };
 
     let result: Extract<StructuredProviderResult, { readonly rawObject: unknown }>;
     try {
-      const generated = await adapter.generateStructured({
-        service: input.service,
-        model: { provider_kind: providerKind, provider_model_id: model.provider_model_id },
-        messages,
-        schema: input.schema,
-        maxOutputTokens,
-        nativeSearch: input.nativeSearch,
-        signal: input.signal,
-        telemetry: input.telemetry,
-        priority: input.priority,
-        scope: input.scope,
-        closeScope: input.closeScope
-      });
-      if (input.signal?.aborted) return { ok: false, error: "aborted" };
+      // The race stops adapters that ignore the signal, such as CLI-backed ones.
+      const generated = await raceAbort(
+        adapter.generateStructured({
+          service: input.service,
+          model: { provider_kind: providerKind, provider_model_id: model.provider_model_id },
+          messages,
+          schema: input.schema,
+          maxOutputTokens,
+          nativeSearch: input.nativeSearch,
+          signal,
+          telemetry: input.telemetry,
+          priority: input.priority,
+          scope: input.scope,
+          closeScope: input.closeScope
+        }),
+        signal
+      );
+      if (signal?.aborted) return { ok: false, error: "aborted" };
       if ("rawText" in generated) {
         try {
           result = {
@@ -227,7 +297,7 @@ export async function generateStructured(
         result = generated;
       }
     } catch (error) {
-      if (input.signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+      if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
         return { ok: false, error: "aborted" };
       }
       if (error instanceof StructuredOutputParseError) {
@@ -268,6 +338,7 @@ export async function generateStructured(
       deps.logger?.info(
         {
           service: input.service,
+          servedBy: options.servedBy,
           modelId: model.id,
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
@@ -285,6 +356,31 @@ export async function generateStructured(
   }
 
   return { ok: false, error: "validation_failed" };
+}
+
+function raceAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      // The losing promise may still reject later; swallow it so it is never unhandled.
+      work.catch(() => undefined);
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      reject(error);
+    };
+    if (signal.aborted) return onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
 }
 
 /**

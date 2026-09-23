@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
 import {
@@ -29,6 +29,7 @@ let providerId: string;
 let modelEconomyJsonId: string;
 let modelReasoningJsonId: string;
 let modelChatJsonId: string;
+let ollamaJsonModelId: string;
 
 function adminContext(): AccessContext {
   return { actorUserId: ids.adminUser, requestId: "request:ai-structured-test" };
@@ -46,6 +47,26 @@ async function seedProvider(displayName: string): Promise<string> {
     }
   });
   expect(response.statusCode).toBe(201);
+  return response.json().provider.id as string;
+}
+
+async function seedProviderOfKind(
+  providerKind: string,
+  displayName: string,
+  baseUrl: string
+): Promise<string> {
+  const response = await server.inject({
+    method: "POST",
+    url: "/api/ai/providers",
+    headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+    payload: {
+      providerKind,
+      displayName,
+      baseUrl,
+      credentialPayload: { apiKey: "structured-test-secret" }
+    }
+  });
+  expect(response.statusCode, response.body).toBe(201);
   return response.json().provider.id as string;
 }
 
@@ -94,6 +115,16 @@ beforeAll(async () => {
     headers: { authorization: `Bearer ${ids.sessionAdmin}` }
   });
   expect(defaultResponse.statusCode).toBe(200);
+
+  // Seed the non-qualifying ollama provider BEFORE the anthropic models: automatic module.*
+  // resolution breaks an economy-tier tie by newest created_at, so creating this provider's model
+  // last would hijack the existing "json-economy" expectations further down this file.
+  const ollamaProviderId = await seedProviderOfKind(
+    "ollama",
+    "Local Ollama",
+    "http://127.0.0.1:11434"
+  );
+  ollamaJsonModelId = await seedModel(ollamaProviderId, "ollama-json", ["json"], "economy");
 
   modelEconomyJsonId = await seedModel(providerId, "json-economy", ["json"], "economy");
   modelReasoningJsonId = await seedModel(providerId, "json-reasoning", ["json"], "reasoning");
@@ -400,6 +431,179 @@ describe("module service binding routes", () => {
   });
 });
 
+describe("sorting binding routes", () => {
+  const auth = { authorization: `Bearer ${ids.sessionAdmin}` };
+  const put = (binding: unknown) =>
+    server.inject({
+      method: "PUT",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth,
+      payload: { binding }
+    });
+  const list = async () =>
+    (await server.inject({ method: "GET", url: "/api/ai/service-bindings", headers: auth })).json()
+      .bindings as Record<string, unknown>;
+
+  it("saves, reads and deletes a sorting model binding through the real repository", async () => {
+    const saved = await put({ kind: "model", modelId: modelEconomyJsonId });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json()).toEqual({
+      service: "sorting",
+      binding: { kind: "model", modelId: modelEconomyJsonId }
+    });
+
+    expect((await list()).sorting).toEqual({ kind: "model", modelId: modelEconomyJsonId });
+    const direct = await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.getSortingBinding(scopedDb)
+    );
+    expect(direct).toEqual({ kind: "model", modelId: modelEconomyJsonId });
+
+    const del = await server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth
+    });
+    expect(del.statusCode, del.body).toBe(200);
+    expect(del.json()).toEqual({ service: "sorting" });
+    expect((await list()).sorting).toBeUndefined();
+  });
+
+  it("rejects a mode binding for sorting", async () => {
+    const response = await put({ kind: "mode", tier: "economy" });
+    expect(response.statusCode).toBe(400);
+    expect((await list()).sorting).toBeUndefined();
+  });
+
+  it("rejects a model without the json capability", async () => {
+    const chatOnly = await seedModel(providerId, "sorting-chat-only", ["chat"], "interactive");
+    const response = await put({ kind: "model", modelId: chatOnly });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("rejects a json model on a provider kind the structured path cannot run", async () => {
+    const response = await put({ kind: "model", modelId: ollamaJsonModelId });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("the repository refuses a mode binding for sorting", async () => {
+    await expect(
+      dataContext.withDataContext(adminContext(), (scopedDb) =>
+        repository.setServiceBinding(
+          scopedDb,
+          "sorting",
+          { kind: "mode", tier: "economy" },
+          ids.adminUser
+        )
+      )
+    ).rejects.toThrow(/model binding/);
+  });
+
+  it("saving sorting leaves chat and module bindings untouched", async () => {
+    const before = await list();
+    expect((await put({ kind: "model", modelId: modelEconomyJsonId })).statusCode).toBe(200);
+    const after = await list();
+    expect(after.chat).toEqual(before.chat);
+    expect(after["module.worker"]).toEqual(before["module.worker"]);
+    await server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth
+    });
+  });
+});
+
+describe("resolveSortingModel precedence", () => {
+  const sortingFor = (service: `module.${string}`, requireExplicitBinding = false) =>
+    dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.resolveSortingModel(scopedDb, service, { requireExplicitBinding })
+    );
+  const setSorting = (modelId: string) =>
+    dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setServiceBinding(scopedDb, "sorting", { kind: "model", modelId }, ids.adminUser)
+    );
+
+  // These tests share the instance's single settings row, so cleanup must run even when an
+  // assertion throws — otherwise a failure leaks a binding or pin into every later suite.
+  afterEach(async () => {
+    await dataContext.withDataContext(adminContext(), async (scopedDb) => {
+      await repository.setAdminPinnedModel(scopedDb, null);
+      await repository.deleteModuleServiceBinding(scopedDb, "module.news", ids.adminUser);
+      await repository.deleteModuleServiceBinding(scopedDb, "module.worker", ids.adminUser);
+      await repository.deleteModuleServiceBinding(scopedDb, "sorting", ids.adminUser);
+    });
+  });
+
+  it("returns null when no sorting binding exists", async () => {
+    expect(await sortingFor("module.news")).toBeNull();
+  });
+
+  it("returns the sorting model when it is bound and qualifies", async () => {
+    await setSorting(modelReasoningJsonId);
+    expect((await sortingFor("module.news"))?.id).toBe(modelReasoningJsonId);
+  });
+
+  it("a strict job never reaches the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    expect(await sortingFor("module.news", true)).toBeNull();
+  });
+
+  it("an admin pin beats the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setAdminPinnedModel(scopedDb, modelChatJsonId)
+    );
+    expect(await sortingFor("module.news")).toBeNull();
+  });
+
+  it("the job's own module binding bypasses the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setServiceBinding(
+        scopedDb,
+        "module.news",
+        { kind: "model", modelId: modelEconomyJsonId },
+        ids.adminUser
+      )
+    );
+    expect(await sortingFor("module.news")).toBeNull();
+    expect((await sortingFor("module.sports"))?.id).toBe(modelReasoningJsonId);
+  });
+
+  it("a module.worker binding does not bypass the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setServiceBinding(
+        scopedDb,
+        "module.worker",
+        { kind: "mode", tier: "economy" },
+        ids.adminUser
+      )
+    );
+    expect((await sortingFor("module.news"))?.id).toBe(modelReasoningJsonId);
+  });
+
+  it("a model that no longer qualifies is ignored", async () => {
+    // Bypass the route check to simulate a binding that went stale after saving.
+    await setSorting(ollamaJsonModelId);
+    expect(await sortingFor("module.news")).toBeNull();
+  });
+
+  it("a disabled provider makes resolveSortingModel return null", async () => {
+    const spareProvider = await seedProvider("Sorting Spare Provider");
+    const spareModel = await seedModel(spareProvider, "sorting-spare", ["json"], "economy");
+    await setSorting(spareModel);
+    expect((await sortingFor("module.news"))?.id).toBe(spareModel);
+    const disabled = await server.inject({
+      method: "PATCH",
+      url: `/api/ai/providers/${spareProvider}`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: { status: "disabled" }
+    });
+    expect(disabled.statusCode, disabled.body).toBe(200);
+    expect(await sortingFor("module.news")).toBeNull();
+  });
+});
+
 describe("generateStructured end-to-end", () => {
   it("resolves the service, decrypts the real credential, calls the adapter, validates", async () => {
     const captured: { apiKey?: string; input?: GenerateStructuredProviderInput } = {};
@@ -441,7 +645,8 @@ describe("generateStructured end-to-end", () => {
     expect(result).toEqual({
       ok: true,
       object: { title: "Staff Engineer" },
-      usage: { inputTokens: 11, outputTokens: 7 }
+      usage: { inputTokens: 11, outputTokens: 7 },
+      servedBy: "main"
     });
     expect(captured.apiKey).toBe("structured-test-secret");
     expect(captured.input?.model.provider_model_id).toBe("json-economy");

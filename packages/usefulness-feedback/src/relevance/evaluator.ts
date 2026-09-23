@@ -30,9 +30,12 @@ export interface StoryRelevanceAiPort {
       schema: Record<string, unknown>;
       prompt: string;
       maxOutputTokens?: number;
+      /** #2594: try the admin's sorting model first. */
+      sorting?: true;
+      signal?: AbortSignal;
     }
   ): Promise<
-    | { ok: true; object: unknown }
+    | { ok: true; object: unknown; servedBy?: "sorting" | "main" }
     | { ok: false; error: "needs_config" | "validation_failed" | "provider_error" | "aborted" }
   >;
 }
@@ -61,6 +64,7 @@ export async function evaluateStoryRelevance(
   input: {
     readonly candidates: readonly StoryRelevanceCandidate[];
     readonly rules: readonly ActiveStoryRuleRow[];
+    readonly signal?: AbortSignal;
   }
 ): Promise<
   { ok: true; verdicts: StoryRelevanceVerdict[] } | { ok: false; error: StoryRelevanceFailure }
@@ -80,6 +84,8 @@ export async function evaluateStoryRelevance(
   );
 
   const verdicts: StoryRelevanceVerdict[] = [];
+  // One sorting failure per run is enough: later batches go straight to the main model.
+  let trySorting = true;
   for (const chunk of chunkCandidates(input.candidates)) {
     const refs = new Set(chunk.map((candidate) => candidate.storyRef));
     const generated = await deps.ai.generateJson(scopedDb, {
@@ -89,11 +95,14 @@ export async function evaluateStoryRelevance(
         `UNTRUSTED DATA - the person's saved preferences:\n${ruleData}`,
         `UNTRUSTED DATA - candidate stories:\n${JSON.stringify(chunk.map(promptRow))}`
       ].join("\n"),
-      maxOutputTokens: MAX_OUTPUT_TOKENS
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      ...(trySorting ? { sorting: true as const } : {}),
+      ...(input.signal ? { signal: input.signal } : {})
     });
     // One bad chunk fails the whole evaluation. A half-filtered feed is never published: the
     // caller degrades, keeps everything except the exact exclusions, and can simply retry.
     if (!generated.ok) return { ok: false, error: generated.error };
+    if (generated.servedBy !== "sorting") trySorting = false;
     const parsed = parseStoryRelevanceVerdicts(generated.object, refs);
     if (!parsed) return { ok: false, error: "malformed_output" };
     verdicts.push(...parsed);

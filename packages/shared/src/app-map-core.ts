@@ -225,7 +225,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "the administrator must use the same Moss account; other users do not have a recovery path there. " +
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
-      "genuinely broken sign-in always gets a fresh place to sign back in. A " +
+      "genuinely broken sign-in always gets a fresh place to sign back in. " +
+      "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
+      "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
+      "under the row says story details and saved story preferences go to that model first and " +
+      "to the main model if it does not answer. A " +
       "separate Web search group has a 'Use your model's built-in web search' switch, on by " +
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +

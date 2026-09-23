@@ -145,6 +145,7 @@ export interface SportsStoryRelevancePort {
       readonly moduleId: "sports";
       readonly candidates: readonly StoryRelevanceCandidate[];
       readonly now: Date;
+      readonly signal?: AbortSignal;
     }
   ): Promise<StoryRelevanceResult>;
 }
@@ -647,7 +648,8 @@ export class SportsService {
       accessContext,
       { byComp: headlinesByComp, bySport: headlinesBySport, bundles: bundleList },
       headlineFollowedTeams,
-      state
+      state,
+      signal
     );
 
     const bundles = new Map(bundleList.map((b) => [b.follow.id, b]));
@@ -1112,7 +1114,8 @@ export class SportsService {
       readonly bundles: FollowedTeamBundle[];
     },
     followedTeams: readonly ResolvedFollow[],
-    state: DegradeState
+    state: DegradeState,
+    signal?: AbortSignal
   ): Promise<{
     readonly details: ReadonlyMap<string, StoryDetail>;
     readonly liftFor: (headline: SourceHeadline) => number;
@@ -1187,7 +1190,8 @@ export class SportsService {
           ownerUserId: accessContext.actorUserId,
           moduleId: "sports",
           candidates: [...details.values()].map((detail) => detail.candidate),
-          now: this.now()
+          now: this.now(),
+          ...(signal ? { signal } : {})
         })
       );
     } catch {
