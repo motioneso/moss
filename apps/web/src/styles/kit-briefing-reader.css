@@ -289,9 +289,14 @@
     grid-row: auto;
   }
   /* Proposed Read only: "Back to Today" reads above the link-and-primary
-     row on a narrow phone, ahead of the automatic footer's back-last order. */
+     row on a narrow phone. Explicit grid rows, not `order`, so DOM and tab
+     order still match what a keyboard user sees, same as the desktop
+     column placement above. */
   .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-back {
-    order: -1;
+    grid-row: 1;
+  }
+  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-actions {
+    grid-row: 2;
   }
 }
 @media (min-width: 1081px) {
