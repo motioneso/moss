@@ -609,6 +609,23 @@ describe("sorting questions (#2594 slice 2)", () => {
     expect(second.verdicts[0]?.ruleStoryRef).toBe("rule:less");
   });
 
+  /** The exact request body `generateChoices` serializes for a System One call. */
+  function exactChoiceBody(
+    batch: StoryRelevanceSortingBatch,
+    modelId = "jev-latest"
+  ): Record<string, unknown> {
+    return {
+      model: modelId,
+      state: batch.state,
+      questions: Object.fromEntries(
+        Object.entries(batch.questions).map(([name, question]) => [
+          name,
+          { type: "choice", instructions: question.instructions, criteria: question.criteria }
+        ])
+      )
+    };
+  }
+
   it("packs many questions into batches that stay under the request byte cap", async () => {
     const candidates = Array.from({ length: 40 }, (_, index) => ({
       ...newsCandidate(STORY_RELEVANCE_FIXTURE[0]!),
@@ -632,10 +649,44 @@ describe("sorting questions (#2594 slice 2)", () => {
     const batches = port.batches.flat();
     expect(batches.length).toBeGreaterThan(1);
     for (const batch of batches) {
-      const bytes = Buffer.byteLength(
-        JSON.stringify({ state: batch.state, questions: batch.questions }),
-        "utf8"
-      );
+      const bytes = Buffer.byteLength(JSON.stringify(exactChoiceBody(batch)), "utf8");
+      expect(bytes).toBeLessThanOrEqual(12_000);
+    }
+  });
+
+  // Live proof on dev: 47 real Sports stories and one rule made the first System One request too
+  // large and the whole run fell back. The planner must size the real body, not an estimate.
+  it("keeps a realistic 50-story, one-rule run's exact request bodies under the cap", async () => {
+    const candidates: StoryRelevanceCandidate[] = Array.from({ length: 50 }, (_, index) => ({
+      storyRef: `story:team-${index}`,
+      headline: `Riverside United edge Northport City in a five-goal thriller at the Riverside Stadium (${index})`,
+      sourceLabel: index % 2 === 0 ? "Example Sports Wire" : "Daily Sports",
+      publishedAt: "2026-08-26T09:00:00.000Z",
+      feedPosition: index,
+      topicRef: "topic:football",
+      teamRef: "team:riverside",
+      competitionRef: "competition:premier-league"
+    }));
+    const rule: ActiveStoryRuleRow = {
+      id: "rule-1",
+      targetRef: "story:rejected",
+      direction: "less",
+      reasonText:
+        "Stop showing me transfer gossip about Riverside United; I only want match reports and results.",
+      rule: {
+        version: STORY_RELEVANCE_RULE_VERSION,
+        module: "sports",
+        direction: "less",
+        storyRef: "story:rejected",
+        terms: ["team:riverside", "topic:transfer-gossip", "riverside", "transfer", "gossip"]
+      }
+    };
+    const port = answeringSortingPort(() => ({ choice: "no", confidence: 0.5 }));
+    await evaluateStoryRelevance(SCOPED_DB, { ai: port }, { candidates, rules: [rule] });
+    const batches = port.batches.flat();
+    expect(batches.length).toBeGreaterThan(0);
+    for (const batch of batches) {
+      const bytes = Buffer.byteLength(JSON.stringify(exactChoiceBody(batch)), "utf8");
       expect(bytes).toBeLessThanOrEqual(12_000);
     }
   });
