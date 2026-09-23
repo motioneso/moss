@@ -140,6 +140,28 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertFalse(sends(machine.handle(.appChanged(denied), now: at(200))))
     }
 
+    /// #2633: an app the person excluded sends nothing even with the entire desktop watched —
+    /// not on the switch, not when the block is found, and not on the regular sample timer.
+    func testAnExcludedAppIsNeverSentEvenWhileTheEntireDesktopIsWatched() {
+        let finance = Observation(appName: "Finance", bundleId: "com.example.Finance", windowTitle: "Accounts")
+        var machine = FocusMachine(policy: ObservationPolicy(
+            allowedBundleIds: [], watchEntireDesktop: true, excludedBundleIds: [finance.bundleId]
+        ))
+        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
+        _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
+        XCTAssertFalse(sends(machine.handle(.appChanged(finance), now: at(0))))
+        XCTAssertFalse(sends(machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(0))))
+        XCTAssertFalse(sends(machine.handle(.sampleTimerFired(generation: machine.generation), now: at(300))))
+    }
+
+    func testExcludingTheAppInFrontStopsItBeingSent() {
+        var machine = armed()
+        let excluding = ObservationPolicy(allowedBundleIds: ["com.apple.Safari"], excludedBundleIds: ["com.apple.Safari"])
+        _ = machine.handle(.policyChanged(excluding), now: at(10))
+        XCTAssertFalse(sends(machine.handle(.sampleTimerFired(generation: machine.generation), now: at(300))))
+    }
+
     func testWithoutAccessibilityNothingIsSent() {
         var machine = armed()
         _ = machine.handle(.accessibilityChanged(granted: false), now: at(10))

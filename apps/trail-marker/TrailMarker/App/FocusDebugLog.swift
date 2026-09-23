@@ -16,6 +16,7 @@ extension ObservationPolicy {
     /// Why `allows(_:)` answered the way it did, in the same order it checks, for the debug log.
     func explain(_ observation: Observation) -> String {
         if Self.deniedBundleIds.contains(observation.bundleId) { return "never watched (denylist)" }
+        if excludedBundleIds.contains(observation.bundleId) { return "never watched (you excluded it)" }
         let title = observation.windowTitle.lowercased()
         if Self.deniedTitleMarkers.contains(where: { title.contains($0) }) {
             return "never watched (private window)"

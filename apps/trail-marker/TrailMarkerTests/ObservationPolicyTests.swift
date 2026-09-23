@@ -66,6 +66,28 @@ final class ObservationPolicyTests: XCTestCase {
         XCTAssertTrue(policy.allows(observation(bundle: "com.apple.Safari")))
     }
 
+    // MARK: the person's own exclusions (#2633)
+
+    func testAnExcludedAppIsRefusedWhenOnlyChosenAppsAreWatched() {
+        let policy = ObservationPolicy(allowedBundleIds: ["com.apple.Safari"], excludedBundleIds: ["com.example.Finance"])
+        XCTAssertFalse(policy.allows(observation(bundle: "com.example.Finance")))
+        XCTAssertTrue(policy.allows(observation()))
+    }
+
+    func testAnExcludedAppIsRefusedWhileTheEntireDesktopIsWatched() {
+        let policy = ObservationPolicy(
+            allowedBundleIds: [], watchEntireDesktop: true, excludedBundleIds: ["com.example.Finance"]
+        )
+        XCTAssertFalse(policy.allows(observation(bundle: "com.example.Finance")))
+        XCTAssertTrue(policy.allows(observation(bundle: "com.apple.mail")))
+    }
+
+    func testAnExclusionWinsEvenWhenTheAppIsAlsoChosen() {
+        let policy = ObservationPolicy(allowedBundleIds: ["com.apple.Safari"], excludedBundleIds: ["com.apple.Safari"])
+        XCTAssertFalse(policy.allows(observation()))
+        XCTAssertEqual(policy.explain(observation()), "never watched (you excluded it)")
+    }
+
     /// The debug log's reason must agree with `allows(_:)`, or a live test reads the wrong answer.
     func testExplainGivesTheReasonAllowsActedOn() {
         let chosen = ObservationPolicy(allowedBundleIds: ["com.apple.Safari"])

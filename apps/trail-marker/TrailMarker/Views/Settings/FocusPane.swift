@@ -8,6 +8,8 @@ struct FocusPane: View {
 
     @State private var apps: [InstalledApp] = []
     @State private var search = ""
+    @State private var isAddingExcluded = false
+    @State private var excludedSearch = ""
     @State private var isAddingApp = false
     @State private var testNudgeNote: String?
     @State private var visionKeyEntry = ""
@@ -101,6 +103,49 @@ struct FocusPane: View {
                         } else {
                             Button("Add app…") { isAddingApp = true }
                         }
+                    }
+                }
+
+                Section("Never watch") {
+                    Text(
+                        "Nothing about these apps leaves this Mac — no picture, no window title, not even "
+                            + "the app's name — even when the entire desktop is watched. Password managers "
+                            + "and private-browsing windows are always excluded too."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    ForEach(excludedApps) { app in
+                        HStack {
+                            Text(app.name)
+                            Spacer()
+                            Button {
+                                focus.setExcluded(app.bundleId, excluded: false)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Stop excluding \(app.name)")
+                        }
+                    }
+
+                    if isAddingExcluded {
+                        TextField("Search apps", text: $excludedSearch)
+                        if excludableApps.isEmpty {
+                            Text(excludedSearch.isEmpty ? "No more apps to add." : "No apps found.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(excludableApps) { app in
+                            Button(app.name) { focus.setExcluded(app.bundleId, excluded: true) }
+                        }
+                        Button("Done") {
+                            isAddingExcluded = false
+                            excludedSearch = ""
+                        }
+                    } else {
+                        Button("Exclude app…") { isAddingExcluded = true }
                     }
                 }
 
@@ -289,7 +334,16 @@ struct FocusPane: View {
     /// no longer found on disk (the app was removed) still shows, by its id, rather than silently
     /// vanishing from a list that is supposed to say what's watched.
     private var chosenApps: [InstalledApp] {
-        focus.allowedBundleIds
+        installedApps(for: focus.allowedBundleIds)
+    }
+
+    /// The apps the person excluded, shown the same way as the chosen apps.
+    private var excludedApps: [InstalledApp] {
+        installedApps(for: focus.excludedBundleIds)
+    }
+
+    private func installedApps(for ids: Set<String>) -> [InstalledApp] {
+        ids
             .map { id in apps.first { $0.bundleId == id } ?? InstalledApp(bundleId: id, name: id) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -298,7 +352,21 @@ struct FocusPane: View {
     /// never becomes the big always-visible list it replaced; typing narrows it further.
     private var addableApps: [InstalledApp] {
         let query = search.trimmingCharacters(in: .whitespaces)
-        let candidates = apps.filter { !focus.allowedBundleIds.contains($0.bundleId) }
+        let candidates = apps.filter {
+            !focus.allowedBundleIds.contains($0.bundleId) && !focus.excludedBundleIds.contains($0.bundleId)
+        }
+        let matching = query.isEmpty ? candidates : candidates.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return Array(matching.prefix(8))
+    }
+
+    /// Installed apps not already excluded, narrowed by the exclude search field. Apps on the
+    /// built-in denylist are left out: they are never watched whatever the person picks.
+    private var excludableApps: [InstalledApp] {
+        let query = excludedSearch.trimmingCharacters(in: .whitespaces)
+        let candidates = apps.filter {
+            !focus.excludedBundleIds.contains($0.bundleId)
+                && !ObservationPolicy.deniedBundleIds.contains($0.bundleId)
+        }
         let matching = query.isEmpty ? candidates : candidates.filter { $0.name.localizedCaseInsensitiveContains(query) }
         return Array(matching.prefix(8))
     }
