@@ -28,13 +28,18 @@ extension Observation {
 /// so nothing is observed until they choose an app, or choose the whole desktop instead — getting
 /// distracted rarely stays inside one app, so watching everything is a real choice, not a fallback
 /// for someone too lazy to pick apps. Either way the denylist is fixed and always wins, so
-/// allowing (or watching) a password manager by mistake still sends nothing.
+/// allowing (or watching) a password manager by mistake still sends nothing. The person can add
+/// their own apps to that denylist (`excludedBundleIds`, #2633) — a finance app, say — and those
+/// win the same way: nothing about them leaves the Mac, not the picture, the title or the name.
 struct ObservationPolicy: Equatable {
     var allowedBundleIds: Set<String>
     /// When true, every app not on the denylist is observed and `allowedBundleIds` is ignored for
     /// the purpose of `allows(_:)` (still kept around as what the person picked before, in case
     /// they switch back). Off by default: an empty allowlist still means nothing is observed.
     var watchEntireDesktop: Bool = false
+    /// Apps the person chose never to have watched. Checked with the fixed denylist, before the
+    /// allowlist or entire-desktop choice, so it wins in both modes.
+    var excludedBundleIds: Set<String> = []
 
     /// Password managers and the system keychain. Not exhaustive and not a promise about every
     /// sensitive app: the allowlist is the real boundary, this is a backstop.
@@ -55,10 +60,17 @@ struct ObservationPolicy: Equatable {
     static let deniedTitleMarkers: [String] = ["incognito", "private browsing", "inprivate", "private window"]
 
     func allows(_ observation: Observation) -> Bool {
-        if Self.deniedBundleIds.contains(observation.bundleId) { return false }
-        let title = observation.windowTitle.lowercased()
-        if Self.deniedTitleMarkers.contains(where: { title.contains($0) }) { return false }
+        if neverWatches(observation) { return false }
         if watchEntireDesktop { return true }
         return allowedBundleIds.contains(observation.bundleId)
+    }
+
+    /// The denylist, the person's exclusions and private windows: never observed, whatever else
+    /// is chosen. Also what Settings' "Test vision" checks, since it captures outside a judgment.
+    func neverWatches(_ observation: Observation) -> Bool {
+        if Self.deniedBundleIds.contains(observation.bundleId) { return true }
+        if excludedBundleIds.contains(observation.bundleId) { return true }
+        let title = observation.windowTitle.lowercased()
+        return Self.deniedTitleMarkers.contains(where: { title.contains($0) })
     }
 }

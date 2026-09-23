@@ -45,6 +45,8 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var consent: Bool
     @Published private(set) var paused: Bool
     @Published private(set) var allowedBundleIds: Set<String>
+    /// Apps the person chose never to have watched; wins over everything else, like the denylist.
+    @Published private(set) var excludedBundleIds: Set<String>
     /// Watch every app instead of only the chosen ones (still subject to the denylist).
     @Published private(set) var watchEntireDesktop: Bool
     /// Rung 3 (#2570 slice 2). Off by default; the Focus pane refuses to turn it on without
@@ -120,6 +122,7 @@ final class FocusRuntime: ObservableObject {
         self.consent = preferences.focusConsent
         self.paused = preferences.focusPaused
         self.allowedBundleIds = preferences.focusAllowedBundleIds
+        self.excludedBundleIds = preferences.focusExcludedBundleIds
         self.watchEntireDesktop = preferences.focusWatchEntireDesktop
         self.rung3Enabled = preferences.focusRung3Enabled
         self.visionSource = preferences.focusVisionSource
@@ -128,7 +131,8 @@ final class FocusRuntime: ObservableObject {
         self.hasVisionAPIKey = keychain.readVisionKey() != nil
         self.machine = FocusMachine(policy: ObservationPolicy(
             allowedBundleIds: preferences.focusAllowedBundleIds,
-            watchEntireDesktop: preferences.focusWatchEntireDesktop
+            watchEntireDesktop: preferences.focusWatchEntireDesktop,
+            excludedBundleIds: preferences.focusExcludedBundleIds
         ))
     }
 
@@ -173,7 +177,32 @@ final class FocusRuntime: ObservableObject {
         if allowed { updated.insert(bundleId) } else { updated.remove(bundleId) }
         allowedBundleIds = updated
         preferences.focusAllowedBundleIds = updated
-        send(.policyChanged(ObservationPolicy(allowedBundleIds: updated, watchEntireDesktop: watchEntireDesktop)))
+        send(.policyChanged(currentPolicy))
+    }
+
+    /// Excluding an app also takes it off the chosen apps, so the two lists never disagree.
+    func setExcluded(_ bundleId: String, excluded: Bool) {
+        var updated = excludedBundleIds
+        if excluded {
+            updated.insert(bundleId)
+            if allowedBundleIds.contains(bundleId) {
+                allowedBundleIds.remove(bundleId)
+                preferences.focusAllowedBundleIds = allowedBundleIds
+            }
+        } else {
+            updated.remove(bundleId)
+        }
+        excludedBundleIds = updated
+        preferences.focusExcludedBundleIds = updated
+        send(.policyChanged(currentPolicy))
+    }
+
+    private var currentPolicy: ObservationPolicy {
+        ObservationPolicy(
+            allowedBundleIds: allowedBundleIds,
+            watchEntireDesktop: watchEntireDesktop,
+            excludedBundleIds: excludedBundleIds
+        )
     }
 
     /// Watching the whole desktop instead of chosen apps. The chosen apps are kept, not cleared,
@@ -181,7 +210,7 @@ final class FocusRuntime: ObservableObject {
     func setWatchEntireDesktop(_ value: Bool) {
         watchEntireDesktop = value
         preferences.focusWatchEntireDesktop = value
-        send(.policyChanged(ObservationPolicy(allowedBundleIds: allowedBundleIds, watchEntireDesktop: value)))
+        send(.policyChanged(currentPolicy))
     }
 
     /// Refused (left unchanged) without Screen Recording already granted, so the toggle can never
@@ -228,6 +257,14 @@ final class FocusRuntime: ObservableObject {
         visionTestCapture = nil
         guard let app = lastKnownApp ?? observer.current else {
             visionTestResult = .failure(.noAppToCapture)
+            return
+        }
+        // A test is still a picture sent to the vision source, so it obeys the same never-watch
+        // rules as a judgment: an excluded app or a password manager is never captured (#2633).
+        if currentPolicy.neverWatches(app) {
+            visionTestResult = .failure(
+                .captureFailed(detail: "\(app.appName) is never watched, so Trail Marker won't take its picture")
+            )
             return
         }
         let describer = visionDescriberFactory(
@@ -350,7 +387,7 @@ final class FocusRuntime: ObservableObject {
     private func appChanged(_ observation: Observation?) {
         if let observation {
             lastKnownApp = observation
-            let policy = ObservationPolicy(allowedBundleIds: allowedBundleIds, watchEntireDesktop: watchEntireDesktop)
+            let policy = currentPolicy
             let title = observation.windowTitle.isEmpty ? "(no title)" : "\"\(observation.windowTitle.prefix(80))\""
             focusDebug("Now in \(observation.appName) \(title): \(policy.explain(observation))")
         }

@@ -21,6 +21,7 @@ final class PreferencesStore {
         static let focusConsent = "focusConsent"
         static let focusPaused = "focusPaused"
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
+        static let focusExcludedBundleIds = "focusExcludedBundleIds"
         static let focusWatchEntireDesktop = "focusWatchEntireDesktop"
         static let focusRung3Enabled = "focusRung3Enabled"
         static let focusVisionSource = "focusVisionSource"
@@ -94,6 +95,13 @@ final class PreferencesStore {
         set { defaults.set(newValue.sorted(), forKey: Key.focusAllowedBundleIds) }
     }
 
+    /// Apps the person chose never to have watched (#2633). Wins over the allowlist and over
+    /// entire-desktop watching, like the fixed denylist.
+    var focusExcludedBundleIds: Set<String> {
+        get { Set(defaults.stringArray(forKey: Key.focusExcludedBundleIds) ?? []) }
+        set { defaults.set(newValue.sorted(), forKey: Key.focusExcludedBundleIds) }
+    }
+
     /// Watch every app (still subject to the denylist) instead of only the chosen apps above.
     /// Off by default: an empty allowlist means nothing is observed, not everything.
     var focusWatchEntireDesktop: Bool {
@@ -130,7 +138,8 @@ final class PreferencesStore {
         for key in [
             Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
             Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
-            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds, Key.focusWatchEntireDesktop,
+            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
+            Key.focusWatchEntireDesktop,
             Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
         ] {
             defaults.removeObject(forKey: key)
