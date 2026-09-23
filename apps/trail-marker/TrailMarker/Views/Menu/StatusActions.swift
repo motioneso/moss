@@ -5,20 +5,17 @@ import AppKit
 @MainActor
 final class StatusActions {
     private let connection: ConnectionRuntime
-    private let focus: FocusRuntime
     private let onShowLastJudgment: () -> Void
     private let onOpenSettings: () -> Void
     private let onOpenOnboarding: () -> Void
 
     init(
         connection: ConnectionRuntime,
-        focus: FocusRuntime,
         onShowLastJudgment: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onOpenOnboarding: @escaping () -> Void
     ) {
         self.connection = connection
-        self.focus = focus
         self.onShowLastJudgment = onShowLastJudgment
         self.onOpenSettings = onOpenSettings
         self.onOpenOnboarding = onOpenOnboarding
@@ -28,8 +25,6 @@ final class StatusActions {
         switch role {
         case .status, .focusStatus, .instanceInfo:
             break
-        case .pauseResume:
-            if focus.paused { focus.resume() } else { focus.pause() }
         case .lastJudgment:
             onShowLastJudgment()
         case .primaryAction:
@@ -60,7 +55,7 @@ final class StatusActions {
         }
     }
 
-    /// Log Out asks for confirmation (guide §9); Disconnect does not (§7 "not destructive").
+    /// Log Out asks for confirmation (guide §9); Pause (disconnect) does not (§7 "not destructive").
     private func confirmLogOut() {
         let alert = NSAlert()
         alert.messageText = "Log out of this Moss account?"

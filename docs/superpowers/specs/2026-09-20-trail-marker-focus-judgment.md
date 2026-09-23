@@ -238,7 +238,9 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
    ends (or "No block right now"), on click, with the block name also available on hover of the
    menu-bar icon. **Pause / Resume** and **Judge now** sit in the same card. The last judgment
    (what was seen, the label, the reason, Wrong / Right) opens from **Judge now**'s result rather
-   than a separate window.
+   than a separate window. _Amended (Ben, 2026-09-23):_ Judge now is gone, the menu has no
+   Pause Focus row (Focus is paused from Settings → Focus), and the card's Pause / Resume is the
+   connection's pause, which stops all communication with Moss. Last Judgment… is its own row.
 2. **Focus settings (one new pane in the existing Settings sidebar):** the image model API
    (endpoint, model name, key, a Test button, and one plain sentence stating where the image will
    be sent). That sentence is the consent: no separate consent screen. Also what to watch — specific

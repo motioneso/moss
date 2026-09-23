@@ -15,7 +15,6 @@ struct MenuItemDescriptor: Equatable {
         case focusStatus
         case instanceInfo
         case primaryAction
-        case pauseResume
         case lastJudgment
         case openMoss
         case settings
@@ -51,7 +50,7 @@ struct FocusMenuInfo: Equatable {
         switch state {
         case .off: return nil
         case .watching: return "Watching · \(goalLine ?? "")"
-        case .paused: return "Paused"
+        case .paused: return "Focus paused"
         case .noBlock: return "No block right now"
         case .unreachable: return "Can't reach Moss"
         case .notReady: return "Judgment isn't set up on your Moss (ask the admin)"
@@ -63,8 +62,6 @@ struct FocusMenuInfo: Equatable {
         if case .watching = state, let goalLine { return "Trail Marker: \(goalLine)" }
         return "Trail Marker"
     }
-
-    var isPaused: Bool { state == .paused }
 }
 
 extension FocusLabel {
@@ -87,7 +84,7 @@ enum MenuModel {
     static func statusTitle(for state: ConnectionState) -> String {
         switch state {
         case .connected: return "Connected"
-        case .disconnected: return "Disconnected"
+        case .disconnected: return "Paused"
         case .reconnecting: return "Reconnecting"
         case .signInRequired: return "Sign-in required"
         case .notLinked: return "Not linked"
@@ -96,8 +93,8 @@ enum MenuModel {
 
     static func primaryActionTitle(for state: ConnectionState) -> String {
         switch state {
-        case .connected: return "Disconnect"
-        case .disconnected: return "Connect"
+        case .connected: return "Pause"
+        case .disconnected: return "Resume"
         case .reconnecting: return "Retry Now"
         case .signInRequired: return "Sign In"
         case .notLinked: return "Set Up Trail Marker"
@@ -123,7 +120,6 @@ enum MenuModel {
         items.append(.separator)
         items.append(.item(primaryActionTitle(for: state), role: .primaryAction))
         if focusOn, let focus {
-            items.append(.item(focus.isPaused ? "Resume Focus" : "Pause Focus", role: .pauseResume))
             if focus.hasLastJudgment {
                 items.append(.item("Last Judgment…", role: .lastJudgment))
             }
