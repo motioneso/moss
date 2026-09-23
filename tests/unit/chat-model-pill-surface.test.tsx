@@ -166,8 +166,39 @@ async function renderPill(
   // component settles out of its `isLoading` (chatd-model--muted) render and the real trigger
   // button mounts. Same pattern as settings-ai-pane.test.tsx's `flush()`.
   await flush();
+  return trackRenderer(renderer);
+}
+
+// #2539 — every renderer in this file stays mounted with a live QueryClient
+// unless it is unmounted, and the ChatModelPill mock below is shared by all
+// tests in the file. A renderer left mounted by an earlier test can re-render
+// late (a query resolution landing under load) on a different surface and
+// append a newer mock call after a later test's own render, so a later test
+// that reads calls[calls.length - 1] observes the wrong surface. Track every
+// renderer and unmount them all after each test.
+const mountedRenderers = new Set<ReactTestRenderer>();
+
+function trackRenderer(renderer: ReactTestRenderer): ReactTestRenderer {
+  mountedRenderers.add(renderer);
   return renderer;
 }
+
+function unmountMountedRenderers(): void {
+  for (const renderer of mountedRenderers) {
+    act(() => {
+      renderer.unmount();
+    });
+  }
+  mountedRenderers.clear();
+}
+
+// File-level cleanup for the whole file: after every test, unmount every
+// renderer mounted above so no leftover renderer can re-render late on
+// another surface. Registered once here instead of per describe block, so
+// the guard test below watches exactly this hook.
+afterEach(() => {
+  unmountMountedRenderers();
+});
 
 function menuButtons(renderer: ReactTestRenderer) {
   const menu = renderer.root.findAll((node) => node.props.className === "chatd-model__menu");
@@ -209,7 +240,7 @@ async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
     await Promise.resolve();
     await Promise.resolve();
   });
-  return renderer;
+  return trackRenderer(renderer);
 }
 
 describe("ChatModelPill mutation surface routing (#1533)", () => {
@@ -350,6 +381,14 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
 });
 
 describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
+  // #2539 — the ChatModelPill mock is shared with the routing tests above,
+  // which render on other surfaces. Clear its calls before each drawer render
+  // so the last-call read below can only observe this test's own drawer.
+  beforeEach(() => {
+    vi.mocked(ChatModelPill).mockClear();
+    vi.mocked(clearChat).mockClear();
+  });
+
   afterEach(() => {
     vi.mocked(ChatModelPill).mockClear();
     vi.mocked(clearChat).mockClear();
@@ -398,5 +437,14 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
     expect(calls.length).toBeGreaterThan(0);
     const pillProps = calls[calls.length - 1]![0];
     expect(pillProps.surface).toBe(DEFAULT_CHAT_SURFACE);
+  });
+
+  // #2539 — the routing tests above mount pill renderers on other surfaces.
+  // The file-level afterEach unmounts every renderer after each test, so no
+  // leftover renderer can re-render late and append a pill call after a
+  // later test's own render. This stands on its own: it passes alone,
+  // first, or shuffled, and fails if that file-level cleanup is removed.
+  it("starts with no renderers left mounted by earlier tests", () => {
+    expect(mountedRenderers.size).toBe(0);
   });
 });

@@ -697,8 +697,11 @@ function sanitizeExtractResult(
   initial: EmailExtractResult
 ): EmailExtractResult {
   let result = initial;
-  if (result.summary === null && (result.signals.confidence ?? 0) > 0) {
-    const deterministicSummary = parsed.snippet?.trim() || parsed.subject.trim();
+  const useFallback = result.summary === null && (result.signals.confidence ?? 0) > 0;
+  const previewFallback = parsed.snippet?.trim() ?? "";
+  if (useFallback) {
+    const deterministicSummary =
+      previewFallback.length > 0 ? previewFallback : parsed.subject.trim();
     result = {
       ...result,
       summary:
@@ -724,9 +727,17 @@ function sanitizeExtractResult(
       normalizedSummary === normalizedBody ||
       (normalizedBody.length > 0 && normalizedSummary.includes(normalizedBody)) ||
       containsLongBodyRun();
+    // A summary taken from the preview fallback is a verbatim slice of the body by construction,
+    // so the echo guard rejects it. Keep the subject instead of losing the summary entirely
+    // (plain-mail previews are long enough for this to fire on most "worth knowing" mail).
+    const subjectFallback = useFallback && previewFallback.length > 0 ? parsed.subject.trim() : "";
     result = {
       ...result,
-      summary: echoesBody ? null : result.summary.slice(0, MAX_SUMMARY_CHARS)
+      summary: echoesBody
+        ? subjectFallback.length > 0
+          ? subjectFallback.slice(0, MAX_SUMMARY_CHARS)
+          : null
+        : result.summary.slice(0, MAX_SUMMARY_CHARS)
     };
   }
 
