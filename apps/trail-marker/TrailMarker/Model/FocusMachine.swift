@@ -19,7 +19,6 @@ enum FocusEvent: Equatable {
     case userToggleConsent(Bool)
     case userPause
     case userResume
-    case userJudgeNow
     case userTestNudge
     case contextLoaded(FocusContext, generation: Int)
     case contextFailed(CompanionError, generation: Int)
@@ -131,12 +130,6 @@ struct FocusMachine {
             if isActive {
                 bumpGeneration()
                 effects.append(.fetchContext(generation: generation))
-            }
-
-        case .userJudgeNow:
-            if let app = currentApp, let block, canObserve(app, now: now) {
-                lastSent = app
-                effects.append(.sendObservation(app, blockId: block.id, generation: generation))
             }
 
         case .userTestNudge:

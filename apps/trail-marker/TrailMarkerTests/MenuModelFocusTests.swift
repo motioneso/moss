@@ -33,8 +33,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), watching()),
             [
                 "Connected", "Watching · Study AI, ends 11:00 AM", "moss.example.com", "ben@example.com",
-                "Disconnect", "Pause Focus", "Judge Now", "Open Moss", "Settings…", "Check for Updates…",
-                "Log Out…", "Quit Trail Marker"
+                "Disconnect", "Pause Focus", "Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -44,8 +43,8 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), watching(hasLast: true)),
             [
                 "Connected", "Watching · Study AI, ends 11:00 AM", "moss.example.com", "ben@example.com",
-                "Disconnect", "Pause Focus", "Judge Now", "Last Judgment…", "Open Moss", "Settings…",
-                "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Disconnect", "Pause Focus", "Last Judgment…", "Open Moss", "Settings…",
+                "Log Out…", "Quit Trail Marker"
             ]
         )
         XCTAssertFalse(titles(.connected(lastContact: now), watching()).contains("Last Judgment…"))
@@ -57,7 +56,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), focus),
             [
                 "Connected", "No block right now", "moss.example.com", "ben@example.com", "Disconnect",
-                "Pause Focus", "Judge Now", "Open Moss", "Settings…", "Check for Updates…", "Log Out…",
+                "Pause Focus", "Open Moss", "Settings…", "Log Out…",
                 "Quit Trail Marker"
             ]
         )
@@ -69,7 +68,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), focus),
             [
                 "Connected", "Paused", "moss.example.com", "ben@example.com", "Disconnect", "Resume Focus",
-                "Judge Now", "Open Moss", "Settings…", "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -80,8 +79,8 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), focus),
             [
                 "Connected", "Judgment isn't set up on your Moss (ask the admin)", "moss.example.com",
-                "ben@example.com", "Disconnect", "Pause Focus", "Judge Now", "Open Moss", "Settings…",
-                "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "ben@example.com", "Disconnect", "Pause Focus", "Open Moss", "Settings…",
+                "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -92,7 +91,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.reconnecting(attempt: 1, lastContact: nil), focus),
             [
                 "Reconnecting", "Can't reach Moss", "moss.example.com", "ben@example.com", "Retry Now",
-                "Pause Focus", "Judge Now", "Open Moss", "Settings…", "Check for Updates…", "Log Out…",
+                "Pause Focus", "Open Moss", "Settings…", "Log Out…",
                 "Quit Trail Marker"
             ]
         )
@@ -108,7 +107,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), nil),
             [
                 "Connected", "moss.example.com", "ben@example.com", "Disconnect", "Open Moss", "Settings…",
-                "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -118,7 +117,7 @@ final class MenuModelFocusTests: XCTestCase {
             .filter { $0.kind == .text }.map(\.title)
         XCTAssertEqual(
             items,
-            ["Not linked", "Set Up Trail Marker", "Open Moss", "Settings…", "Check for Updates…", "Quit Trail Marker"]
+            ["Not linked", "Set Up Trail Marker", "Open Moss", "Settings…", "Quit Trail Marker"]
         )
     }
 
@@ -131,17 +130,6 @@ final class MenuModelFocusTests: XCTestCase {
         }
     }
 
-    func testJudgeNowIsEnabledOnlyWhileWatching() {
-        func judgeNow(_ state: FocusWatchState) -> Bool? {
-            let focus = FocusMenuInfo(state: state, goalLine: nil, hasLastJudgment: false)
-            return MenuModel.items(state: .connected(lastContact: now), identity: identity, focus: focus)
-                .first { $0.role == .judgeNow }?.isEnabled
-        }
-        XCTAssertEqual(judgeNow(.watching(blockId: "b", title: "t", endsAt: endsAt)), true)
-        for state in [FocusWatchState.noBlock, .paused, .unreachable, .notReady] {
-            XCTAssertEqual(judgeNow(state), false, "\(state)")
-        }
-    }
 
     func testTheGoalLineIsAbsentWithNoBlock() {
         let focus = FocusMenuInfo(state: .noBlock, goalLine: nil, hasLastJudgment: false)
@@ -185,8 +173,8 @@ final class StatusCardLayoutTests: XCTestCase {
                 statusTitle: "Connected", focusLine: "Watching · Study AI, ends 11:00 AM",
                 primaryTitle: "Disconnect",
                 rows: [
-                    "Pause Focus", "Judge Now", "Last Judgment…", "Open Moss", "Settings…",
-                    "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                    "Pause Focus", "Last Judgment…", "Open Moss", "Settings…",
+                    "Log Out…", "Quit Trail Marker"
                 ]
             )
         )
@@ -209,7 +197,7 @@ final class StatusCardLayoutTests: XCTestCase {
             MenuModel.card(state: .connected(lastContact: now), identity: identity, focus: nil),
             MenuModel.Card(
                 statusTitle: "Connected", focusLine: nil, primaryTitle: "Disconnect",
-                rows: ["Open Moss", "Settings…", "Check for Updates…", "Log Out…", "Quit Trail Marker"]
+                rows: ["Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"]
             )
         )
     }
@@ -220,7 +208,7 @@ final class StatusCardLayoutTests: XCTestCase {
             MenuModel.card(state: .notLinked, identity: nil, focus: focus),
             MenuModel.Card(
                 statusTitle: "Not linked", focusLine: nil, primaryTitle: "Set Up Trail Marker",
-                rows: ["Open Moss", "Settings…", "Check for Updates…", "Quit Trail Marker"]
+                rows: ["Open Moss", "Settings…", "Quit Trail Marker"]
             )
         )
     }

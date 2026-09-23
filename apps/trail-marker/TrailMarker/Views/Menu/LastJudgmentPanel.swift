@@ -15,7 +15,7 @@ struct LastJudgmentPanel: View {
             if let remembered = focus.lastJudgment {
                 content(remembered)
             } else {
-                Text("Nothing has been judged yet. Choose Judge Now in the menu while a Moss block is on.")
+                Text("Nothing has been judged yet. Trail Marker judges on its own while a Moss block is on.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

@@ -91,7 +91,6 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertEqual(machine.handle(.wake, now: at(500)), [])
         XCTAssertEqual(machine.handle(.connectionChanged(isConnected: false), now: at(510)), [])
         XCTAssertEqual(machine.handle(.connectionChanged(isConnected: true), now: at(520)), [])
-        XCTAssertEqual(machine.handle(.userJudgeNow, now: at(530)), [])
         XCTAssertEqual(machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(540)), [])
     }
 
@@ -117,7 +116,6 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertFalse(sends(effects))
         XCTAssertEqual(machine.state, .noBlock)
         XCTAssertFalse(sends(machine.handle(.appChanged(mail), now: at(200))))
-        XCTAssertFalse(sends(machine.handle(.userJudgeNow, now: at(210))))
     }
 
     func testWithoutConsentNothingIsSent() {
@@ -125,13 +123,11 @@ final class FocusMachineTests: XCTestCase {
         _ = machine.handle(.userToggleConsent(false), now: at(10))
         XCTAssertEqual(machine.state, .off)
         XCTAssertEqual(machine.handle(.appChanged(safari), now: at(200)), [])
-        XCTAssertEqual(machine.handle(.userJudgeNow, now: at(210)), [])
     }
 
     func testAnAppThePersonDidNotAllowIsNeverSent() {
         var machine = armed()
         XCTAssertFalse(sends(machine.handle(.appChanged(mail), now: at(200))))
-        XCTAssertFalse(sends(machine.handle(.userJudgeNow, now: at(210))))
     }
 
     func testAnAppOnTheDenylistIsNeverSentEvenIfAllowed() {
@@ -148,7 +144,6 @@ final class FocusMachineTests: XCTestCase {
         var machine = armed()
         _ = machine.handle(.accessibilityChanged(granted: false), now: at(10))
         XCTAssertFalse(sends(machine.handle(.appChanged(safari), now: at(200))))
-        XCTAssertFalse(sends(machine.handle(.userJudgeNow, now: at(210))))
     }
 
     func testAnEndedBlockIsNotJudged() {
@@ -328,13 +323,7 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertEqual(effects, [.scheduleContext(after: 60, generation: machine.generation)])
     }
 
-    // MARK: Judge now, test nudge, first consent
-
-    func testJudgeNowSendsRightAwayEvenForTheWindowAlreadyJudged() {
-        var machine = armed() // sent at 0
-        let effects = machine.handle(.userJudgeNow, now: at(5))
-        XCTAssertTrue(effects.contains(.sendObservation(safari, blockId: blockId, generation: machine.generation)))
-    }
+    // MARK: Test nudge, first consent
 
     func testTestNudgeAlwaysAsksForTheFixedTestNotification() {
         var machine = FocusMachine()

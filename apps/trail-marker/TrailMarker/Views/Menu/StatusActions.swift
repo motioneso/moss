@@ -9,22 +9,19 @@ final class StatusActions {
     private let onShowLastJudgment: () -> Void
     private let onOpenSettings: () -> Void
     private let onOpenOnboarding: () -> Void
-    private let onCheckForUpdates: () -> Void
 
     init(
         connection: ConnectionRuntime,
         focus: FocusRuntime,
         onShowLastJudgment: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
-        onOpenOnboarding: @escaping () -> Void,
-        onCheckForUpdates: @escaping () -> Void
+        onOpenOnboarding: @escaping () -> Void
     ) {
         self.connection = connection
         self.focus = focus
         self.onShowLastJudgment = onShowLastJudgment
         self.onOpenSettings = onOpenSettings
         self.onOpenOnboarding = onOpenOnboarding
-        self.onCheckForUpdates = onCheckForUpdates
     }
 
     func perform(_ role: MenuItemDescriptor.Role) {
@@ -33,8 +30,6 @@ final class StatusActions {
             break
         case .pauseResume:
             if focus.paused { focus.resume() } else { focus.pause() }
-        case .judgeNow:
-            focus.judgeNow()
         case .lastJudgment:
             onShowLastJudgment()
         case .primaryAction:
@@ -43,8 +38,6 @@ final class StatusActions {
             connection.openInstanceInBrowser()
         case .settings:
             onOpenSettings()
-        case .checkForUpdates:
-            onCheckForUpdates()
         case .logOut:
             confirmLogOut()
         case .quit:
