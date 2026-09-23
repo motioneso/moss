@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Adds a line to the floating focus log. Debug builds only: in a Release build this does nothing,
@@ -150,6 +151,113 @@ private struct FocusDebugLogView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
         }
+    }
+}
+#endif
+
+/// What a judgment does to the debug "back to work" banner (Ben's call, 2026-09-22): a distracted
+/// answer shows it, only a focused answer (or pressing Wrong) clears it, anything else leaves it.
+enum FocusBannerChange: Equatable {
+    case show
+    case hide
+    case keep
+
+    static func after(_ label: FocusLabel) -> FocusBannerChange {
+        switch label {
+        case .distracted: return .show
+        case .focused: return .hide
+        case .necessaryDetour, .insufficientEvidence: return .keep
+        }
+    }
+}
+
+#if DEBUG
+/// An experiment, Debug builds only: a banner that stays above every window from a distracted
+/// judgment until a focused one, instead of waiting for a real two-in-a-row nudge. It never takes
+/// focus, so it does not change what is being observed.
+@MainActor
+final class FocusDebugBanner {
+    private let panel: NSPanel
+    private let model = BannerModel()
+    private var cancellable: AnyCancellable?
+
+    final class BannerModel: ObservableObject {
+        @Published var goal = ""
+        @Published var reason = ""
+    }
+
+    init(focus: FocusRuntime) {
+        panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 64),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.hidesOnDeactivate = false
+        panel.isReleasedWhenClosed = false
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.contentView = NSHostingView(
+            rootView: FocusDebugBannerView(model: model) { [weak self, weak focus] in
+                focus?.correct(.wrong)
+                focusDebug("Banner cleared: Wrong sent")
+                self?.panel.orderOut(nil)
+            }
+        )
+
+        cancellable = focus.$lastJudgment
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] remembered in self?.apply(remembered) }
+    }
+
+    private func apply(_ remembered: RememberedJudgment) {
+        switch FocusBannerChange.after(remembered.judgment.label) {
+        case .show:
+            model.goal = remembered.blockTitle
+            model.reason = remembered.judgment.reason
+            if !panel.isVisible {
+                if let screen = NSScreen.main?.visibleFrame {
+                    panel.setFrameTopLeftPoint(
+                        NSPoint(x: screen.midX - panel.frame.width / 2, y: screen.maxY - 8)
+                    )
+                }
+                panel.orderFrontRegardless()
+                focusDebug("Banner shown")
+            }
+        case .hide:
+            if panel.isVisible {
+                panel.orderOut(nil)
+                focusDebug("Banner cleared: focused")
+            }
+        case .keep:
+            break
+        }
+    }
+}
+
+private struct FocusDebugBannerView: View {
+    @ObservedObject var model: FocusDebugBanner.BannerModel
+    let onWrong: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Back to: \(model.goal)").font(.system(size: 14, weight: .semibold))
+                if !model.reason.isEmpty {
+                    Text(model.reason).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            Button("Wrong", action: onWrong)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 #endif
