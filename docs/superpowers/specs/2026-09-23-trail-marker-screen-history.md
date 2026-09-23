@@ -1,0 +1,258 @@
+# Backtrack: Trail Marker screen history
+
+Status: **Approved by Ben, 2026-09-23** (#2638), including the mockups in §9. Two small defaults
+that Ben can still change are marked as such in §12.
+
+Builds on `2026-09-20-trail-marker-mac-companion.md` (the linked Mac) and sits beside
+`2026-09-20-trail-marker-focus-judgment.md` (focus). It is a separate feature with its own consent.
+It **deliberately reverses** several promises in those two specs; §11 lists each one and how it is
+amended.
+
+## 1. What this is
+
+When the person turns it on, Trail Marker reads the text on their screen through the day (the
+message they read, the page they had open, the doc in the meeting) and keeps it as their private,
+searchable screen history in Moss, called **Backtrack** (Ben, 2026-09-23; "day memory" is its plain description). Later they can ask Moss "what was that site I saw in the
+meeting this morning?" and Moss answers from that history, citing the app, the page and the time.
+
+Whatever the person views, Trail Marker reads, unless the app is on their Never watch list. The
+product question: is a text-only memory of your day, captured without any effort from you, useful
+enough to be worth what it costs in privacy and battery?
+
+## 2. Decisions already made (Ben, 2026-09-23)
+
+- **Stored in Moss, text only.** The Mac reads the screen itself with Apple's on-device text
+  recognition (no AI call and no network involved), strips secrets, and sends only text to the
+  person's Moss account. No screenshots are kept anywhere, on the Mac or on the server.
+- **What is kept per moment:** the words on screen, the app, the window title, the web address when
+  there is one, and the time.
+- **Retention:** the full text is kept for 30 days. After that each day is summarized into a note,
+  and the raw text for that day is deleted. The note goes into the person's attached notes folder
+  when they have one, and otherwise into Moss's private notes store.
+- **Blocking wins.** Everything on the Never watch list (the person's own list, the built-in
+  password managers and Keychain, and private-browsing windows) is never read.
+
+## 3. Non-goals
+
+- Pictures of the screen, video, audio, keystrokes or clipboard.
+- Productivity scores, time-tracking reports or dashboards about the person. This is recall, not
+  surveillance of yourself.
+- Anyone other than the person reading their history. Admins included: the history is owner-only
+  under row-level security, like the rest of Moss.
+- Feeding the history into answers the person did not ask about. §7 covers this.
+- Sharing, a timeline UI, or visual replay. These are possible later slices, each needing its own
+  spec.
+
+## 4. Consent and control
+
+- **Off by default. It is a separate opt-in from Focus.** Turning it on shows a one-time sheet (§9b)
+  that says plainly what is read, what is sent, where it is kept and for how long. Turning Focus on
+  never turns screen history on, and the reverse is also true.
+- It needs Screen Recording (already requested for focus vision). It works with or without Focus.
+- **Always visible.** While screen history is recording, the menu-bar icon shows a small gold dot.
+- **Pausing (Ben, 2026-09-23).** The menu card's primary button becomes **Pause All** / **Resume
+  All**. Pause All stops everything, including the connection to Moss; this is #2635's Pause,
+  renamed. Under it are two menu rows with a switch each, **Focus** and **Backtrack**. Each switch
+  pauses or resumes only that feature, and a row appears only once its feature is turned on in
+  Settings. While Pause All is on, the switches keep their positions but are greyed and can't be
+  changed, so Resume All brings back exactly what was running. A screen lock or sleep also stops
+  Backtrack. This brings back a Focus-only pause, which #2635 removed as a separate row, as a switch
+  row. It uses a new preference key, not the retired `focusPaused` that #2635 deletes on launch, so
+  an old stored value can never pause anyone.
+- The person can delete from Moss (§9c): the last hour, today, any day, or everything. Deletion
+  removes the raw text, its search index and, where asked, that day's summary note.
+- Logging Trail Marker out or revoking the Mac stops capture, and the Mac discards anything it has
+  not yet sent.
+
+## 5. Capture on the Mac
+
+- **When it reads:** on an app switch, a window-title change, and otherwise at most every 10
+  seconds while the frontmost window's pixels have changed. A cheap check on a tiny downscaled frame
+  decides "changed". An unchanged screen costs nothing but that check.
+- **What it reads:** only the focused window of an allowed app, never the whole display. The
+  capture is bound to that window's identity (its process, frame and title, matched to exactly one on-screen window), which is the same window
+  the never-watch check looked at. If the identity can't be established, for example because
+  Accessibility is off, nothing is read. (Amended 2026-09-23 after review: today's Focus capture
+  picks an app's largest window, a defect fixed first, #2643.)
+- **Text recognition:** Apple Vision `VNRecognizeTextRequest`, on-device. The frame lives in memory
+  for the length of one recognition call and is never written to disk.
+- **Web addresses:** read through Accessibility from the focused browser's web area (Safari, Chrome,
+  Arc, Firefox where exposed). Query strings are dropped before anything else happens.
+- **Dedupe:** the Mac keeps the previous capture's lines for each window and sends only a _segment_
+  when the text changed materially. A segment is the new lines, plus the window's title and address,
+  plus a start and end time. Scrolling a long page adds lines instead of resending the page.
+- **Never read:** Never-watch apps, private windows, and every Accessibility secure text field in
+  the window, focused or not. Masked password inputs are blanked before recognition runs; if the
+  secure fields can't all be located, that capture is skipped. Recording continues while the person shares
+  their screen in a meeting, since what they present is the content they'll want to find later (Ben,
+  2026-09-23).
+- **Known kinds of secret are stripped on the Mac before anything leaves it**, from the text,
+  window title and web address alike. An arbitrary password typed as plain text in a document can't
+  be recognised as one; that limit is stated, not hidden. This extends `TextRedactor` with
+  the server's `redactSecrets` patterns (bearer tokens, `sk-`/`ghp_`/`AKIA` keys, secret-looking
+  query and environment fields), card numbers that pass a Luhn check, and one-time codes next to
+  "code"/"verification". The server runs `redactSecrets` again on arrival. Email addresses are
+  **kept** in screen history, because "who sent that?" is often the point (Ben, 2026-09-23); focus
+  judgment text still strips them.
+- **Budget:** at most one recognition every 10 seconds, and none while nothing changes. If the Mac
+  reports low power or thermal pressure, it backs off to one every 60 seconds. The target is under
+  3% average CPU on an M1 Air across a working day. The live proof measures it (§10).
+
+## 6. Sending and storing
+
+- **Local buffer.** Segments are sent in batches about once a minute. When Moss can't be reached,
+  they wait in a small on-disk buffer. The buffer is encrypted with a key kept in the Keychain,
+  capped at 24 hours or 20 MB, and the oldest entries are dropped first. It is wiped on log out,
+  revoke, or when screen history is turned off. This is the only thing the Mac ever stores, and it
+  exists only so an offline hour isn't lost.
+- **Companion route.** A new companion-only platform route, `POST /api/companion/backtrack`.
+  It follows the focus routes' pattern: `requireCompanion`, then the owner is taken from the
+  credential and never from the body. The schema lives in `packages/shared/src/companion-api.ts`
+  with hard caps (for example 200 segments per batch and 8 KB of text per segment). It is
+  IP-rate-limited like the focus routes. Nothing in the route logs a body field. A companion
+  credential still reaches nothing else.
+- **Module.** A new server module, `backtrack`, owns the data:
+  - `app.backtrack_segments`, owner-only with the RLS pattern ENABLE and FORCE plus per-verb
+    policies on `app.current_actor_user_id()`, runtime-role grants only, and no `BYPASSRLS`
+    anywhere. Columns: device, start and end time, app name, bundle id, window title, address, text,
+    text hash, and a generated `tsvector`. Postgres compresses the text out-of-line (TOAST). The
+    expected size is 1 to 5 MB a day for a heavy day.
+  - Embeddings go into `app.memory_chunks` with a new `source_kind = 'screen'`. That needs a
+    memory-owned migration, which widens the CHECK constraint, and memory's public API; this module
+    does not write memory's table directly. The embedder is the existing local one.
+  - The module declares `dataLifecycle` deletion and export sections, so account deletion and the
+    user export include screen history. A cascade test proves it.
+- **Jobs carry IDs only.** Ingest enqueues `backtrack.index` with the actor and segment IDs.
+  The worker reads the text under the actor's data context. No text, title or address ever goes in a
+  job payload or a log line.
+
+## 7. Asking Moss
+
+- A new assistant tool, `backtrack.search`, takes a question plus an optional time range
+  ("this morning", "during my 10:00 meeting"). It combines full-text and vector search over the
+  person's own segments and returns short snippets with the app, title, address and time. Chat
+  cites them.
+- **Pulled, never pushed.** Screen history is used only when this tool is called, meaning when the
+  question is about what the person saw. It is not added to passive per-turn recall, the `<memory>`
+  seed or briefings. Your screen shouldn't leak into an unrelated answer or a prompt you didn't
+  expect. (Letting briefings use it is a tracked follow-up, #2640.)
+- **Meeting-aware ranges.** "In the meeting this morning" resolves against the person's calendar
+  through the calendar module's public API, by finding the event, then searching its time window.
+- The model is whatever the person's chat is configured to use, through the provider-agnostic
+  router. No provider is named.
+
+## 8. After 30 days: the daily summary note
+
+- A nightly job, a per-user cron that runs in the worker with only the actor and date in its
+  payload, takes each day that has just passed 30 days. It asks the router's `summarization`
+  capability for a short note that covers what the person worked on, the sites and documents they
+  spent time in, and the meetings and what was on screen in them. The raw segments and their
+  embeddings for that day are deleted only after the note is written successfully.
+- **Where the note goes:**
+  - With an attached notes folder (`notes-source-path`), it is written through `VaultContext`
+    (`withVaultContextAt`) as `Backtrack/<YYYY-MM-DD>.md`. It carries the same ownership
+    marker the daily chat archive uses, so it never overwrites the person's own file. Then
+    `notes.sync` re-indexes it. Unlike `writeDailyChatArchive`, this uses `VaultContext` and not raw
+    `fs`.
+  - Without an attached folder, the note goes into the private per-user store (`withVaultContext`)
+    and is indexed as a note, so recall still finds it.
+- The summary is redacted again before it is written. If summarization fails (no model set up, or
+  an error), the raw day is kept and retried nightly for up to 7 days. After that it is deleted
+  anyway, and the failure is shown in Settings. The person is never left with a silently growing
+  store.
+
+## 9. Screens (agreed with Ben, 2026-09-23)
+
+Mockups: [`mockups/backtrack.html`](mockups/backtrack.html), a static file you can open directly.
+Native screens follow the Trail Marker design guide (§11, settings window). Moss web screens use
+`@moss/ui` and `jds-*` primitives only; the file names the components, and there are no new raw
+colours.
+
+**Colour (Ben, 2026-09-23):** Trail Marker's controls use the Moss brand forest
+(`TrailMarkerTokens.Color.forest`, `#173E2B`), not the system blue. That covers the card's primary
+button, the switches and the Settings sidebar selection. The build sets forest as the app's accent
+colour once, instead of tinting each control, so every existing button that is blue today, such as
+the card's Pause, turns forest too.
+
+- **A. Menu bar:** today's card with **Pause All** / **Resume All**, then Focus and Backtrack rows
+  with switches, drawn in three states: both on, Focus off while Backtrack records, and Pause All.
+  The gold dot on the menu-bar mark shows while Backtrack is recording.
+- **B. Trail Marker Settings → Backtrack:** a new sidebar tab. It holds the on switch, a status
+  line with last-sent time, the Never watch list (shared with Focus, with a link to edit it there),
+  and "Open in Moss…".
+- **C. One-time consent sheet:** says what is read (including other people's messages), what is
+  removed, where it is kept and for how long, and what is skipped.
+- **D. Moss → Settings → Backtrack:** on/off across all Macs, days and size kept, where the daily
+  notes go, and Delete (last hour, today, choose a day, everything). With no Trail Marker linked it
+  shows an empty state that points to Trail Marker.
+- **E. Delete everything dialog:** daily notes already written to the folder are kept unless the
+  person ticks the box.
+- **F. Chat answer:** cites the meeting, page and time, with a Backtrack source chip.
+
+## 10. How we know it works (live-path gate)
+
+On Ben's Mac against the dev instance:
+
+1. Turn it on and read a known web page and a Messages thread. Within about 2 minutes the segments
+   are in Moss, and the address has no query string.
+2. Open an excluded app, a private window and a password field. Nothing from any of them is stored.
+   This is checked in the database, not only in the UI.
+3. Show a fake API key and a test card number on screen. Only the redacted forms are stored.
+4. Ask the chat question from §1 about a real meeting. It answers with the right site and time.
+5. "Delete today" leaves no rows or embeddings for today.
+6. Force the 30-day job for a backdated test day. The note appears in the notes folder, and the raw
+   rows are gone.
+7. A working day's CPU and battery cost is measured and recorded on the PR.
+
+Tests that assert a privacy property must be seen failing with the protection removed, per
+`CLAUDE.md`.
+
+## 11. Promises this reverses, and the amendments
+
+| Where                                        | Says today                                                                           | Becomes                                                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Focus spec :44-46                            | No continuous screenshot upload or screen recording                                  | Still true: no pictures are ever uploaded or kept. Screen history uploads **text** only, and only with its own consent.                                  |
+| Focus spec :48                               | No history dashboards or reports about the person                                    | Still true: this is private recall, not reports. Scope stays as in §3.                                                                                   |
+| Focus spec :207-209                          | Window titles, selected text, image descriptions not stored                          | True **for focus judgment**. Screen history stores titles and on-screen text, under its own opt-in.                                                      |
+| Focus spec :129-130, :226                    | Window text is never in a job payload; logs content-free                             | Unchanged, and it applies to screen history too (§6).                                                                                                    |
+| Companion spec :14, :76, :214, :243          | Nothing read is stored on the server; no activity history; no queue for later upload | Amended: when screen history is on, text history is stored, and a capped, encrypted, 24-hour offline buffer exists on the Mac (§6). Off, all still true. |
+| Migration `0240_focus_judgments.sql` comment | What the person was looking at is never stored                                       | Stays true for `focus_judgments`. Screen history is a separate table with separate consent.                                                              |
+
+Each spec gets a dated amendment line pointing here in the PR that approves this spec.
+
+## 12. Questions answered (Ben, 2026-09-23)
+
+1. **Screen sharing:** keep recording while sharing (§5).
+2. **Email addresses:** kept in screen history; still stripped from focus-judgment text (§5).
+3. **Briefings:** not in the first version; screen history stays ask-only (§7). Follow-up #2640 so
+   it isn't forgotten.
+4. **Name:** **Backtrack**, with "day memory" as the plain description under it. In this spec,
+   "screen history" means the mechanism.
+5. **Messages:** reading other people's messages to the person is allowed; the consent sheet says
+   so, and any app can be excluded.
+
+Defaults chosen when the spec was approved (Ben can change either):
+
+6. **Moss switch (§9D):** one switch pauses Backtrack on every linked Mac. Turning it on for a Mac
+   still happens on that Mac, with its consent.
+7. **Notes folder:** daily notes go in `Backtrack/` inside the attached notes folder.
+
+## 13. Slices (for the plan, once approved)
+
+1. The Mac captures, recognizes text, dedupes and redacts, with the settings tab, consent sheet and
+   menu row. It sends **nothing**; segments stay in memory in the Debug build only. This proves the
+   CPU budget, recognition quality and redaction first. (Phase 0, Pause All and the Focus switch,
+   ships before it; see the plan.)
+2. The server module: route, table, RLS, index job, `dataLifecycle`, the Moss settings screen and
+   deletion.
+3. The chat tool with calendar-aware time ranges.
+4. The 30-day summary job and the notes-folder writer.
+
+Each slice keeps the app map truthful (`packages/shared/src/app-map-core.ts` and the module
+manifest) in the same PR.
+
+## Related gap found while writing this
+
+`app.focus_judgments` is promised 30-day retention (focus spec :213), but no job purges it, it has no
+`DELETE` grant (migration 0240:34), and it is not in the account-deletion or export lists. It relies
+on FK cascade alone. Tracked as #2637; it is not part of this spec.
