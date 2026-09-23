@@ -30,7 +30,7 @@ import {
   PERSON_INDEX_QUEUE,
   SYNC_PERSON_MEMORY_QUEUE
 } from "@moss/people";
-import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
+import { getVaultBaseDir, VaultContextError, VaultContextRunner } from "@moss/vault";
 import {
   workflowsModuleManifest,
   workflowsModuleSqlMigrationDirectory,
@@ -238,6 +238,7 @@ import {
   type WebSearchSecretCipher,
   readBraveSearchApiKey,
   resolveWebSearchEngine,
+  resolveNotesRoots,
   registerSettingsJobWorkers,
   registerFamilyKeyRoutes,
   registerSettingsRoutes,
@@ -2576,21 +2577,38 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           const accessContext = { actorUserId, requestId: "notes-sync:people" };
           const vaultRunner = new VaultContextRunner(getVaultBaseDir());
           const peopleNotes = new PeopleNotesService();
-          await vaultRunner.withVaultContext(accessContext, (vaultCtx) =>
-            deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-              if (!(await isPeopleNotesSuggestUpdatesEnabled(scopedDb))) {
-                return { projected: 0, candidates: 0 };
-              }
-              try {
-                return await peopleNotes.refreshFromFolder(scopedDb, vaultCtx, actorUserId);
-              } catch (error) {
-                if (error instanceof PeopleNotesFolderUnavailableError) {
-                  return { discovered: 0, projected: 0, ignored: 0, candidates: 0 };
-                }
-                throw error;
-              }
-            })
-          );
+          // #2550: the People folder is chosen with the notes picker and stored as an absolute
+          // path inside the user's notes tree (#2268), not under the private per-user vault.
+          // Rooting this refresh at the private vault (as it used to) listed the wrong tree, so
+          // every canonical people note in the chosen folder read as absent and People were
+          // silently dropped on sync. Resolve the configured folder and open the vault there,
+          // exactly as the People refresh route does (people/routes.ts `withPeopleFolder`).
+          const folder = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
+            if (!(await isPeopleNotesSuggestUpdatesEnabled(scopedDb))) return null;
+            return peopleNotes.resolveFolder(scopedDb);
+          });
+          if (!folder) return;
+          try {
+            await vaultRunner.withVaultContextAt(
+              accessContext,
+              folder,
+              resolveNotesRoots(),
+              (vaultCtx) =>
+                deps.dataContext.withDataContext(accessContext, (scopedDb) =>
+                  peopleNotes.refreshFromFolder(scopedDb, vaultCtx, actorUserId)
+                )
+            );
+          } catch (error) {
+            // Best-effort, like the rest of this hook: a folder that has been unmounted, moved
+            // or taken outside the allowed notes roots must not fail the notes sync.
+            if (
+              error instanceof PeopleNotesFolderUnavailableError ||
+              error instanceof VaultContextError
+            ) {
+              return;
+            }
+            throw error;
+          }
         }
       })
   },
