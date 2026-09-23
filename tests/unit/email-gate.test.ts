@@ -86,4 +86,36 @@ describe("email gate", () => {
     expect(r.signals.skipped).toBe("otp");
     expect(deps.runChat).not.toHaveBeenCalled();
   });
+  it("falls back to the subject when a long plain-mail preview would be rejected as a body echo (#2314)", async () => {
+    // A plain-mail preview is up to 500 characters of the body verbatim, so the deterministic
+    // summary built from it always trips the body-echo guard. The subject is kept instead.
+    const body = "a long plain mail body sentence ".repeat(40);
+    const r = await extractEmailSignals(
+      parsed({ subject: "Parcel update", body, snippet: body.slice(0, 500) }),
+      answer({
+        gate: "worth_knowing",
+        category: "time_sensitive_info",
+        confidence: 0.9,
+        reason: "A delivery is on its way."
+      })
+    );
+    expect(r.gate).toBe("worth_knowing");
+    expect(r.summary).toBe("Parcel update");
+  });
+  it("keeps a short preview as the summary when it is not a body echo (#2314)", async () => {
+    const r = await extractEmailSignals(
+      parsed({
+        subject: "Parcel update",
+        body: "Your parcel arrives today.",
+        snippet: "Parcel arriving"
+      }),
+      answer({
+        gate: "worth_knowing",
+        category: "time_sensitive_info",
+        confidence: 0.9,
+        reason: "A delivery is on its way."
+      })
+    );
+    expect(r.summary).toBe("Parcel arriving");
+  });
 });
