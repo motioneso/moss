@@ -82,13 +82,11 @@ Open questions, each with an owner:
     of the pid has the fresh AX focused window's frame (±1 pt). The AX window is read fresh just
     before capture and again after it, and the post-capture read must equal the first
     (title and frame).
-  - **The title is a sanity check only.** ScreenCaptureKit's title is Accessibility's with its tail
-    cut off, and the tail isn't fixed. Measured on the same Chrome window and frame:
-    - AX "Voice - (19) Messages - Google Chrome", SC "Voice - (19) Messages";
-    - AX "Inbox (800) - … - Gmail - High memory usage - 818 MB - Google Chrome", SC "Inbox (800) - …
-      - Gmail".
-        So the titles match when equal, or when the AX title starts with the SC title followed by " - ".
-        An unreadable or empty SC title never matches a titled window.
+  - **The capture title is not compared at all.** For the same Chrome window and frame,
+    ScreenCaptureKit both drops the tail Accessibility adds (for example "- High memory usage - 908
+    MB - Google Chrome") and shortens long titles in the middle ("Trivia & Networkin… - Gmail").
+    No title rule survives that. Two windows of one app at the same frame are ambiguous, so neither
+    is taken; that covers a normal and a private window both maximised.
   - **Private windows are the policy's job,** checked on the full fresh AX title, not the window
     match's.
   - Safari, Arc, Ghostty and Messages are still to be recorded by the Phase 0 live proof.

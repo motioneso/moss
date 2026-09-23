@@ -28,13 +28,13 @@ protocol WindowCapturing {
 /// initializer, so this is what makes `matchCaptureWindowIndex` testable without the real OS.
 struct CapturableWindow: Equatable {
     let pid: pid_t?
-    /// Nil when ScreenCaptureKit can't read it; a window with no readable title never matches.
+    /// Kept for the Debug diagnostics only; matching uses the frame (see `matchesCaptureWindow`).
     let title: String?
     let isOnScreen: Bool
     let frame: CGRect
 }
 
-/// The one on-screen window of `pid` whose frame and title match `identity`, or nil when there
+/// The one on-screen window of `pid` whose frame matches `identity`, or nil when there
 /// isn't exactly one. Replaces "the app's largest window" (#2643): a small ordinary window in
 /// front of a larger private one of the same browser must never authorise a picture of the
 /// private one. Two identical candidates are ambiguous, so neither is taken.
@@ -44,7 +44,7 @@ func matchCaptureWindowIndex(
     let matches = windows.indices.filter {
         let window = windows[$0]
         return window.pid == pid && window.isOnScreen
-            && identity.matchesCaptureWindow(frame: window.frame, title: window.title)
+            && identity.matchesCaptureWindow(frame: window.frame)
     }
     return matches.count == 1 ? matches[0] : nil
 }

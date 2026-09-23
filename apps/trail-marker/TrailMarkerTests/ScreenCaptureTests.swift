@@ -41,14 +41,6 @@ final class ScreenCaptureTests: XCTestCase {
         XCTAssertNil(matchCaptureWindowIndex(from: windows, pid: browser, identity: WindowIdentity(frame: frame, title: "Docs")))
     }
 
-    func testAnUnreadableTitleNeverMatches() {
-        let frame = CGRect(x: 10, y: 10, width: 800, height: 600)
-        XCTAssertNil(
-            matchCaptureWindowIndex(
-                from: [window(browser, nil, frame)], pid: browser, identity: WindowIdentity(frame: frame, title: "Docs")
-            )
-        )
-    }
 
     func testAnotherProcessWithTheSameFrameAndTitleNeverMatches() {
         let frame = CGRect(x: 10, y: 10, width: 800, height: 600)
@@ -72,10 +64,10 @@ final class ScreenCaptureTests: XCTestCase {
     func testFramesWithinAPointStillMatch() {
         let identity = WindowIdentity(frame: CGRect(x: 10, y: 10, width: 800, height: 600), title: "Docs")
         XCTAssertTrue(
-            identity.matchesCaptureWindow(frame: CGRect(x: 10.5, y: 9.5, width: 800.8, height: 600), title: "Docs")
+            identity.matchesCaptureWindow(frame: CGRect(x: 10.5, y: 9.5, width: 800.8, height: 600))
         )
         XCTAssertFalse(
-            identity.matchesCaptureWindow(frame: CGRect(x: 12, y: 10, width: 800, height: 600), title: "Docs")
+            identity.matchesCaptureWindow(frame: CGRect(x: 12, y: 10, width: 800, height: 600))
         )
     }
 
@@ -106,38 +98,8 @@ final class ScreenCaptureTests: XCTestCase {
         )
     }
 
-    /// A different window's title never matches, whatever the frame.
-    func testADifferentTitleDoesNotMatch() {
-        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
-        XCTAssertNil(
-            matchCaptureWindowIndex(
-                from: [window(browser, "Bank", frame)], pid: browser,
-                identity: WindowIdentity(frame: frame, title: "Docs - Google Chrome")
-            )
-        )
-    }
 
-    /// An empty capture title (a decorative sliver) never stands in for a titled window.
-    func testAnEmptyCaptureTitleDoesNotMatchATitledWindow() {
-        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
-        XCTAssertNil(
-            matchCaptureWindowIndex(
-                from: [window(browser, "", frame)], pid: browser, identity: WindowIdentity(frame: frame, title: "Docs")
-            )
-        )
-    }
 
-    /// Only "<capture title> - <app name>" is accepted, never a title that merely starts the same.
-    func testATitleThatOnlySharesAPrefixDoesNotMatch() {
-        let frame = CGRect(x: 11, y: 8, width: 1427, height: 1006)
-        let identity = WindowIdentity(frame: frame, title: "Voice - (19) Messages and more - Google Chrome")
-        XCTAssertNil(
-            matchCaptureWindowIndex(
-                from: [window(browser, "Voice - (19) Messages", frame)], pid: browser,
-                identity: identity
-            )
-        )
-    }
 
     /// The post-capture re-check compares Accessibility with Accessibility, so it stays exact.
     func testAccessibilityRecheckStaysExact() {
@@ -145,6 +107,31 @@ final class ScreenCaptureTests: XCTestCase {
         let before = WindowIdentity(frame: frame, title: "Voice - (19) Messages - Google Chrome")
         XCTAssertFalse(before.matches(WindowIdentity(frame: frame, title: "Voice - (19) Messages")))
         XCTAssertTrue(before.matches(WindowIdentity(frame: frame, title: "Voice - (19) Messages - Google Chrome")))
+    }
+
+    /// Measured live: ScreenCaptureKit shortens a long title in the middle, so the capture title
+    /// can't be compared at all; the unique frame is the binding.
+    func testATitleShortenedInTheMiddleStillMatchesByFrame() {
+        let frame = CGRect(x: 0, y: 282, width: 1427, height: 1006)
+        let identity = WindowIdentity(
+            frame: frame, title: "Trivia & Networking - Community - Gmail - High memory usage - 908 MB - Google Chrome"
+        )
+        XCTAssertEqual(
+            matchCaptureWindowIndex(from: [window(browser, "Trivia & Networkin… - Gmail", frame)], pid: browser, identity: identity),
+            0
+        )
+    }
+
+    /// A normal and a private window of the same browser, both maximised: the frame can't tell
+    /// them apart, so neither is taken.
+    func testANormalAndAPrivateWindowAtTheSameFrameAreAmbiguous() {
+        let frame = CGRect(x: 0, y: 25, width: 1680, height: 1025)
+        let windows = [window(browser, "Docs", frame), window(browser, "Bank", frame)]
+        XCTAssertNil(
+            matchCaptureWindowIndex(
+                from: windows, pid: browser, identity: WindowIdentity(frame: frame, title: "Docs - Google Chrome")
+            )
+        )
     }
 
     func testReturnsNilWithNoMatch() {

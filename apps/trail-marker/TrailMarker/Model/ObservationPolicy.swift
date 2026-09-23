@@ -24,24 +24,20 @@ struct WindowIdentity: Equatable {
     /// Accessibility against Accessibility (the post-capture re-check): the title must be equal.
     func matches(_ other: WindowIdentity) -> Bool { other.title == title && sameFrame(other.frame) }
 
-    /// Accessibility against a ScreenCaptureKit window. The frame is what binds them: the caller
-    /// takes a window only when exactly one of the app's on-screen windows has this frame, and the
-    /// identity is a fresh Accessibility read, checked again after the picture (#2643).
+    /// Accessibility against a ScreenCaptureKit window: the frame, and only the frame. The caller
+    /// takes a window only when exactly one of the app's on-screen windows has it, and the identity
+    /// is a fresh Accessibility read, read again after the picture and required to be identical
+    /// (#2643).
     ///
-    /// The title is a sanity check, not the binding. Accessibility's title is the capture title
-    /// followed by " - " and whatever the app appends, which is not a fixed suffix. Measured on
-    /// Ben's Mac for Chrome, same window and frame (2026-09-23):
-    /// - AX "Voice - (19) Messages - Google Chrome", SC "Voice - (19) Messages"
-    /// - AX "Inbox (800) - … - Gmail - High memory usage - 818 MB - Google Chrome", SC "Inbox (800) - … - Gmail"
-    /// So the titles match when equal, or when the AX title starts with the SC title and " - ".
-    /// A title that merely starts with the same words does not. An unreadable SC title never
-    /// matches, nor does an empty one against a non-empty AX title. Private windows are refused
-    /// by the policy, which reads the full AX title, not by this check.
-    func matchesCaptureWindow(frame other: CGRect, title scTitle: String?) -> Bool {
-        guard let scTitle, sameFrame(other) else { return false }
-        if scTitle == title { return true }
-        return !scTitle.isEmpty && title.hasPrefix(scTitle + " - ")
-    }
+    /// The capture title is deliberately not compared. Measured on Ben's Mac for one Chrome window
+    /// with the same frame (2026-09-23):
+    /// - ScreenCaptureKit drops the tail Accessibility adds ("- High memory usage - 908 MB -
+    ///   Google Chrome");
+    /// - it also shortens long titles in the middle ("TEKsystems Trivia & Networkin… - … - Gmail").
+    /// So no title rule is reliable. Private windows are refused by the policy, which reads the full
+    /// Accessibility title. Two windows of the app at the same frame are ambiguous, so neither is
+    /// taken.
+    func matchesCaptureWindow(frame other: CGRect) -> Bool { sameFrame(other) }
 }
 
 /// What the frontmost app looked like at one moment. `windowTitle` is empty when Accessibility is
