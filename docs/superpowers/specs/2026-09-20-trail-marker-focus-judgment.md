@@ -105,6 +105,17 @@ when one is in effect, and the person's consent. Anything visible in the capture
 text typed into a form, is sent to the image model. The consent sentence must say this in plain
 words, including which of the two scopes is actually active.
 
+**The person's own exclusions** (amended 2026-09-23, Ben, #2633). The person can add their own apps
+to a "Never watch" list in Settings → Focus, a finance app for example. An excluded app is treated
+exactly like the fixed denylist: it is checked first and wins over both chosen apps and entire-desktop
+watching, and nothing about it leaves the Mac — no capture, no window title, not even the app's name.
+Moss cannot judge while it is in front and simply waits for the next switch. Settings' Test vision
+obeys the same rule, so it never takes a picture of an excluded or denylisted app. Excluding a chosen
+app removes it from the chosen apps.
+
+The fixed denylist above says "banking", but the built-in list covers only password managers and the
+system keychain: no banking or finance app is on it. The person's own list is how those are covered.
+
 ## 7. Judging and nudging
 
 - Typed answer from the model, validated against a schema; anything else counts as
