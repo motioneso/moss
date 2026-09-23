@@ -25,6 +25,54 @@ extension ObservationPolicy {
     }
 }
 
+/// Records a judgment in the debug log's running tally. Does nothing in a Release build.
+@MainActor
+func focusDebugTally(_ judgment: FocusJudgment, blockId: String?, at: Date = Date()) {
+    #if DEBUG
+    FocusDebugLog.shared.tally.record(judgment.label, nudged: judgment.nudge, blockId: blockId, at: at)
+    #endif
+}
+
+/// Running counts for the debug log, mirroring the server's nudge rule (`decideNudge`): a nudge
+/// needs the two newest judgments for the current block both distracted, and none in the last 45
+/// minutes. Any other label breaks the run. Counts start over when the block changes.
+struct FocusTally: Equatable {
+    static let capMinutes: Double = 45
+
+    private(set) var blockId: String?
+    private(set) var counts: [FocusLabel: Int] = [:]
+    private(set) var distractedRun = 0
+    private(set) var lastNudgeAt: Date?
+
+    mutating func record(_ label: FocusLabel, nudged: Bool, blockId: String?, at: Date) {
+        if blockId != self.blockId {
+            self.blockId = blockId
+            counts = [:]
+            distractedRun = 0
+        }
+        counts[label, default: 0] += 1
+        distractedRun = label == .distracted ? distractedRun + 1 : 0
+        if nudged { lastNudgeAt = at }
+    }
+
+    func summary(now: Date) -> String {
+        let run = distractedRun >= 2
+            ? "distracted \(distractedRun) in a row (nudge due)"
+            : "distracted \(distractedRun) in a row (nudge at 2)"
+        let count = { (label: FocusLabel) in self.counts[label] ?? 0 }
+        let totals = "focused \(count(.focused)), detour \(count(.necessaryDetour)), "
+            + "distracted \(count(.distracted)), unsure \(count(.insufficientEvidence))"
+        var nudge = "no nudge yet"
+        if let lastNudgeAt {
+            let capEnds = lastNudgeAt.addingTimeInterval(Self.capMinutes * 60)
+            let time = { (date: Date) in date.formatted(date: .omitted, time: .shortened) }
+            nudge = "last nudge \(time(lastNudgeAt))"
+                + (capEnds > now ? ", next allowed \(time(capEnds))" : ", next allowed now")
+        }
+        return "Run: \(run)\nThis block: \(totals)\n\(nudge) (on this Mac)"
+    }
+}
+
 #if DEBUG
 /// The last few focus events, newest first, for watching a live test.
 @MainActor
@@ -33,6 +81,7 @@ final class FocusDebugLog: ObservableObject {
     private static let limit = 60
 
     @Published private(set) var lines: [String] = []
+    @Published var tally = FocusTally()
 
     func add(_ message: String) {
         let time = Date().formatted(date: .omitted, time: .standard)
@@ -75,6 +124,19 @@ private struct FocusDebugLogView: View {
     @ObservedObject var log: FocusDebugLog
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(log.tally.summary(now: context.date))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+            }
+            Divider()
+            lines
+        }
+    }
+
+    private var lines: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
                 if log.lines.isEmpty {

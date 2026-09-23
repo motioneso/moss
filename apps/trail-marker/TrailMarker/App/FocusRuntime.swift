@@ -330,6 +330,9 @@ final class FocusRuntime: ObservableObject {
                 nudges.showTestNudge()
             case .rememberJudgment(let judgment):
                 remember(judgment)
+                var blockId: String?
+                if case .watching(let id, _, _) = state { blockId = id }
+                focusDebugTally(judgment, blockId: blockId)
             }
         }
         updateObserving()
