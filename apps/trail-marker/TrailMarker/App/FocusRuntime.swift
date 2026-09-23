@@ -335,7 +335,7 @@ final class FocusRuntime: ObservableObject {
             let image: Data
             do {
                 let picture = try await self.windowCapture.capture(
-                    window, pid: app.pid, appName: app.appName, maxDimension: ScreenCaptureKitCapture.maxDimension
+                    window, pid: app.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
                 )
                 image = try JPEGEncoding.encode(picture)
             } catch let error as ScreenCaptureError {
@@ -559,8 +559,7 @@ final class FocusRuntime: ObservableObject {
                 do {
                     focusDebug("Capturing \(observation.appName)'s window…")
                     let picture = try await self.windowCapture.capture(
-                        window, pid: observation.pid, appName: observation.appName,
-                        maxDimension: ScreenCaptureKitCapture.maxDimension
+                        window, pid: observation.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
                     )
                     // Paused, Focus off or asleep while the picture was taken: it never reaches
                     // the vision source (#2643).

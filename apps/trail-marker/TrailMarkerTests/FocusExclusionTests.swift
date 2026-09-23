@@ -37,7 +37,7 @@ final class FocusExclusionTests: XCTestCase {
 
     private final class RecordingCapture: WindowCapturing {
         private(set) var captured: [String] = []
-        func capture(_ window: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat) async throws -> CGImage {
+        func capture(_ window: WindowIdentity, pid: pid_t, maxDimension: CGFloat) async throws -> CGImage {
             captured.append(window.title)
             throw ScreenCaptureError.noMatchingWindow(debugDetail: "")
         }

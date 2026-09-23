@@ -21,9 +21,7 @@ enum ScreenCaptureError: Error, Equatable {
 /// only in memory (rung3 spec §4). A protocol so the escalation logic in `FocusRuntime` can be
 /// tested without ever asking the real OS for a screen.
 protocol WindowCapturing {
-    /// `appName` is the owning app's localized name, used only to accept the app-name suffix
-    /// Accessibility adds to some titles (see `WindowIdentity.matchesCaptureWindow`).
-    func capture(_ window: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat) async throws -> CGImage
+    func capture(_ window: WindowIdentity, pid: pid_t, maxDimension: CGFloat) async throws -> CGImage
 }
 
 /// A window candidate reduced to exactly what matching needs. `SCWindow` has no public
@@ -34,8 +32,6 @@ struct CapturableWindow: Equatable {
     let title: String?
     let isOnScreen: Bool
     let frame: CGRect
-    /// `SCRunningApplication.applicationName`, accepted alongside the localized name.
-    var appName: String? = nil
 }
 
 /// The one on-screen window of `pid` whose frame and title match `identity`, or nil when there
@@ -43,14 +39,12 @@ struct CapturableWindow: Equatable {
 /// front of a larger private one of the same browser must never authorise a picture of the
 /// private one. Two identical candidates are ambiguous, so neither is taken.
 func matchCaptureWindowIndex(
-    from windows: [CapturableWindow], pid: pid_t, appName: String, identity: WindowIdentity
+    from windows: [CapturableWindow], pid: pid_t, identity: WindowIdentity
 ) -> Int? {
     let matches = windows.indices.filter {
         let window = windows[$0]
         return window.pid == pid && window.isOnScreen
-            && identity.matchesCaptureWindow(
-                frame: window.frame, title: window.title, appNames: [appName, window.appName ?? ""]
-            )
+            && identity.matchesCaptureWindow(frame: window.frame, title: window.title)
     }
     return matches.count == 1 ? matches[0] : nil
 }
@@ -66,18 +60,17 @@ struct ScreenCaptureKitCapture: WindowCapturing {
     var focusedWindow: (pid_t) -> WindowIdentity? = { WorkspaceFrontmostSource.focusedWindowIdentity(pid: $0) }
 
     func capture(
-        _ identity: WindowIdentity, pid: pid_t, appName: String, maxDimension: CGFloat = Self.maxDimension
+        _ identity: WindowIdentity, pid: pid_t, maxDimension: CGFloat = Self.maxDimension
     ) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true
         )
         let candidates = content.windows.map {
             CapturableWindow(
-                pid: $0.owningApplication?.processID, title: $0.title, isOnScreen: $0.isOnScreen, frame: $0.frame,
-                appName: $0.owningApplication?.applicationName
+                pid: $0.owningApplication?.processID, title: $0.title, isOnScreen: $0.isOnScreen, frame: $0.frame
             )
         }
-        guard let index = matchCaptureWindowIndex(from: candidates, pid: pid, appName: appName, identity: identity) else {
+        guard let index = matchCaptureWindowIndex(from: candidates, pid: pid, identity: identity) else {
             throw ScreenCaptureError.noMatchingWindow(
                 debugDetail: CaptureDiagnostics.noMatch(identity: identity, pid: pid, candidates: candidates)
             )

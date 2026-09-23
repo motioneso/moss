@@ -24,16 +24,23 @@ struct WindowIdentity: Equatable {
     /// Accessibility against Accessibility (the post-capture re-check): the title must be equal.
     func matches(_ other: WindowIdentity) -> Bool { other.title == title && sameFrame(other.frame) }
 
-    /// Accessibility against a ScreenCaptureKit window. The titles are equal, or the AX title is
-    /// exactly the SC title plus " - " and the owning app's name. Measured on Ben's Mac for Chrome
-    /// (2026-09-23): AX "Voice - (19) Messages - Google Chrome", SC "Voice - (19) Messages", same
-    /// frame. Nothing looser: no prefix or contains matching, so an incognito window's different
-    /// suffix, or a window that merely starts the same, never matches. An unreadable SC title
-    /// never matches.
-    func matchesCaptureWindow(frame other: CGRect, title scTitle: String?, appNames: [String]) -> Bool {
+    /// Accessibility against a ScreenCaptureKit window. The frame is what binds them: the caller
+    /// takes a window only when exactly one of the app's on-screen windows has this frame, and the
+    /// identity is a fresh Accessibility read, checked again after the picture (#2643).
+    ///
+    /// The title is a sanity check, not the binding. Accessibility's title is the capture title
+    /// followed by " - " and whatever the app appends, which is not a fixed suffix. Measured on
+    /// Ben's Mac for Chrome, same window and frame (2026-09-23):
+    /// - AX "Voice - (19) Messages - Google Chrome", SC "Voice - (19) Messages"
+    /// - AX "Inbox (800) - … - Gmail - High memory usage - 818 MB - Google Chrome", SC "Inbox (800) - … - Gmail"
+    /// So the titles match when equal, or when the AX title starts with the SC title and " - ".
+    /// A title that merely starts with the same words does not. An unreadable SC title never
+    /// matches, nor does an empty one against a non-empty AX title. Private windows are refused
+    /// by the policy, which reads the full AX title, not by this check.
+    func matchesCaptureWindow(frame other: CGRect, title scTitle: String?) -> Bool {
         guard let scTitle, sameFrame(other) else { return false }
         if scTitle == title { return true }
-        return appNames.contains { !$0.isEmpty && title == scTitle + " - " + $0 }
+        return !scTitle.isEmpty && title.hasPrefix(scTitle + " - ")
     }
 }
 
