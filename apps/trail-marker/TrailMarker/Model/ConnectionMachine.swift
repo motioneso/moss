@@ -25,6 +25,10 @@ enum ConnectionEffect: Equatable {
     case clearCredential
     case revokeRemotely(generation: Int)
     case showLogoutUnconfirmed
+    /// The link ended: forget this account's settings and reset everything that was running for
+    /// it (#2643). `keepInstance` is true when Moss revoked this Mac, so Sign In can link the same
+    /// instance again; Log Out forgets the instance too.
+    case clearLocalData(keepInstance: Bool)
 }
 
 /// Pure `(state, event) -> (state, [effect])` reducer. A small runtime (`ConnectionRuntime`)
@@ -137,14 +141,20 @@ struct ConnectionMachine {
         }
     }
 
+    /// Log Out works while paused too (#2643): before, it was ignored there, so a paused Mac
+    /// could not be logged out and kept every setting. Revoking on the server is the person's own
+    /// explicit request, so it is sent even from paused.
     private mutating func handleUserLogout() -> [ConnectionEffect] {
         switch state {
-        case .connected, .reconnecting, .signInRequired:
+        case .connected, .reconnecting, .signInRequired, .disconnected:
             let attemptGeneration = generation
             generation += 1
             state = .notLinked
-            return [.cancelAll, .revokeRemotely(generation: attemptGeneration), .clearCredential]
-        case .notLinked, .disconnected:
+            return [
+                .cancelAll, .revokeRemotely(generation: attemptGeneration), .clearCredential,
+                .clearLocalData(keepInstance: false)
+            ]
+        case .notLinked:
             return []
         }
     }
@@ -191,6 +201,9 @@ struct ConnectionMachine {
 
         if let reason = signInReason(for: error) {
             state = .signInRequired(reason: reason)
+            // Revoked (or a credential that no longer works) ends the link; a blocked account
+            // does not, it may be unblocked.
+            if reason == .revoked { return [.cancelAll, .clearLocalData(keepInstance: true)] }
             return [.cancelAll]
         }
         let backoff = min(Self.maxBackoff, Self.baseBackoff * pow(2, Double(attempt)) * Double.random(in: 0.8...1.2))

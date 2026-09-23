@@ -21,33 +21,73 @@ struct WorkspaceFrontmostSource: FrontmostSource {
         else {
             return nil
         }
+        let window = Self.focusedWindowIdentity(pid: app.processIdentifier)
         return Observation(
             appName: app.localizedName ?? bundleId,
             bundleId: bundleId,
-            windowTitle: focusedWindowTitle(processId: app.processIdentifier)
+            // Read on its own, not from `window`: a window whose frame can't be read still has a
+            // title, and the private-window check needs it even when no capture is possible.
+            windowTitle: window?.title ?? Self.focusedWindowTitle(pid: app.processIdentifier) ?? "",
+            pid: app.processIdentifier,
+            window: window
         )
     }
 
-    private func focusedWindowTitle(processId: pid_t) -> String {
-        guard AXIsProcessTrusted() else { return "" }
-        let application = AXUIElementCreateApplication(processId)
-
-        var window: CFTypeRef?
+    /// The focused window's title, or nil when it couldn't be read.
+    static func focusedWindowTitle(pid: pid_t) -> String? {
+        guard AXIsProcessTrusted(), let window = focusedWindow(pid: pid) else { return nil }
+        var titleRef: CFTypeRef?
         guard
-            AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &window) == .success,
-            let window
+            AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success,
+            let title = titleRef as? String
         else {
-            return ""
+            return nil
+        }
+        return title
+    }
+
+    private static func focusedWindow(pid: pid_t) -> AXUIElement? {
+        let application = AXUIElementCreateApplication(pid)
+        var windowRef: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+            let windowRef, CFGetTypeID(windowRef) == AXUIElementGetTypeID()
+        else {
+            return nil
+        }
+        return (windowRef as! AXUIElement)
+    }
+
+    /// The app's focused window, or nil unless every read succeeded: Accessibility granted, a
+    /// focused window, its position, size and title. A title that fails to read is nil, never an
+    /// empty title, so the private-window check can't be skipped by accident (#2643). Also used
+    /// right after a capture to confirm focus didn't move while the picture was taken.
+    static func focusedWindowIdentity(pid: pid_t) -> WindowIdentity? {
+        guard AXIsProcessTrusted(), let window = focusedWindow(pid: pid) else { return nil }
+
+        var titleRef: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success,
+            let title = titleRef as? String
+        else {
+            return nil
         }
 
-        var title: CFTypeRef?
+        var positionRef: CFTypeRef?
+        var sizeRef: CFTypeRef?
+        var position = CGPoint.zero
+        var size = CGSize.zero
         guard
-            AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &title) == .success,
-            let text = title as? String
+            AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionRef) == .success,
+            AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeRef) == .success,
+            let positionRef, let sizeRef,
+            CFGetTypeID(positionRef) == AXValueGetTypeID(), CFGetTypeID(sizeRef) == AXValueGetTypeID(),
+            AXValueGetValue(positionRef as! AXValue, .cgPoint, &position),
+            AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
         else {
-            return ""
+            return nil
         }
-        return text
+        return WindowIdentity(frame: CGRect(origin: position, size: size), title: title)
     }
 }
 

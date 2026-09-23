@@ -364,4 +364,16 @@ final class FocusMachineTests: XCTestCase {
         var machine = armed()
         XCTAssertEqual(machine.handle(.userToggleConsent(false), now: at(9)), [.persistConsent(false), .cancelAll])
     }
+
+    // MARK: sleep (#2643)
+
+    /// Anything started before sleep is dropped: a reply to it after wake does nothing.
+    func testSleepCancelsInFlightWorkAndItsLateReplyIsIgnored() {
+        var machine = armed()
+        let before = machine.generation
+        XCTAssertEqual(machine.handle(.sleep, now: at(10)), [.cancelAll])
+        XCTAssertNotEqual(machine.generation, before)
+        XCTAssertEqual(machine.handle(.judged(judgment(.distracted, nudge: true), generation: before), now: at(11)), [])
+        XCTAssertEqual(machine.handle(.wake, now: at(12)), [.fetchContext(generation: machine.generation)])
+    }
 }

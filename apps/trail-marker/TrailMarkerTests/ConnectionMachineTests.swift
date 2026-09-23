@@ -99,7 +99,7 @@ final class ConnectionMachineTests: XCTestCase {
         let effects = machine.handle(.heartbeatFailed(.credentialInvalid, generation: 0), now: now)
 
         XCTAssertEqual(machine.state, .signInRequired(reason: .revoked))
-        XCTAssertEqual(effects, [.cancelAll])
+        XCTAssertEqual(effects, [.cancelAll, .clearLocalData(keepInstance: true)])
     }
 
     func testTLSAndServerErrorsStayReconnecting() {
@@ -128,12 +128,29 @@ final class ConnectionMachineTests: XCTestCase {
         XCTAssertEqual(machine.handle(.userRetry, now: now), [])
     }
 
+    /// Log Out from paused used to be ignored, so a paused Mac couldn't be logged out and kept
+    /// every setting (#2643).
+    func testUserLogoutWhilePausedRevokesAndClears() {
+        var machine = ConnectionMachine(state: .disconnected, generation: 3)
+        let effects = machine.handle(.userLogout, now: now)
+
+        XCTAssertEqual(machine.state, .notLinked)
+        XCTAssertEqual(effects, [.cancelAll, .revokeRemotely(generation: 3), .clearCredential, .clearLocalData(keepInstance: false)])
+    }
+
+    /// A blocked account may be unblocked, so the link and its settings are kept.
+    func testABlockedAccountDoesNotClearLocalData() {
+        var machine = ConnectionMachine(state: .connected(lastContact: now), generation: 2)
+        let effects = machine.handle(.heartbeatFailed(.accountBlocked(code: "account_deactivated"), generation: 2), now: now)
+        XCTAssertEqual(effects, [.cancelAll])
+    }
+
     func testUserLogoutFromConnectedRevokesAndClears() {
         var machine = ConnectionMachine(state: .connected(lastContact: now), generation: 5)
         let effects = machine.handle(.userLogout, now: now)
 
         XCTAssertEqual(machine.state, .notLinked)
-        XCTAssertEqual(effects, [.cancelAll, .revokeRemotely(generation: 5), .clearCredential])
+        XCTAssertEqual(effects, [.cancelAll, .revokeRemotely(generation: 5), .clearCredential, .clearLocalData(keepInstance: false)])
 
         let laterEffects = machine.handle(.heartbeatFailed(.unreachable, generation: 5), now: now)
         XCTAssertEqual(laterEffects, [.showLogoutUnconfirmed])
@@ -153,7 +170,7 @@ final class ConnectionMachineTests: XCTestCase {
         let effects = machine.handle(.heartbeatFailed(.credentialInvalid, generation: 2), now: now)
 
         XCTAssertEqual(machine.state, .signInRequired(reason: .revoked))
-        XCTAssertEqual(effects, [.cancelAll])
+        XCTAssertEqual(effects, [.cancelAll, .clearLocalData(keepInstance: true)])
     }
 
     func testNetworkFailureWhileConnectedStartsReconnectingAndKeepsLastContact() {

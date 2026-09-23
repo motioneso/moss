@@ -11,6 +11,9 @@ final class ConnectionRuntime: ObservableObject {
     @Published private(set) var state: ConnectionState = .notLinked
     @Published private(set) var identity: LinkedIdentity?
     @Published private(set) var lastDiagnostic: String?
+    /// Bumped every time a link ends (log out, revoked). Focus resets itself on each change, so a
+    /// relink in the same run, possibly as another account, starts from nothing (#2643).
+    @Published private(set) var linkEndCount = 0
 
     private var machine = ConnectionMachine()
     private let keychain: KeychainStore
@@ -21,6 +24,8 @@ final class ConnectionRuntime: ObservableObject {
 
     private var client: CompanionClient?
     private var tasks: [Int: Task<Void, Never>] = [:]
+    /// Tracked so Pause, Log Out and every other cancel stops a rename still in flight.
+    private var renameTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
     private var lastPathSatisfied: Bool?
@@ -96,6 +101,14 @@ final class ConnectionRuntime: ObservableObject {
                 client = nil
             case .revokeRemotely(let generation):
                 startRevokeTask(generation: generation)
+            case .clearLocalData(let keepInstance):
+                if keepInstance {
+                    if let identity { keychain.delete(for: identity) }
+                    preferences.clearAccountData()
+                } else {
+                    preferences.clearAll()
+                }
+                linkEndCount += 1
             case .showLogoutUnconfirmed:
                 lastDiagnostic = "Server-side revocation couldn't be confirmed while offline. "
                     + "This Mac may still be listed in Moss under Active sessions; you can sign it out there."
@@ -161,6 +174,8 @@ final class ConnectionRuntime: ObservableObject {
             task.cancel()
         }
         tasks.removeAll()
+        renameTask?.cancel()
+        renameTask = nil
     }
 
     private func handle(_ event: ConnectionEvent) async {
@@ -180,11 +195,19 @@ final class ConnectionRuntime: ObservableObject {
         NSWorkspace.shared.open(identity.instance.origin)
     }
 
+    /// A connection operation: sent only while linked and not paused (#2643), never gated on
+    /// Focus. The task is tracked, so Pause cancels a rename still in flight.
     func rename(displayName: String) {
+        switch state {
+        case .connected, .reconnecting: break
+        case .disconnected, .notLinked, .signInRequired: return
+        }
         guard let identity, let client, let credential = keychain.read(for: identity) else { return }
-        Task {
+        renameTask?.cancel()
+        renameTask = Task {
             do {
                 try await client.rename(credential: credential, displayName: displayName)
+                if Task.isCancelled { return }
                 self.preferences.displayName = displayName
             } catch {
                 // Best effort: the next successful heartbeat will re-read the server's name,

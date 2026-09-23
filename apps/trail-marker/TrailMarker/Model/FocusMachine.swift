@@ -28,6 +28,9 @@ enum FocusEvent: Equatable {
     case judged(FocusJudgment, generation: Int)
     case judgeFailed(CompanionError, generation: Int)
     case wake
+    /// The Mac is about to sleep: anything in flight is dropped, so no capture, description or
+    /// request started before sleep finishes after it (#2643). Wake fetches afresh.
+    case sleep
     case accessibilityChanged(granted: Bool)
     /// The person changed the app allowlist in the Focus settings.
     case policyChanged(ObservationPolicy)
@@ -188,6 +191,11 @@ struct FocusMachine {
 
         case .wake:
             if isActive { effects.append(.fetchContext(generation: generation)) }
+
+        case .sleep:
+            guard isActive else { break }
+            bumpGeneration()
+            effects.append(.cancelAll)
 
         case .accessibilityChanged(let granted):
             accessibilityGranted = granted

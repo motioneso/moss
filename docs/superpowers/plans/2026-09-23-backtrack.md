@@ -76,14 +76,20 @@ Open questions, each with an owner:
 - **Q2 (Phase 1 builder):** how each browser exposes its address (Safari `AXURL`, Chrome and Arc
   `AXDocument`, Firefox). A browser that exposes none gets no address; the builder never guesses
   one.
-- **Q4 (Phase 0 builder):** Accessibility has no public call that returns a window's `CGWindowID`
-  (only the private `_AXUIElementGetWindow`). The plan uses public API only. `WindowIdentity` is
-  the AX focused window's pid, frame and title, and it matches the `SCWindow` with the same owning
-  pid and frame (±1 pt) **and** the same title. If `SCWindow.title` is unreadable, or the AX title
-  read _failed_ (which is different from a title that was read and is empty), that is no capture
-  (round 2 B1). Zero matches or more than one also means no capture. After capture, the AX focused
-  window must still match. The builder records whether this matched correctly across Safari,
-  Chrome, Arc, Ghostty and Messages.
+- **Q4 (Phase 0 builder), answered 2026-09-23 from a live Chrome measurement.** Accessibility has
+  no public call that returns a window's `CGWindowID`, so the plan uses public API only.
+  - **The binding is the frame.** A capture takes a window only when exactly one on-screen window
+    of the pid has the fresh AX focused window's frame (±1 pt). The AX window is read fresh just
+    before capture and again after it, and the post-capture read must equal the first
+    (title and frame).
+  - **The capture title is not compared at all.** For the same Chrome window and frame,
+    ScreenCaptureKit both drops the tail Accessibility adds (for example "- High memory usage - 908
+    MB - Google Chrome") and shortens long titles in the middle ("Trivia & Networkin… - Gmail").
+    No title rule survives that. Two windows of one app at the same frame are ambiguous, so neither
+    is taken; that covers a normal and a private window both maximised.
+  - **Private windows are the policy's job,** checked on the full fresh AX title, not the window
+    match's.
+  - Safari, Arc, Ghostty and Messages are still to be recorded by the Phase 0 live proof.
 - **Q3 (Phase 3 planner):** the calendar module's public API for "events overlapping a time range".
   It is not verified; Phase 3 must cite it or add it.
 
