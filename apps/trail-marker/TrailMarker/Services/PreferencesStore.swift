@@ -8,6 +8,9 @@ final class PreferencesStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Builds before 2026-09-23 had a separate Focus pause. There is now one pause, the
+        // connection's; a Focus pause left over from then must not keep watching off unseen.
+        defaults.removeObject(forKey: Key.retiredFocusPaused)
     }
 
     private enum Key {
@@ -19,7 +22,8 @@ final class PreferencesStore {
         static let autoCheckUpdates = "autoCheckUpdates"
         static let permissionsPromptShown = "permissionsPromptShown"
         static let focusConsent = "focusConsent"
-        static let focusPaused = "focusPaused"
+        /// Retired: removed on every launch, never read.
+        static let retiredFocusPaused = "focusPaused"
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
         static let focusExcludedBundleIds = "focusExcludedBundleIds"
         static let focusWatchEntireDesktop = "focusWatchEntireDesktop"
@@ -81,12 +85,6 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.focusConsent) }
     }
 
-    /// A Pause survives quitting and restarting, like Disconnect.
-    var focusPaused: Bool {
-        get { defaults.bool(forKey: Key.focusPaused) }
-        set { defaults.set(newValue, forKey: Key.focusPaused) }
-    }
-
     /// Apps the person allowed. Empty means nothing is ever observed, unless
     /// `focusWatchEntireDesktop` is on. Kept even while entire-desktop watching is on, so the
     /// person's app choices are still there if they switch back.
@@ -138,7 +136,7 @@ final class PreferencesStore {
         for key in [
             Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
             Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
-            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
+            Key.focusConsent, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
             Key.focusWatchEntireDesktop,
             Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
         ] {

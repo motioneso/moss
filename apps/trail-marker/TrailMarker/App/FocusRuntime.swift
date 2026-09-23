@@ -43,7 +43,6 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var state: FocusWatchState = .off
     @Published private(set) var lastJudgment: RememberedJudgment?
     @Published private(set) var consent: Bool
-    @Published private(set) var paused: Bool
     @Published private(set) var allowedBundleIds: Set<String>
     /// Apps the person chose never to have watched; wins over everything else, like the denylist.
     @Published private(set) var excludedBundleIds: Set<String>
@@ -120,7 +119,6 @@ final class FocusRuntime: ObservableObject {
         self.windowCapture = windowCapture
         self.visionDescriberFactory = visionDescriberFactory
         self.consent = preferences.focusConsent
-        self.paused = preferences.focusPaused
         self.allowedBundleIds = preferences.focusAllowedBundleIds
         self.excludedBundleIds = preferences.focusExcludedBundleIds
         self.watchEntireDesktop = preferences.focusWatchEntireDesktop
@@ -141,7 +139,7 @@ final class FocusRuntime: ObservableObject {
         // once the person has answered. Without it a build that never got the first answer (a new
         // signing identity, an install made after Focus was already on) would never ask at all.
         if consent { nudges.requestAuthorization() }
-        apply(machine.handle(.launched(consent: consent, paused: paused), now: Date()))
+        apply(machine.handle(.launched(consent: consent), now: Date()))
         send(.accessibilityChanged(granted: permissions.accessibility == .granted))
 
         connection.$state
@@ -168,8 +166,6 @@ final class FocusRuntime: ObservableObject {
     // MARK: - What the person can do
 
     func setConsent(_ value: Bool) { send(.userToggleConsent(value)) }
-    func pause() { send(.userPause) }
-    func resume() { send(.userResume) }
     func testNudge() { send(.userTestNudge) }
 
     func setAllowed(_ bundleId: String, allowed: Bool) {
@@ -349,9 +345,6 @@ final class FocusRuntime: ObservableObject {
                 sendObservation(observation, blockId: blockId, generation: generation)
             case .cancelAll:
                 cancelAllTasks()
-            case .persistPaused(let value):
-                paused = value
-                preferences.focusPaused = value
             case .persistConsent(let value):
                 consent = value
                 preferences.focusConsent = value
@@ -373,7 +366,7 @@ final class FocusRuntime: ObservableObject {
     }
 
     private func updateObserving() {
-        let shouldObserve = consent && !paused && isConnected
+        let shouldObserve = consent && isConnected
         if shouldObserve, !observing {
             observing = true
             observer.start { [weak self] observation in self?.appChanged(observation) }
@@ -396,6 +389,14 @@ final class FocusRuntime: ObservableObject {
 
     private var isConnected: Bool {
         if case .connected = connection.state { return true }
+        return false
+    }
+
+    /// The person paused Trail Marker from the menu (the connection's Pause, the only pause).
+    /// Focus reads as unreachable then, which is true of the network but not why, so the Focus
+    /// settings say paused instead.
+    var connectionPaused: Bool {
+        if case .disconnected = connection.state { return true }
         return false
     }
 

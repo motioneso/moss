@@ -50,7 +50,6 @@ struct FocusMenuInfo: Equatable {
         switch state {
         case .off: return nil
         case .watching: return "Watching · \(goalLine ?? "")"
-        case .paused: return "Focus paused"
         case .noBlock: return "No block right now"
         case .unreachable: return "Can't reach Moss"
         case .notReady: return "Judgment isn't set up on your Moss (ask the admin)"
@@ -108,7 +107,9 @@ enum MenuModel {
 
         // Focus rows only exist for a linked Mac with Focus turned on.
         let focusOn = identity != nil && focus != nil && focus?.state != .off
-        if focusOn, let line = focus?.statusLine {
+        // Paused already says nothing is sent; "Can't reach Moss" under it would be untrue.
+        let connectionPaused = state == .disconnected
+        if focusOn, !connectionPaused, let line = focus?.statusLine {
             items.append(.item(line, role: .focusStatus, enabled: false))
         }
 

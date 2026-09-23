@@ -62,12 +62,14 @@ final class MenuModelFocusTests: XCTestCase {
         )
     }
 
-    func testFocusPausedFromSettingsOnlyChangesTheStateLine() {
-        let focus = FocusMenuInfo(state: .paused, goalLine: nil, hasLastJudgment: false)
+    func testPausedShowsNoFocusLineAndOffersResume() {
+        // Paused already says nothing is sent; Focus reads unreachable underneath, which would
+        // be untrue as a reason.
+        let focus = FocusMenuInfo(state: .unreachable, goalLine: nil, hasLastJudgment: false)
         XCTAssertEqual(
-            titles(.connected(lastContact: now), focus),
+            titles(.disconnected, focus),
             [
-                "Connected", "Focus paused", "moss.example.com", "ben@example.com", "Pause",
+                "Paused", "moss.example.com", "ben@example.com", "Resume",
                 "Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
@@ -122,7 +124,7 @@ final class MenuModelFocusTests: XCTestCase {
     }
 
     func testTheMenuHasNoFocusPauseRowInAnyFocusState() {
-        for state in [FocusWatchState.noBlock, .paused, .unreachable, .notReady] {
+        for state in [FocusWatchState.noBlock, .unreachable, .notReady] {
             let focus = FocusMenuInfo(state: state, goalLine: nil, hasLastJudgment: false)
             let texts = titles(.connected(lastContact: now), focus)
             XCTAssertFalse(texts.contains("Pause Focus"))
@@ -138,7 +140,7 @@ final class MenuModelFocusTests: XCTestCase {
 
     func testTheIconHoverTextIsTheGoalOrJustTheName() {
         XCTAssertEqual(watching().hoverText, "Trail Marker: Study AI, ends 11:00 AM")
-        XCTAssertEqual(FocusMenuInfo(state: .paused, goalLine: nil, hasLastJudgment: false).hoverText, "Trail Marker")
+        XCTAssertEqual(FocusMenuInfo(state: .noBlock, goalLine: nil, hasLastJudgment: false).hoverText, "Trail Marker")
     }
 
     func testLabelsAreShownInPlainWords() {
@@ -185,10 +187,9 @@ final class StatusCardLayoutTests: XCTestCase {
             MenuModel.card(state: .connected(lastContact: now), identity: identity, focus: noBlock).focusLine,
             "No block right now"
         )
-        let paused = FocusMenuInfo(state: .paused, goalLine: nil, hasLastJudgment: false)
-        let card = MenuModel.card(state: .connected(lastContact: now), identity: identity, focus: paused)
-        XCTAssertEqual(card.focusLine, "Focus paused")
-        XCTAssertEqual(card.rows.first, "Open Moss")
+        let card = MenuModel.card(state: .disconnected, identity: identity, focus: noBlock)
+        XCTAssertNil(card.focusLine)
+        XCTAssertEqual(card.primaryTitle, "Resume")
     }
 
     func testCardWithFocusOffIsTheOriginalCard() {

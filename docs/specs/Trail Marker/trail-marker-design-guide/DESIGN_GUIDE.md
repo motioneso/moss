@@ -68,7 +68,7 @@ Every connection state includes an icon, a plain-text label, and an appropriate 
 
 Disconnect, Quit, and Log Out have different outcomes and must remain visibly distinct. Manual Disconnect persists across app and Mac restarts.
 
-In the interface, Disconnect is labelled **Pause** and Connect is labelled **Resume**, and the Disconnected state reads **Paused** (Ben, 2026-09-23). The behaviour is unchanged: Pause stops all communication without logging out. This guide keeps the Disconnect / Connect names for the behaviour.
+In the interface, Disconnect is labelled **Pause** and Connect is labelled **Resume**, and the Disconnected state reads **Paused** (Ben, 2026-09-23). The behaviour is unchanged: Pause stops all communication without logging out. This guide keeps the Disconnect / Connect names for the behaviour. It is the only pause: there is no separate Focus pause.
 
 ### Honest about scope
 
@@ -302,7 +302,7 @@ Order items consistently:
 6. Log Out… when linked.
 7. Quit Trail Marker.
 
-The menu has no separate Pause Focus row; Focus is paused and resumed from Settings → Focus (Ben, 2026-09-23).
+There is one pause, the connection's Pause / Resume above; no separate Pause Focus exists in the menu or in Settings (Ben, 2026-09-23).
 
 Check for Updates lives in Settings, under Updates, not in the menu.
 

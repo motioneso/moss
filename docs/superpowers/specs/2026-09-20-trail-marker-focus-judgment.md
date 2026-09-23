@@ -66,6 +66,8 @@ nudge?
 5. **The Mac decides whether to nudge**, from its distraction gauge (§7a, amended 2026-09-22).
    Default is to say nothing until real distracted time has built up.
 6. **Pause and stop are always one click on the Mac** and stop all observation immediately.
+   There is one pause: the menu's **Pause / Resume**, which pauses the whole connection to Moss
+   without logging out. There is no separate Focus pause (Ben, 2026-09-23).
 
 ## 5. Calendar seam
 
@@ -153,8 +155,9 @@ The person must be able to see the chain working without waiting for a real drif
   Right buttons. Kept in memory on the Mac for the session only.
 - **Send a test nudge** in settings shows the banner for a few seconds, so the delivery path can
   be checked independently of any judgment.
-- A clear state line in the menu: Watching (block name, ends 11:00), Paused, No block right now,
-  or Can't reach Moss.
+- A clear state line in the menu: Watching (block name, ends 11:00), No block right now, or
+  Can't reach Moss. While Trail Marker is paused the menu's status already reads Paused, and no
+  Focus line is shown under it.
 
 ## 7a. The nudge banner (amended 2026-09-22)
 
@@ -238,9 +241,9 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
    ends (or "No block right now"), on click, with the block name also available on hover of the
    menu-bar icon. **Pause / Resume** and **Judge now** sit in the same card. The last judgment
    (what was seen, the label, the reason, Wrong / Right) opens from **Judge now**'s result rather
-   than a separate window. _Amended (Ben, 2026-09-23):_ Judge now is gone, the menu has no
-   Pause Focus row (Focus is paused from Settings → Focus), and the card's Pause / Resume is the
-   connection's pause, which stops all communication with Moss. Last Judgment… is its own row.
+   than a separate window. _Amended (Ben, 2026-09-23):_ Judge now is gone and there is no
+   separate Focus pause anywhere; the card's Pause / Resume is the connection's pause, the only
+   one, and stops all communication with Moss. Last Judgment… is its own row.
 2. **Focus settings (one new pane in the existing Settings sidebar):** the image model API
    (endpoint, model name, key, a Test button, and one plain sentence stating where the image will
    be sent). That sentence is the consent: no separate consent screen. Also what to watch — specific

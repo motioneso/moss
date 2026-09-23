@@ -17,7 +17,7 @@ struct StatusCardView: View {
         MenuModel.items(state: connection.state, identity: connection.identity, focus: focusInfo)
     }
 
-    /// The Focus state line (goal, "No block right now", "Paused", ...), when Focus is on.
+    /// The Focus state line (goal, "No block right now", ...), when Focus is on.
     private var focusLine: String? {
         MenuModel.card(state: connection.state, identity: connection.identity, focus: focusInfo).focusLine
     }
