@@ -583,6 +583,10 @@ describe("evening steps 2 to 4 (V8)", () => {
     const radios = [...group.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
     expect(radios.length).toBe(4);
     expect(radios[3]?.checked).toBe(true);
+    expect(radios[3]?.tabIndex).toBe(0);
+    expect(radios[0]?.tabIndex).toBe(-1);
+    expect(radios[1]?.tabIndex).toBe(-1);
+    expect(radios[2]?.tabIndex).toBe(-1);
     expect(cards[3]?.getAttribute("data-state")).toBe("selected");
     for (const radio of radios) {
       expect(radio.hidden).toBe(false);
@@ -593,6 +597,10 @@ describe("evening steps 2 to 4 (V8)", () => {
     });
     const checked = [...group.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
     expect(checked.filter((radio) => radio.checked).length).toBe(1);
+    expect(checked[0]?.tabIndex).toBe(0);
+    expect(checked[1]?.tabIndex).toBe(-1);
+    expect(checked[2]?.tabIndex).toBe(-1);
+    expect(checked[3]?.tabIndex).toBe(-1);
     expect(group.querySelectorAll('label[data-state="selected"]').length).toBe(1);
     expect(
       (group.querySelector('label[data-state="selected"]') as HTMLElement).textContent

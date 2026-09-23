@@ -304,6 +304,7 @@ export function CommitSection(props: {
                       name={`${row.task.id}-commit`}
                       className="evening-plan__choice-radio"
                       checked={selected}
+                      tabIndex={selected ? 0 : -1}
                       disabled={evening.busy}
                       onChange={() => {
                         if (choice.id === "leave") {
