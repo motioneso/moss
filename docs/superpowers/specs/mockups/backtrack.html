@@ -680,6 +680,71 @@
         padding-top: 0;
         border-top: 0;
       }
+
+      /* ---------- feature tiles in the card ---------- */
+      .mbfig {
+        margin: 0;
+      }
+      .mbfig figcaption {
+        font-size: 12px;
+        color: var(--ink-2);
+        margin-top: 10px;
+        text-align: center;
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .tile {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+        column-gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 9px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        background: rgba(0, 0, 0, 0.04);
+        color: #8e8e93;
+        cursor: pointer;
+      }
+      .tile__sym {
+        grid-row: 1 / 3;
+        font-size: 16px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.08);
+        color: #8e8e93;
+      }
+      .tile__name {
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .tile__state {
+        font-size: 11px;
+      }
+      .tile--on {
+        background: rgba(23, 62, 43, 0.08);
+        border-color: rgba(23, 62, 43, 0.35);
+        color: var(--tm-charcoal);
+      }
+      .tile--on .tile__sym {
+        background: var(--tm-forest);
+        color: var(--tm-bone);
+      }
+      .tile--on .tile__state {
+        color: var(--tm-forest);
+      }
+      .tile--disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
     </style>
   </head>
   <body>
@@ -695,97 +760,172 @@
       </header>
 
       <section class="screen">
-        <h2>A. Menu-bar card while Backtrack is on</h2>
+        <h2>A. Menu-bar card: Focus and Backtrack tiles</h2>
         <p class="note">
-          Today's card (<code>StatusCardView</code>): the colour mark with its status badge, the
-          state, one sentence, the Focus line, one full-width primary button, then the rows. The
-          only additions are a gold dot on the menu-bar mark and one line in the header,
-          <b>Backtrack is recording</b>, under the Focus line. While paused (right) both disappear.
-          With Backtrack off, the card is exactly what ships today.
+          Today's card (<code>StatusCardView</code>) with one addition: a row of two tiles under the
+          header, one per feature. Clicking a tile pauses or resumes only that feature. <b>On</b> is
+          forest-tinted and says what it's doing. <b>Paused</b> is greyed and says Paused. A tile
+          appears only once its feature is turned on in Settings, so someone who never enabled
+          Backtrack sees just the Focus tile. The big button still pauses <em>everything</em>,
+          including the connection to Moss, and while it's on both tiles are greyed and can't be
+          clicked. The gold dot on the menu-bar mark shows whenever Backtrack is actually recording.
         </p>
         <div class="stage">
-          <div class="mb">
-            <div class="mb__bar">
-              <span class="mb__icon"
-                ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                  <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
-                  <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
-                  <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" /></svg
-                ><span class="mb__rec"></span></span
-              ><span>Wed Sep 23&nbsp; 10:14 AM</span>
-            </div>
-            <div class="card">
-              <div class="card__head">
-                <span class="card__mark"
-                  ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
-                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
-                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
-                    <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
-                  ><span class="card__badge" style="background: #28c840">✓</span></span
-                >
-                <div>
-                  <div class="card__title">Connected</div>
-                  <div class="card__expl">Linked to moss.example.com.</div>
-                  <div class="card__focus">Watching · Study AI, ends 11:00 AM</div>
-                  <div class="card__bt">
-                    <span class="dot dot--gold"></span>Backtrack is recording
+          <figure class="mbfig">
+            <div class="mb">
+              <div class="mb__bar">
+                <span class="mb__icon"
+                  ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" /></svg
+                  ><span class="mb__rec"></span></span
+                ><span>Wed Sep 23&nbsp; 10:14 AM</span>
+              </div>
+              <div class="card">
+                <div class="card__head">
+                  <span class="card__mark"
+                    ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                      <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
+                      <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
+                      <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
+                    ><span class="card__badge" style="background: #28c840">✓</span></span
+                  >
+                  <div>
+                    <div class="card__title">Connected</div>
+                    <div class="card__expl">Linked to moss.example.com.</div>
+                    <div class="card__focus">Watching · Study AI, ends 11:00 AM</div>
                   </div>
                 </div>
-              </div>
-              <div class="card__btn">Pause</div>
-              <div class="card__div"></div>
-              <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
-              <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
-              <div class="card__row card__row--red">
-                <span>Log Out…</span><span class="muted"></span>
-              </div>
-              <div class="card__row">
-                <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
-              </div>
-            </div>
-          </div>
-          <div class="mb">
-            <div class="mb__bar">
-              <span class="mb__icon"
-                ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                  <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
-                  <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
-                  <rect
-                    x="4"
-                    y="15.5"
-                    width="9"
-                    height="3"
-                    rx="1.5"
-                    fill="currentColor"
-                  /></svg></span
-              ><span>Wed Sep 23&nbsp; 10:14 AM</span>
-            </div>
-            <div class="card">
-              <div class="card__head">
-                <span class="card__mark"
-                  ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
-                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
-                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
-                    <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
-                  ><span class="card__badge" style="background: #8e8e93">Ⅱ</span></span
-                >
-                <div>
-                  <div class="card__title">Paused</div>
-                  <div class="card__expl">Paused. Nothing is being sent to Moss.</div>
+                <div class="tiles">
+                  <div class="tile tile--on" role="switch" aria-checked="true">
+                    <span class="tile__sym">◎</span><span class="tile__name">Focus</span
+                    ><span class="tile__state">Watching</span>
+                  </div>
+                  <div class="tile tile--on" role="switch" aria-checked="true">
+                    <span class="tile__sym">↺</span><span class="tile__name">Backtrack</span
+                    ><span class="tile__state">Recording</span>
+                  </div>
+                </div>
+                <div class="card__btn">Pause</div>
+                <div class="card__div"></div>
+                <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
+                <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
+                <div class="card__row card__row--red">
+                  <span>Log Out…</span><span class="muted"></span>
+                </div>
+                <div class="card__row">
+                  <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
                 </div>
               </div>
-              <div class="card__btn">Resume</div>
-              <div class="card__div"></div>
-              <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
-              <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
-              <div class="card__row card__row--red">
-                <span>Log Out…</span><span class="muted"></span>
+            </div>
+            <figcaption>1. Both on</figcaption>
+          </figure>
+          <figure class="mbfig">
+            <div class="mb">
+              <div class="mb__bar">
+                <span class="mb__icon"
+                  ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" /></svg
+                  ><span class="mb__rec"></span></span
+                ><span>Wed Sep 23&nbsp; 10:14 AM</span>
               </div>
-              <div class="card__row">
-                <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
+              <div class="card">
+                <div class="card__head">
+                  <span class="card__mark"
+                    ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                      <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
+                      <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
+                      <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
+                    ><span class="card__badge" style="background: #28c840">✓</span></span
+                  >
+                  <div>
+                    <div class="card__title">Connected</div>
+                    <div class="card__expl">Linked to moss.example.com.</div>
+                    <div class="card__focus">Focus paused</div>
+                  </div>
+                </div>
+                <div class="tiles">
+                  <div class="tile" role="switch" aria-checked="false">
+                    <span class="tile__sym">◎</span><span class="tile__name">Focus</span
+                    ><span class="tile__state">Paused</span>
+                  </div>
+                  <div class="tile tile--on" role="switch" aria-checked="true">
+                    <span class="tile__sym">↺</span><span class="tile__name">Backtrack</span
+                    ><span class="tile__state">Recording</span>
+                  </div>
+                </div>
+                <div class="card__btn">Pause</div>
+                <div class="card__div"></div>
+                <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
+                <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
+                <div class="card__row card__row--red">
+                  <span>Log Out…</span><span class="muted"></span>
+                </div>
+                <div class="card__row">
+                  <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
+                </div>
               </div>
             </div>
-          </div>
+            <figcaption>2. Focus paused, Backtrack still recording</figcaption>
+          </figure>
+          <figure class="mbfig">
+            <div class="mb">
+              <div class="mb__bar">
+                <span class="mb__icon"
+                  ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
+                    <rect
+                      x="4"
+                      y="15.5"
+                      width="9"
+                      height="3"
+                      rx="1.5"
+                      fill="currentColor"
+                    /></svg></span
+                ><span>Wed Sep 23&nbsp; 10:14 AM</span>
+              </div>
+              <div class="card">
+                <div class="card__head">
+                  <span class="card__mark"
+                    ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                      <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
+                      <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
+                      <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
+                    ><span class="card__badge" style="background: #8e8e93">Ⅱ</span></span
+                  >
+                  <div>
+                    <div class="card__title">Paused</div>
+                    <div class="card__expl">Paused. Nothing is being sent to Moss.</div>
+                  </div>
+                </div>
+                <div class="tiles">
+                  <div class="tile tile--disabled" role="switch" aria-checked="false">
+                    <span class="tile__sym">◎</span><span class="tile__name">Focus</span
+                    ><span class="tile__state">Paused</span>
+                  </div>
+                  <div class="tile tile--disabled" role="switch" aria-checked="false">
+                    <span class="tile__sym">↺</span><span class="tile__name">Backtrack</span
+                    ><span class="tile__state">Paused</span>
+                  </div>
+                </div>
+                <div class="card__btn">Resume</div>
+                <div class="card__div"></div>
+                <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
+                <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
+                <div class="card__row card__row--red">
+                  <span>Log Out…</span><span class="muted"></span>
+                </div>
+                <div class="card__row">
+                  <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
+                </div>
+              </div>
+            </div>
+            <figcaption>3. Everything paused (the big button)</figcaption>
+          </figure>
         </div>
       </section>
 
