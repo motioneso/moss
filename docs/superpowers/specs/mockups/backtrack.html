@@ -681,7 +681,7 @@
         border-top: 0;
       }
 
-      /* ---------- feature tiles in the card ---------- */
+      /* ---------- feature toggles in the card ---------- */
       .mbfig {
         margin: 0;
       }
@@ -691,59 +691,43 @@
         margin-top: 10px;
         text-align: center;
       }
-      .tiles {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin-top: 14px;
-      }
-      .tile {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        grid-template-rows: auto auto;
-        column-gap: 8px;
+      .card__row--toggle {
         align-items: center;
-        padding: 8px 10px;
-        border-radius: 9px;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        background: rgba(0, 0, 0, 0.04);
-        color: #8e8e93;
-        cursor: pointer;
       }
-      .tile__sym {
-        grid-row: 1 / 3;
-        font-size: 16px;
-        width: 22px;
-        height: 22px;
+      .card__row--toggle.is-disabled {
+        color: #b0b0b5;
+      }
+      .card__row--toggle.is-disabled .mswitch {
+        opacity: 0.4;
+      }
+      .card__div--tight {
+        margin: 6px 0;
+      }
+      .mswitch {
+        width: 26px;
+        height: 15px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.16);
+        position: relative;
+        flex: none;
+      }
+      .mswitch::after {
+        content: "";
+        position: absolute;
+        left: 1.5px;
+        top: 1.5px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.08);
-        color: #8e8e93;
+        background: #fff;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
       }
-      .tile__name {
-        font-size: 12.5px;
-        font-weight: 600;
+      .mswitch--on {
+        background: #0a84ff;
       }
-      .tile__state {
-        font-size: 11px;
-      }
-      .tile--on {
-        background: rgba(23, 62, 43, 0.08);
-        border-color: rgba(23, 62, 43, 0.35);
-        color: var(--tm-charcoal);
-      }
-      .tile--on .tile__sym {
-        background: var(--tm-forest);
-        color: var(--tm-bone);
-      }
-      .tile--on .tile__state {
-        color: var(--tm-forest);
-      }
-      .tile--disabled {
-        opacity: 0.55;
-        cursor: default;
+      .mswitch--on::after {
+        left: auto;
+        right: 1.5px;
       }
     </style>
   </head>
@@ -760,15 +744,16 @@
       </header>
 
       <section class="screen">
-        <h2>A. Menu-bar card: Focus and Backtrack tiles</h2>
+        <h2>A. Menu-bar card: Focus and Backtrack toggles</h2>
         <p class="note">
-          Today's card (<code>StatusCardView</code>) with one addition: a row of two tiles under the
-          header, one per feature. Clicking a tile pauses or resumes only that feature. <b>On</b> is
-          forest-tinted and says what it's doing. <b>Paused</b> is greyed and says Paused. A tile
+          Today's card (<code>StatusCardView</code>). The primary button becomes <b>Pause All</b> /
+          <b>Resume All</b>, and under it are two ordinary menu rows with a switch each,
+          <b>Focus</b> and <b>Backtrack</b>. Each switch pauses or resumes only that feature. A row
           appears only once its feature is turned on in Settings, so someone who never enabled
-          Backtrack sees just the Focus tile. The big button still pauses <em>everything</em>,
-          including the connection to Moss, and while it's on both tiles are greyed and can't be
-          clicked. The gold dot on the menu-bar mark shows whenever Backtrack is actually recording.
+          Backtrack sees just the Focus row. Pause All also stops the connection to Moss. While it's
+          on, the switches keep their positions but are greyed and can't be changed, so Resume All
+          brings back exactly what was running. The gold dot on the menu-bar mark shows whenever
+          Backtrack is actually recording.
         </p>
         <div class="stage">
           <figure class="mbfig">
@@ -797,18 +782,17 @@
                     <div class="card__focus">Watching · Study AI, ends 11:00 AM</div>
                   </div>
                 </div>
-                <div class="tiles">
-                  <div class="tile tile--on" role="switch" aria-checked="true">
-                    <span class="tile__sym">◎</span><span class="tile__name">Focus</span
-                    ><span class="tile__state">Watching</span>
-                  </div>
-                  <div class="tile tile--on" role="switch" aria-checked="true">
-                    <span class="tile__sym">↺</span><span class="tile__name">Backtrack</span
-                    ><span class="tile__state">Recording</span>
-                  </div>
-                </div>
-                <div class="card__btn">Pause</div>
+                <div class="card__btn">Pause All</div>
                 <div class="card__div"></div>
+                <div class="card__row card__row--toggle">
+                  <span>Focus</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__row card__row--toggle">
+                  <span>Backtrack</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__div card__div--tight"></div>
                 <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
                 <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
                 <div class="card__row card__row--red">
@@ -847,18 +831,16 @@
                     <div class="card__focus">Focus paused</div>
                   </div>
                 </div>
-                <div class="tiles">
-                  <div class="tile" role="switch" aria-checked="false">
-                    <span class="tile__sym">◎</span><span class="tile__name">Focus</span
-                    ><span class="tile__state">Paused</span>
-                  </div>
-                  <div class="tile tile--on" role="switch" aria-checked="true">
-                    <span class="tile__sym">↺</span><span class="tile__name">Backtrack</span
-                    ><span class="tile__state">Recording</span>
-                  </div>
-                </div>
-                <div class="card__btn">Pause</div>
+                <div class="card__btn">Pause All</div>
                 <div class="card__div"></div>
+                <div class="card__row card__row--toggle">
+                  <span>Focus</span><span class="mswitch" role="switch" aria-checked="false"></span>
+                </div>
+                <div class="card__row card__row--toggle">
+                  <span>Backtrack</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__div card__div--tight"></div>
                 <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
                 <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
                 <div class="card__row card__row--red">
@@ -869,7 +851,7 @@
                 </div>
               </div>
             </div>
-            <figcaption>2. Focus paused, Backtrack still recording</figcaption>
+            <figcaption>2. Focus off, Backtrack still recording</figcaption>
           </figure>
           <figure class="mbfig">
             <div class="mb">
@@ -902,18 +884,17 @@
                     <div class="card__expl">Paused. Nothing is being sent to Moss.</div>
                   </div>
                 </div>
-                <div class="tiles">
-                  <div class="tile tile--disabled" role="switch" aria-checked="false">
-                    <span class="tile__sym">◎</span><span class="tile__name">Focus</span
-                    ><span class="tile__state">Paused</span>
-                  </div>
-                  <div class="tile tile--disabled" role="switch" aria-checked="false">
-                    <span class="tile__sym">↺</span><span class="tile__name">Backtrack</span
-                    ><span class="tile__state">Paused</span>
-                  </div>
-                </div>
-                <div class="card__btn">Resume</div>
+                <div class="card__btn">Resume All</div>
                 <div class="card__div"></div>
+                <div class="card__row card__row--toggle is-disabled">
+                  <span>Focus</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__row card__row--toggle is-disabled">
+                  <span>Backtrack</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__div card__div--tight"></div>
                 <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
                 <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
                 <div class="card__row card__row--red">
@@ -924,7 +905,7 @@
                 </div>
               </div>
             </div>
-            <figcaption>3. Everything paused (the big button)</figcaption>
+            <figcaption>3. Pause All</figcaption>
           </figure>
         </div>
       </section>

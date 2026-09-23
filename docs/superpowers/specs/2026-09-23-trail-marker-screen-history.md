@@ -50,16 +50,16 @@ enough to be worth what it costs in privacy and battery?
   that says plainly what is read, what is sent, where it is kept and for how long. Turning Focus on
   never turns screen history on, and the reverse is also true.
 - It needs Screen Recording (already requested for focus vision). It works with or without Focus.
-- **Always visible.** While screen history is recording, the menu-bar icon shows a small gold dot,
-  and the Backtrack tile in the menu card says "Recording".
-- **Pausing (Ben, 2026-09-23).** The menu card has one tile per feature that is turned on, **Focus**
-  and **Backtrack**. Clicking a tile pauses or resumes only that feature: on is forest-tinted with
-  its state ("Watching" / "Recording"), paused is greyed with "Paused". The big **Pause** button
-  still pauses everything, including the connection to Moss (#2635). While it is on, both tiles are
-  greyed and can't be clicked. A screen lock or sleep also stops Backtrack. This brings back a
-  Focus-only pause, which #2635 removed as a separate menu row. It returns as a tile and uses a new
-  preference key, not the retired `focusPaused` that #2635 deletes on launch, so an old stored value
-  can never pause anyone.
+- **Always visible.** While screen history is recording, the menu-bar icon shows a small gold dot.
+- **Pausing (Ben, 2026-09-23).** The menu card's primary button becomes **Pause All** / **Resume
+  All**. Pause All stops everything, including the connection to Moss; this is #2635's Pause,
+  renamed. Under it are two menu rows with a switch each, **Focus** and **Backtrack**. Each switch
+  pauses or resumes only that feature, and a row appears only once its feature is turned on in
+  Settings. While Pause All is on, the switches keep their positions but are greyed and can't be
+  changed, so Resume All brings back exactly what was running. A screen lock or sleep also stops
+  Backtrack. This brings back a Focus-only pause, which #2635 removed as a separate row, as a switch
+  row. It uses a new preference key, not the retired `focusPaused` that #2635 deletes on launch, so
+  an old stored value can never pause anyone.
 - The person can delete from Moss (§9c): the last hour, today, any day, or everything. Deletion
   removes the raw text, its search index and, where asked, that day's summary note.
 - Logging Trail Marker out or revoking the Mac stops capture, and the Mac discards anything it has
@@ -164,9 +164,9 @@ Native screens follow the Trail Marker design guide (§11, settings window). Mos
 `@moss/ui` and `jds-*` primitives only; the file names the components, and there are no new raw
 colours.
 
-- **A. Menu bar:** today's card plus a row of Focus and Backtrack tiles under the header, drawn in
-  three states: both on, Focus paused while Backtrack records, and everything paused. The gold dot
-  on the menu-bar mark shows while Backtrack is recording.
+- **A. Menu bar:** today's card with **Pause All** / **Resume All**, then Focus and Backtrack rows
+  with switches, drawn in three states: both on, Focus off while Backtrack records, and Pause All.
+  The gold dot on the menu-bar mark shows while Backtrack is recording.
 - **B. Trail Marker Settings → Backtrack:** a new sidebar tab. It holds the on switch, a status
   line with last-sent time, the Never watch list (shared with Focus, with a link to edit it there),
   and "Open in Moss…".
