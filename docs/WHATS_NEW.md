@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Trail Marker privacy fixes.** Trail Marker now only ever looks at the window you're using, stops everything while paused, and forgets its settings when you log out. [PR #2644](https://github.com/motioneso/moss/pull/2644)
 - **Trail Marker approval page styling.** The page where you approve a Mac for Trail Marker now uses Moss's usual heading style. [PR #2632](https://github.com/motioneso/moss/pull/2632)
 
 #### Added
