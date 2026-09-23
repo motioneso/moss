@@ -270,8 +270,14 @@
   display: none;
 }
 
-/* Mockup rail: every tinted task row carries the dark edge. The reader
-   paints proposed and pending rows gold; the Review shows forest instead. */
+/* Mockup rail rows are square tinted blocks: no curved card radius
+   anywhere in the Review rail, and every tinted row carries the dark edge.
+   The reader paints proposed and pending rows gold; the Review shows
+   forest instead. */
+[data-briefing-surface="review"].plan-review__rail .jds-task {
+  border-radius: 0;
+}
+
 [data-briefing-surface="review"].plan-review__rail .jds-task[data-state="proposed"],
 [data-briefing-surface="review"].plan-review__rail .jds-task[data-state="pending"] {
   border-left: 2px solid var(--forest);
