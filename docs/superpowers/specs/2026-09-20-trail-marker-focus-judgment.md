@@ -7,7 +7,7 @@ call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`. **Am
 (§6, §9): watching can be the entire desktop instead of only chosen apps; full amendment in
 `2026-09-21-trail-marker-rung3-vision.md` §7. **Amended 2026-09-22** (§7, §7a, §9, §10, §11): a
 nudge is a banner that stays on top until the person is back on task, replacing the macOS
-notification, and the person sets how sensitive nudging is.
+notification, and a distraction gauge on the Mac decides when it appears.
 
 ## 1. What this is
 
@@ -47,8 +47,8 @@ nudge?
 - Judging when there is no calendar block.
 - Productivity scores, history dashboards, or reports about the person.
 - Any other computer, Windows, Linux, or a cross-platform framework.
-- Nudges that interrupt without a clear, repeated mismatch, unless the person chose a single
-  distracted check as enough (§7a); the default still needs two in a row.
+- Nudges that interrupt without a clear, sustained mismatch: the gauge in §7a needs real time
+  spent distracted, unless the person chose "right away".
 
 ## 4. How it works
 
@@ -63,7 +63,8 @@ nudge?
    The summary sent to Moss is text only. Moss's configured judgment model receives the block and
    that text and returns a typed answer: `focused`, `necessary_detour`, `distracted` or `insufficient_evidence`,
    with a short reason.
-5. **Moss decides whether to nudge.** Conservative rules (§7). Default is to say nothing.
+5. **The Mac decides whether to nudge**, from its distraction gauge (§7a, amended 2026-09-22).
+   Default is to say nothing until real distracted time has built up.
 6. **Pause and stop are always one click on the Mac** and stop all observation immediately.
 
 ## 5. Calendar seam
@@ -108,21 +109,22 @@ words, including which of the two scopes is actually active.
 
 - Typed answer from the model, validated against a schema; anything else counts as
   `insufficient_evidence`.
-- A nudge needs the person's chosen number of consecutive `distracted` judgments for the current
-  block (1, 2 or 3; default 2), with no other label between them, outside quiet hours, and no
-  nudge within the person's chosen spacing (no limit, 15 or 45 minutes; default 45). See §7a.
+- A nudge comes from the distraction gauge on the Mac (§7a): time spent in front of windows
+  judged `distracted` fills it, and only a stretch of focused time empties it. Nothing is nudged
+  in quiet hours.
 - `insufficient_evidence` never nudges.
 - The person can mark a judgment wrong; those corrections are the trial's main measure.
 - **Judging happens inside the Mac's own request.** The Mac sends a summary and waits (timeout
   about 20 seconds) for the judgment. It is not queued as a background job, because window text
   cannot be stored or carried in a job payload. If the model is slow or fails, the Mac gets
   `insufficient_evidence` and nothing is nudged.
-- **The server holds the nudge rules** (consecutive `distracted`, spacing, quiet hours) and
-  returns a yes/no `nudge` flag with the judgment. The Mac sends the person's two sensitivity
-  choices with each judge request; the server accepts only the listed values and uses the
-  defaults when they are absent, so an older Mac behaves exactly as before. The spacing is
-  **per person**, across all their linked Macs, so a second Mac cannot double the nudges.
-- **The Mac shows the nudge itself** as the on-top banner in §7a when told to. The Moss
+- **The Mac holds the nudge rule (amended 2026-09-22).** The gauge measures time in front of a
+  window, which only the Mac knows; the server sees judgments at irregular moments. The server
+  judges, stores the label, and tells the Mac whether it is quiet hours (in the context it already
+  fetches every minute). The earlier server-side rule (two in a row, a per-person 45-minute cap)
+  and its `nudge` flag are removed. Each Mac keeps its own gauge; a person on two Macs at once can
+  see a banner on each, which is acceptable on a one-person instance.
+- **The Mac shows the nudge itself** as the on-top banner in §7a. The Moss
   notifications module reaches the web and browser push but the Mac's credential cannot read it,
   so it is not the delivery route. Quiet hours are read from the person's Moss settings and a
   nudge in quiet hours is **dropped, not deferred** (a deferred nudge would arrive after the
@@ -154,19 +156,32 @@ Tried live on 2026-09-22 as a Debug-only experiment, then chosen by Ben for the 
 - **What it says:** "Back to: <block title>" and the judge's one-line reason, with one button,
   **Wrong**.
 - **It replaces the macOS notification** for nudges. There is one signal, not two.
-- **It stays until one of these:**
-  - a `focused` judgment for the current block;
+- **It hides when one of these happens:**
+  - a `focused` or `necessary_detour` judgment;
   - the person presses **Wrong**, which also records Wrong for that judgment (the same correction
     as Wrong in Last judgment);
   - the person pauses Trail Marker, or turns Focus off;
   - the block ends, or there is no current block.
-  A `necessary_detour` or `insufficient_evidence` judgment leaves it showing. While it shows, a
-  new nudge only refreshes its reason; banners never stack.
-- **Sensitivity, chosen by the person** in the Focus pane:
-  - "Nudge after [1 / 2 / 3] distracted checks in a row", default 2.
-  - "At most one nudge every [no limit / 15 min / 45 min]", default 45 min.
-  With 1 and no limit, every distracted judgment brings the banner up. The spacing counts from
-  the last nudge, per person, across all their Macs.
+  An `insufficient_evidence` judgment leaves it as it is. There is only ever one banner.
+- **The distraction gauge** (Ben, 2026-09-22) decides when the banner appears:
+  - It **fills** with time spent in front of windows judged `distracted`, from that judgment
+    until the window changes or the next judgment. When it is full, the banner appears.
+  - It **does not empty** when the person gets back to work. It empties only after **5 minutes
+    in a row** of `focused` or `necessary_detour` time.
+  - So after a banner is cleared by getting back to work, the gauge is still full: going back to
+    something distracting within those 5 minutes brings the banner back **at once**. After 5
+    focused minutes the gauge is empty and has to fill again.
+  - The same rule applies before it is ever full: a short distraction, some focus, then more
+    distraction keeps adding up unless 5 focused minutes came between.
+  - `insufficient_evidence` time neither fills it nor counts toward the 5 focused minutes.
+  - **Wrong** on a `distracted` judgment takes that judgment's time back out of the gauge.
+  - Pause freezes the gauge. A new block starts with an empty gauge.
+- **Sensitivity, chosen by the person** in the Focus pane: "Nudge me after [right away / 1 min /
+  2 min / 5 min] distracted", default 2 min. "Right away" means the first `distracted` judgment
+  fills it. The 5-minute emptying time is fixed.
+- **No spacing cap.** The old 45-minute cap existed to stop repeated notifications; a single
+  banner that hides when the person is back on task, and a gauge that only empties after real
+  focus, make it unnecessary.
 - **Accessibility:** readable by VoiceOver when it appears, and follows Reduce Transparency
   (system material) and Increase Contrast.
 - **Known trade-off:** anything on top of every window also shows in a screen share or a
@@ -216,8 +231,8 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
 2. **Focus settings (one new pane in the existing Settings sidebar):** the image model API
    (endpoint, model name, key, a Test button, and one plain sentence stating where the image will
    be sent). That sentence is the consent: no separate consent screen. Also what to watch — specific
-   apps, chosen one at a time, or the entire desktop instead (§6 amendment) — the two nudge
-   sensitivity choices (§7a), and a **Send a test nudge** button.
+   apps, chosen one at a time, or the entire desktop instead (§6 amendment) — the gauge's
+   sensitivity (§7a), and a **Send a test nudge** button.
 3. **The nudge banner (§7a):** the one designed window this adds. Layout below; system material
    background, 12-point corner radius (design guide §5), system font, headline for the goal and
    callout secondary for the reason, a native secondary **Wrong** button, 16-point padding, about
@@ -251,9 +266,12 @@ Resolved:
 - **Existing linked Macs are not re-approved; new setups show the approval info** (D8).
 - **Focus is not a module; server-side it is only Trail Marker info and one model row in Settings** (D9).
 - **Slice order:** text-only end to end first, then screenshots (§12).
-- **Nudges are an on-top banner, and the person sets the sensitivity** (Ben, 2026-09-22, after
-  trying it live): replaces the macOS notification; cleared by a focused judgment, Wrong, Pause or
-  the block ending; 1–3 distracted in a row and no limit / 15 / 45 minutes between nudges (§7a).
+- **Nudges are an on-top banner driven by a distraction gauge on the Mac** (Ben, 2026-09-22,
+  after trying the banner live): replaces the macOS notification; hidden by getting back on task,
+  Wrong, Pause or the block ending; the gauge fills with distracted time (sensitivity right away /
+  1 / 2 / 5 minutes) and empties only after 5 focused minutes in a row, so a relapse within those
+  5 minutes brings the banner straight back (§7a). The server-side two-in-a-row rule and
+  45-minute cap are removed.
 
 Open, for Ben:
 
@@ -294,7 +312,7 @@ work must amend them in the same pull request that builds the first slice:
   settings" line must say the Mac holds exactly this one.
 
 - §9.7, §9.8 and §12 (credential scope): the companion credential also reads the person's current
-  Moss block, submits observations and receives nudge decisions. Still refused on every other
+  Moss block, submits observations and receives judgments and quiet hours. Still refused on every other
   route; the existing boundary test stays.
 - §6 (permissions): no longer needed. The macOS notification permission was required for nudges
   until the banner replaced them (amended 2026-09-22); the Mac does not ask for it.
@@ -330,8 +348,8 @@ Companion credential still opens nothing outside `/api/companion/*`; observation
 for another person; window titles never appear in logs, job payloads or stored rows; pause stops
 network requests immediately (extends the existing Disconnect test); prompt-injection text inside a
 window title cannot change the schema of the answer, and one sample of injected text does not
-produce a nudge at the default sensitivity. (Text that persists across two samples can satisfy the
-two-in-a-row rule; a person who chose one check as enough accepts that one sample can. Either way
-the worst case is one banner, which never stacks, limited by the chosen spacing, and it shows only
-the block title and a reason, never what was seen.) A stolen credential cannot post for another person;
+produce a nudge at the default sensitivity. (Text that stays in front for the fill time can;
+a person who chose "right away" accepts that one judgment can. Either way the worst case is one
+banner, which never stacks, and it shows only the block title and a reason, never what was
+seen.) A stolen credential cannot post for another person;
 a search of the logs finds no window title, description or reason text.
