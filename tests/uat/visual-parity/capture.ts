@@ -361,7 +361,16 @@ function hasRendered(items: readonly RenderedItem[] | undefined, want?: string):
   if (rows.length === 0) return false;
   return want ? rows.some((el) => el.text.includes(want)) : true;
 }
-export function isPopulated(sample: string): boolean {
+export interface PopulatedReport {
+  readonly apiLead: boolean;
+  readonly apiArsenal: boolean;
+  readonly newsRendered: boolean;
+  readonly arsenalRendered: boolean;
+  readonly arsenalHeadline: boolean;
+  readonly facesReady: boolean;
+  readonly facesNotReady: readonly string[];
+}
+export function populatedReport(sample: string): PopulatedReport {
   const value = JSON.parse(sample) as {
     api?: {
       news?: Array<readonly [unknown, unknown, unknown]>;
@@ -374,21 +383,35 @@ export function isPopulated(sample: string): boolean {
   };
   const lead = value.api?.news?.[0];
   const arsenal = value.api?.followed?.find((card) => card[0] === "Arsenal");
-  const apiOk = Boolean(
-    lead?.[0] &&
-    lead[1] &&
-    lead[2] &&
-    (arsenal?.[1] ?? []).some((s) => Boolean(s[0]) && Boolean(s[1]))
+  const apiLead = Boolean(lead?.[0] && lead[1] && lead[2]);
+  const apiArsenal = Boolean((arsenal?.[1] ?? []).some((s) => Boolean(s[0]) && Boolean(s[1])));
+  const newsRendered = hasRendered(value.newsItems);
+  const arsenalRendered = hasRendered(value.arsenalItems);
+  const arsenalHeadline = (value.arsenalText ?? "").includes(
+    "Arsenal seal late win to stay top of the pile"
   );
-  const arsenalHeadline = "Arsenal seal late win to stay top of the pile";
   const faces = value.faces ?? [];
   const facesReady = faces.length > 0 && faces.every((face) => face.ready === true);
+  const facesNotReady = faces.filter((face) => face.ready !== true).map((face) => face.sel ?? "?");
+  return {
+    apiLead,
+    apiArsenal,
+    newsRendered,
+    arsenalRendered,
+    arsenalHeadline,
+    facesReady,
+    facesNotReady
+  };
+}
+export function isPopulated(sample: string): boolean {
+  const report = populatedReport(sample);
   return Boolean(
-    apiOk &&
-    hasRendered(value.newsItems) &&
-    hasRendered(value.arsenalItems) &&
-    (value.arsenalText ?? "").includes(arsenalHeadline) &&
-    facesReady
+    report.apiLead &&
+    report.apiArsenal &&
+    report.newsRendered &&
+    report.arsenalRendered &&
+    report.arsenalHeadline &&
+    report.facesReady
   );
 }
 export function firstDiffKey(first: string, second: string): string {
@@ -436,7 +459,7 @@ export async function waitForStablePopulated(page: Page): Promise<void> {
   }
   const detail = await stableSample(page);
   throw new Error(
-    `parity: display face or geometry did not stabilize: ${detail.slice(0, 400)} (changed: ${firstDiffKey(prev, next)})`
+    `parity: display face or geometry did not stabilize: ${detail.slice(0, 400)} (changed: ${firstDiffKey(prev, next)}) (populated: ${JSON.stringify(populatedReport(next))})`
   );
 }
 
@@ -962,7 +985,10 @@ export function compareReferenceCapture(
 export function diffFiles(aPath: string, bPath: string, outPath: string): number {
   const a = PNG.sync.read(readFileSync(aPath));
   const b = PNG.sync.read(readFileSync(bPath));
-  if (a.width !== b.width || a.height !== b.height) return 100;
+  if (a.width !== b.width || a.height !== b.height) {
+    writeFileSync(outPath, PNG.sync.write(a));
+    return 100;
+  }
   const diff = new PNG({ width: a.width, height: a.height });
   const different = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.1 });
   writeFileSync(outPath, PNG.sync.write(diff));

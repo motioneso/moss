@@ -105,3 +105,114 @@ describe("firstDiffKey", () => {
     expect(firstDiffKey("not-json", b)).toBe("unparseable");
   });
 });
+
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { PNG } from "pngjs";
+
+import { diffFiles, populatedReport } from "../../tests/uat/visual-parity/capture.js";
+
+function solidPngFile(path: string, width: number, height: number): void {
+  const png = new PNG({ width, height });
+  png.data.fill(128);
+  writeFileSync(path, PNG.sync.write(png));
+}
+
+describe("diffFiles size mismatch", () => {
+  it("writes the diff file before returning 100", () => {
+    const dir = mkdtempSync(join(tmpdir(), "parity-diag-"));
+    const aPath = join(dir, "a.png");
+    const bPath = join(dir, "b.png");
+    const outPath = join(dir, "diff.png");
+    solidPngFile(aPath, 4, 4);
+    solidPngFile(bPath, 6, 4);
+    expect(diffFiles(aPath, bPath, outPath)).toBe(100);
+    expect(existsSync(outPath)).toBe(true);
+  });
+});
+
+describe("isPopulated pins", () => {
+  const api = {
+    news: [["n1", "Lead story", "https://news.example/a"]],
+    sports: [["Sport lead", "https://sports.example/a"]],
+    followed: [["Arsenal", [["Arsenal story", "https://sports.example/ars"]]]]
+  };
+  const dom = {
+    newsItems: [{ id: "n", testId: null, href: null, text: "News item" }],
+    arsenalItems: [{ id: "a", testId: null, href: null, text: "Arsenal item" }],
+    arsenalText: "intro Arsenal seal late win to stay top of the pile outro",
+    faces: [{ sel: ".nw-twlead__title", ready: true }]
+  };
+  const cases: Array<[string, unknown, boolean]> = [
+    ["all true", { api, ...dom }, true],
+    [
+      "lead missing id",
+      { api: { ...api, news: [[null, "Lead story", "https://news.example/a"]] }, ...dom },
+      false
+    ],
+    [
+      "arsenal card missing",
+      { api: { ...api, followed: [["Chelsea", [["x", "https://sports.example/c"]]]] }, ...dom },
+      false
+    ],
+    ["news not rendered", { api, ...dom, newsItems: [] }, false],
+    ["arsenal not rendered", { api, ...dom, arsenalItems: [] }, false],
+    ["headline missing", { api, ...dom, arsenalText: "no headline here" }, false],
+    ["face not ready", { api, ...dom, faces: [{ sel: ".nw-twlead__title", ready: false }] }, false]
+  ];
+  for (const [name, sample, expected] of cases) {
+    it(`agrees with the base: ${name} -> ${expected}`, () => {
+      expect(isPopulated(JSON.stringify(sample))).toBe(expected);
+    });
+  }
+});
+
+describe("populatedReport", () => {
+  const api = {
+    news: [["n1", "Lead story", "https://news.example/a"]],
+    sports: [["Sport lead", "https://sports.example/a"]],
+    followed: [["Arsenal", [["Arsenal story", "https://sports.example/ars"]]]]
+  };
+  const dom = {
+    newsItems: [{ id: "n", testId: null, href: null, text: "News item" }],
+    arsenalItems: [{ id: "a", testId: null, href: null, text: "Arsenal item" }],
+    arsenalText: "intro Arsenal seal late win to stay top of the pile outro",
+    faces: [
+      { sel: ".nw-twlead__title", ready: true },
+      { sel: ".desk-title", ready: true }
+    ]
+  };
+  const full = JSON.stringify({ api, ...dom });
+  it("reports all true on a populated sample", () => {
+    expect(populatedReport(full)).toEqual({
+      apiLead: true,
+      apiArsenal: true,
+      newsRendered: true,
+      arsenalRendered: true,
+      arsenalHeadline: true,
+      facesReady: true,
+      facesNotReady: []
+    });
+  });
+  const faults: Array<[string, unknown, string]> = [
+    ["apiLead", { api: { ...api, news: [[null, "t", "u"]] }, ...dom }, "apiLead"],
+    ["apiArsenal", { api: { ...api, followed: [] }, ...dom }, "apiArsenal"],
+    ["newsRendered", { api, ...dom, newsItems: [] }, "newsRendered"],
+    ["arsenalRendered", { api, ...dom, arsenalItems: [] }, "arsenalRendered"],
+    ["arsenalHeadline", { api, ...dom, arsenalText: "nothing" }, "arsenalHeadline"],
+    ["facesReady", { api, ...dom, faces: [{ sel: ".desk-title", ready: false }] }, "facesReady"]
+  ];
+  for (const [name, sample, key] of faults) {
+    it(`flags only ${name} when it is false`, () => {
+      const report = populatedReport(JSON.stringify(sample));
+      expect(report[key as keyof typeof report]).toBe(false);
+      expect(isPopulated(JSON.stringify(sample))).toBe(false);
+    });
+  }
+  it("names the faces that are not ready", () => {
+    const sample = { api, ...dom, faces: [{ sel: ".desk-title", ready: false }] };
+    expect(populatedReport(JSON.stringify(sample)).facesNotReady).toEqual([".desk-title"]);
+  });
+});
