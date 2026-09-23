@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
     private let focusDebugOverlay = FocusDebugOverlay()
     private var focusDebugBanner: FocusDebugBanner?
+    private var cardHarness: CardHarness?
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,6 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // could send requests with it. Tests build their own runtimes.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
         #if DEBUG
+        // The UI tests' harness: the card in a window, against a stubbed link. The real app
+        // doesn't start at all, so the person's own credential is never read.
+        if CardHarness.isRequested {
+            let harness = CardHarness()
+            cardHarness = harness
+            harness.show()
+            return
+        }
         focusDebugOverlay.show()
         focusDebugBanner = FocusDebugBanner(focus: focus)
         #endif

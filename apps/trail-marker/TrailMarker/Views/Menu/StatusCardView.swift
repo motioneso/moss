@@ -38,6 +38,16 @@ struct StatusCardView: View {
 
             Divider()
 
+            if !toggles.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(toggles, id: \.role) { row in
+                        SwitchRow(title: row.title, isOn: row.isOn) { on in setSwitch(row.role, on: on) }
+                            .disabled(!row.isEnabled)
+                    }
+                }
+                Divider()
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(rows, id: \.role) { row in
                     CardRow(title: row.title, shortcut: shortcut(for: row.role), destructive: row.isDestructive) {
@@ -86,6 +96,17 @@ struct StatusCardView: View {
     }
 
     /// Everything after the primary action, in the guide's order, minus what the header shows.
+    /// The feature switches (Focus now; Backtrack later), in `MenuModel`'s order.
+    private var toggles: [MenuItemDescriptor] { items.filter { $0.kind == .toggle } }
+
+    /// A switch changes one feature and leaves the card open, unlike a row, which acts and closes.
+    private func setSwitch(_ role: MenuItemDescriptor.Role, on: Bool) {
+        switch role {
+        case .focusSwitch: focus.setFocusSwitch(on: on)
+        default: break
+        }
+    }
+
     private var rows: [MenuItemDescriptor] {
         items.filter { $0.kind == .text && ![.status, .focusStatus, .instanceInfo, .primaryAction].contains($0.role) }
     }
@@ -158,5 +179,24 @@ private struct CardRow: View {
         .buttonStyle(.plain)
         .foregroundStyle(destructive ? Color(nsColor: .systemRed) : .primary)
         .onHover { hovering = $0 }
+    }
+}
+
+/// A feature switch row from mockup A: the feature's name, then a small switch. Greyed and
+/// unchangeable while Pause All is on, keeping its position.
+private struct SwitchRow: View {
+    let title: String
+    let isOn: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { isOn }, set: { onChange($0) })) {
+            Text(title).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .accessibilityIdentifier("switch.\(title)")
     }
 }

@@ -33,7 +33,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), watching()),
             [
                 "Connected", "Watching · Study AI, ends 11:00 AM", "moss.example.com", "ben@example.com",
-                "Pause", "Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"
+                "Pause All", "Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -43,7 +43,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), watching(hasLast: true)),
             [
                 "Connected", "Watching · Study AI, ends 11:00 AM", "moss.example.com", "ben@example.com",
-                "Pause", "Last Judgment…", "Open Moss", "Settings…",
+                "Pause All", "Last Judgment…", "Open Moss", "Settings…",
                 "Log Out…", "Quit Trail Marker"
             ]
         )
@@ -55,7 +55,7 @@ final class MenuModelFocusTests: XCTestCase {
         XCTAssertEqual(
             titles(.connected(lastContact: now), focus),
             [
-                "Connected", "No block right now", "moss.example.com", "ben@example.com", "Pause",
+                "Connected", "No block right now", "moss.example.com", "ben@example.com", "Pause All",
                 "Open Moss", "Settings…", "Log Out…",
                 "Quit Trail Marker"
             ]
@@ -69,7 +69,7 @@ final class MenuModelFocusTests: XCTestCase {
         XCTAssertEqual(
             titles(.disconnected, focus),
             [
-                "Paused", "moss.example.com", "ben@example.com", "Resume",
+                "Paused", "moss.example.com", "ben@example.com", "Resume All",
                 "Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
@@ -81,7 +81,7 @@ final class MenuModelFocusTests: XCTestCase {
             titles(.connected(lastContact: now), focus),
             [
                 "Connected", "Judgment isn't set up on your Moss (ask the admin)", "moss.example.com",
-                "ben@example.com", "Pause", "Open Moss", "Settings…",
+                "ben@example.com", "Pause All", "Open Moss", "Settings…",
                 "Log Out…", "Quit Trail Marker"
             ]
         )
@@ -108,7 +108,7 @@ final class MenuModelFocusTests: XCTestCase {
         XCTAssertEqual(
             titles(.connected(lastContact: now), nil),
             [
-                "Connected", "moss.example.com", "ben@example.com", "Pause", "Open Moss", "Settings…",
+                "Connected", "moss.example.com", "ben@example.com", "Pause All", "Open Moss", "Settings…",
                 "Log Out…", "Quit Trail Marker"
             ]
         )
@@ -172,7 +172,7 @@ final class StatusCardLayoutTests: XCTestCase {
             MenuModel.card(state: .connected(lastContact: now), identity: identity, focus: focus),
             MenuModel.Card(
                 statusTitle: "Connected", focusLine: "Watching · Study AI, ends 11:00 AM",
-                primaryTitle: "Pause",
+                primaryTitle: "Pause All",
                 rows: [
                     "Last Judgment…", "Open Moss", "Settings…",
                     "Log Out…", "Quit Trail Marker"
@@ -189,14 +189,14 @@ final class StatusCardLayoutTests: XCTestCase {
         )
         let card = MenuModel.card(state: .disconnected, identity: identity, focus: noBlock)
         XCTAssertNil(card.focusLine)
-        XCTAssertEqual(card.primaryTitle, "Resume")
+        XCTAssertEqual(card.primaryTitle, "Resume All")
     }
 
     func testCardWithFocusOffIsTheOriginalCard() {
         XCTAssertEqual(
             MenuModel.card(state: .connected(lastContact: now), identity: identity, focus: nil),
             MenuModel.Card(
-                statusTitle: "Connected", focusLine: nil, primaryTitle: "Pause",
+                statusTitle: "Connected", focusLine: nil, primaryTitle: "Pause All",
                 rows: ["Open Moss", "Settings…", "Log Out…", "Quit Trail Marker"]
             )
         )

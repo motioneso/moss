@@ -23,7 +23,8 @@ final class StatusActions {
 
     func perform(_ role: MenuItemDescriptor.Role) {
         switch role {
-        case .status, .focusStatus, .instanceInfo:
+        case .status, .focusStatus, .instanceInfo, .focusSwitch:
+            // A switch is handled by the card itself (it changes one feature and stays open).
             break
         case .lastJudgment:
             onShowLastJudgment()

@@ -30,7 +30,6 @@ struct SuccessView: View {
                 viewModel.finish()
             }
             .buttonStyle(.borderedProminent)
-            .tint(TrailMarkerTokens.Color.forest)
         }
         .padding(TrailMarkerTokens.Spacing.major)
         .frame(width: OnboardingFlow.contentWidth)
