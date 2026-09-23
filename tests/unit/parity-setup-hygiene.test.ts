@@ -47,8 +47,8 @@ const HYGIENE_MANIFEST = {
 // Everything one setup pass reads: the morning page with its sections and
 // the two buttons that open the planning and reader dialogs. Both dialogs
 // are inserted by the button click so closeDialogs still sees a clean page.
-const STUB_HTML = `<!doctype html><html><body><main>
-<h1>Write the launch brief</h1>
+const STUB_HTML = `<!doctype html><html><body><main class="content-surface">
+<div class="today-hero"><h1>Write the launch brief</h1></div>
 <p>Standup with Priya</p>
 <section class="jds-brief--news"><h2>News</h2><div style="height:1500px"></div></section>
 <section class="jds-brief--sports"><h2>Sports</h2></section>
