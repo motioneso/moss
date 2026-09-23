@@ -49,6 +49,7 @@ import { ChatLockGroup } from "./settings-ai-chat-lock-group";
 import { YoloAdminGroup } from "./settings-yolo-admin-group";
 import { WebSearchKeyGroup } from "./settings-web-search-key-group";
 import { VoiceConfigGroup } from "./settings-voice-config-group";
+import { SortingModelRow } from "./settings-ai-sorting-row";
 import {
   type AiAuthMethod,
   type AiConfiguredModelDto,
@@ -885,6 +886,11 @@ export function AiProvidersPane() {
               providers={providers}
             />
           ))}
+          <SortingModelRow
+            binding={serviceBindingsQuery.data?.bindings.sorting}
+            models={models}
+            providers={providers}
+          />
         </Group>
       ) : null}
       <Note icon={<Terminal size={13} aria-hidden="true" />}>

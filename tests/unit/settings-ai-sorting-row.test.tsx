@@ -1,0 +1,143 @@
+// @vitest-environment jsdom
+import { createElement } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const putAiServiceBinding = vi.fn(async (_service: string, input: unknown) => ({
+  service: "sorting",
+  binding: (input as { binding: unknown }).binding
+}));
+const deleteAiServiceBinding = vi.fn(async (service: string) => ({ service }));
+
+vi.mock("../../apps/web/src/api/client.js", () => ({
+  putAiServiceBinding: (service: string, input: unknown) => putAiServiceBinding(service, input),
+  deleteAiServiceBinding: (service: string) => deleteAiServiceBinding(service)
+}));
+
+import {
+  SORTING_DISCLOSURE,
+  SortingModelRow
+} from "../../apps/web/src/settings/settings-ai-sorting-row.js";
+import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
+
+const provider = (id: string, displayName: string, providerKind: string) => ({
+  id,
+  displayName,
+  providerKind,
+  authMethod: "api_key",
+  executionMode: "interactive",
+  status: "active",
+  hasCredential: true,
+  isInstanceDefault: false
+});
+const model = (
+  id: string,
+  providerConfigId: string,
+  providerKind: string,
+  providerDisplayName: string,
+  capabilities: string[]
+) => ({
+  id,
+  providerConfigId,
+  providerKind,
+  providerDisplayName,
+  providerStatus: "active",
+  providerModelId: id,
+  displayName: id,
+  capabilities,
+  status: "active",
+  tier: "economy",
+  allowUserOverride: false,
+  origin: "manual",
+  createdAt: "2026-09-22T00:00:00.000Z",
+  updatedAt: "2026-09-22T00:00:00.000Z"
+});
+
+const providers = [
+  provider("p-local", "Local box", "openai-compatible"),
+  provider("p-cloud", "Cloud", "anthropic"),
+  provider("p-ollama", "Ollama", "ollama")
+];
+const models = [
+  model("small-json", "p-local", "openai-compatible", "Local box", ["json"]),
+  model("cloud-json", "p-cloud", "anthropic", "Cloud", ["chat", "json"]),
+  model("cloud-chat", "p-cloud", "anthropic", "Cloud", ["chat"]),
+  model("ollama-json", "p-ollama", "ollama", "Ollama", ["json"])
+];
+
+async function render(binding?: unknown): Promise<ReactTestRenderer> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          FeedbackProvider,
+          null,
+          createElement(SortingModelRow, {
+            binding: binding as never,
+            models: models as never,
+            providers: providers as never
+          })
+        )
+      )
+    );
+  });
+  return renderer;
+}
+
+const select = (renderer: ReactTestRenderer) => renderer.root.findByType("select");
+const text = (renderer: ReactTestRenderer) => JSON.stringify(renderer.toJSON());
+
+describe("SortingModelRow", () => {
+  beforeEach(() => {
+    putAiServiceBinding.mockClear();
+    deleteAiServiceBinding.mockClear();
+  });
+
+  it("offers Use main model plus only eligible models, grouped by provider", async () => {
+    const renderer = await render();
+    expect(select(renderer).props.value).toBe("");
+    const groups = renderer.root.findAllByType("optgroup").map((group) => group.props.label);
+    expect(groups).toEqual(["Local box", "Cloud"]);
+    const values = renderer.root.findAllByType("option").map((option) => option.props.value);
+    expect(values).toEqual(["", "model:small-json", "model:cloud-json"]);
+    expect(text(renderer)).toContain("Sorting model");
+    expect(text(renderer)).toContain("Use main model");
+    expect(text(renderer)).not.toContain(SORTING_DISCLOSURE);
+  });
+
+  it("selecting a model saves a model binding", async () => {
+    const renderer = await render();
+    await act(async () => {
+      select(renderer).props.onChange({ target: { value: "model:small-json" } });
+    });
+    expect(putAiServiceBinding).toHaveBeenCalledWith("sorting", {
+      binding: { kind: "model", modelId: "small-json" }
+    });
+  });
+
+  it("choosing Use main model clears the binding", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await act(async () => {
+      select(renderer).props.onChange({ target: { value: "" } });
+    });
+    expect(deleteAiServiceBinding).toHaveBeenCalledWith("sorting");
+    expect(putAiServiceBinding).not.toHaveBeenCalled();
+  });
+
+  it("shows the third-party line whenever a sorting model is chosen", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    expect(select(renderer).props.value).toBe("model:small-json");
+    expect(text(renderer)).toContain(SORTING_DISCLOSURE);
+  });
+
+  it("shows the unavailable note when the bound model no longer qualifies", async () => {
+    const renderer = await render({ kind: "model", modelId: "ollama-json" });
+    expect(select(renderer).props.value).toBe("");
+    expect(text(renderer)).toContain("Chosen model is unavailable. Using your main model.");
+  });
+});
