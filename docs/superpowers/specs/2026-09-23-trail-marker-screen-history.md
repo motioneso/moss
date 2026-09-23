@@ -69,9 +69,11 @@ enough to be worth what it costs in privacy and battery?
 - **When it reads:** on an app switch, a window-title change, and otherwise at most every 10
   seconds while the frontmost window's pixels have changed. A cheap check on a tiny downscaled frame
   decides "changed". An unchanged screen costs nothing but that check.
-- **What it reads:** only the frontmost window of an allowed app, never the whole display. This is
-  the same window selection focus capture uses, `ScreenCaptureKitCapture`, reused behind the
-  `WindowCapturing` protocol.
+- **What it reads:** only the focused window of an allowed app, never the whole display. The
+  capture is bound to that window's identity (its process, frame and title, matched to exactly one on-screen window), which is the same window
+  the never-watch check looked at. If the identity can't be established, for example because
+  Accessibility is off, nothing is read. (Amended 2026-09-23 after review: today's Focus capture
+  picks an app's largest window, a defect fixed first, #2643.)
 - **Text recognition:** Apple Vision `VNRecognizeTextRequest`, on-device. The frame lives in memory
   for the length of one recognition call and is never written to disk.
 - **Web addresses:** read through Accessibility from the focused browser's web area (Safari, Chrome,
@@ -79,11 +81,14 @@ enough to be worth what it costs in privacy and battery?
 - **Dedupe:** the Mac keeps the previous capture's lines for each window and sends only a _segment_
   when the text changed materially. A segment is the new lines, plus the window's title and address,
   plus a start and end time. Scrolling a long page adds lines instead of resending the page.
-- **Never read:** Never-watch apps, private windows, Accessibility secure text fields (masked
-  password inputs are blanked before recognition runs). Recording continues while the person shares
+- **Never read:** Never-watch apps, private windows, and every Accessibility secure text field in
+  the window, focused or not. Masked password inputs are blanked before recognition runs; if the
+  secure fields can't all be located, that capture is skipped. Recording continues while the person shares
   their screen in a meeting, since what they present is the content they'll want to find later (Ben,
   2026-09-23).
-- **Secrets are stripped on the Mac before anything leaves it.** This extends `TextRedactor` with
+- **Known kinds of secret are stripped on the Mac before anything leaves it**, from the text,
+  window title and web address alike. An arbitrary password typed as plain text in a document can't
+  be recognised as one; that limit is stated, not hidden. This extends `TextRedactor` with
   the server's `redactSecrets` patterns (bearer tokens, `sk-`/`ghp_`/`AKIA` keys, secret-looking
   query and environment fields), card numbers that pass a Luhn check, and one-time codes next to
   "code"/"verification". The server runs `redactSecrets` again on arrival. Email addresses are
