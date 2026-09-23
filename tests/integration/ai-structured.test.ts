@@ -645,7 +645,8 @@ describe("generateStructured end-to-end", () => {
     expect(result).toEqual({
       ok: true,
       object: { title: "Staff Engineer" },
-      usage: { inputTokens: 11, outputTokens: 7 }
+      usage: { inputTokens: 11, outputTokens: 7 },
+      servedBy: "main"
     });
     expect(captured.apiKey).toBe("structured-test-secret");
     expect(captured.input?.model.provider_model_id).toBe("json-economy");

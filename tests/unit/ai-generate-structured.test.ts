@@ -77,12 +77,14 @@ describe("generateStructured", () => {
     expect(result).toEqual({
       ok: true,
       object: { a: "b" },
-      usage: { inputTokens: 10, outputTokens: 5 }
+      usage: { inputTokens: 10, outputTokens: 5 },
+      servedBy: "main"
     });
     expect(adapter.generateStructured).toHaveBeenCalledTimes(1);
     expect(info).toHaveBeenCalledWith(
       {
         service: "module.demo-module",
+        servedBy: "main",
         modelId: "model-1",
         inputTokens: 10,
         outputTokens: 5,
@@ -108,7 +110,8 @@ describe("generateStructured", () => {
     expect(result).toEqual({
       ok: true,
       object: { a: "b" },
-      usage: { inputTokens: 10, outputTokens: 5 }
+      usage: { inputTokens: 10, outputTokens: 5 },
+      servedBy: "main"
     });
     expect(generate).toHaveBeenCalledTimes(2);
     expect(generate.mock.calls[1]![0].messages).toHaveLength(3);
@@ -142,7 +145,8 @@ describe("generateStructured", () => {
     expect(result).toEqual({
       ok: true,
       object: { a: "cli" },
-      usage: { inputTokens: 0, outputTokens: 0 }
+      usage: { inputTokens: 0, outputTokens: 0 },
+      servedBy: "main"
     });
     expect(createCliStructuredAdapter).toHaveBeenCalledWith("anthropic");
     expect(decryptJson).not.toHaveBeenCalled();
