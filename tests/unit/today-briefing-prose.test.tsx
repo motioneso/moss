@@ -96,7 +96,7 @@ describe("Today morning briefing prose", () => {
       definitions: [{ ...morning, enabled: false }, evening],
       runs: []
     });
-    expect(disabledHtml).toContain("Morning briefing");
+    expect(disabledHtml).not.toContain("Morning briefing");
   });
 
   it("renders the hero fallback headline and not-ready line without a run", () => {

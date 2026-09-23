@@ -62,6 +62,7 @@ import {
   eveningHeroKicker,
   firstName,
   isToday,
+  greeting,
   morningHeroKicker,
   timeLabel
 } from "./today-labels";
@@ -421,11 +422,13 @@ export function TodayPage(props: {
                   ? firstName(props.me.user.name, props.me.user.email)
                   : null
               )
-            : morningHeroKicker(
-                props.me.user.name.trim()
-                  ? firstName(props.me.user.name, props.me.user.email)
-                  : null
-              )
+            : morningDefinition?.enabled === true
+              ? morningHeroKicker(
+                  props.me.user.name.trim()
+                    ? firstName(props.me.user.name, props.me.user.email)
+                    : null
+                )
+              : `${greeting()} · ${datelineLabel(now, locale)}`
         }
         headline={heroContent.headline}
         summary={heroContent.summary}
@@ -445,7 +448,7 @@ export function TodayPage(props: {
       <div className="cmd-wrap">
         {todayMode === "evening" ? sectionLinks : null}
 
-        <div className="cmd-grid">
+        <div className="cmd-grid" data-mode={todayMode}>
           <TodayRail
             mode={todayMode}
             now={now}
@@ -574,6 +577,19 @@ export function TodayPage(props: {
 
             {feed.overnight.length > 0 ? <OvernightSection items={feed.overnight} /> : null}
 
+            {todayMode === "evening" ? (
+              <>
+                <div id="widgets">
+                  <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
+                </div>
+                <div id="news">
+                  {feed.news.length > 0 || feed.interests.length > 0 ? (
+                    <NewsDesk news={feed.news} interests={feed.interests} />
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
             <div id="goals">
               <GoalsSection />
             </div>
@@ -615,14 +631,18 @@ export function TodayPage(props: {
 
             <ProactiveCards />
           </div>
-          <div id="widgets">
-            <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
-          </div>
-          <div id="news">
-            {feed.news.length > 0 || feed.interests.length > 0 ? (
-              <NewsDesk news={feed.news} interests={feed.interests} />
-            ) : null}
-          </div>
+          {todayMode === "day" ? (
+            <>
+              <div id="widgets">
+                <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
+              </div>
+              <div id="news">
+                {feed.news.length > 0 || feed.interests.length > 0 ? (
+                  <NewsDesk news={feed.news} interests={feed.interests} />
+                ) : null}
+              </div>
+            </>
+          ) : null}
           <div id="sports">
             <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
           </div>

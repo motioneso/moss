@@ -87,9 +87,9 @@
 }
 
 /* Morning desks sit below the shared rail row and use the full content width. */
-.cmd-grid > #widgets,
-.cmd-grid > #news,
-.cmd-grid > #sports {
+.cmd-grid[data-mode="day"] > #widgets,
+.cmd-grid[data-mode="day"] > #news,
+.cmd-grid[data-mode="day"] > #sports {
   grid-column: 1 / -1;
   min-width: 0;
 }

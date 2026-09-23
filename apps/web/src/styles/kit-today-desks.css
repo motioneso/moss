@@ -8,6 +8,10 @@
    contrast is judged on the real ground. */
 .jds-brief--news,
 .jds-brief--sports {
+  background: color-mix(in srgb, var(--forest-soft) 25%, var(--paper));
+}
+.cmd-grid[data-mode="day"] .jds-brief--news,
+.cmd-grid[data-mode="day"] .jds-brief--sports {
   background: transparent;
 }
 
@@ -77,13 +81,24 @@
   font-size: 13px;
   color: var(--text-muted);
 }
-.jds-brief--news .nw-twlead__link {
+.nw-twlead__tag-morning,
+.nw-twlead__link,
+.sp-tksub__morning-star {
+  display: none;
+}
+.cmd-grid[data-mode="day"] .nw-twlead__tag-morning {
+  display: inline;
+}
+.cmd-grid[data-mode="day"] .nw-twlead__link {
   display: inline-block;
   margin-top: 12px;
   color: var(--ink);
   font-size: 12px;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.cmd-grid[data-mode="day"] .sp-tksub__morning-star {
+  display: inline;
 }
 .jds-brief--news .nw-twlist__item {
   padding: 10px 0;
@@ -123,21 +138,21 @@
 }
 
 /* Sports owns a full-width row after the main content and rail share their top row. */
-.cmd-grid > #sports > .jds-brief--sports {
+.cmd-grid[data-mode="day"] > #sports > .jds-brief--sports {
   min-width: 0;
 }
 
-.cmd-grid > #sports {
+.cmd-grid[data-mode="day"] > #sports {
   min-width: 0;
 }
 
 /* The section left .cmd-main in R4.1, leaving the main column's narrow-width card-grid
    override behind: below a 300px container the 300px track floor yields to the container
    and cards stack one-up instead of pushing a 320px page sideways. */
-#sports > .jds-brief--sports .sp-tkgrid {
+.cmd-grid[data-mode="day"] > #sports > .jds-brief--sports .sp-tkgrid {
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 }
-#sports > .jds-brief--sports .sp-tkgrid > * {
+.cmd-grid[data-mode="day"] #sports > .jds-brief--sports .sp-tkgrid > * {
   min-width: 0;
 }
 
@@ -145,8 +160,14 @@
   /* Desktop only: pin the section below the main/rail row. On phones the
      grid is one column with the rail first in the DOM, so auto placement
      keeps visual order equal to DOM/tab order. */
-  .cmd-grid > #sports {
+  .cmd-grid[data-mode="day"] > #widgets {
     grid-row: 2;
+  }
+  .cmd-grid[data-mode="day"] > #news {
+    grid-row: 3;
+  }
+  .cmd-grid[data-mode="day"] > #sports {
+    grid-row: 4;
   }
 }
 
@@ -164,13 +185,13 @@
 .jds-brief--sports .sp-scores__sides {
   display: contents;
 }
-.jds-brief--sports .sp-board__team {
+.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__team {
   font-weight: 400;
 }
-.jds-brief--sports .sp-board__side--you .sp-board__team {
+.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__side--you .sp-board__team {
   font-weight: 700;
 }
-.jds-brief--sports .sp-board__side--you {
+.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__side--you {
   background: transparent;
 }
 .jds-brief--sports .sp-board__score {

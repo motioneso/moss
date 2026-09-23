@@ -95,7 +95,10 @@ export function NewsTodayWidget(): ReactNode {
                 />
               ) : null}
               <span className="nw-twlead__tag">
-                {lead.topicLabel ?? lead.sourceLabel} / THE LEAD STORY
+                <span className="nw-twlead__tag-evening">{lead.sourceLabel}</span>
+                <span className="nw-twlead__tag-morning">
+                  {lead.topicLabel ?? lead.sourceLabel} / THE LEAD STORY
+                </span>
               </span>
               <span className="nw-twlead__title">{lead.title}</span>
               {lead.summary ? <span className="nw-twlead__dek">{lead.summary}</span> : null}
