@@ -270,11 +270,34 @@
   display: none;
 }
 
+/* Mockup rail: every tinted task row carries the dark edge. The reader
+   paints proposed and pending rows gold; the Review shows forest instead. */
+[data-briefing-surface="review"].plan-review__rail .jds-task[data-state="proposed"],
+[data-briefing-surface="review"].plan-review__rail .jds-task[data-state="pending"] {
+  border-left: 2px solid var(--forest);
+}
+
+/* Mockup rail has no timeline spine: times sit beside the cards with no
+   vertical rule or dot markers. */
+[data-briefing-surface="review"] .jds-brief--timeline .tl-body {
+  border-left: none;
+}
+
+[data-briefing-surface="review"] .jds-brief--timeline .tl-body::before {
+  content: none;
+}
+
 [data-briefing-surface="review"] .tl-head {
   margin-bottom: 8px;
 }
 
 @media (max-width: 480px) {
+  /* Narrow rows stack: the title takes the full row and the two fields
+     share the row below it, so titles never squeeze to a letter a line. */
+  [data-briefing-surface="review"] .plan-review__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   [data-briefing-surface="review"] .plan-review__fields {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
