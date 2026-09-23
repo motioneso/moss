@@ -151,6 +151,18 @@ export const chatModuleManifest = {
       description:
         "Each ACP reply shows elapsed time and the token counts reported by the provider.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.response_styles",
+      description:
+        "Set how long answers should be (concise, balanced or detailed), in your own settings or " +
+        "by asking during a conversation; the choice carries over to later chats."
+    },
+    {
+      id: "chat.thread_history",
+      description:
+        "Keep previous conversations so you can go back to them: pick an older thread from the " +
+        "drawer history, start a new one anywhere, and see threads ordered by recent activity."
     }
   ],
   routes: [

@@ -8,20 +8,24 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUN_GATE_SRC="$REPO_ROOT/scripts/run-gate.sh"
 REAL_GIT="$(command -v git)"
+MAINPID=$$
 SCRATCH=""
 
 cleanup() { [ -z "$SCRATCH" ] || rm -rf $SCRATCH; }
-trap cleanup EXIT
+# BASHPID guard: subshells inherit the EXIT trap, but only the main shell may
+# clean up, or an early subshell exit would delete dirs still in use.
+trap '[ "$BASHPID" = "$MAINPID" ] && cleanup' EXIT
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 pass() { echo "ok: $1"; }
 
 # Build a throwaway repo containing the script under test, plus fake
 # docker/pnpm. Prints "<repo> <bindir> <gatedir>", all separate temp dirs.
+# The caller registers them in SCRATCH (appending inside this function would
+# be lost: it runs in a command substitution subshell).
 new_env() {
   local r bin g
   r="$(mktemp -d)"; bin="$(mktemp -d)"; g="$(mktemp -d)"
-  SCRATCH="$SCRATCH $r $bin $g"
   git init -q -b main "$r"
   git -C "$r" config user.email gate-test@example.com
   git -C "$r" config user.name gate-test
@@ -67,6 +71,7 @@ gate_status() {
 
 # --- case A: clean tree records clean -------------------------------------
 read R_A BIN_A G_A <<<"$(new_env)"
+SCRATCH="$SCRATCH $R_A $BIN_A $G_A"
 export JARVIS_PG_CONTAINER="fake-postgres"
 HEAD_A="$("$REAL_GIT" -C "$R_A" rev-parse HEAD)"
 start_and_wait "$R_A" "$BIN_A" "$G_A" "clean"
@@ -79,6 +84,7 @@ pass "clean tree records commit and clean"
 
 # --- case B: one modified + one untracked file -----------------------------
 read R_B BIN_B G_B <<<"$(new_env)"
+SCRATCH="$SCRATCH $R_B $BIN_B $G_B"
 echo change >>"$R_B/file.txt"
 echo new >"$R_B/untracked.txt"
 start_and_wait "$R_B" "$BIN_B" "$G_B" "dirty"
@@ -87,22 +93,24 @@ grep -qF '### +  M file.txt' "$LOG" || fail "dirty: modified file not listed"
 grep -qF '### + ?? untracked.txt' "$LOG" || fail "dirty: untracked file not listed"
 pass "dirty tree lists both changed files"
 
-# --- case C: a few hundred files must not kill start -----------------------
+# --- case C: about two thousand files must not kill start ------------------
 read R_C BIN_C G_C <<<"$(new_env)"
-# Long names (~20KB of status): short names fit in one pipe write and never
-# trip the SIGPIPE this case guards against.
-for i in $(seq 1 300); do : >"$R_C/load-$i-$(printf '%040d' 0)"; done
+SCRATCH="$SCRATCH $R_C $BIN_C $G_C"
+# Long names (~100KB of status): a few hundred short names fit in one pipe
+# write and do not trip the SIGPIPE failure this case guards against.
+for i in $(seq 1 2000); do : >"$R_C/load-$i-$(printf '%040d' 0)"; done
 start_and_wait "$R_C" "$BIN_C" "$G_C" "large"
 PTR="$(cat "$G_C"/*.current 2>/dev/null || true)"
 [ "$PTR" = "$LOG" ] || fail "large: pointer [$PTR] is not this run [$LOG]"
-grep -q '^### DIRTY  dirty (300 files)$' "$LOG" || fail "large: want 'dirty (300 files)'"
-PLUS="$(grep -c '^### + ' "$LOG")"
+grep -q '^### DIRTY  dirty (2000 files)$' "$LOG" || fail "large: want 'dirty (2000 files)'"
+PLUS="$(grep -c '^### + ' "$LOG" || true)"
 [ "$PLUS" -eq 51 ] || fail "large: want 50 listed + truncation line, got $PLUS plus-lines"
-grep -qF '### + ... and 250 more' "$LOG" || fail "large: truncation line missing"
-pass "300-file tree starts cleanly with a capped list"
+grep -qF '### + ... and 1950 more' "$LOG" || fail "large: truncation line missing"
+pass "2000-file tree starts cleanly with a capped list"
 
 # --- case D: failed git status records unknown, never clean ----------------
 read R_D BIN_D G_D <<<"$(new_env)"
+SCRATCH="$SCRATCH $R_D $BIN_D $G_D"
 mkdir "$R_D/gitbin"
 cat >"$R_D/gitbin/git" <<EOF
 #!/usr/bin/env bash

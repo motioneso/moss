@@ -89,7 +89,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       id: "admin-settings",
       label: "Admin",
       description: "Manage instance access, modules, AI providers, and host settings.",
-      path: "/settings/admin",
+      path: "/settings?section=people",
       scope: "admin",
       order: 1000,
       permissionId: "settings.manage"

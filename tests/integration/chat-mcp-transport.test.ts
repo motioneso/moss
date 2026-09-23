@@ -487,8 +487,9 @@ describe("HTTP resolve endpoint", () => {
       }
     });
 
-    await new Promise((r) => setTimeout(r, 100));
-    expect(emitted).toHaveLength(1);
+    // Same fixed-sleep flake as the cross-user test below (Refs #2610): poll
+    // for the emit instead of racing it.
+    await vi.waitFor(() => expect(emitted).toHaveLength(1), { timeout: 5_000 });
     const req = emitted[0]!.record;
     if (req.kind !== "action_request") throw new Error("expected action_request");
 
@@ -543,7 +544,67 @@ describe("HTTP resolve endpoint", () => {
     expect(resolveRes.statusCode).toBe(204);
     expect(exampleToolCalls).toHaveLength(0);
 
+    // The owner's call is still pending after the other user's attempt: it has
+    // not resolved on its own. (User B's round trip already completed above, so
+    // a broken guard would have unblocked it by now; the short window is only
+    // grace for the event loop, not synchronization.)
+    const pendingCheck = await Promise.race([
+      callPromise.then(() => "unblocked" as const),
+      new Promise((r) => setTimeout(r, 250)).then(() => "still-pending" as const)
+    ]);
+    expect(pendingCheck).toBe("still-pending");
+
     // Confirm the call is still waiting — deny it via the real owner to unblock
+    await gateway.resolveActionRequest(ids.userA, req.actionRequestId, "rejected");
+    const callRes = await callPromise;
+    const body = callRes.json<{ result: { isError: boolean } }>();
+    expect(body.result.isError).toBe(true);
+    expect(exampleToolCalls).toHaveLength(0);
+  });
+
+  it("cross-user reject does NOT unblock the owner's pending call (IDOR guard)", async () => {
+    // Same guard as the approve variant above, through the reject path (which
+    // skips the ownership read and relies on the owner-scoped update).
+    const token = tokens.mint({
+      actorUserId: ids.userA,
+      chatSessionId: ids.userA,
+      allowedToolNames: null
+    });
+
+    const callPromise = appA.inject({
+      method: "POST",
+      url: "/api/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        jsonrpc: "2.0",
+        id: 12,
+        method: "tools/call",
+        params: { name: "example.write", arguments: { value: "should-not-execute" } }
+      }
+    });
+
+    await vi.waitFor(() => expect(emitted).toHaveLength(1), { timeout: 5_000 });
+    const req = emitted[0]!.record;
+    if (req.kind !== "action_request") throw new Error("expected action_request");
+
+    // User B tries to reject User A's action request
+    const resolveRes = await appB.inject({
+      method: "POST",
+      url: `/api/chat/action-requests/${encodeURIComponent(req.actionRequestId)}/resolve`,
+      payload: { status: "rejected" }
+    });
+    // HTTP layer returns 204 (no information leak), but the call is NOT unblocked
+    expect(resolveRes.statusCode).toBe(204);
+    expect(exampleToolCalls).toHaveLength(0);
+
+    // The owner's call is still pending after the other user's attempt.
+    const pendingCheck = await Promise.race([
+      callPromise.then(() => "unblocked" as const),
+      new Promise((r) => setTimeout(r, 250)).then(() => "still-pending" as const)
+    ]);
+    expect(pendingCheck).toBe("still-pending");
+
+    // Deny it via the real owner to unblock
     await gateway.resolveActionRequest(ids.userA, req.actionRequestId, "rejected");
     const callRes = await callPromise;
     const body = callRes.json<{ result: { isError: boolean } }>();
