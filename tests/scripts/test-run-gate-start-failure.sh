@@ -259,4 +259,28 @@ if grep -q 'nohup:' "$G6/status.out"; then
 fi
 pass "nohup notice is filtered from the dead reason"
 
+# --- T7: a real nohup error still becomes the dead reason -------------------
+read R7 B7 G7 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R7 $B7 $G7"
+# The launcher execs "$0" directly, so without the exec bit the real nohup
+# reports "failed to run command ... Permission denied". Run everything
+# through bash explicitly so only the launcher hits the missing bit.
+chmod -x "$R7/scripts/run-gate.sh"
+export PATH="$B7:/usr/bin:/bin"
+export JARVIS_GATE_DIR="$G7" JARVIS_PG_CONTAINER="fake-postgres"
+export JARVIS_GATE_LAUNCH_WAIT_SECS=5
+if ( cd "$R7" && bash ./scripts/run-gate.sh start --gate fake-fast-gate >"$G7/start.out" 2>&1 ); then
+  fail "T7: start exited 0 despite the failed launch"
+fi
+LOG7="$(ls -t "$G7"/*.log | head -1)"
+if ( cd "$R7" && bash ./scripts/run-gate.sh status --log "$LOG7" >"$G7/status.out" 2>&1 ); then
+  fail "T7: status exited 0, want DEAD(2)"
+else
+  rc=$?
+  [ "$rc" -eq 2 ] || fail "T7: status gave $rc, want 2"
+fi
+grep -qi 'permission denied' "$G7/status.out" \
+  || fail "T7: DEAD line hides the real error: $(cat "$G7/status.out")"
+pass "real launcher error survives the nohup filter"
+
 echo "run-gate failed-launch tests passed"

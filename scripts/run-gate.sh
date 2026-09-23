@@ -316,10 +316,12 @@ cmd_start() {
     else
       kill -TERM "$launcher_pid" 2>/dev/null || true
     fi
-    # First launcher error line, skipping nohup's own "ignoring input" notice,
-    # which would otherwise hide the real cause when stdin is a terminal.
+    # First launcher error line, skipping only nohup's own "ignoring input"
+    # notice, which would otherwise hide the real cause when stdin is a
+    # terminal. Anything else nohup reports — including its own "failed to
+    # run command" errors — is a real reason and must be kept.
     local launch_err=""
-    launch_err="$(grep -v '^nohup: ' "$log.launch-err" 2>/dev/null || true)"
+    launch_err="$(grep -v '^nohup: ignoring input' "$log.launch-err" 2>/dev/null || true)"
     launch_err="${launch_err%%$'\n'*}"
     launch_err="${launch_err:0:200}"
     [ -n "$launch_err" ] || launch_err="runner never recorded its PID within ${LAUNCH_WAIT_SECS}s of launch"
