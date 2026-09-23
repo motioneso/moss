@@ -16,8 +16,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: NSWindowController?
     private var lastJudgmentWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
+    #if DEBUG
+    private let focusDebugOverlay = FocusDebugOverlay()
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        focusDebugOverlay.show()
+        #endif
         permissions.refresh()
         connection.start()
         focus.start()

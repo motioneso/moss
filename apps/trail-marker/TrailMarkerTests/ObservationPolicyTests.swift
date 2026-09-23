@@ -65,4 +65,21 @@ final class ObservationPolicyTests: XCTestCase {
         XCTAssertFalse(policy.allows(observation(bundle: "com.apple.mail")))
         XCTAssertTrue(policy.allows(observation(bundle: "com.apple.Safari")))
     }
+
+    /// The debug log's reason must agree with `allows(_:)`, or a live test reads the wrong answer.
+    func testExplainGivesTheReasonAllowsActedOn() {
+        let chosen = ObservationPolicy(allowedBundleIds: ["com.apple.Safari"])
+        let desktop = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
+        XCTAssertEqual(chosen.explain(observation()), "watched (chosen app)")
+        XCTAssertEqual(chosen.explain(observation(bundle: "com.apple.mail")), "not watched (not a chosen app)")
+        XCTAssertEqual(desktop.explain(observation(bundle: "com.apple.mail")), "watched (entire desktop)")
+        XCTAssertEqual(desktop.explain(observation(bundle: "com.apple.keychainaccess")), "never watched (denylist)")
+        XCTAssertEqual(desktop.explain(observation(title: "Private Browsing")), "never watched (private window)")
+        for policy in [chosen, desktop] {
+            for bundle in ["com.apple.Safari", "com.apple.mail", "com.apple.keychainaccess"] {
+                let seen = observation(bundle: bundle)
+                XCTAssertEqual(policy.allows(seen), policy.explain(seen).hasPrefix("watched"))
+            }
+        }
+    }
 }

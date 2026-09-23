@@ -301,6 +301,7 @@ final class FocusRuntime: ObservableObject {
     }
 
     private func apply(_ effects: [FocusEffect]) {
+        if machine.state != state { focusDebug("State: \(Self.describe(machine.state))") }
         state = machine.state
         for effect in effects {
             switch effect {
@@ -323,6 +324,7 @@ final class FocusRuntime: ObservableObject {
             case .requestNotificationPermission:
                 nudges.requestAuthorization()
             case .showNudge(let title):
+                focusDebug("NUDGE shown: back to \"\(title)\"")
                 nudges.showNudge(blockTitle: title)
             case .showTestNudge:
                 nudges.showTestNudge()
@@ -346,7 +348,12 @@ final class FocusRuntime: ObservableObject {
     }
 
     private func appChanged(_ observation: Observation?) {
-        if let observation { lastKnownApp = observation }
+        if let observation {
+            lastKnownApp = observation
+            let policy = ObservationPolicy(allowedBundleIds: allowedBundleIds, watchEntireDesktop: watchEntireDesktop)
+            let title = observation.windowTitle.isEmpty ? "(no title)" : "\"\(observation.windowTitle.prefix(80))\""
+            focusDebug("Now in \(observation.appName) \(title): \(policy.explain(observation))")
+        }
         send(.appChanged(observation))
     }
 
@@ -386,11 +393,13 @@ final class FocusRuntime: ObservableObject {
             observedAt: ServerTime.format(Date())
         )
 
+        focusDebug("-> Judging \(request.appName) \"\(request.windowTitle.prefix(80))\"")
         track { [weak self] in
             guard let self else { return }
             do {
                 let judgment = try await client.focusJudge(credential: credential, request)
                 if Task.isCancelled { return }
+                focusDebug("<- \(Self.describe(judgment))")
 
                 // A capture failure or an unreachable/rejected/unconfigured vision source is soft:
                 // rung 1's own answer stands, exactly as if rung 3 were off.
@@ -400,6 +409,11 @@ final class FocusRuntime: ObservableObject {
                         screenRecordingGranted: self.permissions.screenRecording == .granted
                     )
                 else {
+                    if judgment.label == .insufficientEvidence {
+                        focusDebug(
+                            "No screen capture: " + (self.rung3Enabled ? "Screen Recording not granted" : "screen capture is off")
+                        )
+                    }
                     self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
                     self.send(.judged(judgment, generation: generation))
                     return
@@ -411,11 +425,15 @@ final class FocusRuntime: ObservableObject {
                 )
                 let description: String?
                 do {
+                    focusDebug("Capturing \(observation.appName)'s window…")
                     let image = try await self.windowCapture.captureFrontmostWindow(
                         bundleId: observation.bundleId
                     )
+                    focusDebug("Captured \(image.count / 1024) KB, describing…")
                     description = try await describer.describe(image)
+                    focusDebug("Screen described: \"\((description ?? "").prefix(200))\"")
                 } catch {
+                    focusDebug("Capture or description failed: \(error)")
                     description = nil
                 }
 
@@ -434,19 +452,37 @@ final class FocusRuntime: ObservableObject {
                     secondRequest.appName, secondRequest.windowTitle, self.currentBlockTitle ?? "",
                     cleanedDescription
                 )
+                focusDebug("-> Judging again with the screen description")
                 do {
                     let secondJudgment = try await client.focusJudge(credential: credential, secondRequest)
                     if Task.isCancelled { return }
+                    focusDebug("<- \(Self.describe(secondJudgment))")
                     self.send(.judged(secondJudgment, generation: generation))
                 } catch {
                     if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
+                    focusDebug("Judge failed: \(error)")
                     self.send(.judgeFailed(error as? CompanionError ?? .unreachable, generation: generation))
                 }
             } catch {
                 if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
+                focusDebug("Judge failed: \(error)")
                 self.send(.judgeFailed(error as? CompanionError ?? .unreachable, generation: generation))
             }
         }
+    }
+
+    // MARK: - Debug log text
+
+    private static func describe(_ judgment: FocusJudgment) -> String {
+        let reason = judgment.reason.isEmpty ? "" : ": \(judgment.reason)"
+        return "\(judgment.label.rawValue)\(judgment.nudge ? " (nudge)" : "")\(reason)"
+    }
+
+    private static func describe(_ state: FocusWatchState) -> String {
+        if case .watching(_, let title, let endsAt) = state {
+            return "watching \"\(title)\" until \(endsAt.formatted(date: .omitted, time: .shortened))"
+        }
+        return "\(state)"
     }
 
     private var currentBlockTitle: String? {
