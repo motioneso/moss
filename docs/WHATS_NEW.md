@@ -40,6 +40,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Clearer Mac linking; Trail Marker can now judge focus with Jev.** When you link a Mac, the approval page now lists exactly what that Mac will be able to do, and Settings explains how to connect it. Trail Marker's focus judgment can now use TypeSafe's Jev model, in addition to any other model you've configured. [PR #2584](https://github.com/motioneso/moss/pull/2584)
 - **Marketing mail sorted straight away.** Marketing mail from senders you do not know is now left out sooner, without the extra review. [PR #2600](https://github.com/motioneso/moss/pull/2600)
 
 #### Added
