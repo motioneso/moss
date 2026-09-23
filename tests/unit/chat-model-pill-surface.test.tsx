@@ -192,6 +192,14 @@ function unmountMountedRenderers(): void {
   mountedRenderers.clear();
 }
 
+// File-level cleanup for the whole file: after every test, unmount every
+// renderer mounted above so no leftover renderer can re-render late on
+// another surface. Registered once here instead of per describe block, so
+// the guard test below watches exactly this hook.
+afterEach(() => {
+  unmountMountedRenderers();
+});
+
 function menuButtons(renderer: ReactTestRenderer) {
   const menu = renderer.root.findAll((node) => node.props.className === "chatd-model__menu");
   return menu.length > 0 ? menu[0]!.findAllByType("button") : [];
@@ -250,7 +258,6 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     vi.mocked(putChatModelOverride).mockReset();
     vi.mocked(putChatSettings).mockReset();
     vi.mocked(switchChatProvider).mockReset();
-    unmountMountedRenderers();
   });
 
   it("calls switchChatProvider and invalidates threads for the surface it was invoked on", async () => {
@@ -386,7 +393,6 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
     vi.mocked(ChatModelPill).mockClear();
     vi.mocked(clearChat).mockClear();
     vi.mocked(getChatModelOverrideSettings).mockReset();
-    unmountMountedRenderers();
   });
 
   it("passes its exact props.surface into the pill, and the cross-provider callback resolves against that same surface", async () => {
@@ -434,10 +440,10 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
   });
 
   // #2539 — the routing tests above mount pill renderers on other surfaces.
-  // The fixture unmounts every renderer after each test, so no leftover
-  // renderer can re-render late and append a pill call after a later test's
-  // own render. This stands on its own: it passes alone, first, or shuffled,
-  // and fails if the afterEach unmount above is removed.
+  // The file-level afterEach unmounts every renderer after each test, so no
+  // leftover renderer can re-render late and append a pill call after a
+  // later test's own render. This stands on its own: it passes alone,
+  // first, or shuffled, and fails if that file-level cleanup is removed.
   it("starts with no renderers left mounted by earlier tests", () => {
     expect(mountedRenderers.size).toBe(0);
   });
