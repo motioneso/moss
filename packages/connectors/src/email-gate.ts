@@ -23,10 +23,7 @@ const OBLIGATION_CATEGORIES = new Set([
 ]);
 
 // Curly quotes, the modifier-letter apostrophe and the backtick all read as an apostrophe here.
-const APOSTROPHE_FOLD = new RegExp(
-  `[${String.fromCharCode(0x2018, 0x2019, 0x02bc, 0x0060)}]`,
-  "g"
-);
+const APOSTROPHE_FOLD = new RegExp(`[${String.fromCharCode(0x2018, 0x2019, 0x02bc, 0x0060)}]`, "g");
 
 /**
  * Decode the apostrophe forms mail bodies arrive in before the veto reads them: the named and
