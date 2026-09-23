@@ -29,7 +29,7 @@ describe("sports manifest", () => {
       "sql/0222_sports_source_photos.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
-    expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
+    expect(sportsModuleManifest.settings[0]?.path).toBe("/settings?section=modules&module=sports");
     expect(sportsModuleManifest.routes.map((r) => r.path)).toContain("/api/sports/overview");
     expect(sportsModuleManifest.routes.map((r) => r.path)).toEqual(
       expect.arrayContaining([

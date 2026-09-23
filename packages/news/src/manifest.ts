@@ -130,7 +130,7 @@ export const newsModuleManifest = {
       label: "News",
       description:
         "Choose news topics, manage built-in, connected, and excluded publishers, and the sources you add: a publication or a subreddit. Adding a source needs an AI model; discovering topics across the web also needs web search.",
-      path: "/settings/modules/news",
+      path: "/settings?section=modules&module=news",
       scope: "user",
       order: 34,
       permissionId: "news.view",
