@@ -6,17 +6,29 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let connection = ConnectionRuntime()
     private let permissions = PermissionsService()
+    private let nudges = NudgeService()
+    private lazy var focus = FocusRuntime(connection: connection, permissions: permissions, nudges: nudges)
     private let loginItem = LoginItemService()
     private let updater = UpdaterService()
 
     private var menuBarController: MenuBarController?
     private var onboardingWindowController: NSWindowController?
     private var settingsWindowController: NSWindowController?
+    private var lastJudgmentWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
+    #if DEBUG
+    private let focusDebugOverlay = FocusDebugOverlay()
+    private var focusDebugBanner: FocusDebugBanner?
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        focusDebugOverlay.show()
+        focusDebugBanner = FocusDebugBanner(focus: focus)
+        #endif
         permissions.refresh()
         connection.start()
+        focus.start()
 
         connection.$state
             .receive(on: DispatchQueue.main)
@@ -41,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuBarController = MenuBarController(
             connection: connection,
+            focus: focus,
+            onShowLastJudgment: { [weak self] in self?.showLastJudgment() },
             onOpenSettings: { [weak self] in self?.showSettings() },
             onOpenOnboarding: { [weak self] in self?.showOnboarding() },
             onCheckForUpdates: { [weak self] in self?.updater.checkForUpdates() }
@@ -100,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let view = SettingsWindow(
-            connection: connection, permissions: permissions, updater: updater, loginItem: loginItem,
+            connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
             onSetUp: { [weak self] in self?.showOnboarding() }
         )
         let hosting = NSHostingController(rootView: view)
@@ -129,5 +143,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.origin.x = visible.midX - frame.width / 2
         frame.origin.y = visible.midY - frame.height / 2
         window.setFrame(frame, display: false)
+    }
+
+    private func showLastJudgment() {
+        if let lastJudgmentWindowController {
+            lastJudgmentWindowController.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let hosting = NSHostingController(rootView: LastJudgmentPanel(focus: focus))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Last Judgment"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        place(window, hosting: hosting)
+
+        let controller = NSWindowController(window: window)
+        lastJudgmentWindowController = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

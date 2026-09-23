@@ -247,6 +247,10 @@ enum Diagnostics {
             return "The instance redirected to a different address."
         case .decoding:
             return "Received an unexpected response from the server."
+        case .focusNotReady:
+            return "Focus judgment isn't set up on your Moss."
+        case .noBlock:
+            return "There is no Moss calendar block right now."
         }
     }
 
@@ -267,6 +271,12 @@ enum Diagnostics {
 /// The server sends fractional seconds (`2026-09-20T21:26:40.572Z`), which a default
 /// `ISO8601DateFormatter` rejects.
 enum ServerTime {
+    static func format(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
     static func parse(_ text: String) -> Date? {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

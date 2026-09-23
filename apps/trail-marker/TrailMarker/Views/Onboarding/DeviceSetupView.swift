@@ -25,7 +25,12 @@ struct DeviceSetupView: View {
             VStack(alignment: .leading, spacing: TrailMarkerTokens.Spacing.group) {
                 Text("Permissions")
                     .font(.headline)
-                Text("These permissions prepare future capabilities. Trail Marker is not observing your activity.")
+                Text(
+                    ObservationStatement.current(
+                        focusEnabled: PreferencesStore().focusConsent, paused: PreferencesStore().focusPaused,
+                        watchEntireDesktop: PreferencesStore().focusWatchEntireDesktop
+                    )
+                )
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -33,7 +38,7 @@ struct DeviceSetupView: View {
                 PermissionRow(
                     symbol: "accessibility",
                     name: "Accessibility",
-                    scope: "Needed for future shortcuts and automation.",
+                    scope: ObservationStatement.accessibilityScope,
                     state: permissions.accessibility
                 ) {
                     permissions.requestAccessibility()
