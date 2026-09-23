@@ -70,7 +70,7 @@ enough to be worth what it costs in privacy and battery?
   seconds while the frontmost window's pixels have changed. A cheap check on a tiny downscaled frame
   decides "changed". An unchanged screen costs nothing but that check.
 - **What it reads:** only the focused window of an allowed app, never the whole display. The
-  capture is bound to that window's identity (its process, frame and title, matched to exactly one on-screen window), which is the same window
+  capture is bound to that window's identity: its process and frame, matched to exactly one on-screen window, read fresh just before and just after the picture, which is the same window
   the never-watch check looked at. If the identity can't be established, for example because
   Accessibility is off, nothing is read. (Amended 2026-09-23 after review: today's Focus capture
   picks an app's largest window, a defect fixed first, #2643.)
