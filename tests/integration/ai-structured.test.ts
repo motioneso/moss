@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
 import {
@@ -521,10 +521,17 @@ describe("resolveSortingModel precedence", () => {
     dataContext.withDataContext(adminContext(), (scopedDb) =>
       repository.setServiceBinding(scopedDb, "sorting", { kind: "model", modelId }, ids.adminUser)
     );
-  const clear = (service: `module.${string}` | "sorting") =>
-    dataContext.withDataContext(adminContext(), (scopedDb) =>
-      repository.deleteModuleServiceBinding(scopedDb, service, ids.adminUser)
-    );
+
+  // These tests share the instance's single settings row, so cleanup must run even when an
+  // assertion throws — otherwise a failure leaks a binding or pin into every later suite.
+  afterEach(async () => {
+    await dataContext.withDataContext(adminContext(), async (scopedDb) => {
+      await repository.setAdminPinnedModel(scopedDb, null);
+      await repository.deleteModuleServiceBinding(scopedDb, "module.news", ids.adminUser);
+      await repository.deleteModuleServiceBinding(scopedDb, "module.worker", ids.adminUser);
+      await repository.deleteModuleServiceBinding(scopedDb, "sorting", ids.adminUser);
+    });
+  });
 
   it("returns null when no sorting binding exists", async () => {
     expect(await sortingFor("module.news")).toBeNull();
@@ -533,13 +540,11 @@ describe("resolveSortingModel precedence", () => {
   it("returns the sorting model when it is bound and qualifies", async () => {
     await setSorting(modelReasoningJsonId);
     expect((await sortingFor("module.news"))?.id).toBe(modelReasoningJsonId);
-    await clear("sorting");
   });
 
   it("a strict job never reaches the sorting model", async () => {
     await setSorting(modelReasoningJsonId);
     expect(await sortingFor("module.news", true)).toBeNull();
-    await clear("sorting");
   });
 
   it("an admin pin beats the sorting model", async () => {
@@ -548,10 +553,6 @@ describe("resolveSortingModel precedence", () => {
       repository.setAdminPinnedModel(scopedDb, modelChatJsonId)
     );
     expect(await sortingFor("module.news")).toBeNull();
-    await dataContext.withDataContext(adminContext(), (scopedDb) =>
-      repository.setAdminPinnedModel(scopedDb, null)
-    );
-    await clear("sorting");
   });
 
   it("the job's own module binding bypasses the sorting model", async () => {
@@ -566,8 +567,6 @@ describe("resolveSortingModel precedence", () => {
     );
     expect(await sortingFor("module.news")).toBeNull();
     expect((await sortingFor("module.sports"))?.id).toBe(modelReasoningJsonId);
-    await clear("module.news");
-    await clear("sorting");
   });
 
   it("a module.worker binding does not bypass the sorting model", async () => {
@@ -581,15 +580,12 @@ describe("resolveSortingModel precedence", () => {
       )
     );
     expect((await sortingFor("module.news"))?.id).toBe(modelReasoningJsonId);
-    await clear("module.worker");
-    await clear("sorting");
   });
 
   it("a model that no longer qualifies is ignored", async () => {
     // Bypass the route check to simulate a binding that went stale after saving.
     await setSorting(ollamaJsonModelId);
     expect(await sortingFor("module.news")).toBeNull();
-    await clear("sorting");
   });
 
   it("a disabled provider makes resolveSortingModel return null", async () => {
@@ -605,7 +601,6 @@ describe("resolveSortingModel precedence", () => {
     });
     expect(disabled.statusCode, disabled.body).toBe(200);
     expect(await sortingFor("module.news")).toBeNull();
-    await clear("sorting");
   });
 });
 
