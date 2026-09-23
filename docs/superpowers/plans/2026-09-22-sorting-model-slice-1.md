@@ -53,28 +53,29 @@ this paragraph.
 
 ## File map
 
-| File | Change |
-| --- | --- |
-| `packages/shared/src/ai-types.ts` | `SORTING_SERVICE_KEY`, `SortingServiceKey`, `SORTING_PROVIDER_KINDS`, `isSortingProviderKind`; widen `AiServiceKey` |
-| `packages/shared/src/ai-service-binding-api.ts` | params pattern and list-response map accept `sorting` |
-| `packages/ai/src/repository.ts` | save/read/delete `sorting`; new `getSortingBinding`, `resolveSortingModel` |
-| `packages/ai/src/capability-route-routes.ts` | GET/PUT/DELETE handle `sorting` with the eligibility rule |
-| `packages/ai/src/structured/generate-structured.ts` | `sorting` input, `servedBy`, one-try attempt, fallback |
-| `packages/usefulness-feedback/src/relevance/evaluator.ts` | opt in, skip after first failure, signal |
-| `packages/usefulness-feedback/src/relevance/policy.ts` | pass optional signal |
-| `packages/news/src/discovery/ports.ts` | `NewsAiPort` input/result widen |
-| `packages/module-registry/src/index.ts` | port input types widen; export both port builders |
-| `apps/web/src/api/client.ts` | `deleteAiServiceBinding` |
-| `apps/web/src/settings/settings-ai-sorting-row.tsx` | new sorting row |
-| `apps/web/src/settings/settings-ai-admin-pane.tsx` | render the row in Services |
-| `packages/ai/src/manifest.ts` | `ai.sorting_model` feature |
-| `packages/shared/src/app-map-core.ts` | `aiproviders` description sentence |
+| File                                                      | Change                                                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/ai-types.ts`                         | `SORTING_SERVICE_KEY`, `SortingServiceKey`, `SORTING_PROVIDER_KINDS`, `isSortingProviderKind`; widen `AiServiceKey` |
+| `packages/shared/src/ai-service-binding-api.ts`           | params pattern and list-response map accept `sorting`                                                               |
+| `packages/ai/src/repository.ts`                           | save/read/delete `sorting`; new `getSortingBinding`, `resolveSortingModel`                                          |
+| `packages/ai/src/capability-route-routes.ts`              | GET/PUT/DELETE handle `sorting` with the eligibility rule                                                           |
+| `packages/ai/src/structured/generate-structured.ts`       | `sorting` input, `servedBy`, one-try attempt, fallback                                                              |
+| `packages/usefulness-feedback/src/relevance/evaluator.ts` | opt in, skip after first failure, signal                                                                            |
+| `packages/usefulness-feedback/src/relevance/policy.ts`    | pass optional signal                                                                                                |
+| `packages/news/src/discovery/ports.ts`                    | `NewsAiPort` input/result widen                                                                                     |
+| `packages/module-registry/src/index.ts`                   | port input types widen; export both port builders                                                                   |
+| `apps/web/src/api/client.ts`                              | `deleteAiServiceBinding`                                                                                            |
+| `apps/web/src/settings/settings-ai-sorting-row.tsx`       | new sorting row                                                                                                     |
+| `apps/web/src/settings/settings-ai-admin-pane.tsx`        | render the row in Services                                                                                          |
+| `packages/ai/src/manifest.ts`                             | `ai.sorting_model` feature                                                                                          |
+| `packages/shared/src/app-map-core.ts`                     | `aiproviders` description sentence                                                                                  |
 
 ---
 
 ### Task 1: Store and serve the sorting binding
 
 **Files:**
+
 - Modify: `packages/shared/src/ai-types.ts:103-120`
 - Modify: `packages/shared/src/ai-service-binding-api.ts:35-56`
 - Modify: `packages/ai/src/repository.ts:23-40` (imports), `:794-806` (`setServiceBinding`), `:858-872` (`deleteModuleServiceBinding`), new `getSortingBinding` after `:872`
@@ -83,6 +84,7 @@ this paragraph.
 - Test: `tests/integration/ai-structured.test.ts` (new describe block before `describe("generateStructured end-to-end"`)
 
 **Interfaces:**
+
 - Produces (shared): `SORTING_SERVICE_KEY: "sorting"`, `type SortingServiceKey = "sorting"`, `SORTING_PROVIDER_KINDS: readonly AiProviderKind[]`, `isSortingProviderKind(kind: string | null | undefined): boolean`, `AiServiceKey = AiModelCapability | ModuleServiceKey | SortingServiceKey`.
 - Produces (repository): `getSortingBinding(scopedDb): Promise<{ kind: "model"; modelId: string } | null>`; `setServiceBinding` accepts `"sorting"` with a model binding; `deleteModuleServiceBinding(scopedDb, service: ModuleServiceKey | SortingServiceKey, actorUserId)`.
 - Produces (HTTP): `GET /api/ai/service-bindings` includes `bindings.sorting` when set; `PUT /api/ai/services/sorting/binding` (model only, eligible only); `DELETE /api/ai/services/sorting/binding`.
@@ -109,7 +111,11 @@ describe("sorting binding contract", () => {
   });
 
   it("only qualifies provider kinds the structured path can run", () => {
-    expect([...SORTING_PROVIDER_KINDS].sort()).toEqual(["anthropic", "google", "openai-compatible"]);
+    expect([...SORTING_PROVIDER_KINDS].sort()).toEqual([
+      "anthropic",
+      "google",
+      "openai-compatible"
+    ]);
     expect(isSortingProviderKind("openai-compatible")).toBe(true);
     expect(isSortingProviderKind("ollama")).toBe(false);
     expect(isSortingProviderKind("custom")).toBe(false);
@@ -201,8 +207,12 @@ let ollamaJsonModelId: string;
 In `beforeAll`, after the three `seedModel` calls:
 
 ```ts
-  const ollamaProviderId = await seedProviderOfKind("ollama", "Local Ollama", "http://127.0.0.1:11434");
-  ollamaJsonModelId = await seedModel(ollamaProviderId, "ollama-json", ["json"], "economy");
+const ollamaProviderId = await seedProviderOfKind(
+  "ollama",
+  "Local Ollama",
+  "http://127.0.0.1:11434"
+);
+ollamaJsonModelId = await seedModel(ollamaProviderId, "ollama-json", ["json"], "economy");
 ```
 
 Add this helper under `seedProvider`:
@@ -244,9 +254,8 @@ describe("sorting binding routes", () => {
       payload: { binding }
     });
   const list = async () =>
-    (
-      await server.inject({ method: "GET", url: "/api/ai/service-bindings", headers: auth })
-    ).json().bindings as Record<string, unknown>;
+    (await server.inject({ method: "GET", url: "/api/ai/service-bindings", headers: auth })).json()
+      .bindings as Record<string, unknown>;
 
   it("saves, reads and deletes a sorting model binding through the real repository", async () => {
     const saved = await put({ kind: "model", modelId: modelEconomyJsonId });
@@ -308,7 +317,11 @@ describe("sorting binding routes", () => {
     const after = await list();
     expect(after.chat).toEqual(before.chat);
     expect(after["module.worker"]).toEqual(before["module.worker"]);
-    await server.inject({ method: "DELETE", url: "/api/ai/services/sorting/binding", headers: auth });
+    await server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth
+    });
   });
 });
 ```
@@ -334,18 +347,18 @@ import {
 Replace the guard at the top of `setServiceBinding`:
 
 ```ts
-    assertDataContextDb(scopedDb);
-    if (service === SORTING_SERVICE_KEY) {
-      // The sorting model has no mode: unset already means "run as today".
-      if (binding.kind !== "model") {
-        throw new Error('Service "sorting" accepts only a model binding.');
-      }
-    } else if (
-      !USER_FACING_SERVICES.has(service as AiModelCapability) &&
-      !isModuleServiceKey(service)
-    ) {
-      throw new Error(`Service "${service}" is not bindable (worker capabilities stay automatic).`);
-    }
+assertDataContextDb(scopedDb);
+if (service === SORTING_SERVICE_KEY) {
+  // The sorting model has no mode: unset already means "run as today".
+  if (binding.kind !== "model") {
+    throw new Error('Service "sorting" accepts only a model binding.');
+  }
+} else if (
+  !USER_FACING_SERVICES.has(service as AiModelCapability) &&
+  !isModuleServiceKey(service)
+) {
+  throw new Error(`Service "${service}" is not bindable (worker capabilities stay automatic).`);
+}
 ```
 
 Widen the delete signature and its doc comment:
@@ -399,44 +412,44 @@ In `packages/ai/src/capability-route-routes.ts`, add `SORTING_SERVICE_KEY` and `
 In the GET handler, after the `for (const service of BINDABLE_SERVICES)` loop:
 
 ```ts
-            const sorting = await repository.getSortingBinding(scopedDb);
-            if (sorting) result[SORTING_SERVICE_KEY] = sorting;
+const sorting = await repository.getSortingBinding(scopedDb);
+if (sorting) result[SORTING_SERVICE_KEY] = sorting;
 ```
 
 In the PUT handler, replace the `if (binding.kind === "model") { ... }` block with:
 
 ```ts
-            if (service === SORTING_SERVICE_KEY && binding.kind !== "model") {
-              throw new HttpError(400, "the sorting model accepts only a specific model");
-            }
+if (service === SORTING_SERVICE_KEY && binding.kind !== "model") {
+  throw new HttpError(400, "the sorting model accepts only a specific model");
+}
 
-            // Module structured work and the sorting model require json; chat keeps its own
-            // capability. The sorting model must also run on a structured-capable provider kind.
-            if (binding.kind === "model") {
-              const requiredCapability: AiModelCapability =
-                service === SORTING_SERVICE_KEY || isModuleServiceKey(service) ? "json" : service;
-              const models = await repository.listModels(scopedDb);
-              const valid = models.some(
-                (model) =>
-                  model.id === binding.modelId &&
-                  model.status === "active" &&
-                  model.provider_status === "active" &&
-                  model.capabilities.includes(requiredCapability) &&
-                  (service !== SORTING_SERVICE_KEY || isSortingProviderKind(model.provider_kind))
-              );
-              if (!valid) {
-                throw new HttpError(400, "modelId must reference an active compatible model");
-              }
-            }
+// Module structured work and the sorting model require json; chat keeps its own
+// capability. The sorting model must also run on a structured-capable provider kind.
+if (binding.kind === "model") {
+  const requiredCapability: AiModelCapability =
+    service === SORTING_SERVICE_KEY || isModuleServiceKey(service) ? "json" : service;
+  const models = await repository.listModels(scopedDb);
+  const valid = models.some(
+    (model) =>
+      model.id === binding.modelId &&
+      model.status === "active" &&
+      model.provider_status === "active" &&
+      model.capabilities.includes(requiredCapability) &&
+      (service !== SORTING_SERVICE_KEY || isSortingProviderKind(model.provider_kind))
+  );
+  if (!valid) {
+    throw new HttpError(400, "modelId must reference an active compatible model");
+  }
+}
 ```
 
 In the DELETE handler, replace the module-only check:
 
 ```ts
-        const service = parseBindableService(request.params.service);
-        if (service !== SORTING_SERVICE_KEY && !isModuleServiceKey(service)) {
-          throw new HttpError(400, "only module and sorting bindings can be deleted");
-        }
+const service = parseBindableService(request.params.service);
+if (service !== SORTING_SERVICE_KEY && !isModuleServiceKey(service)) {
+  throw new HttpError(400, "only module and sorting bindings can be deleted");
+}
 ```
 
 Update the comment above the DELETE route to `// #915 D6: unbinding a module service returns it to automatic routing; clearing sorting returns jobs to today's path. Chat has no unbind.`
@@ -444,9 +457,9 @@ Update the comment above the DELETE route to `// #915 D6: unbinding a module ser
 In `parseBindableService`, add before the module check:
 
 ```ts
-  if (value === SORTING_SERVICE_KEY) {
-    return SORTING_SERVICE_KEY;
-  }
+if (value === SORTING_SERVICE_KEY) {
+  return SORTING_SERVICE_KEY;
+}
 ```
 
 - [ ] **Step 9: Typecheck and lint**
@@ -474,10 +487,12 @@ git commit -m "feat(ai): store and serve the sorting model binding (#2594)"
 ### Task 2: Decide when a job may use the sorting model
 
 **Files:**
+
 - Modify: `packages/ai/src/repository.ts` (new method `resolveSortingModel`, placed directly after `resolveModelForService`, around `:1320`)
 - Test: `tests/integration/ai-structured.test.ts` (new describe block after `"sorting binding routes"`)
 
 **Interfaces:**
+
 - Consumes: `getSortingBinding`'s helper `readSortingBinding(value)`, `SORTING_PROVIDER_KINDS`, `MODULE_WORKER_SERVICE_KEY` (Task 1).
 - Produces: `resolveSortingModel(scopedDb: DataContextDb, service: ModuleServiceKey, options?: { requireExplicitBinding?: boolean }): Promise<AiConfiguredModelSafeRow | null>`. Returns the sorting model row only when every bypass row of the spec table is false and the model still qualifies. Task 3 calls it.
 
@@ -657,12 +672,14 @@ git commit -m "feat(ai): resolve the sorting model behind pins, strict jobs and 
 ### Task 3: Try the sorting model first in structured calls
 
 **Files:**
+
 - Modify: `packages/ai/src/structured/generate-structured.ts` (whole body of `generateStructured`, lines 65-288)
 - Modify: `tests/unit/ai-generate-structured.test.ts:77-80,82-91,108-112,142-146` (add `servedBy`)
 - Modify: `tests/integration/ai-structured.test.ts:~441` (add `servedBy: "main"` to the end-to-end `toEqual`)
 - Test: `tests/unit/ai-generate-structured-sorting.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `AiRepository.resolveSortingModel` (Task 2).
 - Produces:
   - `GenerateStructuredInput.sorting?: true`.
@@ -775,11 +792,7 @@ describe("generateStructured sorting path", () => {
     const sorting = { generateStructured: vi.fn(async () => ok("small")) };
     const main = { generateStructured: vi.fn(async () => ok("main")) };
     const deps = makeDeps({ sorting, main });
-    const result = await generateStructured(
-      scopedDb,
-      input({ explicitModel: mainModel }),
-      deps
-    );
+    const result = await generateStructured(scopedDb, input({ explicitModel: mainModel }), deps);
     expect(result).toMatchObject({ ok: true, servedBy: "main" });
     expect(deps.repository.resolveSortingModel).not.toHaveBeenCalled();
     expect(sorting.generateStructured).not.toHaveBeenCalled();
@@ -939,19 +952,19 @@ describe("generateStructured sorting path", () => {
 The "no usable credential" test above has a dead first assignment; delete the first `deps.cipher.decryptJson = ...` block and the unused `onlyMainCredential` indirection if eslint flags it, keeping the behaviour: the first decrypt (sorting provider) returns `{}`, the second (main) returns `{ apiKey: "sk-test" }`. Final form:
 
 ```ts
-  it("falls back when the sorting provider has no usable credential", async () => {
-    const sorting = { generateStructured: vi.fn(async () => ok("small")) };
-    const main = { generateStructured: vi.fn(async () => ok("main")) };
-    const deps = makeDeps({ sorting, main });
-    let calls = 0;
-    const decryptJson = vi.fn(() => {
-      calls += 1;
-      return calls === 1 ? {} : { apiKey: "sk-test" };
-    });
-    const result = await generateStructured(scopedDb, input(), { ...deps, cipher: { decryptJson } });
-    expect(result).toMatchObject({ ok: true, servedBy: "main" });
-    expect(sorting.generateStructured).not.toHaveBeenCalled();
+it("falls back when the sorting provider has no usable credential", async () => {
+  const sorting = { generateStructured: vi.fn(async () => ok("small")) };
+  const main = { generateStructured: vi.fn(async () => ok("main")) };
+  const deps = makeDeps({ sorting, main });
+  let calls = 0;
+  const decryptJson = vi.fn(() => {
+    calls += 1;
+    return calls === 1 ? {} : { apiKey: "sk-test" };
   });
+  const result = await generateStructured(scopedDb, input(), { ...deps, cipher: { decryptJson } });
+  expect(result).toMatchObject({ ok: true, servedBy: "main" });
+  expect(sorting.generateStructured).not.toHaveBeenCalled();
+});
 ```
 
 Use this final form in the file.
@@ -1250,12 +1263,12 @@ In `tests/unit/ai-generate-structured.test.ts`, add `servedBy: "main"` to the th
 In `tests/integration/ai-structured.test.ts` around line 441:
 
 ```ts
-    expect(result).toEqual({
-      ok: true,
-      object: { title: "Staff Engineer" },
-      usage: { inputTokens: 11, outputTokens: 7 },
-      servedBy: "main"
-    });
+expect(result).toEqual({
+  ok: true,
+  object: { title: "Staff Engineer" },
+  usage: { inputTokens: 11, outputTokens: 7 },
+  servedBy: "main"
+});
 ```
 
 - [ ] **Step 5: Run the tests**
@@ -1283,6 +1296,7 @@ git commit -m "feat(ai): try the sorting model once before today's path (#2594)"
 ### Task 4: Let the story matcher opt in
 
 **Files:**
+
 - Modify: `packages/usefulness-feedback/src/relevance/evaluator.ts:26-38,58-102`
 - Modify: `packages/usefulness-feedback/src/relevance/policy.ts:28-36,64-68`
 - Modify: `packages/news/src/discovery/ports.ts:123-134`
@@ -1291,6 +1305,7 @@ git commit -m "feat(ai): try the sorting model once before today's path (#2594)"
 - Test: `tests/unit/module-registry-sorting-ports.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `GenerateStructuredInput.sorting`, `signal`, and result `servedBy` (Task 3).
 - Produces:
   - `StoryRelevanceAiPort.generateJson(scopedDb, { schema, prompt, maxOutputTokens?, sorting?: true, signal?: AbortSignal })` returning `{ ok: true; object: unknown; servedBy?: "sorting" | "main" } | { ok: false; error: ... }`.
@@ -1431,45 +1446,45 @@ export interface StoryRelevanceAiPort {
 Add `readonly signal?: AbortSignal;` to the evaluator's `input` parameter type, and replace the loop:
 
 ```ts
-  const verdicts: StoryRelevanceVerdict[] = [];
-  // One sorting failure per run is enough: later batches go straight to the main model.
-  let trySorting = true;
-  for (const chunk of chunkCandidates(input.candidates)) {
-    const refs = new Set(chunk.map((candidate) => candidate.storyRef));
-    const generated = await deps.ai.generateJson(scopedDb, {
-      schema: storyRelevanceResponseSchema,
-      prompt: [
-        INSTRUCTIONS,
-        `UNTRUSTED DATA - the person's saved preferences:\n${ruleData}`,
-        `UNTRUSTED DATA - candidate stories:\n${JSON.stringify(chunk.map(promptRow))}`
-      ].join("\n"),
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-      ...(trySorting ? { sorting: true as const } : {}),
-      ...(input.signal ? { signal: input.signal } : {})
-    });
-    // One bad chunk fails the whole evaluation. A half-filtered feed is never published: the
-    // caller degrades, keeps everything except the exact exclusions, and can simply retry.
-    if (!generated.ok) return { ok: false, error: generated.error };
-    if (generated.servedBy !== "sorting") trySorting = false;
-    const parsed = parseStoryRelevanceVerdicts(generated.object, refs);
-    if (!parsed) return { ok: false, error: "malformed_output" };
-    verdicts.push(...parsed);
-  }
-  return { ok: true, verdicts };
+const verdicts: StoryRelevanceVerdict[] = [];
+// One sorting failure per run is enough: later batches go straight to the main model.
+let trySorting = true;
+for (const chunk of chunkCandidates(input.candidates)) {
+  const refs = new Set(chunk.map((candidate) => candidate.storyRef));
+  const generated = await deps.ai.generateJson(scopedDb, {
+    schema: storyRelevanceResponseSchema,
+    prompt: [
+      INSTRUCTIONS,
+      `UNTRUSTED DATA - the person's saved preferences:\n${ruleData}`,
+      `UNTRUSTED DATA - candidate stories:\n${JSON.stringify(chunk.map(promptRow))}`
+    ].join("\n"),
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    ...(trySorting ? { sorting: true as const } : {}),
+    ...(input.signal ? { signal: input.signal } : {})
+  });
+  // One bad chunk fails the whole evaluation. A half-filtered feed is never published: the
+  // caller degrades, keeps everything except the exact exclusions, and can simply retry.
+  if (!generated.ok) return { ok: false, error: generated.error };
+  if (generated.servedBy !== "sorting") trySorting = false;
+  const parsed = parseStoryRelevanceVerdicts(generated.object, refs);
+  if (!parsed) return { ok: false, error: "malformed_output" };
+  verdicts.push(...parsed);
+}
+return { ok: true, verdicts };
 ```
 
 In `packages/usefulness-feedback/src/relevance/policy.ts`, add `readonly signal?: AbortSignal;` to the `StoryRelevancePolicy` input type, and pass it through:
 
 ```ts
-    const evaluated = await evaluateStoryRelevance(
-      scopedDb,
-      { ai: deps.ai },
-      {
-        candidates: input.candidates,
-        rules: ruleRows,
-        ...(input.signal ? { signal: input.signal } : {})
-      }
-    );
+const evaluated = await evaluateStoryRelevance(
+  scopedDb,
+  { ai: deps.ai },
+  {
+    candidates: input.candidates,
+    rules: ruleRows,
+    ...(input.signal ? { signal: input.signal } : {})
+  }
+);
 ```
 
 - [ ] **Step 4: Widen the News port and the registry port types**
@@ -1532,7 +1547,12 @@ vi.mock("@moss/ai", async (importOriginal) => {
     createAiSecretCipher: () => ({ decryptJson: vi.fn() }),
     generateStructured: vi.fn(async (_db: unknown, input: Record<string, unknown>) => {
       captured.calls.push(input);
-      return { ok: true, object: {}, usage: { inputTokens: 0, outputTokens: 0 }, servedBy: "sorting" };
+      return {
+        ok: true,
+        object: {},
+        usage: { inputTokens: 0, outputTokens: 0 },
+        servedBy: "sorting"
+      };
     })
   };
 });
@@ -1613,6 +1633,7 @@ git commit -m "feat(news,sports): story matcher opts into the sorting model (#25
 Use the `design-system` skill before starting this task.
 
 **Files:**
+
 - Modify: `apps/web/src/api/client.ts:1346` (add `deleteAiServiceBinding` after `putAiServiceBinding`)
 - Create: `apps/web/src/settings/settings-ai-sorting-row.tsx`
 - Modify: `apps/web/src/settings/settings-ai-admin-pane.tsx:39-51` (import), `:877-887` (render)
@@ -1620,6 +1641,7 @@ Use the `design-system` skill before starting this task.
 - Test: `tests/unit/settings-ai-sorting-row.test.tsx` (new)
 
 **Interfaces:**
+
 - Consumes: `GET/PUT/DELETE` sorting routes (Task 1), `SORTING_SERVICE_KEY`, `isSortingProviderKind` (Task 1).
 - Produces: `deleteAiServiceBinding(service: AiServiceKey): Promise<{ service: string }>`; `SortingModelRow(props: { binding: AiServiceBinding | undefined; models: readonly AiConfiguredModelDto[]; providers: readonly AiProviderConfigDto[] })`; exported copy constant `SORTING_DISCLOSURE`.
 
@@ -1922,11 +1944,11 @@ import { SortingModelRow } from "./settings-ai-sorting-row";
 and after the `SERVICE_ROWS.map(...)` block inside `<Group title="Services" ...>`:
 
 ```tsx
-          <SortingModelRow
-            binding={serviceBindingsQuery.data?.bindings.sorting}
-            models={models}
-            providers={providers}
-          />
+<SortingModelRow
+  binding={serviceBindingsQuery.data?.bindings.sorting}
+  models={models}
+  providers={providers}
+/>
 ```
 
 In `tests/unit/settings-ai-admin-pane.test.tsx`, add `deleteAiServiceBinding: vi.fn(),` to the `vi.mock("../../apps/web/src/api/client.js", ...)` object next to `putAiServiceBinding`.
@@ -1992,11 +2014,13 @@ git commit -m "feat(web): Sorting model row under Settings > AI services (#2594)
 ### Task 6: Keep Moss's app map truthful
 
 **Files:**
+
 - Modify: `packages/ai/src/manifest.ts:113` (new entry at the end of `features`)
 - Modify: `packages/shared/src/app-map-core.ts:201-236` (`aiproviders` description)
 - Test: `tests/unit/ai-manifest-sorting-model.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: the row copy from Task 5.
 - Produces: feature `ai.sorting_model`, error `ai.sorting_model.not_answering`, remediation `ai.sorting_model.use_main_model`.
 
@@ -2011,7 +2035,9 @@ import { aiModuleManifest } from "../../packages/ai/src/manifest.js";
 import { CORE_SETTINGS } from "../../packages/shared/src/app-map-core.js";
 
 describe("app map: sorting model (#2594)", () => {
-  const feature = (aiModuleManifest.features ?? []).find((entry) => entry.id === "ai.sorting_model");
+  const feature = (aiModuleManifest.features ?? []).find(
+    (entry) => entry.id === "ai.sorting_model"
+  );
 
   it("declares the sorting model feature with its error and remediation", () => {
     expect(feature?.description).toMatch(/Sorting model/);
@@ -2117,9 +2143,11 @@ git commit -m "docs(app-map): declare the sorting model setting, error and remed
 ### Task 7: Full gate, live proof on dev, and the pull request
 
 **Files:**
+
 - No source changes expected. Evidence goes on the PR.
 
 **Interfaces:**
+
 - Consumes: everything above.
 
 - [ ] **Step 1: Run the full gate**

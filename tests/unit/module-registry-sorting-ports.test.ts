@@ -68,7 +68,8 @@ describe("external module requests cannot opt in (#2594 slice 4 owns that)", () 
     );
     // Anchor on the prompt/schema allow-list: it is the Set whose list contains "schema". A bare
     // /const allowed = new Set\(\[.../ matches the URL-fetch list first and never names "prompt".
-    const allowList = /const allowed = new Set\(\[([^\]]*"schema"[^\]]*)\]\)/.exec(source)?.[1] ?? "";
+    const allowList =
+      /const allowed = new Set\(\[([^\]]*"schema"[^\]]*)\]\)/.exec(source)?.[1] ?? "";
     expect(allowList).toContain('"prompt"');
     expect(allowList).not.toContain("sorting");
   });

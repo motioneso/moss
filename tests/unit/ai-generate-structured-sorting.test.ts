@@ -99,11 +99,7 @@ describe("generateStructured sorting path", () => {
     const sorting = { generateStructured: vi.fn(async () => ok("small")) };
     const main = { generateStructured: vi.fn(async () => ok("main")) };
     const deps = makeDeps({ sorting, main });
-    const result = await generateStructured(
-      scopedDb,
-      input({ explicitModel: mainModel }),
-      deps
-    );
+    const result = await generateStructured(scopedDb, input({ explicitModel: mainModel }), deps);
     expect(result).toMatchObject({ ok: true, servedBy: "main" });
     expect(deps.repository.resolveSortingModel).not.toHaveBeenCalled();
     expect(sorting.generateStructured).not.toHaveBeenCalled();
@@ -185,7 +181,10 @@ describe("generateStructured sorting path", () => {
       calls += 1;
       return calls === 1 ? {} : { apiKey: "sk-test" };
     });
-    const result = await generateStructured(scopedDb, input(), { ...deps, cipher: { decryptJson } });
+    const result = await generateStructured(scopedDb, input(), {
+      ...deps,
+      cipher: { decryptJson }
+    });
     expect(result).toMatchObject({ ok: true, servedBy: "main" });
     expect(sorting.generateStructured).not.toHaveBeenCalled();
   });
