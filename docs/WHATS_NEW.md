@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Better email reviews for non-Gmail mailboxes.** Email arriving over a standard mail account is now reviewed using its message text instead of only its subject line. [PR #2598](https://github.com/motioneso/moss/pull/2598)
 - **Assistant knows where settings live again.** The assistant no longer points at settings pages that no longer exist, and now describes Wellness, Memory, Notes, Tasks, Chat and connected accounts according to what they really do today. [PR #2622](https://github.com/motioneso/moss/pull/2622)
 - **Host details show the app version and commit.** The Environment, Version, Commit and Deploy mode fields under Settings > Host > Technical details now show real values instead of being blank, and on a pinned release Moss tells you when a newer version is available. [PR #2601](https://github.com/motioneso/moss/pull/2601)
 
