@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 import type * as AiModule from "@moss/ai";
 
-const captured = vi.hoisted(() => ({ calls: [] as Record<string, unknown>[] }));
+const captured = vi.hoisted(() => ({
+  calls: [] as Record<string, unknown>[],
+  asks: [] as Record<string, unknown>[]
+}));
 
 vi.mock("@moss/ai", async (importOriginal) => {
   const actual = await importOriginal<typeof AiModule>();
@@ -18,6 +21,10 @@ vi.mock("@moss/ai", async (importOriginal) => {
         usage: { inputTokens: 0, outputTokens: 0 },
         servedBy: "sorting"
       };
+    }),
+    askSortingQuestions: vi.fn(async (_db: unknown, input: Record<string, unknown>) => {
+      captured.asks.push(input);
+      return { ok: true, answers: {}, usage: { inputTokens: 0, outputTokens: 0 } };
     })
   };
 });
@@ -56,6 +63,24 @@ describe("story matcher ports pass the sorting opt-in through (#2594)", () => {
       }
     ]);
   });
+
+  it.each([
+    ["module.news", () => buildNewsDiscoveryPorts()],
+    ["module.sports", () => buildSportsDiscoveryPorts()]
+  ] as const)(
+    "%s forwards sorting-question batches to the general function",
+    async (service, build) => {
+      captured.asks.length = 0;
+      const controller = new AbortController();
+      const batches = [{ state: { untrustedData: {} }, questions: {} }];
+      const result = await build().ai.askSortingQuestions!(scopedDb, {
+        batches,
+        signal: controller.signal
+      });
+      expect(result.ok).toBe(true);
+      expect(captured.asks).toEqual([{ service, batches, signal: controller.signal }]);
+    }
+  );
 });
 
 describe("external module requests cannot opt in (#2594 slice 4 owns that)", () => {

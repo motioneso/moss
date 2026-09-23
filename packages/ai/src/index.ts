@@ -26,6 +26,7 @@ export * from "./routes.js";
 export * from "./structured/schema-bounds.js";
 export * from "./structured/generate-structured.js";
 export * from "./structured/generate-choices.js";
+export * from "./structured/ask-sorting-questions.js";
 export * from "./adapters/http-api.js";
 export * from "./adapters/http-api-structured.js";
 export * from "./adapters/tmux-bridge.js";

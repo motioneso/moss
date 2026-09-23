@@ -9,7 +9,9 @@ import {
 } from "../../packages/shared/src/index.js";
 import {
   evaluateStoryRelevance,
-  type StoryRelevanceAiPort
+  STORY_RELEVANCE_SORTING_CONFIDENCE_FLOOR,
+  type StoryRelevanceAiPort,
+  type StoryRelevanceSortingBatch
 } from "../../packages/usefulness-feedback/src/relevance/evaluator.js";
 import {
   createStoryRelevancePolicy,
@@ -363,5 +365,278 @@ describe("sorting model opt-in (#2594)", () => {
     );
     expect(result).toEqual({ ok: false, error: "aborted" });
     expect(seen[0]).toBe(controller.signal);
+  });
+});
+
+describe("sorting questions (#2594 slice 2)", () => {
+  const RULE = activeRule();
+
+  function twoStories(): StoryRelevanceCandidate[] {
+    return [
+      { ...newsCandidate(REJECTED_STORY), storyRef: "story:a" },
+      { ...newsCandidate(STORY_RELEVANCE_FIXTURE[1]!), storyRef: "story:b" }
+    ];
+  }
+
+  /** A JSON port that records each call; used to prove the main-model fallback ran. */
+  function recordingJsonPort(): StoryRelevanceAiPort & { calls: { sorting?: true }[] } {
+    const calls: { sorting?: true }[] = [];
+    return {
+      calls,
+      async generateJson(_db, input) {
+        calls.push(input);
+        return { ok: true, object: { verdicts: [] } };
+      }
+    };
+  }
+
+  /** A sorting port that answers every asked question through `decide` and records its batches. */
+  function answeringSortingPort(
+    decide: (questionId: string) => { choice: string; confidence: number }
+  ): StoryRelevanceAiPort & { batches: StoryRelevanceSortingBatch[][]; calls: number } {
+    const batches: StoryRelevanceSortingBatch[][] = [];
+    const port: StoryRelevanceAiPort & { batches: StoryRelevanceSortingBatch[][]; calls: number } =
+      {
+        calls: 0,
+        batches,
+        async generateJson() {
+          return { ok: false, error: "provider_error" };
+        },
+        async askSortingQuestions(_db, input) {
+          port.calls += 1;
+          batches.push([...input.batches]);
+          const answers: Record<string, { choice: string; confidence: number }> = {};
+          for (const batch of input.batches) {
+            for (const id of Object.keys(batch.questions)) answers[id] = decide(id);
+          }
+          return { ok: true as const, answers, usage: { inputTokens: 1, outputTokens: 1 } };
+        }
+      };
+    return port;
+  }
+
+  it("matches a story when the answer is yes at or above the confidence floor", async () => {
+    const port = answeringSortingPort((id) =>
+      id.startsWith("s0")
+        ? { choice: "yes", confidence: STORY_RELEVANCE_SORTING_CONFIDENCE_FLOOR }
+        : { choice: "no", confidence: 1 }
+    );
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE] }
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected an applied result");
+    expect(result.verdicts).toEqual([
+      {
+        storyRef: "story:a",
+        matched: true,
+        ruleStoryRef: RULE.rule.storyRef,
+        eventEvidence: [],
+        editorialEvidence: []
+      },
+      {
+        storyRef: "story:b",
+        matched: false,
+        ruleStoryRef: null,
+        eventEvidence: [],
+        editorialEvidence: []
+      }
+    ]);
+  });
+
+  it("does not match a yes below the confidence floor, nor a no at full confidence", async () => {
+    const port = answeringSortingPort((id) =>
+      id.startsWith("s0")
+        ? { choice: "yes", confidence: STORY_RELEVANCE_SORTING_CONFIDENCE_FLOOR - 0.01 }
+        : { choice: "no", confidence: 1 }
+    );
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE] }
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected an applied result");
+    expect(result.verdicts.every((verdict) => verdict.matched === false)).toBe(true);
+  });
+
+  it("keeps only the listed story fields and the rule reason in the question data", async () => {
+    const port = answeringSortingPort(() => ({ choice: "no", confidence: 0.5 }));
+    await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [activeRule("Stop the transfer gossip")] }
+    );
+    const batch = port.batches.flat()[0]!;
+    const untrusted = batch.state["untrustedData"] as {
+      stories: Record<string, Record<string, unknown>>;
+      rules: Record<string, { terms: readonly string[]; reason: string }>;
+    };
+    const story = untrusted.stories["s0"]!;
+    expect(Object.keys(story).sort()).toEqual([
+      "competition",
+      "headline",
+      "sourceLabel",
+      "team",
+      "topic"
+    ]);
+    expect(untrusted.rules["r0"]!.reason).toBe("Stop the transfer gossip");
+    expect(untrusted.rules["r0"]!.terms).toEqual(RULE.rule.terms);
+  });
+
+  it("falls back to the main-model prompt once when the sorting run fails", async () => {
+    const json = recordingJsonPort();
+    const port: StoryRelevanceAiPort = {
+      generateJson: json.generateJson,
+      async askSortingQuestions() {
+        return { ok: false, error: "provider_error" };
+      }
+    };
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE] }
+    );
+    expect(result).toEqual({ ok: true, verdicts: [] });
+    expect(json.calls).toHaveLength(1);
+    // The fallback is the main-model prompt: it must not offer the evidence prompt to the sorting
+    // model again.
+    expect(json.calls[0]?.sorting).toBeUndefined();
+  });
+
+  it("falls back when the sorting answer is missing a question", async () => {
+    const json = recordingJsonPort();
+    const port: StoryRelevanceAiPort = {
+      generateJson: json.generateJson,
+      async askSortingQuestions() {
+        return { ok: true, answers: {}, usage: { inputTokens: 1, outputTokens: 1 } };
+      }
+    };
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE] }
+    );
+    expect(result.ok).toBe(true);
+    expect(json.calls).toHaveLength(1);
+  });
+
+  it("runs today's main-model prompt with no sorting when no sorting model is set", async () => {
+    const json = recordingJsonPort();
+    const port: StoryRelevanceAiPort = {
+      generateJson: json.generateJson,
+      async askSortingQuestions() {
+        return { ok: false, error: "not_supported" };
+      }
+    };
+    await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE] }
+    );
+    expect(json.calls).toHaveLength(1);
+    expect(json.calls[0]?.sorting).toBeUndefined();
+  });
+
+  it("stops before any request when the run is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const port = answeringSortingPort(() => ({ choice: "yes", confidence: 1 }));
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE], signal: controller.signal }
+    );
+    expect(result).toEqual({ ok: false, error: "aborted" });
+    expect(port.calls).toBe(0);
+  });
+
+  it("returns aborted when the caller aborts during the sorting run", async () => {
+    const controller = new AbortController();
+    const port: StoryRelevanceAiPort = {
+      async generateJson() {
+        return { ok: false, error: "provider_error" };
+      },
+      async askSortingQuestions() {
+        controller.abort();
+        return { ok: false, error: "aborted" };
+      }
+    };
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: port },
+      { candidates: twoStories(), rules: [RULE], signal: controller.signal }
+    );
+    expect(result).toEqual({ ok: false, error: "aborted" });
+  });
+
+  it("prefers the higher confidence, and the owner's own less-like-this on a tie", async () => {
+    const moreRule: ActiveStoryRuleRow = {
+      ...activeRule(),
+      id: "rule-more",
+      direction: "more",
+      rule: { ...activeRule().rule, storyRef: "rule:more" }
+    };
+    const lessRule: ActiveStoryRuleRow = {
+      ...activeRule(),
+      id: "rule-less",
+      direction: "less",
+      rule: { ...activeRule().rule, storyRef: "rule:less" }
+    };
+
+    const higher = answeringSortingPort((id) =>
+      id === "s0-r0" ? { choice: "yes", confidence: 0.9 } : { choice: "yes", confidence: 0.8 }
+    );
+    const first = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: higher },
+      { candidates: twoStories(), rules: [moreRule, lessRule] }
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error("expected an applied result");
+    expect(first.verdicts[0]?.ruleStoryRef).toBe("rule:more");
+
+    const tie = answeringSortingPort(() => ({ choice: "yes", confidence: 0.9 }));
+    const second = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: tie },
+      { candidates: twoStories(), rules: [moreRule, lessRule] }
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) throw new Error("expected an applied result");
+    expect(second.verdicts[0]?.ruleStoryRef).toBe("rule:less");
+  });
+
+  it("packs many questions into batches that stay under the request byte cap", async () => {
+    const candidates = Array.from({ length: 40 }, (_, index) => ({
+      ...newsCandidate(STORY_RELEVANCE_FIXTURE[0]!),
+      storyRef: `story:${index}`,
+      headline: `headline ${index} `.repeat(10)
+    }));
+    const rules = Array.from({ length: 6 }, (_, index) => {
+      const base = activeRule(`reason ${index} `.repeat(40));
+      return {
+        ...base,
+        id: `rule-${index}`,
+        rule: {
+          ...base.rule,
+          storyRef: `rule:${index}`,
+          terms: Array.from({ length: 8 }, (_term, term) => `term-${index}-${term}`)
+        }
+      };
+    });
+    const port = answeringSortingPort(() => ({ choice: "no", confidence: 0.5 }));
+    await evaluateStoryRelevance(SCOPED_DB, { ai: port }, { candidates, rules });
+    const batches = port.batches.flat();
+    expect(batches.length).toBeGreaterThan(1);
+    for (const batch of batches) {
+      const bytes = Buffer.byteLength(
+        JSON.stringify({ state: batch.state, questions: batch.questions }),
+        "utf8"
+      );
+      expect(bytes).toBeLessThanOrEqual(12_000);
+    }
   });
 });
