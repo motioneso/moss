@@ -145,7 +145,10 @@ export function SportsTodayWidget(): ReactNode {
       : leagueCards.length > 0
         ? "Your leagues"
         : "Your teams";
-  const followingLine = followingSummary(data?.followed.length ?? 0, leagueCards.length);
+  const followingLine = followingSummary(
+    data?.followedTeams.length ?? 0,
+    data?.followedLeagues.length ?? 0
+  );
 
   return (
     <section className="jds-brief jds-brief--sports" aria-label="Sports desk">

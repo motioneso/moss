@@ -85,6 +85,15 @@ describe("SportsTicker", () => {
     expect(html).not.toContain("sp-feat__comp");
   });
 
+  it("puts the Live label beside a long name and the five form pips in the same head", () => {
+    const html = renderTickerTeam(
+      card({ name: "Wolverhampton Wanderers", form: ["W", "W", "D", "L", "W"] })
+    );
+    const head = /<header class="sp-tk__head">([\s\S]*?)<\/header>/.exec(html)?.[1] ?? "";
+    expect(head).toMatch(/sp-tk__name">Wolverhampton Wanderers<\/span><span class="sp-tk__live">/);
+    expect(head.match(/sp-formpip sp-formpip--/g)).toHaveLength(5);
+  });
+
   it("shows the No-recent-news placeholder on a storyless live card (#963)", () => {
     const html = render([card({ stories: [] })]);
     expect(html).toContain("No recent news");
@@ -347,6 +356,15 @@ describe("TickerTeam", () => {
     expect(html).not.toContain("sp-tk__score");
     // live strip carries the score, not the fixture, even with nextMatch set
     expect(html).not.toContain("Green Bay Packers");
+  });
+
+  it("puts the Live label beside a long name and the five form pips in the same head", () => {
+    const html = renderTickerTeam(
+      card({ name: "Wolverhampton Wanderers", form: ["W", "W", "D", "L", "W"] })
+    );
+    const head = /<header class="sp-tk__head">([\s\S]*?)<\/header>/.exec(html)?.[1] ?? "";
+    expect(head).toMatch(/sp-tk__name">Wolverhampton Wanderers<\/span><span class="sp-tk__live">/);
+    expect(head.match(/sp-formpip sp-formpip--/g)).toHaveLength(5);
   });
 
   it("shows the No-recent-news placeholder on a storyless live card (#963)", () => {

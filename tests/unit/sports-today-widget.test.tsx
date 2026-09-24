@@ -515,7 +515,32 @@ describe("Sports Today desk behaviour", () => {
     expect(links).toHaveLength(2);
     expect(new Set(links)).toEqual(new Set([sharedStory.title]));
     expect(html).not.toContain("undefined");
-    expect(html).toContain("Following 1 team and 1 league");
+  });
+
+  it("counts followed leagues, not just the leagues with a card today", () => {
+    const data = overview({
+      followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }],
+      followedLeagues: [
+        { competitionKey: "eng.1", competitionLabel: "Premier League" },
+        { competitionKey: "esp.1", competitionLabel: "LaLiga" },
+        { competitionKey: "nba", competitionLabel: "NBA" }
+      ],
+      followedLeagueCards: [
+        {
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          kind: "league",
+          status: "news",
+          logoUrl: null,
+          stories: [story(1)],
+          results: []
+        }
+      ] as unknown as SportsOverviewResponse["followedLeagueCards"]
+    });
+    const html = render(seed(data));
+
+    expect(html.match(/class="sp-tk sp-tk--league"/g)).toHaveLength(1);
+    expect(html).toContain("Following 1 team and 3 leagues");
   });
 
   it("uses the shared overview query", () => {

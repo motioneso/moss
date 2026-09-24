@@ -25,10 +25,15 @@
   border-top: 1px solid var(--accent);
 }
 
-/* Three fixed columns so a column keeps its width however many items follow. The selector
-   beats the Today grid's card-track rule in kit-today-desks.css, which carries an id. */
+/* The row sizes its columns from its own width: three columns from 900px, two from 560px,
+   and stacked briefs below that. Each column stays at least ~256px wide, enough for a long
+   team name, the Live label and five form pips. The selector beats the Today grid's
+   card-track rule in kit-today-desks.css, which carries an id. */
+.jds-brief--sports .desk-cards {
+  container: sp-clippings / inline-size;
+}
 #sports .jds-brief--sports .desk-cards .sp-tkgrid.sp-tkgrid.sp-tkgrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* Columns carry no side padding, so every column's content box is the same width. The
@@ -42,18 +47,33 @@
   background: none;
   overflow: visible;
 }
+.jds-brief--sports .sp-tkgrid > .sp-tk::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24px;
+  border-left: 1px solid var(--border);
+}
+.jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(2n + 1)::before {
+  content: none;
+}
+.jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(n + 3) {
+  border-top: 1px solid var(--border);
+}
 
-@media (min-width: 601px) {
-  .jds-brief--sports .sp-tkgrid > .sp-tk:not(:nth-child(3n + 1))::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -24px;
-    border-left: 1px solid var(--border);
+@container sp-clippings (width >= 900px) {
+  #sports .jds-brief--sports .desk-cards .sp-tkgrid.sp-tkgrid.sp-tkgrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(n + 4) {
-    border-top: 1px solid var(--border);
+  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(2n + 1)::before {
+    content: "";
+  }
+  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(3n + 1)::before {
+    content: none;
+  }
+  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(3) {
+    border-top: 0;
   }
 }
 
@@ -76,6 +96,19 @@
 .jds-brief--sports .sp-tkgrid .sp-tk__ident {
   gap: 3px;
   padding-top: 2px;
+}
+/* The name column keeps at least 12rem. When the column is too narrow for that and the
+   form pips, the pips wrap to their own line; the Live label wraps under a long name. */
+.jds-brief--sports .sp-tkgrid .sp-tk__head {
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+.jds-brief--sports .sp-tkgrid .sp-tk__ident {
+  flex: 1 1 12rem;
+}
+.jds-brief--sports .sp-tkgrid .sp-tk__hd {
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 .jds-brief--sports .sp-tkgrid .sp-tk__name {
   font-size: 16px;
@@ -206,16 +239,19 @@
   justify-content: flex-start;
 }
 
-/* Phones: stacked briefs, small photo floated beside the headline */
+/* Narrow rows: stacked briefs, small photo floated beside the headline */
 
-@media (max-width: 600px) {
+@container sp-clippings (width < 560px) {
   #sports .jds-brief--sports .desk-cards .sp-tkgrid.sp-tkgrid.sp-tkgrid {
     display: block;
   }
-  .jds-brief--sports .sp-tkgrid .sp-tk {
+  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(n) {
     padding: 22px 0;
     border: 0;
     border-bottom: 1px solid var(--border);
+  }
+  .jds-brief--sports .sp-tkgrid > .sp-tk::before {
+    content: none;
   }
   .jds-brief--sports .sp-tkgrid .sp-tk__head {
     margin-bottom: var(--space-4);
