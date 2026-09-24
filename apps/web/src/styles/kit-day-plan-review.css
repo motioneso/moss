@@ -314,6 +314,26 @@
     grid-row: 1;
   }
 
+  /* Phone footer matches the mockup measures: 19px left inset, underlined
+     Back link, 96px Save, heavy top rule. */
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer {
+    padding-left: 18px;
+    padding-right: 20px;
+    border-top: 2px solid var(--forest);
+  }
+
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-back .jds-btn {
+    padding-left: 0;
+    padding-right: 0;
+    text-decoration: underline;
+  }
+
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-actions .jds-btn {
+    margin-right: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
   /* Narrow rows stack: the title takes the full row and the two fields
      share the row below it, so titles never squeeze to a letter a line. */
   [data-briefing-surface="review"] .plan-review__row {
