@@ -10,6 +10,7 @@ import {
 import type { UsefulnessFeedbackRepository } from "../repository.js";
 
 import { evaluateStoryRelevance, type StoryRelevanceAiPort } from "./evaluator.js";
+import type { StoryRelevanceAnswerCachePort } from "./answer-cache.js";
 
 /**
  * The one thing News and Sports call. It reads the owner's saved preferences, asks the evaluator
@@ -39,6 +40,8 @@ export type StoryRelevancePolicy = (
 export function createStoryRelevancePolicy(deps: {
   readonly ai: StoryRelevanceAiPort;
   readonly repository: Pick<UsefulnessFeedbackRepository, "listActiveStoryRules">;
+  /** #2636: remembers sorting answers. Left out, every question is asked as before. */
+  readonly answerCache?: StoryRelevanceAnswerCachePort;
   readonly logger: StoryRelevanceLogger;
 }): StoryRelevancePolicy {
   return async (scopedDb, input) => {
@@ -64,10 +67,15 @@ export function createStoryRelevancePolicy(deps: {
     const rules = ruleRows.map((row) => row.rule);
     const evaluated = await evaluateStoryRelevance(
       scopedDb,
-      { ai: deps.ai },
+      {
+        ai: deps.ai,
+        ...(deps.answerCache ? { answerCache: deps.answerCache } : {})
+      },
       {
         candidates: input.candidates,
         rules: ruleRows,
+        ownerUserId: input.ownerUserId,
+        now: input.now,
         ...(input.signal ? { signal: input.signal } : {})
       }
     );
@@ -102,6 +110,10 @@ export function createStoryRelevancePolicy(deps: {
       overridden: decided.overriddenCount,
       boosted: decided.boosts.length,
       kept: decided.kept.length,
+      // #2636: counts only. Never a headline, a term, a reason or a story reference.
+      ...(evaluated.cache
+        ? { remembered: evaluated.cache.remembered, asked: evaluated.cache.asked }
+        : {}),
       durationMs: Date.now() - startedAt
     });
     return decided;

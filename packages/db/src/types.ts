@@ -845,6 +845,23 @@ export interface UsefulnessFeedbackTargetsTable {
   last_seen_at: TimestampColumn;
 }
 
+/**
+ * #2636: remembers one sorting model answer per owner, story, rule and model binding. Holds only
+ * the verdict and the confidence; never a prompt, story text or reason.
+ */
+export interface StoryRelevanceAnswerCacheTable {
+  owner_user_id: string;
+  story_ref: string;
+  rule_id: string;
+  rule_text_hash: string;
+  model_fingerprint: string;
+  answer: "yes" | "no";
+  confidence: number;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+  expires_at: TimestampColumn;
+}
+
 export interface MemoryChunksTable {
   id: string;
   owner_user_id: string;
@@ -1652,6 +1669,7 @@ export interface MossDatabase {
   "app.briefing_runs": BriefingRunsTable;
   "app.usefulness_feedback_signals": UsefulnessFeedbackSignalsTable;
   "app.usefulness_feedback_targets": UsefulnessFeedbackTargetsTable;
+  "app.story_relevance_answer_cache": StoryRelevanceAnswerCacheTable;
   "app.memory_chunks": MemoryChunksTable;
   "app.memory_links": MemoryLinksTable;
   "app.memory_file_index": MemoryFileIndexTable;

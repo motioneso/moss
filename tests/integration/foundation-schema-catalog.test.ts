@@ -470,6 +470,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0242",
           name: "0242_sports_follows_worker_select.sql"
+        },
+        // #2636 — remembered sorting-model relevance answers (owner-only, seven-day TTL).
+        {
+          version: "0243",
+          name: "0243_story_relevance_answer_cache.sql"
         }
       ]);
     } finally {

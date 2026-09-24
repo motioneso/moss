@@ -177,6 +177,9 @@ Model for each job
    - The disclosure line is extended for each new data type.
 4. **Modules and Needle.** The SDK flag, host request validator, and both bridges, JSON-only.
    Needle support once its serve API is confirmed.
+5. **Remember sorting answers** (#2636). The story matcher stops asking about a (story, rule) pair
+   it has already judged. The answer is remembered per owner, story, rule and sorting model, and it
+   is re-asked when the rule or the model changes, or after seven days. Section 10 records it.
 
 ## 8. Decisions (recommended defaults, changeable)
 
@@ -196,4 +199,65 @@ Model for each job
   gets its own issue.
 - A per-user sorting model. The setting is admin-level, like every binding.
 - Replacing any hand-written rule.
-- Batching or caching answers.
+
+## 10. Slice 3: remember sorting answers (#2636)
+
+Status: built 2026-09-24. The story matcher asks a yes/no question for each (story, saved rule) on
+every load. This slice remembers each answer so the next load does not ask again.
+
+### What is remembered
+
+One row per owner, story, rule and sorting model binding:
+
+- The owner, from the caller's scoped database. The table is owner-only under row level security
+  and no role bypasses it.
+- The story identity, the same opaque reference the matcher already uses. It is a hash of the
+  module and the canonical link, never the link itself.
+- The rule id, plus a hash of the rule's terms and its reason text. Editing the rule changes the
+  hash, so the old answer is not used.
+- The sorting model binding, as a hash of the provider kind, the provider config, the
+  configured-model row id and the upstream model id. Switching the model, or re-pointing a saved
+  entry at another model in place, changes the fingerprint, so the old answer is not used.
+
+The row stores only the verdict (`yes` or `no`) and the confidence. No prompt, no story text and no
+reason is stored. The reason's own column stays the only place it lives.
+
+### When it is used
+
+The matcher reads remembered answers for the pairs it is about to judge.
+
+- A remembered answer that is still fresh is used as-is, and no question is asked about it.
+- A missing or expired answer is asked as today, and the fresh answer is remembered.
+- If every answer is remembered, no request is made at all.
+- The confidence floor is applied when the verdict is decided, not when the answer is stored, so
+  changing the floor does not need a cache flush.
+
+A remembered answer is only used when the sorting model is bound, because the key needs the model
+binding. With no sorting model the matcher runs today's main-model path and nothing is remembered.
+
+### Expiry and invalidation
+
+- Answers expire seven days after they are written. An expired row is read as a miss and replaced.
+- Writing new answers also deletes the owner's lapsed rows in the same scoped transaction, so rows
+  for stories that have rotated out or for models that are no longer bound do not pile up. No
+  background sweep is added.
+- Editing a rule deletes its answers. Taking a rule back or replacing it with the opposite
+  direction also deletes them. The key hash would already make an edited rule's answers unusable;
+  the delete keeps the table small and honest.
+
+### Data boundary and logging
+
+- The table lives in the usefulness feedback module and is read and written only through that
+  module's repository. Other modules go through the existing port.
+- Logs carry counts only: how many answers were remembered and how many questions were asked. No
+  headline, term, reason or story reference is logged.
+
+### Tests
+
+- Unit: a hit makes no request; a miss asks and remembers; a mixed batch asks only the misses; an
+  edited rule's old answer is a miss; a changed model binding's old answer is a miss; a saved entry
+  re-pointed at another upstream model is a miss; an expired answer is a miss; two candidates that
+  share a story reference are remembered once.
+- Integration: one user cannot read another user's remembered answers, cannot write a row claiming
+  another user's id, and cannot delete another user's rule's answers; a write sweeps the owner's
+  lapsed rows; editing, replacing or taking back a rule drops its answers.
