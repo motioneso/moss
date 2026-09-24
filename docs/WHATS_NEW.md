@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Readable account name in the sidebar.** The account name in the sidebar is readable again, and the Settings entry in the account menu no longer spills out of its box. [PR #2656](https://github.com/motioneso/moss/pull/2656)
 - **Photos and team logos stay on Today.** Sports photos and team logos no longer disappear until a hard refresh, and more news stories on Today now show their photo. [PR #2654](https://github.com/motioneso/moss/pull/2654)
 - **No false warning after saving tomorrow's plan.** Saving tomorrow's plan in the evening no longer shows a warning that the plan changed. [PR #2650](https://github.com/motioneso/moss/pull/2650)
 
