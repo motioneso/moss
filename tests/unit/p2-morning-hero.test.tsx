@@ -118,8 +118,9 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
       markup.indexOf('class="today-hero__prepared"')
     );
     expect(markup.indexOf('class="today-hero__prepared"')).toBeLessThan(
-      markup.indexOf('class="today-hero__rule"')
+      markup.indexOf("</section>")
     );
+    expect(markup).not.toContain('class="today-hero__rule"');
     expect(labels.morningHeroKicker("Ben")).toMatch(
       /^(Good morning|Good afternoon|Good evening), Ben \/ Morning briefing$/
     );
@@ -210,27 +211,29 @@ describe("morning hero vertical rhythm (day mode only)", () => {
 
   it("wide: day-scoped padding, eyebrow gap and prepared gap match the study rhythm", async () => {
     const block = dayBlock(await heroCss());
-    expect(block).toContain('.today-hero[data-mode="day"] { padding-top: 37px; }');
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__eyebrow { margin-bottom: 24px; }'
+      '.today-hero[data-mode="day"] { margin: 7px 16px 0; padding: 29px 34px 30px;'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 16px; justify-content: space-between; }'
+      '.today-hero[data-mode="day"] .today-hero__eyebrow { margin: 0 0 23px;'
+    );
+    expect(block).toContain(
+      '.today-hero[data-mode="day"] .today-hero__prepared { gap: 18px; margin: 21px 0 0;'
     );
   });
 
   it("narrow: day-scoped rhythm keeps mobile tops on the study (summary 18px per study)", async () => {
     const block = dayBlock(await heroCss());
     expect(block).toContain("@media (max-width: 680px)");
-    expect(block).toContain('.today-hero[data-mode="day"] { padding-top: 25px; }');
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__eyebrow { margin-bottom: 19px; }'
+      '.today-hero[data-mode="day"] { margin: 7px 6px 0; padding: 23px 22px; }'
     );
+    expect(block).toContain("margin-bottom: 21px; font-size: 9px;");
     expect(block).toContain(
       '.today-hero[data-mode="day"] .today-hero__summary { margin-top: 18px; }'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 12px; }'
+      '.today-hero[data-mode="day"] .today-hero__prepared { flex-wrap: wrap; gap: 12px; margin-top: 20px; }'
     );
   });
 
@@ -332,7 +335,7 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     expect(markup).toContain("Briefing not ready yet");
   });
 
-  it("renders the section index outside the hero band below the gold rule", () => {
+  it("renders the section index outside the hero band, below its gold edge", () => {
     const markup = renderToStaticMarkup(
       <TodayHero
         mode="day"
@@ -346,12 +349,10 @@ describe("morning hero vertical rhythm (day mode only)", () => {
       />
     );
 
-    const ruleIndex = markup.indexOf('class="today-hero__rule"');
     const closingSectionIndex = markup.indexOf("</section>");
     const navIndex = markup.indexOf('id="section-nav"');
 
-    expect(ruleIndex).toBeGreaterThan(-1);
-    expect(closingSectionIndex).toBeGreaterThan(ruleIndex);
+    expect(closingSectionIndex).toBeGreaterThan(-1);
     expect(navIndex).toBeGreaterThan(closingSectionIndex);
   });
 });

@@ -49,19 +49,43 @@ export interface TodayRailProps {
   readonly disabledModuleIds: readonly string[];
 }
 
+type TodayDockProps = Pick<
+  TodayRailProps,
+  "wellnessEnabled" | "theme" | "timeZone" | "disabledModuleIds"
+>;
+
+/** Morning quick actions dock. It sits before the main column in the DOM, so
+    phones read dock, day plan, then the rail; desktop places it atop the rail. */
+export function TodayDock(props: TodayDockProps) {
+  return (
+    <section className="cmd-dock" aria-label="Quick actions">
+      <TodayQuickActions
+        enabled={props.wellnessEnabled}
+        theme={props.theme}
+        timeZone={props.timeZone}
+        disabledModuleIds={props.disabledModuleIds}
+      />
+    </section>
+  );
+}
+
 /** Today right rail: quick actions first, then the next meeting, then the
-    rest of the base blocks in their base order. Props only, no fetching. */
+    rest of the base blocks in their base order. In day mode the quick actions
+    live in TodayDock instead. Props only, no fetching. */
 export function TodayRail(props: TodayRailProps) {
   const { nextEvent } = props;
+  const day = props.mode === "day";
   return (
-    <aside className="cmd-aside" aria-label="Quick actions and widgets">
+    <aside className="cmd-aside" aria-label={day ? "Today widgets" : "Quick actions and widgets"}>
       <div className="cmd-aside__inner">
-        <TodayQuickActions
-          enabled={props.wellnessEnabled}
-          theme={props.theme}
-          timeZone={props.timeZone}
-          disabledModuleIds={props.disabledModuleIds}
-        />
+        {day ? null : (
+          <TodayQuickActions
+            enabled={props.wellnessEnabled}
+            theme={props.theme}
+            timeZone={props.timeZone}
+            disabledModuleIds={props.disabledModuleIds}
+          />
+        )}
 
         {nextEvent ? (
           <div className="cmd-next">
@@ -70,7 +94,7 @@ export function TodayRail(props: TodayRailProps) {
                 <div className="rail-block__head">First meeting</div>
                 <div className="cmd-next__v">
                   {timeLabel(nextEvent.startsAt, props.locale)}{" "}
-                  {ampm(nextEvent.startsAt, props.locale)}
+                  <small>{ampm(nextEvent.startsAt, props.locale)}</small>
                 </div>
                 <div className="cmd-next__what">{nextEvent.title}</div>
               </>

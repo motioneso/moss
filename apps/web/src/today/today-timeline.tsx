@@ -37,8 +37,10 @@ export function TimelineRow(props: {
       >
         <TimelineTime item={item} locale={props.locale} />
         <div className="tl-body">
-          <div className="day-ev__title">{item.title}</div>
-          {item.location ? <div className="day-ev__where">{item.location}</div> : null}
+          <div className="tl-block">
+            <div className="day-ev__title">{item.title}</div>
+            {item.location ? <div className="day-ev__where">{item.location}</div> : null}
+          </div>
         </div>
       </div>
     );
@@ -88,12 +90,12 @@ export function TimelineRow(props: {
   );
 }
 
-export function TimelineLegend() {
+export function TimelineLegend(props: { readonly proposed?: boolean }) {
   return (
     <div className="tl-legend">
       <span>
         <i className="tl-legend__filled" aria-hidden="true" />
-        Moss-planned task
+        {props.proposed === true ? "Proposed task" : "Moss-planned task"}
       </span>
       <span>
         <i className="tl-legend__open" aria-hidden="true" />

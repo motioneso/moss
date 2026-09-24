@@ -174,7 +174,7 @@
 }
 /* Flat on the page like the mockup: neutralize the shared tinted/bordered/rounded
    card (components-moss-today.css) and span the full rail column. */
-.cmd-aside .well {
+:is(.cmd-aside, .cmd-dock) .well {
   background: transparent;
   border: none;
   border-radius: 0;
@@ -182,7 +182,7 @@
   padding-right: 0;
   margin-left: -7px;
 }
-.cmd-aside .well__head {
+:is(.cmd-aside, .cmd-dock) .well__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -191,14 +191,14 @@
   border-bottom: 2px solid var(--forest);
   margin-bottom: 4px;
 }
-.cmd-aside .well__eyebrow {
+:is(.cmd-aside, .cmd-dock) .well__eyebrow {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--forest);
 }
-.cmd-aside .well__title {
+:is(.cmd-aside, .cmd-dock) .well__title {
   font-size: 11px;
   font-weight: 600;
   text-transform: none;
@@ -207,7 +207,7 @@
   position: relative;
   top: 3px;
 }
-.cmd-aside .well__row {
+:is(.cmd-aside, .cmd-dock) .well__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -215,37 +215,37 @@
   padding: 12px 0 16px;
   border-bottom: 1px solid var(--line);
 }
-.cmd-aside .well__row + .well__row {
+:is(.cmd-aside, .cmd-dock) .well__row + .well__row {
   padding-top: 17px;
   padding-bottom: 24px;
 }
-.cmd-aside .well__row:last-child {
+:is(.cmd-aside, .cmd-dock) .well__row:last-child {
   border-bottom: 1px solid var(--line);
 }
-.cmd-aside .well__rowtext {
+:is(.cmd-aside, .cmd-dock) .well__rowtext {
   min-width: 0;
 }
-.cmd-aside .well__label {
+:is(.cmd-aside, .cmd-dock) .well__label {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
-.cmd-aside .well__sub {
+:is(.cmd-aside, .cmd-dock) .well__sub {
   font-size: 10px;
   color: var(--text-muted);
   margin-top: 4px;
   line-height: 1.45;
 }
-.cmd-aside .well__btn {
+:is(.cmd-aside, .cmd-dock) .well__btn {
   flex: none;
 }
-.cmd-aside .well__count {
+:is(.cmd-aside, .cmd-dock) .well__count {
   font-size: 10px;
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 8px;
 }
-.cmd-aside .well__plus {
+:is(.cmd-aside, .cmd-dock) .well__plus {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -260,10 +260,10 @@
   cursor: pointer;
   transition: var(--transition-control);
 }
-.cmd-aside .well__plus:hover {
+:is(.cmd-aside, .cmd-dock) .well__plus:hover {
   color: var(--forest-hover);
 }
-.cmd-aside .well__btn--primary {
+:is(.cmd-aside, .cmd-dock) .well__btn--primary {
   background: var(--forest);
   border: 1px solid var(--forest);
   border-radius: 8px;
@@ -272,7 +272,322 @@
   line-height: 1.2;
   padding: 12px 6px;
 }
-.cmd-aside .well__btn--primary:hover {
+:is(.cmd-aside, .cmd-dock) .well__btn--primary:hover {
   background: var(--forest-hover);
   border-color: var(--forest-hover);
+}
+
+/* --- Today page timeline (study .slot rules) ---
+   Scoped to the morning Today main column so the reader and review dialogs
+   and the evening page keep the base editorial timeline above. The block box
+   sits inside the rail column: placed tasks on sage with a forest edge,
+   proposed ones dashed, calendar commitments bare. */
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-head {
+  align-items: center;
+  margin-bottom: 18px;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note {
+  flex-wrap: nowrap;
+  margin: 0 0 18px;
+  background: var(--sage-light);
+  color: var(--forest);
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note__text {
+  flex: 1;
+  margin: 0;
+  font-size: 11px;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note__text strong {
+  font-weight: 700;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note .jds-btn {
+  flex: none;
+  min-height: 40px;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 2px;
+  background: var(--forest);
+  color: var(--bone);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note .jds-btn:hover {
+  background: var(--forest-deep);
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-legend {
+  padding: 0 0 13px;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-list {
+  margin-top: 0;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot {
+  gap: 15px;
+  padding: 0;
+  border: none;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-time {
+  padding-top: 15px;
+  line-height: 1.5;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-time small {
+  margin-top: 0;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-body {
+  padding: 6px 0 6px 19px;
+  background: none;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-body::before {
+  top: 24px;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__main,
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-block {
+  padding: 12px 14px;
+  border-left: 2px solid transparent;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline button.jds-task__main:hover {
+  background: var(--sage);
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot--committed .jds-task__main {
+  background: var(--sage-light);
+  border-left-color: var(--forest);
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot--proposed .jds-task__main,
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot--pending .jds-task__main {
+  padding: 11px 13px;
+  border: 1px dashed var(--forest);
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__where {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__title {
+  line-height: 1.5;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__state {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  background: var(--bone);
+  color: var(--forest);
+  font-size: 9px;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline {
+  padding-top: 0;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-title {
+  font-weight: 900;
+}
+.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__title {
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+/* --- Morning rail: first meeting as a flat study support section --- */
+.cmd-grid[data-mode="day"] .cmd-next {
+  padding: 0 0 24px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+}
+.cmd-grid[data-mode="day"] .cmd-next .rail-block__head {
+  margin-bottom: 11px;
+  padding-bottom: 0;
+  border-bottom: none;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+}
+.cmd-grid[data-mode="day"] .cmd-next__v {
+  margin-top: 0;
+  font-family: var(--font-display);
+  font-size: 39px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  color: var(--forest);
+}
+.cmd-grid[data-mode="day"] .cmd-next__v small {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.cmd-grid[data-mode="day"] .cmd-next__what {
+  margin-top: 0;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+  white-space: normal;
+  color: var(--ink);
+}
+
+/* --- Morning rail: quick actions flush with the column, study .solid button --- */
+.cmd-grid[data-mode="day"] .cmd-aside__inner {
+  gap: 24px;
+}
+.cmd-dock .well {
+  margin: 0;
+  padding: 0;
+}
+.cmd-dock .well__head {
+  align-items: center;
+  margin-bottom: 0;
+  padding-bottom: 13px;
+}
+.cmd-dock .well__title {
+  top: 0;
+}
+.cmd-dock .well__row {
+  padding: 15px 0;
+}
+.cmd-dock .well__row + .well__row,
+.cmd-dock .well__row:last-child {
+  padding: 17px 0 0;
+  border-bottom: none;
+}
+.cmd-dock .well__btn--primary {
+  min-height: 40px;
+  padding: 9px 11px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.cmd-dock .well__btn--primary:hover {
+  background: var(--forest-deep);
+  border-color: var(--forest-deep);
+}
+
+/* --- Morning rail: glance, agenda and review as flat study support sections --- */
+.cmd-grid[data-mode="day"] .cmd-glance,
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card {
+  padding: 0 0 24px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.cmd-grid[data-mode="day"] .cmd-aside > .cmd-aside__inner > :last-child {
+  border-bottom: none;
+}
+.cmd-grid[data-mode="day"] .cmd-glance__title,
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card__title {
+  margin-bottom: 11px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--forest);
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card__head {
+  align-items: center;
+  margin-bottom: 0;
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card__head .jds-card__title {
+  margin-bottom: 0;
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card__meta {
+  font-size: 10px;
+  color: var(--muted);
+}
+.cmd-grid[data-mode="day"] .cmd-glance__grid {
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+.cmd-grid[data-mode="day"] .jds-stat-tile {
+  padding: 12px 0;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.cmd-grid[data-mode="day"] .jds-stat-tile:nth-child(odd) {
+  padding-right: 12px;
+}
+.cmd-grid[data-mode="day"] .jds-stat-tile:nth-child(even) {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.cmd-grid[data-mode="day"] .jds-stat-tile__label {
+  font-size: 10px;
+  color: var(--muted);
+}
+.cmd-grid[data-mode="day"] .jds-stat-tile__value {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--forest);
+}
+.cmd-grid[data-mode="day"] .jds-stat-tile--warn .jds-stat-tile__value {
+  color: var(--gold);
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-agenda-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card__head + * {
+  margin-top: 13px;
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-agenda-row__time {
+  font-size: 10px;
+  color: var(--muted);
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-agenda-row__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.cmd-grid[data-mode="day"] .cmd-aside .jds-card .cmd-empty {
+  margin-top: 11px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 12px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note__text {
+    flex-basis: 100%;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-legend {
+    gap: 14px;
+    font-size: 9px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot {
+    grid-template-columns: 51px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-time {
+    font-size: 11px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-body {
+    padding-left: 12px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__main,
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-block {
+    padding: 12px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__title,
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__title {
+    font-size: 13px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__where {
+    font-size: 9px;
+  }
+  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__state {
+    font-size: 8px;
+  }
 }

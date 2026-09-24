@@ -42,7 +42,7 @@ import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
-import { TodayRail } from "./today-rail";
+import { TodayDock, TodayRail } from "./today-rail";
 import { DayPlanReview } from "./day-plan-review";
 import { useDayPlanReview, type DayPlanReviewController } from "./day-plan-review-controller";
 import { useEveningPlanning } from "./evening-planning-controller";
@@ -57,6 +57,7 @@ import {
   buildLede,
   byStart,
   datelineLabel,
+  shortDatelineLabel,
   driftOf,
   dueTs,
   eveningHeroKicker,
@@ -375,6 +376,55 @@ export function TodayPage(props: {
       ))}
     </nav>
   );
+  const railSection = (
+    <TodayRail
+      mode={todayMode}
+      now={now}
+      locale={locale}
+      nextEvent={
+        nextEvent
+          ? { title: nextEvent.title, startsAt: nextEvent.startsAt, endsAt: nextEvent.endsAt }
+          : null
+      }
+      nextStarted={nextStarted}
+      hasStatSignal={hasStatSignal}
+      prioritiesCount={priorities.length}
+      atRiskCount={atRisk.length}
+      eventsCount={todayEvents.length}
+      doneToday={doneToday}
+      agenda={upcoming.map((event) => ({
+        id: event.id,
+        time: timeLabel(event.startsAt, locale),
+        title: event.title,
+        location: event.location
+      }))}
+      onNavigate={(path) => navigate(path)}
+      showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
+      showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}
+      latestEveningRun={latestEveningRun}
+      eveningRunsPending={eveningRunsQuery.isPending}
+      eveningTargetTime={eveningTargetTime}
+      onEveningFeedback={() => {
+        if (eveningDefinition) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.briefings.runs(eveningDefinition.id)
+          });
+        }
+      }}
+      interviewPending={eveningInterviewMutation.isPending}
+      onPrep={() => {
+        // #891: open the drawer immediately rather than waiting for the
+        // seed POST to resolve; the seeded turn streams in via SSE.
+        chatControls.openChat();
+        eveningInterviewMutation.mutate();
+      }}
+      onPlan={setPlanningAnchor}
+      wellnessEnabled={wellnessEnabled}
+      theme={theme}
+      timeZone={locale.timezone}
+      disabledModuleIds={disabledModuleIds}
+    />
+  );
   const startHereSection = (
     <section className="jds-brief" id="start-here">
       <div className="jds-brief__head">
@@ -447,53 +497,16 @@ export function TodayPage(props: {
         {todayMode === "evening" ? sectionLinks : null}
 
         <div className="cmd-grid" data-mode={todayMode}>
-          <TodayRail
-            mode={todayMode}
-            now={now}
-            locale={locale}
-            nextEvent={
-              nextEvent
-                ? { title: nextEvent.title, startsAt: nextEvent.startsAt, endsAt: nextEvent.endsAt }
-                : null
-            }
-            nextStarted={nextStarted}
-            hasStatSignal={hasStatSignal}
-            prioritiesCount={priorities.length}
-            atRiskCount={atRisk.length}
-            eventsCount={todayEvents.length}
-            doneToday={doneToday}
-            agenda={upcoming.map((event) => ({
-              id: event.id,
-              time: timeLabel(event.startsAt, locale),
-              title: event.title,
-              location: event.location
-            }))}
-            onNavigate={(path) => navigate(path)}
-            showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
-            showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}
-            latestEveningRun={latestEveningRun}
-            eveningRunsPending={eveningRunsQuery.isPending}
-            eveningTargetTime={eveningTargetTime}
-            onEveningFeedback={() => {
-              if (eveningDefinition) {
-                void queryClient.invalidateQueries({
-                  queryKey: queryKeys.briefings.runs(eveningDefinition.id)
-                });
-              }
-            }}
-            interviewPending={eveningInterviewMutation.isPending}
-            onPrep={() => {
-              // #891: open the drawer immediately rather than waiting for the
-              // seed POST to resolve; the seeded turn streams in via SSE.
-              chatControls.openChat();
-              eveningInterviewMutation.mutate();
-            }}
-            onPlan={setPlanningAnchor}
-            wellnessEnabled={wellnessEnabled}
-            theme={theme}
-            timeZone={locale.timezone}
-            disabledModuleIds={disabledModuleIds}
-          />
+          {todayMode === "day" ? (
+            <TodayDock
+              wellnessEnabled={wellnessEnabled}
+              theme={theme}
+              timeZone={locale.timezone}
+              disabledModuleIds={disabledModuleIds}
+            />
+          ) : (
+            railSection
+          )}
 
           <div className="cmd-main">
             {todayMode === "evening" && eveningDefinition?.enabled ? (
@@ -551,7 +564,10 @@ export function TodayPage(props: {
               error={dayPlanQuery.isError}
               calendarError={eventsQuery.isError}
               editorial
-              dateline={datelineLabel(now, locale)}
+              todayLayout={todayMode === "day"}
+              dateline={
+                todayMode === "day" ? shortDatelineLabel(now, locale) : datelineLabel(now, locale)
+              }
               onOpenTask={(id) => setDialog({ id })}
               onReview={(anchor) => {
                 reviewOpener.current = anchor;
@@ -631,6 +647,7 @@ export function TodayPage(props: {
           </div>
           {todayMode === "day" ? (
             <>
+              {railSection}
               <div id="widgets">
                 <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
               </div>

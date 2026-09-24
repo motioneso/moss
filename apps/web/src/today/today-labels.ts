@@ -60,6 +60,11 @@ export function datelineLabel(now: Date, locale: LocaleSettingsDto): string {
   return `${weekday} · ${date} · No.${edition}`;
 }
 
+/** Morning schedule dateline: "Wednesday, September 9". */
+export function shortDatelineLabel(now: Date, locale: LocaleSettingsDto): string {
+  return formatDate(now.toISOString(), locale, { weekday: "long", month: "long", day: "numeric" });
+}
+
 export function countdownLabel(iso: string, now: Date): string {
   const mins = Math.max(0, Math.round((Date.parse(iso) - now.getTime()) / 60_000));
   const h = Math.floor(mins / 60);

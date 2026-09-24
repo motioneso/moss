@@ -84,6 +84,25 @@ export function TodayWeatherRow(props: {
     })
   ];
 
+  // Morning hero: the study weather row, current conditions and today's range.
+  if (props.mode === "day") {
+    return (
+      <>
+        <div className="wx-now">
+          <NowIcon aria-hidden="true" />
+          <strong>
+            {`${wx.temp}°`}
+            <small>{unitSymbol}</small>
+          </strong>
+        </div>
+        <div className="wx-outlook">
+          <strong>{wx.condition}</strong>
+          {first !== null ? <span>{`High ${first.high}° · Low ${first.low}°`}</span> : null}
+        </div>
+      </>
+    );
+  }
+
   const href = `https://www.wunderground.com/weather/${wx.lat},${wx.lon}`;
   const city = wx.location.split(",")[0]?.trim() ?? wx.location;
 

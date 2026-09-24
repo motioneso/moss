@@ -103,7 +103,7 @@ describe("Today sports section row pin", () => {
 
   it("pins the sports section after News on desktop only", () => {
     const desktop = ruleBodiesInMedia(desks, MEDIA);
-    expect(desktop.some((b) => /grid-row:\s*4/.test(b))).toBe(true);
+    expect(desktop.some((b) => /grid-row:\s*5/.test(b))).toBe(true);
     const top = stripMedia(desks);
     const plain = [...top.matchAll(/\.cmd-grid\[data-mode="day"\]\s*>\s*#sports\s*\{([^}]*)\}/g)];
     expect(plain.length).toBeGreaterThan(0);

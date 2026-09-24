@@ -178,7 +178,8 @@ export function EveningHeroLinks() {
 }
 
 /** Today-only hero band: eyebrow, display headline, assessment summary,
-    prepared-at line with the reader control, rule, then the weather row. */
+    then weather and the reader links in day mode; links, rule and weather
+    in evening mode. */
 export function TodayHero(props: TodayHeroProps) {
   const isNotReadyString = props.preparedAt === BRIEFING_NOT_READY_LABEL;
   const preparedTime = isNotReadyString ? null : props.preparedAt;
@@ -217,7 +218,6 @@ export function TodayHero(props: TodayHeroProps) {
                 <span className="today-hero__prepared-time">{preparedTime}</span>
               ) : null}
             </div>
-            <hr className="today-hero__rule" />
           </>
         ) : (
           <>
