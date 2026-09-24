@@ -645,6 +645,11 @@
         font-size: 13px;
         font-weight: 500;
       }
+      .card__btn--quiet {
+        background: transparent;
+        color: var(--tm-forest);
+        border: 1px solid rgba(23, 62, 43, 0.45);
+      }
       .card__div {
         height: 1px;
         background: rgba(0, 0, 0, 0.1);
@@ -782,7 +787,7 @@
                     <div class="card__focus">Watching · Study AI, ends 11:00 AM</div>
                   </div>
                 </div>
-                <div class="card__btn">Pause All</div>
+                <div class="card__btn card__btn--quiet">⏸ Pause All</div>
                 <div class="card__div"></div>
                 <div class="card__row card__row--toggle">
                   <span>Focus</span
@@ -831,7 +836,7 @@
                     <div class="card__focus">Focus paused</div>
                   </div>
                 </div>
-                <div class="card__btn">Pause All</div>
+                <div class="card__btn card__btn--quiet">⏸ Pause All</div>
                 <div class="card__div"></div>
                 <div class="card__row card__row--toggle">
                   <span>Focus</span><span class="mswitch" role="switch" aria-checked="false"></span>
@@ -884,7 +889,7 @@
                     <div class="card__expl">Paused. Nothing is being sent to Moss.</div>
                   </div>
                 </div>
-                <div class="card__btn">Resume All</div>
+                <div class="card__btn">▶ Resume All</div>
                 <div class="card__div"></div>
                 <div class="card__row card__row--toggle is-disabled">
                   <span>Focus</span

@@ -296,7 +296,7 @@ Order items consistently:
 
 1. Status summary.
 2. Connected instance and account.
-3. State-specific primary action: Pause All, Resume All, Retry, or Sign In.
+3. State-specific primary action: Pause All, Resume All, Retry, or Sign In. While running, **Pause All** is a quieter outlined button with a pause icon; while paused, **Resume All** is the prominent forest button with a play icon, so the paused state reads at a glance (Ben, 2026-09-23).
 4. One switch row per feature that is turned on in Settings (Focus; Backtrack when it ships). Each
    switch pauses or resumes only its feature; the connection stays up.
 5. Open Moss.

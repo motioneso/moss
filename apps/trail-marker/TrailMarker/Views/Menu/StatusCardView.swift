@@ -27,13 +27,7 @@ struct StatusCardView: View {
             header
 
             if let primary = items.first(where: { $0.role == .primaryAction }) {
-                Button {
-                    run(.primaryAction)
-                } label: {
-                    Text(primary.title).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                primaryButton(primary.title)
             }
 
             Divider()
@@ -109,6 +103,34 @@ struct StatusCardView: View {
 
     private var rows: [MenuItemDescriptor] {
         items.filter { $0.kind == .text && ![.status, .focusStatus, .instanceInfo, .primaryAction].contains($0.role) }
+    }
+
+    /// Pause All and Resume All look different, not just read differently (Ben, 2026-09-23):
+    /// running, pausing is the quieter outlined choice; paused, Resume All is the loudest thing on
+    /// the card, so the paused state is obvious at a glance. Every other state (Retry, Sign In,
+    /// Set Up) keeps the prominent button.
+    @ViewBuilder
+    private func primaryButton(_ title: String) -> some View {
+        switch connection.state {
+        case .connected:
+            Button { run(.primaryAction) } label: {
+                Label(title, systemImage: "pause.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        case .disconnected:
+            Button { run(.primaryAction) } label: {
+                Label(title, systemImage: "play.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        default:
+            Button { run(.primaryAction) } label: {
+                Text(title).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
     }
 
     private func run(_ role: MenuItemDescriptor.Role) {
