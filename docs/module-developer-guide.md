@@ -150,7 +150,7 @@ missing `dataLifecycle` (for new modules), invalid `fetchHosts`, and `credential
   - an `ON DELETE CASCADE` foreign-key chain that terminates at `app.users` — an integration
     test (`tests/integration/module-data-lifecycle-cascade.test.ts`) verifies this for every
     table you declare in `dataLifecycle.deletion.tables`, so a missing cascade fails CI.
-- `tests/integration/foundation.test.ts` asserts the **full** migration list with `toEqual` —
+- `tests/integration/foundation-schema-catalog.test.ts` asserts the **full** migration list with `toEqual` —
   add your migration's row there and verify through the isolated verify-gate procedure.
 
 ## 5. Backend data access and routes
@@ -334,20 +334,8 @@ Declare `assistantTools` in the manifest with an honest `risk` (`read` / `write`
 access; results must never include secrets. Never name a provider or model — request
 capabilities and let the user's configured router decide.
 
-- Every `assistantTools[].name` and `assistantTools[].permissionId` must be prefixed with
-  `"<moduleId>."` (e.g. `"acme-widgets.lookup"`). This is enforced by
-  `validateExternalModuleManifest` as an anti-spoof check — an unprefixed name or permission id
-  fails the build.
-- Any declared external data source's `fetchHosts` must be a non-empty array of lowercase
-  hostnames, no ports, no IP literals (see §8). An empty or missing `fetchHosts` array fails the
-  build.
-- A tool's `executionPolicy: "auto"` requires `actionFamilyId` to name a declared
-  `assistantActionFamilies` entry whose `allowedTiers` includes `"trusted_auto"`; otherwise omit
-  `executionPolicy` or use `"confirm"` (read-only tools should not set `executionPolicy` at all).
-  Violating this fails with `requires an actionFamilyId` or `requires family ... to allow
-trusted_auto`.
-- Any `actionFamilyId` must match a family id declared in `assistantActionFamilies`, or the build
-  fails with `references undeclared action family`.
+Installable modules use a separate JSON validator for tool names, host permissions, and automatic
+action policy (§13.1).
 
 ## 12. Registration (composition root)
 
@@ -437,6 +425,11 @@ Do not copy built-in `availability`, `permissions`, `settings`, `routes`, `jobs`
 `externalSources`, or executable provider fields into this JSON. The full forbidden-field list
 and individual validation rules are in the validator; the public declaration types are in
 `packages/module-sdk/src/external-module.ts`.
+
+`validateExternalModuleManifest` requires assistant tool names and permission IDs to start with
+`"<moduleId>."`. An `auto` tool must name a declared action family that allows `trusted_auto`;
+an undeclared family or missing `actionFamilyId` fails validation. Declare only the hosts the
+worker actually fetches through `fetchHosts`; each hostname is validated before installation.
 
 ### 13.2 Worker access and authority
 
