@@ -146,7 +146,7 @@ export function SportsTodayWidget(): ReactNode {
         ? "Your leagues"
         : "Your teams";
   const followingLine = followingSummary(
-    data?.followedTeams.length ?? 0,
+    data?.followed.length ?? 0,
     data?.followedLeagues.length ?? 0
   );
 

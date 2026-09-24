@@ -467,6 +467,24 @@ describe("Sports Today editorial desk", () => {
   });
 });
 
+function teamCard(): SportsOverviewResponse["followed"][number] {
+  return {
+    teamKey: "ars",
+    competitionKey: "eng.1",
+    competitionLabel: "Premier League",
+    name: "Arsenal",
+    crestUrl: null,
+    status: "news",
+    primary: "Arsenal story",
+    stories: [story(1)],
+    form: [],
+    standing: null,
+    nextMatch: null,
+    lastMatchAt: null,
+    rationale: ""
+  } as unknown as SportsOverviewResponse["followed"][number];
+}
+
 describe("Sports Today desk behaviour", () => {
   it("keeps league-card story anchors free of undefined publisher text", () => {
     const sharedStory = {
@@ -519,7 +537,6 @@ describe("Sports Today desk behaviour", () => {
 
   it("counts followed leagues, not just the leagues with a card today", () => {
     const data = overview({
-      followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }],
       followedLeagues: [
         { competitionKey: "eng.1", competitionLabel: "Premier League" },
         { competitionKey: "esp.1", competitionLabel: "LaLiga" },
@@ -540,7 +557,25 @@ describe("Sports Today desk behaviour", () => {
     const html = render(seed(data));
 
     expect(html.match(/class="sp-tk sp-tk--league"/g)).toHaveLength(1);
-    expect(html).toContain("Following 1 team and 3 leagues");
+    expect(html).toContain("Following 3 leagues");
+  });
+
+  it("counts one club followed in two competitions as one team", () => {
+    const data = overview({
+      followed: [teamCard()],
+      followedTeams: [
+        { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: "359" },
+        { competitionKey: "uefa.champions", teamKey: "ars", sourceTeamId: "359" }
+      ]
+    });
+
+    expect(render(seed(data))).toContain("Following 1 team");
+  });
+
+  it("counts a shown team card even when its follow reference is missing", () => {
+    const data = overview({ followed: [teamCard()], followedTeams: [] });
+
+    expect(render(seed(data))).toContain("Following 1 team");
   });
 
   it("uses the shared overview query", () => {
