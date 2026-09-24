@@ -92,6 +92,10 @@ final class StatusCardUITests: XCTestCase {
         XCTAssertTrue(turnOn.waitForExistence(timeout: 5), "the consent sheet appears first")
         XCTAssertFalse(backtrackSwitch.exists, "still no row until consent")
         turnOn.click()
+        // Both harness windows open at the top-left, so Settings covers the card: close it before
+        // driving the card again.
+        let settingsWindow = app.windows["Settings"]
+        if settingsWindow.exists { settingsWindow.buttons[XCUIIdentifierCloseWindow].click() }
 
         XCTAssertTrue(backtrackSwitch.waitForExistence(timeout: 5), "the row appears once turned on")
         XCTAssertTrue(isOn(backtrackSwitch))

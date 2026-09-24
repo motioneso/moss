@@ -64,6 +64,7 @@ final class CardHarness {
         )
         let window = NSWindow(contentViewController: NSHostingController(rootView: card))
         window.title = "Trail Marker card (test harness)"
+        Self.placeOnScreen(window)
         window.makeKeyAndOrderFront(nil)
         windows.append(window)
         NSApp.setActivationPolicy(.regular)
@@ -81,11 +82,19 @@ final class CardHarness {
             )
             let window = NSWindow(contentViewController: NSHostingController(rootView: settings))
             window.title = "Settings"
+            Self.placeOnScreen(window)
             window.makeKeyAndOrderFront(nil)
             windows.append(window)
         default:
             break
         }
+    }
+
+    /// Top-left of the visible screen. Left alone, a window can open partly off a small display
+    /// (CI's is), and XCUITest can't click a control it can't see.
+    private static func placeOnScreen(_ window: NSWindow) {
+        guard let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+        window.setFrameTopLeftPoint(NSPoint(x: visible.minX + 20, y: visible.maxY - 20))
     }
 
     /// Answers every companion request locally: a healthy heartbeat, and no calendar block.
