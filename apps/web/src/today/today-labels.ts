@@ -323,12 +323,15 @@ export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
 
 /** Evening hero, recap and open-loops copy (VP-EVENING-SUMMARY-R1). The hero
     kicker names the signed-in user's first name; without one it stands alone. */
-export const EVENING_KICKER = "GOOD EVENING";
-export const EVENING_BRIEFING_TITLE = "EVENING BRIEFING";
+export const EVENING_KICKER = "Good evening";
+export const EVENING_BRIEFING_TITLE = "Evening briefing";
 export function eveningHeroKicker(firstName: string | null): string {
   const name = (firstName ?? "").trim();
-  return name ? `${EVENING_KICKER}, ${name.toUpperCase()}` : EVENING_KICKER;
+  return name
+    ? `${EVENING_KICKER}, ${name} / ${EVENING_BRIEFING_TITLE}`
+    : `${EVENING_KICKER} / ${EVENING_BRIEFING_TITLE}`;
 }
+export const EVENING_SECTION_DAY_LABEL = "Your day & tomorrow";
 export const EVENING_READ_FULL_LABEL = "Read the full evening briefing";
 export const EVENING_SOURCES_LABEL = "What informed this?";
 export const MORNING_SOURCES_LABEL = EVENING_SOURCES_LABEL;

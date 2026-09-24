@@ -202,8 +202,8 @@ describe("morning hero vertical rhythm (day mode only)", () => {
 
   function dayBlock(css: string): string {
     const flat = css.replace(/\s+/g, " ");
-    const start = flat.indexOf("/* Morning-only vertical rhythm");
-    const end = flat.indexOf("/* End morning-only vertical rhythm. */");
+    const start = flat.indexOf("/* Study masthead");
+    const end = flat.indexOf("/* End study masthead. */");
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     return flat.slice(start, end);
@@ -212,13 +212,13 @@ describe("morning hero vertical rhythm (day mode only)", () => {
   it("wide: day-scoped padding, eyebrow gap and prepared gap match the study rhythm", async () => {
     const block = dayBlock(await heroCss());
     expect(block).toContain(
-      '.today-hero[data-mode="day"] { margin: 7px 16px 0; padding: 29px 34px 30px;'
+      '.today-hero:is([data-mode="day"], [data-mode="evening"]) { margin: 7px 16px 0; padding: 29px 34px 30px;'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__eyebrow { margin: 0 0 23px;'
+      '.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__eyebrow { margin: 0 0 23px;'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { gap: 18px; margin: 21px 0 0;'
+      '.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared { gap: 18px; margin: 21px 0 0;'
     );
   });
 
@@ -226,14 +226,14 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     const block = dayBlock(await heroCss());
     expect(block).toContain("@media (max-width: 680px)");
     expect(block).toContain(
-      '.today-hero[data-mode="day"] { margin: 7px 6px 0; padding: 23px 22px; }'
+      '.today-hero:is([data-mode="day"], [data-mode="evening"]) { margin: 7px 6px 0; padding: 23px 22px; }'
     );
     expect(block).toContain("margin-bottom: 21px; font-size: 9px;");
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__summary { margin-top: 18px; }'
+      '.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary { margin-top: 18px; }'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { flex-wrap: wrap; gap: 12px; margin-top: 20px; }'
+      '.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared { flex-wrap: wrap; gap: 12px; margin-top: 20px; }'
     );
   });
 

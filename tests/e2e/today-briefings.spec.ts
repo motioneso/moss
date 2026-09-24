@@ -831,7 +831,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   await page.goto("/today");
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeVisible();
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.getByText(/^Overnight low/).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
   await expect(page.getByText("Team standup").first()).toBeVisible();

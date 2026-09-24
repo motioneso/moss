@@ -3,10 +3,12 @@ import { CalendarDays, CheckCircle2, Clock, Target } from "lucide-react";
 import type { BriefingRunDto, LocaleSettingsDto } from "@moss/shared";
 import { AgendaRow, Card, StatTile } from "@moss/ui";
 
-import { EveningPrepCard, EveningReviewSection, type TodayMode } from "./evening-mode.js";
+import type { CalendarEventDto, TaskDto } from "@moss/shared";
+
+import { EveningReviewSection, EveningTomorrowSection, type TodayMode } from "./evening-mode.js";
 import { TodayQuickActions } from "./today-quick-actions.js";
 import type { ColorMode } from "../theme/color-mode.js";
-import { ampm, countdownLabel, timeLabel } from "./today-labels.js";
+import { ampm, timeLabel } from "./today-labels.js";
 
 export interface RailAgendaRow {
   readonly id: string;
@@ -19,6 +21,7 @@ export interface RailNextEvent {
   readonly title: string;
   readonly startsAt: string;
   readonly endsAt: string;
+  readonly location?: string | null;
 }
 
 export interface TodayRailProps {
@@ -47,6 +50,10 @@ export interface TodayRailProps {
   readonly theme: ColorMode;
   readonly timeZone: string;
   readonly disabledModuleIds: readonly string[];
+  readonly tomorrowLabel?: string;
+  readonly tomorrowEvents?: readonly CalendarEventDto[];
+  readonly tomorrowTasks?: readonly TaskDto[];
+  readonly onOpenTask?: (taskId: string) => void;
 }
 
 type TodayDockProps = Pick<
@@ -69,55 +76,64 @@ export function TodayDock(props: TodayDockProps) {
   );
 }
 
-/** Today right rail: quick actions first, then the next meeting, then the
-    rest of the base blocks in their base order. In day mode the quick actions
-    live in TodayDock instead. Props only, no fetching. */
+/** "30 minutes · Room 4": the first meeting's length and place. */
+function meetingNote(event: RailNextEvent): string {
+  const minutes = Math.max(
+    0,
+    Math.round((Date.parse(event.endsAt) - Date.parse(event.startsAt)) / 60000)
+  );
+  const length =
+    minutes % 60 === 0 && minutes > 0
+      ? `${minutes / 60} ${minutes === 60 ? "hour" : "hours"}`
+      : `${minutes} minutes`;
+  return event.location ? `${length} · ${event.location}` : length;
+}
+
+/** Today right rail. Day: the next meeting, then glance, agenda and the
+    evening review. Evening: tomorrow and the planning actions. Quick actions
+    live in TodayDock in both modes. Props only, no fetching. */
 export function TodayRail(props: TodayRailProps) {
   const { nextEvent } = props;
   const day = props.mode === "day";
+  if (!day) {
+    return (
+      <aside className="cmd-aside" aria-label="Tomorrow and evening planning">
+        <div className="cmd-aside__inner">
+          {props.showEveningPrep ? (
+            <EveningTomorrowSection
+              dateLabel={props.tomorrowLabel ?? ""}
+              events={props.tomorrowEvents ?? []}
+              tasks={props.tomorrowTasks ?? []}
+              locale={props.locale}
+              interviewPending={props.interviewPending}
+              onPlan={props.onPlan}
+              onPrep={props.onPrep}
+              onOpenTask={props.onOpenTask ?? (() => undefined)}
+            />
+          ) : null}
+        </div>
+      </aside>
+    );
+  }
   return (
-    <aside className="cmd-aside" aria-label={day ? "Today widgets" : "Quick actions and widgets"}>
+    <aside className="cmd-aside" aria-label="Today widgets">
       <div className="cmd-aside__inner">
-        {day ? null : (
-          <TodayQuickActions
-            enabled={props.wellnessEnabled}
-            theme={props.theme}
-            timeZone={props.timeZone}
-            disabledModuleIds={props.disabledModuleIds}
-          />
-        )}
-
         {nextEvent ? (
           <div className="cmd-next">
-            {props.mode === "day" ? (
-              <>
-                <div className="rail-block__head">First meeting</div>
-                <div className="cmd-next__v">
-                  {timeLabel(nextEvent.startsAt, props.locale)}{" "}
-                  <small>{ampm(nextEvent.startsAt, props.locale)}</small>
-                </div>
-                <div className="cmd-next__what">{nextEvent.title}</div>
-              </>
-            ) : (
-              <>
-                <div className="rail-block__head">
-                  {props.nextStarted ? "Now" : "First meeting"}
-                </div>
-                <div className="cmd-next__k">
-                  {props.nextStarted ? "Now · ends in" : "Next event in"}
-                </div>
-                <div className="cmd-next__v">
-                  {countdownLabel(
-                    props.nextStarted ? nextEvent.endsAt : nextEvent.startsAt,
-                    props.now
-                  )}
-                </div>
-                <div className="cmd-next__what">
-                  {nextEvent.title} · {timeLabel(nextEvent.startsAt, props.locale)}
-                  {ampm(nextEvent.startsAt, props.locale)}
-                </div>
-              </>
-            )}
+            <div className="rail-block__head">First meeting</div>
+            <div className="cmd-next__v">
+              {timeLabel(nextEvent.startsAt, props.locale)}{" "}
+              <small>{ampm(nextEvent.startsAt, props.locale)}</small>
+            </div>
+            <div className="cmd-next__what">{nextEvent.title}</div>
+            <p className="cmd-next__note">{meetingNote(nextEvent)}</p>
+            <button
+              type="button"
+              className="cmd-next__link"
+              onClick={() => props.onNavigate("/calendar")}
+            >
+              Open in calendar ↗
+            </button>
           </div>
         ) : null}
 
@@ -182,14 +198,6 @@ export function TodayRail(props: TodayRailProps) {
             locale={props.locale}
             targetTime={props.eveningTargetTime}
             onFeedbackChanged={props.onEveningFeedback}
-          />
-        ) : null}
-
-        {props.showEveningPrep ? (
-          <EveningPrepCard
-            onPlan={props.onPlan}
-            interviewPending={props.interviewPending}
-            onPrep={props.onPrep}
           />
         ) : null}
       </div>

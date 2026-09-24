@@ -10,8 +10,8 @@
 .jds-brief--sports {
   background: color-mix(in srgb, var(--forest-soft) 25%, var(--paper));
 }
-.cmd-grid[data-mode="day"] .jds-brief--news,
-.cmd-grid[data-mode="day"] .jds-brief--sports {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports {
   background: transparent;
 }
 
@@ -86,13 +86,13 @@
 .sp-tksub__morning-star {
   display: none;
 }
-.cmd-grid[data-mode="day"] .nw-twlead__tag-evening {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .nw-twlead__tag-evening {
   display: none;
 }
-.cmd-grid[data-mode="day"] .nw-twlead__tag-morning {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .nw-twlead__tag-morning {
   display: inline;
 }
-.cmd-grid[data-mode="day"] .nw-twlead__link {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .nw-twlead__link {
   display: inline-block;
   margin-top: 12px;
   color: var(--ink);
@@ -100,7 +100,7 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.cmd-grid[data-mode="day"] .sp-tksub__morning-star {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .sp-tksub__morning-star {
   display: inline;
 }
 .jds-brief--news .nw-twlist__item {
@@ -141,21 +141,21 @@
 }
 
 /* Sports owns a full-width row after the main content and rail share their top row. */
-.cmd-grid[data-mode="day"] > #sports > .jds-brief--sports {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #sports > .jds-brief--sports {
   min-width: 0;
 }
 
-.cmd-grid[data-mode="day"] > #sports {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #sports {
   min-width: 0;
 }
 
 /* The section left .cmd-main in R4.1, leaving the main column's narrow-width card-grid
    override behind: below a 300px container the 300px track floor yields to the container
    and cards stack one-up instead of pushing a 320px page sideways. */
-.cmd-grid[data-mode="day"] > #sports > .jds-brief--sports .sp-tkgrid {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #sports > .jds-brief--sports .sp-tkgrid {
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 }
-.cmd-grid[data-mode="day"] #sports > .jds-brief--sports .sp-tkgrid > * {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) #sports > .jds-brief--sports .sp-tkgrid > * {
   min-width: 0;
 }
 
@@ -163,13 +163,13 @@
   /* Desktop only: pin the sections below the two main/rail rows. On phones
      the grid is one column, so auto placement keeps visual order equal to
      DOM/tab order. */
-  .cmd-grid[data-mode="day"] > #widgets {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #widgets {
     grid-row: 3;
   }
-  .cmd-grid[data-mode="day"] > #news {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #news {
     grid-row: 4;
   }
-  .cmd-grid[data-mode="day"] > #sports {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #sports {
     grid-row: 5;
   }
 }
@@ -188,13 +188,16 @@
 .jds-brief--sports .sp-scores__sides {
   display: contents;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__team {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-board__team {
   font-weight: 400;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__side--you .sp-board__team {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .jds-brief--sports
+  .sp-board__side--you
+  .sp-board__team {
   font-weight: 700;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__side--you {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-board__side--you {
   background: transparent;
 }
 .jds-brief--sports .sp-board__score {
@@ -261,8 +264,8 @@
 }
 
 /* --- Morning desks follow the study .world sections --- */
-.cmd-grid[data-mode="day"] .jds-brief--news,
-.cmd-grid[data-mode="day"] .jds-brief--sports {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports {
   margin-top: 43px;
   padding: 25px 0 0;
   border: none;
@@ -270,44 +273,44 @@
   border-radius: 0;
   box-shadow: none;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .desk-head,
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-head {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .desk-head,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-head {
   align-items: center;
   margin-bottom: 23px;
   padding-bottom: 0;
   border-bottom: none;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .desk-title,
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .desk-title,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-title {
   top: 0;
   font-weight: 900;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .desk-cols {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .desk-cols {
   grid-template-columns: 1.12fr 1fr;
   gap: 30px;
   margin-top: 0;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .desk-leadcol {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .desk-leadcol {
   padding-right: 30px;
   border-right: 1px solid var(--line);
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead {
   margin: 0;
   padding: 0;
   color: var(--ink);
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__photo {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__photo {
   margin-bottom: 17px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__tag,
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__tag {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__tag,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__tag {
   margin-bottom: 0;
   color: var(--muted);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 1px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__title {
   max-width: 480px;
   margin-top: 12px;
   font-family: var(--font-sans);
@@ -316,32 +319,34 @@
   line-height: 1.12;
   letter-spacing: -0.8px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__dek {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__dek {
   margin: 15px 0 0;
   font-size: 13px;
   line-height: 1.7;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__link {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__link {
   margin-top: 18px;
   font-size: 11px;
   font-weight: 600;
   color: var(--forest);
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__item {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__item {
   margin-bottom: 17px;
   padding: 0 0 18px;
   border-top: none;
   border-bottom: 1px solid var(--line);
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__item:last-child {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .jds-brief--news
+  .nw-twlist__item:last-child {
   margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__link {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__link {
   color: var(--ink);
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__title {
   display: block;
   margin-top: 6px;
   font-size: 17px;
@@ -349,169 +354,181 @@
   line-height: 1.25;
   letter-spacing: -0.2px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__dek {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__dek {
   margin-top: 7px;
   color: var(--muted);
   font-size: 11px;
 }
 @media (max-width: 1080px) {
-  .cmd-grid[data-mode="day"] .jds-brief--news,
-  .cmd-grid[data-mode="day"] .jds-brief--sports {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news,
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports {
     margin-top: 33px;
     padding-top: 22px;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .desk-leadcol {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .desk-leadcol {
     margin-bottom: 22px;
     padding: 0 0 23px;
     border-right: none;
     border-bottom: 1px solid var(--line);
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .desk-cols {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .desk-cols {
     grid-template-columns: 1fr;
     gap: 0;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__item {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__item {
     margin: 0;
     padding: 0;
     border: none;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__title {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__title {
     font-size: 27px;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .nw-twlead__dek {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__dek {
     font-size: 12px;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--news .nw-twlist__title {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__title {
     font-size: 16px;
   }
 }
 
 /* --- Morning sports digest (study .sports-digest) --- */
 @media (min-width: 1081px) {
-  .cmd-grid[data-mode="day"] .jds-brief--sports {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
     column-gap: 34px;
   }
-  .cmd-grid[data-mode="day"] .jds-brief--sports .desk-stories {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-stories {
     padding-left: 34px;
   }
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-scores__head > .jds-brief__title,
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-tonight__head > .sp-tksub {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .jds-brief--sports
+  .desk-scores__head
+  > .jds-brief__title,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .jds-brief--sports
+  .desk-tonight__head
+  > .sp-tksub {
   font-family: var(--font-sans);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.4px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead {
   border-bottom: none;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead__photo {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__photo {
   margin-bottom: 17px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__title {
   margin-top: 10px;
   font-family: var(--font-sans);
   font-size: 29px;
   line-height: 1.15;
   letter-spacing: -0.7px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead__dek {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__dek {
   margin-top: 13px;
   line-height: 1.65;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead__link {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__link {
   margin-top: 17px;
   font-size: 11px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-tonight {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-tonight {
   margin-top: 29px;
   padding-top: 19px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-tonight {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight {
   margin-top: 17px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-tonight__row {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__row {
   grid-template-columns: auto minmax(0, 1fr);
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-tonight__kicker {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__kicker {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-tonight__time {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__time {
   color: var(--forest);
   font-variant-numeric: tabular-nums;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-tonight__note {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__note {
   font-size: 10px;
   text-align: left;
 }
 @media (max-width: 1080px) {
-  .cmd-grid[data-mode="day"] .jds-brief--sports .desk-stories {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-stories {
     margin-top: 23px;
     padding: 24px 0 0;
     border-left: none;
     border-top: 1px solid var(--line);
   }
-  .cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead__title {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__title {
     font-size: 27px;
   }
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-scores .sp-scores__row {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .jds-brief--sports
+  .desk-scores
+  .sp-scores__row {
   gap: 22px;
   padding: 13px 0;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-scores__sides {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__sides {
   gap: 5px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__side {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-board__side {
   align-items: baseline;
   gap: 12px;
   font-size: 13px;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-board__score {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-board__score {
   min-width: 22px;
   color: var(--forest);
   font-size: 15px;
   line-height: 1.3;
   text-align: right;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-scores__status {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__status {
   justify-content: center;
   gap: 5px;
   min-height: 0;
   padding-left: 13px;
   line-height: 1.4;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-scores__statusline {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__statusline {
   color: var(--forest);
   font-size: 9px;
   font-weight: 600;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-scores__recap {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__recap {
   font-size: 10px;
   line-height: 1.4;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .sp-lead__photo {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__photo {
   border-radius: 0;
 }
 @media (max-width: 1180px) {
-  .cmd-grid[data-mode="day"] .jds-brief--sports .desk-scores .sp-scores__row {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .jds-brief--sports
+    .desk-scores
+    .sp-scores__row {
     grid-template-columns: minmax(0, 1fr) 83px;
     gap: 12px;
   }
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-scores {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-scores {
   padding-top: 0;
 }
-.cmd-grid[data-mode="day"] .jds-brief--sports .desk-scores__head {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .desk-scores__head {
   padding-bottom: 13px;
   border-bottom-width: 2px;
 }

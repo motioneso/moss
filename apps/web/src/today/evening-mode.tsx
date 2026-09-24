@@ -6,8 +6,7 @@ import {
   type LocaleSettingsDto,
   type TaskDto
 } from "@moss/shared";
-import { Check, MessageSquareText } from "lucide-react";
-import type { ReactNode } from "react";
+import { Check } from "lucide-react";
 
 import { Card } from "@moss/ui";
 
@@ -26,8 +25,8 @@ import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshnes
 import {
   EVENING_OPEN_LOOPS_EMPTY,
   EVENING_OPEN_LOOPS_HEADING,
-  EVENING_OPEN_LOOPS_KICKER,
   EVENING_RECAP_HEADING,
+  EVENING_RAIL_HEADING,
   EVENING_RECAP_KICKER,
   eventCaptureText,
   joinClauses,
@@ -183,9 +182,8 @@ export function EveningReviewSection(props: {
         <>
           <p className="cmd-empty">{compactSummary(props.run.summaryText)}</p>
           {/* Compact tiles keep the terse "…" feedback menu inline; the primary
-              recap is read-only prose. The "Prep for tomorrow" CTA now lives in
-              the right rail as its own evening-only card (Ben: the button wasn't
-              in the right spot on the recap card). */}
+              recap is read-only prose. Tomorrow's planning actions live in the
+              evening rail. */}
           <BriefingFeedbackMenu targetRef={props.run.id} onChanged={props.onFeedbackChanged} />
         </>
       ) : (
@@ -218,21 +216,19 @@ function EveningRecapSection(props: {
   // section at all; the loading skeleton above covers the pending state.
   if (!props.loading && !hasSummary) return null;
   return (
-    <section className="jds-brief ev-recap" id="evening-recap">
-      <div className="jds-brief__head">
-        <span className="jds-brief__kicker ev-recap__kicker">{EVENING_RECAP_KICKER}</span>
-        {props.dateLabel !== "" ? (
-          <span className="jds-brief__kicker ev-recap__meta">{props.dateLabel}</span>
-        ) : null}
+    <section className="ev-study ev-recap" id="evening-recap">
+      <div className="ev-head">
+        <span className="ev-head__number">{EVENING_RECAP_KICKER}</span>
+        <h2 className="ev-head__title">{EVENING_RECAP_HEADING}</h2>
+        {props.dateLabel !== "" ? <span className="ev-head__meta">{props.dateLabel}</span> : null}
       </div>
-      <div className="jds-brief__title">{EVENING_RECAP_HEADING}</div>
       {props.loading ? (
         <div className="agenda-clear" role="status">
           Gathering your evening review…
         </div>
       ) : (
         <>
-          {prose !== "" ? <BriefingProse summaryText={prose} /> : null}
+          {prose !== "" ? <p className="ev-recap__intro">{prose}</p> : null}
           <EveningRecapRows tasks={props.completedToday} onOpenTask={props.onOpenTask} />
         </>
       )}
@@ -251,25 +247,23 @@ function EveningRecapRows(props: {
     return <p className="cmd-empty">No completed tasks logged today.</p>;
   }
   return (
-    <div className="top3 ev-recap__list">
+    <div className="ev-recap__list">
       {props.tasks.map((task) => (
         <div
-          className="jds-task ev-recap__row"
+          className="ev-done"
           key={task.id}
           data-jarvis-capture-text={`Task: ${task.title} — done`}
         >
-          <span className="jds-task__check ev-recap__check" aria-hidden="true">
-            <Check size={15} />
+          <span className="ev-done__check" aria-hidden="true">
+            <Check size={15} strokeWidth={2.25} />
           </span>
           <button
             type="button"
-            className="jds-task__main"
+            className="ev-done__main"
             onClick={() => props.onOpenTask?.(task.id)}
           >
-            <div className="jds-task__title">
-              <strong>{task.title}</strong>
-            </div>
-            <div className="jds-task__source ev-recap__sub">{task.description ?? ""}</div>
+            <span className="ev-done__title">{task.title}</span>
+            {task.description ? <span className="ev-done__sub">{task.description}</span> : null}
           </button>
         </div>
       ))}
@@ -281,109 +275,122 @@ export function BriefingProse({ summaryText }: { readonly summaryText: string })
   return <div className="jds-brief__body">{summaryText}</div>;
 }
 
-// Evening-only right-rail CTA. Split out of the recap card so "Prep for
-// tomorrow" reads as its own action in the rail instead of hanging off the
-// bottom of the "What happened today" recap (Ben: the button wasn't in the
-// right spot). Rendered only in evening mode, so the action is time-bound.
-export function EveningPrepCard(props: {
-  readonly interviewPending: boolean;
-  readonly onPrep: () => void;
-  readonly onPlan: (anchor: HTMLElement) => void;
+export function EveningSupportSections(props: {
+  readonly openLoopsDek: string | null;
+  readonly carryingForward: readonly TaskDto[];
+  readonly onOpenTask: (taskId: string) => void;
 }) {
-  // Button opens the evening interview chat, so it's labelled by the assistant
-  // (Ben: "Chat with {assistantName}") rather than the generic "Prep for tomorrow".
-  const assistantName = useAssistantName("");
   return (
-    <Card title="Prep for tomorrow" padding="sm">
-      <p className="cmd-empty">Close out today and set up tomorrow in a quick chat.</p>
+    <section className="ev-study ev-loops" id="evening-open-loops">
+      <h2 className="ev-loops__title">{EVENING_OPEN_LOOPS_HEADING}</h2>
+      {props.openLoopsDek !== null ? <p className="ev-loops__dek">{props.openLoopsDek}</p> : null}
+      {props.carryingForward.length > 0 ? (
+        <div className="ev-loops__list">
+          {props.carryingForward.slice(0, 3).map((task) => (
+            <button
+              type="button"
+              className="ev-loop"
+              key={task.id}
+              onClick={() => props.onOpenTask(task.id)}
+            >
+              <span className="ev-loop__topic">{task.source}</span>
+              <span className="ev-loop__title">{task.title}</span>
+              {task.description ? <span className="ev-loop__sub">{task.description}</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="ev-loops__dek">{EVENING_OPEN_LOOPS_EMPTY}</p>
+      )}
+    </section>
+  );
+}
+
+/** Evening rail: tomorrow's calendar and due tasks, then the planning actions. */
+export function EveningTomorrowSection(props: {
+  readonly dateLabel: string;
+  readonly events: readonly CalendarEventDto[];
+  readonly tasks: readonly TaskDto[];
+  readonly locale: LocaleSettingsDto;
+  readonly interviewPending: boolean;
+  readonly onPlan: (anchor: HTMLElement) => void;
+  readonly onPrep: () => void;
+  readonly onOpenTask: (taskId: string) => void;
+}) {
+  const assistantName = useAssistantName("");
+  const empty = props.events.length === 0 && props.tasks.length === 0;
+  return (
+    <section className="ev-tomorrow" aria-label="Tomorrow">
+      <span className="ev-tomorrow__eyebrow">{props.dateLabel}</span>
+      <h3 className="ev-tomorrow__title">{EVENING_RAIL_HEADING}</h3>
+      <p className="ev-tomorrow__dek">
+        {empty ? "No events or due tasks found for tomorrow." : tomorrowCountText(props)}
+      </p>
+      {props.events.slice(0, 3).map((event) => (
+        <div
+          className="ev-tomorrow__item"
+          key={event.id}
+          data-jarvis-capture-text={`Tomorrow: ${eventCaptureText(event, props.locale)}`}
+        >
+          <strong>
+            {timeLabel(event.startsAt, props.locale)}
+            {ampm(event.startsAt, props.locale)} / Calendar
+          </strong>
+          {event.title}
+          <small>{[longDurationLabel(event), event.location].filter(Boolean).join(" · ")}</small>
+        </div>
+      ))}
+      {props.tasks.slice(0, 3).map((task) => (
+        <button
+          type="button"
+          className="ev-tomorrow__item"
+          key={task.id}
+          onClick={() => props.onOpenTask(task.id)}
+        >
+          <strong>Due tomorrow / Task</strong>
+          {task.title}
+          {task.source ? <small>{task.source}</small> : null}
+        </button>
+      ))}
+      <p className="ev-tomorrow__note">Nothing new is committed until you plan tomorrow.</p>
       <button
         type="button"
-        className="primary-button evening-prep__btn"
+        className="ev-tomorrow__plan"
         onClick={(event) => props.onPlan(event.currentTarget)}
       >
         {PLAN_TOMORROW_LABEL}
       </button>
       <button
         type="button"
-        className="secondary-button evening-prep__btn"
+        className="ev-tomorrow__chat"
         disabled={props.interviewPending}
         onClick={props.onPrep}
       >
-        <MessageSquareText size={14} aria-hidden="true" />
-        {assistantName ? `Chat with ${assistantName}` : "Chat"}
+        {assistantName ? `Chat with ${assistantName}` : "Chat"} ↗
       </button>
-    </Card>
+    </section>
   );
 }
 
-export function EveningSupportSections(props: {
-  readonly openLoopsDek: string | null;
-  readonly carryingForward: readonly TaskDto[];
-  readonly tomorrowEvents: readonly CalendarEventDto[];
-  readonly tomorrowTasks: readonly TaskDto[];
-  readonly locale: LocaleSettingsDto;
-  readonly renderTask: (task: TaskDto) => ReactNode;
-}) {
-  return (
-    <>
-      <section className="jds-brief ev-loops" id="evening-open-loops">
-        <div className="jds-brief__head">
-          <span className="jds-brief__kicker ev-loops__kicker">{EVENING_OPEN_LOOPS_KICKER}</span>
-        </div>
-        <div className="jds-brief__title">{EVENING_OPEN_LOOPS_HEADING}</div>
-        {props.openLoopsDek !== null ? (
-          <p className="jds-brief__body">{props.openLoopsDek}</p>
-        ) : null}
-        {props.carryingForward.length > 0 ? (
-          <div className="top3" style={{ marginTop: 4 }}>
-            {props.carryingForward.slice(0, 3).map(props.renderTask)}
-          </div>
-        ) : (
-          <p className="cmd-empty">{EVENING_OPEN_LOOPS_EMPTY}</p>
-        )}
-      </section>
+function tomorrowCountText(props: {
+  readonly events: readonly CalendarEventDto[];
+  readonly tasks: readonly TaskDto[];
+}): string {
+  const parts: string[] = [];
+  if (props.events.length > 0)
+    parts.push(`${props.events.length} ${props.events.length === 1 ? "event" : "events"}`);
+  if (props.tasks.length > 0)
+    parts.push(`${props.tasks.length} ${props.tasks.length === 1 ? "task" : "tasks"} due`);
+  return `${parts.join(" and ")} on the calendar so far.`;
+}
 
-      <section className="jds-brief">
-        <div className="jds-brief__head">
-          <span className="jds-brief__kicker">Tomorrow</span>
-        </div>
-        {props.tomorrowEvents.length > 0 || props.tomorrowTasks.length > 0 ? (
-          <>
-            {props.tomorrowEvents.length > 0 ? (
-              <div className="day-list">
-                {props.tomorrowEvents.slice(0, 3).map((event) => (
-                  <div
-                    className="day-ev"
-                    key={event.id}
-                    data-jarvis-capture-text={`Tomorrow: ${eventCaptureText(event, props.locale)}`}
-                  >
-                    <div className="day-ev__t">
-                      {timeLabel(event.startsAt, props.locale)}
-                      <span className="ap"> {ampm(event.startsAt, props.locale)}</span>
-                    </div>
-                    <div>
-                      <div className="day-ev__title">{event.title}</div>
-                      {event.location ? (
-                        <div className="day-ev__where">{event.location}</div>
-                      ) : null}
-                    </div>
-                    <div className="day-ev__who">{durationLabel(event)}</div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {props.tomorrowTasks.length > 0 ? (
-              <div className="top3" style={{ marginTop: 10 }}>
-                {props.tomorrowTasks.map(props.renderTask)}
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <p className="cmd-empty">No events or due tasks found for tomorrow.</p>
-        )}
-      </section>
-    </>
+function longDurationLabel(event: CalendarEventDto): string {
+  const mins = Math.round(
+    (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000
   );
+  if (mins <= 0) return "";
+  if (mins % 60 !== 0) return `${mins} minutes`;
+  return mins === 60 ? "1 hour" : `${mins / 60} hours`;
 }
 
 function compactSummary(value: string): string {
@@ -417,17 +424,6 @@ function timeLabel(iso: string, locale: LocaleSettingsDto): string {
 
 function ampm(iso: string, locale: LocaleSettingsDto): string {
   return /pm$/i.test(formatTime(iso, locale, { hour: "numeric", hour12: true })) ? "pm" : "am";
-}
-
-function durationLabel(event: CalendarEventDto): string {
-  const mins = Math.round(
-    (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000
-  );
-  if (mins <= 0) return "";
-  if (mins < 60) return `${mins}m`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 function shortDate(iso: string, locale: LocaleSettingsDto): string {

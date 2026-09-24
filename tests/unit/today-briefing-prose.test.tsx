@@ -133,7 +133,7 @@ describe("Today morning briefing prose", () => {
       ]
     });
 
-    expect(html).toContain("today-hero--evening");
+    expect(html).toContain('data-mode="evening"');
     expect(html).toContain("The team shipped the launch.");
     expect(html).toContain("Tomorrow brings customer calls.");
     expect(html).toContain("Prepared at");

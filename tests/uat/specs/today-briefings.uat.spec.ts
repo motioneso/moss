@@ -644,7 +644,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await planDialog.getByRole("button", { name: "Back to Today" }).click();
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeFocused();
 
-  await page.locator("button.evening-prep__btn").filter({ hasText: "Chat with Moss" }).click();
+  await page.locator("button.ev-tomorrow__chat").filter({ hasText: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(drawer).toBeVisible();
   expect(

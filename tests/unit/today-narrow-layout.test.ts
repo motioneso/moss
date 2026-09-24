@@ -35,10 +35,10 @@ describe("Today grid order", () => {
 describe("Today populated 320px offenders", () => {
   it("holds the sports card grid inside narrow Today columns", () => {
     expect(desks).toMatch(
-      /\.cmd-grid\[data-mode="day"\]\s*>\s*#sports\s*>\s*\.jds-brief--sports\s+\.sp-tkgrid\s*\{[^}]*minmax\(min\(300px,\s*100%\),\s*1fr\)/
+      /\.cmd-grid:is\(\[data-mode="day"\], \[data-mode="evening"\]\)\s*>\s*#sports\s*>\s*\.jds-brief--sports\s+\.sp-tkgrid\s*\{[^}]*minmax\(min\(300px,\s*100%\),\s*1fr\)/
     );
     expect(desks).toMatch(
-      /\.cmd-grid\[data-mode="day"\]\s+#sports\s*>\s*\.jds-brief--sports\s+\.sp-tkgrid\s*>\s*\*\s*\{[^}]*min-width:\s*0/
+      /\.cmd-grid:is\(\[data-mode="day"\], \[data-mode="evening"\]\)\s+#sports\s*>\s*\.jds-brief--sports\s+\.sp-tkgrid\s*>\s*\*\s*\{[^}]*min-width:\s*0/
     );
   });
 
@@ -71,7 +71,9 @@ describe("Today sports section row pin", () => {
         j++;
       }
       const inner = css.slice(open + 1, j - 1);
-      for (const rm of inner.matchAll(/\.cmd-grid\[data-mode="day"\]\s*>\s*#sports\s*\{([^}]*)\}/g))
+      for (const rm of inner.matchAll(
+        /\.cmd-grid:is\(\[data-mode="day"\], \[data-mode="evening"\]\)\s*>\s*#sports\s*\{([^}]*)\}/g
+      ))
         if (rm[1] !== undefined) bodies.push(rm[1]);
       i = j;
     }
@@ -105,7 +107,11 @@ describe("Today sports section row pin", () => {
     const desktop = ruleBodiesInMedia(desks, MEDIA);
     expect(desktop.some((b) => /grid-row:\s*5/.test(b))).toBe(true);
     const top = stripMedia(desks);
-    const plain = [...top.matchAll(/\.cmd-grid\[data-mode="day"\]\s*>\s*#sports\s*\{([^}]*)\}/g)];
+    const plain = [
+      ...top.matchAll(
+        /\.cmd-grid:is\(\[data-mode="day"\], \[data-mode="evening"\]\)\s*>\s*#sports\s*\{([^}]*)\}/g
+      )
+    ];
     expect(plain.length).toBeGreaterThan(0);
     for (const rm of plain) expect(rm[1]).not.toMatch(/grid-row/);
   });

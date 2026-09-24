@@ -1,4 +1,8 @@
-import { TODAY_SECTION_INDEX_LABEL, TODAY_SECTION_LINKS } from "./today-labels.js";
+import {
+  EVENING_SECTION_DAY_LABEL,
+  TODAY_SECTION_INDEX_LABEL,
+  TODAY_SECTION_LINKS
+} from "./today-labels.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flag, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -364,14 +368,11 @@ export function TodayPage(props: {
     onOpenReader: openMorningReader
   });
   const sectionLinks = (
-    <nav
-      aria-label="Sections"
-      className={todayMode === "day" ? "cmd-sections today-hero__sections" : "cmd-sections"}
-    >
+    <nav aria-label="Sections" className="cmd-sections today-hero__sections">
       <span className="today-hero__sections-label">{TODAY_SECTION_INDEX_LABEL}</span>
-      {TODAY_SECTION_LINKS.map((link) => (
+      {TODAY_SECTION_LINKS.map((link, index) => (
         <a key={link.href} href={link.href}>
-          {link.label}
+          {todayMode === "evening" && index === 0 ? EVENING_SECTION_DAY_LABEL : link.label}
         </a>
       ))}
     </nav>
@@ -383,7 +384,12 @@ export function TodayPage(props: {
       locale={locale}
       nextEvent={
         nextEvent
-          ? { title: nextEvent.title, startsAt: nextEvent.startsAt, endsAt: nextEvent.endsAt }
+          ? {
+              title: nextEvent.title,
+              startsAt: nextEvent.startsAt,
+              endsAt: nextEvent.endsAt,
+              location: nextEvent.location ?? null
+            }
           : null
       }
       nextStarted={nextStarted}
@@ -419,6 +425,14 @@ export function TodayPage(props: {
         eveningInterviewMutation.mutate();
       }}
       onPlan={setPlanningAnchor}
+      tomorrowLabel={formatDate(`${tomorrowKey}T12:00:00Z`, locale, {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      })}
+      tomorrowEvents={tomorrowEvents}
+      tomorrowTasks={tomorrowTasks}
+      onOpenTask={(id) => setDialog({ id })}
       wellnessEnabled={wellnessEnabled}
       theme={theme}
       timeZone={locale.timezone}
@@ -494,19 +508,13 @@ export function TodayPage(props: {
       />
 
       <div className="cmd-wrap">
-        {todayMode === "evening" ? sectionLinks : null}
-
         <div className="cmd-grid" data-mode={todayMode}>
-          {todayMode === "day" ? (
-            <TodayDock
-              wellnessEnabled={wellnessEnabled}
-              theme={theme}
-              timeZone={locale.timezone}
-              disabledModuleIds={disabledModuleIds}
-            />
-          ) : (
-            railSection
-          )}
+          <TodayDock
+            wellnessEnabled={wellnessEnabled}
+            theme={theme}
+            timeZone={locale.timezone}
+            disabledModuleIds={disabledModuleIds}
+          />
 
           <div className="cmd-main">
             {todayMode === "evening" && eveningDefinition?.enabled ? (
@@ -538,17 +546,7 @@ export function TodayPage(props: {
                     eveningSplit && eveningSplit.rest.trim() !== "" ? eveningSplit.rest : null
                   }
                   carryingForward={looseEnds}
-                  tomorrowEvents={tomorrowEvents}
-                  tomorrowTasks={tomorrowTasks}
-                  locale={locale}
-                  renderTask={(task) => (
-                    <BriefTaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={() => toggleMutation.mutate(task)}
-                      onOpen={() => setDialog({ id: task.id })}
-                    />
-                  )}
+                  onOpenTask={(id) => setDialog({ id })}
                 />
               </>
             ) : null}
@@ -591,19 +589,6 @@ export function TodayPage(props: {
 
             {feed.overnight.length > 0 ? <OvernightSection items={feed.overnight} /> : null}
 
-            {todayMode === "evening" ? (
-              <>
-                <div id="widgets">
-                  <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
-                </div>
-                <div id="news">
-                  {feed.news.length > 0 || feed.interests.length > 0 ? (
-                    <NewsDesk news={feed.news} interests={feed.interests} />
-                  ) : null}
-                </div>
-              </>
-            ) : null}
-
             <div id="goals">
               <GoalsSection />
             </div>
@@ -645,19 +630,15 @@ export function TodayPage(props: {
 
             <ProactiveCards />
           </div>
-          {todayMode === "day" ? (
-            <>
-              {railSection}
-              <div id="widgets">
-                <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
-              </div>
-              <div id="news">
-                {feed.news.length > 0 || feed.interests.length > 0 ? (
-                  <NewsDesk news={feed.news} interests={feed.interests} />
-                ) : null}
-              </div>
-            </>
-          ) : null}
+          {railSection}
+          <div id="widgets">
+            <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
+          </div>
+          <div id="news">
+            {feed.news.length > 0 || feed.interests.length > 0 ? (
+              <NewsDesk news={feed.news} interests={feed.interests} />
+            ) : null}
+          </div>
           <div id="sports">
             <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
           </div>

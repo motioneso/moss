@@ -84,8 +84,9 @@ export function TodayWeatherRow(props: {
     })
   ];
 
-  // Morning hero: the study weather row, current conditions and today's range.
-  if (props.mode === "day") {
+  // Study weather row: current conditions, then today's range (day) or the
+  // overnight low (evening).
+  if (props.mode === "day" || props.mode === "evening") {
     return (
       <>
         <div className="wx-now">
@@ -97,7 +98,13 @@ export function TodayWeatherRow(props: {
         </div>
         <div className="wx-outlook">
           <strong>{wx.condition}</strong>
-          {first !== null ? <span>{`High ${first.high}° · Low ${first.low}°`}</span> : null}
+          {first !== null ? (
+            <span>
+              {props.mode === "evening"
+                ? `Overnight low ${first.low}°`
+                : `High ${first.high}° · Low ${first.low}°`}
+            </span>
+          ) : null}
         </div>
       </>
     );

@@ -153,6 +153,9 @@
   color: var(--text-muted);
   margin-top: 5px;
 }
+.jds-brief--timeline .tl-meta-divider {
+  color: var(--line-strong);
+}
 .jds-brief--timeline .tl-done {
   text-decoration: line-through;
 }
@@ -282,25 +285,36 @@
    and the evening page keep the base editorial timeline above. The block box
    sits inside the rail column: placed tasks on sage with a forest edge,
    proposed ones dashed, calendar commitments bare. */
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-head {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-head {
   align-items: center;
   margin-bottom: 18px;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-note {
   flex-wrap: nowrap;
   margin: 0 0 18px;
   background: var(--sage-light);
   color: var(--forest);
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note__text {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-note__text {
   flex: 1;
   margin: 0;
   font-size: 11px;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note__text strong {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-note__text
+  strong {
   font-weight: 700;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note .jds-btn {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-note
+  .jds-btn {
   flex: none;
   min-height: 40px;
   padding: 11px 14px;
@@ -313,98 +327,143 @@
   white-space: nowrap;
   box-shadow: none;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note .jds-btn:hover {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-note
+  .jds-btn:hover {
   background: var(--forest-deep);
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-legend {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-legend {
   padding: 0 0 13px;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-list {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .day-list {
   margin-top: 0;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-slot {
   gap: 15px;
   padding: 0;
   border: none;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-time {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-time {
   padding-top: 15px;
   line-height: 1.5;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-time small {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-time
+  small {
   margin-top: 0;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-body {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-body {
   padding: 6px 0 6px 19px;
   background: none;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-body::before {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-body::before {
   top: 24px;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__main,
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-block {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .jds-task__main,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-block {
   padding: 12px 14px;
   border-left: 2px solid transparent;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline button.jds-task__main:hover {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  button.jds-task__main:hover {
   background: var(--sage);
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot--committed .jds-task__main {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-slot--committed
+  .jds-task__main {
   background: var(--sage-light);
   border-left-color: var(--forest);
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot--proposed .jds-task__main,
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot--pending .jds-task__main {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-slot--proposed
+  .jds-task__main,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .tl-slot--pending
+  .jds-task__main {
   padding: 11px 13px;
   border: 1px dashed var(--forest);
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .day-ev__title {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__where {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .day-ev__where {
   margin-top: 5px;
   font-size: 10px;
   color: var(--text-muted);
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .jds-task__title {
   line-height: 1.5;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__state {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .jds-task__state {
   padding: 1px 5px;
   border: 1px solid var(--line);
   background: var(--bone);
   color: var(--forest);
   font-size: 9px;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline {
   padding-top: 0;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-title {
   font-weight: 900;
+  text-wrap: balance;
 }
-.cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-main
+  .jds-brief--timeline
+  .day-ev__title {
   font-family: var(--font-sans);
   color: var(--ink);
 }
 
 /* --- Morning rail: first meeting as a flat study support section --- */
-.cmd-grid[data-mode="day"] .cmd-next {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next {
   padding: 0 0 24px;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: none;
   color: var(--ink);
 }
-.cmd-grid[data-mode="day"] .cmd-next .rail-block__head {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next .rail-block__head {
   margin-bottom: 11px;
   padding-bottom: 0;
   border-bottom: none;
   font-size: 10px;
   letter-spacing: 1.5px;
 }
-.cmd-grid[data-mode="day"] .cmd-next__v {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__v {
   margin-top: 0;
   font-family: var(--font-display);
   font-size: 39px;
@@ -413,13 +472,13 @@
   letter-spacing: -1px;
   color: var(--forest);
 }
-.cmd-grid[data-mode="day"] .cmd-next__v small {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__v small {
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0;
 }
-.cmd-grid[data-mode="day"] .cmd-next__what {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__what {
   margin-top: 0;
   font-size: 21px;
   font-weight: 700;
@@ -429,8 +488,29 @@
   color: var(--ink);
 }
 
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__note {
+  margin: 11px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__link {
+  display: block;
+  margin-top: 13px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
 /* --- Morning rail: quick actions flush with the column, study .solid button --- */
-.cmd-grid[data-mode="day"] .cmd-aside__inner {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside__inner {
   gap: 24px;
 }
 .cmd-dock .well {
@@ -466,8 +546,8 @@
 }
 
 /* --- Morning rail: glance, agenda and review as flat study support sections --- */
-.cmd-grid[data-mode="day"] .cmd-glance,
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-glance,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card {
   padding: 0 0 24px;
   border: none;
   border-bottom: 1px solid var(--line);
@@ -475,11 +555,14 @@
   background: none;
   box-shadow: none;
 }
-.cmd-grid[data-mode="day"] .cmd-aside > .cmd-aside__inner > :last-child {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"])
+  .cmd-aside
+  > .cmd-aside__inner
+  > :last-child {
   border-bottom: none;
 }
-.cmd-grid[data-mode="day"] .cmd-glance__title,
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-glance__title,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__title {
   margin-bottom: 11px;
   font-size: 10px;
   font-weight: 700;
@@ -487,66 +570,66 @@
   text-transform: uppercase;
   color: var(--forest);
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card__head {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__head {
   align-items: center;
   margin-bottom: 0;
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card__head .jds-card__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__head .jds-card__title {
   margin-bottom: 0;
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card__meta {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__meta {
   font-size: 10px;
   color: var(--muted);
 }
-.cmd-grid[data-mode="day"] .cmd-glance__grid {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-glance__grid {
   gap: 0;
   border-top: 1px solid var(--line);
 }
-.cmd-grid[data-mode="day"] .jds-stat-tile {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile {
   padding: 12px 0;
   border: none;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: none;
 }
-.cmd-grid[data-mode="day"] .jds-stat-tile:nth-child(odd) {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile:nth-child(odd) {
   padding-right: 12px;
 }
-.cmd-grid[data-mode="day"] .jds-stat-tile:nth-child(even) {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile:nth-child(even) {
   padding-left: 12px;
   border-left: 1px solid var(--line);
 }
-.cmd-grid[data-mode="day"] .jds-stat-tile__label {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile__label {
   font-size: 10px;
   color: var(--muted);
 }
-.cmd-grid[data-mode="day"] .jds-stat-tile__value {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile__value {
   font-family: var(--font-display);
   font-weight: 900;
   font-size: 26px;
   line-height: 1.2;
   color: var(--forest);
 }
-.cmd-grid[data-mode="day"] .jds-stat-tile--warn .jds-stat-tile__value {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile--warn .jds-stat-tile__value {
   color: var(--gold);
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-agenda-row {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row {
   padding: 12px 0;
   border-top: 1px solid var(--line);
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card__head + * {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__head + * {
   margin-top: 13px;
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-agenda-row__time {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__time {
   font-size: 10px;
   color: var(--muted);
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-agenda-row__title {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__title {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink);
 }
-.cmd-grid[data-mode="day"] .cmd-aside .jds-card .cmd-empty {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card .cmd-empty {
   margin-top: 11px;
   font-size: 12px;
   line-height: 1.65;
@@ -554,40 +637,276 @@
 }
 
 @media (max-width: 680px) {
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-note {
     flex-wrap: wrap;
     align-items: flex-start;
     padding: 12px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-note__text {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .cmd-main
+    .jds-brief--timeline
+    .tl-note__text {
     flex-basis: 100%;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-legend {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-legend {
     gap: 14px;
     font-size: 9px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-slot {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-slot {
     grid-template-columns: 51px minmax(0, 1fr);
     gap: 8px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-time {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-time {
     font-size: 11px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-body {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-body {
     padding-left: 12px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__main,
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .tl-block {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .cmd-main
+    .jds-brief--timeline
+    .jds-task__main,
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-block {
     padding: 12px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__title,
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__title {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .cmd-main
+    .jds-brief--timeline
+    .day-ev__title,
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .cmd-main
+    .jds-brief--timeline
+    .jds-task__title {
     font-size: 13px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .day-ev__where {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .cmd-main
+    .jds-brief--timeline
+    .day-ev__where {
     font-size: 9px;
   }
-  .cmd-grid[data-mode="day"] .cmd-main .jds-brief--timeline .jds-task__state {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"])
+    .cmd-main
+    .jds-brief--timeline
+    .jds-task__state {
     font-size: 8px;
+  }
+}
+
+/* ===== Evening study sections: recap, open loops, tomorrow rail ===== */
+.ev-study {
+  margin-top: 35px;
+}
+.ev-study:first-child {
+  margin-top: 0;
+}
+.ev-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.ev-head__number {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--forest);
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 5px;
+}
+.ev-head__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 25px;
+  line-height: 1.18;
+  letter-spacing: -0.7px;
+}
+.ev-head__meta {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: right;
+}
+.ev-recap__intro {
+  max-width: 640px;
+  margin: 2px 0 24px;
+  font-size: 17px;
+  line-height: 1.65;
+}
+.ev-done {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.ev-done__check {
+  flex: none;
+  color: var(--forest);
+  font-size: 17px;
+  line-height: 1;
+}
+.ev-done__check svg {
+  width: 17px;
+  height: 17px;
+}
+.ev-done__main {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ev-done__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ev-done__sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.ev-loops__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 23px;
+  letter-spacing: -0.5px;
+}
+.ev-loops__dek {
+  margin: 8px 0 17px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.ev-loop {
+  display: block;
+  width: 100%;
+  padding: 17px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ev-loop__topic {
+  display: block;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.ev-loop__title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+}
+.ev-loop__sub {
+  display: block;
+  margin: 6px 0 13px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.ev-tomorrow {
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.ev-tomorrow__eyebrow {
+  display: block;
+  margin-bottom: 11px;
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.ev-tomorrow__title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+}
+.ev-tomorrow__dek {
+  margin: 11px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.ev-tomorrow__item {
+  display: block;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+button.ev-tomorrow__item {
+  cursor: pointer;
+}
+.ev-tomorrow__dek + .ev-tomorrow__item {
+  margin-top: 15px;
+}
+.ev-tomorrow__item strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--forest);
+  font-size: 10px;
+}
+.ev-tomorrow__item small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.ev-tomorrow__note {
+  margin: 11px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+.ev-tomorrow__plan {
+  display: block;
+  width: 100%;
+  margin-top: 17px;
+  padding: 11px 14px;
+  border: 1px solid var(--forest);
+  background: var(--forest);
+  color: var(--paper);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ev-tomorrow__plan:hover {
+  background: var(--forest-hover);
+}
+.ev-tomorrow__chat {
+  display: block;
+  margin-top: 13px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+@media (max-width: 680px) {
+  .ev-recap__intro {
+    font-size: 15px;
   }
 }

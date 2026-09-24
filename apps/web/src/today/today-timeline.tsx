@@ -11,6 +11,26 @@ export function durationText(minutes: number | null): string {
   return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
+/** Study meta wording: "45 min", "1 hour", "2 hours". */
+export function blockLengthText(minutes: number | null): string {
+  if (minutes === null || minutes <= 0) return "";
+  if (minutes % 60 !== 0) return `${minutes} min`;
+  return minutes === 60 ? "1 hour" : `${minutes / 60} hours`;
+}
+
+function MetaLength(props: { readonly minutes: number | null }) {
+  const text = blockLengthText(props.minutes);
+  if (text === "") return null;
+  return (
+    <>
+      <span className="tl-meta-len">{text}</span>
+      <span className="tl-meta-divider" aria-hidden="true">
+        ·
+      </span>
+    </>
+  );
+}
+
 /** Today-only timeline row: time column, rule with marker, block. Task
     rows keep their button, state label and data-state; events stay plain. */
 export function TimelineRow(props: {
@@ -39,7 +59,11 @@ export function TimelineRow(props: {
         <div className="tl-body">
           <div className="tl-block">
             <div className="day-ev__title">{item.title}</div>
-            {item.location ? <div className="day-ev__where">{item.location}</div> : null}
+            {item.location || blockLengthText(item.durationMinutes) ? (
+              <div className="day-ev__where">
+                {[blockLengthText(item.durationMinutes), item.location].filter(Boolean).join(" · ")}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -63,6 +87,7 @@ export function TimelineRow(props: {
               {item.title}
             </div>
             <div className="jds-task__meta">
+              <MetaLength minutes={item.durationMinutes} />
               {item.kindLabel !== null ? (
                 <span className="jds-task__source">{item.kindLabel}</span>
               ) : null}
@@ -75,6 +100,7 @@ export function TimelineRow(props: {
               {item.title}
             </div>
             <div className="jds-task__meta">
+              <MetaLength minutes={item.durationMinutes} />
               {item.kindLabel !== null ? (
                 <span className="jds-task__source">{item.kindLabel}</span>
               ) : null}

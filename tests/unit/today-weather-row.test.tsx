@@ -105,15 +105,13 @@ describe("TodayWeatherRow", () => {
     expect(tileCount(html)).toBe(0);
   });
 
-  it("shows the overnight low in evening mode", () => {
+  it("shows the study row with the overnight low in evening mode", () => {
     const html = renderRow({ weather: weather(), mode: "evening" });
-    expect(html).toContain("San Francisco");
-    expect(html).not.toContain("San Francisco, CA");
-    expect(html).toContain("https://www.wunderground.com/weather/37.7,-122.4");
+    expect(html).toContain("21°<small>F</small>");
+    expect(html).toContain("Sunny");
     expect(html).toContain("Overnight low 16°");
     expect(html).not.toContain("High 24°");
-    expect(tileCount(html)).toBe(6);
-    expect(html).toContain("https://www.wunderground.com/weather/37.7,-122.4");
+    expect(tileCount(html)).toBe(0);
   });
 
   it("renders the authored unavailable line with no numbers when data is null", () => {

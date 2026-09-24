@@ -229,11 +229,10 @@
   }
 }
 
-/* Morning-only vertical rhythm. The day hero follows the study masthead:
-   forest ground, gold bottom edge, weather under a sage hairline, then the
-   links and prepared time on one row. Every rule is day-scoped so the
-   evening hero keeps its own geometry. */
-.today-hero[data-mode="day"] {
+/* Study masthead, shared by the morning and evening heroes: forest ground,
+   gold bottom edge, weather under a sage hairline, then the links and
+   prepared time on one row. */
+.today-hero:is([data-mode="day"], [data-mode="evening"]) {
   margin: 7px 16px 0;
   padding: 29px 34px 30px;
   border-bottom: 3px solid var(--gold);
@@ -241,40 +240,40 @@
   color: var(--bone);
 }
 
-[data-theme="dark"] .today-hero[data-mode="day"] {
+[data-theme="dark"] .today-hero:is([data-mode="day"], [data-mode="evening"]) {
   background: var(--hero-bg);
   color: var(--hero-fg);
 }
 
-.today-hero[data-mode="day"] .today-hero__eyebrow {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__eyebrow {
   margin: 0 0 23px;
   font-size: 10px;
   letter-spacing: 1.5px;
   color: var(--sage);
 }
 
-.today-hero[data-mode="day"] .today-hero__title,
-.today-hero[data-mode="day"] .today-hero__summary,
-.today-hero[data-mode="day"] .jds-brief__body {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__title,
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary,
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .jds-brief__body {
   color: inherit;
 }
 
-.today-hero[data-mode="day"] .today-hero__accent {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__accent {
   display: block;
   color: var(--sage);
 }
 
-.today-hero[data-mode="day"] .today-hero__summary .jds-brief__body {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary .jds-brief__body {
   max-width: none;
 }
 
-.today-hero[data-mode="day"] .today-hero__hairline {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__hairline {
   margin: 24px 0 0;
   border: none;
   border-top: 1px solid var(--sage);
 }
 
-.today-hero[data-mode="day"] .today-hero__weather {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather {
   display: flex;
   color: inherit;
   align-items: center;
@@ -282,29 +281,29 @@
   padding-top: 18px;
 }
 
-.today-hero[data-mode="day"] .today-hero__weather .cmd-empty {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather .cmd-empty {
   margin: 0;
   font-size: 13px;
 }
 
-.today-hero[data-mode="day"] .today-hero__weather .cmd-empty a {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather .cmd-empty a {
   color: var(--bone);
 }
 
-.today-hero[data-mode="day"] .today-hero__prepared {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared {
   gap: 18px;
   margin: 21px 0 0;
   font-size: 10px;
   color: var(--sage);
 }
 
-.today-hero[data-mode="day"] .today-hero__links {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__links {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 18px;
 }
 
-.today-hero[data-mode="day"] .today-hero__link {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__link {
   padding: 0;
   border: none;
   background: none;
@@ -316,69 +315,69 @@
   text-underline-offset: 4px;
 }
 
-.today-hero[data-mode="day"] .today-hero__prepared-time {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared-time {
   flex: none;
   margin-left: auto;
 }
 
 @media (max-width: 1180px) {
-  .today-hero[data-mode="day"] {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) {
     padding: 25px 28px;
   }
 }
 
 @media (max-width: 680px) {
-  .today-hero[data-mode="day"] {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) {
     margin: 7px 6px 0;
     padding: 23px 22px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__eyebrow {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__eyebrow {
     max-width: 155px;
     margin-bottom: 21px;
     font-size: 9px;
     line-height: 1.7;
   }
 
-  .today-hero[data-mode="day"] .today-hero__summary {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary {
     margin-top: 18px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__hairline {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__hairline {
     margin-top: 21px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__weather {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather {
     gap: 18px;
     padding-top: 16px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__prepared {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared {
     flex-wrap: wrap;
     gap: 12px;
     margin-top: 20px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__prepared-time {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared-time {
     margin-left: 0;
     font-size: 9px;
   }
 }
 
 /* Study weather row: icon and temperature, then the outlook lines. */
-.today-hero[data-mode="day"] .wx-now {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now {
   display: flex;
   align-items: center;
   gap: 13px;
 }
 
-.today-hero[data-mode="day"] .wx-now svg {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now svg {
   width: 30px;
   height: 30px;
   color: var(--gold-light);
 }
 
-.today-hero[data-mode="day"] .wx-now > strong {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now > strong {
   font-size: 34px;
   font-weight: 600;
   line-height: 1;
@@ -386,7 +385,7 @@
   white-space: nowrap;
 }
 
-.today-hero[data-mode="day"] .wx-now small {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now small {
   margin-left: 2px;
   font-size: 13px;
   font-weight: 400;
@@ -394,110 +393,42 @@
   color: var(--sage);
 }
 
-.today-hero[data-mode="day"] .wx-outlook {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook {
   display: grid;
   gap: 3px;
   font-size: 13px;
 }
 
-.today-hero[data-mode="day"] .wx-outlook > strong {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > strong {
   font-weight: 500;
 }
 
-.today-hero[data-mode="day"] .wx-outlook > span {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > span {
   font-size: 11px;
   color: var(--sage);
 }
 
 @media (max-width: 680px) {
-  .today-hero[data-mode="day"] .wx-now {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now {
     gap: 8px;
   }
 
-  .today-hero[data-mode="day"] .wx-now svg {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now svg {
     width: 25px;
     height: 25px;
   }
 
-  .today-hero[data-mode="day"] .wx-now > strong {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now > strong {
     font-size: 30px;
   }
 
-  .today-hero[data-mode="day"] .wx-outlook {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook {
     font-size: 12px;
   }
 
-  .today-hero[data-mode="day"] .wx-outlook > span {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > span {
     font-size: 10px;
   }
 }
 
-/* End morning-only vertical rhythm. */
-
-/* ===== Evening hero form (VP-EVENING-SUMMARY-R1) =====
-   Kicker block, report links, right-aligned prepared line and the weather
-   chip pinned top-right on wide screens. Every rule below carries
-   .today-hero--evening, so the day hero renders exactly as before. Spacing
-   here uses transparent borders and a gutter grid track instead of
-   margin/padding/gap: the morning-hero rhythm test snapshots every such
-   declaration on today-hero selectors, and day isolation holds because no
-   day markup carries this class. */
-.today-hero--evening .today-hero__kicker {
-  display: block;
-}
-.today-hero--evening .today-hero__evening-title {
-  display: block;
-  border-top: 8px solid transparent;
-  font-family: var(--font-display);
-  font-size: clamp(28px, 2.6vw, 40px);
-  font-weight: 900;
-  line-height: 1.04;
-  letter-spacing: -0.5px;
-  color: var(--hero-fg);
-}
-.today-hero--evening .today-hero__links {
-  display: flex;
-  flex-wrap: wrap;
-  border-top: 14px solid transparent;
-}
-.today-hero--evening .today-hero__link {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--hero-fg);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.today-hero--evening .today-hero__link + .today-hero__link {
-  border-left: 24px solid transparent;
-}
-.today-hero--evening .today-hero__prepared--evening {
-  justify-content: flex-end;
-  text-align: right;
-}
-@media (min-width: 1081px) {
-  .today-hero--evening {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 32px max-content;
-  }
-  .today-hero--evening .today-hero__eyebrow,
-  .today-hero--evening .today-hero__title,
-  .today-hero--evening .today-hero__summary,
-  .today-hero--evening .today-hero__links,
-  .today-hero--evening .today-hero__prepared {
-    grid-column: 1;
-    min-width: 0;
-  }
-  .today-hero--evening .today-hero__rule {
-    grid-column: 1 / -1;
-  }
-  .today-hero--evening .today-hero__weather {
-    grid-column: 3;
-    grid-row: 1 / span 5;
-    align-self: start;
-    justify-self: end;
-    max-width: 280px;
-  }
-}
+/* End study masthead. */
