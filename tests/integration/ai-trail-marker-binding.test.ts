@@ -216,7 +216,7 @@ describe("Trail Marker focus judgment model binding", () => {
   });
 
   // Ben, 2026-09-22: the Trail Marker judge is the admin's sorting model.
-  it("judges with the sorting model, including a System One model, which sorting jobs then skip (fails if the judge still needs its own row or sorting jobs try Jev)", async () => {
+  it("judges with the sorting model, including a System One model; the free-form path still skips it (fails if the judge still needs its own row or the free-form path tries Jev)", async () => {
     const judgeModel = () =>
       dataContext.withDataContext(
         { actorUserId: ids.adminUser, requestId: "focus-judge-model" },
@@ -227,6 +227,13 @@ describe("Trail Marker focus judgment model binding", () => {
         { actorUserId: ids.adminUser, requestId: "sorting-job-model" },
         (scopedDb) => repository.resolveSortingModel(scopedDb, "module.news")
       );
+    // #2594 slice 2: the yes/no sorting-question path accepts a System One model.
+    const sortingQuestionsModel = () =>
+      dataContext.withDataContext(
+        { actorUserId: ids.adminUser, requestId: "sorting-questions-model" },
+        (scopedDb) =>
+          repository.resolveSortingModel(scopedDb, "module.news", { acceptSystemOne: true })
+      );
 
     expect(await judgeModel()).toBeNull();
 
@@ -235,10 +242,12 @@ describe("Trail Marker focus judgment model binding", () => {
     ).toBe(200);
     expect((await judgeModel())?.id).toBe(systemOneModelId);
     expect(await sortingJobModel()).toBeNull();
+    expect((await sortingQuestionsModel())?.id).toBe(systemOneModelId);
 
     expect((await bind("sorting", { binding: { kind: "model", modelId } })).statusCode).toBe(200);
     expect((await judgeModel())?.id).toBe(modelId);
     expect((await sortingJobModel())?.id).toBe(modelId);
+    expect((await sortingQuestionsModel())?.id).toBe(modelId);
 
     const cleared = await server.inject({
       method: "DELETE",

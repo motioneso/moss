@@ -49,6 +49,7 @@ import {
   aiModuleSqlMigrationDirectory,
   createUnwiredActionResolver,
   createAiSecretCipher,
+  askSortingQuestions,
   generateStructured,
   ModelDiscoveryService,
   registerAiMaintenanceWorkers,
@@ -58,6 +59,7 @@ import {
   type AssistantToolGateway,
   type PlatformDiagnosticsService,
   type ProviderKind,
+  type SortingQuestionBatch,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
@@ -785,6 +787,12 @@ export interface BuiltInModuleRegistration {
 const newsRobotsGate = createRobotsGate();
 const newsHostRateLimiter = createHostRateLimiter();
 
+/** The sorting-question input the story matcher's port accepts; the ai function owns the rest. */
+type SortingQuestionsInput = {
+  readonly batches: readonly SortingQuestionBatch[];
+  readonly signal?: AbortSignal;
+};
+
 export function buildNewsDiscoveryPorts(
   logger?: Pick<FastifyBaseLogger, "info" | "warn">,
   // #2229: takes the already-built adapter, not a raw engine factory. The route path must pass
@@ -876,6 +884,12 @@ export function buildNewsDiscoveryPorts(
           { service: "module.news", ...input },
           { repository, cipher, logger, createCliStructuredAdapter }
         ),
+      askSortingQuestions: (scopedDb: DataContextDb, input: SortingQuestionsInput) =>
+        askSortingQuestions(
+          scopedDb,
+          { service: "module.news", ...input },
+          { repository, cipher, logger, createCliStructuredAdapter }
+        ),
       async fingerprint(scopedDb: DataContextDb) {
         const model = (
           await repository.resolveModelForService(scopedDb, "module.news", {
@@ -961,6 +975,17 @@ export function buildSportsDiscoveryPorts(
         }
       ) =>
         generateStructured(
+          scopedDb,
+          { service: "module.sports", ...input },
+          {
+            repository,
+            cipher,
+            logger,
+            createCliStructuredAdapter: createCliStructuredAdapterFactory()
+          }
+        ),
+      askSortingQuestions: (scopedDb: DataContextDb, input: SortingQuestionsInput) =>
+        askSortingQuestions(
           scopedDb,
           { service: "module.sports", ...input },
           {

@@ -138,5 +138,41 @@ export interface NewsAiPort {
         error: "needs_config" | "validation_failed" | "provider_error" | "aborted";
       }
   >;
+  /**
+   * #2594 slice 2: ask the admin's sorting model yes/no questions, one per (story, rule). The
+   * module-registry port runs both backends (System One choices, otherwise the structured path) and
+   * answers `not_supported` when no sorting model is set.
+   */
+  askSortingQuestions?(
+    scopedDb: DataContextDb,
+    input: {
+      batches: readonly {
+        state: Record<string, unknown>;
+        questions: Readonly<
+          Record<
+            string,
+            { readonly instructions: string; readonly criteria: Readonly<Record<string, string>> }
+          >
+        >;
+      }[];
+      signal?: AbortSignal;
+    }
+  ): Promise<
+    | {
+        ok: true;
+        answers: Readonly<Record<string, { readonly choice: string; readonly confidence: number }>>;
+        usage: { readonly inputTokens: number; readonly outputTokens: number };
+      }
+    | {
+        ok: false;
+        error:
+          | "not_supported"
+          | "needs_config"
+          | "provider_error"
+          | "validation_failed"
+          | "invalid_response"
+          | "aborted";
+      }
+  >;
   fingerprint(scopedDb: DataContextDb): Promise<string | null>;
 }

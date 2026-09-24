@@ -206,11 +206,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
       "reads '* Manually added', and they survive refreshes and re-logins). System One (TypeSafe) " +
       "is offered as a provider type; it answers fixed named questions and is used only for the " +
-      "Trail Marker focus judgment, not chat: its models are offered only in the Sorting model " +
-      "row and its card has no Set as default button. The Sorting model row also sets the model " +
+      "Trail Marker focus judgment and the story sorting questions, not chat: its models are " +
+      "offered only in the Sorting model row and its card has no Set as default button. The " +
+      "Sorting model row also sets the model " +
       "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
       "one is chosen it says Trail Marker's app and window titles also go to that model, or for " +
-      "a System One model that they go to TypeSafe and sorting keeps using the main model. " +
+      "a System One model that they go to TypeSafe, which also answers News and Sports sorting " +
+      "questions. " +
       "Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
@@ -236,7 +238,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
       "under the row says story details and saved story preferences go to that model first and " +
-      "to the main model if it does not answer. A " +
+      "to the main model if it does not answer. For a System One model the line instead says it " +
+      "answers the News and Sports sorting questions with a yes or no, and the main model still " +
+      "handles other sorting work. A " +
       "separate Web search group has a 'Use your model's built-in web search' switch, on by " +
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +

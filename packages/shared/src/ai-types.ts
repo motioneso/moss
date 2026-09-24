@@ -155,6 +155,11 @@ export function isSortingProviderKind(kind: string | null | undefined): boolean 
   return kind != null && (SORTING_PROVIDER_KINDS as readonly string[]).includes(kind);
 }
 
+/** System One (TypeSafe) answers fixed named questions, including choice questions, not chat. */
+export function isSystemOneProviderKind(kind: string | null | undefined): boolean {
+  return kind === "system-one";
+}
+
 /**
  * Provider kinds the sorting model may be bound to (Ben, 2026-09-22): the kinds sorting jobs run,
  * plus System One, because the sorting model is also the Trail Marker focus judge and Jev answers

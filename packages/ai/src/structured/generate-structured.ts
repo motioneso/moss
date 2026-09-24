@@ -101,6 +101,11 @@ export type GenerateStructuredInput = {
   readonly closeScope?: boolean;
   /** #2594: try the admin's sorting model first, then today's path once if it fails. */
   readonly sorting?: true;
+  /**
+   * #2594: the role this run should be logged under. The sorting-question path passes an explicit
+   * sorting model through the structured path, so its usage must not be logged as the main model.
+   */
+  readonly servedByLabel?: StructuredServedBy;
 };
 
 export type GenerateStructuredExplicitModel = {
@@ -191,9 +196,9 @@ export async function generateStructured(
   const result = await runOnModel(scopedDb, input, deps, model, {
     maxAttempts: STRUCTURED_MAX_REPAIR_RETRIES + 1,
     signal: input.signal,
-    servedBy: "main"
+    servedBy: input.servedByLabel ?? "main"
   });
-  return result.ok ? { ...result, servedBy: "main" } : result;
+  return result.ok ? { ...result, servedBy: input.servedByLabel ?? "main" } : result;
 }
 
 async function runOnModel(
