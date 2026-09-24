@@ -41,7 +41,7 @@ function EventBlock({ e, hourH, dense, onPick }: EventBlockProps) {
   return (
     <EventChip
       variant={variant}
-      color={isBlock ? "var(--accent)" : "var(--steel)"}
+      color={isBlock ? "var(--accent-fg)" : "var(--steel)"}
       title={e.title}
       holdIcon={isBlock ? <GitCommitHorizontal size={11} /> : undefined}
       time={showTime ? fmtTime(e.startMin) : undefined}
@@ -102,7 +102,7 @@ export function CalendarTimeGrid({ days, hourH, onPick }: TimeGridProps) {
                 .map((e) => (
                   <AllDayChip
                     key={e.id}
-                    color={e.kind === "block" ? "var(--accent)" : "var(--steel)"}
+                    color={e.kind === "block" ? "var(--accent-fg)" : "var(--steel)"}
                     title={e.title}
                     onClick={() => onPick(e)}
                   />
