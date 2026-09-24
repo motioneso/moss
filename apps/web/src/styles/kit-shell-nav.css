@@ -43,6 +43,17 @@
   color: var(--ink);
 }
 
+/* The sidebar is a light ground, so the account block takes surface text
+   tokens instead of the rail's bone-on-forest ones. */
+.sidebar .jds-usermenu__trigger {
+  color: var(--ink);
+}
+
+.sidebar .jds-usermenu__sub,
+.sidebar .jds-usermenu__chev {
+  color: var(--muted);
+}
+
 /* Study focus ring on sidebar controls; the product box-shadow ring is off here. */
 .sidebar :focus-visible {
   outline: 3px solid var(--focus);

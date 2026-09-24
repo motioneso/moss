@@ -85,7 +85,7 @@ test("an undeclared external module shows its trust warning and credential field
   await expect(userMenu).toBeVisible();
 
   await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings & permissions" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
 

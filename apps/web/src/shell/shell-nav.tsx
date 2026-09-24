@@ -216,7 +216,7 @@ function RailUserMenu(props: {
               <span className="jds-usermenu__ic">
                 <Settings size={16} aria-hidden="true" />
               </span>
-              <span className="jds-usermenu__lbl">Settings &amp; permissions</span>
+              <span className="jds-usermenu__lbl">Settings</span>
             </button>
             <div className="jds-usermenu__div" />
             <button

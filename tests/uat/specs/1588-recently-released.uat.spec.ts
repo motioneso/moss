@@ -29,7 +29,7 @@ async function signIn(page: Page) {
 test("a non-admin can navigate to the bundled release history", async ({ page }) => {
   await signIn(page);
   await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings & permissions" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
 
   const settingsNav = page.getByRole("navigation", { name: "Settings categories" });
   await expect(settingsNav.getByText("Moss", { exact: true })).toBeVisible();
