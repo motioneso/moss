@@ -114,7 +114,7 @@ test("Finance reports derive net worth and pairing-excluded spending end-to-end"
 
   // --- Enable through the real admin UI ------------------------------------------------
   await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings & permissions" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();

@@ -127,7 +127,7 @@ test("Finance feed works end-to-end on a docker-cp activated module", async ({ p
 
   const openInstanceModules = async () => {
     await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Settings & permissions" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Admin / Setup" }).click();
     await page.getByRole("button", { name: "Instance modules" }).click();
   };
