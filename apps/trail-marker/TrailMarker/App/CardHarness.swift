@@ -14,6 +14,7 @@ final class CardHarness {
 
     private let connection: ConnectionRuntime
     private let focus: FocusRuntime
+    private let backtrack: BacktrackRuntime
     private var windows: [NSWindow] = []
 
     init() {
@@ -37,6 +38,10 @@ final class CardHarness {
             preferences: preferences, keychain: keychain, transportFactory: { _ in transport },
             freshWindowIdentity: { _ in nil }
         )
+        backtrack = BacktrackRuntime(
+            connection: connection, permissions: PermissionsService(), focus: focus, preferences: preferences,
+            sink: BacktrackDebugRing(), services: .inert()
+        )
     }
 
     private static var identity: LinkedIdentity? {
@@ -48,12 +53,13 @@ final class CardHarness {
 
     func show() {
         focus.start()
+        backtrack.start()
         if let identity = Self.identity {
             connection.send(.linkCompleted(identity, credential: "tm1_harness", generation: connection.currentGeneration))
         }
 
         let card = StatusCardView(
-            connection: connection, focus: focus,
+            connection: connection, focus: focus, feature: backtrack.menuState,
             perform: { [weak self] role in self?.perform(role) }, dismiss: {}
         )
         let window = NSWindow(contentViewController: NSHostingController(rootView: card))
@@ -71,7 +77,7 @@ final class CardHarness {
         case .settings:
             let settings = SettingsWindow(
                 connection: connection, permissions: PermissionsService(), focus: focus,
-                updater: UpdaterService(), loginItem: LoginItemService(), onSetUp: {}
+                updater: UpdaterService(), loginItem: LoginItemService(), onSetUp: {}, backtrack: backtrack
             )
             let window = NSWindow(contentViewController: NSHostingController(rootView: settings))
             window.title = "Settings"

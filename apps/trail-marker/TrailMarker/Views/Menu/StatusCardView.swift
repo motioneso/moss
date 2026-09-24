@@ -6,6 +6,8 @@ import SwiftUI
 struct StatusCardView: View {
     @ObservedObject var connection: ConnectionRuntime
     @ObservedObject var focus: FocusRuntime
+    /// A second feature's switch (Backtrack in Debug builds); empty otherwise.
+    @ObservedObject var feature: FeatureSwitchState = FeatureSwitchState()
     let perform: (MenuItemDescriptor.Role) -> Void
     let dismiss: () -> Void
 
@@ -14,7 +16,7 @@ struct StatusCardView: View {
     }
 
     private var items: [MenuItemDescriptor] {
-        MenuModel.items(state: connection.state, identity: connection.identity, focus: focusInfo)
+        MenuModel.items(state: connection.state, identity: connection.identity, focus: focusInfo, feature: feature.row)
     }
 
     /// The Focus state line (goal, "No block right now", ...), when Focus is on.
@@ -97,6 +99,7 @@ struct StatusCardView: View {
     private func setSwitch(_ role: MenuItemDescriptor.Role, on: Bool) {
         switch role {
         case .focusSwitch: focus.setFocusSwitch(on: on)
+        case .featureSwitch: feature.onToggle?(on)
         default: break
         }
     }

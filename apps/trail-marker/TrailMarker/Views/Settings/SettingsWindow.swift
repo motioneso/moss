@@ -4,6 +4,10 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case connection = "Connection"
     case thisMac = "This Mac"
     case focus = "Focus"
+    #if DEBUG
+    /// Backtrack's Phase 1 preview, Debug builds only (plan §4.4).
+    case backtrack = "Backtrack"
+    #endif
     case permissions = "Permissions"
     case updates = "Updates"
 
@@ -14,6 +18,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "network"
         case .thisMac: return "laptopcomputer"
         case .focus: return "scope"
+        #if DEBUG
+        case .backtrack: return "clock.arrow.circlepath"
+        #endif
         case .permissions: return "hand.raised"
         case .updates: return "arrow.triangle.2.circlepath"
         }
@@ -28,6 +35,9 @@ struct SettingsWindow: View {
     @ObservedObject var updater: UpdaterService
     let loginItem: LoginItemService
     let onSetUp: () -> Void
+    #if DEBUG
+    var backtrack: BacktrackRuntime?
+    #endif
 
     @State private var selection: SettingsSection? = .connection
     @State private var autoCheckUpdates = PreferencesStore().autoCheckUpdates
@@ -49,6 +59,14 @@ struct SettingsWindow: View {
                 ThisMacPane(connection: connection, loginItem: loginItem)
             case .focus:
                 FocusPane(focus: focus, permissions: permissions)
+            #if DEBUG
+            case .backtrack:
+                if let backtrack {
+                    BacktrackPane(backtrack: backtrack, permissions: permissions, onEditNeverWatch: { selection = .focus })
+                } else {
+                    Text("Not available in this build.").foregroundStyle(.secondary)
+                }
+            #endif
             case .permissions:
                 PermissionsPane(permissions: permissions)
             case .updates:
