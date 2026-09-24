@@ -8,16 +8,25 @@ import {
   type SportsRoutesDependencies
 } from "../../packages/sports/src/routes.js";
 
-function makePreferences(initial: unknown = null): PreferencesPort & { writes: unknown[] } {
-  let value = initial;
-  const writes: unknown[] = [];
+// Kept in sync with the private keys in routes.ts on purpose: the test drives the real route and
+// asserts per-key writes, so the strings are part of the observable contract.
+const SELECTED_KEY = "sports.standings_competition_keys";
+const LAST_VIEWED_KEY = "sports.standings_last_viewed";
+
+function makePreferences(initial: Record<string, unknown> = {}): PreferencesPort & {
+  values: Map<string, unknown>;
+  writes: Array<{ key: string; value: unknown }>;
+} {
+  const values = new Map<string, unknown>(Object.entries(initial));
+  const writes: Array<{ key: string; value: unknown }> = [];
   return {
+    values,
     writes,
-    get: async () => value,
+    get: async (_db, key) => values.get(key) ?? null,
     getWithMetadata: async () => null,
-    upsert: async (_db, _key, next) => {
-      value = next;
-      writes.push(next);
+    upsert: async (_db, key, next) => {
+      values.set(key, next);
+      writes.push({ key, value: next });
     }
   };
 }
@@ -68,14 +77,16 @@ describe("sports standings preference routes", () => {
     await absent.ready();
     expect(
       (await absent.inject({ method: "GET", url: "/api/sports/standings-preferences" })).json()
-    ).toEqual({ selectedCompetitionKeys: null });
+    ).toEqual({ selectedCompetitionKeys: null, lastViewed: null });
     await absent.close();
 
-    const app = buildApp(makePreferences(["retired.league", "eng.1", "nfl", "nfl"]));
+    const app = buildApp(
+      makePreferences({ [SELECTED_KEY]: ["retired.league", "eng.1", "nfl", "nfl"] })
+    );
     await app.ready();
     expect(
       (await app.inject({ method: "GET", url: "/api/sports/standings-preferences" })).json()
-    ).toEqual({ selectedCompetitionKeys: ["nfl", "eng.1"] });
+    ).toEqual({ selectedCompetitionKeys: ["nfl", "eng.1"], lastViewed: null });
     await app.close();
   });
 
@@ -91,7 +102,7 @@ describe("sports standings preference routes", () => {
           payload: { selectedCompetitionKeys: ["eng.1", "nfl"] }
         })
       ).json()
-    ).toEqual({ selectedCompetitionKeys: ["nfl", "eng.1"] });
+    ).toEqual({ selectedCompetitionKeys: ["nfl", "eng.1"], lastViewed: null });
     expect(
       (
         await app.inject({
@@ -100,8 +111,50 @@ describe("sports standings preference routes", () => {
           payload: { selectedCompetitionKeys: [] }
         })
       ).json()
-    ).toEqual({ selectedCompetitionKeys: [] });
-    expect(preferences.writes).toEqual([["nfl", "eng.1"], []]);
+    ).toEqual({ selectedCompetitionKeys: [], lastViewed: null });
+    expect(preferences.writes).toEqual([
+      { key: SELECTED_KEY, value: ["nfl", "eng.1"] },
+      { key: SELECTED_KEY, value: [] }
+    ]);
+    await app.close();
+  });
+
+  // #2661: the last-viewed competition is saved under its own key, so writing it never disturbs
+  // the selected-league list and the other way round.
+  it("remembers the last-viewed standings without touching the list", async () => {
+    const preferences = makePreferences({ [SELECTED_KEY]: ["nfl"] });
+    const app = buildApp(preferences);
+    await app.ready();
+    const lastViewed = {
+      competitionKey: "fifa.wwc",
+      viewKey: "sec:2",
+      viewLabel: "Group B"
+    };
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: "/api/sports/standings-preferences",
+          payload: { lastViewed }
+        })
+      ).json()
+    ).toEqual({ selectedCompetitionKeys: ["nfl"], lastViewed });
+    expect(preferences.writes).toEqual([{ key: LAST_VIEWED_KEY, value: lastViewed }]);
+
+    expect(
+      (await app.inject({ method: "GET", url: "/api/sports/standings-preferences" })).json()
+    ).toEqual({ selectedCompetitionKeys: ["nfl"], lastViewed });
+
+    // A null clears the remembered pick without removing the selected list.
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: "/api/sports/standings-preferences",
+          payload: { lastViewed: null }
+        })
+      ).json()
+    ).toEqual({ selectedCompetitionKeys: ["nfl"], lastViewed: null });
     await app.close();
   });
 
@@ -110,11 +163,15 @@ describe("sports standings preference routes", () => {
     const app = buildApp(preferences);
     await app.ready();
     const payloads = [
+      {},
       { selectedCompetitionKeys: "nfl" },
       { selectedCompetitionKeys: ["nfl"], extra: true },
       { selectedCompetitionKeys: ["nfl", "nfl"] },
       { selectedCompetitionKeys: Array.from({ length: 65 }, (_, index) => `league-${index}`) },
-      { selectedCompetitionKeys: ["unknown.league"] }
+      { selectedCompetitionKeys: ["unknown.league"] },
+      { lastViewed: { competitionKey: "unknown.league" } },
+      { lastViewed: { competitionKey: "fifa.wwc", viewKey: 3 } },
+      { lastViewed: { competitionKey: "", viewKey: null, viewLabel: null } }
     ];
     for (const payload of payloads) {
       const response = await app.inject({

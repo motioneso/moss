@@ -158,6 +158,21 @@ export const sportsModuleManifest = {
       id: "sports.national_team_follows",
       description:
         "Following a team in a tournament, like a national team at the World Cup or a club in the Champions League, shows only that team's stories. The tournament is under Following in standings only while it is running."
+    },
+    {
+      id: "sports.womens_leagues",
+      description:
+        "Sports covers more women's competitions: the English, Spanish, French and Dutch top leagues, Australia's A-League Women, the women's Champions League and European Championship, the Olympic tournament and the Concacaf W Gold Cup."
+    },
+    {
+      id: "sports.wpbl_news",
+      description:
+        "The Women's Pro Baseball League can be followed for news from the league's own site. It has no scores or standings, so its standings area says none are available and its stories still show."
+    },
+    {
+      id: "sports.remembered_standings",
+      description:
+        "The standings picker opens the competition and division you last looked at, on any device, until you pick another. A finished tournament you last opened still opens."
     }
   ],
   navigation: [

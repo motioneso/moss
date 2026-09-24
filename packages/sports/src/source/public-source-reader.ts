@@ -4,9 +4,17 @@ import { DatasetCache, DEFAULT_STALE_RETENTION_MS } from "@moss/datasets";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument, parsePublicFeedItems } from "@moss/news";
 
+import { readCatalogFeeds } from "./catalog-feed.js";
 import { catalogEntry } from "./catalog.js";
 import { publisherIdentity } from "./publisher-identity.js";
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
+import {
+  DomainConcurrencyLimiter,
+  FETCH_TIMEOUT_MS,
+  HEADLINE_TTL_MS,
+  MAX_RESPONSE_BYTES,
+  REFRESH_DEADLINE_MS
+} from "./feed-shared.js";
 import {
   type EnsurePhotoResult,
   type PhotoHostSlot,
@@ -42,12 +50,7 @@ import { SPORTS_SPORT_LABELS } from "./scope.js";
 const MAX_ASSIGNMENTS = 20;
 const MAX_REQUESTS = 30;
 const MAX_CONCURRENCY = 4;
-const MAX_DOMAIN_CONCURRENCY = 2;
-export const MAX_RESPONSE_BYTES = 1_000_000;
-export const FETCH_TIMEOUT_MS = 6_000;
-const REFRESH_DEADLINE_MS = 12_000;
 const MAX_RETRY_AFTER_MS = 5_000;
-const HEADLINE_TTL_MS = 10 * 60 * 1000;
 
 export type SportsPublicSourceHeadline = CustomSourceHeadline & {
   readonly imageUrl: string | null;
@@ -129,72 +132,6 @@ interface RequestOutcome {
   readonly message: string | null;
   readonly checkedAt: Date | null;
   readonly fromCache: boolean;
-}
-
-export class DomainConcurrencyLimiter {
-  private readonly active = new Map<string, number>();
-  private readonly waiters = new Map<string, Array<() => void>>();
-
-  async acquireAll(
-    hosts: readonly string[],
-    deadline: number,
-    now: () => number,
-    signal?: AbortSignal
-  ): Promise<readonly string[] | null> {
-    const acquired: string[] = [];
-    for (const host of [...new Set(hosts.map((value) => value.toLowerCase()))].sort()) {
-      if (!(await this.acquire(host, deadline, now, signal))) {
-        for (const held of acquired.reverse()) this.release(held);
-        return null;
-      }
-      acquired.push(host);
-    }
-    return acquired;
-  }
-
-  private async acquire(
-    host: string,
-    deadline: number,
-    now: () => number,
-    signal?: AbortSignal
-  ): Promise<boolean> {
-    if ((this.active.get(host) ?? 0) < MAX_DOMAIN_CONCURRENCY) {
-      this.active.set(host, (this.active.get(host) ?? 0) + 1);
-      return true;
-    }
-    if (signal?.aborted || now() >= deadline) return false;
-    return new Promise<boolean>((resolve) => {
-      let settled = false;
-      const queue = this.waiters.get(host) ?? [];
-      const grant = (): void => finish(true);
-      const finish = (granted: boolean): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        signal?.removeEventListener("abort", onAbort);
-        const current = this.waiters.get(host);
-        const index = current?.indexOf(grant) ?? -1;
-        if (current && index >= 0) current.splice(index, 1);
-        if (current?.length === 0) this.waiters.delete(host);
-        if (granted) this.active.set(host, (this.active.get(host) ?? 0) + 1);
-        resolve(granted);
-      };
-      const onAbort = (): void => finish(false);
-      const timer = setTimeout(() => finish(false), Math.max(1, deadline - now()));
-      signal?.addEventListener("abort", onAbort, { once: true });
-      queue.push(grant);
-      this.waiters.set(host, queue);
-    });
-  }
-
-  release(host: string): void {
-    const count = this.active.get(host) ?? 0;
-    if (count <= 1) this.active.delete(host);
-    else this.active.set(host, count - 1);
-    const next = this.waiters.get(host)?.shift();
-    if (this.waiters.get(host)?.length === 0) this.waiters.delete(host);
-    next?.();
-  }
 }
 
 function stableId(value: string): string {
@@ -891,5 +828,22 @@ export class SportsPublicSourceReader {
       }
     }
     return { headlines, degraded, persistedResults };
+  }
+
+  /**
+   * #2661: news for catalog competitions with a fixed feed. Delegates to the shared reader in
+   * catalog-feed.ts so this uses the same safe-fetch, parse and cache path as custom sources.
+   */
+  async refreshCatalogFeeds(
+    competitionKeys: readonly string[],
+    options: { readonly signal?: AbortSignal } = {}
+  ): Promise<readonly SportsPublicSourceHeadline[]> {
+    return readCatalogFeeds({
+      competitionKeys,
+      fetch: this.dependencies.fetch,
+      cache: this.cache,
+      now: this.now,
+      ...(options.signal ? { signal: options.signal } : {})
+    });
   }
 }

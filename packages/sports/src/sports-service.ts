@@ -170,7 +170,10 @@ export interface SportsServiceDependencies {
   readonly datasetClient: DatasetClient;
   readonly dataContext: SportsDataContext;
   readonly repository: SportsFollowsWriter;
-  readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  // `refreshCatalogFeeds` is optional so existing service stubs that only provide `refresh` keep
+  // compiling; when present, #2661 news-only competitions get their fixed catalog feed.
+  readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh"> &
+    Partial<Pick<SportsPublicSourceReader, "refreshCatalogFeeds">>;
   readonly espnCoverage?: Pick<SportsEspnCoverageRepository, "get">;
   /** Clock seam (default `() => new Date()`); tests inject a fixed instant. */
   readonly now?: () => Date;
@@ -290,7 +293,8 @@ export class SportsService {
   private readonly dataContext: SportsDataContext;
   private readonly repository: SportsFollowsWriter;
   private readonly now: () => Date;
-  private readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  private readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh"> &
+    Partial<Pick<SportsPublicSourceReader, "refreshCatalogFeeds">>;
   private readonly espnCoverage?: Pick<SportsEspnCoverageRepository, "get">;
   private readonly storyRelevance?: SportsStoryRelevancePort;
   private readonly storyFeedback?: SportsStoryFeedbackPort;
@@ -326,6 +330,9 @@ export class SportsService {
    *  Replaces the catalog's former eager per-competition fan-out to ESPN: the picker now asks
    *  for a league's roster only when the user actually expands it. */
   async getLeagueTeams(competitionKey: string): Promise<SportsLeagueTeamsResponse> {
+    // #2661: a news-only competition has no ESPN roster at all; skip the call rather than ask
+    // ESPN for a league it does not carry.
+    if (catalogEntry(competitionKey)?.newsFeedUrl) return { teams: [], degraded: false };
     const state: DegradeState = { degraded: false };
     const teams = await this.teamsFor(competitionKey, state);
     return { teams, degraded: state.degraded };
@@ -439,13 +446,31 @@ export class SportsService {
       })
     );
 
+    // #2661: news-only competitions (a fixed catalog feed, no ESPN data) are read through the
+    // same feed reader the custom sources use, only for competitions the viewer follows.
+    const catalogFeedRefresh = this.publicSourceReader?.refreshCatalogFeeds
+      ? this.publicSourceReader.refreshCatalogFeeds(competitionKeys, { signal }).catch(() => [])
+      : Promise.resolve([]);
+
     // Every competition is fetched independently and in parallel (scoreboard/standings/teams
     // together, then headlines once teams resolves for the team-key join) instead of a serial
     // crawl across all competitions — a cold load no longer pays N sequential round-trips
     // (#765 M2).
-    const [perComp, custom] = await Promise.all([
+    const [perComp, custom, catalogFeeds] = await Promise.all([
       Promise.all(
         competitionKeys.map(async (key) => {
+          const entry = catalogEntry(key);
+          // A news-only competition has no ESPN data at all, so skip the ESPN round-trips that
+          // would only 404 for it; its stories arrive through `catalogFeedRefresh` below.
+          if (entry?.newsFeedUrl) {
+            return {
+              key,
+              scoreboard: [] as GameSummary[],
+              standingsTable: EMPTY_STANDINGS,
+              teams: [] as SourceTeamRef[],
+              headlines: [] as SourceHeadline[]
+            };
+          }
           const [scoreboard, standingsTable, teams] = await Promise.all([
             this.cached<GameSummary[]>(
               "scoreboard",
@@ -479,7 +504,8 @@ export class SportsService {
           return { key, scoreboard, standingsTable, teams, headlines };
         })
       ),
-      customRefresh
+      customRefresh,
+      catalogFeedRefresh
     ]);
     if (custom.degraded) state.degraded = true;
     const scoreboardByComp = new Map(perComp.map((p) => [p.key, p.scoreboard]));
@@ -528,7 +554,7 @@ export class SportsService {
       const catalogKey = identityByFollowId.get(follow.id)!.catalogKey;
       return catalogKey === null ? [] : [{ ...follow, teamKey: catalogKey }];
     });
-    for (const headline of custom.headlines) {
+    for (const headline of [...custom.headlines, ...catalogFeeds]) {
       if (headline.competitionKey === null) {
         const existing = headlinesBySport.get(headline.sportKey) ?? [];
         headlinesBySport.set(headline.sportKey, mergeHeadlineScope(existing, headline));
@@ -889,13 +915,25 @@ export class SportsService {
     competitionKey: string
   ): Promise<{ group: StandingsGroup; fixtures: GameSummary[] }> {
     const state: DegradeState = { degraded: false };
+    const entry = catalogEntry(competitionKey);
+    // #2661: a news-only competition has no ESPN standings; answer empty without the call.
+    if (entry?.newsFeedUrl) {
+      return {
+        group: {
+          competitionKey,
+          competitionLabel: entry.label,
+          standingsShape: entry.standingsShape,
+          sections: []
+        },
+        fixtures: []
+      };
+    }
     const table = await this.cached<StandingsTable>(
       "standings",
       { competitionKey },
       EMPTY_STANDINGS,
       state
     );
-    const entry = catalogEntry(competitionKey);
     const group: StandingsGroup = {
       competitionKey,
       competitionLabel: entry?.label ?? competitionKey,

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   GameSide,
   GameSummary,
   StandingsGroup,
   StandingsRow,
   StandingsSection,
+  SportsStandingsLastViewed,
   SportsStandingsResponse
 } from "@moss/shared";
 
@@ -14,7 +15,8 @@ import {
   getSportsCatalog,
   getSportsStandingsPreferences,
   getStandingsByLeague,
-  listSportsFollows
+  listSportsFollows,
+  updateSportsStandingsPreferences
 } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { buildStandingsPickerGroups, StandingsPicker } from "./sports-standings-picker.js";
@@ -142,6 +144,41 @@ export function defaultStandingsKey(
   );
 }
 
+// #2661: the competition to open. A remembered pick wins whenever it is still in the picker, even
+// if it is a finished tournament (an explicit pick beats the finished-tournament rule). If it is
+// gone (unfollowed or hidden), or was never set, fall back to the derived default. Exported for
+// direct unit testing.
+export function resolveDefaultStandingsKey(
+  rememberedCompetitionKey: string | null,
+  groups: readonly StandingsGroup[],
+  visibleKeys: readonly string[],
+  activeCompetitionKeys: readonly string[]
+): string {
+  if (rememberedCompetitionKey && visibleKeys.includes(rememberedCompetitionKey)) {
+    return rememberedCompetitionKey;
+  }
+  return defaultStandingsKey(groups, visibleKeys, activeCompetitionKeys);
+}
+
+// #2661: the inner division/group view to open inside a remembered competition. Matched by label
+// first (stable across reorders), then by key. Anything no longer present falls back quietly to
+// the competition's own default view. Exported for direct unit testing.
+export function resolveStandingsViewKey(
+  remembered: SportsStandingsLastViewed | null,
+  views: readonly StandingsView[],
+  fallbackKey: string
+): string {
+  if (!remembered) return fallbackKey;
+  if (remembered.viewLabel && remembered.viewLabel !== "All") {
+    const byLabel = views.find((view) => view.label === remembered.viewLabel);
+    if (byLabel) return byLabel.key;
+  }
+  if (remembered.viewKey && views.some((view) => view.key === remembered.viewKey)) {
+    return remembered.viewKey;
+  }
+  return fallbackKey;
+}
+
 export function StandingsRail(props: {
   groups: readonly StandingsGroup[];
   followedPairs: FollowedTeamIndex;
@@ -155,9 +192,11 @@ export function StandingsRail(props: {
     queryKey: sportsQueryKeys.standingsPreferences,
     queryFn: getSportsStandingsPreferences
   });
+  const queryClient = useQueryClient();
   const catalog = catalogQuery.data?.competitions ?? SPORTS_CATALOG;
   const follows = followsQuery.data?.follows ?? [];
   const selectedCompetitionKeys = preferencesQuery.data?.selectedCompetitionKeys ?? null;
+  const lastViewed = preferencesQuery.data?.lastViewed ?? null;
   const activeCompetitionKeys = props.activeCompetitionKeys ?? [];
   const pickerGroups = useMemo(
     () =>
@@ -177,13 +216,34 @@ export function StandingsRail(props: {
     () => new Map(props.groups.map((g) => [g.competitionKey, g])),
     [props.groups]
   );
-  // A tournament that is not running is not opened by default (it is still reachable under its
+  // A remembered pick opens again whenever it is still in the picker (#2661); otherwise a
+  // tournament that is not running is not opened by default (it is still reachable under its
   // sport). Only the default is gated; explicit selection is untouched.
-  const firstKey = defaultStandingsKey(props.groups, visibleKeys, activeCompetitionKeys);
+  const rememberedCompetitionKey =
+    lastViewed && visibleKeys.includes(lastViewed.competitionKey)
+      ? lastViewed.competitionKey
+      : null;
+  const firstKey = resolveDefaultStandingsKey(
+    lastViewed?.competitionKey ?? null,
+    props.groups,
+    visibleKeys,
+    activeCompetitionKeys
+  );
   const [selectedKey, setSelectedKey] = useState(firstKey);
   const activeKey = visibleKeys.includes(selectedKey) ? selectedKey : (visibleKeys[0] ?? "");
   // null = follow the derived default (followed team's division); a string = the viewer's own pick.
   const [viewOverride, setViewOverride] = useState<string | null>(null);
+  // The viewer's own competition/view picks, so a later-arriving remembered value never yanks the
+  // screen out from under them. A competition pick resets the view pick for the new competition.
+  const competitionPicked = useRef(false);
+  const viewPicked = useRef(false);
+  const saveLastViewed = useMutation({
+    mutationFn: (next: SportsStandingsLastViewed) =>
+      updateSportsStandingsPreferences({ lastViewed: next }),
+    onSuccess: (response) => {
+      queryClient.setQueryData(sportsQueryKeys.standingsPreferences, response);
+    }
+  });
 
   // Vertical scroll affordance (Ben 2026-07-07): the rail is height-capped (mrbah9gw decouple),
   // so a 20-team division shows only its top ~14 rows with NO hint the rest is below — it "looks
@@ -193,6 +253,15 @@ export function StandingsRail(props: {
   // left clean.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [moreBelow, setMoreBelow] = useState(false);
+
+  // Adopt a remembered competition that arrived after the first render (preferences load async),
+  // unless the viewer has already picked one.
+  useEffect(() => {
+    if (competitionPicked.current) return;
+    if (rememberedCompetitionKey && selectedKey !== rememberedCompetitionKey) {
+      setSelectedKey(rememberedCompetitionKey);
+    }
+  }, [rememberedCompetitionKey, selectedKey]);
 
   useEffect(() => {
     if (selectedKey !== activeKey) setSelectedKey(activeKey);
@@ -216,7 +285,16 @@ export function StandingsRail(props: {
   const defaultKey = group
     ? defaultViewKey(views, group.competitionKey, props.followedPairs)
     : "all";
-  const activeView = views.find((v) => v.key === (viewOverride ?? defaultKey)) ?? views[0] ?? null;
+  // #2661: the remembered inner view only applies to the competition it was saved for, and only
+  // until the viewer picks a view themselves.
+  const rememberedView = lastViewed && lastViewed.competitionKey === activeKey ? lastViewed : null;
+  const rememberedViewKey = viewPicked.current
+    ? null
+    : resolveStandingsViewKey(rememberedView, views, defaultKey);
+  const activeView =
+    views.find((v) => v.key === (viewOverride ?? rememberedViewKey ?? defaultKey)) ??
+    views[0] ??
+    null;
   // Every non-tournament league: "All" or a whole conference reads as ONE ranking, divisions/
   // conferences mixed, best to worst — not a stack of section tables (live feedback mra33whr,
   // widened from record leagues to MLS-style points leagues by mra50mfr). Tournament group
@@ -234,8 +312,26 @@ export function StandingsRail(props: {
   const shownSections = knockout ? [] : (mergeSections ?? activeView?.sections ?? []);
 
   function selectLeague(competitionKey: string) {
+    competitionPicked.current = true;
+    viewPicked.current = false;
     setSelectedKey(competitionKey);
     setViewOverride(null);
+    // #2661: remember the pick server-side so it carries across devices. The view resets with the
+    // competition; picking a division below saves it separately.
+    saveLastViewed.mutate({ competitionKey, viewKey: null, viewLabel: null });
+  }
+
+  function selectView(key: string) {
+    viewPicked.current = true;
+    setViewOverride(key);
+    const view = views.find((candidate) => candidate.key === key);
+    if (activeKey) {
+      saveLastViewed.mutate({
+        competitionKey: activeKey,
+        viewKey: key,
+        viewLabel: view?.label ?? null
+      });
+    }
   }
 
   // ESPN can send a note with no description (advancement flagged, nothing to label) — such
@@ -288,11 +384,7 @@ export function StandingsRail(props: {
             />
           ) : null}
           {activeKey && !knockout && views.length > 1 ? (
-            <ViewSelect
-              views={views}
-              value={activeView?.key ?? "all"}
-              onChange={(next) => setViewOverride(next)}
-            />
+            <ViewSelect views={views} value={activeView?.key ?? "all"} onChange={selectView} />
           ) : null}
         </span>
       </div>

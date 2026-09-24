@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DatasetClient, DatasetEnvelope } from "@moss/datasets";
 import type { AccessContext, DataContextDb } from "@moss/db";
@@ -17,6 +17,7 @@ import type {
   SourceTeamRef,
   StandingsTable
 } from "../../packages/sports/src/source/sports-source.js";
+import type { SportsPublicSourceHeadline } from "../../packages/sports/src/source/public-source-reader.js";
 import {
   SportsService,
   type RegisteredStory,
@@ -1695,5 +1696,73 @@ describe("SportsService story relevance (#2019)", () => {
       expect(candidate).not.toHaveProperty("url");
       expect(candidate).not.toHaveProperty("body");
     }
+  });
+});
+
+describe("SportsService news-only competitions (#2661)", () => {
+  it("shows a news-only competition's catalog feed and never asks ESPN for it", async () => {
+    const listTeams = vi.fn(async () => [] as SourceTeamRef[]);
+    const getScoreboard = vi.fn(async () => [] as GameSummary[]);
+    const getStandings = vi.fn(async () => ({ sections: [] }) as StandingsTable);
+    const getHeadlines = vi.fn(async () => [] as SourceHeadline[]);
+    const wpblFollow: SportsFollowDto = {
+      id: "f-wpbl",
+      competitionKey: "wpbl",
+      teamKey: null,
+      sourceTeamId: null,
+      createdAt: "2026-06-01T00:00:00.000Z"
+    };
+    const feedHeadline: SportsPublicSourceHeadline = {
+      origin: "custom",
+      sourceId: "catalog:wpbl",
+      id: "catalog:wpbl:boston-opener",
+      sportKey: "baseball",
+      competitionKey: "wpbl",
+      competitionLabel: "Women's Pro Baseball League",
+      title: "Boston opens the season at home",
+      url: "https://www.womensprobaseballleague.com/boston-opener",
+      publishedAt: "2026-07-01T12:00:00.000Z",
+      imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+      summary: "",
+      teamKeys: [],
+      publisherLabel: "Women's Pro Baseball League",
+      publisherDomain: "www.womensprobaseballleague.com"
+    };
+    const service = new SportsService({
+      ...makeDeps({
+        follows: [wpblFollow],
+        source: makeSource({ listTeams, getScoreboard, getStandings, getHeadlines })
+      }),
+      publicSourceReader: {
+        refresh: async () => ({ headlines: [], degraded: false, persistedResults: 0 }),
+        refreshCatalogFeeds: async () => [feedHeadline]
+      }
+    });
+
+    const overview = await service.getOverview(userA);
+
+    // The feed story is on the page even with no ESPN data behind the league.
+    const titles = [
+      ...overview.topStories.map((story) => story.title),
+      ...overview.leagueNews.flatMap((group) => group.headlines.map((story) => story.title))
+    ];
+    expect(titles).toContain("Boston opens the season at home");
+    // No ESPN dataset was asked for the league it does not carry.
+    expect(listTeams).not.toHaveBeenCalled();
+    expect(getScoreboard).not.toHaveBeenCalled();
+    expect(getStandings).not.toHaveBeenCalled();
+    expect(getHeadlines).not.toHaveBeenCalled();
+    // And the standings route answers empty rather than reaching ESPN too.
+    await expect(service.getStandings("wpbl")).resolves.toEqual({
+      group: {
+        competitionKey: "wpbl",
+        competitionLabel: "Women's Pro Baseball League",
+        standingsShape: "record",
+        sections: []
+      },
+      fixtures: []
+    });
   });
 });
