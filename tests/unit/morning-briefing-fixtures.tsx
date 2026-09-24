@@ -244,6 +244,7 @@ export function stubReaderController(
     notice: null,
     busy: false,
     choiceFor: (block: DayPlanBlockDto) => defaultChoiceFor(block),
+    expectOwnWrite: () => undefined,
     setPlacement: () => undefined,
     dismissApproval: () => undefined,
     setTime: () => undefined,

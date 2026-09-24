@@ -170,6 +170,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
         eveningIntent: patch,
         blocks: [...keptRows, ...proposals]
       });
+      review.expectOwnWrite();
       setPlan(saved.plan);
       setSaved(true);
       for (const key of [
