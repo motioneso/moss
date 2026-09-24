@@ -1,6 +1,5 @@
 import {
   gatherToolSection,
-  withToolSavepoint,
   emptySection,
   buildPersonaBlock,
   sourceIncludedInBriefings,
@@ -32,6 +31,7 @@ import {
   type SportsBriefingEvidenceV1
 } from "@moss/shared";
 import { resolveBriefingFreshness } from "./freshness.js";
+import { withToolSavepoint } from "./savepoint.js";
 import { resolvePlanContext } from "./plan-context.js";
 import { planSection } from "./plan-prose.js";
 import { timezoneFor } from "./schedule.js";

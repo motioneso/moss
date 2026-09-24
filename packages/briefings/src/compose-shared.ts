@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import { sql } from "kysely";
 import type { ActiveModulesResolver, AiRepository, AiSecretCipher } from "@moss/ai";
 import { HttpApiAdapter, parseAiApiKeyCredential } from "@moss/ai";
 import type { ChatTurn, GenerateChatInput, ProviderKind } from "@moss/ai";
@@ -17,6 +16,7 @@ import {
   type DayPlanDto
 } from "@moss/shared";
 import type { BriefingContribution, ExternalBriefingInvoker } from "./external-contributions.js";
+import { withToolSavepoint } from "./savepoint.js";
 import type { BriefingStructuredPayloadV1 } from "@moss/shared";
 
 export type GenerateChatFn = (input: GenerateChatInput) => Promise<{ readonly text: string }>;
@@ -346,31 +346,6 @@ export async function readEmailSignalSettings(
     draftReplies: boolPreference(draftReplies, true),
     autoSend: boolPreference(autoSend, false)
   };
-}
-
-let toolSavepointCounter = 0;
-
-/**
- * Runs one best-effort step inside a SAVEPOINT. Compose shares the job's single transaction, so a
- * database error swallowed by a catch would otherwise abort every later statement (25P02) and
- * fail the whole run. Callers must not run two of these concurrently on the same transaction.
- */
-export async function withToolSavepoint<T>(
-  scopedDb: DataContextDb,
-  work: () => Promise<T>
-): Promise<T> {
-  toolSavepointCounter += 1;
-  const name = `briefing_tool_sp_${toolSavepointCounter}`;
-  await sql.raw(`SAVEPOINT ${name}`).execute(scopedDb.db);
-  try {
-    const result = await work();
-    await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(scopedDb.db);
-    return result;
-  } catch (error) {
-    await sql.raw(`ROLLBACK TO SAVEPOINT ${name}`).execute(scopedDb.db);
-    await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(scopedDb.db);
-    throw error;
-  }
 }
 
 /** Gather one tool-backed section; never throws — failures become gaps. */
