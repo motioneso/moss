@@ -9,13 +9,13 @@ import { MODULE_WEB_ROUTES } from "virtual:moss-module-web";
 import { DEFAULT_LOCALE, formatDate } from "./locale/locale-format.js";
 
 const TOP_SECTION = "__top";
-const SECTION_ORDER: readonly string[] = [TOP_SECTION, "Plan", "You"];
+const SECTION_ORDER: readonly string[] = [TOP_SECTION, "Plan", "Your world"];
 const SECTION_OF: Record<string, string> = {
   tasks: "Plan",
   calendar: "Plan",
-  wellness: "You",
-  sports: "You",
-  news: "You"
+  wellness: "Your world",
+  sports: "Your world",
+  news: "Your world"
 };
 const HIDDEN_NAV_IDS = new Set([
   "chat",
