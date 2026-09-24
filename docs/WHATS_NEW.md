@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **No false warning after saving tomorrow's plan.** Saving tomorrow's plan in the evening no longer shows a warning that the plan changed. [PR #2650](https://github.com/motioneso/moss/pull/2650)
 
+#### Changed
+
+- **Trail-map texture on the Today header.** The Today header now has a faint trail-map pattern behind it. [PR #2651](https://github.com/motioneso/moss/pull/2651)
+
 ### 2026-09-23
 
 #### Changed
