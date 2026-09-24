@@ -345,4 +345,47 @@ describe("p6 automatic Review fail-first", () => {
     }
     expect(document.body.querySelector("#cal1-time")).toBeNull();
   });
+
+  it("keeps the due-date hint for an evening leave row", async () => {
+    const { ReviewRow: BareRow } = await import("../../apps/web/src/today/day-plan-review-row.js");
+    const leave = {
+      ...block("due1"),
+      taskId: "due-task",
+      actualPlacement: {
+        startsAt: "2026-09-10T15:30:00.000Z",
+        durationMinutes: 90,
+        calendarEventRef: null
+      },
+      pendingChange: null
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(BareRow, {
+          block: leave,
+          title: "Due task",
+          savedLabel: "On calendar",
+          choice: { placement: "leave", startsAt: null },
+          changed: false,
+          task: {
+            id: "due-task",
+            title: "Due task",
+            status: "todo",
+            dueAt: "2026-09-12T12:00:00.000Z",
+            doAt: null,
+            effort: null
+          },
+          unavailable: false,
+          controller: stubController(),
+          plan: { ...plan(), blocks: [leave] },
+          locale,
+          onOpenTask: () => undefined
+        })
+      );
+    });
+    expect(document.body.textContent).toMatch(/Due .*?, no time set/);
+  });
 });

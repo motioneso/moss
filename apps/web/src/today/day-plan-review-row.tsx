@@ -95,6 +95,10 @@ export function ReviewRow(props: {
         : `Due ${shortDate(props.task.dueAt, props.locale)}`
       : null;
   const metaReason = dueReason ?? stateWord;
+  const eveningDueHint =
+    !readerMode && props.choice.placement === "leave" && props.task?.dueAt
+      ? `Due ${shortDate(props.task.dueAt, props.locale)}, no time set`
+      : null;
   const showTime = readerMode
     ? blockDuration(block) !== null
     : props.choice.placement === "add" || props.choice.placement === "move";
@@ -135,6 +139,7 @@ export function ReviewRow(props: {
         {props.changed ? (
           <div className="plan-review__changed">Changed since you started</div>
         ) : null}
+        {eveningDueHint ? <div className="plan-review__hint">{eveningDueHint}</div> : null}
         {detail && !detail.eligible ? (
           <div className="plan-review__hint">{ineligibleWord(detail.ineligibleReason)}</div>
         ) : null}
