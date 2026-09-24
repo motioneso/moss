@@ -393,7 +393,7 @@ button {
 }
 
 .module-link:hover {
-  background: var(--sage);
+  background: var(--hover-tint);
   color: var(--ink);
 }
 

@@ -61,7 +61,7 @@
   border: 1px solid var(--border-subtle);
 }
 .dexp__fill {
-  background: var(--accent);
+  background: var(--accent-meter);
   border-radius: 999px;
 }
 .dexp__ready {

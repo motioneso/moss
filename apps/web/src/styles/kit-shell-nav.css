@@ -39,7 +39,7 @@
 }
 
 .nav-collapse:hover {
-  background: var(--sage);
+  background: var(--hover-tint);
   color: var(--ink);
 }
 
@@ -139,7 +139,7 @@
 
 [data-theme="dark"] .module-link:hover,
 [data-color-mode="dark"] .module-link:hover {
-  background: var(--surface-2);
+  background: var(--hover-tint);
   color: var(--ink);
 }
 

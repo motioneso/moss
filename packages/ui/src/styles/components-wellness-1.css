@@ -173,7 +173,7 @@
   background: var(--surface-3);
 }
 .wl-medfoot__fill {
-  background: var(--accent);
+  background: var(--accent-meter);
   border-radius: 2px;
 }
 .wl-medfoot__ct {

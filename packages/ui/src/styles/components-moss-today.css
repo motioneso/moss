@@ -495,7 +495,7 @@
 }
 .well__btn:hover {
   border-color: var(--accent-fg);
-  background: var(--white);
+  background: var(--hover-raise);
 }
 .np-photo {
   border-radius: var(--radius-lg);
