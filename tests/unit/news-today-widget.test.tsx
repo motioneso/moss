@@ -6,6 +6,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from "rea
 import { describe, expect, it } from "vitest";
 
 import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
+import { drawLeadContours } from "../../packages/news/src/web/lead-art.js";
 import { NewsTodayWidget } from "../../packages/news/src/web/today-widget.js";
 import { newsQueryKeys } from "../../packages/news/src/web/query-keys.js";
 
@@ -247,6 +248,11 @@ describe("News Today widget", () => {
     expect(art!.props.className).toBe("nw-leadart nw-leadart--culture");
     expect(art!.props["aria-hidden"]).toBe("true");
     expect(art!.findAllByType("path").length).toBeGreaterThan(3);
+    // The terrain follows the topic, not just the colors.
+    const drawn = art!.findAllByType("path").map((path) => path.props.d);
+    for (const line of drawLeadContours(art!.props["data-seed"], "culture")) {
+      expect(drawn).toContain(line.d);
+    }
     // The rest of the lead is unchanged.
     expect(renderer.root.findAllByProps({ children: "Today story 1" }).length).toBe(1);
     expect(renderer.root.findAllByProps({ className: "nw-twlead__dek" }).length).toBe(1);

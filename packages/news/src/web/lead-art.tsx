@@ -2,8 +2,9 @@ import { useMemo, type ReactNode } from "react";
 
 /**
  * Drawn stand-in for the Today lead photo: the "contour print" study
- * (~/moss-placeholder-mockups/direction-1.html). Topic, headline and publisher hash to a seed;
- * the seed places five smooth hills; marching squares traces their height lines into SVG paths.
+ * (~/moss-placeholder-mockups/direction-1.html). Topic, headline and publisher hash to a seed.
+ * The topic family picks a terrain shape and the seed places it, so stories in one topic share a
+ * look but never a picture. Marching squares traces the terrain's height lines into SVG paths.
  * Decorative only, so the whole layer is aria-hidden and the headline carries the meaning.
  */
 
@@ -26,9 +27,9 @@ const CELL = 10;
 const COLUMNS = WIDTH / CELL;
 const ROWS = HEIGHT / CELL;
 const LEVELS = 24;
-const LEVEL_STEP = 0.115;
 
-// Topic keys and labels map onto the four studied color pairs; anything else draws as World.
+// Topic keys and labels map onto four families, each with its own colors and terrain; anything
+// else draws as World.
 const PALETTE_BY_TOPIC: Readonly<Record<string, LeadArtPalette>> = {
   climate: "climate",
   science: "climate",
@@ -59,48 +60,126 @@ export function leadArtSeed(story: LeadArtStory): number {
   return seed;
 }
 
-interface Hill {
-  readonly x: number;
-  readonly y: number;
-  readonly sx: number;
-  readonly sy: number;
-  readonly height: number;
+interface Terrain {
+  readonly height: (x: number, y: number) => number;
+
+  /** Height between neighboring contour lines; smaller steps pack the lines tighter. */
+  readonly step: number;
 }
 
-function placeHills(seed: number): Hill[] {
+/** Triangle wave with period 2 and range 0..1, for creased ridges. */
+function fold(value: number): number {
+  return Math.abs((((value % 2) + 2) % 2) - 1);
+}
+
+/** Each topic family gets its own ground; the seed only places and sizes it. */
+function shapeTerrain(kind: LeadArtPalette, random: () => number): Terrain {
+  switch (kind) {
+    // Broad rolling hills with wide, soft spacing.
+    case "climate": {
+      const hills = Array.from({ length: 4 }, (_, index) => ({
+        x: index * 230 + random() * 180 - 40,
+        y: 60 + random() * 330,
+        sx: 120 + random() * 70,
+        sy: 90 + random() * 60,
+        lift: 0.55 + random() * 0.45
+      }));
+      const phase = random() * Math.PI * 2;
+      return {
+        step: 0.1,
+        height: (x, y) => {
+          let value = 0.15 * Math.sin(x / 140 + y / 190 + phase);
+          for (const hill of hills) {
+            value +=
+              hill.lift *
+              Math.exp(
+                -((x - hill.x) ** 2 / (2 * hill.sx ** 2) + (y - hill.y) ** 2 / (2 * hill.sy ** 2))
+              );
+          }
+          return value;
+        }
+      };
+    }
+
+    // One or two steep summits ringed by tight, even contours, like a mountain map.
+    case "world": {
+      const count = random() < 0.5 ? 1 : 2;
+      const peaks = Array.from({ length: count }, (_, index) => ({
+        x: 160 + random() * 480,
+        y: 110 + random() * 230,
+        reach: 150 + random() * 60,
+        lift: index === 0 ? 1.95 : 1.1 + random() * 0.5
+      }));
+      const wobble = random() * Math.PI * 2;
+      return {
+        step: 0.085,
+        height: (x, y) => {
+          let value = 0;
+          for (const peak of peaks) {
+            const distance = Math.hypot(x - peak.x, y - peak.y);
+            const angle = Math.atan2(y - peak.y, x - peak.x);
+            const reach =
+              peak.reach * (1 + 0.07 * Math.sin(2 * angle + wobble) + 0.04 * Math.sin(5 * angle));
+            value = Math.max(value, peak.lift * Math.exp(-((distance / reach) ** 1.4)));
+          }
+          return value;
+        }
+      };
+    }
+
+    // A meandering river channel with bands that flow along it across the frame.
+    case "culture": {
+      const center = 150 + random() * 150;
+      const bends = [
+        { size: 45 + random() * 35, span: 70 + random() * 40, phase: random() * Math.PI * 2 },
+        { size: 15 + random() * 20, span: 30 + random() * 20, phase: random() * Math.PI * 2 }
+      ];
+      const tilt = (random() - 0.5) * 0.5;
+      return {
+        step: 0.13,
+        height: (x, y) => {
+          let river = center + tilt * (x - 400);
+          for (const bend of bends) river += bend.size * Math.sin(x / bend.span + bend.phase);
+
+          // The rounded valley floor leaves the channel open instead of tracing specks along it.
+          return Math.hypot(y - river, 45) / 120;
+        }
+      };
+    }
+
+    // Regular creased ridges crossing at an angle, like terraced or faceted ground.
+    case "technology": {
+      const angle = (0.25 + random() * 0.5) * (random() < 0.5 ? 1 : -1);
+      const across = angle + Math.PI / 2 + (random() - 0.5) * 0.4;
+      const pitch = 230 + random() * 80;
+      const crossPitch = 300 + random() * 120;
+      const offset = random() * 2;
+      return {
+        step: 0.115,
+        height: (x, y) =>
+          1.55 * fold((x * Math.cos(angle) + y * Math.sin(angle)) / pitch + offset) +
+          1.05 * fold((x * Math.cos(across) + y * Math.sin(across)) / crossPitch)
+      };
+    }
+  }
+}
+
+function seededRandom(seed: number): () => number {
   let state = seed;
-  const random = (): number => {
+  return () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   };
-  return Array.from({ length: 5 }, () => ({
-    x: random() * 900 - 50,
-    y: random() * 500 - 25,
-    sx: 100 + random() * 140,
-    sy: 75 + random() * 120,
-    height: 0.5 + random()
-  }));
 }
 
 /** One path per height level; every fifth level is a gold line. */
-export function drawLeadContours(seed: number): LeadArtLine[] {
-  const hills = placeHills(seed);
+export function drawLeadContours(seed: number, kind: LeadArtPalette): LeadArtLine[] {
+  const { height, step } = shapeTerrain(kind, seededRandom(seed));
   const field: number[][] = [];
   for (let row = 0; row <= ROWS; row += 1) {
     const values: number[] = [];
-    for (let column = 0; column <= COLUMNS; column += 1) {
-      const x = column * CELL;
-      const y = row * CELL;
-      let value = 0.12 * Math.sin(x / 75 + y / 90);
-      for (const hill of hills) {
-        value +=
-          hill.height *
-          Math.exp(
-            -((x - hill.x) ** 2 / (2 * hill.sx ** 2) + (y - hill.y) ** 2 / (2 * hill.sy ** 2))
-          );
-      }
-      values.push(value);
-    }
+    for (let column = 0; column <= COLUMNS; column += 1)
+      values.push(height(column * CELL, row * CELL));
     field.push(values);
   }
 
@@ -123,10 +202,10 @@ export function drawLeadContours(seed: number): LeadArtLine[] {
       const high = Math.max(corners[0][2], corners[1][2], corners[2][2], corners[3][2]);
 
       // Only the levels that pass through this cell can cross its edges.
-      const first = Math.max(1, Math.ceil(low / LEVEL_STEP));
-      const last = Math.min(LEVELS, Math.floor(high / LEVEL_STEP));
+      const first = Math.max(1, Math.ceil(low / step));
+      const last = Math.min(LEVELS, Math.floor(high / step));
       for (let levelIndex = first; levelIndex <= last; levelIndex += 1) {
-        const level = levelIndex * LEVEL_STEP;
+        const level = levelIndex * step;
         const crossings: string[] = [];
         for (let edge = 0; edge < 4; edge += 1) {
           const start = corners[edge]!;
@@ -152,17 +231,18 @@ export function drawLeadContours(seed: number): LeadArtLine[] {
 
 // Remounts and re-renders of the same lead reuse the traced paths instead of re-tracing them.
 const CACHE_LIMIT = 16;
-const contourCache = new Map<number, LeadArtLine[]>();
+const contourCache = new Map<string, LeadArtLine[]>();
 
-function cachedContours(seed: number): LeadArtLine[] {
-  const hit = contourCache.get(seed);
+function cachedContours(seed: number, kind: LeadArtPalette): LeadArtLine[] {
+  const key = `${kind}:${seed}`;
+  const hit = contourCache.get(key);
   if (hit) return hit;
-  const lines = drawLeadContours(seed);
+  const lines = drawLeadContours(seed, kind);
   if (contourCache.size >= CACHE_LIMIT) {
     const oldest = contourCache.keys().next().value;
     if (oldest !== undefined) contourCache.delete(oldest);
   }
-  contourCache.set(seed, lines);
+  contourCache.set(key, lines);
   return lines;
 }
 
@@ -173,13 +253,10 @@ function cachedContours(seed: number): LeadArtLine[] {
 export function LeadArt(props: LeadArtStory): ReactNode {
   const { topic, headline, publisher } = props;
   const seed = leadArtSeed({ topic, headline, publisher });
-  const lines = useMemo(() => cachedContours(seed), [seed]);
+  const kind = leadArtPalette(topic);
+  const lines = useMemo(() => cachedContours(seed, kind), [seed, kind]);
   return (
-    <span
-      className={`nw-leadart nw-leadart--${leadArtPalette(topic)}`}
-      aria-hidden="true"
-      data-seed={seed}
-    >
+    <span className={`nw-leadart nw-leadart--${kind}`} aria-hidden="true" data-seed={seed}>
       <svg
         className="nw-leadart__svg"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
