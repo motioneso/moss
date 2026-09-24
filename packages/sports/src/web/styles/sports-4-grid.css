@@ -74,10 +74,35 @@
 .sp-ticker__scroll:focus-visible {
   outline-offset: 2px;
 }
-/* /today followed-team card, "Minimalist Sports Card V3" anatomy (Ben mockup 2026-07-09):
-   identity header / media-left body / inverted next-game bar. TickerTeam only renders inside
-   .sp-tkgrid now (the /sports strip moved to .sp-feat, mrb7mwhv), so the card idiom lives here
-   directly — the old 240px scroll-strip variant (fixed width, right-hand divider) is retired. */
+/* Followed strip cards: the Today card (sports-8-clippings.css), four across on wide screens
+   with the rest scrolling. Cards stretch to the row height, so every footer docks to one
+   shared baseline. The story feedback menu is hidden here (#2074), so headlines drop the
+   right padding reserved for it. The long selectors outrank the shared clippings rules. */
+.sp-ticker__scroll {
+  gap: 0 48px;
+}
+.sp-ticker__scroll > .sp-tk {
+  flex: 0 0 calc((100% - 3 * 48px) / 4);
+  min-width: 256px;
+}
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__body:has(+ .sp-tk__next) {
+  margin-bottom: 18px;
+}
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__next {
+  margin-top: auto;
+}
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__lead > .sp-tk__newstx,
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__stories > .sp-fbhost > .sp-tk__storylink {
+  padding-right: 0;
+}
+@media (max-width: 768px) {
+  .sp-ticker__scroll > .sp-tk {
+    flex-basis: 280px;
+    min-width: 0;
+  }
+}
+/* Followed-team card base (TickerTeam). Today's .sp-tkgrid and the /sports Followed strip
+   restyle it as flat clippings columns in sports-8-clippings.css. */
 .sp-tk {
   display: flex;
   flex-direction: column;
@@ -149,9 +174,8 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* #885: finished-game result row on /today — opponent crest + "L 3–9", the /today counterpart of
-   .sp-feat__result so both surfaces drop the "vs Blue Jays" text tail. Center-align so the crest
-   tracks the score, not its baseline. */
+/* #885: finished-game result row — both crests and the bare score, no "vs Blue Jays" text
+   tail. Center-align so the crest tracks the score, not its baseline. */
 .sp-tk__result {
   display: flex;
   align-items: center;
@@ -219,8 +243,8 @@
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
-/* Storyless pre-game/idle card: muted italic placeholder, mirrors .sp-feat__lead--empty so the
-   /today widget and /sports strip read the same "nothing here yet" (never the matchup, mrawrk0e). */
+/* Storyless pre-game/idle card: muted italic placeholder, an honest "nothing here yet" (never
+   the matchup, mrawrk0e). */
 .sp-tk__newstx--empty {
   font-style: italic;
 }
@@ -229,51 +253,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-/* ---- Shared next-game footer bar (.sp-next) ----
-   One footer treatment for BOTH /today (TickerTeam) and /sports (FeaturedTeamCard) so the two
-   pages read as siblings across the bottom (Ben 2026-07-09). Layout + venue color live here; the
-   per-surface container classes (.sp-tk__next / .sp-feat__next) supply only the bleed offsets,
-   which differ because the two cards have different side/bottom padding. */
-.sp-next {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  line-height: 1.35;
-  /* long fixture lines truncate rather than wrap the bar to two rows */
-  overflow: hidden;
-}
-/* "vs" (home) / "@" (away) venue token — the only home/away signal now (Ben 2026-07-09), leading
-   the left group ahead of the opponent crest. */
-.sp-next__venue {
-  white-space: nowrap;
-}
-/* Fixture "when" (Today · 6:45 PM, or a dated line) — margin-left:auto floats it to the right edge
-   so venue + crest stay left-grouped and the date/time sits opposite (Ben 2026-07-09 "date/time on
-   the right"). Truncates so the bar never wraps. */
-.sp-next__when {
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-/* Live-score strip (#963): while a game is in progress the footer bar carries the current
-   score instead of the next fixture — same .sp-next ground. The LIVE token takes the venue
-   token's slot; same 2xs uppercase voice as .sp-tk__live / .sp-feat__flag. */
-.sp-next__livetag {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-/* Score rides the .sp-next__when right-float slot; tabular figures so a changing score
-   doesn't jitter the bar. */
-.sp-next__score {
-  font-variant-numeric: tabular-nums;
 }
 /* /today bleed: pin to the card base (auto top) and bleed to the edges. Sides = -space-4,
    bottom = -space-3, matching .sp-tk's padding so the bar sits flush; overflow:hidden on the
@@ -364,229 +343,6 @@
 .sp-tk__matchup {
   line-height: 1.3;
 }
-/* ---- Featured desk strip (mrb7mwhv) ----
-   The /sports followed strip trades the 240px dense .sp-tk for a roomy, image-forward card:
-   far more space per team so the strip reads editorial, not busy (Ben: "not so compact and
-   busy"). Only the desk strip renders .sp-feat; /today keeps the compact .sp-tk. Display name +
-   gold/live flag pull in the sports-desk idiom without dragging in the parked page reskin. */
-.sp-feat {
-  /* Four-up: size each card to a quarter of the strip so exactly four show at once and the
-     footprint stays under the hero's (Ben mrb8fh5e "shoot for four wide to control the size and
-     let the HERO be the HERO"). Width history: 360 → 440 (mrb81ene "wider") → 4-up quarter.
-     More than four followed teams just scroll — the arrows/drag still work. min-width keeps the
-     quarter from collapsing on narrow laptops; there it falls back to a scrolling ~2-up. */
-  flex: 0 0 25%;
-  width: 25%;
-  min-width: 260px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5) var(--space-4);
-  overflow: hidden;
-}
-.sp-feat__banner {
-  position: relative;
-  /* Letterbox 16:7 (was 16:9) — at 440px wide a 16:9 banner is ~247px and the whole card
-     towered over the hero (Ben mrb897r8 "not as tall, it competes with the Hero"). The
-     cinematic crop keeps the image-forward read while cutting ~55px of height. */
-  aspect-ratio: 16 / 7;
-  overflow: hidden;
-}
-.sp-feat__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.sp-feat__plate {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-/* Broadcast-bug status flag over the banner corner. Live = solid accent so it reads against
-   any photo; today = gold (our warmest park token — no rust token exists, mrb7mwhv). */
-.sp-feat__flag {
-  position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: var(--space-0-5) var(--space-2);
-}
-.sp-feat__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  /* Fill the card's leftover height so .sp-feat__next's `margin-top: auto` (below) has slack to
-     push into. Without this the body sized to its content, the footer sat wherever the last
-     headline ended, and the live-score bar floated mid-card at a different height on every card
-     (Ben 2026-08-01 /sports: "the live score should be docked to the bottom"). The strip's cards
-     are equal-height flex siblings, so filling here docks every footer to the same baseline. */
-  flex: 1;
-}
-.sp-feat__idn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-/* The three .sp-feat display slots (team name, lead headline, matchup) are set in --font-display
-   (bold Swiss, same face as the masthead + hero) for editorial weight. Since 2026-07-08
-   --font-display aliases --font-sans's exact stack (see tokens.css) so these never diverge from
-   the score/body font on non-Mac devices — the "out of place" clash Ben flagged (/sports #1). */
-.sp-feat__name {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  line-height: var(--leading-tight);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sp-feat__sub {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  /* Reserve the row height even when empty (Ben 2026-07-08 /sports annotation #2) so the lead /
-     news block starts at the same y on every card across the four-up strip — teams with no
-     standing or form (many leagues) no longer collapse this row and shove their news up. ~20px
-     matches a form-pip's box (11px text + 4px pad + 2px border ≈ 17px) with a little breathing. */
-  min-height: 1.25rem;
-}
-.sp-feat__standing {
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sp-feat__lead {
-  line-height: var(--leading-snug);
-  text-decoration: none;
-  display: -webkit-box;
-  /* 2 lines (was 3) — part of shortening the card so it defers to the hero (mrb897r8). */
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sp-feat__lead:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-/* Storyless placeholder (mrawrk0e): a pre-game/idle club with no news. Muted, non-interactive —
-   it's a <span>, not a link — so it reads as an honest "nothing here yet" rather than a headline. */
-.sp-feat__lead--empty {
-  font-style: italic;
-}
-/* Finished-game result row (Ben 2026-07-08 /sports annotation #2): opponent crest + "L 3–9",
-   the crest standing in for the "vs Blue Jays" text that read as cheap. Mirrors the .sp-feat__next
-   footer's crest-leads-then-text layout so the two rows on a card feel like one family. */
-.sp-feat__result {
-  display: flex;
-  align-items: center;
-  /* #2253: with no scorer lists there are no flex:1 spacers to balance the row, so
-     the crests and score packed against the left edge. Centring the row itself keeps
-     that group in the middle whether both, one, or neither team has scorer data. */
-  justify-content: center;
-  /* #2253 round 2: same tighter gap as .sp-tk__result — the scorer names need that width. */
-  gap: var(--space-1);
-}
-/* Goal-scorer names either side of the two crests — same pattern as .sp-tk__scorers above. */
-.sp-feat__scorers {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-/* #2253: align with text-align, NOT align-items. A column flex container sizes its
-   items to their content on the cross axis, so align-items: flex-end made each name's
-   list item as wide as the full name — wider than the list — and it spilled out of the
-   row uncut. Stretched items take the list's width, which is what the ellipsis below
-   needs to bite on. */
-.sp-feat__scorers--home {
-  text-align: right;
-  align-items: stretch;
-}
-.sp-feat__scorers--away {
-  text-align: left;
-  align-items: stretch;
-}
-/* #2253 round 2: same readable-name treatment as .sp-tk__scorers above — wrap rather than
-   trim, with a last-resort break so one long word can't shove the logos off centre. */
-.sp-feat__scorers li {
-  min-width: 0;
-  max-width: 100%;
-}
-.sp-feat__scorers li > span {
-  display: block;
-  white-space: normal;
-  overflow-wrap: break-word;
-}
-.sp-feat__score {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-.sp-feat__matchup {
-  margin: 0;
-  line-height: var(--leading-snug);
-}
-.sp-feat__stories {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-/* Bullet each story link so the list reads as distinct items, separated from the bold lead above
-   (Ben 2026-07-09 /sports annotation #2) — same pseudo-element bullet as /today's .sp-tk__stories,
-   left-aligned to the first line of a clamped two-line title rather than centered on the li box. */
-.sp-feat__stories li {
-  position: relative;
-  padding-left: var(--space-3);
-}
-.sp-feat__stories li::before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-.sp-feat__storylink {
-  line-height: 1.4;
-  text-decoration: none;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sp-feat__storylink:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-/* /sports footer shares the .sp-next look with /today (Ben 2026-07-09 "similar look across the
-   bottom") but floats instead of bleeding: unlike /today's flush bar, this keeps a little
-   breathing room below the box (Ben 2026-07-09 "space the bottom again"). Pinned toward the base
-   (auto top) but inset by the card's own side + bottom padding, as a rounded block. */
-.sp-feat__next {
-  margin-top: auto;
-}
-@media (max-width: 768px) {
-  .sp-feat {
-    /* Phones can't fit four — fall back to a fixed ~1.3-up scroll so cards stay legible. */
-    flex-basis: 280px;
-    width: 280px;
-    min-width: 0;
-  }
-}
-
 /* ---- Today widget grid (live feedback mrb4mhxt) ----
    The Sports desk widget on /today renders the same TickerTeam cards as the desk ticker
    (replacing the drifted FollowedCard copy), but in a wrapping grid instead of a scroll
@@ -709,18 +465,14 @@
 .sp-brief__row > .sp-brief__link,
 .sp-tk__lead > .sp-tk__newstx,
 .sp-tk__stories > .sp-fbhost > .sp-tk__storylink,
-.sp-feat__leadwrap > .sp-feat__lead,
-.sp-feat__stories > .sp-fbhost > .sp-feat__storylink,
 .sp-latest__item > .sp-hl,
 .sp-newsband__brief > .sp-newsband__brieflink {
   padding-right: var(--space-7);
 }
 .sp-tk__stories > .sp-fbhost > .sp-feedback,
-.sp-feat__stories > .sp-fbhost > .sp-feedback,
 .sp-newsband__brief > .sp-feedback,
 .sp-latest__item > .sp-feedback,
-.sp-tk__lead > .sp-feedback,
-.sp-feat__leadwrap > .sp-feedback {
+.sp-tk__lead > .sp-feedback {
   top: 0;
   right: 0;
 }
