@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Cleaner followed teams on Today.** Your followed teams and leagues on the Today page now appear as newspaper-style columns with their logos and colors. [PR #2652](https://github.com/motioneso/moss/pull/2652)
 - **Trail-map texture on the Today header.** The Today header now has a faint trail-map pattern behind it. [PR #2651](https://github.com/motioneso/moss/pull/2651)
 
 ### 2026-09-23
