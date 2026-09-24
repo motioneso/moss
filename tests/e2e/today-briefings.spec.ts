@@ -345,9 +345,10 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
   await expect(dialog).toContainText("Proposed, not on the calendar yet");
 
-  // Leave the due-dated block unscheduled: the consequence reads in words.
+  // Leave the due-dated block unscheduled: no extra consequence line appears.
   await dialog.getByLabel("File the report: placement").selectOption("leave");
-  await expect(dialog).toContainText("Due Sep 12, no time set");
+  await expect(dialog).toContainText("Proposed, not on the calendar yet");
+  await expect(dialog).not.toContainText("no time set");
 
   // Choose both proposals so they join the selection; the summary names each.
   await dialog.getByLabel("Write the launch brief: placement").selectOption("add");

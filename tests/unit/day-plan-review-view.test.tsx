@@ -294,6 +294,18 @@ describe("p6 automatic Review fail-first", () => {
     expect(document.body.textContent).not.toContain("Your day, laid out");
   });
 
+  it("R1.3 leave keeps a visible disabled Time with the proposed start", async () => {
+    await renderReview(
+      stubController({ choiceFor: () => ({ placement: "leave", startsAt: null }) })
+    );
+    const time = document.body.querySelector("#b1-time") as HTMLInputElement | null;
+    expect(time).not.toBeNull();
+    expect(time?.disabled).toBe(true);
+    expect(time?.value).toBe("09:00");
+    expect(document.body.textContent).toContain("30 minutes");
+    expect(document.body.textContent).not.toMatch(/no time set/);
+  });
+
   it("(e) guard: ReviewRow without the prop shows no Time field on a kept row", async () => {
     const { ReviewRow: BareRow } = await import("../../apps/web/src/today/day-plan-review-row.js");
     const kept = {

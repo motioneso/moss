@@ -135,11 +135,6 @@ export function ReviewRow(props: {
         {props.changed ? (
           <div className="plan-review__changed">Changed since you started</div>
         ) : null}
-        {props.choice.placement === "leave" && props.task?.dueAt ? (
-          <div className="plan-review__hint">
-            Due {shortDate(props.task.dueAt, props.locale)}, no time set
-          </div>
-        ) : null}
         {detail && !detail.eligible ? (
           <div className="plan-review__hint">{ineligibleWord(detail.ineligibleReason)}</div>
         ) : null}
@@ -154,17 +149,20 @@ export function ReviewRow(props: {
         ))}
         {outcome ? <div className="plan-review__hint">{outcomeWord(outcome)}</div> : null}
       </div>
-      <div className="plan-review__fields">
+      <div className={`plan-review__fields${showTime ? "" : " plan-review__fields--single"}`}>
         {showTime ? (
           <div className="plan-review__field">
-            <label className="plan-review__label" htmlFor={`${block.id}-time`}>
+            <label
+              className="plan-review__label plan-review__label--time"
+              htmlFor={`${block.id}-time`}
+            >
               Time
             </label>
             <input
               type="time"
               id={`${block.id}-time`}
               aria-label={`${props.title}: start time`}
-              className="plan-review__time"
+              className="plan-review__time plan-review__field--time"
               disabled={timeDisabled}
               value={readerMode ? readerTimeValue : timeValue}
               onChange={(event) => {
@@ -183,8 +181,11 @@ export function ReviewRow(props: {
             />
           </div>
         ) : null}
-        <div className="plan-review__field">
-          <label className="plan-review__label" htmlFor={`${block.id}-placement`}>
+        <div className="plan-review__field plan-review__field--placement">
+          <label
+            className="plan-review__label plan-review__label--placement"
+            htmlFor={`${block.id}-placement`}
+          >
             Placement
           </label>
           <Select

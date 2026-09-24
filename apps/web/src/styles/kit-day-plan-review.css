@@ -241,10 +241,6 @@
   margin: 12px 0 4px;
 }
 
-[data-briefing-surface="review"] .plan-review__accept .jds-btn--primary {
-  width: 100%;
-}
-
 [data-briefing-surface="review"] .plan-review__accept-rule {
   border: 0;
   border-top: 1px solid var(--line);
@@ -264,8 +260,10 @@
 
 [data-briefing-surface="review"] .plan-review__without ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 0;
   overflow-wrap: anywhere;
+  list-style: none;
+  color: var(--text-muted);
 }
 
 [data-briefing-surface="review"] .tl-legend {
@@ -332,7 +330,6 @@
   .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-back .jds-btn {
     padding-left: 0;
     padding-right: 0;
-    text-decoration: underline;
   }
 
   .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-actions .jds-btn {
@@ -350,4 +347,78 @@
   [data-briefing-surface="review"] .plan-review__fields {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
+}
+
+/* R1.3 whole-screen corrections. Every rule stays under the Review marker,
+   so evening step 4 and the Read rail render exactly as on the base. */
+
+/* 6. Back to Today reads as an underlined link at every width. */
+.brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-back .jds-btn {
+  text-decoration: underline;
+}
+
+/* 6. Save changes is compact at the mockup width on desktop; the phone
+   keeps its measured 96px. */
+@media (min-width: 481px) {
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-actions .jds-btn {
+    width: 114px;
+  }
+}
+
+/* 3. Stacked rows: title and meta on top, labels on one row, then Time and
+   Placement fields side by side spanning the panel at the mockup widths.
+   The field wrappers stay in the DOM and pass through, so evening rows keep
+   their base rendering untouched. */
+[data-briefing-surface="review"] .plan-review__row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 481px) {
+  [data-briefing-surface="review"] .plan-review__fields {
+    grid-template-columns: 306px minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 8px;
+  }
+}
+
+[data-briefing-surface="review"] .plan-review__field {
+  display: contents;
+}
+
+[data-briefing-surface="review"] .plan-review__label--time {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+[data-briefing-surface="review"] .plan-review__field--time {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+[data-briefing-surface="review"] .plan-review__label--placement {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[data-briefing-surface="review"] .plan-review__field--placement > .jds-selectwrap {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+[data-briefing-surface="review"] .plan-review__fields--single .plan-review__label--placement,
+[data-briefing-surface="review"]
+  .plan-review__fields--single
+  .plan-review__field--placement
+  > .jds-selectwrap {
+  grid-column: 1 / -1;
+}
+
+/* Mockup field height with breathing room between rows for the 160 pitch. */
+[data-briefing-surface="review"] .plan-review__field--time,
+[data-briefing-surface="review"] .plan-review__field--placement > .jds-selectwrap > .jds-select {
+  height: 41px;
+}
+
+[data-briefing-surface="review"] .plan-review__row {
+  padding-bottom: 27px;
 }

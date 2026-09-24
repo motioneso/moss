@@ -873,7 +873,7 @@ describe("DayPlanReview view", () => {
     expect(document.querySelectorAll("section.plan-review__confirm")).toHaveLength(1);
   });
 
-  it("redacts unreadable tasks and shows the due consequence", async () => {
+  it("redacts unreadable tasks and keeps the row to its state word", async () => {
     const container = await renderReview(
       stubController({
         choices: { b3: { placement: "leave", startsAt: null } }
@@ -882,7 +882,7 @@ describe("DayPlanReview view", () => {
     );
     expect(container.textContent).toContain("No longer available");
     expect(names(container)).not.toContain("Write the launch brief: placement");
-    expect(container.textContent).toMatch(/Due .*no time set/);
+    expect(container.textContent).not.toMatch(/no time set/);
   });
 
   it("disables Add on a block with no duration to schedule", async () => {
