@@ -144,6 +144,13 @@ final class BacktrackMachineTests: XCTestCase {
         _ = machine.handle(.frontmostChanged(Self.docs, at: Self.t(1.4)))
         XCTAssertEqual(machine.handle(.captured(generation: first, at: Self.t(1.5))), [])
         XCTAssertEqual(machine.handle(.recognized(generation: first, lines: Self.lines, address: nil, at: Self.t(2))), [])
+
+        // A new chain for the same window starts; the first chain's late events must still not
+        // land on it, which only a new generation guarantees.
+        let second = machine.handle(.tick(generation: machine.generation, at: Self.t(11)))
+        XCTAssertEqual(second, [.capture(Self.docs, generation: machine.generation)])
+        XCTAssertNotEqual(machine.generation, first)
+        XCTAssertEqual(machine.handle(.captured(generation: first, at: Self.t(11.1))), [])
     }
 
     func testNoFrontmostWindowRecordsNothing() {

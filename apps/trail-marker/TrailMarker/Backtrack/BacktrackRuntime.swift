@@ -361,11 +361,16 @@ final class BacktrackRuntime: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             self.send(.failed(generation: generation, at: self.services.clock()))
         }
-        guard let window = freshWindow(for: observation),
-              let before = services.secureFields.secureFieldFrames(
-                  pid: observation.pid, window: window, budget: Self.secureFieldBudget
-              )
-        else { return failed() }
+        guard let window = freshWindow(for: observation) else { return failed() }
+        let located = services.clock()
+        guard let before = services.secureFields.secureFieldFrames(
+            pid: observation.pid, window: window, budget: Self.secureFieldBudget
+        ) else {
+            // Plan Q1: what each app allows is recorded from these lines during the live proof.
+            focusDebug("Backtrack: skipped \(observation.appName) — its password fields couldn't all be found in 50 ms")
+            return failed()
+        }
+        let locateMilliseconds = Int(services.clock().timeIntervalSince(located) * 1000)
         let image: CGImage
         do {
             image = try await services.capture.capture(
@@ -377,10 +382,17 @@ final class BacktrackRuntime: ObservableObject {
         guard !Task.isCancelled else { return }
         guard let after = services.secureFields.secureFieldFrames(
             pid: observation.pid, window: window, budget: Self.secureFieldBudget
-        ), after == before,
-            let masked = SecureFieldMask.apply(before, to: image, windowFrame: window.frame)
-        else { return failed() }
+        ), after == before else {
+            focusDebug("Backtrack: skipped \(observation.appName) — a password field moved or appeared during the picture")
+            return failed()
+        }
+        guard let masked = SecureFieldMask.apply(before, to: image, windowFrame: window.frame) else { return failed() }
         let address = services.addresses.address(pid: observation.pid, window: window, bundleId: observation.bundleId)
+        // Plan Q1/Q2, per app, for the live proof. The app name only; no title, no text.
+        focusDebug(
+            "Backtrack: \(observation.appName) · \(before.count) password field(s) masked (\(locateMilliseconds) ms) · "
+                + (address == nil ? "no address exposed" : "address read")
+        )
         held = (generation, masked, address)
         send(.captured(generation: generation, at: services.clock()))
     }
