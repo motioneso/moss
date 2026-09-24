@@ -1,10 +1,10 @@
-# Jarv1s Mission
+# Moss Mission
 
-Jarv1s is a **privacy-first, self-hostable AI personal assistant OS**. It is built to be grounded in your own knowledge and life.
+Moss is a **privacy-first, self-hostable AI personal assistant OS**. It is built to be grounded in your own knowledge and life.
 
 ## What it does
 
-Jarv1s uses **your vault of notes** — the record of your work, projects, commitments, and relationships. It helps you by:
+Moss uses **your vault of notes** — the record of your work, projects, commitments, and relationships. It helps you by:
 
 - Giving you **daily briefings** that surface what actually matters today.
 - Tracking your **commitments and tasks**, watching for drift before it becomes a problem.
@@ -14,7 +14,7 @@ Jarv1s uses **your vault of notes** — the record of your work, projects, commi
 
 ## What it isn't
 
-Jarv1s is not a general-purpose chatbot or a cloud service. It runs on your hardware, keeps your data private, and never sends content to an AI provider without your explicit setup. Every AI capability is BYO-provider: you bring your own API key or run a local model. Nothing is locked to a single vendor.
+Moss is not a general-purpose chatbot or a cloud service. It runs on your hardware, keeps your data private, and never sends content to an AI provider without your explicit setup. Every AI capability is BYO-provider: you bring your own API key or run a local model. Nothing is locked to a single vendor.
 
 ## Design principles
 
@@ -25,4 +25,4 @@ Jarv1s is not a general-purpose chatbot or a cloud service. It runs on your hard
 
 ## The honest acceptance test
 
-Jarv1s is working when you genuinely use the morning briefing: grounded in your real vault, synthesized by a real model, and useful enough that you'd miss it if it stopped.
+Moss is working when you genuinely use the morning briefing: grounded in your real vault, synthesized by a real model, and useful enough that you'd miss it if it stopped.

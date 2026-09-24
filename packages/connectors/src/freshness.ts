@@ -1,4 +1,4 @@
-import type { DataContextDb } from "@moss/db";
+import { withSavepoint, type DataContextDb } from "@moss/db";
 
 import type { ConnectorAccountSafeRow, ConnectorsRepository } from "./repository.js";
 import { CALENDAR_SCOPE, GMAIL_SCOPE } from "./sync-jobs.js";
@@ -26,7 +26,7 @@ export async function getConnectorSyncAt(
 ): Promise<Date | null> {
   let accounts;
   try {
-    accounts = await repo.listAccounts(scopedDb);
+    accounts = await withSavepoint(scopedDb, () => repo.listAccounts(scopedDb));
   } catch {
     return null;
   }

@@ -12,6 +12,7 @@ import {
 import type { BriefingDefinition, DataContextDb } from "@moss/db";
 
 import type { BriefingGap, ComposeDeps } from "./compose-shared.js";
+import { withToolSavepoint } from "./savepoint.js";
 import { timezoneFor } from "./schedule.js";
 import { sanitizeExternal } from "./trust-boundary.js";
 
@@ -128,7 +129,9 @@ export async function resolvePlanContext(
   const day = localDay(now, timeZone);
   let plan: DayPlanDto | undefined;
   try {
-    plan = await port.getForDay(scopedDb, { localDay: day, timeZone });
+    plan = await withToolSavepoint(scopedDb, () =>
+      port.getForDay(scopedDb, { localDay: day, timeZone })
+    );
   } catch (error) {
     const e = error instanceof Error ? error : new Error(String(error));
     deps.logger?.error(

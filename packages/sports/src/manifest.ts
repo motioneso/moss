@@ -110,7 +110,8 @@ export const sportsModuleManifest = {
       "sql/0196_sports_news_source_scopes.sql",
       "sql/0213_sports_reddit_sources.sql",
       "sql/0217_sports_follows_source_team_id.sql",
-      "sql/0222_sports_source_photos.sql"
+      "sql/0222_sports_source_photos.sql",
+      "sql/0242_sports_follows_worker_select.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [

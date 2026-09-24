@@ -1,4 +1,4 @@
-import type { DataContextDb, EmailMessage } from "@moss/db";
+import { withSavepoint, type DataContextDb, type EmailMessage } from "@moss/db";
 
 import type { ConnectorAccountSafeRow } from "../repository.js";
 import type { EmailReadProvider } from "../email-read-provider.js";
@@ -7,6 +7,7 @@ import { IMAP_DEFAULT_FOLDER } from "../imap-email-read-provider.js";
 import type { ImapConnectionSecret } from "../imap-secret.js";
 import { buildEmailActionLink } from "./email-action-links.js";
 import {
+  EmailExtractNeedsConfigurationError,
   extractEmailSignals,
   looksLikeOneTimeCodeEmail,
   type EmailExtractDeps,
@@ -320,8 +321,19 @@ async function readAccountLive(
         : stored;
     } else if (triageBudget > 0) {
       triageBudget -= 1;
-      const extracted = await extractEmailSignals(message, extractDeps);
-      triage = triageFromSignals(cachedRow?.summary ?? extracted.summary, extracted.signals);
+      // Extraction reads the AI settings and swallows model errors, so it runs in a savepoint.
+      // A failed database read then leaves this message untriaged instead of breaking the
+      // transaction for every later message.
+      let extracted: Awaited<ReturnType<typeof extractEmailSignals>> | null;
+      try {
+        extracted = await withSavepoint(scopedDb, () => extractEmailSignals(message, extractDeps));
+      } catch (error) {
+        if (error instanceof EmailExtractNeedsConfigurationError) throw error;
+        extracted = null;
+      }
+      triage = extracted
+        ? triageFromSignals(cachedRow?.summary ?? extracted.summary, extracted.signals)
+        : UNTRIAGED;
     } else {
       triage = UNTRIAGED;
     }
@@ -396,9 +408,14 @@ export async function listEmailContext(
       | { kind: "imap"; secret: ImapConnectionSecret };
     try {
       if (account.provider_type === "google") {
-        credential = { kind: "google", token: await deps.resolveGoogleCredential(scopedDb) };
+        credential = {
+          kind: "google",
+          token: await withSavepoint(scopedDb, () => deps.resolveGoogleCredential(scopedDb))
+        };
       } else {
-        const secret = await deps.resolveImapCredential(scopedDb, account.id);
+        const secret = await withSavepoint(scopedDb, () =>
+          deps.resolveImapCredential(scopedDb, account.id)
+        );
         if (!secret) {
           gaps.push({ account: meta, reason: "auth_error" });
           continue;
@@ -410,8 +427,12 @@ export async function listEmailContext(
       continue;
     }
 
+    // Each attempt and the forced refresh run in savepoints, so the cache fallback below
+    // still has a working transaction after a failed database read.
     const attempt = () =>
-      readAccountLive(scopedDb, deps, account, meta, cachedByExternalId, credential, limit);
+      withSavepoint(scopedDb, () =>
+        readAccountLive(scopedDb, deps, account, meta, cachedByExternalId, credential, limit)
+      );
     try {
       let outcome: LiveReadOutcome;
       try {
@@ -422,7 +443,9 @@ export async function listEmailContext(
         // One forced token refresh, then the auth gap stands (spec §4).
         credential = {
           kind: "google",
-          token: await deps.resolveGoogleCredential(scopedDb, { force: true })
+          token: await withSavepoint(scopedDb, () =>
+            deps.resolveGoogleCredential(scopedDb, { force: true })
+          )
         };
         outcome = await attempt();
       }

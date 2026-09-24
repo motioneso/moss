@@ -16,8 +16,11 @@ import {
   type MonitorPreferencesPort,
   type RunEmailMonitorDeps
 } from "@moss/connectors";
+import { makeRecordingDb } from "./helpers/recording-db.js";
 
-const DB = {} as DataContextDb;
+const fakeScopedDb = makeRecordingDb().scoped;
+
+const DB = fakeScopedDb;
 const ACCOUNT = "acct-1";
 const NOW = () => new Date("2026-07-04T12:00:00.000Z");
 
