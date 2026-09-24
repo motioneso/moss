@@ -24,6 +24,9 @@ import {
   type SportsStoryFeedbackPort,
   type SportsStoryRelevancePort
 } from "../../packages/sports/src/sports-service.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
+
+const fakeScopedDb = makeRecordingDb().scoped;
 
 /**
  * A fake `DatasetClient` dispatching by dataset key, mirroring the shape the retired
@@ -301,7 +304,7 @@ export function makeDeps(
     datasetClient: overrides.source ?? makeSource(),
     dataContext: {
       withDataContext: async <T>(_ac: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
-        work({} as DataContextDb)
+        work(fakeScopedDb)
     },
     repository: {
       list: async () => follows,
@@ -889,10 +892,7 @@ describe("SportsService.getOverview", () => {
 describe("SportsService.getFollowedFactsForToday", () => {
   it("returns compact non-sensitive strings", async () => {
     const service = new SportsService(makeDeps());
-    const { facts } = await service.getFollowedFactsForToday(
-      {} as DataContextDb,
-      userA.actorUserId
-    );
+    const { facts } = await service.getFollowedFactsForToday(fakeScopedDb, userA.actorUserId);
     expect(facts.length).toBeGreaterThan(0);
     expect(facts[0]?.text).toMatch(/play|won|lost|tied/i);
     expect(facts[0]?.competitionKey).toBe("nfl");
@@ -906,7 +906,7 @@ describe("SportsService.getFollowedFactsForToday", () => {
     });
     const service = new SportsService(makeDeps({ source: badSource }));
     const { facts, evidence } = await service.getFollowedFactsForToday(
-      {} as DataContextDb,
+      fakeScopedDb,
       userA.actorUserId
     );
     expect(facts).toEqual([]);
@@ -928,7 +928,7 @@ describe("SportsService.getFollowedFactsForToday", () => {
     });
     const service = new SportsService(makeDeps({ source: badSource }));
     const { facts, evidence } = await service.getFollowedFactsForToday(
-      {} as DataContextDb,
+      fakeScopedDb,
       userA.actorUserId,
       { timeZone: "America/New_York" }
     );
@@ -954,7 +954,7 @@ describe("SportsService.getFollowedFactsForToday", () => {
       })
     );
     const { facts, evidence } = await service.getFollowedFactsForToday(
-      {} as DataContextDb,
+      fakeScopedDb,
       userA.actorUserId,
       { timeZone: "UTC" }
     );
@@ -999,7 +999,7 @@ describe("SportsService.today() timezone handling (#761)", () => {
     });
     const service = new SportsService({ ...makeDeps({ source }), now: () => LATE_EVENING_ET });
     const { facts, evidence } = await service.getFollowedFactsForToday(
-      {} as DataContextDb,
+      fakeScopedDb,
       userA.actorUserId
     );
     expect(seenRanges).toEqual([{ day: "2026-07-03", endDay: ET_DATE }]);

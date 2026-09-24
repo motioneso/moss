@@ -18,6 +18,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 
 import { composeBriefing, sourceIncludedInBriefings, type ComposeDeps } from "./compose.js";
 import { emptyStructuredPayload } from "./action-rows.js";
+import { withToolSavepoint } from "./savepoint.js";
 import { defaultScheduleMetadataFor, timezoneFor } from "./schedule.js";
 import type { BriefingStructuredPayloadV1 } from "@moss/shared";
 
@@ -321,7 +322,9 @@ export class BriefingsRepository {
     let sameDayMorningMeta: Record<string, unknown> | null = null;
     if (definition.briefing_type === "evening") {
       try {
-        const morningRun = await this.findSameLocalDayMorningRun(scopedDb, definition, now);
+        const morningRun = await withToolSavepoint(scopedDb, () =>
+          this.findSameLocalDayMorningRun(scopedDb, definition, now)
+        );
         sameDayMorningMeta =
           (morningRun?.source_metadata as Record<string, unknown> | undefined) ?? null;
       } catch {

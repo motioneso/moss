@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { dataContextBrand, type DataContextDb, type EmailMessage } from "@moss/db";
+import type { EmailMessage } from "@moss/db";
 import type { ConnectorAccountSafeRow } from "../../packages/connectors/src/repository.js";
 import type {
   EmailReadProvider,
@@ -13,8 +13,11 @@ import {
   listEmailContext,
   type EmailSourceContextDeps
 } from "../../packages/connectors/src/source-context/email.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
 
-const scopedDb = { db: {} as never, [dataContextBrand]: true } satisfies DataContextDb;
+const fakeScopedDb = makeRecordingDb().scoped;
+
+const scopedDb = fakeScopedDb;
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 

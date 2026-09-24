@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { DataContextDb } from "@moss/db";
 
 import { getConnectorSyncAt } from "../../packages/connectors/src/freshness.js";
 import type { ConnectorAccountSafeRow } from "../../packages/connectors/src/repository.js";
 import { GMAIL_SCOPE, CALENDAR_SCOPE } from "../../packages/connectors/src/sync-jobs.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
+
+const fakeScopedDb = makeRecordingDb().scoped;
 
 function fakeRepo(accounts: Partial<ConnectorAccountSafeRow>[]) {
   return {
@@ -13,7 +15,7 @@ function fakeRepo(accounts: Partial<ConnectorAccountSafeRow>[]) {
   } as Parameters<typeof getConnectorSyncAt>[0];
 }
 
-const scopedDb = {} as DataContextDb;
+const scopedDb = fakeScopedDb;
 
 describe("getConnectorSyncAt", () => {
   it("returns null when no accounts match the kind", async () => {

@@ -87,6 +87,44 @@ describe("sports follows repository RLS", () => {
     expect(listed[0]?.id).toBe(created.id);
   });
 
+  it("the briefings worker reads only the actor's own follows and cannot write them", async () => {
+    const admin = await signUp("Admin", "sports-worker-admin@example.com");
+    void admin;
+    await disableApproval();
+    const alice = await signUp("Alice", "sports-worker-alice@example.com");
+    const bob = await signUp("Bob", "sports-worker-bob@example.com");
+    await dataCtx.withDataContext({ actorUserId: alice, requestId: "sports-w-a" }, (scopedDb) =>
+      repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" })
+    );
+
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const workerCtx = new DataContextRunner(workerDb);
+      const aliceList = await workerCtx.withDataContext(
+        { actorUserId: alice, requestId: "sports-w-b" },
+        (scopedDb) => repo.list(scopedDb)
+      );
+      expect(aliceList.map((follow) => follow.teamKey)).toEqual(["min"]);
+
+      const bobList = await workerCtx.withDataContext(
+        { actorUserId: bob, requestId: "sports-w-c" },
+        (scopedDb) => repo.list(scopedDb)
+      );
+      expect(bobList).toEqual([]);
+
+      await expect(
+        workerCtx.withDataContext({ actorUserId: alice, requestId: "sports-w-d" }, (scopedDb) =>
+          repo.create(scopedDb, { competitionKey: "nba", teamKey: null, sourceTeamId: null })
+        )
+      ).rejects.toThrow(/permission denied/);
+    } finally {
+      await workerDb.destroy();
+    }
+  });
+
   it("a second actor's list does NOT see the first actor's follow (owner-only isolation)", async () => {
     const admin = await signUp("Admin", "sports2-admin@example.com");
     void admin;

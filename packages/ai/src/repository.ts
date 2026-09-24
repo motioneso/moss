@@ -18,7 +18,8 @@ import {
   type DataContextDb,
   type MossActionAuditLog,
   type MossErrorLog,
-  type MossDatabase
+  type MossDatabase,
+  withSavepoint
 } from "@moss/db";
 import {
   MODULE_WORKER_SERVICE_KEY,
@@ -1528,16 +1529,19 @@ export class AiRepository {
     capability: AiModelCapability
   ): Promise<void> {
     try {
-      await this.recordError(scopedDb, {
-        id: randomUUID(),
-        feature: "ai.routing",
-        operation: `resolve:${capability}`,
-        errorCategory: "needs-config",
-        retryable: false,
-        userMessage: "No AI model is configured for this capability.",
-        internalSummary: `No active capable model resolved for capability=${capability} (needs-config).`,
-        requestId: null
-      });
+      // The savepoint keeps a failed insert from aborting the caller's transaction.
+      await withSavepoint(scopedDb, () =>
+        this.recordError(scopedDb, {
+          id: randomUUID(),
+          feature: "ai.routing",
+          operation: `resolve:${capability}`,
+          errorCategory: "needs-config",
+          retryable: false,
+          userMessage: "No AI model is configured for this capability.",
+          internalSummary: `No active capable model resolved for capability=${capability} (needs-config).`,
+          requestId: null
+        })
+      );
     } catch {
       // Observability is best-effort — a logging failure must not fail the caller's work.
     }

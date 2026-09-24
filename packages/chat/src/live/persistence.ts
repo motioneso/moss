@@ -110,26 +110,24 @@ export async function resolveChatFreshness(
   if (sourceKeys.size === 0) return null;
 
   const capturedAtIso = capturedAt.toISOString();
-  const entries: SourceFreshnessEntry[] = await Promise.all(
-    [...sourceKeys].map(async (source): Promise<SourceFreshnessEntry> => {
-      if (REALTIME_SOURCES_CHAT.has(source)) {
-        return { source, freshnessKind: "realtime", asOf: capturedAtIso };
+  const entries: SourceFreshnessEntry[] = [];
+  for (const source of sourceKeys) {
+    if (REALTIME_SOURCES_CHAT.has(source)) {
+      entries.push({ source, freshnessKind: "realtime", asOf: capturedAtIso });
+    } else if (CONNECTOR_SOURCES_CHAT.has(source)) {
+      let asOf: string | null = null;
+      try {
+        const t = (await opts.connectorSyncAt?.(scopedDb, source as "email" | "calendar")) ?? null;
+        asOf = t ? t.toISOString() : null;
+      } catch {
+        // keep asOf as null on error
       }
-      if (CONNECTOR_SOURCES_CHAT.has(source)) {
-        let asOf: string | null = null;
-        try {
-          const t =
-            (await opts.connectorSyncAt?.(scopedDb, source as "email" | "calendar")) ?? null;
-          asOf = t ? t.toISOString() : null;
-        } catch {
-          // keep asOf as null on error
-        }
-        return { source, freshnessKind: "connector_sync", asOf };
-      }
+      entries.push({ source, freshnessKind: "connector_sync", asOf });
+    } else {
       // vault — V1: asOf: null (no vaultLastWriteAt dep for chat)
-      return { source, freshnessKind: "vault_write", asOf: null };
-    })
-  );
+      entries.push({ source, freshnessKind: "vault_write", asOf: null });
+    }
+  }
 
   return { version: 1, capturedAt: capturedAtIso, sources: entries };
 }
@@ -165,10 +163,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       actorUserId,
       "resolve-provider",
       async (scopedDb) => {
-        const [model, rawChatSettings] = await Promise.all([
-          this.ai.selectChatModelForUser(scopedDb),
-          this.chatPreferences?.get(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
-        ]);
+        // Sequential: model selection can write through a savepoint.
+        const model = await this.ai.selectChatModelForUser(scopedDb);
+        const rawChatSettings = await this.chatPreferences?.get(
+          scopedDb,
+          CHAT_SETTINGS_PREFERENCE_KEY
+        );
         return { model, acpModel: normalizeChatSettings(rawChatSettings).openCodeModel };
       }
     );

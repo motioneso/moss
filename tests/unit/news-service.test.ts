@@ -21,6 +21,9 @@ import type {
   NewsStoryFeedbackPort,
   NewsStoryTargetRow
 } from "../../packages/news/src/story-feedback-port.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
+
+const fakeScopedDb = makeRecordingDb().scoped;
 
 /**
  * Fake `DatasetClient` dispatching by (sourceKey, topicKey). Mirrors the sports-service stub's
@@ -110,7 +113,7 @@ function makeDeps(
     datasetClient: makeDatasetClient(overrides.getFeed ?? (async () => [item()])),
     dataContext: {
       withDataContext: async <T>(_ac: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
-        work({} as DataContextDb)
+        work(fakeScopedDb)
     },
     repository: {
       list: async () => prefs
@@ -257,7 +260,7 @@ describe("NewsService personalized snapshot overview", () => {
         snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two", { rank: 2 })])
       })
     );
-    const { facts } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { facts } = await service.getTopHeadlinesForToday(fakeScopedDb);
     expect(facts).toEqual(["Headline one — Preferred Wire", "Headline two — Preferred Wire"]);
   });
 });
@@ -534,7 +537,7 @@ describe("NewsService exclusion filtering (#953 Slice 1)", () => {
         getFeed: async (sourceKey) => (sourceKey === "bbc" ? [item(), item()] : [item()])
       })
     );
-    const { facts } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { facts } = await service.getTopHeadlinesForToday(fakeScopedDb);
     expect(facts.length).toBeGreaterThan(0);
     for (const fact of facts) expect(fact).not.toContain("BBC News");
   });
@@ -561,7 +564,7 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
           sourceKey === "bbc" ? Array.from({ length: 8 }, () => item()) : []
       })
     );
-    const { facts, evidence } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { facts, evidence } = await service.getTopHeadlinesForToday(fakeScopedDb);
     expect(facts).toHaveLength(5);
     expect(facts[0]).toMatch(/^Story \d+ — BBC News$/);
     expect(evidence.stories).toHaveLength(5);
@@ -577,7 +580,7 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
         }
       })
     );
-    const { facts, evidence } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { facts, evidence } = await service.getTopHeadlinesForToday(fakeScopedDb);
     expect(facts).toEqual([]);
     expect(evidence.stories).toEqual([]);
   });
@@ -591,7 +594,7 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
         ])
       })
     );
-    const { evidence } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { evidence } = await service.getTopHeadlinesForToday(fakeScopedDb);
     expect(evidence.stories.length).toBeLessThanOrEqual(5);
     for (const story of evidence.stories) {
       expect(story.summary.length).toBeLessThanOrEqual(240);
@@ -621,7 +624,7 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
       })
     );
     const { facts, evidence } = await service.getTopHeadlinesForToday(
-      {} as DataContextDb,
+      fakeScopedDb,
       userA.actorUserId
     );
     expect(facts).toEqual(["Headline two — Preferred Wire"]);

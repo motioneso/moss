@@ -14,6 +14,7 @@ import {
   type ComposeRunInput
 } from "./compose-shared.js";
 import { SECTION_ITEM_CAP } from "./compose-shared.js";
+import { withToolSavepoint } from "./savepoint.js";
 
 interface SuggestedTaskShape {
   readonly id: string;
@@ -170,11 +171,9 @@ export async function gatherActionRows(
     return { payload: emptyStructuredPayload(), sourceRefs: new Set(), invalidMetadataCount: 0 };
   }
   try {
-    const result = await tool.execute(
-      scopedDb,
-      { status: "suggested" },
-      ctxFor(definition, input),
-      {}
+    const execute = tool.execute;
+    const result = await withToolSavepoint(scopedDb, () =>
+      execute(scopedDb, { status: "suggested" }, ctxFor(definition, input), {})
     );
     const data = isRecord(result.data) ? result.data : {};
     const items = Array.isArray(data.items) ? data.items : [];
@@ -246,7 +245,9 @@ export async function buildEmailCatchUp(
     .slice(0, 3);
   let asOf: string | null = null;
   try {
-    const syncAt = (await connectorSyncAt?.(scopedDb, "email")) ?? null;
+    const syncAt = connectorSyncAt
+      ? await withToolSavepoint(scopedDb, () => connectorSyncAt(scopedDb, "email"))
+      : null;
     asOf = syncAt?.toISOString() ?? null;
   } catch {
     // Freshness is best-effort; the count and guarded summaries remain useful.

@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { DataContextDb } from "@moss/db";
-
 import { resolveBriefingFreshness } from "../../packages/briefings/src/freshness.js";
+import { fakeScopedDb as scopedDb } from "./briefings-compose.harness.js";
 
-const scopedDb = {} as DataContextDb;
 const CAPTURED_AT = new Date("2026-06-28T08:00:00.000Z");
 const CAPTURED_ISO = CAPTURED_AT.toISOString();
 const EMAIL_SYNC_AT = new Date("2026-06-27T22:00:00.000Z");

@@ -5,6 +5,9 @@ import type { SportsFollowDto } from "@moss/shared";
 import type { SourceTeamRef } from "../../packages/sports/src/source/sports-source.js";
 import { SportsService } from "../../packages/sports/src/sports-service.js";
 import { makeDatasetClient, makeDeps, side, userA } from "./sports-service.test.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
+
+const fakeScopedDb = makeRecordingDb().scoped;
 
 // Review finding S1, round 5 (2026-09-04). A saved follow now means the provider's permanent team
 // number and nothing else. Four earlier rounds tried to work out which team a saved short name
@@ -375,7 +378,7 @@ describe("SportsService.getFollowedFactsForToday team identity (S1)", () => {
   it("says nothing about a saved team that carries no number, instead of the wrong team", async () => {
     const service = briefingService([olderFollow]);
     const { facts } = await service.getFollowedFactsForToday(
-      {} as never,
+      fakeScopedDb,
       "00000000-0000-0000-0000-0000000000a1"
     );
     expect(facts).toEqual([]);
@@ -384,7 +387,7 @@ describe("SportsService.getFollowedFactsForToday team identity (S1)", () => {
   it("says nothing when the only game on the board belongs to the other team with that short name", async () => {
     const service = briefingService([lutheranFollow]);
     const { facts } = await service.getFollowedFactsForToday(
-      {} as never,
+      fakeScopedDb,
       "00000000-0000-0000-0000-0000000000a1"
     );
     expect(facts).toEqual([]);
@@ -393,7 +396,7 @@ describe("SportsService.getFollowedFactsForToday team identity (S1)", () => {
   it("still reports the right team's game when the saved follow carries that team's number", async () => {
     const service = briefingService([{ ...lutheranFollow, sourceTeamId: "413" }]);
     const { facts } = await service.getFollowedFactsForToday(
-      {} as never,
+      fakeScopedDb,
       "00000000-0000-0000-0000-0000000000a1"
     );
     expect(facts).toHaveLength(1);

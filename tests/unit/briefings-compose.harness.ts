@@ -1,6 +1,21 @@
 /** Shared fake-deps harness for the briefings-compose unit suites. */
+import {
+  DummyDriver,
+  Kysely,
+  PostgresAdapter,
+  PostgresIntrospector,
+  PostgresQueryCompiler,
+  type CompiledQuery,
+  type DatabaseConnection,
+  type Transaction
+} from "kysely";
 import type { AiRepository, AiSecretCipher } from "@moss/ai";
-import type { BriefingDefinition, DataContextDb } from "@moss/db";
+import {
+  dataContextBrand,
+  type BriefingDefinition,
+  type DataContextDb,
+  type MossDatabase
+} from "@moss/db";
 import type { MemoryRetriever } from "@moss/memory";
 import type { MossModuleManifest, ToolExecute, ToolResult } from "@moss/module-sdk";
 import type { FocusSignalInput, PriorityModelPreferenceV1 } from "@moss/priority";
@@ -12,7 +27,38 @@ import {
   type GenerateChatFn
 } from "../../packages/briefings/src/compose.js";
 
-export const fakeScopedDb = {} as DataContextDb;
+/** Every raw SQL statement compose issued through `fakeScopedDb` (savepoints only today). */
+export const executedSql: string[] = [];
+
+const recordingConnection = {
+  async executeQuery(query: CompiledQuery) {
+    executedSql.push(query.sql);
+    return { rows: [] };
+  },
+  streamQuery() {
+    throw new Error("streamQuery is not used by compose");
+  }
+} as unknown as DatabaseConnection;
+
+class RecordingDriver extends DummyDriver {
+  override async acquireConnection(): Promise<DatabaseConnection> {
+    return recordingConnection;
+  }
+}
+
+const recordingDb = new Kysely<MossDatabase>({
+  dialect: {
+    createAdapter: () => new PostgresAdapter(),
+    createDriver: () => new RecordingDriver(),
+    createIntrospector: (kyselyDb) => new PostgresIntrospector(kyselyDb),
+    createQueryCompiler: () => new PostgresQueryCompiler()
+  }
+});
+
+export const fakeScopedDb = {
+  db: recordingDb as unknown as Transaction<MossDatabase>,
+  [dataContextBrand]: true
+} as DataContextDb;
 
 export const FIXED_NOW = new Date("2026-06-13T12:00:00.000Z");
 

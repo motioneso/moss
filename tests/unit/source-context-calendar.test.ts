@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { dataContextBrand, type CalendarEvent, type DataContextDb } from "@moss/db";
+import type { CalendarEvent } from "@moss/db";
 import type { ConnectorAccountSafeRow } from "../../packages/connectors/src/repository.js";
 import type { GoogleCalendarEvent } from "../../packages/connectors/src/google-api-client.js";
 import {
@@ -8,8 +8,11 @@ import {
   listCalendarContext,
   type CalendarSourceContextDeps
 } from "../../packages/connectors/src/source-context/calendar.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
 
-const scopedDb = { db: {} as never, [dataContextBrand]: true } satisfies DataContextDb;
+const fakeScopedDb = makeRecordingDb().scoped;
+
+const scopedDb = fakeScopedDb;
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 const NOW = new Date("2026-07-03T12:00:00.000Z");
