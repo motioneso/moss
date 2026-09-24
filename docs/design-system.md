@@ -173,7 +173,7 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
   priority, calendar event colour, the row hover marker) are fine.
 - No monospace outside real code.
 - No serif.
-- No raw colours (hex, `rgb()`, `rgba()`) outside `tokens.css`.
+- First-party code: no raw colours (hex, `rgb()`, `rgba()`) outside `tokens.css`.
 - No invented `jds-*` classes. An undefined class renders as nothing, silently.
 - No unstyled shadcn, Radix or Tailwind-default primitives.
 - No soft drop shadows to separate flat surfaces.

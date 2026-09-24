@@ -367,7 +367,7 @@
 /* ---- Featured desk strip (mrb7mwhv) ----
    The /sports followed strip trades the 240px dense .sp-tk for a roomy, image-forward card:
    far more space per team so the strip reads editorial, not busy (Ben: "not so compact and
-   busy"). Only the desk strip renders .sp-feat; /today keeps the compact .sp-tk. Serif name +
+   busy"). Only the desk strip renders .sp-feat; /today keeps the compact .sp-tk. Display name +
    gold/live flag pull in the sports-desk idiom without dragging in the parked page reskin. */
 .sp-feat {
   /* Four-up: size each card to a quarter of the strip so exactly four show at once and the

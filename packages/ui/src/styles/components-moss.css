@@ -680,8 +680,8 @@
   border-radius: var(--radius-lg);
   cursor: pointer;
   text-align: left;
-  /* The usermenu sits on the forest rail — surface text tokens would render
-     ink-on-forest and disappear until hover. */
+  /* Rail text by default; the app shell's pale nav sets it to --ink
+     (kit-shell-nav.css). */
   color: var(--rail-fg);
   transition: var(--transition-control);
 }

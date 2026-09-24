@@ -347,9 +347,9 @@
   --border-default: var(--border);
   --accent-strong: var(--accent-hover);
 
-  /* Committed forest nav field (spec §3.3). --rail-bg rides --forest-ink so
-     park themes re-ground the rail automatically; dark overrides it (dark's
-     forest-ink is a LIGHT tint, unusable as a ground). */
+  /* Forest ground for the dark "next up" box on Today (.cmd-next). --rail-bg
+     rides --forest-ink so park themes re-ground it automatically; dark
+     overrides it (dark's forest-ink is a LIGHT tint, unusable as a ground). */
   --rail-bg: var(--forest-ink);
   --rail-fg: #ede5d2;
   --rail-fg-muted: rgba(237, 229, 210, 0.9);
