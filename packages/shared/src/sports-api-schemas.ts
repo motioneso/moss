@@ -510,6 +510,9 @@ export const sportsOverviewResponseSchema = {
         topStories: { type: "array", items: headlineSchema },
         leagueNews: { type: "array", items: sportsNewsGroupSchema },
         standings: { type: "array", items: standingsGroupSchema },
+        // Optional on the wire so an older cached payload without it still validates; the current
+        // service always emits it. Declared here or fast-json-stringify strips it (#2660).
+        activeCompetitionKeys: { type: "array", items: { type: "string" } },
         followedTeams: {
           type: "array",
           items: {

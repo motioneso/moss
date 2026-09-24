@@ -3,12 +3,13 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CompetitionRef, SportsFollowDto } from "@moss/shared";
+import type { CompetitionRef, SportsFollowDto, StandingsGroup } from "@moss/shared";
 
 import {
   buildStandingsPickerGroups,
   StandingsPicker
 } from "../../packages/sports/src/web/sports-standings-picker.js";
+import { defaultStandingsKey } from "../../packages/sports/src/web/sports-standings.js";
 import { StandingsLeaguesSection } from "../../packages/sports/src/settings/index.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
@@ -95,6 +96,103 @@ describe("standings picker", () => {
     ).toEqual(["nba"]);
     expect(groups[2]?.regions[0]).toMatchObject({ label: "England" });
     expect(buildStandingsPickerGroups(CATALOG, [], [])).toEqual([]);
+  });
+
+  // #2660: following a national team must not pin its tournament while the tournament is not
+  // running, but the tournament must stay browsable under its sport, and an in-season tournament
+  // is still pinned. Club leagues are never gated by the in-season list.
+  it("keeps a finished tournament out of Following but pins one that is running", () => {
+    const catalog: readonly CompetitionRef[] = [
+      {
+        competitionKey: "nfl",
+        label: "NFL",
+        sportLabel: "Football",
+        regionLabel: null,
+        kind: "league",
+        marquee: false,
+        standingsShape: "record",
+        confederation: "INTL"
+      },
+      {
+        competitionKey: "fifa.world",
+        label: "FIFA World Cup",
+        sportLabel: "Soccer",
+        regionLabel: "International",
+        kind: "tournament",
+        marquee: true,
+        standingsShape: "groups",
+        confederation: "INTL"
+      },
+      {
+        competitionKey: "uefa.champions",
+        label: "Champions League",
+        sportLabel: "Soccer",
+        regionLabel: "Europe",
+        kind: "tournament",
+        marquee: false,
+        standingsShape: "groups",
+        confederation: "UEFA"
+      }
+    ];
+    const follows: readonly SportsFollowDto[] = [
+      {
+        id: "w1",
+        competitionKey: "fifa.world",
+        teamKey: "usa",
+        sourceTeamId: "660",
+        createdAt: "2026-09-01T00:00:00.000Z"
+      },
+      {
+        id: "c1",
+        competitionKey: "uefa.champions",
+        teamKey: "ars",
+        sourceTeamId: "359",
+        createdAt: "2026-09-02T00:00:00.000Z"
+      }
+    ];
+    const allKeys = (groups: ReturnType<typeof buildStandingsPickerGroups>) =>
+      groups.flatMap((group) =>
+        group.regions.flatMap((region) =>
+          region.competitions.map((competition) => competition.competitionKey)
+        )
+      );
+
+    // Only the Champions League is in season. The finished World Cup leaves Following...
+    const finished = buildStandingsPickerGroups(catalog, follows, null, ["uefa.champions"]);
+    const following = finished.find((group) => group.label === "Following");
+    expect(
+      following?.regions[0]?.competitions.map((competition) => competition.competitionKey)
+    ).toEqual(["uefa.champions"]);
+    // ...but stays browsable under its sport.
+    expect(allKeys(finished)).toContain("fifa.world");
+
+    // Both in season: both are pinned.
+    const live = buildStandingsPickerGroups(catalog, follows, null, [
+      "fifa.world",
+      "uefa.champions"
+    ]);
+    const liveFollowing = live.find((group) => group.label === "Following");
+    expect(
+      liveFollowing?.regions[0]?.competitions.map((competition) => competition.competitionKey)
+    ).toEqual(["fifa.world", "uefa.champions"]);
+  });
+
+  // #2660: a finished tournament is never the default standings view, even though it stays in the
+  // visible list under its sport.
+  it("does not open a finished tournament by default", () => {
+    const groups: readonly StandingsGroup[] = [
+      {
+        competitionKey: "fifa.world",
+        competitionLabel: "FIFA World Cup",
+        standingsShape: "groups",
+        sections: []
+      }
+    ];
+    expect(defaultStandingsKey(groups, ["fifa.world", "eng.1"], [])).toBe("eng.1");
+    // An in-progress tournament is still opened by default.
+    expect(defaultStandingsKey(groups, ["fifa.world", "eng.1"], ["fifa.world"])).toBe("fifa.world");
+    // If a finished tournament is the only thing visible, it is still shown rather than nothing.
+    expect(defaultStandingsKey(groups, ["fifa.world"], [])).toBe("fifa.world");
   });
 
   it("opens, moves, selects and dismisses by keyboard or outside click with focus return", async () => {

@@ -152,6 +152,11 @@ export const sportsModuleManifest = {
       id: "sports.team_identity",
       description:
         "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back."
+    },
+    {
+      id: "sports.national_team_follows",
+      description:
+        "Follow a national team, like the US women's team, without following its whole tournament. Its stories show on their own, and the tournament stays out of Following standings unless it is running."
     }
   ],
   navigation: [

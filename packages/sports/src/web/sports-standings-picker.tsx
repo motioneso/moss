@@ -16,6 +16,8 @@ export interface StandingsPickerProps {
   readonly catalog: readonly CompetitionRef[];
   readonly follows: readonly SportsFollowDto[];
   readonly selectedCompetitionKeys: readonly string[] | null;
+  // #2660: followed competitions currently in season — see buildStandingsPickerGroups.
+  readonly activeCompetitionKeys?: readonly string[];
   readonly value: string;
   readonly onChange: (competitionKey: string) => void;
 }
@@ -23,12 +25,18 @@ export interface StandingsPickerProps {
 export function buildStandingsPickerGroups(
   catalog: readonly CompetitionRef[],
   follows: readonly SportsFollowDto[],
-  selectedCompetitionKeys: readonly string[] | null
+  selectedCompetitionKeys: readonly string[] | null,
+  // #2660: followed competitions that are in season right now (the server's `activeCompetitionKeys`).
+  // A followed tournament is only pinned under Following, and only kept out of its sport group,
+  // when its key is here. Club leagues are not gated by this.
+  activeCompetitionKeys: readonly string[] = []
 ): readonly StandingsPickerGroup[] {
   const byKey = new Map(catalog.map((competition) => [competition.competitionKey, competition]));
-  const followedKeys = Array.from(new Set(follows.map((follow) => follow.competitionKey))).filter(
-    (key) => byKey.has(key)
-  );
+  const active = new Set(activeCompetitionKeys);
+  const followedKeys = Array.from(new Set(follows.map((follow) => follow.competitionKey)))
+    .filter((key) => byKey.has(key))
+    // A tournament that is not running is not "Following": it stays browsable under its sport.
+    .filter((key) => byKey.get(key)?.kind !== "tournament" || active.has(key));
   const followed = new Set(followedKeys);
   const selected =
     selectedCompetitionKeys === null
@@ -100,8 +108,14 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
   const rowRefs = useRef<HTMLButtonElement[]>([]);
   const focusTarget = useRef<"current" | "first" | "last">("current");
   const groups = useMemo(
-    () => buildStandingsPickerGroups(props.catalog, props.follows, props.selectedCompetitionKeys),
-    [props.catalog, props.follows, props.selectedCompetitionKeys]
+    () =>
+      buildStandingsPickerGroups(
+        props.catalog,
+        props.follows,
+        props.selectedCompetitionKeys,
+        props.activeCompetitionKeys ?? []
+      ),
+    [props.catalog, props.follows, props.selectedCompetitionKeys, props.activeCompetitionKeys]
   );
   const following = groups.find((group) => group.label === "Following");
   const sports = groups.filter((group) => group.label !== "Following");

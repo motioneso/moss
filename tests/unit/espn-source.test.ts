@@ -298,6 +298,21 @@ describe("EspnDatasetAdapter", () => {
     expect(table.sections[0]?.rows[0]?.qualifies).toBe(true);
   });
 
+  // #2660: ESPN pads a tournament's season.endDate to the end of the calendar year, long after
+  // the final. The last stage in the season's `types` carries the real end, so the window the
+  // service uses to decide "in progress" must come from there.
+  it("reads a season's real end from its last stage, not the padded season end (#2660)", async () => {
+    const table = (await fetchDataset(
+      "standings",
+      { competitionKey: "fifa.world" },
+      okFetch(fixture("fifa-standings.json"))
+    )) as { season: { start: string; end: string } | null };
+    expect(table.season).toEqual({
+      start: "2026-06-11T04:00Z",
+      end: "2026-08-01T03:59Z"
+    });
+  });
+
   it("parses record-league conferences with winPercent", async () => {
     const table = (await fetchDataset(
       "standings",

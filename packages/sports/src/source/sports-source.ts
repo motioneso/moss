@@ -45,4 +45,8 @@ export interface StandingsTable {
     readonly conference?: string | null;
     readonly rows: readonly StandingsRow[];
   }[];
+  // #2660: the competition's newest season window, read from ESPN's standings payload. The end is
+  // the end of the season's LAST stage, not `season.endDate` — ESPN pads the World Cup's season
+  // end to 31 December long after the final. Optional so older cached tables and fixtures omit it.
+  readonly season?: { readonly start: string; readonly end: string } | null;
 }
