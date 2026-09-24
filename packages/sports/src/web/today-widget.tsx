@@ -16,6 +16,7 @@ import {
   selectTonightRows
 } from "./today-scores.js";
 import "./styles/sports-7-sidelines.css";
+import "./styles/sports-8-clippings.css";
 
 type RecapStory = {
   readonly storyRef?: string;
@@ -37,8 +38,8 @@ type RecapStory = {
  * bespoke FollowedCard had drifted a full redesign behind the desk — status-tag pills the
  * desk cut (mratgoq4), no story thumbnails, bottom-docked form row (superseded by mrawlzb7),
  * raw server order. Rendering `TickerTeam` in a grid keeps both surfaces in lockstep by
- * construction; `.sp-tkgrid` restyles the cards from scroll-strip segments into /today's
- * bordered-card idiom. Same reader-priority order as the desk: live, then in-season, then
+ * construction; `.sp-tkgrid` lays the cards out as flat newspaper columns
+ * (sports-8-clippings.css). Same reader-priority order as the desk: live, then in-season, then
  * idle — the widget's 4-card cap should spend itself on teams that matter today.
  */
 export function SportsTodayWidget(): ReactNode {
@@ -144,6 +145,7 @@ export function SportsTodayWidget(): ReactNode {
       : leagueCards.length > 0
         ? "Your leagues"
         : "Your teams";
+  const followingLine = followingSummary(data?.followed.length ?? 0, leagueCards.length);
 
   return (
     <section className="jds-brief jds-brief--sports" aria-label="Sports desk">
@@ -255,7 +257,10 @@ export function SportsTodayWidget(): ReactNode {
           section"). Subhead is dropped when there are no cards (top-stories-only desk). */}
       {teamCards.length > 0 || leagueCards.length > 0 ? (
         <div className="desk-cards">
-          <div className="sp-tksub">{cardsLabel}</div>
+          <div className="desk-cards__head">
+            <div className="sp-tksub">{cardsLabel}</div>
+            {followingLine ? <span>{followingLine}</span> : null}
+          </div>
           <div className="sp-tkgrid">
             {teamCards.map((card) => (
               <TickerTeam
@@ -306,4 +311,13 @@ export function SportsTodayWidget(): ReactNode {
       </div>
     </section>
   );
+}
+
+// "Following 2 teams and 1 league" beside the teams-row label; empty when nothing is followed.
+function followingSummary(teams: number, leagues: number): string {
+  const parts = [
+    teams > 0 ? `${teams} ${teams === 1 ? "team" : "teams"}` : "",
+    leagues > 0 ? `${leagues} ${leagues === 1 ? "league" : "leagues"}` : ""
+  ].filter(Boolean);
+  return parts.length > 0 ? `Following ${parts.join(" and ")}` : "";
 }

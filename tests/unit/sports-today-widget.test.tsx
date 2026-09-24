@@ -515,6 +515,7 @@ describe("Sports Today desk behaviour", () => {
     expect(links).toHaveLength(2);
     expect(new Set(links)).toEqual(new Set([sharedStory.title]));
     expect(html).not.toContain("undefined");
+    expect(html).toContain("Following 1 team and 1 league");
   });
 
   it("uses the shared overview query", () => {

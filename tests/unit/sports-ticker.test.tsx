@@ -5,9 +5,13 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { FollowedTeamCard, FollowedTeamNews } from "@moss/shared";
+import type { FollowedLeagueCard, FollowedTeamCard, FollowedTeamNews } from "@moss/shared";
 
-import { SportsTicker, TickerTeam } from "../../packages/sports/src/web/sports-ticker.js";
+import {
+  SportsTicker,
+  TickerLeague,
+  TickerTeam
+} from "../../packages/sports/src/web/sports-ticker.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -335,8 +339,8 @@ describe("TickerTeam", () => {
         stories: [story({ title: "Vikings lead late in Dallas", url: "https://example.com/live" })]
       })
     );
-    expect(html).toContain("sp-tk__next");
-    expect(html).toContain("sp-next__livetag");
+    expect(html).toContain("sp-tk__next--live");
+    expect(html).toContain("Live now");
     expect(html).toContain("MIN 21 – 14 DAL");
     expect(html).toContain("Vikings lead late in Dallas");
     // the bold body score is gone on this surface too
@@ -348,7 +352,7 @@ describe("TickerTeam", () => {
   it("shows the No-recent-news placeholder on a storyless live card (#963)", () => {
     const html = renderTickerTeam(card({ stories: [] }));
     expect(html).toContain("No recent news");
-    expect(html).toContain("sp-next__livetag");
+    expect(html).toContain("sp-tk__next--live");
     expect(html).toContain("MIN 21 – 14 DAL");
     expect(html).not.toContain("sp-tk__score");
   });
@@ -356,8 +360,36 @@ describe("TickerTeam", () => {
   it("keeps the next-game footer on a non-live card (#963 non-regression)", () => {
     const html = renderTickerTeam(card({ status: "news", primary: "", stories: [story()] }));
     expect(html).toContain("sp-tk__next");
-    expect(html).toContain("Green Bay Packers");
-    expect(html).not.toContain("sp-next__livetag");
+    expect(html).toContain("Next game");
+    expect(html).toContain("vs Green Bay Packers");
+    expect(html).not.toContain("sp-tk__next--live");
+    // the /today footer is a text line, not the shared /sports crest bar
+    expect(html).not.toContain("sp-next");
+  });
+
+  it("puts the publisher in a kicker above the headline instead of trailing it", () => {
+    const html = renderTickerTeam(
+      card({
+        status: "news",
+        primary: "",
+        stories: [
+          story({
+            title: "Vikings sign a new kicker",
+            publisherLabel: "The Athletic",
+            publisherDomain: "theathletic.com"
+          })
+        ]
+      })
+    );
+    expect(html).toMatch(/class="sp-tk__kicker">The Athletic</);
+    expect(html).not.toContain("Vikings sign a new kicker · The Athletic");
+  });
+
+  it("passes the team brand color to the Today stylesheet as --team-accent", () => {
+    expect(renderTickerTeam(card({ status: "news" }))).toContain("--team-accent:#4f2683");
+    expect(renderTickerTeam(card({ status: "news", teamKey: "zzz" }))).not.toContain(
+      "--team-accent"
+    );
   });
 
   it("keeps the score in home-left order when the followed team plays away (#2253)", () => {
@@ -472,5 +504,30 @@ describe("TickerTeam failed lead image", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+});
+
+describe("TickerLeague", () => {
+  const league: FollowedLeagueCard = {
+    competitionKey: "eng.1",
+    competitionLabel: "Premier League",
+    kind: "league",
+    status: "news",
+    logoUrl: null,
+    stories: [story({ title: "City held at home", publisherLabel: "BBC Sport" })],
+    results: [
+      { line: "LIV 2 – 3 MNC", startsAt: "2026-09-20T15:00:00Z", state: "final", detail: "FT" }
+    ]
+  };
+
+  it("labels the recent results and carries no team brand color", () => {
+    const client = new QueryClient();
+    const html = renderToString(
+      createElement(QueryClientProvider, { client }, createElement(TickerLeague, { card: league }))
+    );
+    expect(html).toMatch(/class="sp-tk__kicker">BBC Sport</);
+    expect(html).toContain("Recent results");
+    expect(html).toContain("LIV 2 – 3 MNC");
+    expect(html).not.toContain("--team-accent");
   });
 });
