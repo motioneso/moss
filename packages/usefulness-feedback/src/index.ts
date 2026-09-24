@@ -1,4 +1,5 @@
 export * from "./manifest.js";
+export * from "./relevance/answer-cache.js";
 export * from "./relevance/compile.js";
 export * from "./relevance/evaluator.js";
 export * from "./relevance/policy.js";
