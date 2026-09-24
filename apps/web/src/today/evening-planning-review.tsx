@@ -141,10 +141,7 @@ export function ReviewSection(props: {
         <p className="evening-plan__muted">The review appears after the first save.</p>
       ) : (
         <>
-          <section
-            className="evening-plan__actions"
-            aria-labelledby="evening-review-blocks"
-          >
+          <section className="evening-plan__actions" aria-labelledby="evening-review-blocks">
             <h4 id="evening-review-blocks">
               {evening.policyMode === "auto"
                 ? EVENING_REVIEW_BLOCKS_AUTO

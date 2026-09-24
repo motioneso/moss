@@ -590,16 +590,17 @@ describe("evening steps 2 to 4 (V8)", () => {
     });
     expect(group.querySelectorAll('label[data-state="selected"]').length).toBe(1);
     const priorityLabel = panel.querySelector('label[for="evening-priority"]') as HTMLElement;
-    expect(priorityLabel?.textContent).toBe("Main priority");
+    expect(priorityLabel?.textContent).toBe("The one thing that matters");
     const startLabel = panel.querySelector('label[for="evening-start"]') as HTMLElement;
-    expect(startLabel?.textContent).toBe("Task time starts at");
+    expect(startLabel?.textContent).toBe("Start task time at");
     expect(panel.querySelector("#evening-priority")).not.toBeNull();
     expect(panel.querySelector("#evening-start")).not.toBeNull();
-    expect(panel.querySelector('select[aria-label="Main priority"]')).toBeNull();
-    expect(panel.querySelector('input[aria-label="Task time starts at"]')).toBeNull();
+    expect(panel.querySelector(".evening-plan__response")?.textContent).toContain(
+      "Existing appointments and travel stay protected."
+    );
   });
 
-  it("groups the review into Changes, Keep and No change in order", async () => {
+  it("lists the review as fixed events, task blocks and undecided commitments in order", async () => {
     stubFetch();
     await mountDialog(eveningRun());
     const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
@@ -611,31 +612,60 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(panel.querySelector(".evening-plan__lede")?.textContent).toContain(
       "A plan you can leave with."
     );
-    const groups = [...panel.querySelectorAll("section.evening-plan__group")];
-    const eyebrows = groups.map(
-      (group) => group.querySelector("h4.evening-plan__eyebrow")?.textContent
-    );
-    expect(eyebrows[0]).toBe("Changes");
-    expect(eyebrows).toContain("Keep as they are");
-    expect(eyebrows).toContain("No change");
-    for (let i = 0; i + 1 < groups.length; i += 1) {
-      expect(
-        groups[i]!.compareDocumentPosition(groups[i + 1]!) & Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
-    }
-    const changes = groups[0]!;
-    expect(changes.textContent).toContain("Nothing changes tomorrow.");
-    const keep = groups.find(
-      (group) => group.querySelector("h4")?.textContent === "Keep as they are"
+    const blocks = panel.querySelector("section.evening-plan__actions") as HTMLElement;
+    expect(blocks.querySelector("h4")?.textContent).toBe("Task blocks to propose");
+    expect(blocks.querySelectorAll(".plan-review__rows > *").length).toBeGreaterThan(0);
+    const records = [...panel.querySelectorAll(".evening-plan__record")];
+    const undecided = records.find((record) =>
+      record.textContent?.includes("Write the launch brief")
     )!;
-    expect(keep.querySelectorAll(".plan-review__rows > *").length).toBeGreaterThan(0);
-    const noChange = groups.find(
-      (group) => group.querySelector("h4")?.textContent === "No change"
-    )!;
-    expect(noChange.textContent).toContain("Write the launch brief");
-    expect(panel.querySelector(".evening-plan__controls")?.textContent).toContain(
+    expect(undecided.querySelector("span")?.textContent).toBe("No change");
+    expect(
+      blocks.compareDocumentPosition(undecided) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(panel.querySelector(".evening-plan__review-links")?.textContent).toContain(
       "Preview changes"
     );
+  });
+
+  it("shows the saved view with a morning handoff after a successful save", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    await act(async () => {
+      ([...nav.querySelectorAll("button")][3] as HTMLButtonElement).click();
+    });
+    const save = [...document.body.querySelectorAll(".brief-reader__footer-actions button")].find(
+      (button) => button.textContent === "Save tomorrow's plan"
+    ) as HTMLButtonElement;
+    await act(async () => {
+      save.click();
+    });
+    await vi.waitFor(() =>
+      expect(document.getElementById("evening-finished-heading")?.textContent).toBe(
+        "Tomorrow is ready to meet you."
+      )
+    );
+    expect(document.body.querySelector('nav[aria-label="Plan steps"]')).toBeNull();
+    expect(document.body.querySelector(".evening-plan__done-strip")?.textContent).toContain(
+      "Evening plan saved"
+    );
+    expect(document.body.querySelector("#evening-finished [role=status]")?.textContent).toContain(
+      "Saved."
+    );
+    expect(document.body.querySelector(".brief-reader__footer")?.textContent).toContain(
+      "Back to Today"
+    );
+    const handoff = [...document.body.querySelectorAll("button.evening-plan__link")].find(
+      (button) => button.textContent?.startsWith("Preview the morning handoff")
+    ) as HTMLButtonElement;
+    await act(async () => {
+      handoff.click();
+    });
+    expect(document.getElementById("evening-handoff-heading")?.textContent).toBe(
+      "You already gave today a direction."
+    );
+    expect(document.activeElement).toBe(document.getElementById("evening-handoff-heading"));
   });
 
   it("keeps the step heading focus and the footer save on step 4", async () => {

@@ -617,7 +617,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel("Lighter day")
     .click();
-  await planDialog.getByLabel("Main priority").selectOption(taskId);
+  await planDialog.getByLabel("The one thing that matters").selectOption(taskId);
   for (const width of [320, 768]) {
     await page.setViewportSize({ width, height: 900 });
     await checkLayout(page, width);
@@ -639,7 +639,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   expect(saved.status).toBe(200);
   expect(saved.body.plan.sourceRunId).toBe(evening.runId);
   const planId = saved.body.plan.id as string;
-  await planDialog.getByRole("button", { name: "Leave for now" }).click();
+  await planDialog.getByRole("button", { name: "Back to Today" }).click();
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeFocused();
 
   await page.locator("button.ev-tomorrow__chat").filter({ hasText: "Chat with Moss" }).click();
@@ -653,7 +653,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const reopened = page.getByRole("dialog");
   await expect(reopened).toContainText("meeting happened, follow-up not sent");
-  await expect(reopened.getByLabel("Main priority")).toHaveValue(taskId);
+  await expect(reopened.getByLabel("The one thing that matters")).toHaveValue(taskId);
   await expect(
     reopened.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day")
   ).toBeChecked();

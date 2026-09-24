@@ -11,11 +11,13 @@ import type {
 import { localDay } from "@moss/shared";
 import { Button } from "@moss/ui";
 
+import { formatDate } from "../locale/locale-format.js";
 import { isAtRisk } from "../tasks/focus.js";
 import { BriefingDialog } from "./briefing-dialog.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import { buildEveningLede } from "./evening-mode.js";
 import {
+  EVENING_BACK_LABEL,
   EVENING_DIALOG_EYEBROW,
   EVENING_DIALOG_TITLE,
   EVENING_LEAVE_LABEL,
@@ -24,6 +26,11 @@ import {
   SAVE_TOMORROW_LABEL
 } from "./today-labels.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
+import {
+  EveningDoneStrip,
+  EveningFinishedStep,
+  EveningHandoffStep
+} from "./evening-planning-finished.js";
 import { ReviewSection } from "./evening-planning-review.js";
 import { CommitSection, ReflectStep, ShapeSection } from "./evening-planning-sections.js";
 import {
@@ -78,6 +85,18 @@ function headingIdFor(step: number): string {
 export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
   const { evening, review } = props;
   const [step, setStep] = useState(0);
+  const [savedView, setSavedView] = useState<"none" | "finished" | "handoff">("none");
+  // A save that still needs calendar confirmation stays on the Review step.
+  const done = savedView !== "none" && review.approval == null && !review.busy && !evening.busy;
+  const doneHeadingId =
+    savedView === "handoff" ? "evening-handoff-heading" : "evening-finished-heading";
+  useEffect(() => {
+    if (!done) return;
+    const heading = document.getElementById(doneHeadingId);
+    heading?.focus({ preventScroll: true });
+    const body = heading?.closest(".brief-reader__body");
+    if (body) body.scrollTop = 0;
+  }, [done, doneHeadingId]);
   const prevStepRef = useRef<number | null>(null);
   useEffect(() => {
     if (prevStepRef.current === null) {
@@ -141,6 +160,19 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
     capacity: evening.activeCapacity,
     policyMode: evening.policyMode
   };
+  const dateLabel = formatDate(snapshot.railDateInput, props.locale, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC"
+  });
+  const adjust = () => {
+    setSavedView("none");
+    setStep(2);
+  };
+  const save = async () => {
+    if (await evening.save()) setSavedView("finished");
+  };
   const stepId = STEP_IDS[step]!;
   const stepName = EVENING_STEP_NAMES[step]!;
   return (
@@ -150,32 +182,41 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
       variant="report"
       opener={props.opener}
       onClose={props.onClose}
-      nav={<EveningStepStrip names={[...EVENING_STEP_NAMES]} active={step} onSelect={setStep} />}
+      nav={
+        done ? (
+          <EveningDoneStrip dateLabel={dateLabel} />
+        ) : (
+          <EveningStepStrip names={[...EVENING_STEP_NAMES]} active={step} onSelect={setStep} />
+        )
+      }
       footer={
         <>
           <div className="brief-reader__footer-back">
             <Button variant="quiet" onClick={props.onClose}>
-              {EVENING_LEAVE_LABEL}
+              {done ? EVENING_BACK_LABEL : EVENING_LEAVE_LABEL}
             </Button>
           </div>
-          <span
-            className={`evening-plan__status${evening.status !== "Not saved yet." ? " evening-plan__status--saved" : ""}`}
-            role="status"
-          >
-            {evening.status}
-          </span>
-          {evening.reviewNotice ? (
+          {done ? null : (
+            <span
+              className={`evening-plan__status${evening.status !== "Not saved yet." ? " evening-plan__status--saved" : ""}`}
+              role="status"
+            >
+              {evening.status}
+            </span>
+          )}
+          {/* After a successful save the plan's own new revision raises this notice; it is moot there. */}
+          {evening.reviewNotice && !done ? (
             <span className="evening-plan__notice" role="status">
               {evening.reviewNotice}
             </span>
           ) : null}
           <div className="brief-reader__footer-actions">
-            {step < 3 ? (
+            {done ? null : step < 3 ? (
               <Button variant="primary" onClick={() => setStep(step + 1)}>
                 {EVENING_NEXT_LABELS[step]}
               </Button>
             ) : (
-              <Button variant="primary" disabled={evening.busy} onClick={() => void evening.save()}>
+              <Button variant="primary" disabled={evening.busy} onClick={() => void save()}>
                 {SAVE_TOMORROW_LABEL}
               </Button>
             )}
@@ -185,49 +226,63 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
     >
       <EveningMobilePlan {...snapshot} />
       <div className="evening-plan__grid">
-        <EveningStepPanel
-          stepId={stepId}
-          headingId={summaryText === null && step === 0 ? undefined : headingIdFor(step)}
-          label={stepName}
-        >
-          {step === 0 ? (
-            <ReflectStep
-              evening={evening}
-              headingId={headingIdFor(0)}
-              ledeHtml={ledeHtml}
-              summaryText={summaryText}
-            />
-          ) : step === 1 ? (
-            <CommitSection
-              evening={evening}
-              rows={evening.rows}
-              tomorrowKey={props.tomorrowKey}
-              timeZone={props.locale.timezone}
-            />
-          ) : step === 2 ? (
-            <ShapeSection
-              evening={evening}
-              committed={committed}
-              tasks={props.tasks}
-              locale={props.locale}
-            />
-          ) : (
-            <ReviewSection
-              evening={evening}
-              review={review}
-              plan={evening.plan}
-              rows={evening.rows}
-              summaries={summaries}
-              unavailableTaskIds={props.unavailableTaskIds}
-              tomorrowEvents={props.tomorrowEvents}
-              tomorrowKey={props.tomorrowKey}
-              locale={props.locale}
-              now={props.now}
-              onOpenTask={props.onOpenTask}
-            />
-          )}
-          <EveningNoteComposer evening={evening} />
-        </EveningStepPanel>
+        {done ? (
+          <div className="evening-plan__panel" role="region" aria-labelledby={doneHeadingId}>
+            {savedView === "handoff" ? (
+              <EveningHandoffStep evening={evening} tasks={props.tasks} dateLabel={dateLabel} />
+            ) : (
+              <EveningFinishedStep
+                evening={evening}
+                onHandoff={() => setSavedView("handoff")}
+                onAdjust={adjust}
+              />
+            )}
+          </div>
+        ) : (
+          <EveningStepPanel
+            stepId={stepId}
+            headingId={summaryText === null && step === 0 ? undefined : headingIdFor(step)}
+            label={stepName}
+          >
+            {step === 0 ? (
+              <ReflectStep
+                evening={evening}
+                headingId={headingIdFor(0)}
+                ledeHtml={ledeHtml}
+                summaryText={summaryText}
+              />
+            ) : step === 1 ? (
+              <CommitSection
+                evening={evening}
+                rows={evening.rows}
+                tomorrowKey={props.tomorrowKey}
+                timeZone={props.locale.timezone}
+              />
+            ) : step === 2 ? (
+              <ShapeSection
+                evening={evening}
+                committed={committed}
+                tasks={props.tasks}
+                locale={props.locale}
+              />
+            ) : (
+              <ReviewSection
+                evening={evening}
+                review={review}
+                plan={evening.plan}
+                rows={evening.rows}
+                summaries={summaries}
+                unavailableTaskIds={props.unavailableTaskIds}
+                tomorrowEvents={props.tomorrowEvents}
+                tomorrowKey={props.tomorrowKey}
+                locale={props.locale}
+                now={props.now}
+                onOpenTask={props.onOpenTask}
+              />
+            )}
+            <EveningNoteComposer evening={evening} />
+          </EveningStepPanel>
+        )}
         <EveningRail {...snapshot} />
       </div>
     </BriefingDialog>

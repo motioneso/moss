@@ -266,6 +266,15 @@ export const EVENING_PRIORITY_LABEL = "The one thing that matters";
 export const EVENING_START_LABEL = "Start task time at";
 export const EVENING_REVIEW_NOTE = "Here's what will change";
 export const EVENING_REVIEW_MESSAGE = "A plan you can leave with.";
+export const EVENING_DONE_LABEL = "Evening plan saved";
+export const EVENING_FINISHED_MESSAGE = "Tomorrow is ready to meet you.";
+export const EVENING_FINISHED_REPLY_TITLE = "Morning starts from here.";
+export const EVENING_FINISHED_REPLY =
+  "Moss will check overnight changes against tonight's intentions and explain anything that needs adjusting. It won't ask you to plan the day from scratch.";
+export const EVENING_HANDOFF_LINK = "Preview the morning handoff \u2197";
+export const EVENING_ADJUST_LINK = "Adjust this plan";
+export const EVENING_HANDOFF_MESSAGE = "You already gave today a direction.";
+export const EVENING_BACK_LABEL = "Back to Today";
 export const EVENING_REVIEW_PROSE_AUTO =
   "Your settings allow Moss to place its task blocks. Saving this plan schedules the selected blocks.";
 export const EVENING_REVIEW_PROSE_PROPOSE =

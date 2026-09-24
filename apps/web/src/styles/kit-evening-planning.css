@@ -69,6 +69,29 @@
   border-bottom-color: var(--forest);
 }
 
+/* Saved: a plain status bar in place of the step strip. */
+.evening-plan__done-strip {
+  flex: none;
+  box-sizing: border-box;
+  min-height: 54px;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.evening-plan__done-strip > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
 /* Conversation beside the tomorrow rail. */
 .evening-plan__grid {
   display: grid;
@@ -588,6 +611,12 @@
   text-transform: uppercase;
 }
 
+.evening-plan__record > small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
 .evening-plan__record > strong {
   font-size: 13px;
   font-weight: 600;
@@ -717,6 +746,34 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+/* Saved and morning handoff. */
+.evening-plan__finish-mark {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  margin-bottom: 24px;
+  border-radius: 50%;
+  background: var(--forest);
+  color: var(--bone);
+  font-size: 25px;
+}
+
+.evening-plan__section > .evening-plan__link {
+  display: block;
+}
+
+/* The eyebrow sits in the conversation's 15px/1.5 line box, as in the prototype. */
+.evening-plan__handoff-date {
+  display: block;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  line-height: 22.5px;
+  text-transform: uppercase;
 }
 
 .evening-plan__confirm-actions {
@@ -880,6 +937,16 @@
 
 /* Phone: steps 3 and 4 use the prototype's smaller reply, field and footnote type. */
 @media (max-width: 680px) {
+  .evening-plan__done-strip {
+    min-height: 58px;
+    padding: 0 19px;
+    font-size: 11px;
+  }
+
+  .evening-plan__done-strip > span {
+    font-size: 9px;
+  }
+
   .evening-plan__response {
     padding: 12px;
     font-size: 11px;
