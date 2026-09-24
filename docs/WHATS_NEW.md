@@ -41,6 +41,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Next game lines up across your team cards on Today.** On Today, each team's next game now sits at the bottom of its card, so they line up neatly across the row. [PR #2666](https://github.com/motioneso/moss/pull/2666)
 - **Faster News and Sports filters.** Your News and Sports filters now remember which stories they have already checked, so refreshing the page is quicker. [PR #2662](https://github.com/motioneso/moss/pull/2662)
 - **Faster story filters with a sorting model.** When you set a sorting model, News and Sports use it to check stories against your saved preferences, so refreshes are much faster. [PR #2627](https://github.com/motioneso/moss/pull/2627)
 - **Smoother dark mode details.** In dark mode, divider lines are easier to see and hover highlights now use a soft tint of your theme color instead of a bright block. [PR #2655](https://github.com/motioneso/moss/pull/2655)
