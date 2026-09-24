@@ -351,6 +351,9 @@ export class SportsService {
     let partial = false;
     // Sequential on purpose: warm-fill is a bounded, rate-courteous trickle, not a burst.
     for (const entry of SPORTS_CATALOG) {
+      // #2661: a news-only competition has no ESPN roster, so searching it would only burn a
+      // warm-fill slot and mark the whole search degraded. Skip it.
+      if (entry.newsFeedUrl) continue;
       // Peek first (never fetches) — Task 1's cacheOnly option.
       const peek = await this.datasetClient.getDataset<SourceTeamRef[]>(
         "teams",
@@ -997,6 +1000,14 @@ export class SportsService {
       const headlinesByComp = new Map<string, SourceHeadline[]>();
       await Promise.all(
         competitionKeys.map(async (competitionKey) => {
+          // #2661: a news-only competition has no ESPN games, roster or feed. Skip the calls that
+          // would only 404 for it and mark the whole briefing degraded.
+          if (catalogEntry(competitionKey)?.newsFeedUrl) {
+            scoreboardByComp.set(competitionKey, []);
+            teamsByComp.set(competitionKey, []);
+            headlinesByComp.set(competitionKey, []);
+            return;
+          }
           const [board, teams, headlines] = await Promise.all([
             this.cached<GameSummary[]>(
               "scoreboard",
