@@ -67,6 +67,13 @@ describe("News lead topic art", () => {
     }
   });
 
+  it("draws built-in object names as World terrain without throwing", () => {
+    for (const topic of ["constructor", "__proto__"]) {
+      const seed = leadArtSeed({ ...story, topic });
+      expect(drawLeadContours(seed, leadArtPalette(topic)).length).toBeGreaterThan(0);
+    }
+  });
+
   it("picks a color pair from the topic and falls back to World", () => {
     expect(leadArtPalette("Climate")).toBe("climate");
     expect(leadArtPalette("science")).toBe("climate");
@@ -78,6 +85,9 @@ describe("News lead topic art", () => {
     expect(leadArtPalette("Sport")).toBe("world");
     expect(leadArtPalette("")).toBe("world");
     expect(leadArtPalette(null)).toBe("world");
+    expect(leadArtPalette("constructor")).toBe("world");
+    expect(leadArtPalette("__proto__")).toBe("world");
+    expect(leadArtPalette("toString")).toBe("world");
   });
 });
 

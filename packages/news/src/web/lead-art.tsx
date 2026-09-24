@@ -47,7 +47,8 @@ const PALETTE_BY_TOPIC: Readonly<Record<string, LeadArtPalette>> = {
 };
 
 export function leadArtPalette(topic: string | null | undefined): LeadArtPalette {
-  return PALETTE_BY_TOPIC[(topic ?? "").trim().toLowerCase()] ?? "world";
+  const key = (topic ?? "").trim().toLowerCase();
+  return Object.hasOwn(PALETTE_BY_TOPIC, key) ? PALETTE_BY_TOPIC[key]! : "world";
 }
 
 /** FNV-1a over the NFKC-normalized story fields, so the same story always draws the same hills. */
