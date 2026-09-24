@@ -8,9 +8,11 @@ import {
 import {
   storyRelevanceAnswerKeyId,
   storyRelevanceRuleTextHash,
+  storyRelevanceSortingModelFingerprint,
   type StoryRelevanceAnswerCachePort,
   type StoryRelevanceAnswerKey,
   type StoryRelevanceAskedAnswer,
+  type StoryRelevanceSortingModelIdentity,
   type StoryRelevanceStoredAnswer
 } from "../../packages/usefulness-feedback/src/relevance/answer-cache.js";
 import {
@@ -264,6 +266,60 @@ describe("remembered sorting answers (#2636)", () => {
     expect(result.cache).toEqual({ remembered: 0, asked: 1 });
   });
 
+  it("re-asks when the saved model entry is repointed at another upstream model", async () => {
+    const row = activeRule();
+    // Same configured-model row id and provider, different upstream model: an admin changed which
+    // model the saved entry points at. The fingerprint must move.
+    const before = storyRelevanceSortingModelFingerprint({
+      providerKind: "openai-compatible",
+      providerConfigId: "p1",
+      modelId: "row-1",
+      providerModelId: "small-old"
+    });
+    const after = storyRelevanceSortingModelFingerprint({
+      providerKind: "openai-compatible",
+      providerConfigId: "p1",
+      modelId: "row-1",
+      providerModelId: "small-new"
+    });
+    const cache = fakeCache([
+      storedAnswer(keyFor("story:a", row, { modelFingerprint: before }), "yes", FUTURE)
+    ]);
+    const sorting = sortingPort(() => ({ choice: "no", confidence: 0.5 }), after);
+
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: sorting.port, answerCache: cache.port },
+      { candidates: [twoStories()[0]!], rules: [row], ownerUserId: OWNER, now: NOW }
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected an applied result");
+    expect(sorting.calls()).toBe(1);
+    expect(result.cache).toEqual({ remembered: 0, asked: 1 });
+  });
+
+  it("remembers one answer per key even when two candidates share a story reference", async () => {
+    const row = activeRule();
+    const cache = fakeCache();
+    const sorting = sortingPort(() => ({ choice: "yes", confidence: 0.9 }));
+    const first = twoStories()[0]!;
+    const duplicate = { ...twoStories()[1]!, storyRef: first.storyRef };
+
+    const result = await evaluateStoryRelevance(
+      SCOPED_DB,
+      { ai: sorting.port, answerCache: cache.port },
+      { candidates: [first, duplicate], rules: [row], ownerUserId: OWNER, now: NOW }
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected an applied result");
+    expect(sorting.calls()).toBe(1);
+    // The duplicate key is collapsed before the write: the insert is one statement, and Postgres
+    // rejects the whole statement if the same key appears twice.
+    expect(cache.writes.flat()).toHaveLength(1);
+  });
+
   it("re-asks when the remembered answer has expired", async () => {
     const row = activeRule();
     const cache = fakeCache([
@@ -341,5 +397,46 @@ describe("remembered sorting answers (#2636)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.remembered).toBe(1);
     expect(lines[0]?.asked).toBe(1);
+  });
+});
+
+/**
+ * #2636: the model half of the key. An admin edits a saved model entry in place, so the row id
+ * stays the same while the upstream model changes. Everything an edit can change must move the
+ * fingerprint, or old answers keep being used for up to seven days.
+ */
+describe("sorting model fingerprint (#2636)", () => {
+  const base: StoryRelevanceSortingModelIdentity = {
+    providerKind: "openai-compatible",
+    providerConfigId: "11111111-1111-4111-8111-111111111111",
+    modelId: "22222222-2222-4222-8222-222222222222",
+    providerModelId: "small-old"
+  };
+
+  it("is stable for the same model identity", () => {
+    expect(storyRelevanceSortingModelFingerprint({ ...base })).toBe(
+      storyRelevanceSortingModelFingerprint({ ...base })
+    );
+  });
+
+  it("changes when the saved entry points at another upstream model", () => {
+    expect(
+      storyRelevanceSortingModelFingerprint({ ...base, providerModelId: "small-new" })
+    ).not.toBe(storyRelevanceSortingModelFingerprint(base));
+  });
+
+  it("changes when the saved entry moves to another provider", () => {
+    expect(
+      storyRelevanceSortingModelFingerprint({
+        ...base,
+        providerConfigId: "33333333-3333-4333-8333-333333333333"
+      })
+    ).not.toBe(storyRelevanceSortingModelFingerprint(base));
+  });
+
+  it("changes when the provider kind changes", () => {
+    expect(storyRelevanceSortingModelFingerprint({ ...base, providerKind: "system-one" })).not.toBe(
+      storyRelevanceSortingModelFingerprint(base)
+    );
   });
 });

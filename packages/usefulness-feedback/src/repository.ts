@@ -400,6 +400,15 @@ export class UsefulnessFeedbackRepository {
   ): Promise<void> {
     assertDataContextDb(scopedDb);
     if (answers.length === 0) return;
+    // #2636: expired answers are dead weight. Stories rotate out and old model fingerprints stop
+    // being asked, so a row that has lapsed is never replaced by the upsert. Drop the owner's
+    // lapsed rows here, in the same scoped transaction that writes the fresh ones, rather than
+    // letting the table grow forever or adding a background sweep.
+    await sql`
+      DELETE FROM app.story_relevance_answer_cache
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND expires_at <= now()
+    `.execute(scopedDb.db);
     const rows = answers.map(
       (entry) => sql`(
         ${ownerUserId}::uuid,

@@ -8,8 +8,9 @@ import type { StoryRelevanceRule } from "@moss/shared";
  *
  * The key carries only opaque references and hashes. The story reference is the matcher's own
  * hash of a canonical link; the rule is its id plus a hash of its terms and reason text; the
- * model is a hash of its provider kind and id. An edited rule or a switched model changes the
- * key, so a stale answer is simply never found. Nothing here stores a prompt or story text.
+ * model is a hash of everything that identifies it, including the upstream model its row points
+ * at. An edited rule, a re-pointed model row or a moved provider changes the key, so a stale
+ * answer is simply never found. Nothing here stores a prompt or story text.
  */
 
 /** Answers older than this are read as a miss and replaced. */
@@ -61,6 +62,38 @@ export function storyRelevanceRuleTextHash(
 ): string {
   return createHash("sha256")
     .update(JSON.stringify({ terms: rule.terms, reason: reasonText ?? null }))
+    .digest("hex");
+}
+
+/**
+ * Everything that names the bound sorting model. The configured-model row id alone is not enough:
+ * an admin can repoint that row at a different upstream model in place, or move it to another
+ * provider, so those identities must be part of the key too.
+ */
+export interface StoryRelevanceSortingModelIdentity {
+  readonly providerKind: string;
+  readonly providerConfigId: string;
+  readonly modelId: string;
+  readonly providerModelId: string;
+}
+
+/**
+ * A stable hash of the bound sorting model. The provider kind and config, the configured-model
+ * row id and the upstream model id all go in, so repointing a saved model entry at another model
+ * or provider changes the fingerprint and every answer from the old model becomes a miss.
+ */
+export function storyRelevanceSortingModelFingerprint(
+  identity: StoryRelevanceSortingModelIdentity
+): string {
+  return createHash("sha256")
+    .update(
+      [
+        identity.providerKind,
+        identity.providerConfigId,
+        identity.modelId,
+        identity.providerModelId
+      ].join("\u0000")
+    )
     .digest("hex");
 }
 

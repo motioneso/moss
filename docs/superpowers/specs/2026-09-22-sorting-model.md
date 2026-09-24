@@ -215,8 +215,9 @@ One row per owner, story, rule and sorting model binding:
   module and the canonical link, never the link itself.
 - The rule id, plus a hash of the rule's terms and its reason text. Editing the rule changes the
   hash, so the old answer is not used.
-- The sorting model binding, as a hash of the provider kind and the model id. Switching the model
-  changes the fingerprint, so the old answer is not used.
+- The sorting model binding, as a hash of the provider kind, the provider config, the
+  configured-model row id and the upstream model id. Switching the model, or re-pointing a saved
+  entry at another model in place, changes the fingerprint, so the old answer is not used.
 
 The row stores only the verdict (`yes` or `no`) and the confidence. No prompt, no story text and no
 reason is stored. The reason's own column stays the only place it lives.
@@ -237,6 +238,9 @@ binding. With no sorting model the matcher runs today's main-model path and noth
 ### Expiry and invalidation
 
 - Answers expire seven days after they are written. An expired row is read as a miss and replaced.
+- Writing new answers also deletes the owner's lapsed rows in the same scoped transaction, so rows
+  for stories that have rotated out or for models that are no longer bound do not pile up. No
+  background sweep is added.
 - Editing a rule deletes its answers. Taking a rule back or replacing it with the opposite
   direction also deletes them. The key hash would already make an edited rule's answers unusable;
   the delete keeps the table small and honest.
@@ -251,6 +255,9 @@ binding. With no sorting model the matcher runs today's main-model path and noth
 ### Tests
 
 - Unit: a hit makes no request; a miss asks and remembers; a mixed batch asks only the misses; an
-  edited rule's old answer is a miss; a changed model binding's old answer is a miss; an expired
-  answer is a miss.
-- Integration: one user cannot read another user's remembered answers.
+  edited rule's old answer is a miss; a changed model binding's old answer is a miss; a saved entry
+  re-pointed at another upstream model is a miss; an expired answer is a miss; two candidates that
+  share a story reference are remembered once.
+- Integration: one user cannot read another user's remembered answers, cannot write a row claiming
+  another user's id, and cannot delete another user's rule's answers; a write sweeps the owner's
+  lapsed rows; editing, replacing or taking back a rule drops its answers.

@@ -394,6 +394,7 @@ import {
   createStoryRelevancePolicy,
   registerUsefulnessFeedbackRoutes,
   storyFeedbackTargetRef,
+  storyRelevanceSortingModelFingerprint,
   usefulnessFeedbackModuleManifest,
   usefulnessFeedbackModuleSqlMigrationDirectory
 } from "@moss/usefulness-feedback";
@@ -891,13 +892,19 @@ export function buildNewsDiscoveryPorts(
           { repository, cipher, logger, createCliStructuredAdapter }
         ),
       // #2636: the key for a remembered sorting answer. Resolves the same sorting model the
-      // questions will go to, so a switched or unbound model never reuses an old answer.
+      // questions will go to, so a switched or unbound model never reuses an old answer. The
+      // upstream model and provider are part of the key, so re-pointing the row changes it.
       async sortingModelFingerprint(scopedDb: DataContextDb) {
         const model = await repository.resolveSortingModel(scopedDb, "module.news", {
           acceptSystemOne: true
         });
         if (!model) return null;
-        return createHash("sha256").update(`${model.provider_kind}\0${model.id}`).digest("hex");
+        return storyRelevanceSortingModelFingerprint({
+          providerKind: model.provider_kind,
+          providerConfigId: model.provider_config_id,
+          modelId: model.id,
+          providerModelId: model.provider_model_id
+        });
       },
       async fingerprint(scopedDb: DataContextDb) {
         const model = (
@@ -1005,13 +1012,19 @@ export function buildSportsDiscoveryPorts(
           }
         ),
       // #2636: the key for a remembered sorting answer. Resolves the same sorting model the
-      // questions will go to, so a switched or unbound model never reuses an old answer.
+      // questions will go to, so a switched or unbound model never reuses an old answer. The
+      // upstream model and provider are part of the key, so re-pointing the row changes it.
       async sortingModelFingerprint(scopedDb: DataContextDb) {
         const model = await repository.resolveSortingModel(scopedDb, "module.sports", {
           acceptSystemOne: true
         });
         if (!model) return null;
-        return createHash("sha256").update(`${model.provider_kind}\0${model.id}`).digest("hex");
+        return storyRelevanceSortingModelFingerprint({
+          providerKind: model.provider_kind,
+          providerConfigId: model.provider_config_id,
+          modelId: model.id,
+          providerModelId: model.provider_model_id
+        });
       },
       async fingerprint(scopedDb: DataContextDb) {
         const model = (

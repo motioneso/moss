@@ -373,7 +373,11 @@ async function evaluateWithSortingQuestions(
   // Remember only answers from a fully successful run. A fallback run publishes nothing from the
   // sorting model, so it must not seed the cache either.
   if (cacheKeys && deps.answerCache && asked > 0) {
-    const writes: (StoryRelevanceAnswerKey & StoryRelevanceAskedAnswer)[] = [];
+    // Deduplicate by key before writing. Two candidates can share a story reference, and the
+    // insert runs as one statement with ON CONFLICT DO UPDATE, which Postgres rejects outright
+    // when the same key appears twice. Keeping one write per key makes this call independent of
+    // whatever the caller did upstream.
+    const writesByKey = new Map<string, StoryRelevanceAnswerKey & StoryRelevanceAskedAnswer>();
     for (const pair of toAsk) {
       const answer = answers[pair.questionId];
       if (
@@ -381,15 +385,18 @@ async function evaluateWithSortingQuestions(
         (answer.choice === "yes" || answer.choice === "no") &&
         Number.isFinite(answer.confidence)
       ) {
-        writes.push({
-          ...cacheKeys.get(pair.questionId)!,
+        const key = cacheKeys.get(pair.questionId)!;
+        writesByKey.set(storyRelevanceAnswerKeyId(key), {
+          ...key,
           answer: answer.choice,
           confidence: answer.confidence
         });
       }
     }
-    if (writes.length > 0) {
-      await deps.answerCache.writeStoryRelevanceAnswers(scopedDb, input.ownerUserId!, writes);
+    if (writesByKey.size > 0) {
+      await deps.answerCache.writeStoryRelevanceAnswers(scopedDb, input.ownerUserId!, [
+        ...writesByKey.values()
+      ]);
     }
   }
 
