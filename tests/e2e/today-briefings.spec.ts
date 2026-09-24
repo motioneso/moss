@@ -871,13 +871,18 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   // Lighter day with a main priority, then save in suggest mode.
   await dialog.getByRole("button", { name: "03 Shape tomorrow", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Shape tomorrow" })).toBeFocused();
-  await dialog.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day").click();
-  await dialog.getByLabel("Main priority").selectOption("t2");
-  await dialog.getByRole("button", { name: "04 Review", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Review" })).toBeFocused();
   await expect(
-    dialog.locator('section[aria-label="Changes"]').getByText("Water the plants")
+    dialog.getByRole("heading", { name: "How much room do you want tomorrow?" })
+  ).toBeFocused();
+  await dialog
+    .getByRole("radiogroup", { name: "Day capacity" })
+    .getByLabel("A lighter day")
+    .click();
+  await dialog.getByLabel("The one thing that matters").selectOption("t2");
+  await dialog.getByRole("button", { name: "04 Review", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "A plan you can leave with." })).toBeFocused();
+  await expect(
+    dialog.getByRole("region", { name: "Task blocks to propose" }).getByText("Water the plants")
   ).toBeVisible();
   await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
@@ -898,8 +903,8 @@ test("evening planning saves one draft and never applies in suggest mode", async
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       "no sideways scroll at " + width + "px"
     ).toBe(true);
-    const save = dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ });
-    const box = await save.boundingBox();
+    const back = dialog.getByRole("button", { name: "Back to Today" });
+    const box = await back.boundingBox();
     expect(box, "footer inside the viewport at " + width + "px").not.toBeNull();
   }
 });
