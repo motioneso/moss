@@ -160,6 +160,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.evening-plan__choices--three-up {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .evening-plan__choice {
   position: relative;
   display: flex;
@@ -473,38 +477,253 @@
   display: none;
 }
 
-/* Steps 3 and 4: sections, rows and fields. */
+/* Steps 3 and 4: sections, fields and Moss replies. */
 .evening-plan__section {
   min-width: 0;
 }
 
-.evening-plan__heading {
-  font-size: 15px;
-  font-weight: 650;
-  margin: 0 0 8px;
+.evening-plan__field {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
 }
 
-.evening-plan__heading:focus {
-  outline: none;
+.evening-plan__field label {
+  color: inherit;
+  font: inherit;
 }
 
-.evening-plan__rows {
-  list-style: none;
+.evening-plan__field input,
+.evening-plan__field .jds-select {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 43px;
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.evening-plan__field .jds-select {
+  padding-right: 34px;
+}
+
+/* The start time reads like the prototype's select: chevron, "9:00am", no clock icon. */
+.evening-plan__field input[type="time"] {
+  position: relative;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23282c25' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 6px;
+}
+
+.evening-plan__field input[type="time"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 8px;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
 }
 
-.evening-plan__row {
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-ampm-field {
+  margin-left: -3px;
+  text-transform: lowercase;
+}
+
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-text,
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-hour-field,
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-minute-field,
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-ampm-field {
+  padding: 0;
+}
+
+.evening-plan__response {
   display: grid;
+  gap: 4px;
+  margin: 18px 0;
+  padding: 13px 15px;
+  background: var(--sage-light);
+  border-left: 2px solid var(--forest);
+  color: var(--forest);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.evening-plan__response strong {
+  font-weight: 600;
+}
+
+.evening-plan__muted {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* Review: ruled records, the task-block list and the notes box. */
+.evening-plan__record {
+  display: grid;
+  gap: 5px;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+}
+
+.evening-plan__record > span {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+
+.evening-plan__record > strong {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__actions {
+  margin: 24px 0 17px;
+}
+
+.evening-plan__actions > h4 {
+  margin: 0 0 12px;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.evening-plan__actions .plan-review__rows {
+  gap: 0;
+}
+
+.evening-plan__actions .plan-review__row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 170px);
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.evening-plan__actions .plan-review__title,
+.evening-plan__actions .plan-review__titlelink {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.evening-plan__actions .plan-review__titlelink:hover {
+  text-decoration: underline;
+}
+
+.evening-plan__actions .plan-review__meta,
+.evening-plan__actions .plan-review__state,
+.evening-plan__actions .plan-review__changed,
+.evening-plan__actions .plan-review__hint {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.evening-plan__actions .plan-review__fields {
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  background: var(--surface);
+  gap: 6px;
+}
+
+.evening-plan__actions .plan-review__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.evening-plan__actions .plan-review__time,
+.evening-plan__actions .plan-review__field--placement .jds-select {
+  width: 100%;
   min-width: 0;
+  height: auto;
+  min-height: 36px;
+  padding: 7px 30px 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background-color: var(--surface);
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--forest);
+}
+
+.evening-plan__review-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 4px 0 0;
+}
+
+.evening-plan__link {
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.evening-plan__link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.evening-plan__notes {
+  margin: 18px 0 16px;
+  padding: 15px;
+  background: var(--sage-light);
+}
+
+.evening-plan__notes > h4 {
+  margin: 0 0 9px;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.evening-plan__notes > p {
+  margin: 0 0 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.evening-plan__confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
 }
 
 .evening-plan__title {
@@ -536,37 +755,11 @@
   max-width: 100%;
 }
 
-.evening-plan__rule {
-  border: 0;
-  border-top: 1px solid var(--line);
-  margin: 18px 0 14px;
-}
-
-.evening-plan__fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 4px;
-  min-width: 0;
-  margin-top: 12px;
-}
-
 .evening-plan__field-label {
   font-size: 12px;
   font-weight: 650;
   color: var(--forest);
   overflow-wrap: anywhere;
-}
-
-.evening-plan__fields input,
-.evening-plan__fields select,
-.evening-plan__fields .jds-selectwrap {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.evening-plan__group {
-  min-width: 0;
-  margin: 16px 0;
 }
 
 .evening-plan__eyebrow {
@@ -682,6 +875,26 @@
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn--primary {
     max-width: 195px;
+  }
+}
+
+/* Phone: steps 3 and 4 use the prototype's smaller reply, field and footnote type. */
+@media (max-width: 680px) {
+  .evening-plan__response {
+    padding: 12px;
+    font-size: 11px;
+  }
+
+  .evening-plan__field {
+    font-size: 11px;
+  }
+
+  .evening-plan__muted {
+    font-size: 12px;
+  }
+
+  .evening-plan__choices--three-up {
+    gap: 8px;
   }
 }
 

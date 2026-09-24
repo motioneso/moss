@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import type { LocaleSettingsDto, TaskDto } from "@moss/shared";
 
 import { localDay } from "@moss/shared";
@@ -15,32 +13,25 @@ import {
   EVENING_COMMIT_NOTE,
   EVENING_REFLECT_QUESTION,
   EVENING_REVIEW_NOT_READY,
+  EVENING_PRIORITY_LABEL,
+  EVENING_SHAPE_LIGHT_REPLY,
   EVENING_SHAPE_MESSAGE,
   EVENING_SHAPE_NOTE,
+  EVENING_SHAPE_PROSE,
+  EVENING_SHAPE_REPLY,
+  EVENING_START_LABEL,
   EVENING_SPEAKER_NAME,
   EVENING_SPEAKER_NOTE,
   eveningCommitProse,
-  NO_ROOM_FOUND,
-  timeLabel
+  NO_ROOM_FOUND
 } from "./today-labels.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
 
-function PlanSection(props: { id: string; label: string; children: ReactNode }) {
-  return (
-    <section className="evening-plan__section" id={props.id} aria-label={props.label}>
-      <h3 id={`${props.id}-heading`} tabIndex={-1} className="evening-plan__heading">
-        {props.label}
-      </h3>
-      {props.children}
-    </section>
-  );
-}
-
 const CAPACITY_OPTIONS = [
-  ["light", "Lighter day"],
-  ["normal", "Steady day"],
-  ["full", "Full day"]
+  ["normal", "A steady day", "The main task, with room for follow-through."],
+  ["light", "A lighter day", "One work block. Leave the rest available."],
+  ["full", "A full day", "Use the open time for task blocks."]
 ] as const;
 
 /** Evening step 1 reflection choices (VP-REFLECTION-R1); nothing here writes tasks. */
@@ -114,8 +105,12 @@ export function ReflectStep(props: {
   );
 }
 
-/** Speaker line and large message shared by steps 2 to 4 (V8). */
-function StepIntro(props: { readonly note: string; readonly message: string }) {
+/** Speaker line and large message; the message is the step heading. */
+export function StepIntro(props: {
+  readonly note: string;
+  readonly message: string;
+  readonly headingId: string;
+}) {
   return (
     <>
       <div className="evening-plan__speaker">
@@ -127,9 +122,9 @@ function StepIntro(props: { readonly note: string; readonly message: string }) {
           <small>{props.note}</small>
         </div>
       </div>
-      <p className="evening-plan__lede" tabIndex={-1}>
+      <h3 id={props.headingId} tabIndex={-1} className="evening-plan__lede">
         {props.message}
-      </p>
+      </h3>
     </>
   );
 }
@@ -249,7 +244,7 @@ export function CommitSection(props: {
   );
 }
 
-/** Capacity, priority, start time and the resulting proposals with a note field. */
+/** Capacity, priority and start time; the rail shows the resulting blocks. */
 export function ShapeSection(props: {
   readonly evening: EveningPlanningController;
   readonly committed: readonly TaskDto[];
@@ -257,11 +252,26 @@ export function ShapeSection(props: {
   readonly locale: LocaleSettingsDto;
 }) {
   const { evening } = props;
+  const unplaced = evening.proposals.filter(
+    (proposal) =>
+      proposal.pendingChange === null ||
+      proposal.pendingChange === undefined ||
+      proposal.pendingChange.kind === "remove"
+  );
   return (
-    <PlanSection id="evening-shape" label="Shape tomorrow">
-      <StepIntro note={EVENING_SHAPE_NOTE} message={EVENING_SHAPE_MESSAGE} />
-      <div className="evening-plan__choices" role="radiogroup" aria-label="Day capacity">
-        {CAPACITY_OPTIONS.map(([value, label]) => (
+    <section className="evening-plan__section" id="evening-shape" aria-label="Shape tomorrow">
+      <StepIntro
+        note={EVENING_SHAPE_NOTE}
+        message={EVENING_SHAPE_MESSAGE}
+        headingId="evening-shape-heading"
+      />
+      <p className="evening-plan__prose">{EVENING_SHAPE_PROSE}</p>
+      <div
+        className="evening-plan__choices evening-plan__choices--three-up"
+        role="radiogroup"
+        aria-label="Day capacity"
+      >
+        {CAPACITY_OPTIONS.map(([value, label, hint]) => (
           <label
             key={value}
             className="evening-plan__choice"
@@ -270,18 +280,20 @@ export function ShapeSection(props: {
             <input
               type="radio"
               name="evening-capacity"
+              className="evening-plan__choice-radio"
               checked={evening.activeCapacity === value}
               disabled={evening.busy}
               onChange={() => evening.setCapacity(value)}
             />
-            <strong>{label}</strong>
+            <span className="evening-plan__choice-text">
+              <strong>{label}</strong>
+              <small>{hint}</small>
+            </span>
           </label>
         ))}
       </div>
-      <div className="evening-plan__fields">
-        <label className="evening-plan__field-label" htmlFor="evening-priority">
-          Main priority
-        </label>
+      <div className="evening-plan__field">
+        <label htmlFor="evening-priority">{EVENING_PRIORITY_LABEL}</label>
         <Select
           id="evening-priority"
           value={evening.activePriority[0] ?? ""}
@@ -297,9 +309,9 @@ export function ShapeSection(props: {
             </option>
           ))}
         </Select>
-        <label className="evening-plan__field-label" htmlFor="evening-start">
-          Task time starts at
-        </label>
+      </div>
+      <div className="evening-plan__field">
+        <label htmlFor="evening-start">{EVENING_START_LABEL}</label>
         <input
           id="evening-start"
           type="time"
@@ -308,41 +320,20 @@ export function ShapeSection(props: {
           onChange={(event) => evening.setStartTime(event.target.value)}
         />
       </div>
-      <ul className="evening-plan__rows">
-        {evening.proposals.map((proposal) => {
+      <div className="evening-plan__response">
+        {evening.activeCapacity === "light" ? EVENING_SHAPE_LIGHT_REPLY : EVENING_SHAPE_REPLY}
+        {unplaced.map((proposal) => {
           const task =
             proposal.taskId === null
               ? undefined
               : props.tasks.find((t) => t.id === proposal.taskId);
-          const pending = proposal.pendingChange;
           return (
-            <li className="evening-plan__row" key={proposal.taskId ?? proposal.title}>
-              <div>
-                <div className="evening-plan__title">
-                  {task?.title ?? proposal.title ?? "Untitled block"}
-                </div>
-                <div className="evening-plan__state">
-                  {pending !== null && pending !== undefined && pending.kind !== "remove"
-                    ? timeLabel(pending.startsAt, props.locale)
-                    : `${NO_ROOM_FOUND} for ${task?.title ?? "this task"}`}
-                </div>
-              </div>
-            </li>
+            <span className="evening-plan__response-line" key={proposal.taskId ?? proposal.title}>
+              {`${NO_ROOM_FOUND} for ${task?.title ?? proposal.title ?? "this task"}.`}
+            </span>
           );
         })}
-      </ul>
-      <div className="evening-plan__controls">
-        <label>
-          Evening note
-          <input
-            type="text"
-            aria-label="Evening note"
-            value={evening.activeNotes}
-            disabled={evening.busy}
-            onChange={(event) => evening.setNotesText(event.target.value)}
-          />
-        </label>
       </div>
-    </PlanSection>
+    </section>
   );
 }

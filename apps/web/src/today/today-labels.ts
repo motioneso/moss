@@ -256,9 +256,26 @@ export const EVENING_COMMIT_NOTE = "Only the loose ends that matter";
 export const EVENING_COMMIT_MESSAGE = "Give this a place, or leave it open.";
 export const EVENING_SHAPE_NOTE = "A realistic starting point";
 export const EVENING_SHAPE_MESSAGE = "How much room do you want tomorrow?";
-export const EVENING_REVIEW_NOTE = "Here is what will change";
+export const EVENING_SHAPE_PROSE =
+  "Your appointments stay where they are. I'll keep time around them open and fit task blocks into the rest.";
+export const EVENING_SHAPE_REPLY =
+  "I've left a short buffer between task blocks. Existing appointments and travel stay protected.";
+export const EVENING_SHAPE_LIGHT_REPLY =
+  "A lighter day asks less of you. Other tasks stay open; they aren't deleted or marked complete.";
+export const EVENING_PRIORITY_LABEL = "The one thing that matters";
+export const EVENING_START_LABEL = "Start task time at";
+export const EVENING_REVIEW_NOTE = "Here's what will change";
 export const EVENING_REVIEW_MESSAGE = "A plan you can leave with.";
-export const EVENING_REVIEW_CHANGES_HEADING = "Changes";
+export const EVENING_REVIEW_PROSE_AUTO =
+  "Your settings allow Moss to place its task blocks. Saving this plan schedules the selected blocks.";
+export const EVENING_REVIEW_PROSE_PROPOSE =
+  "Your settings keep task blocks as proposals. Saving carries these suggestions into the morning without adding them to your calendar.";
+export const EVENING_REVIEW_BLOCKS_AUTO = "Task blocks to schedule";
+export const EVENING_REVIEW_BLOCKS_PROPOSE = "Task blocks to propose";
+export const EVENING_REVIEW_UNSCHEDULED_HEADING = "Leave unscheduled";
+export const EVENING_REVIEW_NOTES_HEADING = "What you want Moss to remember";
+export const EVENING_REVIEW_FOOTNOTE =
+  "Only the blocks listed above are included. Your tasks stay on your list.";
 export const EVENING_REVIEW_KEEP_HEADING = "Keep as they are";
 export const EVENING_REVIEW_NO_CHANGE_HEADING = "No change";
 export const EVENING_REVIEW_NO_CHANGES = "Nothing changes tomorrow.";

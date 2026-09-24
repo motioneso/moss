@@ -89,7 +89,10 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
     }
     prevStepRef.current = step;
     const heading = document.getElementById(headingIdFor(step));
-    (heading ?? document.getElementById(`evening-panel-${STEP_IDS[step]}`))?.focus();
+    const target = heading ?? document.getElementById(`evening-panel-${STEP_IDS[step]}`);
+    target?.focus({ preventScroll: true });
+    const body = target?.closest(".brief-reader__body");
+    if (body) body.scrollTop = 0;
   }, [step]);
   const summaries = useMemo(() => {
     const known = new Map(props.taskSummaries.map((entry) => [entry.id, entry]));
@@ -217,6 +220,7 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
               summaries={summaries}
               unavailableTaskIds={props.unavailableTaskIds}
               tomorrowEvents={props.tomorrowEvents}
+              tomorrowKey={props.tomorrowKey}
               locale={props.locale}
               now={props.now}
               onOpenTask={props.onOpenTask}
