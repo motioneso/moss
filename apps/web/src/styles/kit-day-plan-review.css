@@ -298,6 +298,22 @@
 }
 
 @media (max-width: 480px) {
+  /* Review keeps one footer row on narrow phones: Back left, Save right.
+     The shell stacks footer zones here; the Review dialog opts back out. */
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-back {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   /* Narrow rows stack: the title takes the full row and the two fields
      share the row below it, so titles never squeeze to a letter a line. */
   [data-briefing-surface="review"] .plan-review__row {
