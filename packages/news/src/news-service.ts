@@ -1,5 +1,5 @@
 import type { DatasetClient } from "@moss/datasets";
-import type { AccessContext, DataContextDb } from "@moss/db";
+import { withSavepoint, type AccessContext, type DataContextDb } from "@moss/db";
 import type {
   NewsBriefingEvidenceV1,
   NewsCatalogResponse,
@@ -179,19 +179,19 @@ export class NewsService {
   ): Promise<{ facts: string[]; evidence: NewsBriefingEvidenceV1 }> {
     const now = this.now();
     const capturedAt = now.toISOString();
-    const [prefs, exclusions, customSources, customTopics, snapshot, dismissedRefs] =
-      await Promise.all([
-        this.repository.list(scopedDb),
-        this.personalization.listExclusions(scopedDb),
-        this.personalization.listCustomSources(scopedDb),
-        this.personalization.listCustomTopics(scopedDb),
-        this.personalization.readLatestSnapshot(scopedDb),
-        actorUserId && this.storyFeedback?.listDismissedRefs
-          ? this.storyFeedback
-              .listDismissedRefs(scopedDb, actorUserId)
-              .catch(() => new Set<string>())
-          : Promise.resolve(new Set<string>())
-      ]);
+    // One read at a time: the briefing runs this on a single transaction inside a savepoint.
+    const prefs = await this.repository.list(scopedDb);
+    const exclusions = await this.personalization.listExclusions(scopedDb);
+    const customSources = await this.personalization.listCustomSources(scopedDb);
+    const customTopics = await this.personalization.listCustomTopics(scopedDb);
+    const snapshot = await this.personalization.readLatestSnapshot(scopedDb);
+    const storyFeedback = this.storyFeedback;
+    const dismissedRefs =
+      actorUserId && storyFeedback
+        ? await withSavepoint(scopedDb, () =>
+            storyFeedback.listDismissedRefs(scopedDb, actorUserId)
+          ).catch(() => new Set<string>())
+        : new Set<string>();
     const overview =
       this.composePersonalized(
         snapshot,

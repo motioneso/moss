@@ -1,12 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
 
+import { AiRepository } from "@moss/ai";
+import type { DatasetClient } from "@moss/datasets";
 import { DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import type { MossModuleManifest, ToolExecute } from "@moss/module-sdk";
+import { configureNewsBriefingService, NewsPrefsRepository } from "@moss/news";
 
 import { withToolSavepoint } from "../../packages/briefings/src/savepoint.js";
+import { NewsPersonalizationRepository } from "../../packages/news/src/personalization-repository.js";
 import { connectionStrings } from "./test-database.js";
 import {
   makeComposeDeps,
@@ -57,6 +61,10 @@ describe("briefing savepoints on the worker transaction", () => {
     workerContext = new DataContextRunner(loggedDb);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   afterAll(async () => {
     await loggedDb?.destroy();
     await teardownBriefingsHarness(harness ?? {});
@@ -90,6 +98,28 @@ describe("briefing savepoints on the worker transaction", () => {
       await sql.raw("ROLLBACK TO SAVEPOINT cleanup_probe").execute(scopedDb.db);
       return (error as { code?: string }).code === "3B001";
     }
+  }
+
+  async function createDefinition(selectedToolNames: string[]): Promise<{ id: string }> {
+    return harness.dataContext.withDataContext(userAContext(), (scopedDb) =>
+      harness.repository.createDefinition(scopedDb, {
+        title: "Savepoint morning briefing",
+        scheduleMetadata: { targetTime: "07:00", timezone: "UTC" },
+        selectedToolNames
+      })
+    );
+  }
+
+  async function readStoredRun(
+    runId: string
+  ): Promise<Array<{ status: string; source_metadata: unknown }>> {
+    return workerContext.withDataContext(userAContext(), (scopedDb) =>
+      scopedDb.db
+        .selectFrom("app.briefing_runs")
+        .select(["status", "source_metadata"])
+        .where("id", "=", runId)
+        .execute()
+    );
   }
 
   it("releases the savepoint and keeps the work on success", async () => {
@@ -160,13 +190,11 @@ describe("briefing savepoints on the worker transaction", () => {
       }
     );
 
-    const definition = await harness.dataContext.withDataContext(userAContext(), (scopedDb) =>
-      harness.repository.createDefinition(scopedDb, {
-        title: "Savepoint morning briefing",
-        scheduleMetadata: { targetTime: "07:00", timezone: "UTC" },
-        selectedToolNames: ["tasks.list", "goals.list", "news.topHeadlinesToday"]
-      })
-    );
+    const definition = await createDefinition([
+      "tasks.list",
+      "goals.list",
+      "news.topHeadlinesToday"
+    ]);
 
     const outcome = await workerContext.withDataContext(userAContext(), (scopedDb) =>
       harness.repository.generateRun(scopedDb, definition.id, {
@@ -183,13 +211,97 @@ describe("briefing savepoints on the worker transaction", () => {
     expect(gaps).not.toContainEqual({ source: "news", reason: "tool_failed" });
 
     // Read back in a fresh transaction: the row only exists if the run's transaction committed.
-    const stored = await workerContext.withDataContext(userAContext(), (scopedDb) =>
-      scopedDb.db
-        .selectFrom("app.briefing_runs")
-        .select("status")
-        .where("id", "=", outcome!.run.id)
-        .execute()
+    const stored = await readStoredRun(outcome!.run.id);
+    expect(stored.map((row) => row.status)).toEqual(["succeeded"]);
+  });
+
+  it("saves the plain-text fallback when the AI credential read is denied", async () => {
+    const aiRepository = new AiRepository();
+    // A configured model, so compose goes on to read its provider credential.
+    vi.spyOn(aiRepository, "selectModelForCapability").mockResolvedValue({
+      id: "savepoint-model",
+      provider_config_id: "savepoint-provider",
+      provider_kind: "openai",
+      display_name: "Savepoint model",
+      tier: "economy"
+    } as unknown as Awaited<ReturnType<AiRepository["selectModelForCapability"]>>);
+    vi.spyOn(aiRepository, "selectProviderWithCredential").mockImplementation(async (scopedDb) => {
+      await DENIED_READ.execute(scopedDb.db);
+      return undefined;
+    });
+
+    const definition = await createDefinition(["tasks.list"]);
+    const outcome = await workerContext.withDataContext(userAContext(), (scopedDb) =>
+      harness.repository.generateRun(scopedDb, definition.id, {
+        moduleManifests: getBuiltInModuleManifests(),
+        runKind: "manual",
+        composeDeps: { ...makeComposeDeps(), aiRepository }
+      })
     );
-    expect(stored).toEqual([{ status: "succeeded" }]);
+
+    expect(outcome?.run.status).toBe("succeeded");
+    const stored = await readStoredRun(outcome!.run.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.status).toBe("succeeded");
+    expect(stored[0]!.source_metadata).toMatchObject({ degradedReason: "credential_error" });
+  });
+
+  it("runs the real news tool's reads one at a time and survives a denied read", async () => {
+    configureNewsBriefingService({
+      async getDataset() {
+        throw new Error("news feeds are not reached in this test");
+      }
+    } as DatasetClient);
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const reads: string[] = [];
+    function track<P extends object>(proto: P, method: keyof P & string, deny = false): void {
+      const original = proto[method] as (...args: unknown[]) => Promise<unknown>;
+      vi.spyOn(proto, method as never).mockImplementation(async function (
+        this: unknown,
+        ...args: unknown[]
+      ) {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        reads.push(method);
+        try {
+          // Yield so any read started alongside this one is counted as in flight.
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          if (deny) await DENIED_READ.execute((args[0] as DataContextDb).db);
+          return await original.apply(this, args);
+        } finally {
+          inFlight -= 1;
+        }
+      } as never);
+    }
+    track(NewsPrefsRepository.prototype, "list");
+    track(NewsPersonalizationRepository.prototype, "listExclusions");
+    track(NewsPersonalizationRepository.prototype, "listCustomSources");
+    track(NewsPersonalizationRepository.prototype, "listCustomTopics");
+    track(NewsPersonalizationRepository.prototype, "readLatestSnapshot", true);
+
+    const definition = await createDefinition(["tasks.list", "news.topHeadlinesToday"]);
+    const outcome = await workerContext.withDataContext(userAContext(), (scopedDb) =>
+      harness.repository.generateRun(scopedDb, definition.id, {
+        moduleManifests: getBuiltInModuleManifests(),
+        runKind: "manual",
+        composeDeps: makeComposeDeps()
+      })
+    );
+
+    expect(reads).toEqual([
+      "list",
+      "listExclusions",
+      "listCustomSources",
+      "listCustomTopics",
+      "readLatestSnapshot"
+    ]);
+    expect(maxInFlight).toBe(1);
+    expect(outcome?.run.status).toBe("succeeded");
+    const gaps = (outcome?.run.source_metadata as { gaps?: Array<Record<string, string>> }).gaps;
+    expect(gaps).toContainEqual({ source: "news", reason: "tool_failed" });
+    const stored = await readStoredRun(outcome!.run.id);
+    expect(stored.map((row) => row.status)).toEqual(["succeeded"]);
   });
 });

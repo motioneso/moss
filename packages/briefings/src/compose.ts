@@ -276,10 +276,8 @@ export async function composeBriefing(
     chats.lines,
     vaultNotes.map((note) => note.excerpt)
   );
-  const [calendarSettings, emailSettings] = await Promise.all([
-    readCalendarSignalSettings(scopedDb, deps),
-    readEmailSignalSettings(scopedDb, deps)
-  ]);
+  const calendarSettings = await readCalendarSignalSettings(scopedDb, deps);
+  const emailSettings = await readEmailSignalSettings(scopedDb, deps);
   const calendarSignals = includeCalendar
     ? deriveCalendarSignals({
         items: rawCalendar.rawItems ?? [],
@@ -603,40 +601,43 @@ async function attachCalendarFollowThrough<
 ): Promise<T[]> {
   if (!deps.calendarFollowThrough) return [...signals];
   const ctx = ctxFor(definition, input);
-  return Promise.all(
-    signals.map(async (signal) => {
-      if (
-        !signal.suggestedActions.includes("create_task") &&
-        !signal.suggestedActions.includes("block_time")
-      ) {
-        return signal;
-      }
-      const targetRef = briefingSignalFeedbackItemId("calendar", signal.type, signal.summary);
-      // Task creation failures propagate: the generation transaction rolls
-      // back, so a failed task can never leave a block with a guessed id.
-      // Intent building itself is pure and cannot throw.
-      try {
-        const followThrough = await deps.calendarFollowThrough!.executeAutoActions({
-          scopedDb,
-          actorUserId: ctx.actorUserId,
-          requestId: ctx.requestId,
-          targetRef,
-          signal
-        });
-        return { ...signal, followThrough };
-      } catch (error) {
-        deps.logger?.error(
-          {
-            event: "calendar_follow_through_failed",
-            error: error instanceof Error ? error.name : "UnknownError",
-            signalType: signal.type
-          },
-          "calendar follow-through failed"
-        );
-        throw error;
-      }
-    })
-  );
+  // One signal at a time: two signals can share a task key, and parallel create calls would
+  // both miss the existence check and collide on the unique index.
+  const results: T[] = [];
+  for (const signal of signals) {
+    if (
+      !signal.suggestedActions.includes("create_task") &&
+      !signal.suggestedActions.includes("block_time")
+    ) {
+      results.push(signal);
+      continue;
+    }
+    const targetRef = briefingSignalFeedbackItemId("calendar", signal.type, signal.summary);
+    // Task creation failures propagate: the generation transaction rolls
+    // back, so a failed task can never leave a block with a guessed id.
+    // Intent building itself is pure and cannot throw.
+    try {
+      const followThrough = await deps.calendarFollowThrough.executeAutoActions({
+        scopedDb,
+        actorUserId: ctx.actorUserId,
+        requestId: ctx.requestId,
+        targetRef,
+        signal
+      });
+      results.push({ ...signal, followThrough });
+    } catch (error) {
+      deps.logger?.error(
+        {
+          event: "calendar_follow_through_failed",
+          error: error instanceof Error ? error.name : "UnknownError",
+          signalType: signal.type
+        },
+        "calendar follow-through failed"
+      );
+      throw error;
+    }
+  }
+  return results;
 }
 
 // ── Trust boundary (prompt-injection hardening, #316) ──────────────────────────

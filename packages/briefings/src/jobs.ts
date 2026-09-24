@@ -19,6 +19,7 @@ import type { ComposeDeps } from "./compose.js";
 import type { BriefingDayPlanAutoPort } from "./repository.js";
 import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./manifest.js";
 import { BriefingsRepository } from "./repository.js";
+import { withToolSavepoint } from "./savepoint.js";
 
 export interface BriefingRunPayload extends ActorScopedJobPayload {
   readonly definitionId: string;
@@ -208,18 +209,22 @@ export async function registerBriefingsJobWorkers(
         job.data.runKind === "scheduled" &&
         outcome.run.status === "succeeded"
       ) {
+        const notifications = options.notificationsRepository;
         try {
-          await options.notificationsRepository.create(scopedDb, {
-            moduleId: BRIEFINGS_MODULE_ID,
-            title:
-              outcome.run.briefing_type === "evening"
-                ? "Your evening review is ready"
-                : outcome.run.briefing_type === "weekly_review"
-                  ? "Your weekly review is ready"
-                  : "Your morning briefing is ready",
-            urgency: "normal",
-            metadata: { definitionId: outcome.run.definition_id, briefingRunId: outcome.run.id }
-          });
+          // The savepoint keeps a failed notification write from rolling back the saved run.
+          await withToolSavepoint(scopedDb, () =>
+            notifications.create(scopedDb, {
+              moduleId: BRIEFINGS_MODULE_ID,
+              title:
+                outcome.run.briefing_type === "evening"
+                  ? "Your evening review is ready"
+                  : outcome.run.briefing_type === "weekly_review"
+                    ? "Your weekly review is ready"
+                    : "Your morning briefing is ready",
+              urgency: "normal",
+              metadata: { definitionId: outcome.run.definition_id, briefingRunId: outcome.run.id }
+            })
+          );
         } catch (error) {
           const e = error instanceof Error ? error : new Error(String(error));
           options.logger?.error(

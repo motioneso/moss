@@ -1,5 +1,5 @@
 import type { DatasetClient } from "@moss/datasets";
-import type { AccessContext, DataContextDb } from "@moss/db";
+import { withSavepoint, type AccessContext, type DataContextDb } from "@moss/db";
 import {
   localDay,
   type SportsBriefingEvidenceV1,
@@ -892,7 +892,9 @@ export class SportsService {
     const timeZone =
       typeof opts?.timeZone === "string" && opts.timeZone.trim() !== "" ? opts.timeZone : "UTC";
     try {
-      const rawFollows = await this.repository.list(scopedDb);
+      // The savepoint lets a failed follows read degrade this section without breaking the
+      // briefing's transaction.
+      const rawFollows = await withSavepoint(scopedDb, () => this.repository.list(scopedDb));
       const follows = rawFollows.filter((f) => catalogEntry(f.competitionKey) !== undefined);
       const state: DegradeState = { degraded: false };
       const today = this.today();

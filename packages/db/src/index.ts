@@ -12,6 +12,7 @@ export * from "./module-rls-emitter.js";
 export * from "./module-statement-classify.js";
 export * from "./module-storage-rpc.js";
 export * from "./role-bootstrap.js";
+export * from "./savepoint.js";
 export * from "./secret-cipher.js";
 export * from "./sharing/index.js";
 export * from "./target-identity-guard.js";

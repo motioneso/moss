@@ -290,6 +290,17 @@ export async function readPreference(
   return deps.sourceBehaviorPolicy?.preferencesRepository.get(scopedDb, key) ?? null;
 }
 
+/** Reads each key in turn. Compose shares one transaction, so reads never run side by side. */
+async function readPreferences(
+  scopedDb: DataContextDb,
+  deps: ComposeDeps,
+  keys: readonly string[]
+): Promise<unknown[]> {
+  const values: unknown[] = [];
+  for (const key of keys) values.push(await readPreference(scopedDb, deps, key));
+  return values;
+}
+
 export function boolPreference(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -310,14 +321,14 @@ export async function readCalendarSignalSettings(
     blockTime,
     storedPrepTaskMode,
     storedTimeBlockMode
-  ] = await Promise.all([
-    readPreference(scopedDb, deps, "calendar.briefing_lookahead_days"),
-    readPreference(scopedDb, deps, "calendar.signal_suggest_tasks"),
-    readPreference(scopedDb, deps, "calendar.signal_create_tasks"),
-    readPreference(scopedDb, deps, "calendar.signal_suggest_time_blocks"),
-    readPreference(scopedDb, deps, "calendar.signal_block_time"),
-    readPreference(scopedDb, deps, "calendar.prep_task_mode"),
-    readPreference(scopedDb, deps, "calendar.time_block_mode")
+  ] = await readPreferences(scopedDb, deps, [
+    "calendar.briefing_lookahead_days",
+    "calendar.signal_suggest_tasks",
+    "calendar.signal_create_tasks",
+    "calendar.signal_suggest_time_blocks",
+    "calendar.signal_block_time",
+    "calendar.prep_task_mode",
+    "calendar.time_block_mode"
   ]);
   const legacyPrepTaskMode =
     createTasks === true ? "auto" : suggestTasks === false ? "off" : "suggest";
@@ -334,12 +345,16 @@ export async function readEmailSignalSettings(
   scopedDb: DataContextDb,
   deps: ComposeDeps
 ): Promise<EmailSignalSettings> {
-  const [createTasks, suggestReplies, draftReplies, autoSend] = await Promise.all([
-    readPreference(scopedDb, deps, "email.signal_create_tasks"),
-    readPreference(scopedDb, deps, "email.signal_suggest_replies"),
-    readPreference(scopedDb, deps, "email.signal_draft_replies"),
-    readPreference(scopedDb, deps, "email.signal_auto_send")
-  ]);
+  const [createTasks, suggestReplies, draftReplies, autoSend] = await readPreferences(
+    scopedDb,
+    deps,
+    [
+      "email.signal_create_tasks",
+      "email.signal_suggest_replies",
+      "email.signal_draft_replies",
+      "email.signal_auto_send"
+    ]
+  );
   return {
     createTasks: boolPreference(createTasks, true),
     suggestReplies: boolPreference(suggestReplies, true),
@@ -561,10 +576,8 @@ export async function buildPersonaBlock(
   if (!deps.personaRepository || !deps.resolveUserName) {
     return "";
   }
-  const [stored, userName] = await Promise.all([
-    deps.personaRepository.get(scopedDb, "persona.bundle"),
-    deps.resolveUserName(scopedDb, definition.owner_user_id)
-  ]);
+  const stored = await deps.personaRepository.get(scopedDb, "persona.bundle");
+  const userName = await deps.resolveUserName(scopedDb, definition.owner_user_id);
   const persona = normalizePersonaSettings(stored);
   return renderPersonaText({
     assistantName: persona.assistantName,
@@ -599,9 +612,8 @@ export async function synthesizeWithConfiguredModel(
   let apiKey: string;
   let baseUrl: string | null;
   try {
-    const provider = await deps.aiRepository.selectProviderWithCredential(
-      scopedDb,
-      model.provider_config_id
+    const provider = await withToolSavepoint(scopedDb, () =>
+      deps.aiRepository.selectProviderWithCredential(scopedDb, model.provider_config_id)
     );
     if (!provider?.encrypted_credential) {
       return { ok: false, reason: "credential_error" };

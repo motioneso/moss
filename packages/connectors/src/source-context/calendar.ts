@@ -1,4 +1,4 @@
-import { resolveMossEnv, type CalendarEvent, type DataContextDb } from "@moss/db";
+import { resolveMossEnv, withSavepoint, type CalendarEvent, type DataContextDb } from "@moss/db";
 
 import type { ConnectorAccountSafeRow } from "../repository.js";
 import type { GoogleCalendarEvent } from "../google-api-client.js";
@@ -290,7 +290,9 @@ export async function listCalendarContext(
     // Credential resolution failure = broken auth → gap, never silent cache (spec §4).
     let token: string;
     try {
-      token = await deps.resolveGoogleCredential(scopedDb);
+      // Savepoints keep a failed credential read or token write from breaking the cache
+      // fallback and later accounts.
+      token = await withSavepoint(scopedDb, () => deps.resolveGoogleCredential(scopedDb));
     } catch {
       gaps.push({ account: meta, reason: "auth_error" });
       continue;
@@ -321,7 +323,9 @@ export async function listCalendarContext(
         const classified = classifyLiveReadFailure(error);
         if (classified.kind !== "auth") throw error;
         // One forced token refresh, then the auth gap stands (spec §4).
-        const freshToken = await deps.resolveGoogleCredential(scopedDb, { force: true });
+        const freshToken = await withSavepoint(scopedDb, () =>
+          deps.resolveGoogleCredential(scopedDb, { force: true })
+        );
         accountItems = await attempt(freshToken);
       }
       unflagged.push(...accountItems);
