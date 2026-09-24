@@ -40,6 +40,18 @@ function parseColor(value: string): [number, number, number] {
   throw new Error(`not an opaque hex color (test only asserts opaque pairs): ${value}`);
 }
 
+/** Composite a translucent `rgba(r, g, b, a)` token over an opaque hex ground. */
+function over(value: string, ground: string): string {
+  const m = value.match(/^rgba?\((\d+),?\s*(\d+),?\s*(\d+)\s*[,/]\s*([\d.]+)\)$/);
+  if (!m) return value;
+  const a = Number(m[4]);
+  const hex = parseColor(ground)
+    .map((c, i) => Math.round(c + (Number(m[i + 1]) - c) * a))
+    .map((c) => c.toString(16).padStart(2, "0"))
+    .join("");
+  return `#${hex}`;
+}
+
 function luminance([r, g, b]: [number, number, number]): number {
   const lin = (c: number) => {
     const s = c / 255;
@@ -132,13 +144,19 @@ describe("dark mode accent lines and progress fills", () => {
   ];
   for (const [id, dark] of themes) {
     it(`${id}: rules and meters clear 3:1 on every dark ground`, () => {
-      for (const t of ["--accent-rule", "--accent-meter"]) {
-        for (const ground of ["--paper", "--surface", "--surface-2", "--surface-3"]) {
-          expect(
-            contrast(resolve(t, dark), resolve(ground, dark)),
-            `${id} ${t}/${ground}`
-          ).toBeGreaterThanOrEqual(3);
+      for (const ground of ["--paper", "--surface", "--surface-2", "--surface-3"]) {
+        const bg = resolve(ground, dark);
+        for (const t of ["--accent-rule", "--accent-meter"]) {
+          expect(contrast(resolve(t, dark), bg), `${id} ${t}/${ground}`).toBeGreaterThanOrEqual(3);
         }
+
+        // Meters fill a translucent --border track, so the fill's real neighbour is that
+        // track composited over the card (--bg-sunken is --surface-2).
+        const track = over(resolve("--border", dark), bg);
+        expect(
+          contrast(resolve("--accent-meter", dark), track),
+          `${id} --accent-meter/--border over ${ground}`
+        ).toBeGreaterThanOrEqual(3);
       }
     });
   }

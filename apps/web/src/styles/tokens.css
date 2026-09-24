@@ -485,9 +485,11 @@
   --accent-soft-border: rgb(121 166 141 / 0.5);
   --accent-soft-border-weak: rgb(121 166 141 / 0.36);
 
-  /* Same hue as --forest, lifted to 3:1 on --surface-3 (3.9:1 on --paper). */
+  /* Same hue as --forest, lifted to 3:1 on --surface-3 (3.9:1 on --paper).
+     Meters sit on a translucent --border track, so they lift further: 3:1
+     on that track over every dark ground. */
   --accent-rule: #5b7f6b;
-  --accent-meter: var(--accent-rule);
+  --accent-meter: #6d917c;
 
   /* A faint wash of the accent text tint; light's pale --sage glares on dark. */
   --hover-tint: rgb(121 166 141 / 0.12);
@@ -585,6 +587,7 @@
   --accent-soft-border: rgb(137 162 116 / 0.5);
   --accent-soft-border-weak: rgb(137 162 116 / 0.36);
   --accent-rule: #697d58;
+  --accent-meter: #7b906b;
   --hover-tint: rgb(137 162 116 / 0.12);
 }
 
@@ -598,6 +601,7 @@
   --accent-soft-border: rgb(213 131 90 / 0.5);
   --accent-soft-border-weak: rgb(213 131 90 / 0.36);
   --accent-rule: #a96746;
+  --accent-meter: #bc7958;
   --hover-tint: rgb(213 131 90 / 0.12);
 }
 
@@ -611,6 +615,7 @@
   --accent-soft-border: rgb(92 169 165 / 0.5);
   --accent-soft-border-weak: rgb(92 169 165 / 0.36);
   --accent-rule: #44817e;
+  --accent-meter: #579490;
   --hover-tint: rgb(92 169 165 / 0.12);
 }
 
@@ -624,6 +629,7 @@
   --accent-soft-border: rgb(150 149 183 / 0.5);
   --accent-soft-border-weak: rgb(150 149 183 / 0.36);
   --accent-rule: #767590;
+  --accent-meter: #8787a2;
   --hover-tint: rgb(150 149 183 / 0.12);
 }
 
