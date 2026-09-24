@@ -37,6 +37,7 @@ struct SettingsWindow: View {
     let onSetUp: () -> Void
     #if DEBUG
     var backtrack: BacktrackRuntime?
+    var onShowBacktrackText: (() -> Void)?
     #endif
 
     @State private var selection: SettingsSection? = .connection
@@ -62,7 +63,10 @@ struct SettingsWindow: View {
             #if DEBUG
             case .backtrack:
                 if let backtrack {
-                    BacktrackPane(backtrack: backtrack, permissions: permissions, onEditNeverWatch: { selection = .focus })
+                    BacktrackPane(
+                        backtrack: backtrack, permissions: permissions, onEditNeverWatch: { selection = .focus },
+                        onShowText: onShowBacktrackText
+                    )
                 } else {
                     Text("Not available in this build.").foregroundStyle(.secondary)
                 }

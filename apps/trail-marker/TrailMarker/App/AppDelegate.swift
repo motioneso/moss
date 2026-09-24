@@ -21,9 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var focusDebugBanner: FocusDebugBanner?
     private var cardHarness: CardHarness?
     /// Backtrack's Phase 1 preview (plan §4): Debug builds only; its one sink is in memory.
+    private let backtrackRing = BacktrackDebugRing()
     private lazy var backtrack = BacktrackRuntime(
-        connection: connection, permissions: permissions, focus: focus, sink: BacktrackDebugRing()
+        connection: connection, permissions: permissions, focus: focus, sink: backtrackRing
     )
+    private var backtrackTextWindowController: NSWindowController?
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -141,7 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         let view = SettingsWindow(
             connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
-            onSetUp: { [weak self] in self?.showOnboarding() }, backtrack: backtrack
+            onSetUp: { [weak self] in self?.showOnboarding() }, backtrack: backtrack,
+            onShowBacktrackText: { [weak self] in self?.showBacktrackText() }
         )
         #else
         let view = SettingsWindow(
@@ -176,6 +179,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.origin.y = visible.midY - frame.height / 2
         window.setFrame(frame, display: false)
     }
+
+    #if DEBUG
+    private func showBacktrackText() {
+        if let backtrackTextWindowController {
+            backtrackTextWindowController.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let hosting = NSHostingController(rootView: BacktrackTextView(ring: backtrackRing))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Backtrack text (debug build)"
+        window.styleMask = [.titled, .closable, .resizable]
+        window.isReleasedWhenClosed = false
+        place(window, hosting: hosting)
+
+        let controller = NSWindowController(window: window)
+        backtrackTextWindowController = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    #endif
 
     private func showLastJudgment() {
         if let lastJudgmentWindowController {

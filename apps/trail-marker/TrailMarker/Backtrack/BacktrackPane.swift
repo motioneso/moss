@@ -8,6 +8,8 @@ struct BacktrackPane: View {
     @ObservedObject var backtrack: BacktrackRuntime
     @ObservedObject var permissions: PermissionsService
     let onEditNeverWatch: () -> Void
+    /// Opens the window of remembered text; nil where there is no ring to show (the UI harness).
+    var onShowText: (() -> Void)?
 
     @State private var showingConsent = false
 
@@ -64,6 +66,18 @@ struct BacktrackPane: View {
                             permissions.requestScreenRecording()
                             SystemSettingsLinks.openScreenRecording()
                         }
+                    }
+                }
+            }
+
+            if let onShowText {
+                Section("What's remembered") {
+                    HStack {
+                        Text("The text Backtrack kept, newest first. In memory only.")
+                            .font(.callout)
+                        Spacer()
+                        Button("Show text…", action: onShowText)
+                            .accessibilityIdentifier("backtrack.showText")
                     }
                 }
             }
