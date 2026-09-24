@@ -47,6 +47,9 @@ targets:
         CODE_SIGN_ENTITLEMENTS: TrailMarker/Resources/TrailMarker.entitlements
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # Moss forest (#173E2B), not the system blue, on every button, switch and sidebar
+        # selection (Ben, 2026-09-23; Backtrack plan §3.4).
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         # Notarization (release) needs it; development builds do not, and with a local signing
         # certificate it would refuse to load the debug library and Sparkle.
@@ -70,13 +73,31 @@ targets:
     dependencies:
       - target: TrailMarker
 
+  # Drives the real card in a window (Debug-only `-TMHostCardInWindow YES`), since XCUITest can't
+  # open a status item's popover (Backtrack plan §3.5).
+  TrailMarkerUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: TrailMarkerUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moss.trailmarker.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: TrailMarker
+    dependencies:
+      - target: TrailMarker
+
 schemes:
   TrailMarker:
     build:
       targets:
         TrailMarker: all
         TrailMarkerTests: [test]
+        TrailMarkerUITests: [test]
     test:
       config: Debug
       targets:
         - TrailMarkerTests
+        - TrailMarkerUITests

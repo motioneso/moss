@@ -342,3 +342,79 @@ final class PrivacyFixesTests: XCTestCase {
         )
     }
 }
+
+// MARK: - The menu's Focus switch (Backtrack plan §3.4), through the real runtime and transport
+
+extension PrivacyFixesTests {
+    /// With Focus switched off, nothing about Focus leaves the Mac: no context, no judgment, even
+    /// with the app in front for longer than the dwell. `testPauseDuringAutomaticCapture…` is the
+    /// control: the same harness sends a judgment within this time when the switch is on.
+    func testWithTheFocusSwitchOffNothingIsSentToFocus() async {
+        let h = harness()
+        link(h)
+        h.focus.setFocusSwitch(on: false)
+        let before = h.transport.paths.filter { $0.contains("/focus/") }.count
+        for _ in 0..<80 { await settle() }
+        let after = h.transport.paths.filter { $0.contains("/focus/") }.count
+        XCTAssertEqual(after, before, "sent with Focus switched off: \(h.transport.paths.suffix(4))")
+        XCTAssertEqual(h.transport.count("/focus/judge"), 0)
+        XCTAssertEqual(h.capture.calls, 0)
+    }
+
+    func testWithTheFocusSwitchOffTestVisionAndCorrectSendNothingButRenameStillWorks() async {
+        let h = harness()
+        link(h)
+        await settle()
+        h.focus.seedLastJudgmentForTesting(remembered())
+        h.focus.setFocusSwitch(on: false)
+        await settle()
+        let before = h.transport.count("/focus/correct")
+
+        h.focus.testVision()
+        h.focus.correct(.right)
+        h.connection.rename(displayName: "New name")
+        await settle()
+
+        XCTAssertEqual(h.focus.visionTestResult, .failure(.focusSwitchedOff))
+        XCTAssertEqual(h.capture.calls, 0)
+        XCTAssertEqual(h.transport.count("/focus/correct"), before)
+        XCTAssertEqual(h.transport.count("/device"), 1, "rename is a connection operation, not Focus")
+    }
+
+    /// The automatic path: a capture is suspended when Focus is switched off. No description and
+    /// no second judge request, exactly as for Pause All.
+    func testSwitchingFocusOffDuringAutomaticCaptureSendsNoDescriptionAndNoSecondJudgment() async {
+        let h = harness(rung3: true)
+        link(h)
+        for _ in 0..<80 where !h.capture.isSuspended {
+            await settle()
+        }
+        XCTAssertTrue(h.capture.isSuspended, "never reached the capture; requests: \(h.transport.paths)")
+        XCTAssertEqual(h.transport.count("/focus/judge"), 1)
+
+        h.focus.setFocusSwitch(on: false)
+        h.capture.resume()
+        await settle(300_000_000)
+
+        XCTAssertEqual(h.describer.calls, 0)
+        XCTAssertEqual(h.transport.count("/focus/judge"), 1, "a second judgment left with Focus switched off")
+    }
+
+    /// Switching Focus off while a Test vision picture is being taken drops it before the vision
+    /// source, like Pause All does.
+    func testSwitchingFocusOffDuringTestVisionNeverReachesTheVisionSource() async {
+        let h = harness()
+        link(h)
+        await settle()
+        h.focus.testVision()
+        await settle()
+        XCTAssertTrue(h.capture.isSuspended)
+
+        h.focus.setFocusSwitch(on: false)
+        h.capture.resume()
+        await settle()
+
+        XCTAssertEqual(h.describer.calls, 0)
+        XCTAssertNil(h.focus.visionTestCapture)
+    }
+}

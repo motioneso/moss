@@ -45,7 +45,6 @@ struct WelcomeView: View {
                 viewModel.connectInBrowser()
             }
             .buttonStyle(.borderedProminent)
-            .tint(TrailMarkerTokens.Color.forest)
             .disabled(viewModel.urlText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(TrailMarkerTokens.Spacing.major)

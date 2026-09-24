@@ -31,6 +31,11 @@ jobs:
         working-directory: apps/trail-marker
         run: xcodegen generate
 
+      # The UI tests (TrailMarkerUITests) need macOS UI automation, which otherwise waits for a
+      # password prompt nobody can answer on a runner.
+      - name: Enable UI automation
+        run: sudo automationmodetool enable-automationmode-without-authentication
+
       - name: Build and test
         working-directory: apps/trail-marker
         run: |

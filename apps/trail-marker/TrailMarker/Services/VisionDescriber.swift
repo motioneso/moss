@@ -37,6 +37,8 @@ enum VisionError: Error, Equatable {
     case paused
     /// Test only: Focus is off, so Trail Marker takes no pictures at all.
     case focusOff
+    /// Test only: Focus is switched off from the menu for now, so nothing is captured or sent.
+    case focusSwitchedOff
 }
 
 /// One description of one captured window. A source is free to fail; callers treat every case the
