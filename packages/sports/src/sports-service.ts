@@ -424,6 +424,21 @@ export class SportsService {
         competitionLabel: catalogEntry(f.competitionKey)?.label ?? f.competitionKey
       }));
 
+    // #2660: a tournament the reader follows only by its teams must not pull the tournament-wide
+    // league feed. The teams' own feeds are fetched per follow below; only those stories are used.
+    // A whole-tournament follow (teamKey null) keeps the whole feed, and club leagues are never
+    // affected — this set only ever holds tournaments with no whole-competition follow.
+    const wholeCompetitionFollows = new Set(
+      follows.filter((f) => !f.teamKey).map((f) => f.competitionKey)
+    );
+    const teamOnlyTournamentKeys = new Set(
+      competitionKeys.filter((key) => {
+        if (catalogEntry(key)?.kind !== "tournament") return false;
+        if (wholeCompetitionFollows.has(key)) return false;
+        return follows.some((f) => f.competitionKey === key && f.teamKey !== null);
+      })
+    );
+
     // Every competition is fetched independently and in parallel (scoreboard/standings/teams
     // together, then headlines once teams resolves for the team-key join) instead of a serial
     // crawl across all competitions — a cold load no longer pays N sequential round-trips
@@ -449,6 +464,7 @@ export class SportsService {
           const competition = catalogEntry(key);
           const includeEspnHeadlines =
             competition !== undefined &&
+            !teamOnlyTournamentKeys.has(key) &&
             sportsNewsCoverageAllows(espnCoverage, follows, {
               kind: "competition",
               sportKey: competition.espnSport,
@@ -640,6 +656,33 @@ export class SportsService {
       headlinesByComp.set(game.competitionKey, merged);
     }
 
+    // #2660: for a tournament followed only by its teams, the tournament-wide feed was not
+    // fetched. Build its news group from the followed teams' own feeds instead, keeping only
+    // stories tagged with one of those teams — so the feed (and the top-story/hero pick) carries
+    // the reader's national team and no untagged tournament story. Stories from the reader's own
+    // custom sources are kept as-is; those are explicitly theirs.
+    for (const key of teamOnlyTournamentKeys) {
+      const compBundles = bundleList.filter((bundle) => bundle.follow.competitionKey === key);
+      const followedCatalogKeys = new Set(
+        compBundles.flatMap((bundle) =>
+          bundle.identity.catalogKey === null ? [] : [bundle.identity.catalogKey]
+        )
+      );
+      let kept: SourceHeadline[] = (headlinesByComp.get(key) ?? []).filter(
+        (headline) =>
+          headline.origin === "custom" ||
+          headline.teamKeys.some((catalogKey) => followedCatalogKeys.has(catalogKey))
+      );
+      for (const bundle of compBundles) {
+        const catalogKey = bundle.identity.catalogKey;
+        if (catalogKey === null) continue;
+        for (const headline of filterTeamHeadlines(bundle.headlines, catalogKey)) {
+          kept = mergeHeadlineScope(kept, headline);
+        }
+      }
+      headlinesByComp.set(key, kept);
+    }
+
     // One relevance pass over every headline the page could show, then every pool is cut down to
     // the survivors (#2019). Doing it here — before followed cards, the hero, top stories and the
     // league news band are composed from these same pools — is what makes the promise true that a
@@ -730,6 +773,13 @@ export class SportsService {
       }))
       .filter((group) => group.sections.some((section) => section.rows.length > 0));
 
+    // #2660: which followed competitions are in season right now, from the season window the
+    // standings fetch carries. The picker keeps a followed tournament out of Following unless its
+    // key is here; club leagues are never gated by it.
+    const activeCompetitionKeys = competitionKeys.filter((key) =>
+      seasonIsActive(standingsByComp.get(key)?.season, this.now())
+    );
+
     // Fill the NewsBand hero with real article body (#857). The featured story is picked
     // CLIENT-side by NewsBand; we recompute the IDENTICAL pick here with the shared ranking
     // (selectFeature over all groups = the client's default "all" filter), fetch just that one
@@ -819,6 +869,7 @@ export class SportsService {
       followedLeagues,
       followedLeagueCards,
       ambiguousFollows,
+      activeCompetitionKeys,
       degraded: state.degraded
     };
 
@@ -1474,4 +1525,18 @@ function groupStageComplete(sections: StandingsTable["sections"]): boolean {
         (row) => row.wins + row.losses + (row.draws ?? 0) >= section.rows.length - 1
       )
   );
+}
+
+// #2660: is the competition's newest season running at `now`? The window comes from the standings
+// fetch (see espn-source.ts `seasonWindow`). Unknown or unparseable dates are NOT active — a
+// tournament is only kept in Following when its season is provably in progress.
+export function seasonIsActive(
+  season: { readonly start: string; readonly end: string } | null | undefined,
+  now: Date
+): boolean {
+  if (!season) return false;
+  const start = Date.parse(season.start);
+  const end = Date.parse(season.end);
+  if (Number.isNaN(start) || Number.isNaN(end)) return false;
+  return now.getTime() >= start && now.getTime() <= end;
 }

@@ -1,4 +1,30 @@
 {
+  "season": {
+    "year": 2026,
+    "startDate": "2026-06-11T04:00Z",
+    "endDate": "2026-12-31T04:59Z",
+    "displayName": "2026 FIFA World Cup"
+  },
+  "seasons": [
+    {
+      "year": 2026,
+      "startDate": "2026-06-11T04:00Z",
+      "endDate": "2026-12-31T04:59Z",
+      "displayName": "2026 FIFA World Cup",
+      "types": [
+        {
+          "name": "Group Stage",
+          "startDate": "2026-06-11T04:00Z",
+          "endDate": "2026-06-28T03:59Z"
+        },
+        {
+          "name": "Final",
+          "startDate": "2026-07-19T04:00Z",
+          "endDate": "2026-08-01T03:59Z"
+        }
+      ]
+    }
+  ],
   "children": [
     {
       "name": "Group A",

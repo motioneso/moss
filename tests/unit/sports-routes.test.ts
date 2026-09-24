@@ -307,6 +307,9 @@ describe("sports routes", () => {
     expect(body.scoreboard[0].games[0]).toHaveProperty("recap", "A late comeback");
     expect(body.hero.games[0].game.home).toHaveProperty("sourceTeamId", "6");
     expect(body).toHaveProperty("ambiguousFollows");
+    // #2660: the in-season competition list must survive serialization, or the picker would treat
+    // every followed tournament as not running.
+    expect(Array.isArray(body.activeCompetitionKeys)).toBe(true);
     await app.close();
   });
 

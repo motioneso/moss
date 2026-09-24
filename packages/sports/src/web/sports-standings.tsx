@@ -119,9 +119,35 @@ function unwrapStandings(data: SportsStandingsResponse | StandingsGroup | undefi
   return { group: data, fixtures: [] };
 }
 
+// #2660: the standings view to open when the viewer has not picked one. Followed competitions come
+// first (in follow order, as `groups` does), then the first visible competition. A tournament that
+// is not in progress is skipped so a finished World Cup is never opened by default; it stays
+// reachable under its sport. Exported for direct unit testing.
+export function defaultStandingsKey(
+  groups: readonly StandingsGroup[],
+  visibleKeys: readonly string[],
+  activeCompetitionKeys: readonly string[]
+): string {
+  const active = new Set(activeCompetitionKeys);
+  const inactiveTournament = (key: string) =>
+    catalogEntry(key)?.kind === "tournament" && !active.has(key);
+  return (
+    groups.find(
+      (group) =>
+        visibleKeys.includes(group.competitionKey) && !inactiveTournament(group.competitionKey)
+    )?.competitionKey ??
+    visibleKeys.find((key) => !inactiveTournament(key)) ??
+    visibleKeys[0] ??
+    ""
+  );
+}
+
 export function StandingsRail(props: {
   groups: readonly StandingsGroup[];
   followedPairs: FollowedTeamIndex;
+  // #2660: followed competitions currently in season. A followed tournament that is not running is
+  // kept out of Following and never chosen as the default view.
+  activeCompetitionKeys?: readonly string[];
 }) {
   const catalogQuery = useQuery({ queryKey: sportsQueryKeys.catalog, queryFn: getSportsCatalog });
   const followsQuery = useQuery({ queryKey: sportsQueryKeys.follows, queryFn: listSportsFollows });
@@ -132,9 +158,11 @@ export function StandingsRail(props: {
   const catalog = catalogQuery.data?.competitions ?? SPORTS_CATALOG;
   const follows = followsQuery.data?.follows ?? [];
   const selectedCompetitionKeys = preferencesQuery.data?.selectedCompetitionKeys ?? null;
+  const activeCompetitionKeys = props.activeCompetitionKeys ?? [];
   const pickerGroups = useMemo(
-    () => buildStandingsPickerGroups(catalog, follows, selectedCompetitionKeys),
-    [catalog, follows, selectedCompetitionKeys]
+    () =>
+      buildStandingsPickerGroups(catalog, follows, selectedCompetitionKeys, activeCompetitionKeys),
+    [catalog, follows, selectedCompetitionKeys, activeCompetitionKeys]
   );
   const visibleKeys = useMemo(
     () =>
@@ -149,11 +177,9 @@ export function StandingsRail(props: {
     () => new Map(props.groups.map((g) => [g.competitionKey, g])),
     [props.groups]
   );
-  const firstKey =
-    props.groups.find((standings) => visibleKeys.includes(standings.competitionKey))
-      ?.competitionKey ??
-    visibleKeys[0] ??
-    "";
+  // A tournament that is not running is not opened by default (it is still reachable under its
+  // sport). Only the default is gated; explicit selection is untouched.
+  const firstKey = defaultStandingsKey(props.groups, visibleKeys, activeCompetitionKeys);
   const [selectedKey, setSelectedKey] = useState(firstKey);
   const activeKey = visibleKeys.includes(selectedKey) ? selectedKey : (visibleKeys[0] ?? "");
   // null = follow the derived default (followed team's division); a string = the viewer's own pick.
@@ -256,6 +282,7 @@ export function StandingsRail(props: {
               catalog={catalog}
               follows={follows}
               selectedCompetitionKeys={selectedCompetitionKeys}
+              activeCompetitionKeys={activeCompetitionKeys}
               value={activeKey}
               onChange={selectLeague}
             />

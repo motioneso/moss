@@ -347,6 +347,10 @@ export interface SportsOverviewResponse {
   // Saved follows that can no longer be told apart from another team (S1); ask the person to
   // choose. Excluded from `followed`, `scoreboard` and `standings` matching above.
   readonly ambiguousFollows: readonly AmbiguousFollowedTeamRef[];
+  // #2660: followed competitions whose season is provably in progress (their newest season window
+  // covers now). The standings picker keeps a followed tournament out of Following — and never
+  // opens it by default — unless its key is here. Club leagues are not gated by this.
+  readonly activeCompetitionKeys?: readonly string[];
   readonly degraded: boolean; // source failed → cached/empty
 }
 
