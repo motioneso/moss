@@ -228,10 +228,8 @@
   /* --font-mono retired 2026-07-08 (Ben: "kill mono anywhere in the app, I'm not a fan").
      All former mono surfaces now use --font-sans; numeric columns hold alignment via
      font-variant-numeric: tabular-nums rather than a fixed-width face. Genuine code blocks
-     (chat CLI output) keep a literal monospace stack locally, not this token. */
-  /* Nameplate-only serif (Ben 2026-07-07, live feedback mrb0n3j3): the no-serif rule stands
-     everywhere except the sports masthead brand, where a serif carries the newspaper read. */
-  --font-serif: Georgia, "Times New Roman", Times, serif;
+     (chat code blocks) keep a literal monospace stack locally, not this token.
+     No serif token: serif is not used anywhere in the app (Ben 2026-09-24). */
 
   --text-2xs: 11px;
   --text-xs: 12px;
@@ -349,9 +347,9 @@
   --border-default: var(--border);
   --accent-strong: var(--accent-hover);
 
-  /* Committed forest nav field (spec §3.3). --rail-bg rides --forest-ink so
-     park themes re-ground the rail automatically; dark overrides it (dark's
-     forest-ink is a LIGHT tint, unusable as a ground). */
+  /* Forest ground for the dark "next up" box on Today (.cmd-next). --rail-bg
+     rides --forest-ink so park themes re-ground it automatically; dark
+     overrides it (dark's forest-ink is a LIGHT tint, unusable as a ground). */
   --rail-bg: var(--forest-ink);
   --rail-fg: #ede5d2;
   --rail-fg-muted: rgba(237, 229, 210, 0.9);

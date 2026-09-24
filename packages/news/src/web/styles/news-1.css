@@ -1,6 +1,6 @@
 /* News broadsheet page scaffolding: masthead, hero carousel, skeleton, empty state.
-   Tokens only — raw colors live in apps/web/src/styles/tokens.css. Display serif is allowed
-   on /news per the spec's extension of the /sports amendment (broadsheet sections). */
+   Tokens only — raw colors live in apps/web/src/styles/tokens.css. No serif: News uses the
+   app's sans and display faces like every other surface. */
 
 .nw-wrap {
   min-width: 0;

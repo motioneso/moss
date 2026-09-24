@@ -1,5 +1,7 @@
 # Moss Visual Language Research Plan
 
+> **Superseded by [docs/design-system.md](../design-system.md).** Kept as a dated record.
+
 Date: 2026-06-06
 
 ## Purpose

@@ -307,10 +307,12 @@ Conventions:
 - **HTTP**: use `requestJson` from `@moss/module-web-sdk` — identical behavior to the shell's
   client (cookie credentials, `X-Timezone`, typed `ApiError`). Paths are relative (`/api/...`).
 - **React Query keys**: `[moduleId, ...]` tuples, e.g. `["your-module", "overview"]`.
-- **Design system**: use the authored `jds-*` primitives and current typography tokens
-  (`--font-display` for headings, `--font-sans` for body and labels; no new mono or serif styles). Raw CSS colors belong in `apps/web/src/styles/tokens.css` only.
-  Empty/loading states reuse existing authored patterns. The lucide `Sparkles` icon is banned
-  (lint-enforced).
+- **Design system**: follow [`docs/design-system.md`](design-system.md). First-party modules
+  use `@moss/ui` components and tokens fully and keep their own CSS to layout; third-party modules
+  may style freely. `--font-display` for headings, `--font-sans` for everything else; no serif,
+  and monospace only for real code. Raw CSS colors belong in `apps/web/src/styles/tokens.css`
+  only. Empty/loading states reuse existing authored patterns. The lucide `Sparkles` icon is
+  banned (lint-enforced).
 - **Settings pane**: declare a `settings` surface in the manifest with `entry: "./settings"`
   and export it from `./settings` — same scanner mechanism (`virtual:moss-module-settings`).
 

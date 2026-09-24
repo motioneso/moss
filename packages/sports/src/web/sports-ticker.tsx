@@ -286,7 +286,7 @@ export function SportsTicker(props: {
 // Desk-strip card (mrb7mwhv): the /sports followed strip deliberately diverges from the
 // compact /today widget. Ben wanted far more room per team — "not so compact and busy" — and
 // the strip to lead the page, so this is the roomy, image-forward variant: a wide lead-story
-// banner, a serif team name at display size, and generous spacing. /today keeps the dense
+// banner, a team name at display size, and generous spacing. /today keeps the dense
 // TickerTeam below. The team-semantics helpers (standingIsSane, NextGameContent, Crest/FormPips)
 // are shared so the two layouts can't drift on what a team's status/standing means.
 function FeaturedTeamCard(props: {
