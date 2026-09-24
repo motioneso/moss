@@ -617,13 +617,13 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel("Lighter day")
     .click();
-  await planDialog.getByLabel("Main priority").selectOption(taskId);
+  await planDialog.getByLabel("The one thing that matters").selectOption(taskId);
   for (const width of [320, 768]) {
     await page.setViewportSize({ width, height: 900 });
     await checkLayout(page, width);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await planDialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+  await planDialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(planDialog).toContainText("Saved. The blocks are proposed for the morning.");
   const creates = requests.filter(
     (r) => r.method === "POST" && r.url.endsWith("/api/calendar/day-plans")
@@ -653,11 +653,11 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const reopened = page.getByRole("dialog");
   await expect(reopened).toContainText("meeting happened, follow-up not sent");
-  await expect(reopened.getByLabel("Main priority")).toHaveValue(taskId);
+  await expect(reopened.getByLabel("The one thing that matters")).toHaveValue(taskId);
   await expect(
     reopened.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day")
   ).toBeChecked();
-  await reopened.getByRole("button", { name: "Back to Today" }).click();
+  await reopened.getByRole("button", { name: "Leave for now" }).click();
 
   const morning = await createBriefingRun(page, "morning", "T22 next morning", [
     "tasks.list",

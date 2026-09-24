@@ -233,6 +233,7 @@ export function acceptAllOutcomeLine(applied: number, failed: number, pending: n
 /** Evening planning surface (T20). */
 export const PLAN_TOMORROW_LABEL = "Plan tomorrow";
 export const SAVE_TOMORROW_LABEL = "Save tomorrow's plan";
+export const SAVE_PROPOSED_LABEL = "Save proposed plan";
 export const EVENING_REVIEW_NOT_READY = "Your evening review is not ready yet";
 export const NO_ROOM_FOUND = "No room found";
 
@@ -256,12 +257,42 @@ export const EVENING_COMMIT_NOTE = "Only the loose ends that matter";
 export const EVENING_COMMIT_MESSAGE = "Give this a place, or leave it open.";
 export const EVENING_SHAPE_NOTE = "A realistic starting point";
 export const EVENING_SHAPE_MESSAGE = "How much room do you want tomorrow?";
-export const EVENING_REVIEW_NOTE = "Here is what will change";
+export const EVENING_SHAPE_PROSE =
+  "Your appointments stay where they are. I'll keep time around them open and fit task blocks into the rest.";
+export const EVENING_SHAPE_REPLY =
+  "I've left a short buffer between task blocks. Existing appointments and travel stay protected.";
+export const EVENING_SHAPE_LIGHT_REPLY =
+  "A lighter day asks less of you. Other tasks stay open; they aren't deleted or marked complete.";
+export const EVENING_PRIORITY_LABEL = "The one thing that matters";
+export const EVENING_START_LABEL = "Start task time at";
+export const EVENING_REVIEW_NOTE = "Here's what will change";
 export const EVENING_REVIEW_MESSAGE = "A plan you can leave with.";
-export const EVENING_REVIEW_CHANGES_HEADING = "Changes";
+export const EVENING_DONE_LABEL = "Evening plan saved";
+export const EVENING_FINISHED_MESSAGE = "Tomorrow is ready to meet you.";
+export const EVENING_FINISHED_REPLY_TITLE = "Morning starts from here.";
+export const EVENING_FINISHED_REPLY =
+  "Moss will check overnight changes against tonight's intentions and explain anything that needs adjusting. It won't ask you to plan the day from scratch.";
+export const EVENING_HANDOFF_LINK = "Preview the morning handoff \u2197";
+export const EVENING_ADJUST_LINK = "Adjust this plan";
+export const EVENING_HANDOFF_MESSAGE = "You already gave today a direction.";
+export const EVENING_BACK_LABEL = "Back to Today";
+export const EVENING_REVIEW_PROSE_AUTO =
+  "Your settings allow Moss to place its task blocks. Saving this plan schedules the selected blocks.";
+export const EVENING_REVIEW_PROSE_PROPOSE =
+  "Your settings keep task blocks as proposals. Saving carries these suggestions into the morning without adding them to your calendar.";
+export const EVENING_REVIEW_BLOCKS_AUTO = "Task blocks to schedule";
+export const EVENING_REVIEW_BLOCKS_PROPOSE = "Task blocks to propose";
+export const EVENING_REVIEW_CHANGES_AUTO = "Changes to existing Moss blocks";
+export const EVENING_REVIEW_CHANGES_PROPOSE = "Proposed calendar changes";
+export const EVENING_REVIEW_EXISTING_STAY =
+  "Existing blocks stay on the calendar until changes are accepted.";
+export const EVENING_REVIEW_UNSCHEDULED_HEADING = "Leave unscheduled";
+export const EVENING_REVIEW_NOTES_HEADING = "What you want Moss to remember";
+export const EVENING_REVIEW_FOOTNOTE =
+  "Only the blocks listed above are included. Your tasks stay on your list.";
 export const EVENING_REVIEW_KEEP_HEADING = "Keep as they are";
 export const EVENING_REVIEW_NO_CHANGE_HEADING = "No change";
-export const EVENING_REVIEW_NO_CHANGES = "Nothing changes tomorrow.";
+export const EVENING_REVIEW_NO_CHANGES = "No task-block times change.";
 
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {
@@ -320,6 +351,58 @@ export const EVENING_REFLECT_NOTE_LABEL = "Or tell Moss in your own words";
 export const EVENING_REFLECT_NOTE_PLACEHOLDER =
   "A correction, a constraint, or something to remember…";
 export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
+
+/** Evening dialog frame: title, footer actions and the next-step buttons. */
+export const EVENING_DIALOG_TITLE = "A good place to leave the day.";
+export const EVENING_DIALOG_EYEBROW = "Moss / Evening planning";
+export const EVENING_LEAVE_LABEL = "Leave for now";
+export const EVENING_NEXT_LABELS = [
+  "Open commitments \u2192",
+  "Shape tomorrow \u2192",
+  "Review the plan \u2192"
+] as const;
+
+/** Evening step 2 commitment choices; "leave" keeps the task undecided. */
+export const EVENING_COMMIT_CHOICES = [
+  { id: "tomorrow", title: "Tomorrow", hint: "Suggest a time block." },
+  { id: "another-date", title: "Another day", hint: "Choose a day that fits better." },
+  {
+    id: "unscheduled",
+    title: "Keep it on my list",
+    hint: "Leave it unscheduled. Nothing deleted."
+  },
+  { id: "leave", title: "Leave this for now", hint: "Keep today's task exactly as it is." }
+] as const;
+export const EVENING_COMMIT_EYEBROW = "Open task";
+export const EVENING_COMMIT_TASK_HINT = "It was on today's list without a time block.";
+export function eveningCommitProse(count: number): string {
+  if (count === 0) return "Nothing from today is waiting for a decision.";
+  return count === 1
+    ? "One task from today never got a time block. It can fit tomorrow, but it doesn't have to."
+    : `${count} tasks from today never got a time block. Take them one at a time.`;
+}
+
+/** Tomorrow snapshot beside every evening step. */
+export const EVENING_SNAPSHOT_INTENT = {
+  light: "A lighter day, with space to recover.",
+  normal: "A steady day, with room for follow-through.",
+  full: "A full day, with the essentials protected."
+} as const;
+export const EVENING_SNAPSHOT_NO_BLOCKS = "No task blocks selected. The rest stays open.";
+export const EVENING_SNAPSHOT_REST = "The rest stays open.";
+export const EVENING_PLACEMENT_NOTES = {
+  auto: {
+    title: "Automatic scheduling is on",
+    body: "Selected task blocks will be placed when you save."
+  },
+  suggest: {
+    title: "Propose before scheduling",
+    body: "Selected blocks stay as suggestions until accepted."
+  }
+} as const;
+export function eveningMobilePlanLabel(blocks: number): string {
+  return `Tomorrow's plan \u00b7 ${blocks} ${blocks === 1 ? "task block" : "task blocks"}`;
+}
 
 /** Evening hero, recap and open-loops copy (VP-EVENING-SUMMARY-R1). The hero
     kicker names the signed-in user's first name; without one it stands alone. */

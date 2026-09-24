@@ -614,10 +614,13 @@ export async function prepareSelectedEntry(
         name: `${(m.tasks[2] as ParityTask).title}: plan`
       });
       const tomorrow = group.getByLabel("Tomorrow");
-      if (await tomorrow.isChecked()) await group.getByLabel("Keep on the list").check();
+      if (await tomorrow.isChecked()) await group.getByLabel("Keep it on my list").check();
       else await tomorrow.check();
     },
-    planningSaved: () => dialog().getByRole("button", { name: "Save tomorrow's plan" }).click(),
+    planningSaved: () =>
+      dialog()
+        .getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ })
+        .click(),
     expectSavedText: () =>
       expect(dialog()).toContainText("Saved. The blocks are proposed for the morning."),
     closeDialogs: () => closeDialogs(page).then(() => undefined),

@@ -478,7 +478,7 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       }
       if (entry.state === "evening-saved") {
         const dialog = page.getByRole("dialog");
-        await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+        await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
         await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
       }
       await driveState(page, entry.state, entry.viewport);

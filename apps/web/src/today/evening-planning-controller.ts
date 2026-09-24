@@ -280,6 +280,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
         needsConfirm: review?.approval != null
       }),
     busy,
+    policyMode,
     proposals,
     setNote: (taskId: string, note: string) =>
       setNoteDrafts((prev) => ({ ...prev, [taskId]: note })),
