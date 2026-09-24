@@ -497,7 +497,9 @@ export const newsModuleManifest = {
       description:
         "Show a picture with a story. If a publisher's feed doesn't name one (such as NPR), News " +
         "looks in the story's own text instead. The address must be on that publisher's approved " +
-        "list, and a tracking image is never shown as story art."
+        "list, and a tracking image is never shown as story art. When Today's lead story has no " +
+        "picture, or its picture fails to load, a decorative drawing in the story's topic colors " +
+        "fills the space."
     },
     {
       id: "news.add_source",
