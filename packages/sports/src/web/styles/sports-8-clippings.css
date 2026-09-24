@@ -216,9 +216,14 @@
 
 /* Next game, or the live score */
 
+/* Pinned to the card base so every footer in a row lines up. Cards in a row share its height,
+   and the body keeps the 18px minimum gap above the footer. */
+.jds-brief--sports .sp-tkgrid .sp-tk__body:has(+ .sp-tk__next) {
+  margin-bottom: 18px;
+}
 .jds-brief--sports .sp-tkgrid .sp-tk__next {
   display: block;
-  margin: 18px 0 0;
+  margin: auto 0 0;
   padding: 12px 0 0;
   border-top: 1px solid var(--border);
 }
