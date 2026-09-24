@@ -59,7 +59,8 @@ describe("usefulness feedback foundation", () => {
 
     expect(registration?.manifest.database?.ownedTables).toEqual([
       "app.usefulness_feedback_signals",
-      "app.usefulness_feedback_targets"
+      "app.usefulness_feedback_targets",
+      "app.story_relevance_answer_cache"
     ]);
     expect(registration?.manifest.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
       "POST /api/me/usefulness-feedback",
