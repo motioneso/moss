@@ -3,10 +3,12 @@ import Foundation
 enum FocusWatchState: Equatable {
     /// The person has not turned Focus on.
     case off
+    /// Focus is on, but the person switched it off from the menu for now. Nothing is observed or
+    /// sent; distinct from the connection's Pause All, which stops everything.
+    case switchedOff
     /// Focus is on and connected, but no Moss calendar block covers now.
     case noBlock
     case watching(blockId: String, title: String, endsAt: Date)
-    case paused
     /// Moss can't be reached (or the last judgment failed); the next scheduled try runs by itself.
     case unreachable
     /// Focus module is off for this person, or no judgment model is bound in Moss.
@@ -14,11 +16,11 @@ enum FocusWatchState: Equatable {
 }
 
 enum FocusEvent: Equatable {
-    case launched(consent: Bool, paused: Bool)
+    case launched(consent: Bool, switchedOff: Bool = false)
     case connectionChanged(isConnected: Bool)
     case userToggleConsent(Bool)
-    case userPause
-    case userResume
+    /// The menu's Focus switch (Ben, 2026-09-23): pauses only Focus, keeping the connection.
+    case userSwitchedFocus(on: Bool)
     case userTestNudge
     case contextLoaded(FocusContext, generation: Int)
     case contextFailed(CompanionError, generation: Int)
@@ -31,6 +33,9 @@ enum FocusEvent: Equatable {
     case judged(FocusJudgment, generation: Int)
     case judgeFailed(CompanionError, generation: Int)
     case wake
+    /// The Mac is about to sleep: anything in flight is dropped, so no capture, description or
+    /// request started before sleep finishes after it (#2643). Wake fetches afresh.
+    case sleep
     case accessibilityChanged(granted: Bool)
     /// The person changed the app allowlist in the Focus settings.
     case policyChanged(ObservationPolicy)
@@ -44,8 +49,8 @@ enum FocusEffect: Equatable {
     /// Judge this change if the window is still in front after the dwell time.
     case scheduleDwell(after: TimeInterval, generation: Int, change: Int)
     case cancelAll
-    case persistPaused(Bool)
     case persistConsent(Bool)
+    case persistFocusSwitchedOff(Bool)
     case requestNotificationPermission
     case showNudge(title: String)
     case showTestNudge
@@ -54,8 +59,9 @@ enum FocusEffect: Equatable {
 }
 
 /// Pure `(state, event) -> (state, [effect])`, in the same style as `ConnectionMachine`, so
-/// "Pause really stops requests" can be tested without a network. Anything that can send is
-/// gated on being *active* (consent on, not paused, connected to Moss); every timer and reply
+/// "Pause really stops requests" can be tested without a network. Pause is the connection's own
+/// (it disconnects), the only pause there is. Anything that can send is gated on being *active*
+/// (consent on, connected to Moss); every timer and reply
 /// carries the generation it was started under, and a change of activity bumps the generation so
 /// old ones are ignored.
 struct FocusMachine {
@@ -71,7 +77,7 @@ struct FocusMachine {
     private(set) var policy: ObservationPolicy
 
     private var consent = false
-    private var paused = false
+    private var switchedOff = false
     private var connected = false
     private var accessibilityGranted = false
     private var currentApp: Observation?
@@ -91,15 +97,21 @@ struct FocusMachine {
         self.policy = policy
     }
 
-    private var isActive: Bool { consent && !paused && connected }
+    private var isActive: Bool { consent && !switchedOff && connected }
 
     mutating func handle(_ event: FocusEvent, now: Date) -> [FocusEffect] {
         var effects: [FocusEffect] = []
 
         switch event {
-        case .launched(let consent, let paused):
+        case .launched(let consent, let switchedOff):
             self.consent = consent
-            self.paused = paused
+            self.switchedOff = switchedOff
+
+        case .userSwitchedFocus(let on):
+            let wasActive = isActive
+            switchedOff = !on
+            effects.append(.persistFocusSwitchedOff(!on))
+            effects += activityChanged(wasActive: wasActive)
 
         case .connectionChanged(let isConnected):
             let wasActive = isActive
@@ -115,22 +127,6 @@ struct FocusMachine {
                 effects.append(.requestNotificationPermission)
             }
             effects += activityChanged(wasActive: wasActive)
-
-        case .userPause:
-            guard consent, !paused else { return [] }
-            let wasActive = isActive
-            paused = true
-            if wasActive { bumpGeneration() }
-            effects = [.persistPaused(true), .cancelAll]
-
-        case .userResume:
-            guard paused else { return [] }
-            paused = false
-            effects.append(.persistPaused(false))
-            if isActive {
-                bumpGeneration()
-                effects.append(.fetchContext(generation: generation))
-            }
 
         case .userTestNudge:
             effects.append(.showTestNudge)
@@ -210,6 +206,11 @@ struct FocusMachine {
         case .wake:
             if isActive { effects.append(.fetchContext(generation: generation)) }
 
+        case .sleep:
+            guard isActive else { break }
+            bumpGeneration()
+            effects.append(.cancelAll)
+
         case .accessibilityChanged(let granted):
             accessibilityGranted = granted
 
@@ -272,8 +273,8 @@ struct FocusMachine {
     private mutating func refreshState(now: Date) {
         if !consent {
             state = .off
-        } else if paused {
-            state = .paused
+        } else if switchedOff {
+            state = .switchedOff
         } else if !connected || failed {
             state = .unreachable
         } else if contextLoadedOnce && !judgmentReady {

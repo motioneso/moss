@@ -27,7 +27,7 @@ struct DeviceSetupView: View {
                     .font(.headline)
                 Text(
                     ObservationStatement.current(
-                        focusEnabled: PreferencesStore().focusConsent, paused: PreferencesStore().focusPaused,
+                        focusEnabled: PreferencesStore().focusConsent,
                         watchEntireDesktop: PreferencesStore().focusWatchEntireDesktop
                     )
                 )
@@ -63,7 +63,6 @@ struct DeviceSetupView: View {
                 viewModel.finishDeviceSetup()
             }
             .buttonStyle(.borderedProminent)
-            .tint(TrailMarkerTokens.Color.forest)
         }
         .padding(TrailMarkerTokens.Spacing.major)
         .frame(width: OnboardingFlow.contentWidth, alignment: .leading)

@@ -33,6 +33,12 @@ enum VisionError: Error, Equatable {
     /// never be reported as `unreachable`: that reads as a network problem and sends debugging
     /// the wrong way (#2570 — this exact confusion cost a real round trip).
     case captureFailed(detail: String)
+    /// Test only: Trail Marker is paused (Pause), so nothing is captured or sent (#2643).
+    case paused
+    /// Test only: Focus is off, so Trail Marker takes no pictures at all.
+    case focusOff
+    /// Test only: Focus is switched off from the menu for now, so nothing is captured or sent.
+    case focusSwitchedOff
 }
 
 /// One description of one captured window. A source is free to fail; callers treat every case the

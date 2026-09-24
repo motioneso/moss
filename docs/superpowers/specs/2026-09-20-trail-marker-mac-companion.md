@@ -3,6 +3,7 @@
 Date: 2026-09-20
 Status: specification for review; product decisions agreed in the design interview, visual direction supplied by Ben. No product implementation is included in this change.
 Tracking: [#2560 — Build Trail Marker: native Mac companion connection foundation](https://github.com/motioneso/moss/issues/2560). This spec is separate from the Moss desktop-server packaging project.
+Amended 2026-09-23: with **Backtrack** turned on (its own opt-in), on-screen text history _is_ stored on the server, and a capped, encrypted offline buffer exists on the Mac. With it off, this spec's "nothing it reads is stored", "no activity history" and "no queue for later upload" statements still hold. See [2026-09-23-trail-marker-screen-history.md](2026-09-23-trail-marker-screen-history.md) §11.
 Implementation plan: [2026-09-20-trail-marker-mac-companion.md](../plans/2026-09-20-trail-marker-mac-companion.md) resolves the pairing exchange, credential lifetime, endpoint contracts, migration boundary and updater choices this spec leaves open in §9 and §10.
 
 ## 1. Outcome and scope
@@ -66,10 +67,12 @@ Persist connection enablement separately from the credential and account identit
 | State            | Meaning                                                   | Primary action                          |
 | ---------------- | --------------------------------------------------------- | --------------------------------------- |
 | Not linked       | No linked account/credential                              | Set Up Trail Marker                     |
-| Connected        | Enabled, authenticated, recent successful contact         | Disconnect                              |
-| Disconnected     | User deliberately disabled communication                  | Connect                                 |
+| Connected        | Enabled, authenticated, recent successful contact         | Disconnect (labelled Pause)             |
+| Disconnected     | User deliberately disabled communication                  | Connect (labelled Resume)               |
 | Reconnecting     | Enabled, temporarily unable to reach Moss                 | Retry Now; Disconnect remains available |
 | Sign-in required | Credential expired/revoked, or account no longer eligible | Sign In or Log Out                      |
+
+Amendment (Ben, 2026-09-23): in the interface, Disconnect is labelled **Pause**, Connect is labelled **Resume**, and the Disconnected state reads **Paused**. The behaviour below is unchanged; this spec keeps the Disconnect / Connect names for it.
 
 Browser approval waiting is a setup state, not a sixth steady connection state. Local credential-access failures must be presented as actionable local errors, not misreported as server revocation.
 

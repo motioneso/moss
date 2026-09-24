@@ -165,3 +165,80 @@ function TimelineTime(props: { readonly item: DayItem; readonly locale: LocaleSe
     </div>
   );
 }
+
+function compactTime(iso: string, locale: LocaleSettingsDto): string {
+  return `${timeLabel(iso, locale)}${ampm(iso, locale)}`;
+}
+
+/** Morning reader rail row: start time, then title over "end · state".
+    Task rows keep their button and data-state; events stay plain. */
+export function SnapshotRow(props: {
+  readonly item: DayItem;
+  readonly locale: LocaleSettingsDto;
+  readonly onOpenTask: (taskId: string) => void;
+}) {
+  const { item } = props;
+  const endAt = rowEndAt(item);
+  const endText = endAt !== null ? compactTime(endAt, props.locale) : null;
+  const start = item.startsAt !== null ? compactTime(item.startsAt, props.locale) : "No time yet";
+  if (item.eventId !== null) {
+    return (
+      <div
+        className="day-ev brief-snapshot__row"
+        key={item.key}
+        data-jarvis-capture-text={eventCaptureText(
+          {
+            id: item.eventId,
+            startsAt: item.startsAt!,
+            endsAt: item.endsAt ?? item.startsAt!,
+            title: item.title,
+            location: item.location
+          } as CalendarEventDto,
+          props.locale
+        )}
+      >
+        <span className="brief-snapshot__time">{start}</span>
+        <div className="brief-snapshot__main">
+          <span className="day-ev__title">{item.title}</span>
+          <small>{[endText, "Calendar"].filter(Boolean).join(" · ")}</small>
+        </div>
+      </div>
+    );
+  }
+
+  // The reader's short caption already leads with the end time.
+  const meta = item.label.includes(" · ")
+    ? item.label
+    : [endText, item.label].filter(Boolean).join(" · ");
+  const body = (
+    <>
+      <span className={`jds-task__title${item.state === "completed" ? " tl-done" : ""}`}>
+        {item.title}
+      </span>
+      <small className="jds-task__state">
+        {meta}
+        {item.unavailable ? " · Task no longer visible" : null}
+      </small>
+    </>
+  );
+  return (
+    <div
+      className="jds-task brief-snapshot__row brief-snapshot__row--task"
+      key={item.key}
+      data-state={item.state}
+    >
+      <span className="brief-snapshot__time">{start}</span>
+      {item.taskId !== null && !item.unavailable ? (
+        <button
+          type="button"
+          className="brief-snapshot__main"
+          onClick={() => props.onOpenTask(item.taskId!)}
+        >
+          {body}
+        </button>
+      ) : (
+        <div className="brief-snapshot__main">{body}</div>
+      )}
+    </div>
+  );
+}

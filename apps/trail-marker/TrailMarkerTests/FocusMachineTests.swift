@@ -24,11 +24,11 @@ final class FocusMachineTests: XCTestCase {
         FocusJudgment(judgmentId: "6f1f0c1e-6c1a-4f5e-9d3a-0a1b2c3d4e5f", label: label, reason: "r", nudge: nudge)
     }
 
-    /// Consent on, unpaused, connected, Accessibility granted, Safari allowed and in front, and a
+    /// Consent on, connected, Accessibility granted, Safari allowed and in front, and a
     /// block covering now with a model bound. The first sample has been sent at `at(0)`.
     private func armed() -> FocusMachine {
         var machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: ["com.apple.Safari"]))
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: true), now: at(0))
         _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
         _ = machine.handle(.appChanged(safari), now: at(0))
         _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
@@ -44,14 +44,14 @@ final class FocusMachineTests: XCTestCase {
 
     func testItStartsOffWithoutConsent() {
         var machine = FocusMachine()
-        XCTAssertEqual(machine.handle(.launched(consent: false, paused: false), now: at(0)), [])
+        XCTAssertEqual(machine.handle(.launched(consent: false), now: at(0)), [])
         XCTAssertEqual(machine.state, .off)
         XCTAssertEqual(machine.handle(.connectionChanged(isConnected: true), now: at(0)), [])
     }
 
     func testBecomingConnectedWithConsentFetchesTheContext() {
         var machine = FocusMachine()
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: true), now: at(0))
         let effects = machine.handle(.connectionChanged(isConnected: true), now: at(0))
         XCTAssertEqual(effects, [.fetchContext(generation: machine.generation)])
     }
@@ -69,18 +69,12 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertEqual(back, [.fetchContext(generation: machine.generation)])
     }
 
-    // MARK: pause
-
-    func testPausePersistsBeforeItCancels() {
-        var machine = armed()
-        XCTAssertEqual(machine.handle(.userPause, now: at(5)), [.persistPaused(true), .cancelAll])
-        XCTAssertEqual(machine.state, .paused)
-    }
+    // MARK: pause (the connection's Pause is the only pause; it reaches Focus as a disconnect)
 
     func testAfterPauseNothingCanSendOnAnyPath() {
         var machine = armed()
         let staleGeneration = machine.generation
-        _ = machine.handle(.userPause, now: at(5))
+        XCTAssertEqual(machine.handle(.connectionChanged(isConnected: false), now: at(5)), [.cancelAll])
 
         // If any of these produced an effect, pausing would not stop requests.
         XCTAssertEqual(machine.handle(.appChanged(safari), now: at(200)), [])
@@ -89,23 +83,24 @@ final class FocusMachineTests: XCTestCase {
         XCTAssertEqual(machine.handle(.sampleTimerFired(generation: machine.generation), now: at(400)), [])
         XCTAssertEqual(machine.handle(.contextTimerFired(generation: machine.generation), now: at(400)), [])
         XCTAssertEqual(machine.handle(.wake, now: at(500)), [])
-        XCTAssertEqual(machine.handle(.connectionChanged(isConnected: false), now: at(510)), [])
-        XCTAssertEqual(machine.handle(.connectionChanged(isConnected: true), now: at(520)), [])
+        XCTAssertEqual(machine.handle(.contextLoaded(context(), generation: staleGeneration), now: at(540)), [])
         XCTAssertEqual(machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(540)), [])
+        XCTAssertEqual(machine.handle(.judged(judgment(.distracted, nudge: true), generation: staleGeneration), now: at(550)), [])
     }
 
-    func testPauseSurvivesARelaunch() {
+    func testAPausedLaunchSendsNothingUntilResumed() {
         var machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: ["com.apple.Safari"]))
-        XCTAssertEqual(machine.handle(.launched(consent: true, paused: true), now: at(0)), [])
-        XCTAssertEqual(machine.handle(.connectionChanged(isConnected: true), now: at(1)), [])
-        XCTAssertEqual(machine.state, .paused)
+        XCTAssertEqual(machine.handle(.launched(consent: true), now: at(0)), [])
+        XCTAssertEqual(machine.handle(.accessibilityChanged(granted: true), now: at(0)), [])
+        XCTAssertFalse(sends(machine.handle(.appChanged(safari), now: at(1))))
+        XCTAssertEqual(machine.state, .unreachable)
     }
 
-    func testResumePersistsThenFetchesTheContext() {
+    func testResumeFetchesTheContext() {
         var machine = armed()
-        _ = machine.handle(.userPause, now: at(5))
-        let effects = machine.handle(.userResume, now: at(10))
-        XCTAssertEqual(effects, [.persistPaused(false), .fetchContext(generation: machine.generation)])
+        _ = machine.handle(.connectionChanged(isConnected: false), now: at(5))
+        let effects = machine.handle(.connectionChanged(isConnected: true), now: at(10))
+        XCTAssertEqual(effects, [.fetchContext(generation: machine.generation)])
     }
 
     // MARK: what is required before anything is sent
@@ -133,7 +128,7 @@ final class FocusMachineTests: XCTestCase {
     func testAnAppOnTheDenylistIsNeverSentEvenIfAllowed() {
         let denied = Observation(appName: "1Password", bundleId: "com.1password.1password", windowTitle: "Vault")
         var machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: [denied.bundleId]))
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: true), now: at(0))
         _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
         _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
         _ = machine.handle(.contextLoaded(context(), generation: machine.generation), now: at(0))
@@ -147,7 +142,7 @@ final class FocusMachineTests: XCTestCase {
         var machine = FocusMachine(policy: ObservationPolicy(
             allowedBundleIds: [], watchEntireDesktop: true, excludedBundleIds: [finance.bundleId]
         ))
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: true), now: at(0))
         _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
         _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
         XCTAssertFalse(sends(machine.handle(.appChanged(finance), now: at(0))))
@@ -188,7 +183,7 @@ final class FocusMachineTests: XCTestCase {
 
     func testTheFirstSampleIsSentWhenTheBlockIsFoundAndContextRefreshesEverySixtySeconds() {
         var machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: ["com.apple.Safari"]))
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: true), now: at(0))
         _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
         _ = machine.handle(.appChanged(safari), now: at(0))
         _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
@@ -205,7 +200,7 @@ final class FocusMachineTests: XCTestCase {
     private func armedForBoth() -> FocusMachine {
         let allowBoth = ObservationPolicy(allowedBundleIds: ["com.apple.Safari", "com.apple.mail"])
         var machine = FocusMachine(policy: allowBoth)
-        _ = machine.handle(.launched(consent: true, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: true), now: at(0))
         _ = machine.handle(.accessibilityChanged(granted: true), now: at(0))
         _ = machine.handle(.appChanged(safari), now: at(0))
         _ = machine.handle(.connectionChanged(isConnected: true), now: at(0))
@@ -260,7 +255,7 @@ final class FocusMachineTests: XCTestCase {
         var machine = armedForBoth()
         let generation = machine.generation
         let change = try! XCTUnwrap(dwell(machine.handle(.appChanged(mail), now: at(1))))
-        _ = machine.handle(.userPause, now: at(2))
+        _ = machine.handle(.connectionChanged(isConnected: false), now: at(2))
         XCTAssertFalse(sends(machine.handle(.dwellTimerFired(generation: generation, change: change), now: at(6))))
     }
 
@@ -305,8 +300,8 @@ final class FocusMachineTests: XCTestCase {
     func testAJudgmentFromAnOldGenerationIsIgnored() {
         var machine = armed()
         let old = machine.generation
-        _ = machine.handle(.userPause, now: at(5))
-        _ = machine.handle(.userResume, now: at(6))
+        _ = machine.handle(.connectionChanged(isConnected: false), now: at(5))
+        _ = machine.handle(.connectionChanged(isConnected: true), now: at(6))
         XCTAssertEqual(machine.handle(.judged(judgment(.distracted, nudge: true), generation: old), now: at(7)), [])
     }
 
@@ -354,7 +349,7 @@ final class FocusMachineTests: XCTestCase {
 
     func testTheFirstConsentAsksForNotificationPermissionExactlyOnce() {
         var machine = FocusMachine()
-        _ = machine.handle(.launched(consent: false, paused: false), now: at(0))
+        _ = machine.handle(.launched(consent: false), now: at(0))
 
         let first = machine.handle(.userToggleConsent(true), now: at(1))
         XCTAssertEqual(first.filter { $0 == .requestNotificationPermission }.count, 1)
@@ -368,5 +363,17 @@ final class FocusMachineTests: XCTestCase {
     func testTurningConsentOffCancelsAfterPersisting() {
         var machine = armed()
         XCTAssertEqual(machine.handle(.userToggleConsent(false), now: at(9)), [.persistConsent(false), .cancelAll])
+    }
+
+    // MARK: sleep (#2643)
+
+    /// Anything started before sleep is dropped: a reply to it after wake does nothing.
+    func testSleepCancelsInFlightWorkAndItsLateReplyIsIgnored() {
+        var machine = armed()
+        let before = machine.generation
+        XCTAssertEqual(machine.handle(.sleep, now: at(10)), [.cancelAll])
+        XCTAssertNotEqual(machine.generation, before)
+        XCTAssertEqual(machine.handle(.judged(judgment(.distracted, nudge: true), generation: before), now: at(11)), [])
+        XCTAssertEqual(machine.handle(.wake, now: at(12)), [.fetchContext(generation: machine.generation)])
     }
 }

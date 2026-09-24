@@ -23,7 +23,7 @@ struct FocusPane: View {
                 )
                 Text(
                     ObservationStatement.current(
-                        focusEnabled: true, paused: focus.paused, watchEntireDesktop: focus.watchEntireDesktop
+                        focusEnabled: true, watchEntireDesktop: focus.watchEntireDesktop
                     )
                 )
                     .font(.callout)
@@ -45,9 +45,6 @@ struct FocusPane: View {
                         }
                     }
                     notificationsStatus
-                    Button(focus.paused ? "Resume Focus" : "Pause Focus") {
-                        if focus.paused { focus.resume() } else { focus.pause() }
-                    }
                 }
 
                 Section("Apps to watch") {
@@ -327,6 +324,12 @@ struct FocusPane: View {
             return "Trail Marker hasn't seen another app in front yet. Switch to one, then come back and test."
         case .captureFailed(let detail):
             return "Couldn't take the picture (\(detail))."
+        case .paused:
+            return "Paused: resume to test."
+        case .focusOff:
+            return "Turn Focus on to test."
+        case .focusSwitchedOff:
+            return "Focus is paused from the menu: switch it back on to test."
         }
     }
 
@@ -375,11 +378,13 @@ struct FocusPane: View {
         let info = FocusMenuInfo(state: focus.state, goalLine: focus.goalLine, hasLastJudgment: false)
         switch focus.state {
         case .off: return "Focus is off."
+        case .switchedOff: return "Focus is paused from the menu, so nothing is watched. Switch it back on there."
         case .watching: return info.statusLine ?? "Watching"
-        case .paused: return "Paused. Nothing is sent until you resume."
         case .noBlock:
             return "No Moss calendar block is on right now. Trail Marker only watches during blocks Moss created."
-        case .unreachable: return "Can't reach Moss. Trail Marker will try again shortly."
+        case .unreachable:
+            if focus.connectionPaused { return "Trail Marker is paused, so nothing is sent. Resume it from the menu." }
+            return "Can't reach Moss. Trail Marker will try again shortly."
         case .notReady:
             return "Judgment isn't set up on your Moss. Ask the admin to choose a model under Settings → AI."
         }
@@ -388,10 +393,10 @@ struct FocusPane: View {
     private var statusSymbol: String {
         switch focus.state {
         case .off: return "circle"
+        case .switchedOff: return "pause.circle"
         case .watching: return "checkmark.circle.fill"
-        case .paused: return "pause.circle.fill"
         case .noBlock: return "calendar"
-        case .unreachable: return "exclamationmark.circle.fill"
+        case .unreachable: return focus.connectionPaused ? "pause.circle.fill" : "exclamationmark.circle.fill"
         case .notReady: return "wrench.and.screwdriver"
         }
     }

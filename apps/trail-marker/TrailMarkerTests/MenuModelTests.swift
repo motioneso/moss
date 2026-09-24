@@ -28,17 +28,17 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(
             titles(.connected(lastContact: now), identity: identity),
             [
-                "Connected", "moss.example.com", "ben@example.com", "Disconnect", "Open Moss",
+                "Connected", "moss.example.com", "ben@example.com", "Pause All", "Open Moss",
                 "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
 
-    func testDisconnectedMenu() {
+    func testPausedMenuOffersResume() {
         XCTAssertEqual(
             titles(.disconnected, identity: identity),
             [
-                "Disconnected", "moss.example.com", "ben@example.com", "Connect", "Open Moss",
+                "Paused", "moss.example.com", "ben@example.com", "Resume All", "Open Moss",
                 "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
@@ -69,12 +69,12 @@ final class MenuModelTests: XCTestCase {
         XCTAssertFalse(items.contains { $0.title == "Log Out…" })
     }
 
-    func testDisconnectIsNeverDestructiveAndLogOutAlwaysIs() {
+    func testPauseIsNeverDestructiveAndLogOutAlwaysIs() {
         let connectedItems = MenuModel.items(state: .connected(lastContact: now), identity: identity)
-        let disconnect = connectedItems.first { $0.title == "Disconnect" }
+        let pause = connectedItems.first { $0.title == "Pause All" }
         let logOut = connectedItems.first { $0.title == "Log Out…" }
 
-        XCTAssertEqual(disconnect?.isDestructive, false)
+        XCTAssertEqual(pause?.isDestructive, false)
         XCTAssertEqual(logOut?.isDestructive, true)
     }
 }

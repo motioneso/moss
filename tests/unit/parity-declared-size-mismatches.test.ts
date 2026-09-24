@@ -68,6 +68,16 @@ describe("one-heading desktop Read declarations", () => {
     const entry = DECLARED_SIZE_MISMATCHES.find((declared) => declared.name === "1440-news.png");
     expect(entry).toBeUndefined();
   });
+
+  describe("Review frame declarations (SCREEN-REVIEW)", () => {
+    it.each(["1440-proposed-review.png", "partial-review.png"])(
+      "no longer declares a size mismatch for %s: every Review state takes 1120x910",
+      (name) => {
+        const entry = DECLARED_SIZE_MISMATCHES.find((declared) => declared.name === name);
+        expect(entry).toBeUndefined();
+      }
+    );
+  });
 });
 
 describe("compareContentTwin", () => {

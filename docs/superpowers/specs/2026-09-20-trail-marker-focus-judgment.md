@@ -7,7 +7,10 @@ call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`. **Am
 (§6, §9): watching can be the entire desktop instead of only chosen apps; full amendment in
 `2026-09-21-trail-marker-rung3-vision.md` §7. **Amended 2026-09-22** (§7, §7a, §9, §10, §11): a
 nudge is a banner that stays on top until the person is back on task, replacing the macOS
-notification, and a distraction gauge on the Mac decides when it appears.
+notification, and a distraction gauge on the Mac decides when it appears. **Amended 2026-09-23:** the "Not
+stored" list (§ data) still holds for focus judgment. **Backtrack**, a separate feature with its own
+consent, does store on-screen text and titles; see `2026-09-23-trail-marker-screen-history.md` §11.
+The menu's pause becomes **Pause All**, with a separate Focus switch row (that spec §4).
 
 ## 1. What this is
 
@@ -66,6 +69,8 @@ nudge?
 5. **The Mac decides whether to nudge**, from its distraction gauge (§7a, amended 2026-09-22).
    Default is to say nothing until real distracted time has built up.
 6. **Pause and stop are always one click on the Mac** and stop all observation immediately.
+   There is one pause: the menu's **Pause / Resume**, which pauses the whole connection to Moss
+   without logging out. There is no separate Focus pause (Ben, 2026-09-23).
 
 ## 5. Calendar seam
 
@@ -153,8 +158,9 @@ The person must be able to see the chain working without waiting for a real drif
   Right buttons. Kept in memory on the Mac for the session only.
 - **Send a test nudge** in settings shows the banner for a few seconds, so the delivery path can
   be checked independently of any judgment.
-- A clear state line in the menu: Watching (block name, ends 11:00), Paused, No block right now,
-  or Can't reach Moss.
+- A clear state line in the menu: Watching (block name, ends 11:00), No block right now, or
+  Can't reach Moss. While Trail Marker is paused the menu's status already reads Paused, and no
+  Focus line is shown under it.
 
 ## 7a. The nudge banner (amended 2026-09-22)
 
@@ -238,7 +244,9 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
    ends (or "No block right now"), on click, with the block name also available on hover of the
    menu-bar icon. **Pause / Resume** and **Judge now** sit in the same card. The last judgment
    (what was seen, the label, the reason, Wrong / Right) opens from **Judge now**'s result rather
-   than a separate window.
+   than a separate window. _Amended (Ben, 2026-09-23):_ Judge now is gone and there is no
+   separate Focus pause anywhere; the card's Pause / Resume is the connection's pause, the only
+   one, and stops all communication with Moss. Last Judgment… is its own row.
 2. **Focus settings (one new pane in the existing Settings sidebar):** the image model API
    (endpoint, model name, key, a Test button, and one plain sentence stating where the image will
    be sent). That sentence is the consent: no separate consent screen. Also what to watch — specific

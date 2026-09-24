@@ -8,6 +8,9 @@ final class PreferencesStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Builds before 2026-09-23 had a separate Focus pause. There is now one pause, the
+        // connection's; a Focus pause left over from then must not keep watching off unseen.
+        defaults.removeObject(forKey: Key.retiredFocusPaused)
     }
 
     private enum Key {
@@ -19,7 +22,11 @@ final class PreferencesStore {
         static let autoCheckUpdates = "autoCheckUpdates"
         static let permissionsPromptShown = "permissionsPromptShown"
         static let focusConsent = "focusConsent"
-        static let focusPaused = "focusPaused"
+        /// The menu's Focus switch, off. A new key on purpose: the retired `focusPaused` is deleted
+        /// on launch, so an old stored value can never pause anyone (Backtrack plan §3.4).
+        static let focusSwitchedOff = "focusSwitchedOff"
+        /// Retired: removed on every launch, never read.
+        static let retiredFocusPaused = "focusPaused"
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
         static let focusExcludedBundleIds = "focusExcludedBundleIds"
         static let focusWatchEntireDesktop = "focusWatchEntireDesktop"
@@ -27,6 +34,12 @@ final class PreferencesStore {
         static let focusVisionSource = "focusVisionSource"
         static let focusVisionBaseURL = "focusVisionBaseURL"
         static let focusVisionModel = "focusVisionModel"
+        // Backtrack (plan §4.1). Read only by Debug builds in Phase 1; cleared with the account.
+        static let backtrackEnabled = "backtrackEnabled"
+        /// The consent version the person accepted: 1 is the Debug in-memory preview, 2 (Phase 2b)
+        /// storage in Moss. An upload requires 2, so a Debug opt-in never authorises sending.
+        static let backtrackConsentVersion = "backtrackConsentVersion"
+        static let backtrackSwitchedOff = "backtrackSwitchedOff"
     }
 
     var linkedIdentity: LinkedIdentity? {
@@ -81,10 +94,9 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.focusConsent) }
     }
 
-    /// A Pause survives quitting and restarting, like Disconnect.
-    var focusPaused: Bool {
-        get { defaults.bool(forKey: Key.focusPaused) }
-        set { defaults.set(newValue, forKey: Key.focusPaused) }
+    var focusSwitchedOff: Bool {
+        get { defaults.bool(forKey: Key.focusSwitchedOff) }
+        set { defaults.set(newValue, forKey: Key.focusSwitchedOff) }
     }
 
     /// Apps the person allowed. Empty means nothing is ever observed, unless
@@ -133,14 +145,42 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.focusVisionModel) }
     }
 
+    var backtrackEnabled: Bool {
+        get { defaults.bool(forKey: Key.backtrackEnabled) }
+        set { defaults.set(newValue, forKey: Key.backtrackEnabled) }
+    }
+
+    var backtrackConsentVersion: Int {
+        get { defaults.integer(forKey: Key.backtrackConsentVersion) }
+        set { defaults.set(newValue, forKey: Key.backtrackConsentVersion) }
+    }
+
+    var backtrackSwitchedOff: Bool {
+        get { defaults.bool(forKey: Key.backtrackSwitchedOff) }
+        set { defaults.set(newValue, forKey: Key.backtrackSwitchedOff) }
+    }
+
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
-            Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
-            Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
-            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
+            Key.linkedIdentity, Key.connectionEnabled,
+            Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown
+        ] {
+            defaults.removeObject(forKey: key)
+        }
+        clearAccountData()
+    }
+
+    /// Everything that belongs to the account rather than to this Mac's link to an instance: the
+    /// device name and every Focus choice. Cleared when Moss revokes this Mac, which keeps the
+    /// instance so Sign In can link again, possibly as someone else (#2643).
+    func clearAccountData() {
+        for key in [
+            Key.displayName, Key.pendingDisplayName,
+            Key.focusConsent, Key.focusSwitchedOff, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
             Key.focusWatchEntireDesktop,
-            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
+            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel,
+            Key.backtrackEnabled, Key.backtrackConsentVersion, Key.backtrackSwitchedOff
         ] {
             defaults.removeObject(forKey: key)
         }

@@ -1,6 +1,7 @@
 /* Morning briefing reader: a focused shell that reads as a two-column report
    on desktop and a full-screen dialog on the phone. Scoped under
-   .brief-reader; canonical tokens only. */
+   .brief-reader; canonical tokens only. Values follow the approved
+   prototype (morning-briefing.css, evening-plan.css). */
 .brief-reader__scrim {
   position: fixed;
   inset: 0;
@@ -35,6 +36,33 @@
 .brief-reader__title:focus {
   outline: none;
 }
+
+/* Close icon: an unlabelled glyph for every dialog that uses this shell. The
+   button keeps its accessible name and text node; the text is hidden and a
+   symbol drawn in its place so no test needs to know about the glyph. */
+.brief-reader__head .jds-btn {
+  font-size: 0;
+  color: transparent;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-sizing: border-box;
+}
+.brief-reader__head .jds-btn:hover {
+  background: transparent;
+}
+.brief-reader__head .jds-btn::before {
+  content: "\00d7";
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 400;
+  font-family: var(--font-sans);
+}
 .brief-reader__body {
   overflow-y: auto;
   min-height: 0;
@@ -45,7 +73,8 @@
   border-top: 1px solid var(--border-subtle);
   background: var(--surface);
 }
-/* T19: three to four footer buttons wrap instead of pushing a 320px page. */
+
+/* Three to four footer buttons wrap instead of pushing a 320px page. */
 .brief-reader__footer .jds-btn {
   margin: 0 var(--space-2) var(--space-2) 0;
   max-width: 100%;
@@ -56,10 +85,10 @@
 }
 .brief-reader__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 336px;
-  gap: var(--space-8);
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 32px;
   align-items: start;
-  padding: var(--space-5);
+  padding: 28px 30px 34px;
 }
 .brief-reader__report {
   min-width: 0;
@@ -69,26 +98,11 @@
 .brief-reader__plan-changed {
   margin: 0 0 var(--space-2);
 }
-.brief-reader__jump {
-  display: flex;
-  gap: var(--space-3);
-  margin: var(--space-2) 0;
-}
 .brief-reader__plan ul,
 .brief-reader__intent ul,
 .brief-reader__earlier ul {
   margin: var(--space-2) 0;
   padding-left: var(--space-5);
-}
-.brief-reader__story {
-  margin: var(--space-3) 0;
-  overflow-wrap: anywhere;
-}
-.brief-reader__photo {
-  max-width: 100%;
-  height: auto;
-  display: block;
-  margin-bottom: var(--space-2);
 }
 .brief-reader__sources,
 .brief-reader__earlier {
@@ -97,45 +111,15 @@
 .brief-reader__gap {
   margin: var(--space-2) 0;
 }
-@media (min-width: 1081px) {
-  .brief-reader:has([data-briefing-surface="automatic-read"]) {
-    max-width: 1120px;
-    height: 910px;
-  }
-  .brief-reader:has([data-briefing-surface="proposed-read"]) {
-    max-width: 1120px;
-    height: 910px;
-  }
-  .brief-reader:has([data-briefing-surface="automatic-read"]) .brief-reader__body {
-    flex: 1 1 auto;
-  }
-  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__body {
-    flex: 1 1 auto;
-  }
-}
-@media (max-width: 1080px) {
-  .brief-reader__scrim {
-    padding: 0;
-  }
-  .brief-reader {
-    max-width: none;
-    min-height: 100vh;
-    min-height: 100dvh;
-    max-height: 100vh;
-    max-height: 100dvh;
-    border: none;
-  }
-  .brief-reader__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .brief-reader__footer {
-    position: sticky;
-    bottom: 0;
-  }
-}
 
-/* V5 report shell, scoped under .brief-reader--report so the review and
-   evening dialogs keep the plain surface. Canonical tokens only. */
+/* Report frame, shared by the morning reader, its review tab and evening
+   planning. Evening keeps its own size and head overrides. */
+.brief-reader--report {
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
 .brief-reader--report .brief-reader__head {
   flex-wrap: wrap;
   row-gap: var(--space-1);
@@ -153,97 +137,156 @@
 }
 .brief-reader--report .brief-reader__title {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 30px;
   line-height: 1.1;
+  letter-spacing: -0.01em;
   color: var(--hero-fg);
 }
-.brief-reader--report .brief-reader__head .jds-btn {
+.brief-reader--report .brief-reader__head .jds-btn::before {
   color: var(--hero-fg);
 }
-/* Tab strip: tabs left, jump links right, wrapping inside. */
+
+/* Morning head: eyebrow over title, close button top right. */
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 20px;
+  background: var(--forest);
+  color: var(--hero-fg);
+  padding: 24px 30px 25px;
+}
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__eyebrow {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 17.5px;
+  letter-spacing: 1.7px;
+  color: var(--sage);
+}
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__title {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 8px 0 0;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: -1px;
+}
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 36px;
+  height: 36px;
+}
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn::before {
+  content: "\2715";
+  font-size: 18px;
+}
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+}
+.brief-reader--report .brief-reader__body {
+  background: var(--paper);
+}
+
+/* Morning dialog size: both tabs take the prototype's fixed frame. */
+.brief-reader--report:has(.brief-reader__grid) {
+  box-sizing: border-box;
+  width: min(1120px, 100%);
+  max-width: none;
+  height: min(910px, calc(100dvh - 48px));
+  max-height: none;
+}
+.brief-reader--report:has(.brief-reader__grid) .brief-reader__body {
+  flex: 1 1 auto;
+}
+
+/* Tab strip: tabs left, jump links right. */
 .brief-reader__tabs {
   flex: none;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-2) var(--space-5) 0;
+  align-items: stretch;
+  gap: 23px;
+  min-height: 54px;
+  padding: 0 30px;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
+  box-sizing: border-box;
 }
 .brief-reader__tablist {
   display: flex;
-  gap: var(--space-4);
+  align-items: stretch;
+  gap: 23px;
 }
-.brief-reader__tab {
+.brief-reader__tab,
+.brief-reader__tabs .brief-reader__jump a {
   appearance: none;
+  display: flex;
+  align-items: center;
   border: none;
+  border-bottom: 3px solid transparent;
   background: none;
-  padding: var(--space-2) 0;
-  font-size: 13px;
+  padding: 16px 1px 13px;
+  font-size: 11px;
+  line-height: 1.5;
   color: var(--text-muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  text-decoration: none;
+  cursor: pointer;
 }
 .brief-reader__tab--selected {
   color: var(--forest);
   font-weight: 700;
-  border-bottom-color: var(--gold);
+  border-bottom-color: var(--forest);
 }
 .brief-reader__tab:focus-visible,
+.brief-reader__tabs .brief-reader__jump a:focus-visible,
 .brief-reader__schedule-toggle:focus-visible {
   outline: 2px solid var(--forest);
   outline-offset: 2px;
 }
 .brief-reader__tabs .brief-reader__jump {
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
   margin: 0 0 0 auto;
-  padding-bottom: var(--space-2);
-  font-size: 13px;
 }
-/* Eyebrow lines: prepared stamp, rail date, callout kicker. */
-.brief-reader__prepared,
-.brief-reader__rail-date,
-.brief-reader__headline {
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-display);
-  font-size: 27px;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-.brief-reader__callout {
-  margin: var(--space-4) 0;
-  padding: var(--space-3) var(--space-4);
-  background: var(--forest-soft);
-  border-left: 4px solid var(--gold);
-}
-.brief-reader__callout .brief-reader__plan-changed {
-  margin: 0;
-}
-/* Schedule rail: date and heading chrome over the editorial day plan. */
+
+/* Phone schedule toggle; the desktop rail is always open beside the report. */
 .brief-reader__railwrap {
   min-width: 0;
 }
 .brief-reader__schedule-toggle {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 6px;
   width: 100%;
   appearance: none;
   border: none;
   border-bottom: 1px solid var(--line);
   background: none;
-  padding: var(--space-3) 0;
-  font-size: 14px;
-  font-weight: 700;
+  padding: 0 0 13px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--forest);
   text-align: left;
+  cursor: pointer;
 }
 .brief-reader__schedule-toggle::before {
-  content: "\25b8";
-  font-size: 11px;
+  content: "\25b6";
+  font-size: 8px;
   line-height: 1;
 }
 .brief-reader__schedule-toggle[aria-expanded="true"]::before {
-  content: "\25be";
+  content: "\25bc";
+}
+.brief-reader__rail-date {
+  margin: 0 0 var(--space-3);
 }
 .brief-reader__rail-heading {
   margin: 0 0 var(--space-2);
@@ -253,12 +296,16 @@
   padding-bottom: var(--space-2);
   border-bottom: 2px solid var(--line-strong);
 }
-/* Footer zones: back left, actions right, status full row. Plain footer untouched. */
+
+/* Footer zones: back left, actions right, status full row. */
 .brief-reader--report .brief-reader__footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
+  gap: 18px;
   align-items: center;
+  padding: 15px 30px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
 }
 .brief-reader__footer-back {
   grid-column: 1;
@@ -269,12 +316,498 @@
   grid-row: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 0;
+  align-items: center;
+  gap: 20px;
   justify-content: flex-end;
 }
 .brief-reader__footer--with-status .brief-reader__footer-back,
 .brief-reader__footer--with-status .brief-reader__footer-actions {
   grid-row: 2;
+}
+.brief-reader--report .brief-reader__status {
+  grid-area: 1 / 1 / auto / -1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--sage-light);
+}
+.brief-reader--report .brief-reader__status .brief-reader__accept-status {
+  margin: 0;
+  font-size: 12px;
+}
+.brief-reader--report .jds-btn[aria-busy="true"] {
+  opacity: 1;
+}
+
+/* Footer controls: solid primary and underlined text actions. */
+.brief-reader--report .brief-reader__footer .jds-btn {
+  margin: 0;
+}
+.brief-reader--report .brief-reader__footer .jds-btn--primary {
+  height: auto;
+  min-height: 44px;
+  padding: 12px 17px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: 2px;
+  background: var(--forest);
+  border-color: var(--forest);
+}
+.brief-reader--report .brief-reader__footer .jds-btn--primary:hover {
+  background: var(--forest-deep);
+  border-color: var(--forest-deep);
+}
+.brief-reader--report .brief-reader__footer .jds-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.brief-reader--report .brief-reader__footer .jds-btn--quiet {
+  height: auto;
+  padding: 9px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--forest);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.brief-reader--report .brief-reader__footer-actions .jds-btn--quiet {
+  font-size: 11px;
+  font-weight: 600;
+}
+.brief-reader--report .brief-reader__footer .jds-btn--quiet:hover {
+  background: transparent;
+  color: var(--forest-deep);
+}
+
+/* Read tab content (both proposed and automatic). */
+.brief-reader:has([data-briefing-surface]) .brief-reader__prepared,
+.brief-reader:has([data-briefing-surface]) .brief-reader__rail-date,
+.brief-reader__callout-kicker,
+.brief-reader__editorial-eyebrow {
+  margin: 0 0 12px;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.brief-reader__prepared,
+.brief-reader__headline {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: 27px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.brief-reader:has([data-briefing-surface]) .brief-reader__headline {
+  max-width: 530px;
+  margin: 0 0 16px;
+  font-weight: 900;
+  font-size: 27px;
+  line-height: 1.17;
+  letter-spacing: -0.8px;
+}
+.brief-reader:has([data-briefing-surface]) .jds-brief__body {
+  max-width: none;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* Changed-overnight callout: square box, gold edge. */
+.brief-reader__callout {
+  margin: 23px 0;
+  padding: 17px 19px;
+  background: var(--sage-light);
+  border-left: 3px solid var(--gold);
+}
+.brief-reader__callout-kicker {
+  margin: 0;
+  letter-spacing: 1.7px;
+
+  /* Full ink: forest on the callout fill falls under 4.5:1 in the dark
+     theme, so the text stays full contrast. */
+  color: var(--text);
+}
+.brief-reader__callout-headline {
+  margin: 8px 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+.brief-reader__callout .brief-reader__plan-changed {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+.brief-reader__callout-headline + .brief-reader__plan-changed {
+  margin-top: 0;
+}
+.brief-reader__callout-disclosure {
+  appearance: none;
+  border: none;
+  background: none;
+  margin-top: 12px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.brief-reader__callout-disclosure:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+.brief-reader__callout-detail {
+  margin: 10px 0 0;
+  padding: 0 0 0 var(--space-4);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* Report sections from action rows. */
+.brief-reader__section-heading {
+  margin: 24px 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.brief-reader__section-prose {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+.brief-reader__section-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--forest);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* News and Sports: forest rule, eyebrow, headline, photo, prose, text link. */
+.brief-reader__editorial {
+  margin: 30px 0 0;
+  padding-top: 22px;
+  border-top: 2px solid var(--forest);
+  scroll-margin-top: 22px;
+}
+.brief-reader__editorial:focus {
+  outline: none;
+}
+.brief-reader__editorial-eyebrow {
+  margin: 0;
+  color: var(--forest);
+}
+.brief-reader__editorial-headline {
+  margin: 10px 0 17px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+}
+.brief-reader__photo {
+  display: block;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+  margin-bottom: 18px;
+}
+.brief-reader__editorial-paragraph {
+  margin: 0 0 15px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-muted);
+}
+.brief-reader__editorial-paragraph strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.brief-reader__editorial-subhead {
+  margin: 17px 0 8px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 700;
+}
+.brief-reader__editorial .jds-btn {
+  height: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--forest);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.brief-reader__editorial .jds-btn:hover {
+  background: transparent;
+  color: var(--forest-deep);
+}
+
+/* Sources disclosure. */
+.brief-reader:has([data-briefing-surface]) .brief-reader__sources {
+  margin-top: 26px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+.brief-reader:has([data-briefing-surface]) .brief-reader__sources > summary,
+.brief-reader:has([data-briefing-surface]) .brief-reader__earlier > summary {
+  color: var(--forest);
+  font-weight: 600;
+  cursor: pointer;
+}
+.brief-reader:has([data-briefing-surface]) .brief-reader__earlier {
+  font-size: 11px;
+}
+
+/* Schedule rail in the Read tab: side column with a snapshot of the day. */
+.brief-reader:has([data-briefing-surface]) .brief-reader__rail {
+  border-left: 1px solid var(--line);
+  padding-left: 25px;
+}
+.brief-reader:has([data-briefing-surface]) .brief-reader__rail-date {
+  margin: 0;
+  padding-top: 6px;
+  letter-spacing: 1px;
+  color: var(--forest);
+}
+.brief-reader:has([data-briefing-surface]) .brief-reader__rail-heading {
+  margin: 8px 0 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--forest);
+  font-family: var(--font-sans);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+.brief-snapshot {
+  margin: 16px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+}
+.brief-snapshot .day-list {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+.brief-snapshot .cmd-empty,
+.brief-snapshot .agenda-clear {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+.brief-snapshot__row {
+  display: grid;
+  grid-template-columns: 55px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: none;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.brief-snapshot__row--task {
+  grid-template-columns: 50px minmax(0, 1fr);
+  border-radius: 0;
+  margin-bottom: 8px;
+  padding: 12px 10px;
+  border-top: 0;
+  border-left: 2px solid var(--forest);
+  background: var(--sage-light);
+}
+.brief-snapshot__time {
+  padding-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--forest);
+  font-variant-numeric: tabular-nums;
+}
+.brief-snapshot__main {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+button.brief-snapshot__main {
+  cursor: pointer;
+}
+button.brief-snapshot__main:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+.brief-snapshot__main .day-ev__title,
+.brief-snapshot__main .jds-task__title {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.brief-snapshot__main small {
+  display: block;
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+@media (min-width: 1081px) {
+  /* Desktop schedule starts open beside the report; the toggle stays hidden. */
+  .brief-reader__schedule-toggle {
+    display: none;
+  }
+}
+@media (max-width: 1080px) {
+  .brief-reader__scrim {
+    padding: 0;
+  }
+  .brief-reader {
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border: none;
+  }
+  .brief-reader--report:has(.brief-reader__grid) {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    border: none;
+    border-radius: 0;
+  }
+  .brief-reader__grid {
+    display: block;
+    padding: 17px 19px 28px;
+  }
+  .brief-reader__footer {
+    position: sticky;
+    bottom: 0;
+  }
+  .brief-reader--report:has(.brief-reader__grid) .brief-reader__head {
+    gap: 0 9px;
+    padding: 20px 19px;
+  }
+  .brief-reader--report:has(.brief-reader__grid) .brief-reader__eyebrow {
+    padding-top: 6px;
+    font-size: 8px;
+    line-height: 16.5px;
+    letter-spacing: 1.2px;
+  }
+  .brief-reader--report:has(.brief-reader__grid) .brief-reader__title {
+    font-size: 24px;
+    letter-spacing: -0.7px;
+    max-width: 340px;
+  }
+  .brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn {
+    width: 28px;
+    height: 32px;
+  }
+  .brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn::before {
+    font-size: 16px;
+  }
+  .brief-reader__tabs {
+    flex-wrap: wrap;
+    gap: 0 20px;
+    min-height: 49px;
+    padding: 0 19px;
+  }
+  .brief-reader__tablist {
+    gap: 20px;
+  }
+  .brief-reader__tab,
+  .brief-reader__tabs .brief-reader__jump a {
+    padding: 10px 0;
+    line-height: 1.4;
+  }
+  .brief-reader__tabs .brief-reader__jump {
+    gap: 14px;
+  }
+  .brief-reader__tabs .brief-reader__jump a {
+    font-size: 10px;
+  }
+  .brief-reader__railwrap {
+    margin-bottom: 22px;
+  }
+  .brief-reader:has([data-briefing-surface]) .brief-reader__rail {
+    border-left: none;
+    padding: 5px 0 20px;
+  }
+  .brief-reader:has([data-briefing-surface]) .brief-reader__rail-date,
+  .brief-reader:has([data-briefing-surface]) .brief-reader__rail-heading {
+    display: none;
+  }
+  .brief-reader:has([data-briefing-surface]) .brief-reader__headline {
+    font-size: 25px;
+    line-height: 1.15;
+    letter-spacing: -0.6px;
+  }
+  .brief-reader:has([data-briefing-surface]) .jds-brief__body {
+    font-size: 14px;
+  }
+  .brief-reader__callout {
+    margin: 20px 0;
+    padding: 14px;
+  }
+  .brief-reader__callout-headline {
+    font-size: 19px;
+  }
+  .brief-reader__callout .brief-reader__plan-changed,
+  .brief-reader__section-prose {
+    font-size: 12px;
+  }
+  .brief-reader__editorial-headline {
+    font-size: 24px;
+  }
+  .brief-reader__photo {
+    height: 170px;
+  }
+  .brief-reader__editorial-paragraph {
+    font-size: 12px;
+  }
+  .brief-reader--report .brief-reader__footer {
+    gap: 10px 15px;
+    padding: 12px 19px;
+  }
+  .brief-reader--report .brief-reader__footer .jds-btn--primary {
+    font-size: 11px;
+    padding: 11px 12px;
+    min-width: 0;
+  }
+  .brief-reader--report .brief-reader__footer .jds-btn--quiet {
+    font-size: 11px;
+  }
+  .brief-reader--report .brief-reader__footer-actions {
+    gap: 12px;
+  }
 }
 @media (max-width: 480px) {
   /* Narrow phones stack the report footer zones instead of squeezing them. */
@@ -288,65 +821,44 @@
     grid-column: 1;
     grid-row: auto;
   }
-  /* Proposed Read only: "Back to Today" reads above the link-and-primary
-     row on a narrow phone. Explicit grid rows, not `order`, so DOM and tab
-     order still match what a keyboard user sees, same as the desktop
-     column placement above. */
-  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-back {
+
+  /* Read states: "Back to Today" sits above the link-and-primary row.
+     Explicit grid rows, not `order`, so DOM and tab order still match. */
+  .brief-reader:has([data-briefing-surface]) .brief-reader__footer-back {
     grid-row: 1;
   }
-  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-actions {
+  .brief-reader:has([data-briefing-surface]) .brief-reader__footer-actions {
     grid-row: 2;
   }
-  /* When an accept status line is showing, it keeps row 1 (rule above,
-     unscoped by width), so Back and the actions both move down one row
-     instead of sharing row 1 with it. */
-  .brief-reader:has([data-briefing-surface="proposed-read"])
+  .brief-reader:has([data-briefing-surface]) .brief-reader__footer-actions:has(> :nth-child(2)) {
+    justify-content: space-between;
+  }
+
+  /* A showing accept status keeps row 1, so Back and the actions move down. */
+  .brief-reader:has([data-briefing-surface])
     .brief-reader__footer--with-status
     .brief-reader__footer-back {
     grid-row: 2;
   }
-  .brief-reader:has([data-briefing-surface="proposed-read"])
+  .brief-reader:has([data-briefing-surface])
     .brief-reader__footer--with-status
     .brief-reader__footer-actions {
     grid-row: 3;
   }
-}
-@media (min-width: 1081px) {
-  /* Desktop schedule starts open beside the report; the toggle stays hidden. */
-  .brief-reader__schedule-toggle {
-    display: none;
-  }
-}
 
-/* V6 reader-side status visuals: proposed marks, footer strip, busy button.
-   Tokens only; scoped under the report chrome so other surfaces are untouched. */
-.brief-reader__rail .jds-task[data-state="proposed"],
-.brief-reader__rail .jds-task[data-state="pending"] {
-  border-left: 3px solid var(--gold);
-  padding-left: var(--space-2);
-}
-.brief-reader__rail .jds-task[data-state="proposed"] .day-ev__t,
-.brief-reader__rail .jds-task[data-state="pending"] .day-ev__t {
-  color: var(--text-muted);
-}
-.brief-reader--report .brief-reader__status {
-  grid-area: 1 / 1 / auto / -1;
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-left: 4px solid var(--gold);
-  background: var(--forest-soft);
-}
-.brief-reader--report .brief-reader__status .brief-reader__accept-status {
-  margin: 0;
-}
-.brief-reader--report .jds-btn[aria-busy="true"] {
-  opacity: 1;
-}
-/* Proposed Read footer (P5): the review hand-off reads as an underlined
-   link ahead of the primary action, not a secondary button. */
-.brief-reader__review-link .jds-btn {
-  text-decoration: underline;
-  padding-left: 0;
-  padding-right: 0;
+  /* A lone action keeps one row: Back left, the button right. */
+  .brief-reader:has([data-briefing-surface])
+    .brief-reader__footer:not(.brief-reader__footer--with-status):has(
+      .brief-reader__footer-actions > :only-child
+    ) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .brief-reader:has([data-briefing-surface])
+    .brief-reader__footer:not(.brief-reader__footer--with-status):has(
+      .brief-reader__footer-actions > :only-child
+    )
+    > .brief-reader__footer-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }

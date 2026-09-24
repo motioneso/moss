@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// A menu-independent description of what the status-bar menu should contain for a given
@@ -7,6 +8,8 @@ struct MenuItemDescriptor: Equatable {
     enum Kind: Equatable {
         case text
         case separator
+        /// A feature switch row: a label and a switch (Backtrack plan §3.4, mockup A).
+        case toggle
     }
 
     /// What an item does, so `StatusMenu` can wire actions without matching on display text.
@@ -15,7 +18,10 @@ struct MenuItemDescriptor: Equatable {
         case focusStatus
         case instanceInfo
         case primaryAction
-        case pauseResume
+        /// Pauses or resumes Focus alone; the connection stays up.
+        case focusSwitch
+        /// A second feature's switch (Backtrack, Debug builds only in its Phase 1).
+        case featureSwitch
         case lastJudgment
         case openMoss
         case settings
@@ -28,6 +34,9 @@ struct MenuItemDescriptor: Equatable {
     var role: Role = .status
     var isEnabled: Bool = true
     var isDestructive: Bool = false
+    /// For `.toggle` rows: whether the feature is running. Kept as-is during Pause All, so Resume
+    /// All brings back exactly what was on.
+    var isOn: Bool = false
 
     static let separator = MenuItemDescriptor(kind: .separator)
 
@@ -36,6 +45,26 @@ struct MenuItemDescriptor: Equatable {
     ) -> MenuItemDescriptor {
         MenuItemDescriptor(kind: .text, title: title, role: role, isEnabled: enabled, isDestructive: destructive)
     }
+
+    static func toggle(_ title: String, role: Role, isOn: Bool, enabled: Bool) -> MenuItemDescriptor {
+        MenuItemDescriptor(kind: .toggle, title: title, role: role, isEnabled: enabled, isOn: isOn)
+    }
+}
+
+/// A second feature's menu row and the menu-bar recording dot, owned by that feature's runtime and
+/// read by the card and the menu bar. Kept feature-neutral so nothing outside the feature names it:
+/// in a build without the feature, `row` is always nil and the dot never shows.
+@MainActor
+final class FeatureSwitchState: ObservableObject {
+    struct Row: Equatable {
+        let title: String
+        let isOn: Bool
+    }
+
+    /// Nil hides the row (the feature is off in Settings).
+    @Published var row: Row?
+    @Published var showsRecordingDot = false
+    var onToggle: ((Bool) -> Void)?
 }
 
 /// What the menu needs to know about Focus. The goal is the current Moss calendar block, so the
@@ -50,8 +79,8 @@ struct FocusMenuInfo: Equatable {
     var statusLine: String? {
         switch state {
         case .off: return nil
+        case .switchedOff: return "Focus paused"
         case .watching: return "Watching · \(goalLine ?? "")"
-        case .paused: return "Paused"
         case .noBlock: return "No block right now"
         case .unreachable: return "Can't reach Moss"
         case .notReady: return "Judgment isn't set up on your Moss (ask the admin)"
@@ -63,8 +92,6 @@ struct FocusMenuInfo: Equatable {
         if case .watching = state, let goalLine { return "Trail Marker: \(goalLine)" }
         return "Trail Marker"
     }
-
-    var isPaused: Bool { state == .paused }
 }
 
 extension FocusLabel {
@@ -80,14 +107,15 @@ extension FocusLabel {
 }
 
 /// Menu order per the design guide (§10): status summary; connected instance and account; the
-/// state-specific primary action; Open Moss; Settings…; Log Out… (only when linked); Quit.
+/// state-specific primary action (Pause All / Resume All when linked); one switch row per feature
+/// that is on (Focus); Open Moss; Settings…; Log Out… (only when linked); Quit.
 /// Checking for updates lives in Settings → Updates, not here. Separators fall between the status group, the navigation/action group, the
 /// account-action group, and Quit.
 enum MenuModel {
     static func statusTitle(for state: ConnectionState) -> String {
         switch state {
         case .connected: return "Connected"
-        case .disconnected: return "Disconnected"
+        case .disconnected: return "Paused"
         case .reconnecting: return "Reconnecting"
         case .signInRequired: return "Sign-in required"
         case .notLinked: return "Not linked"
@@ -96,8 +124,8 @@ enum MenuModel {
 
     static func primaryActionTitle(for state: ConnectionState) -> String {
         switch state {
-        case .connected: return "Disconnect"
-        case .disconnected: return "Connect"
+        case .connected: return "Pause All"
+        case .disconnected: return "Resume All"
         case .reconnecting: return "Retry Now"
         case .signInRequired: return "Sign In"
         case .notLinked: return "Set Up Trail Marker"
@@ -105,13 +133,16 @@ enum MenuModel {
     }
 
     static func items(
-        state: ConnectionState, identity: LinkedIdentity?, focus: FocusMenuInfo? = nil
+        state: ConnectionState, identity: LinkedIdentity?, focus: FocusMenuInfo? = nil,
+        feature: FeatureSwitchState.Row? = nil
     ) -> [MenuItemDescriptor] {
         var items: [MenuItemDescriptor] = [.item(statusTitle(for: state), role: .status, enabled: false)]
 
         // Focus rows only exist for a linked Mac with Focus turned on.
         let focusOn = identity != nil && focus != nil && focus?.state != .off
-        if focusOn, let line = focus?.statusLine {
+        // Paused already says nothing is sent; "Can't reach Moss" under it would be untrue.
+        let connectionPaused = state == .disconnected
+        if focusOn, !connectionPaused, let line = focus?.statusLine {
             items.append(.item(line, role: .focusStatus, enabled: false))
         }
 
@@ -122,8 +153,21 @@ enum MenuModel {
 
         items.append(.separator)
         items.append(.item(primaryActionTitle(for: state), role: .primaryAction))
+        // One switch per feature that is turned on in Settings. Pause All greys them but keeps
+        // their positions, so Resume All restores what was running.
+        var switches: [MenuItemDescriptor] = []
         if focusOn, let focus {
-            items.append(.item(focus.isPaused ? "Resume Focus" : "Pause Focus", role: .pauseResume))
+            switches.append(.toggle("Focus", role: .focusSwitch, isOn: focus.state != .switchedOff, enabled: !connectionPaused))
+        }
+        if identity != nil, let feature {
+            switches.append(.toggle(feature.title, role: .featureSwitch, isOn: feature.isOn, enabled: !connectionPaused))
+        }
+        if !switches.isEmpty {
+            items.append(.separator)
+            items.append(contentsOf: switches)
+            items.append(.separator)
+        }
+        if focusOn, let focus {
             if focus.hasLastJudgment {
                 items.append(.item("Last Judgment…", role: .lastJudgment))
             }
