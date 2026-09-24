@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Faster story filters with a sorting model.** When you set a sorting model, News and Sports use it to check stories against your saved preferences, so refreshes are much faster. [PR #2627](https://github.com/motioneso/moss/pull/2627)
 - **Smoother dark mode details.** In dark mode, divider lines are easier to see and hover highlights now use a soft tint of your theme color instead of a bright block. [PR #2655](https://github.com/motioneso/moss/pull/2655)
 - **Dark mode keeps your theme colors.** In dark mode every color theme now keeps its real accent color instead of switching to a pale version, and Sage looks right again. [PR #2653](https://github.com/motioneso/moss/pull/2653)
 - **Cleaner followed teams on Today.** Your followed teams and leagues on the Today page now appear as newspaper-style columns with their logos and colors. [PR #2652](https://github.com/motioneso/moss/pull/2652)
