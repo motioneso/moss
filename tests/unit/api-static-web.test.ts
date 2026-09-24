@@ -40,6 +40,22 @@ describe("registerStaticWeb", () => {
     expect(res.body).toContain("jarv1s");
   });
 
+  it("serves the service worker with the image hosts in connect-src, and only the worker", async () => {
+    const app = Fastify({ logger: false });
+    const dist = makeDist();
+    writeFileSync(join(dist, "service-worker.js"), "self.addEventListener('fetch', () => {});");
+    registerStaticWeb(app, { distDir: dist });
+
+    const worker = await app.inject({ method: "GET", url: "/service-worker.js?dev=1" });
+    const asset = await app.inject({ method: "GET", url: "/assets/app.js" });
+
+    expect(worker.statusCode).toBe(200);
+    expect(worker.headers["content-security-policy"]).toContain(
+      "connect-src 'self' https://a.espncdn.com https://s.espncdn.com"
+    );
+    expect(asset.headers["content-security-policy"]).toContain("connect-src 'self';");
+  });
+
   it("overrides the API helmet CSP for SPA HTML", async () => {
     const app = Fastify({ logger: false });
     await app.register(helmet, {

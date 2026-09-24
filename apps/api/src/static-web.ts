@@ -32,19 +32,30 @@ const MIME: Record<string, string> = {
 // LOADER-SEAM(sports): img-src extends to the hosts the composed SportsSource declares.
 // infra/nginx/jarv1s-web.conf must carry the same img-src (pinned by
 // tests/unit/static-web-csp.test.ts).
-const IMG_SRC = ["'self'", "data:", ...MODULE_IMAGE_CSP_HOSTS.map((h) => `https://${h}`)].join(" ");
+const IMAGE_HOST_SOURCES = MODULE_IMAGE_CSP_HOSTS.map((h) => `https://${h}`);
+const IMG_SRC = ["'self'", "data:", ...IMAGE_HOST_SOURCES].join(" ");
 
-export const SPA_CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  `img-src ${IMG_SRC}`,
-  "font-src 'self' data:",
-  "worker-src 'self'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'"
-].join("; ");
+function spaCsp(connectSrc: string): string {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src ${IMG_SRC}`,
+    "font-src 'self' data:",
+    "worker-src 'self'",
+    `connect-src ${connectSrc}`,
+    "frame-ancestors 'none'",
+    "base-uri 'self'"
+  ].join("; ");
+}
+
+export const SPA_CSP = spaCsp("'self'");
+
+// The service worker answers the page's image requests with its own fetch(), which CSP
+// governs by connect-src. It gets the img-src hosts there so cross-origin art (ESPN, news
+// publishers) loads and keeps its retry. The page itself stays on connect-src 'self'.
+export const SERVICE_WORKER_PATH = "/service-worker.js";
+export const SERVICE_WORKER_CSP = spaCsp(["'self'", ...IMAGE_HOST_SOURCES].join(" "));
 
 export function defaultWebDistDir(): string {
   return (
@@ -86,7 +97,7 @@ async function serveStaticOrSpa(
 
   const assetPath = resolveAssetPath(distDir, url);
   if (assetPath && existsSync(assetPath) && statSync(assetPath).isFile()) {
-    sendFile(reply, assetPath);
+    sendFile(reply, assetPath, url === SERVICE_WORKER_PATH ? SERVICE_WORKER_CSP : SPA_CSP);
     return;
   }
 
@@ -103,7 +114,7 @@ async function serveStaticOrSpa(
     return;
   }
 
-  sendFile(reply, indexPath);
+  sendFile(reply, indexPath, SPA_CSP);
 }
 
 function sendNotFound(reply: FastifyReply): void {
@@ -131,9 +142,9 @@ function resolveAssetPath(distDir: string, urlPath: string): string | undefined 
   return full;
 }
 
-function sendFile(reply: FastifyReply, filePath: string): void {
+function sendFile(reply: FastifyReply, filePath: string, csp: string): void {
   reply.header("Content-Type", MIME[extname(filePath)] ?? "application/octet-stream");
-  reply.header("Content-Security-Policy", SPA_CSP);
+  reply.header("Content-Security-Policy", csp);
   reply.header("X-Content-Type-Options", "nosniff");
   reply.header("Referrer-Policy", "no-referrer");
   reply.header("X-Frame-Options", "DENY");
