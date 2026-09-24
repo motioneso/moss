@@ -5,6 +5,7 @@ const styles = readFileSync("packages/ui/src/styles/components-moss-today.css", 
 const kit = readFileSync("apps/web/src/styles/kit-today.css", "utf8");
 const desks = readFileSync("apps/web/src/styles/kit-today-desks.css", "utf8");
 const sidelines = readFileSync("packages/sports/src/web/styles/sports-7-sidelines.css", "utf8");
+const clippings = readFileSync("packages/sports/src/web/styles/sports-8-clippings.css", "utf8");
 
 describe("Today narrow masthead", () => {
   it("stacks masthead content instead of squeezing lead copy beside the folio", () => {
@@ -132,5 +133,24 @@ describe("Today sports phone rule gap", () => {
     expect(sidelines).toMatch(
       /@media \(max-width: 600px\)[\s\S]*?\.jds-brief--sports \.desk-stories\s*\{[^}]*padding-top:\s*22px/
     );
+  });
+});
+
+describe("Today sports teams row columns", () => {
+  it("steps from stacked to two to three columns by the row's own width", () => {
+    expect(clippings).toMatch(/\.desk-cards\s*\{\s*container:\s*sp-clippings \/ inline-size/);
+    expect(clippings).toMatch(
+      /\.sp-tkgrid\.sp-tkgrid\.sp-tkgrid\s*\{\s*grid-template-columns:\s*repeat\(2,/
+    );
+    expect(clippings).toMatch(
+      /@container sp-clippings \(width >= 900px\)\s*\{[^@]*repeat\(3,[^@]*nth-child\(3n \+ 1\)::before/
+    );
+    expect(clippings).toMatch(/@container sp-clippings \(width < 560px\)/);
+    expect(clippings).not.toMatch(/@media/);
+  });
+
+  it("keeps a 12rem name column and wraps the form pips instead of crushing it", () => {
+    expect(clippings).toMatch(/\.sp-tk__head\s*\{\s*flex-wrap:\s*wrap/);
+    expect(clippings).toMatch(/\.sp-tk__ident\s*\{\s*flex:\s*1 1 12rem/);
   });
 });
