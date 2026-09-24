@@ -44,6 +44,10 @@ feature that is not present in the image you are running.
 - **Cleaner followed teams on Today.** Your followed teams and leagues on the Today page now appear as newspaper-style columns with their logos and colors. [PR #2652](https://github.com/motioneso/moss/pull/2652)
 - **Trail-map texture on the Today header.** The Today header now has a faint trail-map pattern behind it. [PR #2651](https://github.com/motioneso/moss/pull/2651)
 
+#### Added
+
+- **Artwork for news stories without a photo.** When the lead story on Today has no photo, Moss now shows a drawn contour print in the story's topic colors instead of an empty space. [PR #2657](https://github.com/motioneso/moss/pull/2657)
+
 ### 2026-09-23
 
 #### Changed
