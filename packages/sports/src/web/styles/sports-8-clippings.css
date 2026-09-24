@@ -20,7 +20,7 @@
 }
 
 .jds-brief--sports .sp-tkgrid {
-  gap: 0;
+  gap: 0 48px;
   margin-top: var(--space-3);
   border-top: 1px solid var(--accent);
 }
@@ -31,25 +31,26 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* Columns carry no side padding, so every column's content box is the same width. The
+   dividing rules sit in the middle of the column gap instead. */
 .jds-brief--sports .sp-tkgrid .sp-tk {
+  position: relative;
   gap: 0;
-  padding: 22px 24px 20px;
+  padding: 22px 0 20px;
   border: 0;
-  border-left: 1px solid var(--border);
   border-radius: 0;
   background: none;
   overflow: visible;
 }
 
-/* Column edges: the first column in each row loses its left rule and inset, the last its
-   right inset, and later rows get a hairline above. */
 @media (min-width: 601px) {
-  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(3n + 1) {
-    padding-left: 0;
-    border-left: 0;
-  }
-  .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(3n) {
-    padding-right: 0;
+  .jds-brief--sports .sp-tkgrid > .sp-tk:not(:nth-child(3n + 1))::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -24px;
+    border-left: 1px solid var(--border);
   }
   .jds-brief--sports .sp-tkgrid > .sp-tk:nth-child(n + 4) {
     border-top: 1px solid var(--border);
