@@ -88,10 +88,12 @@ function stubController(overrides: Partial<DayPlanReviewController> = {}): DayPl
     notice: null,
     busy: false,
     choiceFor: (entry) => defaultChoiceFor(entry),
+    expectOwnWrite: () => undefined,
     setPlacement: () => undefined,
     dismissApproval: () => undefined,
     setTime: () => undefined,
     runPreview: async () => true,
+    saveChanges: async () => true,
     acceptAllAdditions: async () => true,
     apply: async () => true,
     confirm: async () => true,
@@ -210,5 +212,181 @@ describe("DayPlanReview in the report shell", () => {
     expect(status.textContent).toContain("Applied 1");
     const panel = document.body.querySelector('[role="tabpanel"]') as HTMLElement;
     expect(panel.contains(strip)).toBe(true);
+  });
+});
+
+describe("p6 automatic Review fail-first", () => {
+  it("(a) wraps the report in the review surface", async () => {
+    await renderReview(stubController());
+    expect(document.body.querySelector('[data-briefing-surface="review"]')).not.toBeNull();
+  });
+
+  it("(b) shows Time with the start and Keep on calendar on a calendar row", async () => {
+    const calendarPlan = {
+      ...plan(),
+      blocks: [
+        {
+          ...block("cal1"),
+          title: "Parity carry-over",
+          actualPlacement: {
+            startsAt: "2026-09-10T15:30:00.000Z",
+            durationMinutes: 90,
+            calendarEventRef: null
+          },
+          pendingChange: null
+        }
+      ]
+    };
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: async () =>
+        JSON.stringify({
+          settings: { timeBlockMode: "manual", suggestTasks: false, createTasks: false }
+        })
+    })) as unknown as typeof fetch;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(DayPlanReview, {
+            controller: stubController(),
+            plan: calendarPlan,
+            tasks: tasks(),
+            unavailableTaskIds: [],
+            events: [],
+            locale,
+            now: new Date(NOW),
+            opener: null,
+            onClose: () => undefined,
+            onOpenTask: () => undefined
+          })
+        )
+      );
+    });
+    for (let round = 0; round < 4; round += 1) {
+      await act(async () => {});
+    }
+    const time = document.body.querySelector("#cal1-time") as HTMLInputElement | null;
+    expect(time).not.toBeNull();
+    expect(time?.value).toBe("08:30");
+    const placement = document.body.querySelector("#cal1-placement") as HTMLSelectElement;
+    expect([...placement.options].map((option) => option.textContent)).toContain(
+      "Keep on calendar"
+    );
+  });
+
+  it("(c) always shows What will change with No changes selected", async () => {
+    await renderReview(stubController());
+    expect(document.body.textContent).toContain("What will change");
+    expect(document.body.textContent).toContain("No changes selected.");
+  });
+
+  it("(d) keeps one rail heading", async () => {
+    await renderReview(stubController());
+    expect(document.body.textContent).toContain("Your day, in order.");
+    expect(document.body.textContent).not.toContain("Your day, laid out");
+  });
+
+  it("R1.3 leave keeps a visible disabled Time with the proposed start", async () => {
+    await renderReview(
+      stubController({ choiceFor: () => ({ placement: "leave", startsAt: null }) })
+    );
+    const time = document.body.querySelector("#b1-time") as HTMLInputElement | null;
+    expect(time).not.toBeNull();
+    expect(time?.disabled).toBe(true);
+    expect(time?.value).toBe("09:00");
+    expect(document.body.textContent).toContain("30 minutes");
+    expect(document.body.textContent).not.toMatch(/no time set/);
+  });
+
+  it("(e) guard: ReviewRow without the prop shows no Time field on a kept row", async () => {
+    const { ReviewRow: BareRow } = await import("../../apps/web/src/today/day-plan-review-row.js");
+    const kept = {
+      ...block("cal1"),
+      title: "Parity carry-over",
+      actualPlacement: {
+        startsAt: "2026-09-10T15:30:00.000Z",
+        durationMinutes: 90,
+        calendarEventRef: null
+      },
+      pendingChange: null
+    };
+    const single = { ...plan(), blocks: [kept] };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(BareRow, {
+          block: kept,
+          title: "Parity carry-over",
+          savedLabel: "Due today",
+          choice: { placement: "keep", startsAt: null },
+          changed: false,
+          task: undefined,
+          unavailable: false,
+          controller: stubController(),
+          plan: single,
+          locale,
+          onOpenTask: () => undefined
+        })
+      );
+    });
+    for (let round = 0; round < 4; round += 1) {
+      await act(async () => {});
+    }
+    expect(document.body.querySelector("#cal1-time")).toBeNull();
+  });
+
+  it("keeps the due-date hint for an evening leave row", async () => {
+    const { ReviewRow: BareRow } = await import("../../apps/web/src/today/day-plan-review-row.js");
+    const leave = {
+      ...block("due1"),
+      taskId: "due-task",
+      actualPlacement: {
+        startsAt: "2026-09-10T15:30:00.000Z",
+        durationMinutes: 90,
+        calendarEventRef: null
+      },
+      pendingChange: null
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(BareRow, {
+          block: leave,
+          title: "Due task",
+          savedLabel: "On calendar",
+          choice: { placement: "leave", startsAt: null },
+          changed: false,
+          task: {
+            id: "due-task",
+            title: "Due task",
+            status: "todo",
+            dueAt: "2026-09-12T12:00:00.000Z",
+            doAt: null,
+            effort: null
+          },
+          unavailable: false,
+          controller: stubController(),
+          plan: { ...plan(), blocks: [leave] },
+          locale,
+          onOpenTask: () => undefined
+        })
+      );
+    });
+    expect(document.body.textContent).toMatch(/Due .*?, no time set/);
   });
 });

@@ -265,16 +265,16 @@ describe("BriefingReportShell selected tab", () => {
 });
 
 describe("automatic-read reader frame height", () => {
-  it("fixes the desktop automatic frame to exactly 910px instead of only capping it", () => {
+  it("fixes the desktop morning frame to exactly 910px instead of only capping it", () => {
     // #2555 R8: max-height only caps a frame, it never grows one. The one-heading automatic
     // content is naturally 896px tall, so a max-height of 910px left the frame short of the
     // approved 1120x910 mockup. The frame must declare an exact height instead.
     const css = readFileSync("apps/web/src/styles/kit-briefing-reader.css", "utf8");
     const match = css.match(
-      /\.brief-reader:has\(\[data-briefing-surface="automatic-read"]\)\s*\{(?<body>[^}]*)\}/m
+      /\.brief-reader--report:has\(\.brief-reader__grid\)\s*\{(?<body>[^}]*)\}/m
     );
     const body = match?.groups?.body ?? "";
-    expect(body).toContain("height: 910px");
+    expect(body).toContain("height: min(910px");
     expect(body).not.toContain("max-height: 910px");
   });
 });

@@ -84,6 +84,32 @@ export function TodayWeatherRow(props: {
     })
   ];
 
+  // Study weather row: current conditions, then today's range (day) or the
+  // overnight low (evening).
+  if (props.mode === "day" || props.mode === "evening") {
+    return (
+      <>
+        <div className="wx-now">
+          <NowIcon aria-hidden="true" />
+          <strong>
+            {`${wx.temp}°`}
+            <small>{unitSymbol}</small>
+          </strong>
+        </div>
+        <div className="wx-outlook">
+          <strong>{wx.condition}</strong>
+          {first !== null ? (
+            <span>
+              {props.mode === "evening"
+                ? `Overnight low ${first.low}°`
+                : `High ${first.high}° · Low ${first.low}°`}
+            </span>
+          ) : null}
+        </div>
+      </>
+    );
+  }
+
   const href = `https://www.wunderground.com/weather/${wx.lat},${wx.lon}`;
   const city = wx.location.split(",")[0]?.trim() ?? wx.location;
 
@@ -98,7 +124,7 @@ export function TodayWeatherRow(props: {
             <div>
               {props.mode === "evening"
                 ? `Overnight low ${first.low}°`
-                : `High ${first.high}° / Low ${first.low}°`}
+                : `High ${first.high}° · Low ${first.low}°`}
             </div>
           ) : null}
         </div>

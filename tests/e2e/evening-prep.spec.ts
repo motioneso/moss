@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { createMockBriefingDefinition, createMockConnectorProviders, mockApi } from "./mock-api.js";
 
 /**
- * #891 — Today's evening "Prep for tomorrow" card.
+ * #891 — Today's evening tomorrow panel.
  *
  * The "Chat with {assistant}" button must OPEN THE CHAT DRAWER on click, the same
  * way the topbar chat button does. The regression it guards: opening the drawer used
@@ -54,7 +54,7 @@ test("#891: evening Prep-for-tomorrow opens the chat drawer even when the seed i
 
   await page.goto("/today");
 
-  const prepButton = page.locator("button.secondary-button.evening-prep__btn");
+  const prepButton = page.locator("button.ev-tomorrow__chat");
   await expect(prepButton).toBeVisible();
   await prepButton.click();
 
@@ -88,7 +88,7 @@ test("#891: evening Prep-for-tomorrow opens the drawer before the seed POST reso
   });
 
   await page.goto("/today");
-  await page.locator("button.secondary-button.evening-prep__btn").click();
+  await page.locator("button.ev-tomorrow__chat").click();
 
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(drawer).toBeVisible(); // open while the seed POST is still pending

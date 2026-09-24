@@ -143,7 +143,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
     await page.goto("/today");
     await expect(page.locator(".cmd-wrap")).toBeVisible();
     // Every widget the page shows is populated, otherwise the width check proves nothing.
-    await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+    await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
     await expect(page.getByText("Write the launch brief").first()).toBeVisible();
     await page.getByRole("button", { name: "Read the full morning briefing" }).click();
@@ -332,7 +332,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await page.goto("/today");
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
@@ -342,12 +342,13 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await page.getByRole("button", { name: "Review task blocks" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
   await expect(dialog).toContainText("Proposed, not on the calendar yet");
 
-  // Leave the due-dated block unscheduled: the consequence reads in words.
+  // Leave the due-dated block unscheduled: no extra consequence line appears.
   await dialog.getByLabel("File the report: placement").selectOption("leave");
-  await expect(dialog).toContainText("Due Sep 12, no time set");
+  await expect(dialog).toContainText("Proposed, not on the calendar yet");
+  await expect(dialog).not.toContainText("no time set");
 
   // Choose both proposals so they join the selection; the summary names each.
   await dialog.getByLabel("Write the launch brief: placement").selectOption("add");
@@ -358,32 +359,33 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(dialog).toContainText("Add Call the vendor at 12:30");
 
   // Preview: the lunch overlap names the commitment; only the clean add applies.
-  await dialog.getByRole("button", { name: "Preview changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toContainText("Overlaps Lunch with Sam, 12:00 to 1:00");
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
   await expect(dialog).toContainText("Applied 1; 0 failed; 0 pending.");
   await expect(dialog).not.toContainText("Confirm calendar changes");
 
   // Back on Today the added block reads on the calendar without a reload.
   await dialog.getByRole("button", { name: "Back to Today" }).click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await page.getByRole("button", { name: "Review task blocks" }).first().click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
   await expect(dialog).toContainText("On the calendar");
   // The task dialog still opens for the added block.
   await dialog
     .getByRole("button", { name: /Write the launch brief/ })
     .first()
     .click();
-  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
+  const taskDialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("button", { name: "Cancel" }) });
+  await expect(taskDialog.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await taskDialog.getByRole("button", { name: "Cancel" }).click();
 
   // Move the calendar block: confirmation names the event and keeps the task.
   await page.getByRole("button", { name: "Review task blocks" }).first().click();
   await dialog.getByLabel("Ship the invoice: placement").selectOption("move");
   await dialog.getByLabel("Ship the invoice: start time").fill("17:00");
-  await dialog.getByRole("button", { name: "Preview changes" }).click();
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   const confirm = dialog.locator("section.plan-review__confirm");
   await expect(confirm).toContainText("Confirm calendar changes");
   await expect(confirm).toContainText("Ship the invoice");
@@ -393,7 +395,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(confirm).toBeHidden();
   // The earlier outcome stands unchanged: nothing new applied.
   await expect(dialog).toContainText("Applied 1; 0 failed; 0 pending.");
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   await dialog.getByRole("button", { name: "Confirm" }).click();
   await expect(dialog).toContainText("Applied 2; 0 failed; 0 pending.");
   await dialog.getByRole("button", { name: "Back to Today" }).click();
@@ -404,12 +406,15 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await page.getByRole("button", { name: "Read the full morning briefing" }).click();
   const reader = page.getByRole("dialog");
   await expect(reader).toContainText("Protect the launch window");
-  await reader.getByRole("button", { name: "Review task blocks" }).click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
+  await reader.getByRole("button", { name: "Adjust task blocks" }).click();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "The briefing" })).toHaveAttribute(
+    "aria-selected",
+    "false"
+  );
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Make the plan fit." })).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Read the full morning briefing" })).toBeFocused();
 
@@ -417,7 +422,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.getByRole("button", { name: "Review task blocks" }).first().click();
-    await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `no sideways scroll at ${width}px`
@@ -587,18 +592,18 @@ test("accept all applies eligible additions from the reader, then reviews the co
   await page.goto("/today");
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Team standup").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
 
-  // The reader footer offers Accept all first on the populated 320px page.
+  // The reader footer puts the Adjust link before Accept all on the populated 320px page.
   await page.getByRole("button", { name: "Read the full morning briefing" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Protect the launch window");
   const footerNames = await dialog.locator(".brief-reader__footer button").allTextContents();
-  expect(footerNames).toEqual(["Accept all time blocks", "Review task blocks", "Back to Today"]);
+  expect(footerNames).toEqual(["Adjust task blocks", "Accept all time blocks", "Back to Today"]);
 
   // One activation previews the three proposals and applies the two clean ones.
   await dialog.getByRole("button", { name: "Accept all time blocks" }).click();
@@ -623,7 +628,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
 
   // Review changes keeps the rows, names the conflict and shows the outcomes.
   await dialog.getByRole("button", { name: "Review changes" }).click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
   await expect(dialog).toContainText("Overlaps Team standup");
   await expect(dialog).toContainText("Applied 2; 0 failed; 0 pending.");
   // Everything resolved, so there is nothing to retry and no retry is sent.
@@ -632,12 +637,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
 
   // Buttons fit the narrow viewport; DOM order follows the shell, grid keeps Back left.
   const reviewNames = await dialog.locator(".brief-reader__footer button").allTextContents();
-  expect(reviewNames).toEqual([
-    "Preview changes",
-    "Apply changes",
-    "Accept all time blocks",
-    "Back to Today"
-  ]);
+  expect(reviewNames).toEqual(["Save changes", "Back to Today"]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     "no sideways scroll at 320px in the review"
@@ -653,7 +653,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
   );
   await page.getByRole("tab", { name: "The briefing" }).click();
   await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Make the plan fit." })).toBeHidden();
 });
 
 test("evening planning saves one draft and never applies in suggest mode", async ({ page }) => {
@@ -831,7 +831,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   await page.goto("/today");
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeVisible();
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.getByText(/^Overnight low/).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
   await expect(page.getByText("Team standup").first()).toBeVisible();
@@ -839,7 +839,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "A good place to leave the day." })).toBeVisible();
   await expect(dialog).toContainText("Protect the launch window");
 
   // Reflect: pick a reply and add a note; the note reads back, no task is written.
@@ -857,7 +857,9 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   // Commit one task for tomorrow; the due-dated one is already set.
   await dialog.getByRole("button", { name: "02 Open commitments", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Open commitments" })).toBeFocused();
+  await expect(
+    dialog.getByRole("heading", { name: "Give this a place, or leave it open." })
+  ).toBeFocused();
   await dialog
     .getByRole("radiogroup", { name: "Call the vendor: plan" })
     .getByLabel("Tomorrow")
@@ -869,15 +871,20 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   // Lighter day with a main priority, then save in suggest mode.
   await dialog.getByRole("button", { name: "03 Shape tomorrow", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Shape tomorrow" })).toBeFocused();
-  await dialog.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day").click();
-  await dialog.getByLabel("Main priority").selectOption("t2");
-  await dialog.getByRole("button", { name: "04 Review", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Review" })).toBeFocused();
   await expect(
-    dialog.locator('section[aria-label="Changes"]').getByText("Water the plants")
+    dialog.getByRole("heading", { name: "How much room do you want tomorrow?" })
+  ).toBeFocused();
+  await dialog
+    .getByRole("radiogroup", { name: "Day capacity" })
+    .getByLabel("A lighter day")
+    .click();
+  await dialog.getByLabel("The one thing that matters").selectOption("t2");
+  await dialog.getByRole("button", { name: "04 Review", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "A plan you can leave with." })).toBeFocused();
+  await expect(
+    dialog.getByRole("region", { name: "Task blocks to propose" }).getByText("Water the plants")
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+  await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
 
   // Exactly one draft save; suggest mode never previews or applies.
@@ -889,18 +896,20 @@ test("evening planning saves one draft and never applies in suggest mode", async
   // Widths on the populated page: no sideways scroll, footer stays visible.
   for (const width of [1440, 768, 375, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "A good place to leave the day." })
+    ).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       "no sideways scroll at " + width + "px"
     ).toBe(true);
-    const save = dialog.getByRole("button", { name: "Save tomorrow's plan" });
-    const box = await save.boundingBox();
+    const back = dialog.getByRole("button", { name: "Back to Today" });
+    const box = await back.boundingBox();
     expect(box, "footer inside the viewport at " + width + "px").not.toBeNull();
   }
 });
 
-test("today hero band spans the content with an unclipped headline", async ({ page }) => {
+test("today morning hero is inset with an unclipped headline", async ({ page }) => {
   await page.clock.setFixedTime(new Date(NOW));
   const morningDefinition = createMockBriefingDefinition("briefing-hero", "Morning", {
     briefingType: "morning",
@@ -947,7 +956,8 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
       innerW: window.innerWidth
     };
   });
-  expect(Math.abs(desktop.heroW - desktop.contentW)).toBeLessThanOrEqual(1);
+  // The surface's 24px horizontal padding combines with the 16px morning inset.
+  expect(Math.abs(desktop.heroW - (desktop.contentW - 80))).toBeLessThanOrEqual(1);
   expect(desktop.h1Clipped).toBe(false);
   expect(desktop.fontSize).toBeGreaterThanOrEqual(40);
   expect(desktop.fontSize).toBeLessThanOrEqual(48);
@@ -977,7 +987,8 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
       scrollW: document.documentElement.scrollWidth
     };
   });
-  expect(Math.abs(phone.heroW - phone.innerW)).toBeLessThanOrEqual(1);
+  // 12px surface padding plus the 6px phone inset on each side.
+  expect(Math.abs(phone.heroW - (phone.innerW - 36))).toBeLessThanOrEqual(1);
   expect(phone.h1Clipped).toBe(false);
   expect(phone.fontSize).toBeGreaterThanOrEqual(28);
   expect(phone.fontSize).toBeLessThanOrEqual(34);

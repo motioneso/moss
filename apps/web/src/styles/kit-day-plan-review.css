@@ -154,3 +154,274 @@
     align-items: start;
   }
 }
+
+/* Morning reader Review tab. Every rule sits under the Review-only marker,
+   so evening step 4 keeps the base rows above. Measures follow the
+   prototype's morning-briefing.css and evening-plan.css. */
+[data-briefing-surface="review"] {
+  min-width: 0;
+}
+
+[data-briefing-surface="review"] .plan-review__lede {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+[data-briefing-surface="review"] .plan-review__accept {
+  margin: 0 0 20px;
+}
+
+[data-briefing-surface="review"] .plan-review__accept .jds-btn {
+  width: auto;
+  min-height: 40px;
+  height: auto;
+  padding: 11px 14px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+[data-briefing-surface="review"] .plan-review__rows {
+  gap: 0;
+}
+
+[data-briefing-surface="review"] .plan-review__row {
+  display: block;
+  margin: 0;
+  padding: 19px 0 22px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-briefing-surface="review"] .plan-review__title,
+[data-briefing-surface="review"] .plan-review__titlelink {
+  display: block;
+  width: 100%;
+  margin-bottom: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  text-decoration: none;
+}
+
+[data-briefing-surface="review"] .plan-review__meta,
+[data-briefing-surface="review"] .plan-review__state {
+  margin-bottom: 13px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  opacity: 1;
+  overflow-wrap: anywhere;
+}
+
+[data-briefing-surface="review"] .plan-review__changed,
+[data-briefing-surface="review"] .plan-review__hint {
+  margin: -8px 0 13px;
+  font-size: 11px;
+  color: var(--forest);
+  opacity: 1;
+}
+
+/* Labels share one row, the two controls the row below: Time 1fr,
+   Placement 1.3fr, like the prototype's label-wrapped selects. */
+[data-briefing-surface="review"] .plan-review__fields {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  column-gap: 12px;
+  row-gap: 6px;
+}
+
+[data-briefing-surface="review"] .plan-review__field {
+  display: contents;
+}
+
+[data-briefing-surface="review"] .plan-review__label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--forest);
+}
+
+[data-briefing-surface="review"] .plan-review__label--time {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+[data-briefing-surface="review"] .plan-review__field--time {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+[data-briefing-surface="review"] .plan-review__label--placement {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[data-briefing-surface="review"] .plan-review__field--placement > .jds-selectwrap {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+[data-briefing-surface="review"] .plan-review__fields--single .plan-review__label--placement,
+[data-briefing-surface="review"]
+  .plan-review__fields--single
+  .plan-review__field--placement
+  > .jds-selectwrap {
+  grid-column: 1 / -1;
+}
+
+/* Both controls read as the prototype's native select: square, strong
+   border, surface fill, small chevron at the right. The time input hides
+   its clock icon behind the same chevron, and keeps the picker on click. */
+[data-briefing-surface="review"] .plan-review__field--time,
+[data-briefing-surface="review"] .plan-review__field--placement .jds-select {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 42px;
+  padding: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background-color: var(--surface);
+  box-shadow: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--forest);
+}
+
+[data-briefing-surface="review"] .plan-review__field--time {
+  position: relative;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23282c25' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 10px 6px;
+}
+
+[data-briefing-surface="review"] .plan-review__field--time::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+}
+
+/* Chrome's time field reads "8:30am" like the prototype's option text. */
+[data-briefing-surface="review"] .plan-review__field--time::-webkit-datetime-edit-ampm-field {
+  margin-left: -3px;
+  text-transform: lowercase;
+}
+
+[data-briefing-surface="review"] .plan-review__field--time::-webkit-datetime-edit-text,
+[data-briefing-surface="review"] .plan-review__field--time::-webkit-datetime-edit-hour-field,
+[data-briefing-surface="review"] .plan-review__field--time::-webkit-datetime-edit-minute-field,
+[data-briefing-surface="review"] .plan-review__field--time::-webkit-datetime-edit-ampm-field {
+  padding: 0;
+}
+
+[data-briefing-surface="review"] .plan-review__field--placement .jds-select {
+  padding-right: 28px;
+}
+
+[data-briefing-surface="review"] .plan-review__field--placement .jds-selectwrap__chev {
+  right: 9px;
+}
+
+[data-briefing-surface="review"] .plan-review__field--placement .jds-selectwrap__chev svg {
+  display: none;
+}
+
+[data-briefing-surface="review"] .plan-review__field--placement .jds-selectwrap__chev::before {
+  content: "";
+  width: 10px;
+  height: 6px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23282c25' stroke-width='1.4'/%3E%3C/svg%3E")
+    no-repeat center / 10px 6px;
+}
+
+[data-briefing-surface="review"] .plan-review__field--time:disabled,
+[data-briefing-surface="review"] .plan-review__field--placement .jds-select:disabled {
+  opacity: 0.55;
+}
+
+[data-briefing-surface="review"] .plan-review__changes {
+  margin-top: 4px;
+  padding-top: 15px;
+  border-top: 2px solid var(--forest);
+}
+
+[data-briefing-surface="review"] .plan-review__changes-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-briefing-surface="review"] .plan-review__changes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-briefing-surface="review"] .plan-review__changes li,
+[data-briefing-surface="review"] .plan-review__empty {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Rail list of blocks with no time, like the prototype's unscheduled note. */
+[data-briefing-surface="review"] .plan-review__without {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+[data-briefing-surface="review"] .plan-review__without-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-briefing-surface="review"] .plan-review__without ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-briefing-surface="review"] .plan-review__without li {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  [data-briefing-surface="review"] .plan-review__lede {
+    font-size: 12px;
+  }
+
+  [data-briefing-surface="review"] .plan-review__fields {
+    column-gap: 8px;
+  }
+
+  [data-briefing-surface="review"] .plan-review__field--time,
+  [data-briefing-surface="review"] .plan-review__field--placement .jds-select {
+    padding: 8px 26px 8px 8px;
+    font-size: 11px;
+  }
+}

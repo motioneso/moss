@@ -307,9 +307,11 @@ function Harness(props: { plan: DayPlanDto; seen: (controller: DayPlanReviewCont
   return null;
 }
 
-async function mountHook(
-  plan: DayPlanDto
-): Promise<{ current: () => DayPlanReviewController; client: QueryClient }> {
+async function mountHook(plan: DayPlanDto): Promise<{
+  current: () => DayPlanReviewController;
+  client: QueryClient;
+  rerender: (next: DayPlanDto) => Promise<void>;
+}> {
   let latest: DayPlanReviewController | null = null;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -318,22 +320,25 @@ async function mountHook(
   document.body.appendChild(container);
   const root = createRoot(container);
   liveRoots.push(root);
-  await act(async () => {
-    root.render(
-      createElement(
-        QueryClientProvider,
-        { client },
-        createElement(Harness, {
-          plan,
-          seen: (controller) => {
-            latest = controller;
-          }
-        })
-      )
-    );
-  });
+  const rerender = async (next: DayPlanDto) => {
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(Harness, {
+            plan: next,
+            seen: (controller) => {
+              latest = controller;
+            }
+          })
+        )
+      );
+    });
+  };
+  await rerender(plan);
   if (!latest) throw new Error("hook did not render");
-  return { current: () => latest as DayPlanReviewController, client };
+  return { current: () => latest as DayPlanReviewController, client, rerender };
 }
 
 beforeEach(() => {
@@ -548,30 +553,7 @@ describe("useDayPlanReview writes", () => {
 
   it("keeps choices and marks rows when a save hits a 409", async () => {
     const first = plan();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    liveRoots.push(root);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    let latest: DayPlanReviewController | null = null;
-    const renderPlan = async (value: DayPlanDto) => {
-      await act(async () => {
-        root.render(
-          createElement(
-            QueryClientProvider,
-            { client },
-            createElement(Harness, {
-              plan: value,
-              seen: (controller) => {
-                latest = controller;
-              }
-            })
-          )
-        );
-      });
-    };
-    await renderPlan(first);
-    const current = () => latest as DayPlanReviewController;
+    const { current, rerender: renderPlan } = await mountHook(first);
     await act(async () => {
       current().setPlacement("b3", "add", "2026-09-10T18:00:00.000Z");
     });
@@ -601,6 +583,22 @@ describe("useDayPlanReview writes", () => {
     expect(current().changedIds).toEqual(["b2"]);
     expect(current().stalePreview).toBe(true);
     expect(current().preview).toBe(null);
+    expect(current().notice).toMatch(/changed since it was read/);
+  });
+
+  it("stays quiet when the caller marks the new revision as its own write", async () => {
+    const first = plan();
+    const { current, rerender: renderPlan } = await mountHook(first);
+    await act(async () => {
+      current().expectOwnWrite();
+    });
+    await renderPlan({ ...first, revision: first.revision + 1 });
+    expect(current().revision).toBe(first.revision + 1);
+    expect(current().notice).toBe(null);
+    expect(current().stalePreview).toBe(false);
+
+    // Only the next revision is ours; a later outside change still warns.
+    await renderPlan({ ...first, revision: first.revision + 2 });
     expect(current().notice).toMatch(/changed since it was read/);
   });
 
@@ -741,10 +739,12 @@ describe("DayPlanReview view", () => {
       notice: null,
       busy: false,
       choiceFor: (block) => choices[block.id] ?? defaultChoiceFor(block),
+      expectOwnWrite: () => undefined,
       setPlacement: () => undefined,
       dismissApproval: () => undefined,
       setTime: () => undefined,
       runPreview: async () => true,
+      saveChanges: async () => true,
       acceptAllAdditions: async () => true,
       apply: async () => true,
       confirm: async () => true,
@@ -804,8 +804,8 @@ describe("DayPlanReview view", () => {
     const all = names(container);
     expect(all).toContain("Accept all time blocks");
     expect(all).toContain("Write the launch brief: placement");
-    expect(all).toContain("Preview changes");
-    expect(all).toContain("Apply changes");
+    expect(all).toContain("Save changes");
+    expect(all).toContain("Back to Today");
     expect(all).toContain("Back to Today");
     expect(container.textContent).toContain("Proposed, not on the calendar yet");
     const target = [...container.querySelectorAll("button")].find(
@@ -825,8 +825,8 @@ describe("DayPlanReview view", () => {
     );
     const all = names(container);
     expect(all.some((name) => /accept all/i.test(name))).toBe(false);
-    expect(all).toContain("Preview changes");
-    expect(all).toContain("Apply changes");
+    expect(all).toContain("Save changes");
+    expect(all).toContain("Back to Today");
     expect(all).toContain("Back to Today");
   });
 
@@ -872,7 +872,7 @@ describe("DayPlanReview view", () => {
     expect(document.querySelectorAll("section.plan-review__confirm")).toHaveLength(1);
   });
 
-  it("redacts unreadable tasks and shows the due consequence", async () => {
+  it("redacts unreadable tasks and keeps the row to its state word", async () => {
     const container = await renderReview(
       stubController({
         choices: { b3: { placement: "leave", startsAt: null } }
@@ -881,7 +881,7 @@ describe("DayPlanReview view", () => {
     );
     expect(container.textContent).toContain("No longer available");
     expect(names(container)).not.toContain("Write the launch brief: placement");
-    expect(container.textContent).toMatch(/Due .*no time set/);
+    expect(container.textContent).not.toMatch(/no time set/);
   });
 
   it("disables Add on a block with no duration to schedule", async () => {
@@ -894,38 +894,22 @@ describe("DayPlanReview view", () => {
     expect(add?.disabled).toBe(true);
   });
 
-  it("applies only conflict-free eligible blocks", async () => {
-    const apply = vi.fn(async () => true);
+  it("saves through saveChanges when edits are pending", async () => {
+    const saveChanges = vi.fn(async () => true);
     const container = await renderReview(
       stubController({
-        preview: {
-          revision: 4,
-          calendarAvailability: "available",
-          calendarAsOf: null,
-          blocks: [],
-          eligibleBlockIds: ["b1", "b2"],
-          conflicts: [
-            {
-              blockId: "b2",
-              kind: "calendar_busy",
-              withBlockId: null,
-              detail: "Overlaps lunch",
-              calendarEvent: null
-            }
-          ]
-        },
-        apply
+        choices: { b2: { placement: "move", startsAt: "2026-09-10T22:00:00.000Z" } },
+        saveChanges
       })
     );
     const target = [...container.querySelectorAll("button")].find(
-      (node) => node.textContent === "Apply changes"
+      (node) => node.textContent === "Save changes"
     ) as HTMLButtonElement;
     expect(target.disabled).toBe(false);
     await act(async () => {
       target.click();
     });
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(apply).toHaveBeenCalledWith(["b1"]);
+    expect(saveChanges).toHaveBeenCalledTimes(1);
   });
 
   it("offers Retry only for failed or unknown outcomes, never pending", async () => {
@@ -990,7 +974,7 @@ describe("DayPlanReview view", () => {
     expect(container.textContent).toContain("Partially applied");
     expect(container.textContent).not.toMatch(/nothing changed/i);
     const apply = [...container.querySelectorAll("button")].find(
-      (node) => node.textContent === "Apply changes"
+      (node) => node.textContent === "Save changes"
     );
     expect(apply?.disabled).toBe(true);
     expect(container.textContent).toContain("calendar is unavailable");

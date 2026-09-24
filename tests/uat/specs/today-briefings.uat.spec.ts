@@ -363,17 +363,16 @@ test("T22 assembled daytime journey: briefing, review, Accept All, policy", asyn
   // from its own footer button, which swaps the dialogs by design.
   await reader.getByRole("button", { name: "Review task blocks" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
   await dialog.getByLabel("T22 call vendor: placement").selectOption("add");
   await dialog.getByLabel("T22 call vendor: start time").fill("11:30");
-  await dialog.getByRole("button", { name: "Preview changes" }).click();
   await expect(dialog).toContainText("Add T22 call vendor at 11:30");
-  await expect(dialog.getByRole("button", { name: "Apply changes" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Save changes" })).toBeEnabled();
   const applyResponse = page.waitForResponse(
     (response) =>
       response.url().includes("/api/calendar/day-plans/") && response.url().endsWith("/apply")
   );
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   expect((await applyResponse).status()).toBe(200);
   await expect(dialog).toContainText(/Applied|pending/);
 
@@ -382,9 +381,8 @@ test("T22 assembled daytime journey: briefing, review, Accept All, policy", asyn
   // the provider callback is simulated below, as the T20 probe does.
   await dialog.getByLabel("T22 assemble report: placement").selectOption("move");
   await dialog.getByLabel("T22 assemble report: start time").fill("15:00");
-  await dialog.getByRole("button", { name: "Preview changes" }).click();
   await expect(dialog).toContainText("Move T22 assemble report");
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   const confirm = dialog.locator("section.plan-review__confirm");
   await expect(dialog).toContainText(/Applied|pending|Confirm calendar changes/);
   if ((await confirm.count()) > 0 && (await confirm.isVisible())) {
@@ -451,7 +449,7 @@ test("T22 assembled daytime journey: briefing, review, Accept All, policy", asyn
   // 4. Review from the reader footer agrees; close returns focus.
   await reread.getByRole("button", { name: "Review task blocks" }).click();
   const review = page.getByRole("dialog");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
   await expect(review).toContainText("On the calendar");
   // The reader-hosted review words pending blocks as "Change pending".
   await expect(review).toContainText("Change pending");
@@ -502,7 +500,7 @@ test("T22 assembled daytime journey: briefing, review, Accept All, policy", asyn
   const keyboardOpener = page.getByRole("button", { name: "Review task blocks" }).first();
   await keyboardOpener.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
   await page.getByRole("dialog").getByRole("button", { name: "Back to Today" }).click();
   await expect(keyboardOpener).toBeFocused();
   const finalRead = await json(
@@ -619,13 +617,13 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel("Lighter day")
     .click();
-  await planDialog.getByLabel("Main priority").selectOption(taskId);
+  await planDialog.getByLabel("The one thing that matters").selectOption(taskId);
   for (const width of [320, 768]) {
     await page.setViewportSize({ width, height: 900 });
     await checkLayout(page, width);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await planDialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+  await planDialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(planDialog).toContainText("Saved. The blocks are proposed for the morning.");
   const creates = requests.filter(
     (r) => r.method === "POST" && r.url.endsWith("/api/calendar/day-plans")
@@ -644,7 +642,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await planDialog.getByRole("button", { name: "Back to Today" }).click();
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeFocused();
 
-  await page.locator("button.evening-prep__btn").filter({ hasText: "Chat with Moss" }).click();
+  await page.locator("button.ev-tomorrow__chat").filter({ hasText: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(drawer).toBeVisible();
   expect(
@@ -655,11 +653,11 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const reopened = page.getByRole("dialog");
   await expect(reopened).toContainText("meeting happened, follow-up not sent");
-  await expect(reopened.getByLabel("Main priority")).toHaveValue(taskId);
+  await expect(reopened.getByLabel("The one thing that matters")).toHaveValue(taskId);
   await expect(
     reopened.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day")
   ).toBeChecked();
-  await reopened.getByRole("button", { name: "Back to Today" }).click();
+  await reopened.getByRole("button", { name: "Leave for now" }).click();
 
   const morning = await createBriefingRun(page, "morning", "T22 next morning", [
     "tasks.list",

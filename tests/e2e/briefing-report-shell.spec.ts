@@ -101,10 +101,10 @@ test("report tabs move focus by keyboard and hand off to review", async ({ page 
   await expect(dialog.getByRole("tab", { name: "Review task blocks" })).toBeFocused();
 
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
 
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Make the plan fit." })).toBeHidden();
 });
 
 test("phone disclosure toggles the schedule without sideways scroll", async ({ page }) => {
@@ -120,7 +120,8 @@ test("phone disclosure toggles the schedule without sideways scroll", async ({ p
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(dialog.getByText("Your day, in order.")).toBeVisible();
+  // The open phone schedule shows its rows without the rail heading, as in the prototype.
+  await expect(dialog.locator(".brief-reader__rail")).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     "no sideways scroll at 375px with the schedule open"
@@ -151,12 +152,20 @@ test("phone disclosure toggles the schedule without sideways scroll", async ({ p
     const backRect = back.getBoundingClientRect();
     const actionsRect = actions.getBoundingClientRect();
     return {
+      lone: actions.children.length === 1,
       columns: getComputedStyle(bar).gridTemplateColumns.split(" ").length,
-      stacked: backRect.bottom <= actionsRect.top || backRect.top >= actionsRect.bottom
+      stacked: backRect.bottom <= actionsRect.top || backRect.top >= actionsRect.bottom,
+      sideBySide: backRect.right <= actionsRect.left
     };
   });
-  expect(footer.columns, "report footer is one column at 320px").toBe(1);
-  expect(footer.stacked, "footer zones stack at 320px").toBe(true);
+  // A lone action shares one row with Back, as in the prototype; more actions stack.
+  if (footer.lone) {
+    expect(footer.columns, "report footer is two columns at 320px").toBe(2);
+    expect(footer.sideBySide, "Back and the lone action sit side by side at 320px").toBe(true);
+  } else {
+    expect(footer.columns, "report footer is one column at 320px").toBe(1);
+    expect(footer.stacked, "footer zones stack at 320px").toBe(true);
+  }
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();

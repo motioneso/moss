@@ -596,6 +596,7 @@ describe("useEveningPlanning", () => {
       },
       notice: null,
       approval: null,
+      expectOwnWrite: vi.fn(),
       apply: vi.fn(),
       confirm: vi.fn(),
       acceptAllAdditions: vi.fn(),
@@ -608,6 +609,33 @@ describe("useEveningPlanning", () => {
     });
     expect(ok).toBe(true);
     expect(m.current().status).toBe("Saved. The blocks are proposed for the morning.");
+  });
+  it("marks its own draft save so the review does not call it a stale plan", async () => {
+    const expectOwnWrite = vi.fn();
+    const stub = {
+      revision: 5,
+      choiceFor: defaultChoiceFor,
+      touchedIds: [],
+      outcomes: {},
+      notice: null,
+      approval: null,
+      expectOwnWrite,
+      apply: vi.fn(),
+      confirm: vi.fn(),
+      acceptAllAdditions: vi.fn(),
+      dismissApproval: vi.fn()
+    } as unknown as DayPlanReviewController;
+    const m = await mount(tomorrowPlan(), { stub });
+    await act(async () => {
+      await m.current().save();
+    });
+    expect(expectOwnWrite).toHaveBeenCalledTimes(1);
+
+    draftMode = "conflict";
+    await act(async () => {
+      await m.current().save();
+    });
+    expect(expectOwnWrite).toHaveBeenCalledTimes(1);
   });
   it("sends one block per task and drops replaced proposals", async () => {
     const m = await mount(tomorrowPlan());
@@ -653,6 +681,7 @@ describe("useEveningPlanning", () => {
       },
       notice: null,
       approval: null,
+      expectOwnWrite: vi.fn(),
       apply: vi.fn(),
       confirm: vi.fn(),
       acceptAllAdditions: vi.fn(),

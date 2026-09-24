@@ -133,7 +133,7 @@ describe("Today morning briefing prose", () => {
       ]
     });
 
-    expect(html).toContain("today-hero--evening");
+    expect(html).toContain('data-mode="evening"');
     expect(html).toContain("The team shipped the launch.");
     expect(html).toContain("Tomorrow brings customer calls.");
     expect(html).toContain("Prepared at");
@@ -302,8 +302,8 @@ describe("Today morning briefing prose", () => {
     const needsYou = html.indexOf('id="needs-you"');
     const widgets = html.indexOf('id="widgets"');
     expect(startHere).toBeGreaterThan(-1);
-    expect(schedule).toBeGreaterThan(startHere);
-    expect(needsYou).toBeGreaterThan(schedule);
+    expect(schedule).toBeLessThan(startHere);
+    expect(needsYou).toBeGreaterThan(startHere);
     expect(widgets).toBeGreaterThan(schedule);
     expect(html.indexOf("Write the draft")).toBeGreaterThan(schedule);
 

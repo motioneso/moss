@@ -11,6 +11,10 @@ final class StatusCardUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments += ["-TMHostCardInWindow", "YES"]
         app.launch()
+        // The first launch after a fresh build can take well over ten seconds to draw the card;
+        // wait for it once here so no test's own short timeout races a cold start. The harness
+        // now starts running every launch (#2646), so Pause All is what appears.
+        XCTAssertTrue(app.buttons["Pause All"].waitForExistence(timeout: 30), "the card never appeared running")
     }
 
     override func tearDown() {
@@ -63,8 +67,45 @@ final class StatusCardUITests: XCTestCase {
         let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.click()
-        for section in ["Connection", "This Mac", "Focus", "Permissions", "Updates"] {
+        for section in ["Connection", "This Mac", "Focus", "Backtrack", "Permissions", "Updates"] {
             XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 5), "missing \(section)")
         }
+    }
+
+    /// Backtrack plan §4.5 UI: the menu row appears only once Backtrack is turned on through its
+    /// consent sheet, and during Pause All it is greyed and keeps its position. The harness's
+    /// Backtrack reads nothing (its capture always fails), so this drives the UI only.
+    func testBacktrackRowNeedsConsentAndKeepsItsPositionDuringPauseAll() {
+        let backtrackSwitch = app.switches["switch.Backtrack"]
+        XCTAssertFalse(backtrackSwitch.exists, "no row before Backtrack is turned on")
+
+        let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.click()
+        let section = app.staticTexts["Backtrack"]
+        XCTAssertTrue(section.waitForExistence(timeout: 5))
+        section.click()
+        let enable = app.descendants(matching: .any)["backtrack.enabled"].firstMatch
+        XCTAssertTrue(enable.waitForExistence(timeout: 5))
+        enable.click()
+        let turnOn = app.buttons["backtrack.consent.turnOn"]
+        XCTAssertTrue(turnOn.waitForExistence(timeout: 5), "the consent sheet appears first")
+        XCTAssertFalse(backtrackSwitch.exists, "still no row until consent")
+        turnOn.click()
+        // Both harness windows open at the top-left, so Settings covers the card: close it before
+        // driving the card again.
+        let settingsWindow = app.windows["Settings"]
+        if settingsWindow.exists { settingsWindow.buttons[XCUIIdentifierCloseWindow].click() }
+
+        XCTAssertTrue(backtrackSwitch.waitForExistence(timeout: 5), "the row appears once turned on")
+        XCTAssertTrue(isOn(backtrackSwitch))
+        XCTAssertTrue(pauseAll.waitForExistence(timeout: 5))
+        pauseAll.click()
+        XCTAssertTrue(resumeAll.waitForExistence(timeout: 5))
+        XCTAssertFalse(backtrackSwitch.isEnabled)
+        XCTAssertTrue(isOn(backtrackSwitch), "Pause All keeps its position")
+        resumeAll.click()
+        XCTAssertTrue(pauseAll.waitForExistence(timeout: 5))
+        XCTAssertTrue(backtrackSwitch.isEnabled)
     }
 }

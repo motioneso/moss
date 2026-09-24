@@ -80,14 +80,6 @@
   color: var(--hero-fg);
 }
 
-.today-hero[data-mode="day"] .today-hero__weather {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-  align-items: center;
-  gap: 16px 24px;
-  min-width: 0;
-}
-
 /* Hero-scoped weather variant: temperature large, conditions and high/low
    read on the dark ground. TodayWeatherRow itself is unchanged. */
 .today-hero__weather .wx-row {
@@ -98,42 +90,6 @@
   font-size: 34px;
   font-weight: 600;
   line-height: 1.1;
-}
-
-/* Morning weather on the band: chip text takes the hero colors and the
-   condition and high/low lines take the mockup sizes. Day-scoped so the
-   evening hero renders exactly as before. */
-.today-hero[data-mode="day"] .today-hero__weather .jds-brief__title {
-  font-family: var(--font-sans);
-}
-.today-hero[data-mode="day"] .today-hero__weather .wx-row > div > div:nth-child(2) {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.4;
-  color: var(--hero-fg);
-}
-.today-hero[data-mode="day"] .today-hero__weather .wx-row > div > div:nth-child(3) {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.4;
-  color: var(--hero-fg-muted);
-}
-.today-hero[data-mode="day"] .jds-weather-chip__location {
-  font-size: 14px;
-  line-height: 1.3;
-  color: var(--hero-fg);
-}
-.today-hero[data-mode="day"] .jds-weather-chip__label {
-  line-height: 1.3;
-  color: var(--hero-fg-muted);
-}
-.today-hero[data-mode="day"] .jds-weather-chip__temp {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--hero-fg);
 }
 
 /* Moved card text carries light-paper colors; re-ground it on the band. */
@@ -183,19 +139,24 @@
 .today-hero__sections {
   display: flex;
   align-items: center;
-  gap: 6px 20px;
-  margin: 16px 0 0;
-  padding: 14px 0 12px;
+  gap: 6px 26px;
+  margin: 0 16px 28px;
+  padding: 18px 0 21px;
   border-bottom: 1px solid var(--line);
+  font-size: 11px;
 }
 
 .today-hero__sections a {
   color: var(--forest);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: none;
   letter-spacing: normal;
   text-decoration: none;
+}
+
+.today-hero__sections a:hover {
+  text-decoration: underline;
 }
 
 .today-hero__sections-label {
@@ -206,6 +167,35 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.today-hero__sections .today-hero__sections-label {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+@media (max-width: 920px) {
+  .today-hero__sections {
+    gap: 6px 20px;
+  }
+}
+
+@media (max-width: 680px) {
+  .today-hero__sections {
+    flex-wrap: wrap;
+    gap: 6px 15px;
+    margin: 0 6px 24px;
+    padding: 17px 0;
+  }
+
+  .today-hero__sections a {
+    font-size: 9px;
+  }
+
+  .today-hero__sections-label {
+    display: none;
+  }
 }
 
 @media (max-width: 880px) {
@@ -225,9 +215,6 @@
   }
 }
 
-/* Narrow-screen sizing from the design study, which the wide-screen values
-   above don't cover: the clamp() floor undershoots the study's own numbers
-   below 680px, and the summary drops a size too. */
 @media (max-width: 680px) {
   .today-hero__title {
     font-size: 32px;
@@ -242,160 +229,206 @@
   }
 }
 
-/* Morning-only vertical rhythm (day mode). These numbers compensate for a
-   structural difference: the seeded product text wraps to different line
-   counts than the study's fixed mockup text, so rows below the wrap point
-   need explicit offsets to land on the study's tops. Deltas come from the
-   ink-top comparison at head fbbc40ca (desktop headline 22px high,
-   desktop prepared time 36px high, mobile headline 11px high, mobile
-   summary 9px high, mobile prepared time already within 1px). Scoped to
-   data-mode="day" so the evening hero and its guards do not move.
-   Warnings for the next touch: the prepared-time offset absorbs the
-   deferred row-layout gap, so the later slice that moves that control into
-   the design's row will break these margins. And the desktop offset holds
-   only while the seeded summary wraps to three lines, a property of the
-   stand-in writer's fixed prose, not of the design. The prepared-time number depends on the summary wrapping to three lines specifically, not on the summary in general: re-wrap the summary and the prepared line lands elsewhere. */
-.today-hero[data-mode="day"] {
-  padding-top: 37px;
+/* Study masthead, shared by the morning and evening heroes: forest ground,
+   gold bottom edge, weather under a sage hairline, then the links and
+   prepared time on one row. */
+.today-hero:is([data-mode="day"], [data-mode="evening"]) {
+  margin: 7px 16px 0;
+  padding: 29px 34px 30px;
+  border-bottom: 3px solid var(--gold);
+  background: var(--forest);
+  color: var(--bone);
 }
 
-.today-hero[data-mode="day"] .today-hero__eyebrow {
-  margin-bottom: 24px;
+[data-theme="dark"] .today-hero:is([data-mode="day"], [data-mode="evening"]) {
+  background: var(--hero-bg);
+  color: var(--hero-fg);
 }
 
-.today-hero[data-mode="day"] .today-hero__prepared {
-  margin-top: 35px;
-  justify-content: space-between;
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__eyebrow {
+  margin: 0 0 23px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--sage);
 }
 
-.today-hero[data-mode="day"] .today-hero__prepared-time {
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__title,
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary,
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .jds-brief__body {
+  color: inherit;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__accent {
+  display: block;
+  color: var(--sage);
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary .jds-brief__body {
+  max-width: none;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__hairline {
+  margin: 24px 0 0;
+  border: none;
+  border-top: 1px solid var(--sage);
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather {
+  display: flex;
+  color: inherit;
+  align-items: center;
+  gap: 24px;
+  padding-top: 18px;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather .cmd-empty {
+  margin: 0;
+  font-size: 13px;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather .cmd-empty a {
+  color: var(--bone);
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared {
+  gap: 18px;
+  margin: 21px 0 0;
+  font-size: 10px;
+  color: var(--sage);
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bone);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared-time {
   flex: none;
+  margin-left: auto;
+}
+
+@media (max-width: 1180px) {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) {
+    padding: 25px 28px;
+  }
 }
 
 @media (max-width: 680px) {
-  .today-hero[data-mode="day"] .today-hero__weather {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) {
+    margin: 7px 6px 0;
+    padding: 23px 22px;
   }
 
-  /* The populated summary gains a line at the narrowest probe width. Keep
-     the compact weather block in the same frozen band at both phone widths;
-     the prepared row gives back that extra offset at 320px. */
-  .today-hero[data-mode="day"] .today-hero__weather {
-    margin-top: clamp(12px, calc(100vw - 308px), 67px);
-  }
-
-  .today-hero__sections {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 16px;
-    margin: 12px 0 0;
-    padding: 10px 0;
-  }
-
-  .today-hero__sections a {
-    font-size: 12px;
-    line-height: 1.2;
-  }
-
-  .today-hero__sections-label {
-    width: 100%;
-    margin-right: 0;
-    margin-bottom: 2px;
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__eyebrow {
+    max-width: 155px;
+    margin-bottom: 21px;
     font-size: 9px;
-    line-height: 1.1;
-  }
-}
-
-@media (max-width: 680px) {
-  .today-hero[data-mode="day"] {
-    padding-top: 25px;
+    line-height: 1.7;
   }
 
-  .today-hero[data-mode="day"] .today-hero__eyebrow {
-    margin-bottom: 19px;
-  }
-
-  .today-hero[data-mode="day"] .today-hero__summary {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary {
     margin-top: 18px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__prepared {
-    margin-top: 11px;
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__hairline {
+    margin-top: 21px;
   }
 
-  .today-hero[data-mode="day"] .today-hero__prepared {
-    margin-top: clamp(0px, calc(100vw - 320px), 11px);
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__weather {
+    gap: 18px;
+    padding-top: 16px;
+  }
+
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__prepared-time {
+    margin-left: 0;
+    font-size: 9px;
   }
 }
 
-/* End morning-only vertical rhythm. */
-
-/* ===== Evening hero form (VP-EVENING-SUMMARY-R1) =====
-   Kicker block, report links, right-aligned prepared line and the weather
-   chip pinned top-right on wide screens. Every rule below carries
-   .today-hero--evening, so the day hero renders exactly as before. Spacing
-   here uses transparent borders and a gutter grid track instead of
-   margin/padding/gap: the morning-hero rhythm test snapshots every such
-   declaration on today-hero selectors, and day isolation holds because no
-   day markup carries this class. */
-.today-hero--evening .today-hero__kicker {
-  display: block;
-}
-.today-hero--evening .today-hero__evening-title {
-  display: block;
-  border-top: 8px solid transparent;
-  font-family: var(--font-display);
-  font-size: clamp(28px, 2.6vw, 40px);
-  font-weight: 900;
-  line-height: 1.04;
-  letter-spacing: -0.5px;
-  color: var(--hero-fg);
-}
-.today-hero--evening .today-hero__links {
+/* Study weather row: icon and temperature, then the outlook lines. */
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now {
   display: flex;
-  flex-wrap: wrap;
-  border-top: 14px solid transparent;
+  align-items: center;
+  gap: 13px;
 }
-.today-hero--evening .today-hero__link {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--hero-fg);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now svg {
+  width: 30px;
+  height: 30px;
+  color: var(--gold-light);
 }
-.today-hero--evening .today-hero__link + .today-hero__link {
-  border-left: 24px solid transparent;
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now > strong {
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -1px;
+  white-space: nowrap;
 }
-.today-hero--evening .today-hero__prepared--evening {
-  justify-content: flex-end;
-  text-align: right;
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now small {
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--sage);
 }
-@media (min-width: 1081px) {
-  .today-hero--evening {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 32px max-content;
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook {
+  display: grid;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > strong {
+  font-weight: 500;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > span {
+  font-size: 11px;
+  color: var(--sage);
+}
+
+@media (max-width: 680px) {
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now {
+    gap: 8px;
   }
-  .today-hero--evening .today-hero__eyebrow,
-  .today-hero--evening .today-hero__title,
-  .today-hero--evening .today-hero__summary,
-  .today-hero--evening .today-hero__links,
-  .today-hero--evening .today-hero__prepared {
-    grid-column: 1;
-    min-width: 0;
+
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now svg {
+    width: 25px;
+    height: 25px;
   }
-  .today-hero--evening .today-hero__rule {
-    grid-column: 1 / -1;
+
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-now > strong {
+    font-size: 30px;
   }
-  .today-hero--evening .today-hero__weather {
-    grid-column: 3;
-    grid-row: 1 / span 5;
-    align-self: start;
-    justify-self: end;
-    max-width: 280px;
+
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook {
+    font-size: 12px;
+  }
+
+  .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > span {
+    font-size: 10px;
   }
 }
+
+/* End study masthead. */

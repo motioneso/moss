@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 import type {
   CalendarEventDto,
@@ -10,13 +9,20 @@ import type {
 
 import { Button } from "@moss/ui";
 
-import { getCalendarBriefingSettings } from "../api/client.js";
 import { DayPlanSection } from "./day-plan.js";
 import { buildDayItems } from "./day-plan-view-model.js";
-import { ACCEPT_ALL_LABEL, timeLabel } from "./today-labels.js";
+import {
+  ACCEPT_ALL_LABEL,
+  REVIEW_NO_CHANGES_SELECTED,
+  REVIEW_TITLE,
+  REVIEW_WHAT_WILL_CHANGE_HEADING,
+  REVIEW_WITHOUT_TIME_BLOCK_HEADING,
+  timeLabel
+} from "./today-labels.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
   acceptAllSelectionFor,
+  draftBlocksFor,
   effectivePending,
   hasOtherPendingEdits,
   previewSelectionFor
@@ -53,13 +59,7 @@ function approvalTitle(
 /** Individual review of the plan's task blocks inside the briefing dialog shell. */
 export function DayPlanReview(props: DayPlanReviewProps) {
   const { controller, plan } = props;
-  const settingsQuery = useQuery({
-    queryKey: ["calendar", "briefing-settings"],
-    queryFn: getCalendarBriefingSettings,
-    retry: false
-  });
-  const automatic = settingsQuery.data?.settings?.timeBlockMode === "auto";
-  const title = automatic ? "Adjust task blocks" : "Review task blocks";
+  const title = REVIEW_TITLE;
   const savedLabels = useMemo(() => {
     const items = buildDayItems({
       plan,
@@ -88,11 +88,37 @@ export function DayPlanReview(props: DayPlanReviewProps) {
   const acceptSelection = acceptBlocked
     ? []
     : acceptAllSelectionFor(plan, controller.choiceFor, controller.touchedIds);
-  const conflicted = new Set((controller.preview?.conflicts ?? []).map((e) => e.blockId));
-  const raw =
-    !controller.preview || controller.stalePreview ? [] : controller.preview.eligibleBlockIds;
-  const eligible = raw.filter((id) => !conflicted.has(id));
   const unavailableCalendar = controller.preview?.calendarAvailability === "unavailable";
+  const displayPlan = useMemo(() => {
+    const drafts = new Map(
+      draftBlocksFor(plan, controller.choiceFor).map((entry) => [entry.id, entry.pendingChange])
+    );
+    return {
+      ...plan,
+      blocks: plan.blocks.map((block) =>
+        drafts.has(block.id) ? { ...block, pendingChange: drafts.get(block.id) ?? null } : block
+      )
+    };
+  }, [plan, controller.choiceFor]);
+  const timedBlocks = displayPlan.blocks.filter(
+    (block) =>
+      (block.pendingChange !== null &&
+        block.pendingChange.kind !== "remove" &&
+        "startsAt" in block.pendingChange &&
+        block.pendingChange.startsAt != null) ||
+      block.actualPlacement?.startsAt != null
+  );
+  const untimedBlocks = displayPlan.blocks.filter(
+    (block) =>
+      !(
+        (block.pendingChange !== null &&
+          block.pendingChange.kind !== "remove" &&
+          "startsAt" in block.pendingChange &&
+          block.pendingChange.startsAt != null) ||
+        block.actualPlacement?.startsAt != null
+      )
+  );
+  const saveDisabled = controller.busy || selectedCount === 0 || unavailableCalendar;
   const items = Object.values(controller.outcomes);
   const applied = items.filter((item) => item.outcome === "applied").length;
   const failed = items.filter((item) => item.outcome === "failed").length;
@@ -106,15 +132,28 @@ export function DayPlanReview(props: DayPlanReviewProps) {
       title={title}
       opener={props.opener}
       onClose={props.onClose}
-      reviewTabLabel={title}
+      reviewTabLabel="Review task blocks"
       onSelectReviewTab={() => undefined}
       selectedTab="review"
       onSelectBriefingTab={props.onSelectBriefingTab}
       jumpLinks={null}
       report={
-        <>
+        <div data-briefing-surface="review">
           <h3 className="brief-reader__headline">Make the plan fit.</h3>
-          <p>Meetings, lunch, and travel stay in place. Adjust the task blocks around them.</p>
+          <p className="plan-review__lede">
+            Meetings, lunch, and travel stay in place. Adjust the task blocks around them.
+          </p>
+          {acceptSelection.length > 0 ? (
+            <div className="plan-review__accept">
+              <Button
+                variant="primary"
+                disabled={controller.busy}
+                onClick={() => void controller.acceptAllAdditions()}
+              >
+                {ACCEPT_ALL_LABEL}
+              </Button>
+            </div>
+          ) : null}
           <ul className="plan-review__rows">
             {plan.blocks.map((block) => {
               const task =
@@ -137,6 +176,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
                   plan={plan}
                   locale={props.locale}
                   onOpenTask={props.onOpenTask}
+                  calendarTimeField
                 />
               );
             })}
@@ -151,9 +191,9 @@ export function DayPlanReview(props: DayPlanReviewProps) {
               The calendar is unavailable, so nothing can be applied until it returns.
             </p>
           ) : null}
-          {changes.length > 0 ? (
-            <div className="plan-review__changes">
-              <h3 className="plan-review__changes-title">Changes</h3>
+          <div className="plan-review__changes">
+            <h3 className="plan-review__changes-title">{REVIEW_WHAT_WILL_CHANGE_HEADING}</h3>
+            {changes.length > 0 ? (
               <ul>
                 {changes.map(({ block, title: name, change }) => (
                   <li key={block.id}>
@@ -165,8 +205,10 @@ export function DayPlanReview(props: DayPlanReviewProps) {
                   </li>
                 ))}
               </ul>
-            </div>
-          ) : null}
+            ) : (
+              <p className="plan-review__empty">{REVIEW_NO_CHANGES_SELECTED}</p>
+            )}
+          </div>
           {controller.approval ? (
             <section className="plan-review__confirm" aria-labelledby="plan-review-confirm">
               <h3 id="plan-review-confirm">Confirm calendar changes</h3>
@@ -218,67 +260,58 @@ export function DayPlanReview(props: DayPlanReviewProps) {
               {controller.notice}
             </p>
           ) : null}
-        </>
+        </div>
       }
       railDateInput={props.now}
       locale={props.locale}
       railHeading="Your day, in order."
       rail={
-        <DayPlanSection
-          dayPlan={{
-            plan,
-            tasks: [...props.tasks],
-            unavailableTaskIds: [...props.unavailableTaskIds],
-            sourceRun: null,
-            sourceRunUnavailable: false
-          }}
-          events={props.events}
-          locale={props.locale}
-          now={props.now}
-          loading={false}
-          error={false}
-          calendarError={false}
-          onOpenTask={props.onOpenTask}
-          editorial
-        />
+        <div className="plan-review__rail" data-briefing-surface="review">
+          <DayPlanSection
+            showEditorialHeading={false}
+            proposedCaption="short"
+            snapshot
+            dayPlan={{
+              plan: { ...displayPlan, blocks: timedBlocks },
+              tasks: [...props.tasks],
+              unavailableTaskIds: [...props.unavailableTaskIds],
+              sourceRun: null,
+              sourceRunUnavailable: false
+            }}
+            events={props.events}
+            locale={props.locale}
+            now={props.now}
+            loading={false}
+            error={false}
+            calendarError={false}
+            onOpenTask={props.onOpenTask}
+            editorial
+          />
+          {untimedBlocks.length > 0 ? (
+            <div className="plan-review__without">
+              <h4 className="plan-review__without-title">{REVIEW_WITHOUT_TIME_BLOCK_HEADING}</h4>
+              <ul>
+                {untimedBlocks.map((block) => (
+                  <li key={block.id}>{rowTitle(block, props.tasks)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
       }
       footerBack={
-        <Button variant="secondary" onClick={props.onClose}>
+        <Button variant="quiet" onClick={props.onClose}>
           Back to Today
         </Button>
       }
       footerActions={
-        <>
-          <Button
-            variant="secondary"
-            disabled={controller.busy || selectedCount === 0}
-            onClick={() => void controller.runPreview()}
-          >
-            Preview changes
-          </Button>
-          <Button
-            variant="primary"
-            disabled={
-              controller.busy ||
-              controller.preview === null ||
-              controller.stalePreview ||
-              eligible.length === 0 ||
-              unavailableCalendar
-            }
-            onClick={() => void controller.apply(eligible)}
-          >
-            Apply changes
-          </Button>
-          {acceptSelection.length > 0 ? (
-            <Button
-              variant="primary"
-              disabled={controller.busy}
-              onClick={() => void controller.acceptAllAdditions()}
-            >
-              {ACCEPT_ALL_LABEL}
-            </Button>
-          ) : null}
-        </>
+        <Button
+          variant="primary"
+          disabled={saveDisabled}
+          onClick={() => void controller.saveChanges()}
+        >
+          Save changes
+        </Button>
       }
     />
   );

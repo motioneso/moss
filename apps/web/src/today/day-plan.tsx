@@ -7,7 +7,7 @@ import { Button } from "@moss/ui";
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import { buildDayItems } from "./day-plan-view-model.js";
-import { durationText, TimelineLegend, TimelineRow } from "./today-timeline.js";
+import { durationText, SnapshotRow, TimelineLegend, TimelineRow } from "./today-timeline.js";
 import type { DayItem } from "./day-plan-view-model.js";
 
 export interface DayPlanSectionProps {
@@ -27,12 +27,20 @@ export interface DayPlanSectionProps {
   readonly showEditorialHeading?: boolean;
   readonly dateline?: string;
   readonly targetDayKey?: string;
+  /** Today page layout: plan status text in the note and the legend above
+      the timeline. Dialogs leave it unset. */
+  readonly todayLayout?: boolean;
   /** Forwarded to buildDayItems. Only the morning reader's rail passes
       this; every other caller leaves it unset. */
   readonly proposedCaption?: "short";
+  /** Morning reader rail: compact snapshot rows and no legend. Needs editorial. */
+  readonly snapshot?: boolean;
 }
 
-function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void }) {
+function ReviewButton(props: {
+  readonly onReview: (anchor: HTMLElement) => void;
+  readonly solid?: boolean;
+}) {
   const settingsQuery = useQuery({
     queryKey: ["calendar", "briefing-settings"],
     queryFn: getCalendarBriefingSettings,
@@ -43,7 +51,10 @@ function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void 
       ? "Adjust task blocks"
       : "Review task blocks";
   return (
-    <Button variant="secondary" onClick={(event) => props.onReview(event.currentTarget)}>
+    <Button
+      variant={props.solid === true ? "primary" : "secondary"}
+      onClick={(event) => props.onReview(event.currentTarget)}
+    >
       {label}
     </Button>
   );
@@ -54,8 +65,10 @@ function DayItemRow(props: {
   readonly locale: LocaleSettingsDto;
   readonly onOpenTask: (taskId: string) => void;
   readonly editorial?: boolean;
+  readonly snapshot?: boolean;
 }) {
   const { item } = props;
+  if (props.snapshot === true) return <SnapshotRow {...props} />;
   if (props.editorial === true) return <TimelineRow {...props} />;
   if (item.eventId !== null) {
     return (
@@ -160,7 +173,12 @@ function SectionHead(props: {
 /** Today schedule: the saved day plan merged with today's calendar events. */
 export function DayPlanSection(props: DayPlanSectionProps) {
   const editorial = props.editorial === true;
-  const sectionClass = editorial ? "jds-brief jds-brief--timeline" : "jds-brief";
+  const snapshot = editorial && props.snapshot === true;
+  const sectionClass = snapshot
+    ? "jds-brief brief-snapshot"
+    : editorial
+      ? "jds-brief jds-brief--timeline"
+      : "jds-brief";
   if (props.loading) {
     if (props.events.length === 0) {
       return (
@@ -203,10 +221,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
               locale={props.locale}
               onOpenTask={props.onOpenTask}
               editorial={editorial}
+              snapshot={snapshot}
             />
           ))}
         </div>
-        {editorial ? <TimelineLegend /> : null}
+        {editorial && !snapshot ? <TimelineLegend /> : null}
       </section>
     );
   }
@@ -250,6 +269,23 @@ export function DayPlanSection(props: DayPlanSectionProps) {
     </p>
   ) : null;
   if (editorial) {
+    const today = props.todayLayout === true;
+    const proposed = items.some((item) => item.state === "proposed" || item.state === "pending");
+    const blockCount = taskBlocks.length;
+    const status =
+      today && showReview ? (
+        proposed ? (
+          <p className="tl-note__text">
+            <strong>Your proposed plan.</strong>{" "}
+            {`${blockCount} task ${blockCount === 1 ? "block fits" : "blocks fit"} around your commitments.`}
+          </p>
+        ) : (
+          <p className="tl-note__text">
+            <strong>Your task blocks are on the calendar.</strong> Moss can adjust its blocks when
+            the day changes.
+          </p>
+        )
+      ) : null;
     return (
       <section className={sectionClass} id="schedule">
         <SectionHead
@@ -259,8 +295,12 @@ export function DayPlanSection(props: DayPlanSectionProps) {
         />
         {showReview || notice ? (
           <div className="tl-note">
-            {showReview ? <ReviewButton onReview={props.onReview!} /> : null}
+            {status}
             {notice}
+            {/* Placed blocks on the Today page need no button, as in the mockup. */}
+            {showReview && !(today && !proposed) ? (
+              <ReviewButton onReview={props.onReview!} solid={today} />
+            ) : null}
           </div>
         ) : null}
         {items.length === 0 ? (
@@ -269,6 +309,7 @@ export function DayPlanSection(props: DayPlanSectionProps) {
           )
         ) : (
           <>
+            {today ? <TimelineLegend proposed={proposed} /> : null}
             <div className="day-list">
               {items.map((item) => (
                 <DayItemRow
@@ -277,10 +318,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
                   locale={props.locale}
                   onOpenTask={props.onOpenTask}
                   editorial
+                  snapshot={snapshot}
                 />
               ))}
             </div>
-            <TimelineLegend />
+            {today || snapshot ? null : <TimelineLegend />}
           </>
         )}
       </section>

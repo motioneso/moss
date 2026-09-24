@@ -787,13 +787,13 @@ export async function waitForRoutePopulated(
     await waitForWeather(page, route, matched, deadlineAt);
   } else {
     await routeVisible(page, ".cmd-wrap", "Evening content", matched);
-    await routeText(page, ".today-hero--evening", "EVENING BRIEFING", "Evening hero", matched);
-    await routeText(page, ".jds-brief", "What happened today", "Evening summary title", matched);
+    await routeText(page, ".today-hero", "EVENING BRIEFING", "Evening hero", matched);
+    await routeText(page, ".ev-recap", "What happened today", "Evening summary title", matched);
     await routeVisible(page, ".jds-brief__body", "Rendered evening summary", matched);
-    await routeVisible(page, ".evening-prep__btn", "Prep for tomorrow action", matched);
+    await routeVisible(page, ".ev-tomorrow__chat", "Prep for tomorrow action", matched);
     for (const [selector, label] of [
       ["main h1", "Evening heading"],
-      [".jds-brief__title", "Evening section title"],
+      [".ev-head__title", "Evening section title"],
       [".jds-brief__body", "Evening body"]
     ] as const) {
       const text = (await page.locator(selector).first().innerText())

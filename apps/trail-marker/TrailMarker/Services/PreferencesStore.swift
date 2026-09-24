@@ -34,6 +34,12 @@ final class PreferencesStore {
         static let focusVisionSource = "focusVisionSource"
         static let focusVisionBaseURL = "focusVisionBaseURL"
         static let focusVisionModel = "focusVisionModel"
+        // Backtrack (plan §4.1). Read only by Debug builds in Phase 1; cleared with the account.
+        static let backtrackEnabled = "backtrackEnabled"
+        /// The consent version the person accepted: 1 is the Debug in-memory preview, 2 (Phase 2b)
+        /// storage in Moss. An upload requires 2, so a Debug opt-in never authorises sending.
+        static let backtrackConsentVersion = "backtrackConsentVersion"
+        static let backtrackSwitchedOff = "backtrackSwitchedOff"
     }
 
     var linkedIdentity: LinkedIdentity? {
@@ -139,6 +145,21 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.focusVisionModel) }
     }
 
+    var backtrackEnabled: Bool {
+        get { defaults.bool(forKey: Key.backtrackEnabled) }
+        set { defaults.set(newValue, forKey: Key.backtrackEnabled) }
+    }
+
+    var backtrackConsentVersion: Int {
+        get { defaults.integer(forKey: Key.backtrackConsentVersion) }
+        set { defaults.set(newValue, forKey: Key.backtrackConsentVersion) }
+    }
+
+    var backtrackSwitchedOff: Bool {
+        get { defaults.bool(forKey: Key.backtrackSwitchedOff) }
+        set { defaults.set(newValue, forKey: Key.backtrackSwitchedOff) }
+    }
+
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
@@ -158,7 +179,8 @@ final class PreferencesStore {
             Key.displayName, Key.pendingDisplayName,
             Key.focusConsent, Key.focusSwitchedOff, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
             Key.focusWatchEntireDesktop,
-            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
+            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel,
+            Key.backtrackEnabled, Key.backtrackConsentVersion, Key.backtrackSwitchedOff
         ] {
             defaults.removeObject(forKey: key)
         }

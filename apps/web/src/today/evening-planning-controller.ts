@@ -170,6 +170,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
         eveningIntent: patch,
         blocks: [...keptRows, ...proposals]
       });
+      review.expectOwnWrite();
       setPlan(saved.plan);
       setSaved(true);
       for (const key of [
@@ -280,6 +281,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
         needsConfirm: review?.approval != null
       }),
     busy,
+    policyMode,
     proposals,
     setNote: (taskId: string, note: string) =>
       setNoteDrafts((prev) => ({ ...prev, [taskId]: note })),

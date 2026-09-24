@@ -219,8 +219,7 @@ describe("TodayPage evening mode", () => {
     });
     const hero = html.slice(0, html.indexOf('<div class="cmd-wrap">'));
 
-    expect(hero).toContain("GOOD EVENING, BEN");
-    expect(hero).toContain("EVENING BRIEFING");
+    expect(hero).toContain("Good evening, Ben / Evening briefing");
     expect(hero).toContain("Read the full evening briefing");
     expect(hero).toContain("What informed this?");
     expect(hero).toContain("Prepared at");

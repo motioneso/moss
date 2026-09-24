@@ -653,7 +653,7 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
     // Both overflow offenders are on the page, otherwise the check below proves
     // nothing about the populated layout.
     await expect(page.locator(".sp-tkgrid article.sp-tk").first()).toBeVisible();
-    await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+    await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `no sideways scroll at ${width}px`
@@ -681,18 +681,18 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
   await page.getByRole("button", { name: "Close" }).first().click();
 
   // Tab order follows the document at phone and desktop widths: the dock comes
-  // before any schedule item, and at desktop the main column follows the rail.
+  // before any schedule item, and at desktop the main column follows the dock.
   for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/today");
     await expect(page.locator(".cmd-wrap")).toBeVisible();
     if (width === 1440) {
-      await expect(page.locator('aside[aria-label="Quick actions and widgets"]')).toBeVisible();
+      await expect(page.locator('section.cmd-dock[aria-label="Quick actions"]')).toBeVisible();
     }
     let medsAt = -1;
     let checkinAt = -1;
     let firstScheduleAt = -1;
-    let lastRailAt = -1;
+    let lastDockAt = -1;
     let firstMainAt = -1;
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press("Tab");
@@ -704,7 +704,7 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
         return {
           name: (el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40),
           inSchedule: el.closest("#schedule") !== null,
-          inRail: el.closest("aside.cmd-aside") !== null,
+          inDock: el.closest(".cmd-dock") !== null,
           inMain: el.closest(".cmd-main") !== null
         };
       });
@@ -712,7 +712,7 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
       if (medsAt === -1 && stop.name.includes("Log medication")) medsAt = i;
       if (checkinAt === -1 && stop.name.includes("Check in")) checkinAt = i;
       if (firstScheduleAt === -1 && stop.inSchedule) firstScheduleAt = i;
-      if (stop.inRail) lastRailAt = i;
+      if (stop.inDock) lastDockAt = i;
       if (firstMainAt === -1 && stop.inMain) firstMainAt = i;
     }
     expect(medsAt, `Log medication is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(
@@ -726,9 +726,9 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
       );
     }
     if (width === 1440) {
-      expect(lastRailAt, "rail has tab stops at 1440px").toBeGreaterThanOrEqual(0);
+      expect(lastDockAt, "dock has tab stops at 1440px").toBeGreaterThanOrEqual(0);
       expect(firstMainAt, "main column has tab stops at 1440px").toBeGreaterThanOrEqual(0);
-      expect(lastRailAt, "main column follows the rail at 1440px").toBeLessThan(firstMainAt);
+      expect(lastDockAt, "main column follows the dock at 1440px").toBeLessThan(firstMainAt);
     }
   }
 });
@@ -736,7 +736,7 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
 const RAIL_NOW = "2026-09-10T16:00:00.000Z";
 const RAIL_DAY = "2026-09-10";
 
-test("today timeline shows the editorial schedule with quick actions first in the rail", async ({
+test("today timeline shows the editorial schedule with quick actions docked above the rail", async ({
   page
 }) => {
   await page.clock.setFixedTime(new Date(RAIL_NOW));
@@ -804,10 +804,10 @@ test("today timeline shows the editorial schedule with quick actions first in th
   const timeline = page.locator(".jds-brief--timeline");
   await expect(timeline).toBeVisible();
   await expect(timeline).toContainText("Your day, laid out");
-  await expect(timeline).toContainText("Moss-planned task");
+  await expect(timeline).toContainText("Proposed task");
 
   const aside = page.locator("aside.cmd-aside");
-  const quickActions = aside.locator(".well");
+  const quickActions = page.locator("section.cmd-dock .well");
   await expect(quickActions).toContainText("Quick actions");
   await expect(quickActions).toContainText("Wellness");
   const nextBlock = aside.locator(".cmd-next");
@@ -821,17 +821,22 @@ test("today timeline shows the editorial schedule with quick actions first in th
 
   const desktop = await page.evaluate(() => {
     const asideEl = document.querySelector("aside.cmd-aside")!;
+    const dockEl = document.querySelector("section.cmd-dock")!;
     const mainEl = document.querySelector("div.cmd-main")!;
     const asideRect = asideEl.getBoundingClientRect();
+    const dockRect = dockEl.getBoundingClientRect();
     const mainRect = mainEl.getBoundingClientRect();
     const committed = document.querySelector(
-      '.jds-brief--timeline .jds-task[data-state="committed"]'
+      '.jds-brief--timeline .jds-task[data-state="committed"] .jds-task__main'
     )!;
     const proposed = document.querySelector(
-      '.jds-brief--timeline .jds-task[data-state="proposed"]'
+      '.jds-brief--timeline .jds-task[data-state="proposed"] .jds-task__main'
     )!;
     return {
       asideLeft: asideRect.left,
+      dockLeft: dockRect.left,
+      dockBottom: dockRect.bottom,
+      asideTop: asideRect.top,
       mainRight: mainRect.right,
       committedEdge: getComputedStyle(committed).borderLeftStyle,
       proposedEdge: getComputedStyle(proposed).borderLeftStyle,
@@ -840,6 +845,8 @@ test("today timeline shows the editorial schedule with quick actions first in th
     };
   });
   expect(desktop.asideLeft).toBeGreaterThanOrEqual(desktop.mainRight);
+  expect(desktop.dockLeft).toBeGreaterThanOrEqual(desktop.mainRight);
+  expect(desktop.dockBottom).toBeLessThanOrEqual(desktop.asideTop);
   expect(desktop.committedEdge).toBe("solid");
   expect(desktop.proposedEdge).toBe("dashed");
   expect(desktop.scrollW).toBe(desktop.innerW);
@@ -848,16 +855,20 @@ test("today timeline shows the editorial schedule with quick actions first in th
   await page.goto("/today");
   await expect(page.locator(".jds-brief--timeline")).toBeVisible();
   const phone = await page.evaluate(() => {
+    const dockEl = document.querySelector("section.cmd-dock")!;
     const asideEl = document.querySelector("aside.cmd-aside")!;
     const mainEl = document.querySelector("div.cmd-main")!;
     return {
-      asideBottom: asideEl.getBoundingClientRect().bottom,
+      dockBottom: dockEl.getBoundingClientRect().bottom,
+      asideTop: asideEl.getBoundingClientRect().top,
       mainTop: mainEl.getBoundingClientRect().top,
+      mainBottom: mainEl.getBoundingClientRect().bottom,
       scrollW: document.documentElement.scrollWidth,
       innerW: window.innerWidth
     };
   });
-  expect(phone.asideBottom).toBeLessThanOrEqual(phone.mainTop);
+  expect(phone.dockBottom).toBeLessThanOrEqual(phone.mainTop);
+  expect(phone.mainBottom).toBeLessThanOrEqual(phone.asideTop);
   expect(phone.scrollW).toBe(phone.innerW);
 });
 

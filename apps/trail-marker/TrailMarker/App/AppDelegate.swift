@@ -20,6 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let focusDebugOverlay = FocusDebugOverlay()
     private var focusDebugBanner: FocusDebugBanner?
     private var cardHarness: CardHarness?
+    /// Backtrack's Phase 1 preview (plan §4): Debug builds only; its one sink is in memory.
+    private let backtrackRing = BacktrackDebugRing()
+    private lazy var backtrack = BacktrackRuntime(
+        connection: connection, permissions: permissions, focus: focus, sink: backtrackRing
+    )
+    private var backtrackTextWindowController: NSWindowController?
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,6 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissions.refresh()
         connection.start()
         focus.start()
+        #if DEBUG
+        backtrack.start()
+        #endif
 
         connection.$state
             .receive(on: DispatchQueue.main)
@@ -64,12 +73,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        #if DEBUG
+        let feature = backtrack.menuState
+        #else
+        let feature = FeatureSwitchState()
+        #endif
         menuBarController = MenuBarController(
             connection: connection,
             focus: focus,
             onShowLastJudgment: { [weak self] in self?.showLastJudgment() },
             onOpenSettings: { [weak self] in self?.showSettings() },
-            onOpenOnboarding: { [weak self] in self?.showOnboarding() }
+            onOpenOnboarding: { [weak self] in self?.showOnboarding() },
+            feature: feature
         )
 
         if case .notLinked = connection.state {
@@ -125,10 +140,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        #if DEBUG
+        let view = SettingsWindow(
+            connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
+            onSetUp: { [weak self] in self?.showOnboarding() }, backtrack: backtrack,
+            onShowBacktrackText: { [weak self] in self?.showBacktrackText() }
+        )
+        #else
         let view = SettingsWindow(
             connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
             onSetUp: { [weak self] in self?.showOnboarding() }
         )
+        #endif
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Trail Marker Settings"
@@ -156,6 +179,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.origin.y = visible.midY - frame.height / 2
         window.setFrame(frame, display: false)
     }
+
+    #if DEBUG
+    private func showBacktrackText() {
+        if let backtrackTextWindowController {
+            backtrackTextWindowController.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let hosting = NSHostingController(rootView: BacktrackTextView(ring: backtrackRing))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Backtrack text (debug build)"
+        window.styleMask = [.titled, .closable, .resizable]
+        window.isReleasedWhenClosed = false
+        place(window, hosting: hosting)
+
+        let controller = NSWindowController(window: window)
+        backtrackTextWindowController = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    #endif
 
     private func showLastJudgment() {
         if let lastJudgmentWindowController {

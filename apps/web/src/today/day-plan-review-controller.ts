@@ -91,6 +91,11 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     for (const key of keys) void queryClient.invalidateQueries({ queryKey: key });
   }, [input.localDay, input.timeZone, input.morningDefinitionId, queryClient]);
 
+  // A caller that writes the plan itself marks the next revision as its own.
+  const expectOwnWrite = useCallback(() => {
+    quietRef.current = true;
+  }, []);
+
   const reloadAfterConflict = useCallback(() => {
     quietRef.current = false;
     void queryClient.invalidateQueries({
@@ -280,6 +285,20 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     );
   }, [approval, attempt, invalidateAfterWrite, runPreview, storeReport]);
 
+  const saveChanges = useCallback(async (): Promise<boolean> => {
+    const plan = snapshotRef.current;
+    if (!plan) return false;
+    const selected = previewSelectionFor(plan, choiceFor, touchedIds);
+    if (selected.length === 0) return false;
+    if (!(await runPreview(selected))) return false;
+    const response = previewRef.current;
+    if (!response) return false;
+    const conflicted = new Set(response.conflicts.map((conflict) => conflict.blockId));
+    const list = response.eligibleBlockIds.filter((id) => !conflicted.has(id));
+    if (list.length === 0) return false;
+    return apply(list);
+  }, [apply, choiceFor, runPreview, touchedIds]);
+
   const acceptAllAdditions = useCallback(async (): Promise<boolean> => {
     const plan = snapshotRef.current;
     if (!plan) return false;
@@ -326,10 +345,12 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     notice,
     busy,
     choiceFor,
+    expectOwnWrite,
     setPlacement,
     dismissApproval,
     setTime,
     runPreview,
+    saveChanges,
     acceptAllAdditions,
     apply,
     confirm,

@@ -17,7 +17,7 @@ describe("web route metadata", () => {
     ];
 
     const sections = buildShellNavigation(modules, []);
-    expect(sections.map((section) => section.key)).toEqual(["__top", "Plan", "You"]);
+    expect(sections.map((section) => section.key)).toEqual(["__top", "Plan", "Your world"]);
     expect(sections[0]?.items.map((item) => item.id)).toEqual(["today"]);
     expect(sections.flatMap((section) => section.items.map((item) => item.id))).toEqual([
       "today",
@@ -38,7 +38,12 @@ describe("web route metadata", () => {
     ];
 
     const sections = buildShellNavigation(modules, []);
-    expect(sections.map((section) => section.key)).toEqual(["__top", "Plan", "You", "__installed"]);
+    expect(sections.map((section) => section.key)).toEqual([
+      "__top",
+      "Plan",
+      "Your world",
+      "__installed"
+    ]);
     const modulesSection = sections.find((section) => section.key === "__installed");
     expect(modulesSection?.label).toBeNull();
     expect(modulesSection?.items).toEqual([
@@ -57,7 +62,7 @@ describe("web route metadata", () => {
       moduleWithNav("wellness", "Fake Wellness", "/m/wellness", "briefcase", 0, true)
     ];
     const sections = buildShellNavigation(modules, []);
-    const you = sections.find((section) => section.key === "You");
+    const you = sections.find((section) => section.key === "Your world");
     const modulesSection = sections.find((section) => section.key === "__installed");
     expect(you).toBeUndefined();
     expect(modulesSection?.items.map((item) => item.id)).toEqual(["wellness"]);

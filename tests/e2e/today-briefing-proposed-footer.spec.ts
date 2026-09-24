@@ -106,7 +106,7 @@ test("proposed-read footer keeps Back to Today clear of the accept status at 375
   await page.goto("/today");
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
 

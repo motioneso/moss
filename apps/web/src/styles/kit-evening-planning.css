@@ -1,7 +1,31 @@
+/* Evening planning dialog. Values follow the approved prototype
+   (evening-plan.css); the head and footer come from the shared report frame. */
+
+/* Dialog size: the prototype frame without its demo strip. */
+.brief-reader--report:has(.evening-plan__grid) {
+  box-sizing: border-box;
+  width: min(1080px, 100%);
+  max-width: none;
+  height: min(846px, calc(100dvh - 48px));
+  max-height: none;
+}
+
+.brief-reader--report:has(.evening-plan__grid) .brief-reader__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Step strip: numbered buttons, the current one underlined. */
 .evening-plan__strip {
   flex: none;
+  box-sizing: border-box;
+  min-height: 54px;
+  padding: 0 30px;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
+  display: flex;
 }
 
 .evening-plan__strip ol {
@@ -9,41 +33,34 @@
   margin: 0;
   padding: 0;
   display: flex;
-  flex-wrap: nowrap;
-  column-gap: 25px;
+  align-items: stretch;
+  gap: 23px;
   min-width: 0;
-  height: 100%;
 }
 
 .evening-plan__strip li {
-  min-width: 0;
-  height: 100%;
   display: flex;
+  min-width: 0;
 }
 
 .evening-plan__strip button {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 100%;
-  min-height: 0;
-  padding: 2px 0 0;
-  background: none;
+  padding: 16px 1px 13px;
   border: 0;
   border-bottom: 3px solid transparent;
+  background: none;
   color: var(--text-muted);
   font-size: 11px;
-  line-height: 1;
+  line-height: 1.5;
   cursor: pointer;
-  overflow-wrap: anywhere;
-  box-sizing: border-box;
 }
 
 .evening-plan__strip button > span {
   font-size: 9px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
 }
 
 .evening-plan__strip button[aria-current="step"] {
@@ -52,22 +69,48 @@
   border-bottom-color: var(--forest);
 }
 
+/* Saved: a plain status bar in place of the step strip. */
+.evening-plan__done-strip {
+  flex: none;
+  box-sizing: border-box;
+  min-height: 54px;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.evening-plan__done-strip > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+/* Conversation beside the tomorrow rail. */
 .evening-plan__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 32px;
+  padding: 28px 30px 34px;
+  align-items: start;
 }
 
 .evening-plan__panel {
   min-width: 0;
+  outline: none;
 }
 
 .evening-plan__speaker {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 23px;
   color: var(--forest);
   font-size: 12px;
   font-weight: 600;
@@ -88,19 +131,21 @@
 
 .evening-plan__speaker small {
   display: block;
+  margin-top: 2px;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 400;
-  margin-top: 2px;
 }
 
 .evening-plan__lede {
+  max-width: 530px;
+  margin: 0 0 16px;
   font-family: var(--font-display);
   font-size: 27px;
+  font-weight: 900;
   line-height: 1.17;
   letter-spacing: -0.8px;
-  margin: 0 0 16px;
-  max-width: 530px;
+  text-wrap: balance;
   overflow-wrap: anywhere;
 }
 
@@ -108,46 +153,634 @@
   outline: none;
 }
 
-.evening-plan__question {
-  font-size: 15px;
-  line-height: 1.5;
-  font-weight: 550;
-  margin: 20px 0 0;
+.evening-plan__prose {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
 
-.evening-plan__section {
-  min-width: 0;
-  margin-bottom: 20px;
-}
-
-.evening-plan__heading {
+.evening-plan__question {
+  margin: 20px 0 0;
+  color: var(--text);
   font-size: 15px;
-  font-weight: 650;
-  margin: 0 0 8px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
-.evening-plan__heading:focus {
-  outline: none;
-}
-
-.evening-plan__rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.evening-plan__row {
+/* Suggested replies: square cards, the chosen one tinted with a forest bar. */
+.evening-plan__choices {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
+  gap: 9px;
+  margin: 18px 0;
   min-width: 0;
+}
+
+.evening-plan__choices--two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.evening-plan__choices--three-up {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.evening-plan__choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 400;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__choice:hover {
+  background: var(--sage-light);
+}
+
+.evening-plan__choice input {
+  flex: none;
+  accent-color: var(--forest);
+}
+
+.evening-plan__choice strong {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.evening-plan__choice[data-state="selected"] {
+  border-color: var(--forest);
+  background: var(--sage-light);
+  box-shadow: inset 3px 0 var(--forest);
+}
+
+.evening-plan__choice[data-state="selected"] strong {
+  color: var(--forest);
+}
+
+.evening-plan__choice .evening-plan__choice-radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.evening-plan__choice:has(.evening-plan__choice-radio:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.evening-plan__choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.evening-plan__choice-text small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* Open commitment: a ruled task card above its choices. */
+/* The eyebrow stays inline so the 15px/1.5 line box sets its spacing, as in the prototype. */
+.evening-plan__task {
+  margin-top: 20px;
+  padding: 16px 0;
+  font-size: 15px;
+  line-height: 1.5;
+  border-top: 2px solid var(--forest);
+  border-bottom: 1px solid var(--line);
+}
+
+.evening-plan__task .evening-plan__eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.evening-plan__task .evening-plan__title {
+  margin: 7px 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.evening-plan__task .evening-plan__state {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Free-text note under every step. */
+.evening-plan__note-form {
+  margin-top: 24px;
+  padding-top: 19px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+
+.evening-plan__note-form > .evening-plan__field-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.evening-plan__note-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.evening-plan__note-composer textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: var(--surface);
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.evening-plan__note-composer textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.evening-plan__note-composer .jds-btn {
+  flex: none;
+  height: auto;
+  min-height: 40px;
+  padding: 11px 12px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.evening-plan__note-form .evening-plan__hint {
+  margin-top: 9px;
+  color: var(--forest);
+  font-size: 10px;
+}
+
+/* Tomorrow rail and its phone disclosure. */
+.evening-plan__railwrap {
+  position: sticky;
+  top: 25px;
+  min-width: 0;
+  padding-left: 25px;
+  border-left: 1px solid var(--line);
+}
+
+.evening-plan__snapshot-heading {
+  padding-bottom: 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  border-bottom: 2px solid var(--forest);
+}
+
+.evening-plan__rail-date {
+  margin: 0;
+  color: var(--forest);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.evening-plan__rail-heading {
+  margin: 8px 0 0;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+.evening-plan__snapshot-intent {
+  margin: 15px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.evening-plan__snapshot-entry {
+  display: grid;
+  grid-template-columns: 59px minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__snapshot-entry > span {
+  padding-top: 2px;
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.evening-plan__snapshot-entry small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.evening-plan__snapshot-entry--draft {
+  grid-template-columns: 52px minmax(0, 1fr);
+  margin-bottom: 8px;
+  padding: 12px 10px;
+  border-top: 0;
+  border-left: 2px solid var(--forest);
+  background: var(--sage-light);
+}
+
+.evening-plan__snapshot-gap {
+  margin: 0 0 5px;
+  padding: 9px 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.evening-plan__snapshot-bottom {
+  display: grid;
+  gap: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--forest);
+  font-size: 11px;
+}
+
+.evening-plan__snapshot-bottom span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.evening-plan__placement {
+  margin-top: 26px;
+  padding-left: 13px;
+  border-left: 2px solid var(--gold);
+  color: var(--forest);
+  font-size: 11px;
+}
+
+.evening-plan__placement p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.evening-plan__mobile-plan {
+  display: none;
+}
+
+/* Footer: the shared report footer; the unsaved line stays for screen readers. */
+.brief-reader--report:has(.evening-plan__grid) .brief-reader__footer {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__footer-back {
+  grid-area: 1 / 1;
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions {
+  grid-area: 1 / 2;
+}
+
+.brief-reader:has(.evening-plan__grid) .evening-plan__status,
+.brief-reader:has(.evening-plan__grid) .evening-plan__notice {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.brief-reader:has(.evening-plan__grid) .evening-plan__status:not(.evening-plan__status--saved) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.evening-plan__status:empty,
+.evening-plan__notice:empty {
+  display: none;
+}
+
+/* Steps 3 and 4: sections, fields and Moss replies. */
+.evening-plan__section {
+  min-width: 0;
+}
+
+.evening-plan__field {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.evening-plan__field label {
+  color: inherit;
+  font: inherit;
+}
+
+.evening-plan__field input,
+.evening-plan__field .jds-select {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 43px;
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.evening-plan__field .jds-select {
+  padding-right: 34px;
+}
+
+/* The start time reads like the prototype's select: chevron, "9:00am", no clock icon. */
+.evening-plan__field input[type="time"] {
+  position: relative;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23282c25' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 6px;
+}
+
+.evening-plan__field input[type="time"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+}
+
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-ampm-field {
+  margin-left: -3px;
+  text-transform: lowercase;
+}
+
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-text,
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-hour-field,
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-minute-field,
+.evening-plan__field input[type="time"]::-webkit-datetime-edit-ampm-field {
+  padding: 0;
+}
+
+.evening-plan__response {
+  display: grid;
+  gap: 4px;
+  margin: 18px 0;
+  padding: 13px 15px;
+  background: var(--sage-light);
+  border-left: 2px solid var(--forest);
+  color: var(--forest);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.evening-plan__response strong {
+  font-weight: 600;
+}
+
+.evening-plan__muted {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* Review: ruled records, the task-block list and the notes box. */
+.evening-plan__record {
+  display: grid;
+  gap: 5px;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+}
+
+.evening-plan__record > span {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+
+.evening-plan__record > small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.evening-plan__record > strong {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__actions {
+  margin: 24px 0 17px;
+}
+
+.evening-plan__actions > h4 {
+  margin: 0 0 12px;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.evening-plan__actions .plan-review__rows {
+  gap: 0;
+}
+
+.evening-plan__actions .plan-review__row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 170px);
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.evening-plan__actions .plan-review__title,
+.evening-plan__actions .plan-review__titlelink {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.evening-plan__actions .plan-review__titlelink:hover {
+  text-decoration: underline;
+}
+
+.evening-plan__actions .plan-review__meta,
+.evening-plan__actions .plan-review__state,
+.evening-plan__actions .plan-review__changed,
+.evening-plan__actions .plan-review__hint {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.evening-plan__actions .plan-review__fields {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.evening-plan__actions .plan-review__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.evening-plan__actions .plan-review__time,
+.evening-plan__actions .plan-review__field--placement .jds-select {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 36px;
+  padding: 7px 30px 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background-color: var(--surface);
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--forest);
+}
+
+.evening-plan__review-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 4px 0 0;
+}
+
+.evening-plan__link {
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.evening-plan__link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.evening-plan__notes {
+  margin: 18px 0 16px;
+  padding: 15px;
+  background: var(--sage-light);
+}
+
+.evening-plan__notes > h4 {
+  margin: 0 0 9px;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.evening-plan__notes > p {
+  margin: 0 0 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Saved and morning handoff. */
+.evening-plan__finish-mark {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  margin-bottom: 24px;
+  border-radius: 50%;
+  background: var(--forest);
+  color: var(--bone);
+  font-size: 25px;
+}
+
+.evening-plan__section > .evening-plan__link {
+  display: block;
+}
+
+/* The eyebrow sits in the conversation's 15px/1.5 line box, as in the prototype. */
+.evening-plan__handoff-date {
+  display: block;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  line-height: 22.5px;
+  text-transform: uppercase;
+}
+
+.evening-plan__confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
 }
 
 .evening-plan__title {
@@ -179,659 +812,11 @@
   max-width: 100%;
 }
 
-.evening-plan__prose {
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__status,
-.evening-plan__notice {
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-.evening-plan__status:empty,
-.evening-plan__notice:empty {
-  display: none;
-}
-
-.evening-plan__railwrap {
-  min-width: 0;
-}
-
-.evening-plan__rail-date {
-  margin: 0 0 10px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--forest);
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__rail-heading {
-  font-family: var(--font-display);
-  font-size: 21px;
-  line-height: 1.2;
-  letter-spacing: -0.5px;
-  margin: 0 0 12px;
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--forest);
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__details {
-  min-width: 0;
-}
-
-.evening-plan__details-cap {
-  cursor: pointer;
-  font-weight: 650;
-}
-
-.brief-reader:has(.evening-plan__grid) .brief-reader__head {
-  background: var(--forest);
-}
-
-.brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
-  font-size: 0;
-  color: transparent;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  min-height: 0;
-  border: none;
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-.brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn:focus-visible {
-  outline: 2px solid var(--paper);
-  outline-offset: 2px;
-}
-
-.brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn::before {
-  content: "\00d7";
-  color: var(--paper);
-  font-size: 22px;
-  line-height: 1;
-  font-weight: 400;
-  font-family: var(--font-sans);
-}
-
-.brief-reader:has(.evening-plan__grid) .brief-reader__footer {
-  background: var(--paper);
-}
-
-.brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn {
-  margin: 0;
-}
-
-@media (min-width: 1081px) {
-  .brief-reader:has(.evening-plan__grid) {
-    box-sizing: border-box;
-    width: 1080px;
-    max-width: 1080px;
-    height: 846px;
-    max-height: 846px;
-    border-top-color: var(--line-strong);
-    border-left-color: var(--line-strong);
-    border-right-color: var(--line-strong);
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__head {
-    box-sizing: border-box;
-    position: relative;
-    height: 118px;
-    min-height: 118px;
-    max-height: 118px;
-    padding: 24px 32px 20px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__eyebrow {
-    flex: 1 1 100%;
-    margin: 0;
-    padding-right: 48px;
-    box-sizing: border-box;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__title {
-    flex: 1 1 100%;
-    margin: 0;
-    padding-right: 48px;
-    box-sizing: border-box;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
-    position: absolute;
-    top: 30px;
-    right: 32px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn::before {
-    font-size: 24px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__body {
-    flex: 1 1 0%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .evening-plan__strip {
-    box-sizing: border-box;
-    height: 54px;
-    padding: 0 32px 0 31px;
-  }
-
-  .evening-plan__strip button > span {
-    position: relative;
-    top: -1px;
-  }
-
-  .evening-plan__grid {
-    grid-template-columns: 749px 331px;
-    gap: 0;
-    align-items: stretch;
-    height: 100%;
-  }
-
-  .evening-plan__panel {
-    box-sizing: border-box;
-    position: relative;
-    padding: 32px;
-    overflow-y: auto;
-    height: 100%;
-  }
-
-  .evening-plan__panel::after {
-    content: "";
-    position: absolute;
-    right: 0;
-    top: 28px;
-    width: 1px;
-    height: 503px;
-    background: var(--line);
-  }
-
-  .evening-plan__railwrap {
-    box-sizing: border-box;
-    border-left: none;
-    padding: 35px 32px 32px 24px;
-    overflow-y: auto;
-    height: 100%;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
-    box-sizing: border-box;
-    min-height: 75px;
-    padding: 15px 32px 15px;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    column-gap: 16px;
-    row-gap: 8px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: start;
-    display: flex;
-    align-items: center;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .evening-plan__status {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-    font-size: 13px;
-    line-height: 1.4;
-    text-align: right;
-    color: var(--text-muted);
-    overflow-wrap: anywhere;
-    min-width: 0;
-    margin: 0;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .evening-plan__notice {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    font-size: 13px;
-    line-height: 1.4;
-    color: var(--text-muted);
-    overflow-wrap: anywhere;
-    margin: 0;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn {
-    height: 44px;
-    min-height: 44px;
-    box-sizing: border-box;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions .jds-btn {
-    border-radius: 3px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    height: auto;
-    min-height: 0;
-    color: var(--text);
-    font-size: 12px;
-    line-height: 1.3;
-    white-space: nowrap;
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn:focus-visible {
-    outline: 2px solid var(--forest);
-    outline-offset: 2px;
-  }
-}
-
-@media (max-width: 1080px) {
-  .brief-reader:has(.evening-plan__grid) .brief-reader__head {
-    box-sizing: border-box;
-    position: relative;
-    height: 130px;
-    padding: 20px 20px 16px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__eyebrow {
-    flex: 1 1 100%;
-    margin: 0;
-    padding-right: 48px;
-    box-sizing: border-box;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__title {
-    flex: 1 1 100%;
-    margin: 0;
-    padding-right: 48px;
-    box-sizing: border-box;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
-    position: absolute;
-    top: 24px;
-    right: 16px;
-  }
-
-  .evening-plan__strip {
-    box-sizing: border-box;
-    height: 58px;
-    padding: 0 19px;
-    background: var(--paper);
-  }
-
-  .evening-plan__strip ol {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    gap: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .evening-plan__strip li {
-    display: flex;
-    min-width: 0;
-    height: 100%;
-  }
-
-  .evening-plan__strip button {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    flex: 0 1 auto;
-    min-width: 0;
-    white-space: nowrap;
-    height: 100%;
-    min-height: 0;
-    padding: 0;
-    gap: 5px;
-    font-size: 10px;
-    letter-spacing: normal;
-    position: static;
-    bottom: auto;
-    line-height: 1.1;
-    box-sizing: border-box;
-    border-bottom: 3px solid transparent;
-  }
-
-  .evening-plan__strip button > span {
-    display: block;
-    font-size: 8px;
-    color: var(--text-muted);
-    line-height: 1;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__body {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
-    box-sizing: border-box;
-    min-height: 69px;
-    padding: 12px 19px 13px;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    column-gap: 4px;
-    row-gap: 8px;
-    width: 100%;
-    margin-top: auto;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: start;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .evening-plan__status {
-    grid-column: 2;
-    grid-row: 1;
-    font-size: 12px;
-    line-height: 1.3;
-    text-align: center;
-    color: var(--text-muted);
-    min-width: 0;
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-    display: flex;
-    align-items: center;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions .jds-btn {
-    padding: 0 8px;
-    font-size: 12px;
-    white-space: nowrap;
-    height: 44px;
-    min-height: 44px;
-    box-sizing: border-box;
-    border-radius: 3px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    height: auto;
-    min-height: 0;
-    color: var(--text);
-    font-size: 12px;
-    line-height: 1.3;
-    white-space: nowrap;
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn:focus-visible {
-    outline: 2px solid var(--forest);
-    outline-offset: 2px;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .evening-plan__status--saved {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    text-align: left;
-  }
-
-  .brief-reader:has(.evening-plan__grid) .evening-plan__notice {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--text-muted);
-    overflow-wrap: anywhere;
-    margin: 0;
-  }
-
-  .brief-reader:has(.evening-plan__grid)
-    .brief-reader__footer:has(.evening-plan__notice)
-    .evening-plan__status {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    text-align: left;
-  }
-
-  .brief-reader:has(.evening-plan__grid)
-    .brief-reader__footer:has(.evening-plan__notice)
-    .evening-plan__notice {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    text-align: left;
-  }
-}
-
-.evening-plan__choices {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  min-width: 0;
-  margin: 12px 0;
-}
-
-.evening-plan__choice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__choice input {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  accent-color: var(--forest);
-}
-
-.evening-plan__choice strong {
-  font-weight: 600;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__choice[data-state="selected"] {
-  border-color: var(--forest);
-  box-shadow: inset 3px 0 0 var(--forest);
-}
-
-.evening-plan__choices--stacked {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-
-.evening-plan__choices--stacked .evening-plan__choice {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  min-height: 64px;
-  padding: 12px 14px;
-  box-sizing: border-box;
-}
-
-.evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
-.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:checked) {
-  border-color: var(--forest);
-  background: var(--sage);
-  box-shadow: inset 3px 0 0 var(--forest);
-}
-
-[data-color-mode="dark"]
-  .evening-plan__choices--stacked
-  .evening-plan__choice[data-state="selected"],
-[data-color-mode="dark"]
-  .evening-plan__choices--stacked
-  .evening-plan__choice:has(input[type="radio"]:checked),
-[data-theme="dark"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
-[data-theme="dark"]
-  .evening-plan__choices--stacked
-  .evening-plan__choice:has(input[type="radio"]:checked),
-[data-theme="canyon"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
-[data-theme="canyon"]
-  .evening-plan__choices--stacked
-  .evening-plan__choice:has(input[type="radio"]:checked) {
-  background: var(--forest-soft);
-}
-
-.evening-plan__choices--stacked .evening-plan__choice input[type="radio"],
-.evening-plan__choice-radio {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:focus-visible) {
-  outline: 2px solid var(--forest);
-  outline-offset: 2px;
-}
-
-.evening-plan__choice-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.evening-plan__choice-text strong {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__choice-text small {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.evening-plan__choices--stacked
-  .evening-plan__choice[data-state="selected"]
-  .evening-plan__choice-text
-  small,
-.evening-plan__choices--stacked
-  .evening-plan__choice:has(input[type="radio"]:checked)
-  .evening-plan__choice-text
-  small {
-  color: var(--forest-ink);
-}
-
-.evening-plan__rule {
-  border: 0;
-  border-top: 1px solid var(--line);
-  margin: 18px 0 14px;
-}
-
-.evening-plan__note-form {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.evening-plan__note-composer {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.evening-plan__note-composer textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: 52px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: inherit;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.4;
-  resize: vertical;
-}
-
-.evening-plan__note-composer textarea:focus-visible {
-  outline: 2px solid var(--forest);
-  outline-offset: 1px;
-}
-
-.evening-plan__note-composer button {
-  flex: none;
-  min-height: 38px;
-}
-
-.evening-plan__fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 4px;
-  min-width: 0;
-  margin-top: 12px;
-}
-
 .evening-plan__field-label {
   font-size: 12px;
   font-weight: 650;
   color: var(--forest);
   overflow-wrap: anywhere;
-}
-
-.evening-plan__fields input,
-.evening-plan__fields select,
-.evening-plan__fields .jds-selectwrap {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.evening-plan__group {
-  min-width: 0;
-  margin: 16px 0;
 }
 
 .evening-plan__eyebrow {
@@ -843,12 +828,149 @@
   overflow-wrap: anywhere;
 }
 
-@media (min-width: 1081px) {
-  .evening-plan__choices {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Phone: full-screen dialog, the rail folds into a disclosure above the steps. */
+@media (max-width: 1080px) {
+  .brief-reader--report:has(.evening-plan__grid) {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    border: none;
+    border-radius: 0;
   }
 
-  .evening-plan__choices--stacked {
+  .evening-plan__strip {
+    min-height: 58px;
+    padding: 0 19px;
+  }
+
+  .evening-plan__strip ol {
+    flex: 1;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .evening-plan__strip li {
+    max-width: 28%;
+  }
+
+  .evening-plan__strip button {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 3px;
+    padding: 10px 0;
+    font-size: 10px;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .evening-plan__strip button > span {
+    font-size: 8px;
+  }
+
+  .evening-plan__grid {
+    display: block;
+    padding: 22px 19px 28px;
+  }
+
+  .evening-plan__railwrap {
+    display: none;
+  }
+
+  .evening-plan__mobile-plan {
+    display: block;
+    margin: 17px 19px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 11px;
+  }
+
+  .evening-plan__mobile-plan > summary {
+    padding-bottom: 13px;
+    color: var(--forest);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .evening-plan__mobile-plan .evening-plan__snapshot {
+    padding: 5px 0 20px;
+  }
+
+  .evening-plan__lede {
+    font-size: 25px;
+    line-height: 1.15;
+    letter-spacing: -0.6px;
+  }
+
+  .evening-plan__prose {
+    font-size: 12px;
+  }
+
+  .evening-plan__speaker {
+    margin-bottom: 20px;
+  }
+
+  .evening-plan__question {
+    font-size: 14px;
+  }
+
+  .evening-plan__choice {
+    padding: 12px;
+  }
+
+  .evening-plan__choices--two-up {
+    gap: 8px;
+  }
+
+  .evening-plan__note-composer {
+    gap: 7px;
+  }
+
+  .evening-plan__note-composer .jds-btn {
+    min-width: 63px;
+    padding-inline: 10px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn--primary {
+    max-width: 195px;
+  }
+}
+
+/* Phone: steps 3 and 4 use the prototype's smaller reply, field and footnote type. */
+@media (max-width: 680px) {
+  .evening-plan__done-strip {
+    min-height: 58px;
+    padding: 0 19px;
+    font-size: 11px;
+  }
+
+  .evening-plan__done-strip > span {
+    font-size: 9px;
+  }
+
+  .evening-plan__response {
+    padding: 12px;
+    font-size: 11px;
+  }
+
+  .evening-plan__field {
+    font-size: 11px;
+  }
+
+  .evening-plan__muted {
+    font-size: 12px;
+  }
+
+  .evening-plan__choices--three-up {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .evening-plan__choices--two-up {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn--primary {
+    max-width: 175px;
   }
 }
