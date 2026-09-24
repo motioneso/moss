@@ -309,5 +309,17 @@ final class BacktrackMachineTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(later.0.timeIntervalSince(earlier.0), 10 - 0.001)
         }
     }
+
+    func testTheViewersSearchMatchesEveryShownFieldIgnoringCaseAndAccents() {
+        let segment = BacktrackSegment(
+            appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Café menu",
+            address: "https://example.com/specials", lines: ["Soup of the day", "Lemon TART"],
+            start: Self.t0, end: Self.t0
+        )
+        for query in ["safari", "cafe", "EXAMPLE.com", "lemon tart", "soup"] {
+            XCTAssertTrue(segment.contains(query), query)
+        }
+        XCTAssertFalse(segment.contains("pizza"))
+    }
 }
 #endif
