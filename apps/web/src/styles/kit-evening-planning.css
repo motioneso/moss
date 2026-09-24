@@ -264,7 +264,7 @@
   padding: 16px 0;
   font-size: 15px;
   line-height: 1.5;
-  border-top: 2px solid var(--forest);
+  border-top: 2px solid var(--accent-rule);
   border-bottom: 1px solid var(--line);
 }
 
@@ -360,7 +360,7 @@
   padding-bottom: 16px;
   font-size: 15px;
   line-height: 1.5;
-  border-bottom: 2px solid var(--forest);
+  border-bottom: 2px solid var(--accent-rule);
 }
 
 .evening-plan__rail-date {
@@ -418,7 +418,7 @@
   margin-bottom: 8px;
   padding: 12px 10px;
   border-top: 0;
-  border-left: 2px solid var(--forest);
+  border-left: 2px solid var(--accent-rule);
   background: var(--sage-light);
 }
 
@@ -578,7 +578,7 @@
   margin: 18px 0;
   padding: 13px 15px;
   background: var(--sage-light);
-  border-left: 2px solid var(--forest);
+  border-left: 2px solid var(--accent-rule);
   color: var(--accent-fg);
   font-size: 12px;
   line-height: 1.65;

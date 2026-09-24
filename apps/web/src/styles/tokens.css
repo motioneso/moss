@@ -384,6 +384,17 @@
   --white-translucent: rgba(255, 255, 255, 0.18);
   --accent-soft-border: rgb(41 75 57 / 0.45);
   --accent-soft-border-weak: rgb(41 75 57 / 0.32);
+
+  /* Accent lines (section rules, rails) and progress fills. Dark lifts both
+     per theme so they clear 3:1 on every dark ground. */
+  --accent-rule: var(--forest);
+  --accent-meter: var(--accent);
+
+  /* Hover grounds and accent hover states. Dark re-points each one. */
+  --hover-tint: var(--sage);
+  --hover-raise: var(--white);
+  --accent-fill-hover: var(--forest-deep);
+  --accent-text-hover: var(--forest-deep);
   --provenance-said: var(--forest-ink);
   --provenance-said-bg: var(--forest-soft);
   --provenance-said-border: var(--forest-soft-2);
@@ -474,6 +485,17 @@
   --accent-soft-border: rgb(121 166 141 / 0.5);
   --accent-soft-border-weak: rgb(121 166 141 / 0.36);
 
+  /* Same hue as --forest, lifted to 3:1 on --surface-3 (3.9:1 on --paper). */
+  --accent-rule: #5b7f6b;
+  --accent-meter: var(--accent-rule);
+
+  /* A faint wash of the accent text tint; light's pale --sage glares on dark. */
+  --hover-tint: rgb(121 166 141 / 0.12);
+  --hover-raise: var(--hover-tint);
+  --surface-hover: var(--hover-tint);
+  --accent-fill-hover: var(--forest-hover);
+  --accent-text-hover: var(--accent-fg-hover);
+
   /* The light study panel ground is a pale literal; dark rides the raised surface. */
   --sage-light: var(--surface-2);
 
@@ -562,6 +584,8 @@
   --focus-ring: rgba(137, 162, 116, 0.5);
   --accent-soft-border: rgb(137 162 116 / 0.5);
   --accent-soft-border-weak: rgb(137 162 116 / 0.36);
+  --accent-rule: #697d58;
+  --hover-tint: rgb(137 162 116 / 0.12);
 }
 
 [data-color-mode="dark"][data-theme="canyon"] {
@@ -573,6 +597,8 @@
   --focus-ring: rgba(213, 131, 90, 0.5);
   --accent-soft-border: rgb(213 131 90 / 0.5);
   --accent-soft-border-weak: rgb(213 131 90 / 0.36);
+  --accent-rule: #a96746;
+  --hover-tint: rgb(213 131 90 / 0.12);
 }
 
 [data-color-mode="dark"][data-theme="teal"] {
@@ -584,6 +610,8 @@
   --focus-ring: rgba(92, 169, 165, 0.5);
   --accent-soft-border: rgb(92 169 165 / 0.5);
   --accent-soft-border-weak: rgb(92 169 165 / 0.36);
+  --accent-rule: #44817e;
+  --hover-tint: rgb(92 169 165 / 0.12);
 }
 
 [data-color-mode="dark"][data-theme="dusk"] {
@@ -595,6 +623,8 @@
   --focus-ring: rgba(150, 149, 183, 0.5);
   --accent-soft-border: rgb(150 149 183 / 0.5);
   --accent-soft-border-weak: rgb(150 149 183 / 0.36);
+  --accent-rule: #767590;
+  --hover-tint: rgb(150 149 183 / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {

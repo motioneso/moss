@@ -858,7 +858,7 @@
   height: 100%;
   width: calc(var(--jds-score, 0) * 100%);
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--accent-meter);
 }
 
 /* A score that leads a block of prose rather than sitting in a column of other scores.

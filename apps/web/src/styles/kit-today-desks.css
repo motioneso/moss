@@ -269,7 +269,7 @@
   margin-top: 43px;
   padding: 25px 0 0;
   border: none;
-  border-top: 1px solid var(--forest);
+  border-top: 1px solid var(--accent-rule);
   border-radius: 0;
   box-shadow: none;
 }

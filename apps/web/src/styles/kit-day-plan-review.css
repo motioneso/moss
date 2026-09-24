@@ -359,7 +359,7 @@
 [data-briefing-surface="review"] .plan-review__changes {
   margin-top: 4px;
   padding-top: 15px;
-  border-top: 2px solid var(--forest);
+  border-top: 2px solid var(--accent-rule);
 }
 
 [data-briefing-surface="review"] .plan-review__changes-title {

@@ -123,6 +123,32 @@ describe("dark mode keeps each theme's real accent", () => {
   });
 });
 
+describe("dark mode accent lines and progress fills", () => {
+  const themes: Array<[string, Map<string, string>]> = [
+    ["forest", blockFor('[data-theme="dark"]')],
+    ...["sage", "canyon", "teal", "dusk"].map(
+      (id) => [id, darkThemeBlock(id)] as [string, Map<string, string>]
+    )
+  ];
+  for (const [id, dark] of themes) {
+    it(`${id}: rules and meters clear 3:1 on every dark ground`, () => {
+      for (const t of ["--accent-rule", "--accent-meter"]) {
+        for (const ground of ["--paper", "--surface", "--surface-2", "--surface-3"]) {
+          expect(
+            contrast(resolve(t, dark), resolve(ground, dark)),
+            `${id} ${t}/${ground}`
+          ).toBeGreaterThanOrEqual(3);
+        }
+      }
+    });
+  }
+
+  it("light keeps the real accent for rules and meters", () => {
+    expect(resolve("--accent-rule")).toBe(resolve("--forest"));
+    expect(resolve("--accent-meter")).toBe(resolve("--accent"));
+  });
+});
+
 describe("national-park themes", () => {
   for (const id of ["sage", "canyon", "teal", "dusk"]) {
     it(`${id} accent clears AA on oat`, () => {

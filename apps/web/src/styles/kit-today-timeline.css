@@ -66,7 +66,7 @@
   display: inline-block;
   width: 8px;
   height: 8px;
-  background: var(--forest);
+  background: var(--accent-rule);
 }
 .jds-brief--timeline .tl-legend__open {
   display: inline-block;
@@ -89,7 +89,7 @@
 /* State reads by shape, never colour alone. The edge sits on the row so the
    committed/proposed distinction survives without the tinted ground. */
 .jds-brief--timeline .tl-slot--committed {
-  border-left: 2px solid var(--forest);
+  border-left: 2px solid var(--accent-rule);
 }
 .jds-brief--timeline .tl-slot--proposed,
 .jds-brief--timeline .tl-slot--pending {
@@ -168,7 +168,7 @@
   text-transform: uppercase;
   color: var(--accent-fg);
   padding-bottom: 8px;
-  border-bottom: 2px solid var(--forest);
+  border-bottom: 2px solid var(--accent-rule);
   margin-bottom: 10px;
 }
 .cmd-aside .cmd-next__v {
@@ -191,7 +191,7 @@
   justify-content: space-between;
   gap: 10px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--forest);
+  border-bottom: 2px solid var(--accent-rule);
   margin-bottom: 4px;
 }
 :is(.cmd-aside, .cmd-dock) .well__eyebrow {
@@ -332,7 +332,7 @@
   .jds-brief--timeline
   .tl-note
   .jds-btn:hover {
-  background: var(--forest-deep);
+  background: var(--accent-fill-hover);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-legend {
   padding: 0 0 13px;
@@ -378,7 +378,7 @@
   .cmd-main
   .jds-brief--timeline
   button.jds-task__main:hover {
-  background: var(--sage);
+  background: var(--hover-tint);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"])
   .cmd-main
@@ -386,7 +386,7 @@
   .tl-slot--committed
   .jds-task__main {
   background: var(--sage-light);
-  border-left-color: var(--forest);
+  border-left-color: var(--accent-rule);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"])
   .cmd-main
@@ -541,8 +541,8 @@
   font-weight: 600;
 }
 .cmd-dock .well__btn--primary:hover {
-  background: var(--forest-deep);
-  border-color: var(--forest-deep);
+  background: var(--accent-fill-hover);
+  border-color: var(--accent-fill-hover);
 }
 
 /* --- Morning rail: glance, agenda and review as flat study support sections --- */

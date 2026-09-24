@@ -121,7 +121,7 @@
 .jds-progress__fill {
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--accent-meter);
   transition: width var(--dur-slow) var(--ease-out);
 }
 .jds-progress--amber .jds-progress__fill {
