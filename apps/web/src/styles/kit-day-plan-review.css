@@ -225,7 +225,7 @@
 [data-briefing-surface="review"] .plan-review__hint {
   margin: -8px 0 13px;
   font-size: 11px;
-  color: var(--forest);
+  color: var(--accent-fg);
   opacity: 1;
 }
 
@@ -245,7 +245,7 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1.5;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 
 [data-briefing-surface="review"] .plan-review__label--time {
@@ -294,7 +294,7 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 
 [data-briefing-surface="review"] .plan-review__field--time {

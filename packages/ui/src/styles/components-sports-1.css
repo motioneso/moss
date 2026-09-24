@@ -43,7 +43,7 @@
 /* ---- live indicator ---- */
 .sp-livedot {
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-fg);
   box-shadow: 0 0 0 0 var(--focus-ring);
 }
 @keyframes sp-pulse {
@@ -277,7 +277,7 @@
    real zone color on the followed row (Ben couldn't see Arsenal's Europa League tint at all).
    (live feedback mrb4imes) */
 .sp-tbl tr.is-you .nm {
-  color: var(--accent);
+  color: var(--accent-fg);
   font-weight: 700;
 }
 

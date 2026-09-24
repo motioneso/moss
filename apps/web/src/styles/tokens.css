@@ -158,6 +158,7 @@
   --text-subtle: #615a48; /* 5.4:1 on oat --paper */
   --text-faint: #6a6350; /* 4.7:1 on oat --paper */
   --text-on-accent: #ffffff;
+  --accent-label: var(--bone); /* bone label on an accent fill */
 
   --border: var(--line);
   --border-subtle: var(--line-subtle);
@@ -167,6 +168,7 @@
   --accent-hover: var(--forest-hover);
   --accent-active: var(--forest-active);
   --accent-fg: var(--forest); /* 7.7:1 on oat; park themes re-point --forest */
+  --accent-fg-hover: var(--forest-hover);
   --accent-soft: var(--forest-soft);
   --accent-soft-fg: var(--forest-ink);
   /* Primary-button fill. Defaults to --accent (light passes WCAG AA at 6.4:1);
@@ -419,19 +421,16 @@
   --text-subtle: #9b968a; /* 5.9:1 on dark --paper */
   --text-faint: #8b8578; /* 4.8:1 on dark --paper */
 
-  --forest: #3e8a63;
-  --forest-hover: #48996f;
-  --forest-active: #357857;
+  /* Dark keeps the real accent ramp for fills (buttons, hero, active nav).
+     Only the grounds and the text tints below are dark-specific. */
+  --forest: #294b39;
+  --forest-hover: #345942;
+  --forest-active: #203a2c;
   --forest-soft: #22392c;
-  --forest-soft-2: #2a4636;
-  --forest-ink: #a3d1b8;
-  --hero-bg: color-mix(
-    in srgb,
-    var(--forest) 55%,
-    #000
-  ); /* Design-fidelity plan V0: dark-block hero ground; 55% because dark mode brightens the accent. */
+  --forest-soft-2: #2d4b3a;
+  --forest-ink: #b0dfc2;
 
-  --gold: #d9a04b;
+  --gold: #c2872b;
   --gold-strong: #e3b268;
   --gold-soft: #3a2e14;
   --gold-soft-2: #46381a;
@@ -453,11 +452,13 @@
   --steel-ink: #aec8e0;
 
   --text-on-accent: #f4fbf6;
-  --accent-fg: #82c7a5;
-  --focus-ring: rgba(62, 138, 99, 0.45);
-  /* Darken the primary-button fill in dark so the near-white label clears WCAG AA
-     (on --forest-active #357857 it is ~5.3:1). #354. */
-  --btn-primary-bg: var(--forest-active);
+  --accent-label: var(--text-on-accent); /* dark --bone is the paper */
+
+  /* Accent TEXT and icons: the accent's own OKLCH hue, lifted just enough to
+     clear 4.5:1 on --surface-3 and --forest-soft. Park themes re-point these. */
+  --accent-fg: #79a68d;
+  --accent-fg-hover: #83b096;
+  --focus-ring: rgba(121, 166, 141, 0.5);
 
   --texture-opacity: 0.03;
   --texture-blend: screen;
@@ -470,8 +471,11 @@
 
   --shadow-drawer: -8px 0 28px rgba(0, 0, 0, 0.6);
   --topbar-bg: rgb(28 26 22 / 0.85);
-  --accent-soft-border: rgb(62 138 99 / 0.5);
-  --accent-soft-border-weak: rgb(62 138 99 / 0.36);
+  --accent-soft-border: rgb(121 166 141 / 0.5);
+  --accent-soft-border-weak: rgb(121 166 141 / 0.36);
+
+  /* The light study panel ground is a pale literal; dark rides the raised surface. */
+  --sage-light: var(--surface-2);
 
   /* Dark's --forest-ink is a light tint (text duty); the rail needs a ground.
      Use --forest-soft-2, the same dark-mode-correct accent-ground token other
@@ -480,12 +484,9 @@
      theme switch (#1809). */
   --rail-bg: var(--forest-soft-2);
 
-  /* Dark masthead: the field rides the ramp's dark ground (light --forest is a
-     text-duty tint in dark mode); the eyebrow takes pale gold-ink. */
-  --masthead-bg: var(--forest-soft);
-  --masthead-fg: var(--rail-fg);
-  --masthead-fg-muted: rgba(237, 229, 210, 0.85);
-  --masthead-accent: var(--gold-ink);
+  /* Dark masthead keeps the real accent field (root --masthead-bg); the eyebrow
+     takes light's --gold-soft value because dark --gold-soft is a ground. */
+  --masthead-accent: #f1e2c2;
   --masthead-rule: var(--gold);
   --masthead-action-bg: var(--gold);
   --masthead-action-fg: #241a06;
@@ -550,55 +551,50 @@
   --accent-soft-border-weak: rgb(75 74 99 / 0.32);
 }
 
-/* Built-in accents stay independent from the charcoal base. */
+/* Dark + park theme: the real --forest ramp comes from the [data-theme] block
+   above. These re-point only the dark grounds and the lifted text tints. */
 [data-color-mode="dark"][data-theme="sage"] {
-  --forest: #86a66b;
-  --forest-hover: #9abf7c;
-  --forest-active: #75945e;
   --forest-soft: #293624;
   --forest-soft-2: #35472e;
   --forest-ink: #b9d8a0;
-  --focus-ring: rgba(134, 166, 107, 0.5);
+  --accent-fg: #89a274;
+  --accent-fg-hover: #94ad7f;
+  --focus-ring: rgba(137, 162, 116, 0.5);
+  --accent-soft-border: rgb(137 162 116 / 0.5);
+  --accent-soft-border-weak: rgb(137 162 116 / 0.36);
 }
 
 [data-color-mode="dark"][data-theme="canyon"] {
-  --forest: #d07b4c;
-  --forest-hover: #e18b59;
-  --forest-active: #b9673e;
   --forest-soft: #432b20;
   --forest-soft-2: #563727;
   --forest-ink: #f0b08a;
-  --focus-ring: rgba(208, 123, 76, 0.5);
+  --accent-fg: #d5835a;
+  --accent-fg-hover: #e59168;
+  --focus-ring: rgba(213, 131, 90, 0.5);
+  --accent-soft-border: rgb(213 131 90 / 0.5);
+  --accent-soft-border-weak: rgb(213 131 90 / 0.36);
 }
 
 [data-color-mode="dark"][data-theme="teal"] {
-  --forest: #63b8b2;
-  --forest-hover: #78ccc5;
-  --forest-active: #52a39e;
   --forest-soft: #203937;
   --forest-soft-2: #2a4a47;
   --forest-ink: #a3ded9;
-  --focus-ring: rgba(99, 184, 178, 0.5);
+  --accent-fg: #5ca9a5;
+  --accent-fg-hover: #66b3af;
+  --focus-ring: rgba(92, 169, 165, 0.5);
+  --accent-soft-border: rgb(92 169 165 / 0.5);
+  --accent-soft-border-weak: rgb(92 169 165 / 0.36);
 }
 
 [data-color-mode="dark"][data-theme="dusk"] {
-  --forest: #a3a1c8;
-  --forest-hover: #b5b3d7;
-  --forest-active: #8e8cad;
   --forest-soft: #302f43;
   --forest-soft-2: #3e3d56;
   --forest-ink: #c9c7e6;
-  --focus-ring: rgba(163, 161, 200, 0.5);
-}
-
-[data-color-mode="dark"][data-theme="light"] {
-  --forest: #65b889;
-  --forest-hover: #7acb9d;
-  --forest-active: #52a477;
-  --forest-soft: #22392c;
-  --forest-soft-2: #2d4b3a;
-  --forest-ink: #b0dfc2;
-  --focus-ring: rgba(101, 184, 137, 0.5);
+  --accent-fg: #9695b7;
+  --accent-fg-hover: #a4a3c6;
+  --focus-ring: rgba(150, 149, 183, 0.5);
+  --accent-soft-border: rgb(150 149 183 / 0.5);
+  --accent-soft-border-weak: rgb(150 149 183 / 0.36);
 }
 
 @media (prefers-reduced-motion: reduce) {

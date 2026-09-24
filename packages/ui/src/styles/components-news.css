@@ -48,7 +48,7 @@
 .nw-mast__chip[aria-pressed="true"] {
   color: var(--text);
   font-weight: var(--weight-bold);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent-fg);
 }
 .nw-mast__chip:focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -76,8 +76,8 @@
   background: transparent;
 }
 .nw-carousel__dot[aria-current] {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fg);
+  border-color: var(--accent-fg);
 }
 .nw-hero__photo--empty {
   background: var(--surface-2);
@@ -363,7 +363,7 @@
   border-color: var(--border-strong);
 }
 .nw-setsrc.is-active {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--forest-soft);
 }
 .nw-setsrc__name {
@@ -391,7 +391,7 @@
   border-color: var(--border-strong);
 }
 .nw-settopic.is-active {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--forest-soft);
   color: var(--accent-fg);
   font-weight: var(--weight-bold);

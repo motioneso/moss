@@ -27,7 +27,7 @@
 }
 
 .jds-display__accent {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 
 .jds-hairline-row:hover {

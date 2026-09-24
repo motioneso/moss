@@ -110,7 +110,7 @@
   border-radius: var(--radius-lg);
 }
 .wl-tadd:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .wl-tadd__ic {
@@ -338,7 +338,7 @@
 }
 .wl-note-field:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .wl-note-field::placeholder {
@@ -420,7 +420,7 @@
   font-weight: 600;
 }
 .wl-prn__log:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--surface);
 }
 .wl-prn__chip {
@@ -445,7 +445,7 @@
 }
 .wl-prn__input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
 }
 
 @media (max-width: 560px) {
@@ -477,7 +477,7 @@
 }
 .wl-input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .wl-modal__desc {

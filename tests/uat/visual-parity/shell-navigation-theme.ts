@@ -151,13 +151,17 @@ export async function runThemeContrastChecks(
     await page.screenshot({ path: join(dir, `p1-1440-${theme}.png`) });
     // Prove the theme actually applied: dark must leave the light paper,
     // while canyon keeps the light paper by design and instead swaps the
-    // accent tokens (--forest identifies it: #65b889 dark, #8a4b2b canyon).
-    const applied = await page.evaluate(() => ({
-      bg: getComputedStyle(document.body).backgroundColor,
-      forest: getComputedStyle(document.documentElement).getPropertyValue("--forest").trim()
-    }));
+    // accent tokens. Dark keeps the real --forest fill, so its lifted text
+    // tint identifies it (--accent-fg #79a68d); canyon's --forest is #8a4b2b.
+    const applied = await page.evaluate(
+      (token) => ({
+        bg: getComputedStyle(document.body).backgroundColor,
+        forest: getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+      }),
+      theme === "dark" ? "--accent-fg" : "--forest"
+    );
     const expectedForest: [number, number, number] =
-      theme === "dark" ? [101, 184, 137] : [138, 75, 43];
+      theme === "dark" ? [121, 166, 141] : [138, 75, 43];
     const forestRgb = parseRgb(applied.forest);
     const forestDist = Math.max(
       Math.abs(forestRgb[0] - expectedForest[0]),

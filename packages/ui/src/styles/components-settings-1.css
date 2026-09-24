@@ -179,7 +179,7 @@
   color: var(--text);
 }
 .provpick__item:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--forest-soft);
   color: var(--forest-ink);
 }
@@ -188,7 +188,7 @@
   background: var(--border-strong);
 }
 .provpick__item:hover .provpick__dot {
-  background: var(--accent);
+  background: var(--accent-fg);
 }
 .provpick__foot {
   font-size: 11.5px;
