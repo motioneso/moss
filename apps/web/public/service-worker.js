@@ -1,4 +1,4 @@
-const CACHE_NAME = "jarv1s-shell-v1";
+const CACHE_NAME = "jarv1s-shell-v2";
 const APP_SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 const IMAGE_RETRY_DELAYS_MS = [250, 1000];
 // register-service-worker.ts registers this script as "/service-worker.js?dev=1" outside

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { SPA_CSP } from "../../apps/api/src/static-web.js";
+import { SERVICE_WORKER_CSP, SPA_CSP } from "../../apps/api/src/static-web.js";
 
 // Registration order: sports' ESPN hosts, then the news catalog's (sorted) artwork hosts.
 const EXPECTED_IMG_SRC =
@@ -30,5 +30,33 @@ describe("SPA CSP image hosts", () => {
       "utf8"
     );
     expect(conf).toContain(EXPECTED_IMG_SRC);
+  });
+});
+
+// The worker re-fetches the page's images itself, and CSP judges a worker fetch() by
+// connect-src, so every img-src host must also be a worker connect-src host.
+const EXPECTED_WORKER_CONNECT_SRC = EXPECTED_IMG_SRC.replace(
+  "img-src 'self' data:",
+  "connect-src 'self'"
+);
+
+describe("service worker CSP", () => {
+  it("lets the worker fetch every image host the page may show", () => {
+    expect(SERVICE_WORKER_CSP).toContain(EXPECTED_WORKER_CONNECT_SRC);
+    expect(SERVICE_WORKER_CSP).toContain(EXPECTED_IMG_SRC);
+  });
+
+  it("keeps the page itself on connect-src 'self'", () => {
+    expect(SPA_CSP).toContain("connect-src 'self';");
+    expect(SPA_CSP).not.toContain("connect-src 'self' https://");
+  });
+
+  it("keeps the nginx service worker CSP in sync with the API", () => {
+    const conf = readFileSync(
+      fileURLToPath(new URL("../../infra/nginx/jarv1s-web.conf", import.meta.url)),
+      "utf8"
+    );
+    const block = conf.slice(conf.indexOf("location = /service-worker.js"));
+    expect(block).toContain(EXPECTED_WORKER_CONNECT_SRC);
   });
 });

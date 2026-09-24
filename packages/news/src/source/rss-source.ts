@@ -51,6 +51,8 @@ interface RawFeedItem {
   contentFallback: string;
   publishedAt: string;
   imageUrl: string;
+  /** True once the item names its art in a media tag, even when that tag has no usable URL. */
+  hasMediaImage: boolean;
   imageIsThumbnail: boolean;
   imageWidth: number;
 }
@@ -63,6 +65,7 @@ function emptyRawItem(): RawFeedItem {
     contentFallback: "",
     publishedAt: "",
     imageUrl: "",
+    hasMediaImage: false,
     imageIsThumbnail: false,
     imageWidth: 0
   };
@@ -99,6 +102,7 @@ export function parseFeedXml(xml: string): RawFeedItem[] {
         if (!current) return;
         // Media tags may sit inside <media:group>; accept them at any depth within the item.
         if (tag === "media:content" || tag === "media:thumbnail") {
+          current.hasMediaImage = true;
           const url = attribs["url"];
           // Prefer media:content (full-size art) over media:thumbnail, and among several
           // media:content sizes (Guardian emits 140/460/…) keep the widest.
@@ -119,7 +123,9 @@ export function parseFeedXml(xml: string): RawFeedItem[] {
           return;
         }
         if (tag === "enclosure") {
-          if (!current.imageUrl && attribs["url"] && (attribs["type"] ?? "").startsWith("image/")) {
+          if (!(attribs["type"] ?? "").startsWith("image/")) return;
+          current.hasMediaImage = true;
+          if (!current.imageUrl && attribs["url"]) {
             current.imageUrl = attribs["url"];
           }
           return;
@@ -334,6 +340,20 @@ function firstRealImgSrc(html: string): string | null {
   return picked.src;
 }
 
+/**
+ * The first real body image of a feed item (content:encoded, then the summary), kept only when
+ * its host is on `imageHosts`. NPR and The Verge carry their art this way, with no media tag.
+ */
+export function feedBodyImageUrl(
+  raw: Pick<RawFeedItem, "contentFallback" | "summary">,
+  imageHosts: readonly string[]
+): string | null {
+  return sanitizeImageUrl(
+    firstRealImgSrc(raw.contentFallback) ?? firstRealImgSrc(raw.summary),
+    imageHosts
+  );
+}
+
 function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFeedItem[] {
   const items: RssFeedItem[] = [];
   const seen = new Set<string>();
@@ -349,12 +369,9 @@ function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFe
     // Fall back to a body image only when the feed carried no media tag at all. A media image
     // that exists but fails the host check must not open the door to a body image instead — the
     // feed named the story's art and got it wrong, so the story gets no art (reviewer blocker 5).
-    const imageUrl = raw.imageUrl
+    const imageUrl = raw.hasMediaImage
       ? sanitizeImageUrl(raw.imageUrl, imageHosts)
-      : sanitizeImageUrl(
-          firstRealImgSrc(raw.contentFallback) ?? firstRealImgSrc(raw.summary),
-          imageHosts
-        );
+      : feedBodyImageUrl(raw, imageHosts);
     items.push({
       id,
       title,
