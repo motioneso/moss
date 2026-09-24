@@ -1,0 +1,53 @@
+
+ RUN  v4.1.8 /home/ben/Jarv1s/.claude/worktrees/2521-screen-morning-reader
+
+ ❯ tests/unit/morning-briefing.test.tsx (26 tests | 2 failed | 24 skipped) 101ms
+     × moves focus to the Sports section when its jump link is used 81ms
+     × makes Adjust task blocks the primary button when nothing awaits acceptance 19ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/morning-briefing.test.tsx > MorningBriefingReader report > moves focus to the Sports section when its jump link is used
+AssertionError: expected '_r_4_' to be 'brief-reader-sports' // Object.is equality
+
+Expected: "brief-reader-sports"
+Received: "_r_4_"
+
+ ❯ tests/unit/morning-briefing.test.tsx:252:40
+    250|     )!;
+    251|     act(() => sportsLink.click());
+    252|     expect(document.activeElement?.id).toBe("brief-reader-sports");
+       |                                        ^
+    253|   });
+    254|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/unit/morning-briefing.test.tsx > MorningBriefingReader review footer > makes Adjust task blocks the primary button when nothing awaits acceptance
+AssertionError: expected [ 'Review task blocks', …(1) ] to deeply equal [ 'Adjust task blocks', …(1) ]
+
+- Expected
++ Received
+
+  [
+-   "Adjust task blocks",
++   "Review task blocks",
+    "Back to Today",
+  ]
+
+ ❯ tests/unit/morning-briefing.test.tsx:411:29
+    409|       dayPlan: { ...base, plan: { ...base.plan, blocks: [committed] } }
+    410|     });
+    411|     expect(footerButtons()).toEqual(["Adjust task blocks", "Back to To…
+       |                             ^
+    412|     const adjustButton = Array.from(document.querySelectorAll("button"…
+    413|       (b) => b.textContent === "Adjust task blocks"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 24 skipped (26)
+   Start at  21:03:59
+   Duration  2.28s (transform 1.00s, setup 27ms, import 1.40s, tests 101ms, environment 616ms)
+

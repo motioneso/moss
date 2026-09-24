@@ -182,7 +182,12 @@ export function EditorialBlock(props: {
   readonly onMoreOnToday: () => void;
 }) {
   return (
-    <section className="brief-reader__editorial" id={props.id} aria-label={props.sectionLabel}>
+    <section
+      className="brief-reader__editorial"
+      id={props.id}
+      aria-label={props.sectionLabel}
+      tabIndex={-1}
+    >
       <div className="brief-reader__editorial-eyebrow">{props.eyebrow}</div>
       {props.headline ? (
         <h4 className="brief-reader__editorial-headline">{props.headline}</h4>

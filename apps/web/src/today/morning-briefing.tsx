@@ -17,7 +17,7 @@ import {
 
 import { Button } from "@moss/ui";
 
-import { getBriefingRun, getCalendarBriefingSettings, requestJson } from "../api/client.js";
+import { getBriefingRun, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { formatDate, formatTime } from "../locale/locale-format.js";
 import { joinActionRowsToTasks, type DisplayedActionRow } from "./briefing-action-rows.js";
@@ -83,16 +83,13 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     }
   });
 
-  const settingsQuery = useQuery({
-    queryKey: ["calendar", "briefing-settings"],
-    queryFn: getCalendarBriefingSettings,
-    retry: false
-  });
-  const isAutoMode = settingsQuery.data?.settings?.timeBlockMode === "auto";
-  // The Read tab always reads "Review task blocks"; only the footer's own
-  // secondary button keeps the auto-mode wording (B10).
+  // The Read tab always reads "Review task blocks"; the automatic Read's
+  // own footer button always reads "Adjust task blocks" (B10). This is
+  // fixed wording for that surface, not the settings-level auto/suggest
+  // mode — the footer button below only ever renders on the
+  // automatic-read surface, never on proposed-read.
   const reviewTabLabel = "Review task blocks";
-  const footerReviewLabel = isAutoMode ? "Adjust task blocks" : "Review task blocks";
+  const footerAdjustLabel = "Adjust task blocks";
   // Every Read-tab state (proposed or automatic) takes the same wide frame;
   // the attribute just names which one this report is.
   const hasAutomaticPlacement = (props.dayPlan?.plan?.blocks ?? []).some(
@@ -123,6 +120,16 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   };
   const openReaderReview = (event: { currentTarget: HTMLElement }) =>
     props.onReview(event.currentTarget);
+  // Jump links scroll their section to the report top and move keyboard
+  // focus to its heading, instead of leaving focus behind on the link.
+  const jumpTo = (sectionId: string) => (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    const section = document.getElementById(sectionId);
+    // scrollIntoView is absent under jsdom (no layout engine), so guard the
+    // call itself rather than just the element.
+    section?.scrollIntoView?.({ block: "start" });
+    section?.focus();
+  };
   const acceptReviewButton = acceptStatus.needsReview ? (
     <Button variant="quiet" size="sm" ref={acceptReviewRef} onClick={openReaderReview}>
       {acceptLabels.REVIEW_CHANGES_LABEL}
@@ -167,8 +174,16 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       jumpLinks={
         newsPreview || sportsPreview ? (
           <nav className="brief-reader__jump" aria-label="Report sections">
-            {newsPreview ? <a href="#brief-reader-news">News ↓</a> : null}
-            {sportsPreview ? <a href="#brief-reader-sports">Sports ↓</a> : null}
+            {newsPreview ? (
+              <a href="#brief-reader-news" onClick={jumpTo("brief-reader-news")}>
+                News ↓
+              </a>
+            ) : null}
+            {sportsPreview ? (
+              <a href="#brief-reader-sports" onClick={jumpTo("brief-reader-sports")}>
+                Sports ↓
+              </a>
+            ) : null}
           </nav>
         ) : null
       }
@@ -233,13 +248,20 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
             </span>
             {acceptPrimaryButton}
           </>
-        ) : (
+        ) : acceptPrimaryButton ? (
           <>
             {acceptPrimaryButton}
             <Button variant="secondary" onClick={openReaderReview}>
-              {footerReviewLabel}
+              {footerAdjustLabel}
             </Button>
           </>
+        ) : (
+          // Nothing awaits acceptance: "Adjust task blocks" is the only
+          // action, so it takes the primary button instead of leaving the
+          // footer with no primary at all.
+          <Button variant="primary" onClick={openReaderReview}>
+            {footerAdjustLabel}
+          </Button>
         )
       }
       footerStatus={
