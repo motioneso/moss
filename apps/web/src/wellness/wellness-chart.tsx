@@ -132,7 +132,7 @@ export function WellnessChart({ days, theme = "light" }: Props) {
     const { medFrac, isToday } = d;
     const dim = active != null && active !== i;
     const op = isToday ? 0.5 : 1;
-    const pine = "var(--accent)";
+    const pine = "var(--accent-fg)";
     let mark: React.ReactNode;
 
     if (medFrac <= 0) {

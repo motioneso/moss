@@ -316,7 +316,7 @@ button {
   align-items: center;
   gap: 0.625rem;
   padding: 0 13px;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 
 .brand-mark {
@@ -325,7 +325,7 @@ button {
   display: grid;
   place-items: center;
   /* currentColor drives the mark's outer bars against the pale sidebar. */
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 
 .brand-mark svg {
@@ -399,7 +399,7 @@ button {
 
 .module-link.active {
   background: var(--forest);
-  color: var(--bone);
+  color: var(--accent-label);
   font-weight: 600;
 }
 
@@ -849,7 +849,7 @@ button.module-link {
 }
 
 .back-link:hover {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 
 .empty-state {
@@ -882,7 +882,7 @@ button.module-link {
   width: 2.25rem;
   height: 2.25rem;
   border: 4px solid var(--border-default);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-fg);
   border-radius: 999px;
   animation: spin 900ms linear infinite;
 }

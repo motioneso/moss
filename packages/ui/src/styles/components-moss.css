@@ -165,7 +165,7 @@
 .jds-tab[aria-current="page"] {
   color: var(--text);
   font-weight: var(--weight-semibold);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--accent-fg);
 }
 .jds-tab svg {
   width: 15px;

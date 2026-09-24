@@ -248,14 +248,14 @@
   cursor: pointer;
 }
 .brief-reader__tab--selected {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-weight: 700;
-  border-bottom-color: var(--forest);
+  border-bottom-color: var(--accent-fg);
 }
 .brief-reader__tab:focus-visible,
 .brief-reader__tabs .brief-reader__jump a:focus-visible,
 .brief-reader__schedule-toggle:focus-visible {
-  outline: 2px solid var(--forest);
+  outline: 2px solid var(--accent-fg);
   outline-offset: 2px;
 }
 .brief-reader__tabs .brief-reader__jump {
@@ -282,7 +282,7 @@
   font-size: 11px;
   font-weight: 600;
   line-height: 1.5;
-  color: var(--forest);
+  color: var(--accent-fg);
   text-align: left;
   cursor: pointer;
 }
@@ -378,7 +378,7 @@
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
-  color: var(--forest);
+  color: var(--accent-fg);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -473,7 +473,7 @@
   cursor: pointer;
 }
 .brief-reader__callout-disclosure:focus-visible {
-  outline: 2px solid var(--forest);
+  outline: 2px solid var(--accent-fg);
   outline-offset: 2px;
 }
 .brief-reader__callout-detail {
@@ -501,7 +501,7 @@
   margin-top: 10px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--forest);
+  color: var(--accent-fg);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -518,7 +518,7 @@
 }
 .brief-reader__editorial-eyebrow {
   margin: 0;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .brief-reader__editorial-headline {
   margin: 10px 0 17px;
@@ -560,7 +560,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0;
-  color: var(--forest);
+  color: var(--accent-fg);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -578,7 +578,7 @@
 }
 .brief-reader:has([data-briefing-surface]) .brief-reader__sources > summary,
 .brief-reader:has([data-briefing-surface]) .brief-reader__earlier > summary {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-weight: 600;
   cursor: pointer;
 }
@@ -595,7 +595,7 @@
   margin: 0;
   padding-top: 6px;
   letter-spacing: 1px;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .brief-reader:has([data-briefing-surface]) .brief-reader__rail-heading {
   margin: 8px 0 0;
@@ -651,7 +651,7 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1.5;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-variant-numeric: tabular-nums;
 }
 .brief-snapshot__main {
@@ -670,7 +670,7 @@ button.brief-snapshot__main {
   cursor: pointer;
 }
 button.brief-snapshot__main:focus-visible {
-  outline: 2px solid var(--forest);
+  outline: 2px solid var(--accent-fg);
   outline-offset: 2px;
 }
 .brief-snapshot__main .day-ev__title,

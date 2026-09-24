@@ -74,7 +74,7 @@
 }
 
 .onb__step.is-current .onb__step__dot {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   color: var(--accent-fg);
 }
 
@@ -317,7 +317,7 @@
 }
 
 .onb-opt.is-sel {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: color-mix(in srgb, var(--forest-soft) 40%, var(--surface));
   box-shadow:
     0 0 0 1px var(--accent),
@@ -380,9 +380,9 @@
 }
 
 .onb-cli.is-sel {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--forest-soft);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-fg);
 }
 
 .onb-cli.is-off {
@@ -481,7 +481,7 @@
 
 .onb-auth__code:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
@@ -549,7 +549,7 @@
 }
 
 .onb-prov:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow:
     0 0 0 1px var(--accent),
     var(--shadow-xs);

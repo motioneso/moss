@@ -131,8 +131,9 @@
 /* Canyon's shared --muted resting nav-link color clears only 4.46:1 on the
    sage-light sidebar, just under the 4.5:1 normal-text floor (WCAG AA
    normal text). Nudge canyon's resting link color only; hover and the
-   selected pill keep their own tokens and already clear the floor. */
-[data-theme="canyon"] .module-link:not(:hover):not(.active) {
+   selected pill keep their own tokens and already clear the floor. Dark
+   mode keeps the charcoal sidebar's own link color. */
+[data-theme="canyon"]:not([data-color-mode="dark"]) .module-link:not(:hover):not(.active) {
   color: var(--nav-link-muted);
 }
 
@@ -146,12 +147,9 @@
   background: var(--forest);
   color: var(--text-on-accent);
 }
-/* Dark color-mode forest is mid-green: accent text on it reads 2.28. The
-   pill keeps its forest ground and takes bone text, which aliases the dark
-   paper in this combo (about 7), so the selected label stays readable. */
 [data-color-mode="dark"] .module-link.active {
   background: var(--forest);
-  color: var(--bone);
+  color: var(--accent-label);
 }
 
 [data-theme="dark"] .brand-lockup,

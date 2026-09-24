@@ -13,7 +13,7 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
   if (!event) return null;
   const isBlock = event.kind === "block";
   const isTentative = event.status === "needsAction" || event.status === "tentative";
-  const evColor = isBlock ? "var(--accent)" : "var(--steel)";
+  const evColor = isBlock ? "var(--accent-fg)" : "var(--steel)";
 
   return (
     <>

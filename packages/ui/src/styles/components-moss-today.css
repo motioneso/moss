@@ -42,7 +42,7 @@
   margin: 0;
 }
 .jds-masthead__accent {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 .jds-masthead__lede {
   margin: var(--space-2) 0 0;
@@ -198,16 +198,16 @@
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 .jds-agenda-row__now-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-fg);
 }
 .jds-agenda-row--now .jds-agenda-row__title {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 .jds-agenda-row--done .jds-agenda-row__title,
 .jds-agenda-row--done .jds-agenda-row__time {
@@ -494,7 +494,7 @@
   font-weight: 600;
 }
 .well__btn:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--white);
 }
 .np-photo {

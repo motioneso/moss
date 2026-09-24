@@ -14,7 +14,7 @@
 .jds-brief--timeline .tl-number {
   font-size: 10px;
   font-weight: 700;
-  color: var(--forest);
+  color: var(--accent-fg);
   border-bottom: 2px solid var(--gold);
   padding-bottom: 5px;
 }
@@ -72,7 +72,7 @@
   display: inline-block;
   width: 8px;
   height: 8px;
-  border: 1px solid var(--forest);
+  border: 1px solid var(--accent-fg);
 }
 
 /* --- Rows: time column, rule with marker, block --- */
@@ -93,13 +93,13 @@
 }
 .jds-brief--timeline .tl-slot--proposed,
 .jds-brief--timeline .tl-slot--pending {
-  border-left: 1px dashed var(--forest);
+  border-left: 1px dashed var(--accent-fg);
 }
 .jds-brief--timeline .tl-time {
   padding-top: 12px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-variant-numeric: tabular-nums;
 }
 .jds-brief--timeline .tl-time small {
@@ -166,7 +166,7 @@
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent-fg);
   padding-bottom: 8px;
   border-bottom: 2px solid var(--forest);
   margin-bottom: 10px;
@@ -199,14 +199,14 @@
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 :is(.cmd-aside, .cmd-dock) .well__title {
   font-size: 11px;
   font-weight: 600;
   text-transform: none;
   letter-spacing: normal;
-  color: var(--forest);
+  color: var(--accent-fg);
   position: relative;
   top: 3px;
 }
@@ -257,20 +257,20 @@
   padding: 0 0 0 4px;
   border: none;
   background: transparent;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
   transition: var(--transition-control);
 }
 :is(.cmd-aside, .cmd-dock) .well__plus:hover {
-  color: var(--forest-hover);
+  color: var(--accent-fg-hover);
 }
 :is(.cmd-aside, .cmd-dock) .well__btn--primary {
   background: var(--forest);
   border: 1px solid var(--forest);
   border-radius: 8px;
-  color: var(--paper);
+  color: var(--accent-label);
   font-size: 12px;
   line-height: 1.2;
   padding: 12px 6px;
@@ -293,7 +293,7 @@
   flex-wrap: nowrap;
   margin: 0 0 18px;
   background: var(--sage-light);
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"])
   .cmd-main
@@ -321,7 +321,7 @@
   border: none;
   border-radius: 2px;
   background: var(--forest);
-  color: var(--bone);
+  color: var(--accent-label);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -399,7 +399,7 @@
   .tl-slot--pending
   .jds-task__main {
   padding: 11px 13px;
-  border: 1px dashed var(--forest);
+  border: 1px dashed var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"])
   .cmd-main
@@ -430,7 +430,7 @@
   padding: 1px 5px;
   border: 1px solid var(--line);
   background: var(--bone);
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 9px;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline {
@@ -470,7 +470,7 @@
   font-weight: 900;
   line-height: 1.2;
   letter-spacing: -1px;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__v small {
   font-family: var(--font-sans);
@@ -500,7 +500,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--forest);
+  color: var(--accent-fg);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -568,7 +568,7 @@
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__head {
   align-items: center;
@@ -608,7 +608,7 @@
   font-weight: 900;
   font-size: 26px;
   line-height: 1.2;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile--warn .jds-stat-tile__value {
   color: var(--gold);
@@ -631,7 +631,7 @@
   padding-top: 0;
   font-size: 10px;
   font-weight: 700;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__title {
   font-size: 12px;
@@ -646,7 +646,7 @@
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__now {
   margin-top: 5px;
   font-size: 9px;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__now-dot {
   background: var(--gold);
@@ -655,7 +655,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card .cmd-empty {
   margin-top: 11px;
@@ -737,7 +737,7 @@
 .ev-head__number {
   font-size: 10px;
   font-weight: 700;
-  color: var(--forest);
+  color: var(--accent-fg);
   border-bottom: 2px solid var(--gold);
   padding-bottom: 5px;
 }
@@ -768,7 +768,7 @@
 }
 .ev-done__check {
   flex: none;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 17px;
   line-height: 1;
 }
@@ -848,7 +848,7 @@
 .ev-tomorrow__eyebrow {
   display: block;
   margin-bottom: 11px;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.5px;
@@ -888,7 +888,7 @@ button.ev-tomorrow__item {
 .ev-tomorrow__item strong {
   display: block;
   margin-bottom: 3px;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 10px;
 }
 .ev-tomorrow__item small {
@@ -910,7 +910,7 @@ button.ev-tomorrow__item {
   padding: 11px 14px;
   border: 1px solid var(--forest);
   background: var(--forest);
-  color: var(--paper);
+  color: var(--accent-label);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -925,7 +925,7 @@ button.ev-tomorrow__item {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--forest);
+  color: var(--accent-fg);
   font: inherit;
   font-size: 12px;
   font-weight: 600;

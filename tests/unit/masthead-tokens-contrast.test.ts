@@ -79,8 +79,13 @@ for (const name of [...lightThemes.keys()].sort()) {
   contexts.push({ label: `light, ${name}`, chain: [lightThemes.get(name)!, root] });
 }
 contexts.push({ label: "dark, default", chain: [darkBase, root] });
-for (const name of [...darkCombos.keys()].sort()) {
-  contexts.push({ label: `dark, ${name}`, chain: [darkCombos.get(name)!, darkBase, root] });
+// Cascade order: the dark-plus-theme block outranks the standalone theme block,
+// which follows (and so outranks) the dark block in source order.
+for (const name of [...new Set([...lightThemes.keys(), ...darkCombos.keys()])].sort()) {
+  const chain = [darkCombos.get(name), lightThemes.get(name), darkBase, root].filter(
+    (block): block is Decls => block !== undefined
+  );
+  contexts.push({ label: `dark, ${name}`, chain });
 }
 
 function resolveToken(name: string, chain: readonly Decls[], depth = 0): string {

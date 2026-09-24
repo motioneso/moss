@@ -133,7 +133,7 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
   text-decoration: none;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 
 .today-hero__sections {
@@ -147,7 +147,7 @@
 }
 
 .today-hero__sections a {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 11px;
   font-weight: 600;
   text-transform: none;
@@ -240,9 +240,9 @@
   color: var(--bone);
 }
 
-[data-theme="dark"] .today-hero:is([data-mode="day"], [data-mode="evening"]) {
-  background: var(--hero-bg);
-  color: var(--hero-fg);
+/* Dark --bone is the charcoal paper; the hero keeps light's bone-on-accent text. */
+[data-color-mode="dark"] .today-hero:is([data-mode="day"], [data-mode="evening"]) {
+  --bone: var(--hero-fg);
 }
 
 /* Faint topographic contours, dense on the right and fading out behind the text. */

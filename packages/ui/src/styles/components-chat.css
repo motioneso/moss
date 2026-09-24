@@ -175,7 +175,7 @@
 }
 
 .chatd-sugg__btn:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--forest-soft);
   color: var(--forest-ink);
 }
@@ -193,7 +193,7 @@
 
 .chatd-sess__row.is-selected {
   background: var(--forest-soft);
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
 }
 
 .chatd-sess__ic {
@@ -230,7 +230,7 @@
 }
 
 .chatd-input:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
   background: var(--surface);
 }
@@ -270,8 +270,8 @@
 }
 
 .chatd-mic:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
 }
 
 .chatd-mic.is-recording {
@@ -547,7 +547,7 @@
 
 .source-chip:hover,
 .source-chip[aria-expanded="true"] {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--accent-soft);
   color: var(--accent-soft-fg);
 }
@@ -555,7 +555,7 @@
 .source-chip:focus-visible,
 .source-tray__close:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
@@ -652,8 +652,8 @@
 }
 
 .chatd-attach__btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
 }
 
 /* from apps/web/src/styles/kit-chat-skills.css */
@@ -722,7 +722,7 @@
 
 .chatd-model__trigger[aria-expanded="true"],
 .chatd-model__trigger:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   color: var(--text);
 }
 
