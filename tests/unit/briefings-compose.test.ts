@@ -12,6 +12,7 @@ import {
   FIXED_NOW,
   committedDayPlanBlock,
   definition,
+  executedSql,
   fakeScopedDb,
   makeFakeDeps,
   runInput
@@ -337,6 +338,21 @@ describe("composeBriefing — gathering", () => {
     const gaps = (result.sourceMetadata.gaps ?? []) as Array<{ source: string; reason: string }>;
     expect(gaps.some((g) => g.source === "email" && g.reason === "tool_failed")).toBe(true);
     expect(result.status).toBe("succeeded");
+  });
+
+  it("rolls a failing tool back to its own savepoint so later tools keep a live transaction", async () => {
+    executedSql.length = 0;
+    const deps = makeFakeDeps({ failTool: "email.listVisibleMessages" });
+    await composeBriefing(fakeScopedDb, definition(), runInput, deps);
+
+    const rollback = executedSql.findIndex((stmt) => stmt.startsWith("ROLLBACK TO SAVEPOINT"));
+    expect(rollback).toBeGreaterThan(-1);
+    const name = executedSql[rollback]!.replace("ROLLBACK TO SAVEPOINT ", "");
+    expect(executedSql.indexOf(`SAVEPOINT ${name}`)).toBeLessThan(rollback);
+    // A later tool still opens its own savepoint after the failed one is unwound.
+    expect(executedSql.slice(rollback + 1).some((stmt) => stmt.startsWith("SAVEPOINT "))).toBe(
+      true
+    );
   });
 });
 

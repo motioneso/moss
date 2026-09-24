@@ -465,6 +465,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0241",
           name: "0241_ai_provider_kind_system_one.sql"
+        },
+        // Briefings worker reads followed teams for the morning sports section.
+        {
+          version: "0242",
+          name: "0242_sports_follows_worker_select.sql"
         }
       ]);
     } finally {

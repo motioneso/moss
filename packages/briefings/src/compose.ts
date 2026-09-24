@@ -1,5 +1,6 @@
 import {
   gatherToolSection,
+  withToolSavepoint,
   emptySection,
   buildPersonaBlock,
   sourceIncludedInBriefings,
@@ -208,10 +209,12 @@ export async function composeBriefing(
       const query = [...commitments.lines, ...tasks.lines, ...rawCalendar.lines]
         .join(" ")
         .slice(0, 500);
-      const semantic = query.trim()
-        ? await deps.memoryRetriever.retrieve(scopedDb, query, VAULT_CHUNK_CAP, "vault")
-        : [];
-      const recent = await deps.memoryRetriever.retrieveRecent(scopedDb, VAULT_CHUNK_CAP, "vault");
+      const [semantic, recent] = await withToolSavepoint(scopedDb, async () => [
+        query.trim()
+          ? await deps.memoryRetriever.retrieve(scopedDb, query, VAULT_CHUNK_CAP, "vault")
+          : [],
+        await deps.memoryRetriever.retrieveRecent(scopedDb, VAULT_CHUNK_CAP, "vault")
+      ]);
       const seen = new Set<string>();
       for (const chunk of [...semantic, ...recent]) {
         const dedupeKey = chunk.id || `${chunk.sourcePath}:${chunk.lineStart}`;
@@ -321,13 +324,15 @@ export async function composeBriefing(
   ];
   let priorityResults: PriorityResult[] = [];
   try {
-    const [priorityModel, focusReadiness] = await Promise.all([
-      readPriorityModel(scopedDb, deps.priorityPreferencesRepository),
-      deps.focusReadiness?.({
-        actorUserId: definition.owner_user_id,
-        requestId: input.jobId ? `pgboss:${input.jobId}` : `briefing:${input.runId ?? "priority"}`
-      }) ?? Promise.resolve([])
-    ]);
+    const [priorityModel, focusReadiness] = await withToolSavepoint(scopedDb, () =>
+      Promise.all([
+        readPriorityModel(scopedDb, deps.priorityPreferencesRepository),
+        deps.focusReadiness?.({
+          actorUserId: definition.owner_user_id,
+          requestId: input.jobId ? `pgboss:${input.jobId}` : `briefing:${input.runId ?? "priority"}`
+        }) ?? Promise.resolve([])
+      ])
+    );
     priorityResults = rankPriorityCandidates({
       model: priorityModel,
       candidates: priorityCandidates,
