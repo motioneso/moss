@@ -248,6 +248,7 @@ export function stubReaderController(
     dismissApproval: () => undefined,
     setTime: () => undefined,
     runPreview: async () => true,
+    saveChanges: async () => true,
     acceptAllAdditions: async () => true,
     apply: async () => true,
     confirm: async () => true,

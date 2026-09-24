@@ -1,5 +1,7 @@
 import { Select } from "@moss/ui";
 
+import { localDay } from "@moss/shared";
+
 import type {
   DayPlanBlockDto,
   DayPlanDto,
@@ -21,7 +23,7 @@ import {
   type BlockChoice,
   type ReviewPlacement
 } from "./day-plan-review-model.js";
-import { shortDate } from "./today-labels.js";
+import { REVIEW_KEEP_ON_CALENDAR_LABEL, shortDate } from "./today-labels.js";
 
 /** Row list shared with the evening planning dialog (T20). Moved verbatim
     from day-plan-review.tsx in V6; the controls gained visible labels. */
@@ -57,6 +59,7 @@ export function ReviewRow(props: {
   readonly plan: DayPlanDto;
   readonly locale: LocaleSettingsDto;
   readonly onOpenTask: (taskId: string) => void;
+  readonly calendarTimeField?: boolean;
 }) {
   const { block, controller } = props;
   if (props.unavailable) {
@@ -68,9 +71,41 @@ export function ReviewRow(props: {
     );
   }
   const onCalendar = block.actualPlacement?.startsAt != null;
+  const readerMode = props.calendarTimeField === true;
+  const readerCalendar = readerMode && onCalendar;
+  const readerDuration = readerMode ? blockDuration(block) : null;
+  const pendingStartsAt =
+    block.pendingChange !== null &&
+    block.pendingChange.kind !== "remove" &&
+    "startsAt" in block.pendingChange
+      ? (block.pendingChange.startsAt ?? null)
+      : null;
+  const readerTimeIso =
+    props.choice.startsAt ?? pendingStartsAt ?? block.actualPlacement?.startsAt ?? null;
+  const readerTimeValue =
+    readerTimeIso !== null ? isoToLocalTime(readerTimeIso, props.plan.timeZone) : "";
   const effective = effectivePending(block, props.choice);
   const changed = effective !== undefined && !samePending(effective, block.pendingChange ?? null);
   const transient = transientWord(changed, effective?.kind, onCalendar);
+  const stateWord = transient ?? props.savedLabel;
+  const dueReason =
+    props.task?.dueAt !== undefined && props.task?.dueAt !== null
+      ? localDay(props.task.dueAt, props.plan.timeZone) === props.plan.localDay
+        ? "Due today"
+        : `Due ${shortDate(props.task.dueAt, props.locale)}`
+      : null;
+  const metaReason = dueReason ?? stateWord;
+  const eveningDueHint =
+    !readerMode && props.choice.placement === "leave" && props.task?.dueAt
+      ? `Due ${shortDate(props.task.dueAt, props.locale)}, no time set`
+      : null;
+  const showTime = readerMode
+    ? blockDuration(block) !== null
+    : props.choice.placement === "add" || props.choice.placement === "move";
+  const timeDisabled =
+    blockDuration(block) === null ||
+    controller.busy ||
+    (readerMode && (props.choice.placement === "leave" || props.choice.placement === "remove"));
   const detail = controller.preview?.blocks.find((entry) => entry.blockId === block.id) ?? null;
   const conflicts = (controller.preview?.conflicts ?? []).filter(
     (conflict) => conflict.blockId === block.id
@@ -94,15 +129,17 @@ export function ReviewRow(props: {
         ) : (
           <div className="plan-review__title">{props.title}</div>
         )}
-        <div className="plan-review__state">{transient ?? props.savedLabel}</div>
+        {readerMode && readerDuration !== null ? (
+          <div className="plan-review__meta">
+            {readerDuration} minutes · {metaReason}
+          </div>
+        ) : (
+          <div className="plan-review__state">{stateWord}</div>
+        )}
         {props.changed ? (
           <div className="plan-review__changed">Changed since you started</div>
         ) : null}
-        {props.choice.placement === "leave" && props.task?.dueAt ? (
-          <div className="plan-review__hint">
-            Due {shortDate(props.task.dueAt, props.locale)}, no time set
-          </div>
-        ) : null}
+        {eveningDueHint ? <div className="plan-review__hint">{eveningDueHint}</div> : null}
         {detail && !detail.eligible ? (
           <div className="plan-review__hint">{ineligibleWord(detail.ineligibleReason)}</div>
         ) : null}
@@ -117,32 +154,43 @@ export function ReviewRow(props: {
         ))}
         {outcome ? <div className="plan-review__hint">{outcomeWord(outcome)}</div> : null}
       </div>
-      <div className="plan-review__fields">
-        {props.choice.placement === "add" || props.choice.placement === "move" ? (
+      <div className={`plan-review__fields${showTime ? "" : " plan-review__fields--single"}`}>
+        {showTime ? (
           <div className="plan-review__field">
-            <label className="plan-review__label" htmlFor={`${block.id}-time`}>
+            <label
+              className="plan-review__label plan-review__label--time"
+              htmlFor={`${block.id}-time`}
+            >
               Time
             </label>
             <input
               type="time"
               id={`${block.id}-time`}
               aria-label={`${props.title}: start time`}
-              className="plan-review__time"
-              disabled={!schedulable || controller.busy}
-              value={timeValue}
+              className="plan-review__time plan-review__field--time"
+              disabled={timeDisabled}
+              value={readerMode ? readerTimeValue : timeValue}
               onChange={(event) => {
                 const iso = localTimeToIso(
                   props.plan.localDay,
                   event.target.value,
                   props.plan.timeZone
                 );
+                if (readerMode) {
+                  controller.setPlacement(block.id, onCalendar ? "move" : "add", iso);
+                  controller.setTime(block.id, iso);
+                  return;
+                }
                 controller.setTime(block.id, iso);
               }}
             />
           </div>
         ) : null}
-        <div className="plan-review__field">
-          <label className="plan-review__label" htmlFor={`${block.id}-placement`}>
+        <div className="plan-review__field plan-review__field--placement">
+          <label
+            className="plan-review__label plan-review__label--placement"
+            htmlFor={`${block.id}-placement`}
+          >
             Placement
           </label>
           <Select
@@ -165,7 +213,9 @@ export function ReviewRow(props: {
                 value={option.value}
                 disabled={!schedulable && (option.value === "add" || option.value === "move")}
               >
-                {option.label}
+                {readerCalendar && option.value === "keep"
+                  ? REVIEW_KEEP_ON_CALENDAR_LABEL
+                  : option.label}
               </option>
             ))}
           </Select>

@@ -342,12 +342,13 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await page.getByRole("button", { name: "Review task blocks" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
   await expect(dialog).toContainText("Proposed, not on the calendar yet");
 
-  // Leave the due-dated block unscheduled: the consequence reads in words.
+  // Leave the due-dated block unscheduled: no extra consequence line appears.
   await dialog.getByLabel("File the report: placement").selectOption("leave");
-  await expect(dialog).toContainText("Due Sep 12, no time set");
+  await expect(dialog).toContainText("Proposed, not on the calendar yet");
+  await expect(dialog).not.toContainText("no time set");
 
   // Choose both proposals so they join the selection; the summary names each.
   await dialog.getByLabel("Write the launch brief: placement").selectOption("add");
@@ -358,32 +359,33 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(dialog).toContainText("Add Call the vendor at 12:30");
 
   // Preview: the lunch overlap names the commitment; only the clean add applies.
-  await dialog.getByRole("button", { name: "Preview changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toContainText("Overlaps Lunch with Sam, 12:00 to 1:00");
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
   await expect(dialog).toContainText("Applied 1; 0 failed; 0 pending.");
   await expect(dialog).not.toContainText("Confirm calendar changes");
 
   // Back on Today the added block reads on the calendar without a reload.
   await dialog.getByRole("button", { name: "Back to Today" }).click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await page.getByRole("button", { name: "Review task blocks" }).first().click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
   await expect(dialog).toContainText("On the calendar");
   // The task dialog still opens for the added block.
   await dialog
     .getByRole("button", { name: /Write the launch brief/ })
     .first()
     .click();
-  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
+  const taskDialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("button", { name: "Cancel" }) });
+  await expect(taskDialog.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await taskDialog.getByRole("button", { name: "Cancel" }).click();
 
   // Move the calendar block: confirmation names the event and keeps the task.
   await page.getByRole("button", { name: "Review task blocks" }).first().click();
   await dialog.getByLabel("Ship the invoice: placement").selectOption("move");
   await dialog.getByLabel("Ship the invoice: start time").fill("17:00");
-  await dialog.getByRole("button", { name: "Preview changes" }).click();
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   const confirm = dialog.locator("section.plan-review__confirm");
   await expect(confirm).toContainText("Confirm calendar changes");
   await expect(confirm).toContainText("Ship the invoice");
@@ -393,7 +395,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(confirm).toBeHidden();
   // The earlier outcome stands unchanged: nothing new applied.
   await expect(dialog).toContainText("Applied 1; 0 failed; 0 pending.");
-  await dialog.getByRole("button", { name: "Apply changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   await dialog.getByRole("button", { name: "Confirm" }).click();
   await expect(dialog).toContainText("Applied 2; 0 failed; 0 pending.");
   await dialog.getByRole("button", { name: "Back to Today" }).click();
@@ -405,11 +407,14 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   const reader = page.getByRole("dialog");
   await expect(reader).toContainText("Protect the launch window");
   await reader.getByRole("button", { name: "Adjust task blocks" }).click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "The briefing" })).toHaveAttribute(
+    "aria-selected",
+    "false"
+  );
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Make the plan fit." })).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Read the full morning briefing" })).toBeFocused();
 
@@ -417,7 +422,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.getByRole("button", { name: "Review task blocks" }).first().click();
-    await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `no sideways scroll at ${width}px`
@@ -623,7 +628,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
 
   // Review changes keeps the rows, names the conflict and shows the outcomes.
   await dialog.getByRole("button", { name: "Review changes" }).click();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
   await expect(dialog).toContainText("Overlaps Team standup");
   await expect(dialog).toContainText("Applied 2; 0 failed; 0 pending.");
   // Everything resolved, so there is nothing to retry and no retry is sent.
@@ -632,12 +637,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
 
   // Buttons fit the narrow viewport; DOM order follows the shell, grid keeps Back left.
   const reviewNames = await dialog.locator(".brief-reader__footer button").allTextContents();
-  expect(reviewNames).toEqual([
-    "Preview changes",
-    "Apply changes",
-    "Accept all time blocks",
-    "Back to Today"
-  ]);
+  expect(reviewNames).toEqual(["Save changes", "Back to Today"]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     "no sideways scroll at 320px in the review"
@@ -653,7 +653,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
   );
   await page.getByRole("tab", { name: "The briefing" }).click();
   await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Make the plan fit." })).toBeHidden();
 });
 
 test("evening planning saves one draft and never applies in suggest mode", async ({ page }) => {
