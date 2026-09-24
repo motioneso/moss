@@ -330,7 +330,7 @@ lines — split by section rather than fighting it.
 ## 11. AI integration
 
 Declare `assistantTools` in the manifest with an honest `risk` (`read` / `write` /
-`destructive`) and `executionPolicy` (`auto` / `confirm`). Tools receive RLS-scoped data
+`destructive` / `outbound`) and `executionPolicy` (`auto` / `confirm`). Tools receive RLS-scoped data
 access; results must never include secrets. Never name a provider or model — request
 capabilities and let the user's configured router decide.
 
@@ -537,6 +537,11 @@ version identify the accepted artifact. Bump the version when that trust set cha
 SQL provisioning, staged update acceptance, and purge use the privileged host reconcile lifecycle;
 reconcile is not a command generated module code may run.
 
+**Dev parity.** `pnpm db:reconcile` runs the same reconcile pass as boot against the local registry
+and `JARVIS_MODULES_ENSURE`. Once the target has a bootstrap owner, set
+`MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` to that owner's email before running it; fresh installs are
+exempt.
+
 Live discovery exists: `POST /api/admin/modules/rescan` refreshes the API's discovered modules and
 signals the worker. Discovery does not provision a schema or accept every staged update.
 Workshop's “Look at the draft” currently requests a rescan before navigating to its page.
@@ -557,7 +562,7 @@ For built-in modules, before opening a PR:
 - [ ] Approved spec in `docs/superpowers/specs/` + GitHub `task` issue (in-repo modules).
 - [ ] Manifest declares `dataLifecycle` (explicit empty `exportSections` if truly none).
 - [ ] Every owned table: RLS policies + `ON DELETE CASCADE` chain to `app.users`.
-- [ ] Migration row added to `tests/integration/foundation.test.ts`; full
+- [ ] Migration row added to `tests/integration/foundation-schema-catalog.test.ts`; full
       integration verification through the verify-gate skill.
 - [ ] All external fetches go through a declared source + adapter (`ctx.fetchFn` only).
 - [ ] `./web` entry is browser-safe (no `node:*`, no manifest import) and mirrors manifest
