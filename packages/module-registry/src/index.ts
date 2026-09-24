@@ -394,6 +394,7 @@ import {
   createStoryRelevancePolicy,
   registerUsefulnessFeedbackRoutes,
   storyFeedbackTargetRef,
+  storyRelevanceSortingModelFingerprint,
   usefulnessFeedbackModuleManifest,
   usefulnessFeedbackModuleSqlMigrationDirectory
 } from "@moss/usefulness-feedback";
@@ -890,6 +891,21 @@ export function buildNewsDiscoveryPorts(
           { service: "module.news", ...input },
           { repository, cipher, logger, createCliStructuredAdapter }
         ),
+      // #2636: the key for a remembered sorting answer. Resolves the same sorting model the
+      // questions will go to, so a switched or unbound model never reuses an old answer. The
+      // upstream model and provider are part of the key, so re-pointing the row changes it.
+      async sortingModelFingerprint(scopedDb: DataContextDb) {
+        const model = await repository.resolveSortingModel(scopedDb, "module.news", {
+          acceptSystemOne: true
+        });
+        if (!model) return null;
+        return storyRelevanceSortingModelFingerprint({
+          providerKind: model.provider_kind,
+          providerConfigId: model.provider_config_id,
+          modelId: model.id,
+          providerModelId: model.provider_model_id
+        });
+      },
       async fingerprint(scopedDb: DataContextDb) {
         const model = (
           await repository.resolveModelForService(scopedDb, "module.news", {
@@ -995,6 +1011,21 @@ export function buildSportsDiscoveryPorts(
             createCliStructuredAdapter: createCliStructuredAdapterFactory()
           }
         ),
+      // #2636: the key for a remembered sorting answer. Resolves the same sorting model the
+      // questions will go to, so a switched or unbound model never reuses an old answer. The
+      // upstream model and provider are part of the key, so re-pointing the row changes it.
+      async sortingModelFingerprint(scopedDb: DataContextDb) {
+        const model = await repository.resolveSortingModel(scopedDb, "module.sports", {
+          acceptSystemOne: true
+        });
+        if (!model) return null;
+        return storyRelevanceSortingModelFingerprint({
+          providerKind: model.provider_kind,
+          providerConfigId: model.provider_config_id,
+          modelId: model.id,
+          providerModelId: model.provider_model_id
+        });
+      },
       async fingerprint(scopedDb: DataContextDb) {
         const model = (
           await repository.resolveModelForService(scopedDb, "module.sports", {
@@ -1238,6 +1269,8 @@ function buildNewsStoryFeedbackPort(
     // policy never names a provider or a model.
     ai,
     repository: usefulnessFeedbackRepository,
+    // #2636: remembered sorting answers live in this module's own repository.
+    answerCache: usefulnessFeedbackRepository,
     // Counts and names only. A reason, a headline, a link or a story reference never reaches here.
     logger: {
       info: (fields) => logger?.info(fields, "story relevance"),
@@ -2401,6 +2434,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const sportsStoryRelevance = createStoryRelevancePolicy({
         ai: discovery.ai,
         repository: usefulnessFeedbackRepository,
+        // #2636: remembered sorting answers live in the feedback module's own repository.
+        answerCache: usefulnessFeedbackRepository,
         logger: sportsStoryLogger
       });
       const sportsStoryFeedback = {

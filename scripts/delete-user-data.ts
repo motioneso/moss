@@ -115,6 +115,8 @@ const userScopedCountQueries: ReadonlyArray<readonly [table: string, predicate: 
   // counted, so a deletion report under-reported what it had removed.
   ["app.usefulness_feedback_signals", "owner_user_id = $1::uuid"],
   ["app.usefulness_feedback_targets", "owner_user_id = $1::uuid"],
+  // #2636 remembered sorting answers: also cascades, and is counted for the same reason.
+  ["app.story_relevance_answer_cache", "owner_user_id = $1::uuid"],
   // Per-user module enablement deny rows (0065): only scope='user' rows are
   // owner-scoped (scope='instance' rows are global; disabled_by_user_id is
   // ON DELETE SET NULL — retained/anonymized, not counted here).

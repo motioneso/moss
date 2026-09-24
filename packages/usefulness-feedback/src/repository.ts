@@ -21,6 +21,12 @@ import {
   storyRelevanceRuleNeedsRecompile
 } from "./relevance/compile.js";
 import {
+  STORY_RELEVANCE_ANSWER_TTL_DAYS,
+  type StoryRelevanceAnswerKey,
+  type StoryRelevanceAskedAnswer,
+  type StoryRelevanceStoredAnswer
+} from "./relevance/answer-cache.js";
+import {
   STORY_TARGET_KIND_BY_MODULE,
   isStoryTargetKind,
   sanitizeStoryTargetMetadata
@@ -222,7 +228,7 @@ export class UsefulnessFeedbackRepository {
   ): Promise<UsefulnessFeedbackSignal | undefined> {
     assertDataContextDb(scopedDb);
     const now = new Date();
-    return scopedDb.db
+    const retired = await scopedDb.db
       .updateTable("app.usefulness_feedback_signals")
       .set({ status: "superseded", resolved_at: now, updated_at: now })
       .where("owner_user_id", "=", ownerUserId)
@@ -230,6 +236,9 @@ export class UsefulnessFeedbackRepository {
       .where("status", "=", "active")
       .returningAll()
       .executeTakeFirst();
+    // #2636: the retired rule's remembered answers are no longer reachable, so drop them.
+    if (retired) await this.deleteStoryRelevanceAnswersForRule(scopedDb, ownerUserId, id);
+    return retired;
   }
 
   /**
@@ -258,7 +267,11 @@ export class UsefulnessFeedbackRepository {
         AND kind = 'less_like_this'
       RETURNING *
     `.execute(scopedDb.db);
-    return result.rows[0];
+    const updated = result.rows[0];
+    // #2636: the rule's text changed, so its remembered answers are stale. Drop them rather than
+    // lean on the key hash alone; the delete keeps the cache from carrying abandoned keys.
+    if (updated) await this.deleteStoryRelevanceAnswersForRule(scopedDb, ownerUserId, id);
+    return updated;
   }
 
   /**
@@ -320,6 +333,129 @@ export class UsefulnessFeedbackRepository {
       });
     }
     return rules;
+  }
+
+  /**
+   * #2636: the remembered answers for the pairs the matcher is about to judge. Only the caller's
+   * own rows, and only the ones still inside their seven-day life. The read is deliberately narrow
+   * (the exact stories and rules asked about) so a large feed never pulls the owner's whole cache.
+   */
+  async readStoryRelevanceAnswers(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    keys: readonly StoryRelevanceAnswerKey[]
+  ): Promise<StoryRelevanceStoredAnswer[]> {
+    assertDataContextDb(scopedDb);
+    if (keys.length === 0) return [];
+    const storyRefs = [...new Set(keys.map((key) => key.storyRef))];
+    const ruleIds = [...new Set(keys.map((key) => key.ruleId))];
+    const result = await sql<{
+      readonly story_ref: string;
+      readonly rule_id: string;
+      readonly rule_text_hash: string;
+      readonly model_fingerprint: string;
+      readonly answer: string;
+      readonly confidence: number;
+      readonly expires_at: Date;
+    }>`
+      SELECT story_ref, rule_id, rule_text_hash, model_fingerprint, answer, confidence, expires_at
+      FROM app.story_relevance_answer_cache
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND expires_at > now()
+        AND story_ref IN (${sql.join(
+          storyRefs.map((ref) => sql`${ref}`),
+          sql`, `
+        )})
+        AND rule_id IN (${sql.join(
+          ruleIds.map((id) => sql`${id}::uuid`),
+          sql`, `
+        )})
+    `.execute(scopedDb.db);
+
+    const answers: StoryRelevanceStoredAnswer[] = [];
+    for (const row of result.rows) {
+      if (row.answer !== "yes" && row.answer !== "no") continue;
+      if (!Number.isFinite(row.confidence)) continue;
+      answers.push({
+        storyRef: row.story_ref,
+        ruleId: row.rule_id,
+        ruleTextHash: row.rule_text_hash,
+        modelFingerprint: row.model_fingerprint,
+        answer: row.answer,
+        confidence: row.confidence,
+        expiresAt: row.expires_at
+      });
+    }
+    return answers;
+  }
+
+  /**
+   * #2636: remembers the answers a run just earned. The key is the whole identity of the answer, so
+   * a repeat writes the same row and refreshes its life rather than piling up duplicates.
+   */
+  async writeStoryRelevanceAnswers(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    answers: readonly (StoryRelevanceAnswerKey & StoryRelevanceAskedAnswer)[]
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    if (answers.length === 0) return;
+    // #2636: expired answers are dead weight. Stories rotate out and old model fingerprints stop
+    // being asked, so a row that has lapsed is never replaced by the upsert. Drop the owner's
+    // lapsed rows here, in the same scoped transaction that writes the fresh ones, rather than
+    // letting the table grow forever or adding a background sweep.
+    await sql`
+      DELETE FROM app.story_relevance_answer_cache
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND expires_at <= now()
+    `.execute(scopedDb.db);
+    const rows = answers.map(
+      (entry) => sql`(
+        ${ownerUserId}::uuid,
+        ${entry.storyRef},
+        ${entry.ruleId}::uuid,
+        ${entry.ruleTextHash},
+        ${entry.modelFingerprint},
+        ${entry.answer},
+        ${entry.confidence},
+        now() + make_interval(days => ${STORY_RELEVANCE_ANSWER_TTL_DAYS})
+      )`
+    );
+    await sql`
+      INSERT INTO app.story_relevance_answer_cache (
+        owner_user_id,
+        story_ref,
+        rule_id,
+        rule_text_hash,
+        model_fingerprint,
+        answer,
+        confidence,
+        expires_at
+      )
+      VALUES ${sql.join(rows, sql`, `)}
+      ON CONFLICT (owner_user_id, story_ref, rule_id, rule_text_hash, model_fingerprint)
+      DO UPDATE SET answer = EXCLUDED.answer,
+                    confidence = EXCLUDED.confidence,
+                    expires_at = EXCLUDED.expires_at,
+                    updated_at = now()
+    `.execute(scopedDb.db);
+  }
+
+  /**
+   * #2636: drops a rule's remembered answers. Called when the rule is edited, taken back or
+   * replaced. Owner-scoped so one person's rule edit can never touch another person's rows.
+   */
+  async deleteStoryRelevanceAnswersForRule(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    ruleId: string
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await sql`
+      DELETE FROM app.story_relevance_answer_cache
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND rule_id = ${ruleId}::uuid
+    `.execute(scopedDb.db);
   }
 
   /**
@@ -506,6 +642,8 @@ export class UsefulnessFeedbackRepository {
       .where("id", "=", id)
       .returningAll()
       .executeTakeFirst();
+    // #2636: a story rule that has just been taken back leaves no rule behind to key an answer to.
+    if (updated) await this.deleteStoryRelevanceAnswersForRule(scopedDb, ownerUserId, id);
     return updated ? { feedback: updated, changed: true } : undefined;
   }
 }

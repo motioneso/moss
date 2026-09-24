@@ -29,10 +29,15 @@ export const usefulnessFeedbackModuleManifest = {
   database: {
     migrations: [
       "sql/0120_usefulness_feedback_signals.sql",
-      "sql/0201_story_relevance_feedback.sql"
+      "sql/0201_story_relevance_feedback.sql",
+      "sql/0243_story_relevance_answer_cache.sql"
     ],
     migrationDirectories: ["packages/usefulness-feedback/sql"],
-    ownedTables: ["app.usefulness_feedback_signals", "app.usefulness_feedback_targets"]
+    ownedTables: [
+      "app.usefulness_feedback_signals",
+      "app.usefulness_feedback_targets",
+      "app.story_relevance_answer_cache"
+    ]
   },
   permissions: [
     {

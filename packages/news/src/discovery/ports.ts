@@ -174,5 +174,10 @@ export interface NewsAiPort {
           | "aborted";
       }
   >;
+  /**
+   * #2636: a stable fingerprint of the sorting model questions would go to, or null when none is
+   * bound. Used to key remembered answers so a switched model invalidates them.
+   */
+  sortingModelFingerprint?(scopedDb: DataContextDb): Promise<string | null>;
   fingerprint(scopedDb: DataContextDb): Promise<string | null>;
 }
