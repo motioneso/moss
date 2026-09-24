@@ -470,7 +470,7 @@ button.module-link {
   backdrop-filter: blur(12px);
 }
 
-/* Command-center title: serif page name over a mono uppercase eyebrow. */
+/* Command-center title: page name over an uppercase eyebrow. */
 .topbar-titles {
   min-width: 0;
   display: grid;
@@ -628,7 +628,7 @@ button.module-link {
   color: var(--text-subtle);
 }
 
-/* Lead-in line under a briefing-section title (serif, quiet). */
+/* Lead-in line under a briefing-section title (quiet). */
 .cmd-leadin {
   margin: 0 0 10px;
   font-family: var(--font-sans);

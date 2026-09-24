@@ -95,8 +95,8 @@ path-scoped commit is unsafe on a co-edited file, and the skill has the only saf
 - **Do not casually build:** real OAuth callbacks, real connector sync, full email/calendar clients,
   a module marketplace, a workflow engine. Each needs its own milestone and spec.
 - **The design system is authored, not generated.** Before any UI, CSS, or component work, use the
-  `design-system` skill — `jds-*` primitives, `tokens.css` typography rules, and the audit that
-  catches invented classes.
+  `design-system` skill and `docs/design-system.md` — tokens, `@moss/ui` primitives, module rules,
+  and the audit that catches invented classes.
 - Keep plain Fastify REST plus shared TypeScript contracts (`packages/shared/*-api.ts`) unless a
   milestone explicitly justifies a heavier contract layer.
 - Write `~/Jarv1s` rather than absolute local paths in docs, specs and handoffs.

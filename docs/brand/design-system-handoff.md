@@ -1,5 +1,7 @@
 # Jarvis Design System — Handoff Brief for Claude Design
 
+> **Superseded by [docs/design-system.md](../design-system.md).** Kept as a dated record.
+
 > **Dated record — kept verbatim.** The product is now named **Moss** (decided 2026-08-06, #1441).
 > This brief is left in its original wording because it names the codename the referenced design
 > deliverables were actually produced under, and because it explicitly scoped public-name

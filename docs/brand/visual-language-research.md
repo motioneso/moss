@@ -1,5 +1,7 @@
 # Moss Interface Strategy: A Blueprint for Durable, Calm Intelligence
 
+> **Superseded by [docs/design-system.md](../design-system.md).** Kept as a dated record.
+
 > Source: provided by Ben (2026-06-13) as the visual-language research output (NotebookLM artifact). This is the research deliverable the `visual-language-research-plan.md` anticipated. **Lead direction decision (Ben, 2026-06-13): leaning to Direction 3 — "The Chronological Flow (Ritual Model)" (the doc's "option c").** Use this as the source of truth for the Phase 3 design-direction slice (epic #48 criterion #4, issue #16).
 
 ## 1. Thematic Analysis of Market Patterns
