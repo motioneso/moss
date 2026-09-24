@@ -15,7 +15,7 @@ import type { NewsPersonalizationRepository } from "../personalization-repositor
 import { resolveEffectivePrefs, type NewsPrefsReader } from "../news-service.js";
 import type { NewsSourceEntry } from "../source/catalog.js";
 import { topicOption } from "../source/catalog.js";
-import { parseFeedXml } from "../source/rss-source.js";
+import { feedBodyImageUrl, parseFeedXml } from "../source/rss-source.js";
 import {
   SUMMARY_CHAR_CAP,
   TITLE_CHAR_CAP,
@@ -108,6 +108,8 @@ function feedCandidates(
     matchedTopics: readonly string[];
     now: Date;
     exclusions: readonly string[];
+    /** Hosts a body image may come from when the item has no media tag; empty disables it. */
+    bodyImageHosts: readonly string[];
   }
 ): CandidateWithoutId[] {
   const candidates: CandidateWithoutId[] = [];
@@ -134,7 +136,10 @@ function feedCandidates(
       url,
       publishedAt,
       excerpt: sanitizeFeedText(raw.summary || raw.contentFallback, SUMMARY_CHAR_CAP) || null,
-      imageUrl: httpsUrl(raw.imageUrl),
+      // A media tag names the story's art, so a bad one is not replaced by a body image.
+      imageUrl: raw.imageUrl
+        ? httpsUrl(raw.imageUrl)
+        : httpsUrl(feedBodyImageUrl(raw, input.bodyImageHosts)),
       origin: input.origin,
       matchedTopics: input.matchedTopics
     });
@@ -230,6 +235,7 @@ async function collectCustomSource(
         canonicalDomain: source.canonicalDomain,
         origin: "preferred_source",
         matchedTopics: [],
+        bodyImageHosts: [],
         ...input
       }),
       failure: null
@@ -427,7 +433,8 @@ export async function collectCandidates(
           origin: "curated",
           matchedTopics: plan.topics,
           now: opts.now,
-          exclusions
+          exclusions,
+          bodyImageHosts: source.imageHosts
         }).slice(0, PER_SOURCE_CAP - sourceItems.length)
       );
     }

@@ -334,6 +334,20 @@ function firstRealImgSrc(html: string): string | null {
   return picked.src;
 }
 
+/**
+ * The first real body image of a feed item (content:encoded, then the summary), kept only when
+ * its host is on `imageHosts`. NPR and The Verge carry their art this way, with no media tag.
+ */
+export function feedBodyImageUrl(
+  raw: Pick<RawFeedItem, "contentFallback" | "summary">,
+  imageHosts: readonly string[]
+): string | null {
+  return sanitizeImageUrl(
+    firstRealImgSrc(raw.contentFallback) ?? firstRealImgSrc(raw.summary),
+    imageHosts
+  );
+}
+
 function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFeedItem[] {
   const items: RssFeedItem[] = [];
   const seen = new Set<string>();
@@ -351,10 +365,7 @@ function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFe
     // feed named the story's art and got it wrong, so the story gets no art (reviewer blocker 5).
     const imageUrl = raw.imageUrl
       ? sanitizeImageUrl(raw.imageUrl, imageHosts)
-      : sanitizeImageUrl(
-          firstRealImgSrc(raw.contentFallback) ?? firstRealImgSrc(raw.summary),
-          imageHosts
-        );
+      : feedBodyImageUrl(raw, imageHosts);
     items.push({
       id,
       title,

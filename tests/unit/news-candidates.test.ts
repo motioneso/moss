@@ -4,6 +4,7 @@ import type { DataContextDb } from "@moss/db";
 
 import { collectCandidates } from "../../packages/news/src/compilation/candidates.js";
 import { applyDeterministicFilters } from "../../packages/news/src/compilation/filters.js";
+import { NEWS_CATALOG } from "../../packages/news/src/source/catalog.js";
 
 const db = {} as DataContextDb;
 const now = new Date("2026-07-11T12:00:00.000Z");
@@ -567,3 +568,53 @@ function aiReturningApproved() {
     })
   };
 }
+
+describe("collectCandidates body images", () => {
+  // The Verge and NPR put their art inside the item body, with no media tag.
+  const vergeFeed = `<?xml version="1.0"?><rss><channel>
+    <item><title>Body image on the catalog host</title><link>https://www.theverge.com/a</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <description><![CDATA[<p><img src="https://platform.theverge.com/uploads/a.jpg" /></p>]]></description></item>
+    <item><title>Body image on another host</title><link>https://www.theverge.com/b</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <description><![CDATA[<img src="https://tracker.example.net/b.jpg" />]]></description></item>
+    <item><title>Media tag present but not HTTPS</title><link>https://www.theverge.com/c</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <media:content url="http://platform.theverge.com/uploads/c-media.jpg" />
+      <description><![CDATA[<img src="https://platform.theverge.com/uploads/c-body.jpg" />]]></description></item>
+  </channel></rss>`;
+
+  it("takes a curated story's photo from its body when the feed has no media tag", async () => {
+    const result = await collectCandidates(
+      db,
+      {
+        fetch: async (url) => ({
+          ok: true,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/rss+xml",
+          body: vergeFeed,
+          truncated: false
+        }),
+        search: { search: async () => ({ results: [] }) },
+        ai: {
+          fingerprint: async () => "fp",
+          generateJson: async () => ({ ok: false, error: "provider_error" })
+        },
+        repo: repo(),
+        prefs: { list: async () => [{ kind: "source", key: "verge" }] as never },
+        catalog: NEWS_CATALOG
+      },
+      { now }
+    );
+
+    const imageByUrl = Object.fromEntries(
+      result.candidates.map((candidate) => [candidate.url, candidate.imageUrl])
+    );
+    expect(imageByUrl).toEqual({
+      "https://www.theverge.com/a": "https://platform.theverge.com/uploads/a.jpg",
+      "https://www.theverge.com/b": null,
+      "https://www.theverge.com/c": null
+    });
+  });
+});

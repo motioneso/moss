@@ -1,4 +1,4 @@
-const CACHE_NAME = "jarv1s-shell-v1";
+const CACHE_NAME = "jarv1s-shell-v2";
 const APP_SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 const IMAGE_RETRY_DELAYS_MS = [250, 1000];
 // register-service-worker.ts registers this script as "/service-worker.js?dev=1" outside
@@ -74,6 +74,13 @@ self.addEventListener("fetch", (event) => {
 
   const request = event.request;
   const url = new URL(request.url);
+
+  // Cross-origin requests (ESPN logos, news photos) are left to the browser. The worker
+  // script runs under CSP connect-src 'self', so its own fetch() of another origin fails;
+  // the page loads these under its img-src allowlist instead.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
   if (url.pathname.startsWith("/api/")) {
     return;
