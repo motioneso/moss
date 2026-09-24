@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // #1452 (part of #1440), see docs/superpowers/plans/2026-08-12-fix-1452-safe-seed.md.
 // Drives a real throwaway signup (bare seed level -> zero accounts, needsBootstrap true) through a
-// real briefing generation and asserts the rendered Today-page card. No shared-DB seed/reset, no
+// real briefing generation and asserts the rendered Today hero. No shared-DB seed/reset, no
 // insert-by-recorded-id fixture -- the whole run lives in the UAT harness's own ephemeral Docker
 // stack (tests/uat/provisioner.ts), torn down via its usual `down -v` + assertNoLeakedResources().
 export const uatLevel = { level: "bare", without: [] } as const;
@@ -37,18 +37,16 @@ async function signUp(page: Page): Promise<void> {
   await expect(userMenu).toBeVisible();
 }
 
-function briefingCard(page: Page) {
-  // .jds-brief is reused across >=4 Today-page sections -- scope to the one whose kicker reads
-  // "Morning briefing" to avoid Playwright strict-mode ambiguity.
-  return page.locator(".jds-brief").filter({ has: page.getByText("Morning briefing") });
-}
-
-test("throwaway signup drives a real briefing generation to a rendered Today card, no old product name", async ({
-  page
-}) => {
+test("throwaway signup and a sports follow drive a real briefing to Today", async ({ page }) => {
   test.setTimeout(180_000);
 
   await signUp(page);
+
+  const followed = await page.request.post("/api/sports/follows", {
+    data: { competitionKey: "eng.1" }
+  });
+  expect(followed.ok(), `competition follow -> ${followed.status()}`).toBe(true);
+  console.log("[live proof] owner follows the Premier League through the live Sports API");
 
   const created = await page.evaluate(async () => {
     const response = await fetch("/api/briefings/definitions", {
@@ -58,7 +56,7 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
         title: "UAT morning briefing",
         briefingType: "morning",
         enabled: true,
-        selectedToolNames: ["vault"]
+        selectedToolNames: ["vault", "sports.followedFactsToday"]
       })
     });
     return { status: response.status, json: await response.json() };
@@ -68,13 +66,9 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
   const definitionId = created.json.definition.id as string;
   expect(definitionId).toBeTruthy();
 
-  // MorningBriefingSection only mounts once an *enabled* morning definition exists (see
-  // today-page.tsx) -- a brand-new zero-definition account hides the section entirely rather than
-  // showing an empty-state placeholder. The definition was created via a raw fetch, bypassing the
-  // client's React Query cache, so reload before the section (and its "not ready yet" placeholder,
-  // since no run exists yet) can appear.
+  // The definition was created through fetch, bypassing React Query's cache.
   await page.reload();
-  await expect(page.getByText("Your morning briefing is not ready yet.")).toBeVisible();
+  await expect(page.getByText("Briefing not ready yet")).toBeVisible();
 
   const triggered = await page.evaluate(async (id: string) => {
     const response = await fetch(`/api/briefings/definitions/${id}/run`, {
@@ -108,18 +102,15 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
   expect(matchedRun).toBeDefined();
   expect(matchedRun?.status).toBe("succeeded");
   expect(matchedRun?.summaryText.trim()).not.toHaveLength(0);
+  console.log("[live proof] morning briefing with a sports follow persisted successfully");
 
   // Fresh query fetch on reload, no client-cache staleness.
   await page.reload();
+  const hero = page.locator(".today-hero");
+  await expect(hero).toBeVisible();
+  await expect(hero.getByRole("button", { name: "Read the full morning briefing" })).toBeVisible();
+  await expect(hero.getByText("Briefing not ready yet")).not.toBeVisible();
+  expect(await hero.innerText()).not.toMatch(/Jarvis/i);
 
-  const card = briefingCard(page);
-  await expect(card).toBeVisible();
-  await expect(card.locator(".jds-brief__kicker")).toHaveText("Morning briefing");
-  await expect(card.locator(".jds-brief__title")).toHaveText("Your day, in focus");
-  await expect(page.getByText("Your morning briefing is not ready yet.")).not.toBeVisible();
-
-  const cardText = await card.innerText();
-  expect(cardText).not.toMatch(/Jarvis/i);
-
-  await page.screenshot({ path: test.info().outputPath("briefing-card.png") });
+  console.log("[live proof] Today rendered the saved morning briefing");
 });
