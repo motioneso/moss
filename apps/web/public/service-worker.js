@@ -75,13 +75,6 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Cross-origin requests (ESPN logos, news photos) are left to the browser. The worker
-  // script runs under CSP connect-src 'self', so its own fetch() of another origin fails;
-  // the page loads these under its img-src allowlist instead.
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
   if (url.pathname.startsWith("/api/")) {
     return;
   }

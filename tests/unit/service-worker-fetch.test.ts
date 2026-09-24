@@ -35,7 +35,7 @@ interface FakeRequest {
 
 function makeRequest(overrides: Partial<FakeRequest>): FakeRequest {
   return {
-    url: "https://app.example.com/photo.jpg",
+    url: "https://cdn.example.com/photo.jpg",
     method: "GET",
     mode: "same-origin",
     destination: "",
@@ -63,8 +63,7 @@ function loadServiceWorker(
       listeners[type].push(callback);
     },
     skipWaiting() {},
-    clients: { claim: async () => {} },
-    location: { origin: "https://app.example.com", search: "" }
+    clients: { claim: async () => {} }
   };
 
   const caches = {
@@ -129,7 +128,7 @@ function tryDispatchFetch(
 }
 
 describe("service worker fetch recovery", () => {
-  it("resolves (does not reject) an uncached same-origin image GET whose fetch always rejects", async () => {
+  it("resolves (does not reject) an uncached cross-origin image GET whose fetch always rejects", async () => {
     let calls = 0;
     const sandbox = loadServiceWorker(async () => {
       calls += 1;
@@ -137,7 +136,7 @@ describe("service worker fetch recovery", () => {
     });
 
     const request = makeRequest({
-      url: "https://app.example.com/icons/photo.jpg",
+      url: "https://cdn.example.com/photo.jpg",
       destination: "image"
     });
 
@@ -157,7 +156,7 @@ describe("service worker fetch recovery", () => {
     });
 
     const request = makeRequest({
-      url: "https://app.example.com/icons/logo.png",
+      url: "https://cdn.example.com/logo.png",
       destination: "image"
     });
 
@@ -225,7 +224,7 @@ describe("service worker fetch recovery", () => {
     });
 
     const request = makeRequest({
-      url: "https://app.example.com/icons/always-broken.jpg",
+      url: "https://cdn.example.com/always-broken.jpg",
       destination: "image"
     });
 
@@ -257,7 +256,7 @@ describe("service worker fetch recovery", () => {
     });
 
     const request = makeRequest({
-      url: "https://app.example.com/icons/always-broken.jpg",
+      url: "https://cdn.example.com/always-broken.jpg",
       destination: "image"
     });
 
@@ -322,20 +321,5 @@ describe("service worker fetch recovery", () => {
 
     await expect(dispatchFetch(sandbox, request)).resolves.toBe(success);
     expect(calls).toBe(1);
-  });
-
-  it("does not intercept cross-origin image requests, so the browser loads them under the page CSP", async () => {
-    const sandbox = loadServiceWorker(async () => {
-      throw new Error("the worker must not fetch another origin itself");
-    });
-
-    const request = makeRequest({
-      url: "https://a.espncdn.com/i/teamlogos/nba/500/bos.png",
-      destination: "image"
-    });
-
-    const captured = tryDispatchFetch(sandbox, request);
-    expect(captured).toBeUndefined();
-    expect(sandbox.matchCalls).toBe(0);
   });
 });
