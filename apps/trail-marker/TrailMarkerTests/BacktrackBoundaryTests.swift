@@ -263,9 +263,21 @@ final class BacktrackBoundaryTests: XCTestCase {
         let h = await harness()
         h.secure.fallback = nil
         await runChain(h)
+        XCTAssertEqual(h.secure.calls, 2, "tried twice, then skipped")
         XCTAssertEqual(h.capture.fullCaptures, 0)
         XCTAssertEqual(h.recognizer.images.count, 0)
         XCTAssertEqual(h.sink.accepted, [])
+    }
+
+    func testAWindowWhoseSecureFieldsAreFoundOnTheSecondTryIsRead() async {
+        // Safari, measured live: the first search after a switch runs over while the page builds
+        // its accessibility tree; the next one fits.
+        let h = await harness()
+        h.secure.answers = [nil]
+        await runChain(h)
+        XCTAssertEqual(h.secure.calls, 3, "one timed-out try, one completed, one after the picture")
+        XCTAssertEqual(h.recognizer.images.count, 1)
+        XCTAssertEqual(h.sink.accepted.count, 1)
     }
 
     func testASecureFieldThatMovesDuringTheCaptureSkipsIt() async {

@@ -334,8 +334,36 @@ final class BacktrackRuntime: ObservableObject {
         return fresh.window
     }
 
+    /// Why a chain stopped, for the focus log. The app name and the kind of failure only: a
+    /// capture error's Debug detail carries window titles, which these lines never do.
+    private func noteSkipped(_ observation: Observation, _ reason: String) {
+        focusDebug("Backtrack: skipped \(observation.appName) — \(reason)")
+    }
+
+    private static func describe(_ error: Error) -> String {
+        switch error as? ScreenCaptureError {
+        case .noMatchingWindow: return "no single on-screen window matched the focused one"
+        case .focusMovedDuringCapture: return "focus moved during the picture"
+        case .captureFailed, nil: return "the picture couldn't be taken"
+        }
+    }
+
+    /// The secure-field search, with one immediate second try at the same budget. Measured live
+    /// (plan Q1, 2026-09-23): Safari's first search after a switch took 67 ms while its page built
+    /// its accessibility tree, then 26 ms and 8 ms. The rule is unchanged: a capture needs a
+    /// completed search, and both tries are held to the budget.
+    private func locateSecureFields(_ observation: Observation, window: WindowIdentity) -> [CGRect]? {
+        if let frames = services.secureFields.secureFieldFrames(
+            pid: observation.pid, window: window, budget: Self.secureFieldBudget
+        ) {
+            return frames
+        }
+        return services.secureFields.secureFieldFrames(pid: observation.pid, window: window, budget: Self.secureFieldBudget)
+    }
+
     private func checkThumbnail(_ observation: Observation, generation: Int) async {
         guard let window = freshWindow(for: observation) else {
+            noteSkipped(observation, "its window couldn't be identified, or it is never watched")
             return send(.failed(generation: generation, at: services.clock()))
         }
         do {
@@ -349,6 +377,7 @@ final class BacktrackRuntime: ObservableObject {
             send(.thumbnailChecked(generation: generation, changed: changed, at: services.clock()))
         } catch {
             guard !Task.isCancelled else { return }
+            noteSkipped(observation, Self.describe(error))
             send(.failed(generation: generation, at: services.clock()))
         }
     }
@@ -361,13 +390,14 @@ final class BacktrackRuntime: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             self.send(.failed(generation: generation, at: self.services.clock()))
         }
-        guard let window = freshWindow(for: observation) else { return failed() }
+        guard let window = freshWindow(for: observation) else {
+            noteSkipped(observation, "its window couldn't be identified, or it is never watched")
+            return failed()
+        }
         let located = services.clock()
-        guard let before = services.secureFields.secureFieldFrames(
-            pid: observation.pid, window: window, budget: Self.secureFieldBudget
-        ) else {
+        guard let before = locateSecureFields(observation, window: window) else {
             // Plan Q1: what each app allows is recorded from these lines during the live proof.
-            focusDebug("Backtrack: skipped \(observation.appName) — its password fields couldn't all be found in 50 ms")
+            noteSkipped(observation, "its password fields couldn't all be found in 50 ms, twice")
             return failed()
         }
         let locateMilliseconds = Int(services.clock().timeIntervalSince(located) * 1000)
@@ -377,16 +407,18 @@ final class BacktrackRuntime: ObservableObject {
                 window, pid: observation.pid, maxDimension: Self.captureMaxDimension
             )
         } catch {
+            if !Task.isCancelled { noteSkipped(observation, Self.describe(error)) }
             return failed()
         }
         guard !Task.isCancelled else { return }
-        guard let after = services.secureFields.secureFieldFrames(
-            pid: observation.pid, window: window, budget: Self.secureFieldBudget
-        ), after == before else {
-            focusDebug("Backtrack: skipped \(observation.appName) — a password field moved or appeared during the picture")
+        guard let after = locateSecureFields(observation, window: window), after == before else {
+            noteSkipped(observation, "a password field moved or appeared during the picture")
             return failed()
         }
-        guard let masked = SecureFieldMask.apply(before, to: image, windowFrame: window.frame) else { return failed() }
+        guard let masked = SecureFieldMask.apply(before, to: image, windowFrame: window.frame) else {
+            noteSkipped(observation, "the password fields couldn't be painted over")
+            return failed()
+        }
         let address = services.addresses.address(pid: observation.pid, window: window, bundleId: observation.bundleId)
         // Plan Q1/Q2, per app, for the live proof. The app name only; no title, no text.
         focusDebug(
@@ -406,6 +438,7 @@ final class BacktrackRuntime: ObservableObject {
             send(.recognized(generation: generation, lines: lines, address: held.address, at: services.clock()))
         } catch {
             guard !Task.isCancelled else { return }
+            focusDebug("Backtrack: skipped — the text couldn't be recognised")
             send(.failed(generation: generation, at: services.clock()))
         }
     }
