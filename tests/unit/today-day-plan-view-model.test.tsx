@@ -255,7 +255,7 @@ describe("buildDayItems state rules", () => {
     });
     expect(items[0]?.state).toBe("pending");
     // Q6: the reader's short caption leads with the block's end time.
-    expect(items[0]?.label).toBe("12:30 pm · Proposed");
+    expect(items[0]?.label).toBe("12:30pm · Proposed");
   });
 
   it("Q6: shortens a committed row's caption to 'On calendar' with its end time when proposedCaption is short", () => {
@@ -277,7 +277,7 @@ describe("buildDayItems state rules", () => {
       tasks: [summary({ id: "t1" })]
     });
     expect(items[0]?.state).toBe("committed");
-    expect(items[0]?.label).toBe("11:00 am · On calendar");
+    expect(items[0]?.label).toBe("11:00am · On calendar");
   });
 
   it("keeps the long label for a proposed block with no time yet, even with proposedCaption set", () => {

@@ -7,7 +7,7 @@ import { Button } from "@moss/ui";
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import { buildDayItems } from "./day-plan-view-model.js";
-import { durationText, TimelineLegend, TimelineRow } from "./today-timeline.js";
+import { durationText, SnapshotRow, TimelineLegend, TimelineRow } from "./today-timeline.js";
 import type { DayItem } from "./day-plan-view-model.js";
 
 export interface DayPlanSectionProps {
@@ -30,6 +30,8 @@ export interface DayPlanSectionProps {
   /** Forwarded to buildDayItems. Only the morning reader's rail passes
       this; every other caller leaves it unset. */
   readonly proposedCaption?: "short";
+  /** Morning reader rail: compact snapshot rows and no legend. Needs editorial. */
+  readonly snapshot?: boolean;
 }
 
 function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void }) {
@@ -54,8 +56,10 @@ function DayItemRow(props: {
   readonly locale: LocaleSettingsDto;
   readonly onOpenTask: (taskId: string) => void;
   readonly editorial?: boolean;
+  readonly snapshot?: boolean;
 }) {
   const { item } = props;
+  if (props.snapshot === true) return <SnapshotRow {...props} />;
   if (props.editorial === true) return <TimelineRow {...props} />;
   if (item.eventId !== null) {
     return (
@@ -160,7 +164,12 @@ function SectionHead(props: {
 /** Today schedule: the saved day plan merged with today's calendar events. */
 export function DayPlanSection(props: DayPlanSectionProps) {
   const editorial = props.editorial === true;
-  const sectionClass = editorial ? "jds-brief jds-brief--timeline" : "jds-brief";
+  const snapshot = editorial && props.snapshot === true;
+  const sectionClass = snapshot
+    ? "jds-brief brief-snapshot"
+    : editorial
+      ? "jds-brief jds-brief--timeline"
+      : "jds-brief";
   if (props.loading) {
     if (props.events.length === 0) {
       return (
@@ -203,10 +212,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
               locale={props.locale}
               onOpenTask={props.onOpenTask}
               editorial={editorial}
+              snapshot={snapshot}
             />
           ))}
         </div>
-        {editorial ? <TimelineLegend /> : null}
+        {editorial && !snapshot ? <TimelineLegend /> : null}
       </section>
     );
   }
@@ -277,10 +287,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
                   locale={props.locale}
                   onOpenTask={props.onOpenTask}
                   editorial
+                  snapshot={snapshot}
                 />
               ))}
             </div>
-            <TimelineLegend />
+            {snapshot ? null : <TimelineLegend />}
           </>
         )}
       </section>

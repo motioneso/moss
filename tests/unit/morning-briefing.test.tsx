@@ -359,7 +359,7 @@ describe("MorningBriefingReader review footer", () => {
     expect(footerButtons()).toEqual(["Review proposed blocks", "Review changes", "Back to Today"]);
   });
 
-  it("keeps Accept all first, then Adjust task blocks, in the automatic surface", async () => {
+  it("puts the Adjust task blocks link before Accept all in the automatic surface", async () => {
     const proposed = acceptPlanResponse();
     if (!proposed.plan) throw new Error("plan missing for the automatic-surface case");
     const withOneCommitted: GetDayPlanResponse = {
@@ -383,8 +383,8 @@ describe("MorningBriefingReader review footer", () => {
     };
     await renderReader(seedClient([]), { dayPlan: withOneCommitted });
     expect(footerButtons()).toEqual([
-      "Accept all time blocks",
       "Adjust task blocks",
+      "Accept all time blocks",
       "Back to Today"
     ]);
   });

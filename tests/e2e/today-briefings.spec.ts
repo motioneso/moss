@@ -593,12 +593,12 @@ test("accept all applies eligible additions from the reader, then reviews the co
   await expect(page.getByText("Team standup").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
 
-  // The reader footer offers Accept all first on the populated 320px page.
+  // The reader footer puts the Adjust link before Accept all on the populated 320px page.
   await page.getByRole("button", { name: "Read the full morning briefing" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Protect the launch window");
   const footerNames = await dialog.locator(".brief-reader__footer button").allTextContents();
-  expect(footerNames).toEqual(["Accept all time blocks", "Adjust task blocks", "Back to Today"]);
+  expect(footerNames).toEqual(["Adjust task blocks", "Accept all time blocks", "Back to Today"]);
 
   // One activation previews the three proposals and applies the two clean ones.
   await dialog.getByRole("button", { name: "Accept all time blocks" }).click();

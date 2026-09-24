@@ -234,6 +234,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           calendarError={props.calendarError}
           onOpenTask={props.onOpenTask}
           editorial
+          snapshot
           showEditorialHeading={false}
           // Only the proposed Read says "Proposed" on a rail row: Moss has
           // already placed the automatic Read's blocks, so it keeps the
@@ -253,10 +254,12 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           </>
         ) : acceptPrimaryButton ? (
           <>
+            <span className="brief-reader__review-link">
+              <Button variant="quiet" onClick={openReaderReview}>
+                {footerAdjustLabel}
+              </Button>
+            </span>
             {acceptPrimaryButton}
-            <Button variant="secondary" onClick={openReaderReview}>
-              {footerAdjustLabel}
-            </Button>
           </>
         ) : (
           // Nothing awaits acceptance: "Adjust task blocks" is the only

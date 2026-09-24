@@ -167,7 +167,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
             ? READER_ON_CALENDAR_LABEL
             : null;
       // Q6: the reader's rail leads those two forms with the block's end
-      // time ("11:00 am · On calendar"); Today's own rail is untouched.
+      // time ("11:00am · On calendar"); Today's own rail is untouched.
       const readerEndsAt =
         startsAt !== null && durationMinutes !== null && durationMinutes > 0
           ? new Date(Date.parse(startsAt) + durationMinutes * 60000).toISOString()
@@ -175,7 +175,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
       const label =
         input.proposedCaption === "short" && readerCaptionWord !== null
           ? readerEndsAt !== null
-            ? `${timeLabel(readerEndsAt, input.locale)} ${ampm(readerEndsAt, input.locale)} · ${readerCaptionWord}`
+            ? `${timeLabel(readerEndsAt, input.locale)}${ampm(readerEndsAt, input.locale)} · ${readerCaptionWord}`
             : readerCaptionWord
           : DAY_ITEM_STATE_LABELS[state];
       return {
