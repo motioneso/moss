@@ -24,6 +24,7 @@ describe("sports catalog", () => {
         "eng.5",
         "esp.1",
         "fifa.world",
+        "fifa.wwc",
         "fra.1",
         "ger.1",
         "gre.1",
@@ -217,6 +218,16 @@ describe("sports catalog", () => {
     const e = catalogEntry("fifa.world");
     expect(e?.kind).toBe("tournament");
     expect(e?.marquee).toBe(true);
+  });
+  // #2660: the US women's national team is only reachable through the Women's World Cup
+  // competition, so it must exist as a soccer tournament that team search can reach.
+  it("adds the Women's World Cup so the US women's team can be followed (#2660)", () => {
+    const e = catalogEntry("fifa.wwc");
+    expect(e?.espnSport).toBe("soccer");
+    expect(e?.espnLeague).toBe("fifa.wwc");
+    expect(e?.kind).toBe("tournament");
+    expect(e?.standingsShape).toBe("groups");
+    expect(e?.confederation).toBe("INTL");
   });
   it("tags every entry with a confederation (#907)", () => {
     for (const entry of SPORTS_CATALOG) expect(entry.confederation).toBeTruthy();

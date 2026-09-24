@@ -522,6 +522,23 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
     // Cross-confederation tournament — no single confederation runs it (#907).
     confederation: "INTL"
   },
+  // #2660: the US women's national team is only reachable through ESPN's Women's World Cup
+  // competition (probed live 2026-09-24: fifa.wwc/teams lists "United States", id 2765), the
+  // women's counterpart to fifa.world above. Adding it lets team search find the US women's team
+  // so it can be followed like any other national team; a team-only follow here is treated like
+  // any other tournament team follow (see sports-service.ts).
+  {
+    competitionKey: "fifa.wwc",
+    label: "FIFA Women's World Cup",
+    sportLabel: "Soccer",
+    regionLabel: "International",
+    kind: "tournament",
+    marquee: false,
+    standingsShape: "groups",
+    espnSport: "soccer",
+    espnLeague: "fifa.wwc",
+    confederation: "INTL"
+  },
   // AFC, CAF, and the remaining CONMEBOL/CONCACAF feeder leagues from spec Appendix A
   // (#907 slice 4 — the final batch). All live-probed via scripts/probe-espn-leagues.mjs;
   // see task-10-report.md for the full run including every failed alt-slug attempt.

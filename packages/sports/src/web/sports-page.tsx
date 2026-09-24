@@ -639,7 +639,11 @@ function BroadsheetGrid(props: {
         />
       </div>
       <aside className="sp-grid__rail">
-        <StandingsRail groups={props.overview.standings} followedPairs={props.followedPairs} />
+        <StandingsRail
+          groups={props.overview.standings}
+          followedPairs={props.followedPairs}
+          activeCompetitionKeys={props.overview.activeCompetitionKeys}
+        />
       </aside>
     </div>
   );

@@ -887,6 +887,134 @@ describe("SportsService.getOverview", () => {
     // a small fixed set of major year-round leagues, not the whole catalog (no tournaments)
     expect(new Set(requestedComps)).toEqual(new Set(["nfl", "nba", "nhl", "mlb", "eng.1"]));
   });
+
+  // #2660: a tournament follow is "Following" only while the tournament is in season. The window
+  // comes from the standings fetch; the service reports the followed competition keys it covers.
+  it("reports a followed tournament as active only while its season window covers now", async () => {
+    const usaFollow: SportsFollowDto = {
+      id: "w1",
+      competitionKey: "fifa.world",
+      teamKey: "usa",
+      sourceTeamId: "660",
+      createdAt: "2026-06-01T00:00:00.000Z"
+    };
+    const usaTeamRef: SourceTeamRef = {
+      teamKey: "usa",
+      competitionKey: "fifa.world",
+      name: "United States",
+      shortName: "USA",
+      crestUrl: null,
+      sourceTeamId: "660",
+      abbreviation: "usa"
+    };
+    const serviceWithSeason = (season: { start: string; end: string }) =>
+      new SportsService(
+        makeDeps({
+          follows: [usaFollow],
+          source: makeSource({
+            listTeams: async () => [usaTeamRef],
+            getScoreboard: async () => [],
+            getSchedule: async () => [],
+            getStandings: async () => ({ sections: [], season }),
+            getHeadlines: async () => []
+          })
+        })
+      );
+
+    // FIXED_NOW is 2026-07-01. A season that ended in June is over; one that runs into August is not.
+    const finished = await serviceWithSeason({
+      start: "2026-06-11T04:00Z",
+      end: "2026-06-20T04:00Z"
+    }).getOverview(userA);
+    expect(finished.activeCompetitionKeys).not.toContain("fifa.world");
+
+    const running = await serviceWithSeason({
+      start: "2026-06-11T04:00Z",
+      end: "2026-08-01T03:59Z"
+    }).getOverview(userA);
+    expect(running.activeCompetitionKeys).toContain("fifa.world");
+  });
+
+  // #2660: following one national team in a tournament must not pull the whole tournament feed.
+  // The league feed is not fetched at all; the team's own feed supplies the stories, team-tagged only.
+  it("pulls only team-tagged stories for a team-only tournament follow", async () => {
+    const generalStory: SourceHeadline = {
+      id: "wc-general",
+      sportKey: "soccer",
+      competitionKey: "fifa.world",
+      competitionLabel: "FIFA World Cup",
+      title: "General World Cup story",
+      url: "https://example.com/wc/general",
+      publishedAt: `${TODAY}T13:00:00.000Z`,
+      imageUrl: null,
+      summary: "",
+      teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
+      sourceTeamIds: []
+    };
+    const usaStory: SourceHeadline = {
+      id: "usmnt",
+      sportKey: "soccer",
+      competitionKey: "fifa.world",
+      competitionLabel: "FIFA World Cup",
+      title: "USMNT wins",
+      url: "https://example.com/wc/usmnt",
+      publishedAt: `${TODAY}T12:00:00.000Z`,
+      imageUrl: null,
+      summary: "",
+      teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
+      sourceTeamIds: ["660"]
+    };
+    const usaFollow: SportsFollowDto = {
+      id: "w1",
+      competitionKey: "fifa.world",
+      teamKey: "usa",
+      sourceTeamId: "660",
+      createdAt: "2026-06-01T00:00:00.000Z"
+    };
+    const usaTeamRef: SourceTeamRef = {
+      teamKey: "usa",
+      competitionKey: "fifa.world",
+      name: "United States",
+      shortName: "USA",
+      crestUrl: null,
+      sourceTeamId: "660",
+      abbreviation: "usa"
+    };
+    const leagueFeedCalls: string[] = [];
+    const service = new SportsService(
+      makeDeps({
+        follows: [usaFollow],
+        source: makeSource({
+          listTeams: async () => [usaTeamRef],
+          getScoreboard: async () => [],
+          getSchedule: async () => [],
+          getStandings: async () => ({ sections: [] }),
+          getHeadlines: async (competitionKey, teamKey) => {
+            if (competitionKey === "fifa.world" && teamKey === undefined) {
+              leagueFeedCalls.push(competitionKey);
+              return [generalStory];
+            }
+            return competitionKey === "fifa.world" ? [usaStory] : [];
+          }
+        })
+      })
+    );
+    const overview = await service.getOverview(userA);
+    const titles = [
+      ...overview.topStories.map((h) => h.title),
+      ...overview.leagueNews.flatMap((group) => group.headlines.map((h) => h.title)),
+      ...overview.followed.flatMap((card) => card.stories.map((story) => story.title))
+    ];
+    expect(titles).toContain("USMNT wins");
+    expect(titles).not.toContain("General World Cup story");
+    expect(leagueFeedCalls).toEqual([]);
+  });
 });
 
 describe("SportsService.getFollowedFactsForToday", () => {
@@ -1121,6 +1249,33 @@ describe("SportsService.getCatalog", () => {
     expect(nfl).not.toHaveProperty("teams");
     expect(catalog.degraded).toBe(false);
     expect(listTeamsCalls).toBe(0);
+  });
+});
+
+// #2660: the US women's national team lives in the Women's World Cup competition. Search must be
+// able to reach it so a person can follow it from the follow picker.
+describe("SportsService.searchTeams", () => {
+  it("finds the US women's national team in the Women's World Cup", async () => {
+    const uswnt: SourceTeamRef = {
+      teamKey: "usa",
+      competitionKey: "fifa.wwc",
+      name: "United States",
+      shortName: "USA",
+      crestUrl: null,
+      sourceTeamId: "2765",
+      abbreviation: "usa"
+    };
+    const service = new SportsService(
+      makeDeps({
+        source: makeSource({
+          listTeams: async (competitionKey) => (competitionKey === "fifa.wwc" ? [uswnt] : [])
+        })
+      })
+    );
+    const result = await service.searchTeams("united states");
+    expect(result.teams.map((team) => `${team.competitionKey}:${team.teamKey}`)).toContain(
+      "fifa.wwc:usa"
+    );
   });
 });
 

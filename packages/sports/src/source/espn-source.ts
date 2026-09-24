@@ -535,6 +535,17 @@ interface EspnStandingsNode {
   readonly abbreviation?: string;
   readonly standings?: { entries?: readonly EspnStandingsEntry[] };
   readonly children?: readonly EspnStandingsNode[];
+  // Season metadata (#2660). The site standings payload carries the newest season in `season`
+  // and the full history in `seasons` (newest first); each season carries its stage `types`.
+  readonly season?: {
+    readonly startDate?: string;
+    readonly endDate?: string;
+  };
+  readonly seasons?: readonly {
+    readonly startDate?: string;
+    readonly endDate?: string;
+    readonly types?: readonly { readonly endDate?: string }[];
+  }[];
 }
 
 type StandingsSectionRaw = {
@@ -582,7 +593,32 @@ async function getStandings(
   )) as EspnStandingsNode;
   const sections: StandingsSectionRaw[] = [];
   collectStandingsSections(data, null, 0, sections);
-  return { sections: sections.filter((section) => section.rows.length > 0) };
+  return {
+    sections: sections.filter((section) => section.rows.length > 0),
+    season: seasonWindow(data)
+  };
+}
+
+// #2660: the end of a competition's newest season, used to tell whether a tournament is still
+// running. `season.endDate` alone is unreliable — ESPN pads the World Cup's to 31 December even
+// though the final is in July (probed live 2026-09-24). The season's stage list (`types`) carries
+// the real last stage, so the window ends at the last stage's end; the start is the season start.
+// Falls back to the season-level dates when no stage list is present. Returns null when nothing
+// usable is on the payload, so a caller can never mistake "unknown" for "in progress".
+function seasonWindow(data: EspnStandingsNode): StandingsTable["season"] {
+  const newest:
+    | {
+        readonly startDate?: string;
+        readonly endDate?: string;
+        readonly types?: readonly { readonly endDate?: string }[];
+      }
+    | undefined = data.seasons?.[0] ?? data.season;
+  if (!newest) return null;
+  const types = newest.types ?? [];
+  const lastStageEnd = types[types.length - 1]?.endDate;
+  const start = newest.startDate;
+  const end = lastStageEnd ?? newest.endDate;
+  return start && end ? { start, end } : null;
 }
 
 async function getHeadlines(
