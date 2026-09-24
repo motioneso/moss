@@ -163,10 +163,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       actorUserId,
       "resolve-provider",
       async (scopedDb) => {
-        const [model, rawChatSettings] = await Promise.all([
-          this.ai.selectChatModelForUser(scopedDb),
-          this.chatPreferences?.get(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
-        ]);
+        // Sequential: model selection can write through a savepoint.
+        const model = await this.ai.selectChatModelForUser(scopedDb);
+        const rawChatSettings = await this.chatPreferences?.get(
+          scopedDb,
+          CHAT_SETTINGS_PREFERENCE_KEY
+        );
         return { model, acpModel: normalizeChatSettings(rawChatSettings).openCodeModel };
       }
     );
