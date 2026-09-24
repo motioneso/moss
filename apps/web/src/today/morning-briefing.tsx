@@ -235,7 +235,10 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           onOpenTask={props.onOpenTask}
           editorial
           showEditorialHeading={false}
-          proposedCaption="short"
+          // Only the proposed Read says "Proposed" on a rail row: Moss has
+          // already placed the automatic Read's blocks, so it keeps the
+          // plain caption (Architect R1.2, F1).
+          proposedCaption={briefingSurface === "proposed-read" ? "short" : undefined}
         />
       }
       footerActions={

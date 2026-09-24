@@ -404,7 +404,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await page.getByRole("button", { name: "Read the full morning briefing" }).click();
   const reader = page.getByRole("dialog");
   await expect(reader).toContainText("Protect the launch window");
-  await reader.getByRole("button", { name: "Review task blocks" }).click();
+  await reader.getByRole("button", { name: "Adjust task blocks" }).click();
   await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(1);
@@ -598,7 +598,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Protect the launch window");
   const footerNames = await dialog.locator(".brief-reader__footer button").allTextContents();
-  expect(footerNames).toEqual(["Accept all time blocks", "Review task blocks", "Back to Today"]);
+  expect(footerNames).toEqual(["Accept all time blocks", "Adjust task blocks", "Back to Today"]);
 
   // One activation previews the three proposals and applies the two clean ones.
   await dialog.getByRole("button", { name: "Accept all time blocks" }).click();

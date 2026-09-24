@@ -389,6 +389,37 @@ describe("MorningBriefingReader review footer", () => {
     ]);
   });
 
+  // B5 / Architect R1.2, F1: Moss has already placed the automatic Read's
+  // blocks, so a still-pending row keeps its long-form label there. Only
+  // the proposed Read gets the short "· Proposed" rail caption.
+  it("shows no short Proposed caption on the automatic surface", async () => {
+    const proposed = acceptPlanResponse();
+    if (!proposed.plan) throw new Error("plan missing for the automatic-surface case");
+    const withOneCommitted: GetDayPlanResponse = {
+      ...proposed,
+      plan: {
+        ...proposed.plan,
+        blocks: [
+          {
+            ...proposed.plan.blocks[0]!,
+            pendingChange: null,
+            actualPlacement: {
+              startsAt: "2026-09-10T16:00:00.000Z",
+              durationMinutes: 30,
+              calendarEventRef: "evt-1"
+            }
+          },
+          proposed.plan.blocks[1]!,
+          proposed.plan.blocks[2]!
+        ]
+      }
+    };
+    const html = await renderReader(seedClient([]), { dayPlan: withOneCommitted });
+    expect(html).toContain('data-briefing-surface="automatic-read"');
+    expect(html).not.toContain("· Proposed<");
+    expect(html).toContain("Change pending");
+  });
+
   // B3 fail-first: before the fix this read "Review task blocks" (it
   // followed the settings-level mode) with no primary button at all.
   it("makes Adjust task blocks the primary button when nothing awaits acceptance", async () => {
