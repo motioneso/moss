@@ -199,6 +199,10 @@ private struct CardRow: View {
             )
         }
         .buttonStyle(.plain)
+        // Opening the card gives keyboard focus to the first row, and macOS drew its focus ring
+        // around Open Moss as if it were selected (Ben, 2026-09-23). Rows are menu items, which
+        // show hover, not a focus ring.
+        .focusEffectDisabled()
         .foregroundStyle(destructive ? Color(nsColor: .systemRed) : .primary)
         .onHover { hovering = $0 }
     }
