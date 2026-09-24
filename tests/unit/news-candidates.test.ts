@@ -582,6 +582,22 @@ describe("collectCandidates body images", () => {
       <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
       <media:content url="http://platform.theverge.com/uploads/c-media.jpg" />
       <description><![CDATA[<img src="https://platform.theverge.com/uploads/c-body.jpg" />]]></description></item>
+    <item><title>Media tag with an empty url</title><link>https://www.theverge.com/d</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <media:content url="" medium="image" />
+      <description><![CDATA[<img src="https://platform.theverge.com/uploads/d-body.jpg" />]]></description></item>
+    <item><title>Media tag with no url attribute</title><link>https://www.theverge.com/e</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <media:thumbnail width="140" />
+      <description><![CDATA[<img src="https://platform.theverge.com/uploads/e-body.jpg" />]]></description></item>
+    <item><title>Image enclosure with no url</title><link>https://www.theverge.com/f</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <enclosure type="image/jpeg" />
+      <description><![CDATA[<img src="https://platform.theverge.com/uploads/f-body.jpg" />]]></description></item>
+    <item><title>Audio enclosure only</title><link>https://www.theverge.com/g</link>
+      <pubDate>Fri, 11 Jul 2026 11:00:00 GMT</pubDate>
+      <enclosure url="https://www.theverge.com/g.mp3" type="audio/mpeg" />
+      <description><![CDATA[<img src="https://platform.theverge.com/uploads/g-body.jpg" />]]></description></item>
   </channel></rss>`;
 
   it("takes a curated story's photo from its body when the feed has no media tag", async () => {
@@ -614,7 +630,11 @@ describe("collectCandidates body images", () => {
     expect(imageByUrl).toEqual({
       "https://www.theverge.com/a": "https://platform.theverge.com/uploads/a.jpg",
       "https://www.theverge.com/b": null,
-      "https://www.theverge.com/c": null
+      "https://www.theverge.com/c": null,
+      "https://www.theverge.com/d": null,
+      "https://www.theverge.com/e": null,
+      "https://www.theverge.com/f": null,
+      "https://www.theverge.com/g": "https://platform.theverge.com/uploads/g-body.jpg"
     });
   });
 });

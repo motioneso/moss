@@ -137,7 +137,7 @@ function feedCandidates(
       publishedAt,
       excerpt: sanitizeFeedText(raw.summary || raw.contentFallback, SUMMARY_CHAR_CAP) || null,
       // A media tag names the story's art, so a bad one is not replaced by a body image.
-      imageUrl: raw.imageUrl
+      imageUrl: raw.hasMediaImage
         ? httpsUrl(raw.imageUrl)
         : httpsUrl(feedBodyImageUrl(raw, input.bodyImageHosts)),
       origin: input.origin,

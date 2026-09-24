@@ -168,6 +168,22 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBeNull();
   });
 
+  it.each([
+    ["an empty address", '<media:content url="" medium="image"/>'],
+    ["no address at all", '<media:thumbnail width="240"/>'],
+    ["an image enclosure with no address", '<enclosure type="image/jpeg"/>']
+  ])("does not fall back to a body picture when the feed's own picture has %s", (_, media) => {
+    const xml = rss(`    <item>
+      <title>Unusable media tag, valid body picture</title>
+      <link>https://example.com/unusable-media</link>
+      ${media}
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBeNull();
+  });
+
   it("reads the actual picture address, not a lazy-loading attribute with 'src' in its name", () => {
     // The lazy-loading attribute is written AFTER the real one, which is the order that broke:
     // a greedy "<img[^>]*src=" match runs to the LAST "src" in the tag, and "data-src" contains
