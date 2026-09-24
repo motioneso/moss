@@ -245,6 +245,24 @@
   color: var(--hero-fg);
 }
 
+/* Faint topographic contours, dense on the right and fading out behind the text. */
+.today-hero:is([data-mode="day"], [data-mode="evening"]) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.today-hero:is([data-mode="day"], [data-mode="evening"])::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url("/textures/hero-contours.svg") right center / cover no-repeat;
+  opacity: 0.2;
+  mask-image: linear-gradient(to right, transparent 18%, var(--forest) 60%);
+  pointer-events: none;
+}
+
 .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__eyebrow {
   margin: 0 0 23px;
   font-size: 10px;
