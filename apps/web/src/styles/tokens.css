@@ -114,6 +114,19 @@
   --shadow: 0 12px 44px rgb(18 31 24 / 0.18); /* VP-P0: study value. */
   --hero-accent: #e9bd69; /* Design-fidelity plan V0: study gold-light; the one fixed literal, only ever on --hero-bg. */
 
+  /* News lead topic art (lead-art.tsx): a plate and a line ink per topic, pulled toward the
+     theme accent so the drawing follows Forest/Sage/Canyon/Teal/Dusk. Climate is the accent's
+     own soft/strong pair. */
+  --news-art-gold: var(--gold-strong);
+  --news-art-climate-plate: var(--forest-soft);
+  --news-art-climate-ink: var(--forest);
+  --news-art-world-plate: color-mix(in srgb, var(--forest-soft) 45%, #dde2db);
+  --news-art-world-ink: color-mix(in srgb, var(--forest) 45%, #405a58);
+  --news-art-culture-plate: color-mix(in srgb, var(--forest-soft) 35%, #ede0c5);
+  --news-art-culture-ink: color-mix(in srgb, var(--forest) 35%, #655337);
+  --news-art-technology-plate: color-mix(in srgb, var(--forest-soft) 45%, #dce1de);
+  --news-art-technology-ink: color-mix(in srgb, var(--forest) 45%, #39554f);
+
   /* Amber — drift / at-risk / recovery (anti-shame) */
   --amber: #aa6d18;
   --amber-strong: #8a5a0f;
@@ -507,6 +520,17 @@
      the old hardcoded #182b21 was too close to light's rail-bg to read as a
      theme switch (#1809). */
   --rail-bg: var(--forest-soft-2);
+
+  /* News lead topic art on dark: a deep plate from the accent's dark ground, pale line ink. */
+  --news-art-gold: #e3b268;
+  --news-art-climate-plate: var(--forest-soft);
+  --news-art-climate-ink: color-mix(in srgb, var(--forest-ink) 55%, #a9b8a1);
+  --news-art-world-plate: color-mix(in srgb, var(--forest-soft) 65%, #26302e);
+  --news-art-world-ink: color-mix(in srgb, var(--forest-ink) 45%, #aebbb7);
+  --news-art-culture-plate: color-mix(in srgb, var(--forest-soft) 55%, #372f22);
+  --news-art-culture-ink: color-mix(in srgb, var(--forest-ink) 40%, #cdb994);
+  --news-art-technology-plate: color-mix(in srgb, var(--forest-soft) 65%, #233230);
+  --news-art-technology-ink: color-mix(in srgb, var(--forest-ink) 45%, #a4bdb6);
 
   /* Dark masthead keeps the real accent field (root --masthead-bg); the eyebrow
      takes light's --gold-soft value because dark --gold-soft is a ground. */

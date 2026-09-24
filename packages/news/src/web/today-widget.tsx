@@ -4,6 +4,7 @@ import "./styles/news-2.css";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
+import { LeadArt } from "./lead-art.js";
 import { getNewsOverview } from "./news-client.js";
 import { newsQueryKeys } from "./query-keys.js";
 import { StoryFeedbackMenu } from "./story-feedback-menu.js";
@@ -53,15 +54,15 @@ function SourceTag(props: { faviconUrl: string | null; label: string }): ReactNo
  * treatment — photo + display headline + one-line dek, the same voice as the /news mosaic hero —
  * while the remaining stories keep the tight headline-list treatment ("smaller stories can still
  * get the headline treatment"). Lead order is NOT reshuffled to chase a photo: the server's #1
- * story leads regardless, and when it happens to have no art it degrades to a headline-forward
- * lead (no fake image plate — same minimalist rule the sports cards follow).
+ * story leads regardless, and when it has no photo (or the photo fails) the same 16:9 frame shows
+ * a drawn contour print seeded from the story (see lead-art.tsx).
  */
 export function NewsTodayWidget(): ReactNode {
   const overviewQuery = useQuery({
     queryKey: newsQueryKeys.overview,
     queryFn: () => getNewsOverview()
   });
-  // A lead photo that fails to load falls back to the text treatment: track the URL that
+  // A lead photo that fails to load falls back to the drawn topic art: track the URL that
   // failed (not a bare flag) so a later lead with a good photo still renders it.
   const [failedLeadPhoto, setFailedLeadPhoto] = useState<string | null>(null);
   const data = overviewQuery.data;
@@ -85,15 +86,25 @@ export function NewsTodayWidget(): ReactNode {
               and a one-line dek clamped so a long summary can't push the brief list off the fold. */}
           <div className="nw-twlead-wrap nw-fbhost">
             <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
-              {lead.imageUrl && lead.imageUrl !== failedLeadPhoto ? (
-                <img
-                  className="nw-twlead__photo"
-                  src={lead.imageUrl}
-                  alt=""
-                  loading="lazy"
-                  onError={() => setFailedLeadPhoto(lead.imageUrl)}
-                />
-              ) : null}
+              {/* 16:9 frame of stacked layers: the photo when it loads, the drawn topic art
+                  otherwise. A later generated illustration stacks over the art as another layer. */}
+              <span className="nw-twlead__frame">
+                {lead.imageUrl && lead.imageUrl !== failedLeadPhoto ? (
+                  <img
+                    className="nw-twlead__photo"
+                    src={lead.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    onError={() => setFailedLeadPhoto(lead.imageUrl)}
+                  />
+                ) : (
+                  <LeadArt
+                    topic={lead.topicLabel ?? lead.topicKey ?? ""}
+                    headline={lead.title}
+                    publisher={lead.sourceLabel}
+                  />
+                )}
+              </span>
               <span className="nw-twlead__tag">
                 <span className="nw-twlead__tag-evening">{lead.sourceLabel}</span>
                 <span className="nw-twlead__tag-morning">
