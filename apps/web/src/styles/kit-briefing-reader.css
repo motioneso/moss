@@ -32,6 +32,7 @@
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .brief-reader__title:focus {
   outline: none;
@@ -113,7 +114,7 @@
 }
 
 /* Report frame, shared by the morning reader, its review tab and evening
-   planning. Evening keeps its own size and head overrides. */
+   planning. Evening keeps its own size. */
 .brief-reader--report {
   background: var(--paper);
   border: 1px solid var(--line-strong);
@@ -147,8 +148,8 @@
   color: var(--hero-fg);
 }
 
-/* Morning head: eyebrow over title, close button top right. */
-.brief-reader--report:has(.brief-reader__grid) .brief-reader__head {
+/* Report head: eyebrow over title, close button top right. */
+.brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid)) .brief-reader__head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -157,7 +158,8 @@
   color: var(--hero-fg);
   padding: 24px 30px 25px;
 }
-.brief-reader--report:has(.brief-reader__grid) .brief-reader__eyebrow {
+.brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+  .brief-reader__eyebrow {
   grid-column: 1;
   grid-row: 1;
   padding-top: 5px;
@@ -167,7 +169,8 @@
   letter-spacing: 1.7px;
   color: var(--sage);
 }
-.brief-reader--report:has(.brief-reader__grid) .brief-reader__title {
+.brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+  .brief-reader__title {
   grid-column: 1;
   grid-row: 2;
   margin: 8px 0 0;
@@ -175,17 +178,23 @@
   line-height: 1.2;
   letter-spacing: -1px;
 }
-.brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn {
+.brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+  .brief-reader__head
+  .jds-btn {
   grid-column: 2;
   grid-row: 1 / span 2;
   width: 36px;
   height: 36px;
 }
-.brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn::before {
+.brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+  .brief-reader__head
+  .jds-btn::before {
   content: "\2715";
   font-size: 18px;
 }
-.brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn:focus-visible {
+.brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+  .brief-reader__head
+  .jds-btn:focus-visible {
   box-shadow: none;
   outline: 2px solid var(--gold-light);
   outline-offset: 2px;
@@ -712,26 +721,33 @@ button.brief-snapshot__main:focus-visible {
     position: sticky;
     bottom: 0;
   }
-  .brief-reader--report:has(.brief-reader__grid) .brief-reader__head {
+  .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+    .brief-reader__head {
     gap: 0 9px;
     padding: 20px 19px;
   }
-  .brief-reader--report:has(.brief-reader__grid) .brief-reader__eyebrow {
+  .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+    .brief-reader__eyebrow {
     padding-top: 6px;
     font-size: 8px;
     line-height: 16.5px;
     letter-spacing: 1.2px;
   }
-  .brief-reader--report:has(.brief-reader__grid) .brief-reader__title {
+  .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+    .brief-reader__title {
     font-size: 24px;
     letter-spacing: -0.7px;
     max-width: 340px;
   }
-  .brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn {
+  .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+    .brief-reader__head
+    .jds-btn {
     width: 28px;
     height: 32px;
   }
-  .brief-reader--report:has(.brief-reader__grid) .brief-reader__head .jds-btn::before {
+  .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
+    .brief-reader__head
+    .jds-btn::before {
     font-size: 16px;
   }
   .brief-reader__tabs {

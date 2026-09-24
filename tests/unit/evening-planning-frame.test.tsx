@@ -299,10 +299,10 @@ describe("evening step strip", () => {
     }
     expect(lede.textContent).toContain("carrying forward");
     expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
-      "Next: Open commitments"
+      "Open commitments \u2192"
     );
     expect(document.body.querySelector(".brief-reader__footer-back")?.textContent).toContain(
-      "Back to Today"
+      "Leave for now"
     );
   });
 
@@ -314,7 +314,9 @@ describe("evening step strip", () => {
       "Tomorrow, taking shape."
     );
     expect(rail.querySelector(".evening-plan__rail-date")?.textContent).toContain("September 11");
-    expect(rail.querySelector("summary")?.textContent).toBe("Tomorrow's plan");
+    expect(document.body.querySelector(".evening-plan__mobile-plan summary")?.textContent).toBe(
+      "Tomorrow's plan \u00b7 0 task blocks"
+    );
     const panel = document.body.querySelector(".evening-plan__panel") as HTMLElement;
     expect(panel.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -402,12 +404,10 @@ describe("evening step navigation", () => {
     expect(second.getAttribute("aria-current")).toBe("step");
     const heading = document.getElementById("evening-commitments-heading") as HTMLElement;
     expect(document.activeElement).toBe(heading);
-    expect(document.body.querySelector('[role="region"]')?.textContent).toContain(
-      "Open commitments"
-    );
+    expect(heading.textContent).toBe("Give this a place, or leave it open.");
     expect(document.body.querySelector(".evening-plan__railwrap")).not.toBeNull();
     expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
-      "Next: Shape tomorrow"
+      "Shape tomorrow \u2192"
     );
   });
 
@@ -544,14 +544,15 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(group).not.toBeNull();
     expect(group.classList.contains("evening-plan__choices")).toBe(true);
     const cards = [...group.querySelectorAll("label.evening-plan__choice")];
-    expect(cards.length).toBe(3);
+    expect(cards.length).toBe(4);
     expect(cards.map((card) => card.querySelector("strong")?.textContent)).toEqual([
       "Tomorrow",
-      "Another date",
-      "Keep on the list"
+      "Another day",
+      "Keep it on my list",
+      "Leave this for now"
     ]);
     const radios = [...group.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
-    expect(radios.length).toBe(3);
+    expect(radios.length).toBe(4);
     for (const radio of radios) {
       expect(radio.hidden).toBe(false);
       expect(radio.getAttribute("aria-hidden")).not.toBe("true");

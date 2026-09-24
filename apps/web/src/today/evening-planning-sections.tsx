@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import type { LocaleSettingsDto, TaskDto } from "@moss/shared";
 
@@ -7,11 +7,11 @@ import { localDay } from "@moss/shared";
 import { Button, Select } from "@moss/ui";
 
 import {
+  EVENING_COMMIT_CHOICES,
+  EVENING_COMMIT_EYEBROW,
   EVENING_COMMIT_MESSAGE,
-  EVENING_REFLECT_ADD_NOTE_LABEL,
+  EVENING_COMMIT_TASK_HINT,
   EVENING_REFLECT_CHOICES,
-  EVENING_REFLECT_NOTE_LABEL,
-  EVENING_REFLECT_NOTE_PLACEHOLDER,
   EVENING_COMMIT_NOTE,
   EVENING_REFLECT_QUESTION,
   EVENING_REVIEW_NOT_READY,
@@ -19,6 +19,7 @@ import {
   EVENING_SHAPE_NOTE,
   EVENING_SPEAKER_NAME,
   EVENING_SPEAKER_NOTE,
+  eveningCommitProse,
   NO_ROOM_FOUND,
   timeLabel
 } from "./today-labels.js";
@@ -36,46 +37,18 @@ function PlanSection(props: { id: string; label: string; children: ReactNode }) 
   );
 }
 
-const COMMIT_OPTIONS = [
-  ["tomorrow", "Tomorrow"],
-  ["another-date", "Another date"],
-  ["unscheduled", "Keep on the list"]
-] as const;
-
 const CAPACITY_OPTIONS = [
   ["light", "Lighter day"],
   ["normal", "Steady day"],
   ["full", "Full day"]
 ] as const;
 
-/** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1); nothing here writes tasks. */
-export function ReflectSection(props: {
-  readonly evening: EveningPlanningController;
-  readonly tasks: readonly TaskDto[];
-  readonly locale: LocaleSettingsDto;
-}) {
+/** Evening step 1 reflection choices (VP-REFLECTION-R1); nothing here writes tasks. */
+export function ReflectSection(props: { readonly evening: EveningPlanningController }) {
   const { evening } = props;
-  const [draftNote, setDraftNote] = useState("");
-
-  const handleAddNote = () => {
-    const trimmed = draftNote.trim();
-    if (trimmed === "") return;
-    evening.addNote(trimmed);
-    setDraftNote("");
-  };
-
-  const notes = evening.activeNotes
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
   return (
     <section className="evening-plan__section" id="evening-reflect" aria-label="Reflect">
-      <div
-        className="evening-plan__choices evening-plan__choices--stacked"
-        role="radiogroup"
-        aria-label="Reflection"
-      >
+      <div className="evening-plan__choices" role="radiogroup" aria-label="Reflection">
         {EVENING_REFLECT_CHOICES.map((choice) => (
           <label
             key={choice.id}
@@ -97,38 +70,6 @@ export function ReflectSection(props: {
           </label>
         ))}
       </div>
-
-      <hr className="evening-plan__rule" />
-
-      <div className="evening-plan__note-form">
-        <label className="evening-plan__field-label" htmlFor="evening-reflect-note">
-          {EVENING_REFLECT_NOTE_LABEL}
-        </label>
-        <div className="evening-plan__note-composer">
-          <textarea
-            id="evening-reflect-note"
-            aria-label={EVENING_REFLECT_NOTE_LABEL}
-            rows={2}
-            maxLength={500}
-            placeholder={EVENING_REFLECT_NOTE_PLACEHOLDER}
-            value={draftNote}
-            disabled={evening.busy}
-            onChange={(event) => setDraftNote(event.target.value)}
-          />
-          <Button
-            variant="secondary"
-            disabled={evening.busy || draftNote.trim() === ""}
-            onClick={handleAddNote}
-          >
-            {EVENING_REFLECT_ADD_NOTE_LABEL}
-          </Button>
-        </div>
-        {notes.map((note, index) => (
-          <div className="evening-plan__hint" key={index}>
-            Noted: {note}
-          </div>
-        ))}
-      </div>
     </section>
   );
 }
@@ -136,8 +77,6 @@ export function ReflectSection(props: {
 /** Step 1 conversation: speaker line, large message, prose, question, rows. */
 export function ReflectStep(props: {
   readonly evening: EveningPlanningController;
-  readonly tasks: readonly TaskDto[];
-  readonly locale: LocaleSettingsDto;
   readonly headingId: string;
   readonly ledeHtml: string;
   readonly summaryText: string | null;
@@ -170,7 +109,7 @@ export function ReflectStep(props: {
         </p>
       )}
       <p className="evening-plan__question">{EVENING_REFLECT_QUESTION}</p>
-      <ReflectSection evening={evening} tasks={props.tasks} locale={props.locale} />
+      <ReflectSection evening={evening} />
     </>
   );
 }
@@ -195,6 +134,15 @@ function StepIntro(props: { readonly note: string; readonly message: string }) {
   );
 }
 
+function markedWord(row: CommitmentRow, tomorrowKey: string, timeZone: string): string | null {
+  if (row.marked === "done") return "Done";
+  if (row.marked === "archived") return "Archived";
+  if (row.marked === "unavailable") return "No longer available";
+  if (row.task.dueAt !== null && localDay(row.task.dueAt, timeZone) === tomorrowKey)
+    return "Already set for tomorrow";
+  return null;
+}
+
 /** Tomorrow-or-later choices; only "Change due date" writes a task field. */
 export function CommitSection(props: {
   readonly evening: EveningPlanningController;
@@ -203,68 +151,76 @@ export function CommitSection(props: {
   readonly timeZone: string;
 }) {
   const { evening } = props;
+  const open = props.rows.filter(
+    (row) => markedWord(row, props.tomorrowKey, props.timeZone) === null
+  ).length;
   return (
-    <PlanSection id="evening-commitments" label="Open commitments">
-      <StepIntro note={EVENING_COMMIT_NOTE} message={EVENING_COMMIT_MESSAGE} />
-      <ul className="evening-plan__rows">
-        {props.rows.map((row) => {
-          const word =
-            row.marked === "done"
-              ? "Done"
-              : row.marked === "archived"
-                ? "Archived"
-                : row.marked === "unavailable"
-                  ? "No longer available"
-                  : row.task.dueAt !== null &&
-                      localDay(row.task.dueAt, props.timeZone) === props.tomorrowKey
-                    ? "Already set for tomorrow"
-                    : null;
-          if (word !== null) {
-            return (
-              <li className="evening-plan__row" key={row.task.id}>
-                <div>
-                  <div className="evening-plan__title">{row.task.title}</div>
-                  <div className="evening-plan__state">{word}</div>
-                </div>
-              </li>
-            );
-          }
-          const current = evening.decisions[row.task.id]?.decision ?? row.decided;
-          const date = evening.decisions[row.task.id]?.date ?? "";
-          return (
-            <li className="evening-plan__row" key={row.task.id}>
-              <div>
-                <div className="evening-plan__title">{row.task.title}</div>
+    <section
+      className="evening-plan__section"
+      id="evening-commitments"
+      aria-label="Open commitments"
+    >
+      <div className="evening-plan__speaker">
+        <span className="evening-plan__initial" aria-hidden="true">
+          {EVENING_SPEAKER_NAME.slice(0, 1)}
+        </span>
+        <div>
+          {EVENING_SPEAKER_NAME}
+          <small>{EVENING_COMMIT_NOTE}</small>
+        </div>
+      </div>
+      <h3 id="evening-commitments-heading" tabIndex={-1} className="evening-plan__lede">
+        {EVENING_COMMIT_MESSAGE}
+      </h3>
+      <p className="evening-plan__prose">{eveningCommitProse(open)}</p>
+      {props.rows.map((row) => {
+        const word = markedWord(row, props.tomorrowKey, props.timeZone);
+        const tag = row.task.tags?.[0]?.name;
+        const eyebrow = tag ? `${tag} / ${EVENING_COMMIT_EYEBROW}` : EVENING_COMMIT_EYEBROW;
+        const current = evening.decisions[row.task.id]?.decision ?? row.decided;
+        const date = evening.decisions[row.task.id]?.date ?? "";
+        return (
+          <div className="evening-plan__commitment" key={row.task.id}>
+            <article className="evening-plan__task">
+              <span className="evening-plan__eyebrow">{eyebrow}</span>
+              <h4 className="evening-plan__title">{row.task.title}</h4>
+              <p className="evening-plan__state">{word ?? EVENING_COMMIT_TASK_HINT}</p>
+            </article>
+            {word === null ? (
+              <>
                 <div
-                  className="evening-plan__choices"
+                  className="evening-plan__choices evening-plan__choices--two-up"
                   role="radiogroup"
                   aria-label={`${row.task.title}: plan`}
                 >
-                  {COMMIT_OPTIONS.map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="evening-plan__choice"
-                      data-state={current === value ? "selected" : undefined}
-                    >
-                      <input
-                        type="radio"
-                        name={`${row.task.id}-commit`}
-                        checked={current === value}
-                        disabled={evening.busy}
-                        onChange={() => evening.setDecision(row.task.id, value)}
-                      />
-                      <strong>{label}</strong>
-                    </label>
-                  ))}
-                </div>
-                <div className="evening-plan__controls">
-                  <Button
-                    variant="secondary"
-                    disabled={evening.busy || current === null}
-                    onClick={() => evening.clearDecision(row.task.id)}
-                  >
-                    Undecided
-                  </Button>
+                  {EVENING_COMMIT_CHOICES.map((choice) => {
+                    const selected =
+                      choice.id === "leave" ? current === null : current === choice.id;
+                    return (
+                      <label
+                        key={choice.id}
+                        className="evening-plan__choice"
+                        data-state={selected ? "selected" : undefined}
+                      >
+                        <input
+                          type="radio"
+                          name={`${row.task.id}-commit`}
+                          className="evening-plan__choice-radio"
+                          checked={selected}
+                          disabled={evening.busy}
+                          onChange={() =>
+                            choice.id === "leave"
+                              ? evening.clearDecision(row.task.id)
+                              : evening.setDecision(row.task.id, choice.id)
+                          }
+                        />
+                        <span className="evening-plan__choice-text">
+                          <strong>{choice.title}</strong>
+                          <small>{choice.hint}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
                 {current === "another-date" ? (
                   <div className="evening-plan__controls">
@@ -284,12 +240,12 @@ export function CommitSection(props: {
                     </Button>
                   </div>
                 ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </PlanSection>
+              </>
+            ) : null}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

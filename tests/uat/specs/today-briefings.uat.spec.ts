@@ -639,7 +639,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   expect(saved.status).toBe(200);
   expect(saved.body.plan.sourceRunId).toBe(evening.runId);
   const planId = saved.body.plan.id as string;
-  await planDialog.getByRole("button", { name: "Back to Today" }).click();
+  await planDialog.getByRole("button", { name: "Leave for now" }).click();
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeFocused();
 
   await page.locator("button.ev-tomorrow__chat").filter({ hasText: "Chat with Moss" }).click();
@@ -657,7 +657,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await expect(
     reopened.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day")
   ).toBeChecked();
-  await reopened.getByRole("button", { name: "Back to Today" }).click();
+  await reopened.getByRole("button", { name: "Leave for now" }).click();
 
   const morning = await createBriefingRun(page, "morning", "T22 next morning", [
     "tasks.list",

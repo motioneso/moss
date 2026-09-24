@@ -321,6 +321,58 @@ export const EVENING_REFLECT_NOTE_PLACEHOLDER =
   "A correction, a constraint, or something to remember…";
 export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
 
+/** Evening dialog frame: title, footer actions and the next-step buttons. */
+export const EVENING_DIALOG_TITLE = "A good place to leave the day.";
+export const EVENING_DIALOG_EYEBROW = "Moss / Evening planning";
+export const EVENING_LEAVE_LABEL = "Leave for now";
+export const EVENING_NEXT_LABELS = [
+  "Open commitments \u2192",
+  "Shape tomorrow \u2192",
+  "Review the plan \u2192"
+] as const;
+
+/** Evening step 2 commitment choices; "leave" keeps the task undecided. */
+export const EVENING_COMMIT_CHOICES = [
+  { id: "tomorrow", title: "Tomorrow", hint: "Suggest a time block." },
+  { id: "another-date", title: "Another day", hint: "Choose a day that fits better." },
+  {
+    id: "unscheduled",
+    title: "Keep it on my list",
+    hint: "Leave it unscheduled. Nothing deleted."
+  },
+  { id: "leave", title: "Leave this for now", hint: "Keep today's task exactly as it is." }
+] as const;
+export const EVENING_COMMIT_EYEBROW = "Open task";
+export const EVENING_COMMIT_TASK_HINT = "It was on today's list without a time block.";
+export function eveningCommitProse(count: number): string {
+  if (count === 0) return "Nothing from today is waiting for a decision.";
+  return count === 1
+    ? "One task from today never got a time block. It can fit tomorrow, but it doesn't have to."
+    : `${count} tasks from today never got a time block. Take them one at a time.`;
+}
+
+/** Tomorrow snapshot beside every evening step. */
+export const EVENING_SNAPSHOT_INTENT = {
+  light: "A lighter day, with space to recover.",
+  normal: "A steady day, with room for follow-through.",
+  full: "A full day, with the essentials protected."
+} as const;
+export const EVENING_SNAPSHOT_NO_BLOCKS = "No task blocks selected. The rest stays open.";
+export const EVENING_SNAPSHOT_REST = "The rest stays open.";
+export const EVENING_PLACEMENT_NOTES = {
+  auto: {
+    title: "Automatic scheduling is on",
+    body: "Selected task blocks will be placed when you save."
+  },
+  suggest: {
+    title: "Propose before scheduling",
+    body: "Selected blocks stay as suggestions until accepted."
+  }
+} as const;
+export function eveningMobilePlanLabel(blocks: number): string {
+  return `Tomorrow's plan \u00b7 ${blocks} ${blocks === 1 ? "task block" : "task blocks"}`;
+}
+
 /** Evening hero, recap and open-loops copy (VP-EVENING-SUMMARY-R1). The hero
     kicker names the signed-in user's first name; without one it stands alone. */
 export const EVENING_KICKER = "Good evening";
