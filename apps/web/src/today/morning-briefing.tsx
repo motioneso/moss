@@ -11,6 +11,7 @@ import {
   type GetBriefingRunResponse,
   type GetDayPlanResponse,
   type LocaleSettingsDto,
+  type SportsBriefingEvidenceGameV1,
   type TaskDto
 } from "@moss/shared";
 
@@ -26,6 +27,7 @@ import {
   readEditorial,
   readGaps
 } from "./briefing-report-shell.js";
+import { calloutCopy, findChangedBlocks } from "./briefing-callout.js";
 import { splitHeadline } from "./today-hero.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import { acceptAllSelectionFor, hasOtherPendingEdits } from "./day-plan-review-model.js";
@@ -87,7 +89,10 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     retry: false
   });
   const isAutoMode = settingsQuery.data?.settings?.timeBlockMode === "auto";
-  const reviewLabel = isAutoMode ? "Adjust task blocks" : "Review task blocks";
+  // The Read tab always reads "Review task blocks"; only the footer's own
+  // secondary button keeps the auto-mode wording (B10).
+  const reviewTabLabel = "Review task blocks";
+  const footerReviewLabel = isAutoMode ? "Adjust task blocks" : "Review task blocks";
   // Every Read-tab state (proposed or automatic) takes the same wide frame;
   // the attribute just names which one this report is.
   const hasAutomaticPlacement = (props.dayPlan?.plan?.blocks ?? []).some(
@@ -157,13 +162,13 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       title="Your day, prepared."
       opener={props.opener}
       onClose={props.onClose}
-      reviewTabLabel={reviewLabel}
+      reviewTabLabel={reviewTabLabel}
       onSelectReviewTab={openReaderReview}
       jumpLinks={
         newsPreview || sportsPreview ? (
           <nav className="brief-reader__jump" aria-label="Report sections">
-            {newsPreview ? <a href="#brief-reader-news">News</a> : null}
-            {sportsPreview ? <a href="#brief-reader-sports">Sports</a> : null}
+            {newsPreview ? <a href="#brief-reader-news">News ↓</a> : null}
+            {sportsPreview ? <a href="#brief-reader-sports">Sports ↓</a> : null}
           </nav>
         ) : null
       }
@@ -215,7 +220,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           onOpenTask={props.onOpenTask}
           editorial
           showEditorialHeading={false}
-          proposedCaption={briefingSurface === "proposed-read" ? "short" : undefined}
+          proposedCaption="short"
         />
       }
       footerActions={
@@ -232,7 +237,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           <>
             {acceptPrimaryButton}
             <Button variant="secondary" onClick={openReaderReview}>
-              {reviewLabel}
+              {footerReviewLabel}
             </Button>
           </>
         )
@@ -245,12 +250,42 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         ) : null
       }
       footerBack={
-        <Button variant="primary" ref={backRef} onClick={props.onClose}>
+        <Button variant="quiet" ref={backRef} onClick={props.onClose}>
           Back to Today
         </Button>
       }
     />
   );
+}
+
+// Sports paragraph copy (Q5): finished games as a "final" line with the
+// scores in bold, up to two.
+function finalsParagraphs(games: readonly SportsBriefingEvidenceGameV1[]) {
+  return games
+    .filter((game) => game.phase === "final")
+    .slice(0, 2)
+    .map((game) => (
+      <>
+        {game.awayShort} <strong>{game.awayScore}</strong>, {game.homeShort}{" "}
+        <strong>{game.homeScore}</strong> final.
+      </>
+    ));
+}
+
+// Sports "Tonight" copy (Q5): tonight's games and their start times, or
+// nothing when none are on tonight.
+function tonightParagraph(
+  games: readonly SportsBriefingEvidenceGameV1[],
+  locale: LocaleSettingsDto
+): { readonly heading: string; readonly paragraph: string } | null {
+  const tonightGames = games.filter((game) => game.phase === "tonight");
+  if (tonightGames.length === 0) return null;
+  return {
+    heading: "Tonight",
+    paragraph: tonightGames
+      .map((game) => `${game.awayShort} at ${game.homeShort}, ${formatTime(game.startsAt, locale)}`)
+      .join("; ")
+  };
 }
 
 function ReportBody(props: {
@@ -270,7 +305,6 @@ function ReportBody(props: {
   const gaps = readGaps(run.sourceMetadata);
   const news = readEditorial(run.sourceMetadata, "news", isNewsBriefingEvidence);
   const sports = readEditorial(run.sourceMetadata, "sports", isSportsBriefingEvidence);
-  const tasksById = new Map(props.tasks.map((task) => [task.id, task]));
 
   return (
     <div>
@@ -285,40 +319,40 @@ function ReportBody(props: {
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
       {headline.rest ? <BriefingProse summaryText={headline.rest} /> : null}
       {props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable" ? (
-        <div className="brief-reader__callout">
-          <p className="brief-reader__callout-kicker">Changed overnight</p>
-          <p className="brief-reader__plan-changed">The plan has changed since this report.</p>
-        </div>
+        <BriefingCallout
+          before={planContext}
+          after={props.detail.plan.current}
+          locale={props.locale}
+        />
       ) : null}
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
-      {planContext ? <PlanContextBlock planContext={planContext} tasksById={tasksById} /> : null}
       {run.structuredPayload.actionRows.length > 0 ? (
-        <ActionRowsBlock run={run} tasks={props.tasks} />
+        <BriefingSections run={run} tasks={props.tasks} />
       ) : null}
       {news ? (
         <EditorialBlock
           id="brief-reader-news"
-          title="News"
-          stories={news.stories.map((story) => ({
-            title: story.title,
-            url: story.url,
-            imageUrl: story.imageUrl,
-            meta: `${story.sourceLabel}${story.summary ? ` · ${story.summary}` : ""}`
-          }))}
+          sectionLabel="News"
+          eyebrow="NEWS / THE BIG STORIES"
+          headline={news.stories[0]?.title ?? null}
+          photoUrl={news.stories[0]?.imageUrl ?? null}
+          paragraphs={news.stories
+            .slice(0, 2)
+            .flatMap((story) => (story.summary ? [story.summary] : []))}
+          ctaLabel="Read the stories ↗"
           onMoreOnToday={props.onMoreOnToday}
         />
       ) : null}
       {sports ? (
         <EditorialBlock
           id="brief-reader-sports"
-          title="Sports"
-          games={sports.games}
-          stories={sports.stories.map((story) => ({
-            title: story.title,
-            url: story.url,
-            imageUrl: story.imageUrl,
-            meta: story.publisherLabel
-          }))}
+          sectionLabel="Sports"
+          eyebrow="SPORTS / YOUR TEAMS FIRST"
+          headline={sports.stories[0]?.title ?? sports.games[0]?.headline ?? null}
+          photoUrl={sports.stories[0]?.imageUrl ?? null}
+          paragraphs={finalsParagraphs(sports.games)}
+          tonight={tonightParagraph(sports.games, props.locale)}
+          ctaLabel="See scores & tonight's games ↗"
           onMoreOnToday={props.onMoreOnToday}
         />
       ) : null}
@@ -358,45 +392,50 @@ function ReportBody(props: {
   );
 }
 
-function PlanContextBlock(props: {
-  readonly planContext: BriefingPlanContextV1;
-  readonly tasksById: ReadonlyMap<string, TaskDto>;
+/** Q2 callout: names the plan block that moved since this report was
+    prepared, with a keyboard-operable disclosure for the old and new time.
+    Falls back to the plain sentence when nothing comparable by id moved. */
+function BriefingCallout(props: {
+  readonly before: BriefingPlanContextV1 | null;
+  readonly after: BriefingPlanContextV1 | null;
+  readonly locale: LocaleSettingsDto;
 }) {
-  const intent = props.planContext.eveningIntent;
-  if (!intent && props.planContext.blocks.length === 0) return null;
+  const [open, setOpen] = useState(false);
+  const changed = findChangedBlocks(props.before, props.after);
+  const copy = calloutCopy(changed, props.locale);
   return (
-    <div className="brief-reader__plan">
-      {intent ? (
+    <div className="brief-reader__callout">
+      <p className="brief-reader__callout-kicker">Changed overnight</p>
+      {copy ? (
         <>
-          <span className="jds-brief__kicker">Evening intent</span>
-          {intent.capacity ? <p>Capacity: {intent.capacity}</p> : null}
-          {intent.notes ? <p>{intent.notes}</p> : null}
-          {intent.priorityTaskIds.length > 0 ? (
-            <ul>
-              {intent.priorityTaskIds.map((taskId) => (
-                <li key={taskId}>{props.tasksById.get(taskId)?.title ?? "No longer available"}</li>
+          <p className="brief-reader__callout-headline">{copy.headline}</p>
+          <p className="brief-reader__plan-changed">{copy.sentence}</p>
+          <button
+            type="button"
+            className="brief-reader__callout-disclosure"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? "▾" : "▸"} {copy.disclosureLabel}
+          </button>
+          {open ? (
+            <ul className="brief-reader__callout-detail">
+              {copy.disclosureLines.map((line) => (
+                <li key={line}>{line}</li>
               ))}
             </ul>
           ) : null}
         </>
-      ) : null}
-      {props.planContext.blocks.length > 0 ? (
-        <>
-          <span className="jds-brief__kicker">Plan</span>
-          <ul>
-            {props.planContext.blocks.map((block) => (
-              <li key={block.id}>
-                {block.title ?? block.kind} · {block.pendingChange ? "proposed" : "committed"}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
+      ) : (
+        <p className="brief-reader__plan-changed">The plan has changed since this report.</p>
+      )}
     </div>
   );
 }
 
-function ActionRowsBlock(props: {
+/** Q3: each action row renders as a report section (heading, explanation as
+    prose, a "View ↗" link for a view action), replacing the old flat list. */
+function BriefingSections(props: {
   readonly run: BriefingRunDto;
   readonly tasks: readonly TaskDto[];
 }) {
@@ -404,10 +443,9 @@ function ActionRowsBlock(props: {
   const shown = new Set(displayed.map((entry) => entry.row.taskId));
   const dropped = props.run.structuredPayload.actionRows.filter((row) => !shown.has(row.taskId));
   return (
-    <div className="brief-reader__rows">
-      <span className="jds-brief__kicker">Needs you</span>
+    <div className="brief-reader__sections">
       {displayed.map((entry) => (
-        <JoinedRow key={entry.row.taskId} entry={entry} />
+        <BriefingSection key={entry.row.taskId} entry={entry} />
       ))}
       {dropped.map((row) => (
         <p key={row.taskId} className="brief-reader__gap">
@@ -418,25 +456,22 @@ function ActionRowsBlock(props: {
   );
 }
 
-function JoinedRow(props: { readonly entry: DisplayedActionRow }) {
+function BriefingSection(props: { readonly entry: DisplayedActionRow }) {
   const row = props.entry.row;
   return (
-    <div className="loose-row">
-      <div className="loose-row__main">
-        <div className="loose-row__title">{row.title}</div>
-        <div className="loose-row__meta">{row.explanation}</div>
-        <div className="loose-row__meta">{row.sourceLabel}</div>
-      </div>
+    <section className="brief-reader__section">
+      <h4 className="brief-reader__section-heading">{row.title}</h4>
+      <p className="brief-reader__section-prose">{row.explanation}</p>
       {row.primaryAction?.kind === "view" ? (
         <a
-          className="jds-btn jds-btn--sm jds-btn--quiet"
+          className="brief-reader__section-link"
           href={row.primaryAction.href}
           target="_blank"
           rel="noopener noreferrer"
         >
-          View
+          View ↗
         </a>
       ) : null}
-    </div>
+    </section>
   );
 }

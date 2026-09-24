@@ -254,7 +254,30 @@ describe("buildDayItems state rules", () => {
       tasks: [summary({ id: "t1" })]
     });
     expect(items[0]?.state).toBe("pending");
-    expect(items[0]?.label).toBe("Proposed");
+    // Q6: the reader's short caption leads with the block's end time.
+    expect(items[0]?.label).toBe("12:30 pm · Proposed");
+  });
+
+  it("Q6: shortens a committed row's caption to 'On calendar' with its end time when proposedCaption is short", () => {
+    const items = buildDayItems({
+      ...base,
+      proposedCaption: "short",
+      plan: plan([
+        block({
+          id: "b1",
+          taskId: "t1",
+          position: 0,
+          actualPlacement: {
+            startsAt: "2026-06-30T17:00:00.000Z",
+            durationMinutes: 60,
+            calendarEventRef: "evt-1"
+          }
+        })
+      ]),
+      tasks: [summary({ id: "t1" })]
+    });
+    expect(items[0]?.state).toBe("committed");
+    expect(items[0]?.label).toBe("11:00 am · On calendar");
   });
 
   it("keeps the long label for a proposed block with no time yet, even with proposedCaption set", () => {

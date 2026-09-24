@@ -14,6 +14,7 @@ import type {
   GetBriefingRunResponse,
   GetDayPlanResponse,
   LocaleSettingsDto,
+  SportsBriefingEvidenceV1,
   TaskDto
 } from "@moss/shared";
 
@@ -401,19 +402,21 @@ describe("MorningBriefingReader report", () => {
     ]);
     const html = await renderReader(client);
     expect(html).toContain("Protect the launch window and reply to Alex about the contract.");
-    expect(html).toContain("Keep the morning clear.");
-    expect(html).toContain("light");
     expect(html).toContain("Book the launch room");
-    expect(html).toContain("Write the launch brief");
-    expect(html).toContain("committed");
-    expect(html).toContain("Standup");
-    expect(html).toContain("proposed");
     expect(html).toContain("Why Book the launch room matters");
     expect(html).toContain("Launch window holds despite weather");
-    expect(html).toContain("Test News");
-    expect(html).toContain("Vikings beat Cowboys 21-14");
-    expect(html).toContain("Test Sports");
+    expect(html).toContain("Crews cleared the range.");
+    expect(html).toContain("Vikings defense shines again");
+    expect(html).toContain("DAL");
+    expect(html).toContain("MIN");
+    expect(html).toContain("final.");
     expect(html).toContain("Sources");
+    // Q4: the evening-intent/plan-context lists are dropped from the Read tab.
+    expect(html).not.toContain("Evening intent");
+    expect(html).not.toContain("Write the launch brief · committed");
+    // Q5: individual story bylines sit behind the "↗" link now, not inline.
+    expect(html).not.toContain("Test News");
+    expect(html).not.toContain("Test Sports");
   });
 
   it("omits sections the run does not carry", async () => {
@@ -514,6 +517,74 @@ describe("MorningBriefingReader report", () => {
     expect(html).not.toContain("Accept");
     expect(html).not.toContain("Dismiss");
     expect(html).not.toContain("Reply");
+  });
+
+  it("names the moved block and its new time in the changed-overnight callout", async () => {
+    // FAIL-FIRST at 62ccbb3d: today's code only ever shows the generic
+    // "The plan has changed since this report." line and has no disclosure
+    // button. This proves that against the base before the callout copy
+    // change lands (see proofs/SCREEN-MORNING-READER/fail-first-callout-62ccbb3d.txt).
+    const run = fullRun();
+    const client = seedClient([
+      [
+        queryKeys.briefings.run("def-morning", "run-full"),
+        readyDetail(run, {
+          plan: {
+            status: "changed",
+            storedRevision: 2,
+            currentRevision: 3,
+            current: {
+              ...run.structuredPayload.planContext!,
+              revision: 3,
+              blocks: [
+                run.structuredPayload.planContext!.blocks[0]!,
+                {
+                  ...run.structuredPayload.planContext!.blocks[1]!,
+                  pendingChange: null,
+                  actualPlacement: {
+                    startsAt: "2026-09-10T17:15:00.000Z",
+                    durationMinutes: 30,
+                    calendarEventRef: null
+                  }
+                }
+              ]
+            }
+          }
+        })
+      ]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("Standup is set for 10:15");
+    expect(html).toContain("See the calendar change");
+    expect(html).not.toContain("The plan has changed since this report.");
+  });
+
+  it("shows tonight's sports games and times under a Tonight heading", async () => {
+    // FAIL-FIRST at 62ccbb3d: the reader had no "Tonight" copy at all, only a
+    // flat list of finished-game scorelines (see
+    // proofs/SCREEN-MORNING-READER/fail-first-sports-tonight-62ccbb3d.txt).
+    const run = fullRun();
+    const editorial = run.sourceMetadata.editorial as { sports: SportsBriefingEvidenceV1 };
+    const tonightGame = {
+      id: "game-2",
+      competitionKey: "nfl",
+      startsAt: "2026-09-10T23:15:00.000Z",
+      phase: "tonight" as const,
+      statusDetail: "8:15 PM",
+      headline: "Eagles host the Giants",
+      homeShort: "PHI",
+      awayShort: "NYG",
+      homeScore: null,
+      awayScore: null
+    };
+    const sports = { ...editorial.sports, games: [...editorial.sports.games, tonightGame] };
+    const sourceMetadata = { ...run.sourceMetadata, editorial: { ...editorial, sports } };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail({ ...run, sourceMetadata })]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("Tonight");
+    expect(html).toContain("NYG at PHI");
   });
 
   it("requests nothing from news or sports endpoints for a payload without them", async () => {

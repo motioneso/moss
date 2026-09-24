@@ -6,7 +6,7 @@ import {
   type ReactNode
 } from "react";
 
-import type { LocaleSettingsDto, SportsBriefingEvidenceGameV1 } from "@moss/shared";
+import type { LocaleSettingsDto } from "@moss/shared";
 
 import { Button } from "@moss/ui";
 
@@ -172,41 +172,37 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
 
 export function EditorialBlock(props: {
   readonly id: string;
-  readonly title: string;
-  readonly games?: readonly SportsBriefingEvidenceGameV1[] | null;
-  readonly stories: readonly {
-    readonly title: string;
-    readonly url: string;
-    readonly imageUrl: string | null;
-    readonly meta: string;
-  }[];
+  readonly sectionLabel: string;
+  readonly eyebrow: string;
+  readonly headline: string | null;
+  readonly photoUrl: string | null;
+  readonly paragraphs: readonly ReactNode[];
+  readonly tonight?: { readonly heading: string; readonly paragraph: ReactNode } | null;
+  readonly ctaLabel: string;
   readonly onMoreOnToday: () => void;
 }) {
   return (
-    <section className="brief-reader__editorial" id={props.id} aria-label={props.title}>
-      <div className="jds-brief__title">{props.title}</div>
-      {props.games?.map((game) => (
-        <div className="brief-reader__game" key={game.id}>
-          <div className="loose-row__title">{game.headline}</div>
-          <div className="loose-row__meta">
-            {game.awayShort} {game.awayScore ?? ""} · {game.homeShort} {game.homeScore ?? ""} ·{" "}
-            {game.statusDetail}
-          </div>
-        </div>
+    <section className="brief-reader__editorial" id={props.id} aria-label={props.sectionLabel}>
+      <div className="brief-reader__editorial-eyebrow">{props.eyebrow}</div>
+      {props.headline ? (
+        <h4 className="brief-reader__editorial-headline">{props.headline}</h4>
+      ) : null}
+      {props.photoUrl ? (
+        <img src={props.photoUrl} alt="" className="brief-reader__photo" loading="lazy" />
+      ) : null}
+      {props.paragraphs.map((paragraph, index) => (
+        <p className="brief-reader__editorial-paragraph" key={index}>
+          {paragraph}
+        </p>
       ))}
-      {props.stories.map((story) => (
-        <article className="brief-reader__story" key={story.url}>
-          {story.imageUrl ? (
-            <img src={story.imageUrl} alt="" className="brief-reader__photo" loading="lazy" />
-          ) : null}
-          <a href={story.url} target="_blank" rel="noopener noreferrer">
-            {story.title}
-          </a>
-          <div className="loose-row__meta">{story.meta}</div>
-        </article>
-      ))}
+      {props.tonight ? (
+        <>
+          <h5 className="brief-reader__editorial-subhead">{props.tonight.heading}</h5>
+          <p className="brief-reader__editorial-paragraph">{props.tonight.paragraph}</p>
+        </>
+      ) : null}
       <Button variant="quiet" size="sm" onClick={props.onMoreOnToday}>
-        More on Today
+        {props.ctaLabel}
       </Button>
     </section>
   );
