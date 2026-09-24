@@ -1,7 +1,7 @@
 /* Sports broadsheet editorial layer for issue 839. Tokens only - see tokens.css. */
 
 /* Broadsheet masthead (header redesign pass): now just the section-nav bar + the gameday event
-   headline at display scale. The folio strip — date line, "The Sports Desk" serif nameplate, and
+   headline at display scale. The folio strip — date line, "The Sports Desk" nameplate, and
    Manage link — was removed (Ben 2026-07-07; the app topbar already titles the page "Sports"), so
    those rules are gone with it. Sans throughout. */
 .sp-mast {

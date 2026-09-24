@@ -25,12 +25,7 @@
 }
 
 .chatd-skillac__name {
-  font:
-    700 12px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
+  font: 700 12px var(--font-sans);
 }
 
 .chatd-skillac__desc {
@@ -43,12 +38,7 @@
   gap: 5px;
   margin: 0 0 8px;
   padding: 5px 8px 5px 10px;
-  font:
-    12px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
+  font: 12px var(--font-sans);
   max-width: 100%;
 }
 

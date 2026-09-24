@@ -147,19 +147,21 @@ settle delay, because the disable happens _after_ the enable returns 200.
 
 ## Design System Guardrails
 
-Moss UI must keep the authored design-system shape:
+The full reference is [`docs/design-system.md`](design-system.md). The shipped CSS
+(`apps/web/src/styles/tokens.css`, `packages/ui/src/styles/`) is the authority if that doc drifts.
+In short:
 
-- headings use `--font-display` (Neue Haas Grotesk, interim Helvetica stack); body uses
-  `--font-sans`. **No mono and no serif** — mono was retired 2026-07-08 (eyebrows, labels, and data
-  use `--font-sans` with `tabular-nums`); serif survives only in the sports nameplate. Match the
-  live `apps/web/src/styles/tokens.css`, which is the authority if this list ever drifts again
-- palette, radius, shadow, focus, and state colors come from `apps/web/src/styles/tokens.css`
-- extend existing `jds-*` and local UI primitives; do not drop in unstyled shadcn, Radix, or
+- headings use `--font-display` (Archivo, self-hosted); everything else uses `--font-sans`. No
+  serif anywhere. Monospace only for real code (chat code blocks, snippets)
+- every colour, radius, shadow and focus value comes from a token in `tokens.css`
+- first-party modules use `@moss/ui` components and tokens fully, so they work in every theme;
+  their own CSS is layout only. Third-party modules may style freely. News and Sports module
+  styling is known debt, not precedent
+- extend `@moss/ui` and its `jds-*` primitives; do not drop in unstyled shadcn, Radix, or
   Tailwind-default primitives
-- new empty and loading states must match existing authored states: warm surface, sentence-case
-  copy, tokenized color, and no generic placeholder cards
+- empty and loading states follow the patterns in the reference
 
-Run `pnpm check:design-tokens` before shipping frontend CSS changes.
+Run `pnpm check:design-tokens` and `pnpm check:ui-classes` before shipping frontend CSS changes.
 
 ### A new module needs its front end designed before it is built
 
