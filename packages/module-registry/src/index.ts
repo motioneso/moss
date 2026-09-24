@@ -2185,6 +2185,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           moduleManifests: getBuiltInModuleManifests(),
           aiRepository: new AiRepository(),
           cipher: createAiSecretCipher(),
+          // Subscription-login summarization models run through chat's CLI transport.
+          createCliStructuredAdapter: createCliStructuredAdapterFactory(),
           personaRepository: new PreferencesRepository(),
           priorityPreferencesRepository: new PreferencesRepository(),
           focusReadiness: dependencies.focusSignals,

@@ -205,6 +205,20 @@ export const briefingsModuleManifest = {
       ]
     },
     {
+      id: "briefings.ai_writing",
+      description:
+        "Briefings are written by the summarization model chosen in the admin AI settings, " +
+        "signed in by API key or subscription login. Without a working model a briefing " +
+        "still arrives as a plain list of the gathered items.",
+      remediations: [
+        {
+          id: "briefings.ai_writing.configure",
+          description: "Add or fix a summarization model in the admin AI provider settings.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
       id: "briefings.plan_handoff",
       description:
         "A report records the plan id and revision it was written from, and a later " +
