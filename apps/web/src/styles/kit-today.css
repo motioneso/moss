@@ -24,14 +24,6 @@
   padding: 0;
 }
 
-/* Evening-only "Prep for tomorrow" rail CTA: full-width button under a short
-   one-liner so it reads as the card's primary action in the narrow rail. */
-.evening-prep__btn {
-  width: 100%;
-  justify-content: center;
-  margin-top: 10px;
-}
-
 .top3 {
   display: flex;
   flex-direction: column;
@@ -85,6 +77,29 @@
   align-items: start;
   margin-top: 30px;
 }
+
+/* Morning grid follows the study: the section index sits directly above
+   it, and the rail is a fixed 270px column carrying its own keyline. */
+.today-hero__sections + .cmd-wrap {
+  padding-top: 0;
+}
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) {
+  margin-top: 0;
+}
+@media (min-width: 1081px) {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) {
+    grid-template-columns: minmax(0, 1fr) 270px;
+    gap: 34px;
+  }
+}
+
+/* Morning desks sit below the shared rail row and use the full content width. */
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #widgets,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #news,
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) > #sports {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 @media (min-width: 1081px) {
   /* The rail comes first in the DOM so tab order matches the single-column
      visual order on phones; explicit placement keeps the desktop two-column
@@ -100,6 +115,43 @@
     border-left: 1px solid var(--line-strong);
     padding-left: 32px;
     margin-left: -32px;
+  }
+  /* Morning follows the study grid: the dock tops the rail column, the day
+     plan spans both rows, and the rail keyline breaks between dock and rail. */
+  /* The flexible second row absorbs the day plan's height, so the dock row
+     stays as tall as the dock and the rail starts right under it. */
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) {
+    grid-template-rows: max-content 1fr;
+  }
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > .cmd-main {
+    grid-row: 1 / span 2;
+  }
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > .cmd-dock {
+    grid-column: 2;
+    grid-row: 1;
+    border-left: 1px solid var(--line);
+    padding-left: 26px;
+  }
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > .cmd-aside {
+    grid-row: 2;
+    border-left-color: var(--line);
+    padding-left: 26px;
+    margin-left: 0;
+  }
+}
+@media (max-width: 1080px) {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) {
+    row-gap: 0;
+  }
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > .cmd-dock {
+    margin-bottom: 25px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) > .cmd-aside {
+    margin-top: 28px;
+    padding-top: 23px;
+    border-top: 1px solid var(--line);
   }
 }
 @media (max-width: 1080px) {

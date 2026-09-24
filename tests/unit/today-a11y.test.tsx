@@ -226,10 +226,13 @@ describe("Today named controls and order", () => {
     expect(exposed).toEqual([]);
   });
 
-  it("places the rail before the schedule in the document", () => {
+  it("places quick actions before the schedule and the widget rail after it", () => {
     const html = quietPageHtml();
-    expect(html.indexOf("<aside")).toBeGreaterThan(-1);
-    expect(html.indexOf("<aside")).toBeLessThan(html.indexOf('id="schedule"'));
+    const dock = html.indexOf('class="cmd-dock"');
+    const schedule = html.indexOf('id="schedule"');
+    expect(dock).toBeGreaterThan(-1);
+    expect(dock).toBeLessThan(schedule);
+    expect(html.indexOf("<aside")).toBeGreaterThan(schedule);
   });
 });
 

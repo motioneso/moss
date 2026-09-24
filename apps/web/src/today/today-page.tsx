@@ -1,4 +1,8 @@
-import { TODAY_SECTION_INDEX_LABEL, TODAY_SECTION_LINKS } from "./today-labels.js";
+import {
+  EVENING_SECTION_DAY_LABEL,
+  TODAY_SECTION_INDEX_LABEL,
+  TODAY_SECTION_LINKS
+} from "./today-labels.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flag, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -42,7 +46,7 @@ import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
-import { TodayRail } from "./today-rail";
+import { TodayDock, TodayRail } from "./today-rail";
 import { DayPlanReview } from "./day-plan-review";
 import { useDayPlanReview, type DayPlanReviewController } from "./day-plan-review-controller";
 import { useEveningPlanning } from "./evening-planning-controller";
@@ -57,12 +61,14 @@ import {
   buildLede,
   byStart,
   datelineLabel,
+  shortDatelineLabel,
   driftOf,
   dueTs,
   eveningHeroKicker,
   firstName,
-  greeting,
   isToday,
+  greeting,
+  morningHeroKicker,
   timeLabel
 } from "./today-labels";
 import { isAtRisk, isDoFirst, isDoneToday } from "../tasks/focus";
@@ -362,18 +368,113 @@ export function TodayPage(props: {
     onOpenReader: openMorningReader
   });
   const sectionLinks = (
-    <nav
-      aria-label="Sections"
-      className={todayMode === "day" ? "cmd-sections today-hero__sections" : "cmd-sections"}
-    >
+    <nav aria-label="Sections" className="cmd-sections today-hero__sections">
       <span className="today-hero__sections-label">{TODAY_SECTION_INDEX_LABEL}</span>
-      {TODAY_SECTION_LINKS.map((link) => (
+      {TODAY_SECTION_LINKS.map((link, index) => (
         <a key={link.href} href={link.href}>
-          {link.label}
+          {todayMode === "evening" && index === 0 ? EVENING_SECTION_DAY_LABEL : link.label}
         </a>
       ))}
     </nav>
   );
+  const railSection = (
+    <TodayRail
+      mode={todayMode}
+      now={now}
+      locale={locale}
+      nextEvent={
+        nextEvent
+          ? {
+              title: nextEvent.title,
+              startsAt: nextEvent.startsAt,
+              endsAt: nextEvent.endsAt,
+              location: nextEvent.location ?? null
+            }
+          : null
+      }
+      nextStarted={nextStarted}
+      hasStatSignal={hasStatSignal}
+      prioritiesCount={priorities.length}
+      atRiskCount={atRisk.length}
+      eventsCount={todayEvents.length}
+      doneToday={doneToday}
+      agenda={upcoming.map((event) => ({
+        id: event.id,
+        time: timeLabel(event.startsAt, locale),
+        title: event.title,
+        location: event.location
+      }))}
+      onNavigate={(path) => navigate(path)}
+      showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
+      showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}
+      latestEveningRun={latestEveningRun}
+      eveningRunsPending={eveningRunsQuery.isPending}
+      eveningTargetTime={eveningTargetTime}
+      onEveningFeedback={() => {
+        if (eveningDefinition) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.briefings.runs(eveningDefinition.id)
+          });
+        }
+      }}
+      interviewPending={eveningInterviewMutation.isPending}
+      onPrep={() => {
+        // #891: open the drawer immediately rather than waiting for the
+        // seed POST to resolve; the seeded turn streams in via SSE.
+        chatControls.openChat();
+        eveningInterviewMutation.mutate();
+      }}
+      onPlan={setPlanningAnchor}
+      tomorrowLabel={formatDate(`${tomorrowKey}T12:00:00Z`, locale, {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      })}
+      tomorrowEvents={tomorrowEvents}
+      tomorrowTasks={tomorrowTasks}
+      onOpenTask={(id) => setDialog({ id })}
+      wellnessEnabled={wellnessEnabled}
+      theme={theme}
+      timeZone={locale.timezone}
+      disabledModuleIds={disabledModuleIds}
+    />
+  );
+  const startHereSection = (
+    <section className="jds-brief" id="start-here">
+      <div className="jds-brief__head">
+        <span className="jds-brief__kicker">Start here</span>
+      </div>
+      <div className="jds-brief__title">The few things that matter most</div>
+      <div className="top3" style={{ marginTop: 4 }}>
+        {startHere.length > 0 ? (
+          startHere.map((task) => (
+            <BriefTaskRow
+              key={task.id}
+              task={task}
+              onToggle={() => toggleMutation.mutate(task)}
+              onOpen={() => setDialog({ id: task.id })}
+            />
+          ))
+        ) : (
+          <p className="cmd-empty" role="status">
+            Nothing pressing right now.
+          </p>
+        )}
+      </div>
+      {startHere.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          <span className="jds-why">
+            <Info size={12} aria-hidden="true" />
+            Ranked by priority, then by what&apos;s due first.
+          </span>
+        </div>
+      ) : null}
+    </section>
+  );
+
+  const userFirstName = props.me.user.name.trim()
+    ? firstName(props.me.user.name, props.me.user.email)
+    : null;
 
   // The hero stands outside .cmd-wrap: it breaks out of the surface padding
   // to span the content region in both sidebar states, while the wrap below
@@ -384,12 +485,12 @@ export function TodayPage(props: {
         mode={todayMode}
         eyebrow={
           todayMode === "evening"
-            ? eveningHeroKicker(
-                props.me.user.name.trim()
-                  ? firstName(props.me.user.name, props.me.user.email)
-                  : null
-              )
-            : `${greeting()} · ${datelineLabel(now, locale)}`
+            ? eveningHeroKicker(userFirstName)
+            : morningDefinition?.enabled === true
+              ? morningHeroKicker(userFirstName)
+              : userFirstName
+                ? `${greeting()}, ${userFirstName}`
+                : greeting()
         }
         headline={heroContent.headline}
         summary={heroContent.summary}
@@ -407,50 +508,8 @@ export function TodayPage(props: {
       />
 
       <div className="cmd-wrap">
-        {todayMode === "evening" ? sectionLinks : null}
-
-        <div className="cmd-grid">
-          <TodayRail
-            now={now}
-            locale={locale}
-            nextEvent={
-              nextEvent
-                ? { title: nextEvent.title, startsAt: nextEvent.startsAt, endsAt: nextEvent.endsAt }
-                : null
-            }
-            nextStarted={nextStarted}
-            hasStatSignal={hasStatSignal}
-            prioritiesCount={priorities.length}
-            atRiskCount={atRisk.length}
-            eventsCount={todayEvents.length}
-            doneToday={doneToday}
-            agenda={upcoming.map((event) => ({
-              id: event.id,
-              time: timeLabel(event.startsAt, locale),
-              title: event.title,
-              location: event.location
-            }))}
-            onNavigate={(path) => navigate(path)}
-            showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
-            showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}
-            latestEveningRun={latestEveningRun}
-            eveningRunsPending={eveningRunsQuery.isPending}
-            eveningTargetTime={eveningTargetTime}
-            onEveningFeedback={() => {
-              if (eveningDefinition) {
-                void queryClient.invalidateQueries({
-                  queryKey: queryKeys.briefings.runs(eveningDefinition.id)
-                });
-              }
-            }}
-            interviewPending={eveningInterviewMutation.isPending}
-            onPrep={() => {
-              // #891: open the drawer immediately rather than waiting for the
-              // seed POST to resolve; the seeded turn streams in via SSE.
-              chatControls.openChat();
-              eveningInterviewMutation.mutate();
-            }}
-            onPlan={setPlanningAnchor}
+        <div className="cmd-grid" data-mode={todayMode}>
+          <TodayDock
             wellnessEnabled={wellnessEnabled}
             theme={theme}
             timeZone={locale.timezone}
@@ -487,51 +546,12 @@ export function TodayPage(props: {
                     eveningSplit && eveningSplit.rest.trim() !== "" ? eveningSplit.rest : null
                   }
                   carryingForward={looseEnds}
-                  tomorrowEvents={tomorrowEvents}
-                  tomorrowTasks={tomorrowTasks}
-                  locale={locale}
-                  renderTask={(task) => (
-                    <BriefTaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={() => toggleMutation.mutate(task)}
-                      onOpen={() => setDialog({ id: task.id })}
-                    />
-                  )}
+                  onOpenTask={(id) => setDialog({ id })}
                 />
               </>
             ) : null}
 
-            <section className="jds-brief" id="start-here">
-              <div className="jds-brief__head">
-                <span className="jds-brief__kicker">Start here</span>
-              </div>
-              <div className="jds-brief__title">The few things that matter most</div>
-              <div className="top3" style={{ marginTop: 4 }}>
-                {startHere.length > 0 ? (
-                  startHere.map((task) => (
-                    <BriefTaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={() => toggleMutation.mutate(task)}
-                      onOpen={() => setDialog({ id: task.id })}
-                    />
-                  ))
-                ) : (
-                  <p className="cmd-empty" role="status">
-                    Nothing pressing right now.
-                  </p>
-                )}
-              </div>
-              {startHere.length > 0 ? (
-                <div style={{ marginTop: 12 }}>
-                  <span className="jds-why">
-                    <Info size={12} aria-hidden="true" />
-                    Ranked by priority, then by what&apos;s due first.
-                  </span>
-                </div>
-              ) : null}
-            </section>
+            {todayMode === "evening" ? startHereSection : null}
 
             <DayPlanSection
               dayPlan={dayPlanQuery.data}
@@ -542,7 +562,10 @@ export function TodayPage(props: {
               error={dayPlanQuery.isError}
               calendarError={eventsQuery.isError}
               editorial
-              dateline={datelineLabel(now, locale)}
+              todayLayout={todayMode === "day"}
+              dateline={
+                todayMode === "day" ? shortDatelineLabel(now, locale) : datelineLabel(now, locale)
+              }
               onOpenTask={(id) => setDialog({ id })}
               onReview={(anchor) => {
                 reviewOpener.current = anchor;
@@ -550,6 +573,8 @@ export function TodayPage(props: {
                 setReview(true);
               }}
             />
+
+            {todayMode === "day" ? startHereSection : null}
 
             <div id="needs-you">
               <BriefingActionRowsSection
@@ -563,15 +588,6 @@ export function TodayPage(props: {
             </div>
 
             {feed.overnight.length > 0 ? <OvernightSection items={feed.overnight} /> : null}
-
-            <div id="widgets">
-              <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
-            </div>
-            <div id="news">
-              {feed.news.length > 0 || feed.interests.length > 0 ? (
-                <NewsDesk news={feed.news} interests={feed.interests} />
-              ) : null}
-            </div>
 
             <div id="goals">
               <GoalsSection />
@@ -613,6 +629,15 @@ export function TodayPage(props: {
             ) : null}
 
             <ProactiveCards />
+          </div>
+          {railSection}
+          <div id="widgets">
+            <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
+          </div>
+          <div id="news">
+            {feed.news.length > 0 || feed.interests.length > 0 ? (
+              <NewsDesk news={feed.news} interests={feed.interests} />
+            ) : null}
           </div>
           <div id="sports">
             <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />

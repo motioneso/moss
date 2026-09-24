@@ -94,9 +94,15 @@ export function NewsTodayWidget(): ReactNode {
                   onError={() => setFailedLeadPhoto(lead.imageUrl)}
                 />
               ) : null}
-              <span className="nw-twlead__tag">{lead.sourceLabel}</span>
+              <span className="nw-twlead__tag">
+                <span className="nw-twlead__tag-evening">{lead.sourceLabel}</span>
+                <span className="nw-twlead__tag-morning">
+                  {lead.topicLabel ?? lead.sourceLabel} / THE LEAD STORY
+                </span>
+              </span>
               <span className="nw-twlead__title">{lead.title}</span>
               {lead.summary ? <span className="nw-twlead__dek">{lead.summary}</span> : null}
+              <span className="nw-twlead__link">Read the story ↗</span>
             </a>
             <StoryFeedbackMenu headline={lead} surface="today" />
           </div>

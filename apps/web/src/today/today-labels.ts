@@ -60,6 +60,11 @@ export function datelineLabel(now: Date, locale: LocaleSettingsDto): string {
   return `${weekday} · ${date} · No.${edition}`;
 }
 
+/** Morning schedule dateline: "Wednesday, September 9". */
+export function shortDatelineLabel(now: Date, locale: LocaleSettingsDto): string {
+  return formatDate(now.toISOString(), locale, { weekday: "long", month: "long", day: "numeric" });
+}
+
 export function countdownLabel(iso: string, now: Date): string {
   const mins = Math.max(0, Math.round((Date.parse(iso) - now.getTime()) / 60_000));
   const h = Math.floor(mins / 60);
@@ -275,6 +280,16 @@ export const TODAY_SECTION_LINKS = [
   { href: "#sports", label: "Sports" }
 ] as const;
 
+/** Morning hero copy shared by the day-mode kicker and reader links. */
+export const MORNING_BRIEFING_TITLE = "Morning briefing";
+export const MORNING_READ_FULL_LABEL = "Read the full morning briefing";
+export function morningHeroKicker(firstName: string | null): string {
+  const name = (firstName ?? "").trim();
+  return name
+    ? `${greeting()}, ${name} / ${MORNING_BRIEFING_TITLE}`
+    : `${greeting()} / ${MORNING_BRIEFING_TITLE}`;
+}
+
 /** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1). */
 export const EVENING_REFLECT_CHOICE_CAPTURES_TITLE = "That captures it";
 export const EVENING_REFLECT_CHOICE_CAPTURES_HINT = "I'm ready to look ahead.";
@@ -308,14 +323,18 @@ export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
 
 /** Evening hero, recap and open-loops copy (VP-EVENING-SUMMARY-R1). The hero
     kicker names the signed-in user's first name; without one it stands alone. */
-export const EVENING_KICKER = "GOOD EVENING";
-export const EVENING_BRIEFING_TITLE = "EVENING BRIEFING";
+export const EVENING_KICKER = "Good evening";
+export const EVENING_BRIEFING_TITLE = "Evening briefing";
 export function eveningHeroKicker(firstName: string | null): string {
   const name = (firstName ?? "").trim();
-  return name ? `${EVENING_KICKER}, ${name.toUpperCase()}` : EVENING_KICKER;
+  return name
+    ? `${EVENING_KICKER}, ${name} / ${EVENING_BRIEFING_TITLE}`
+    : `${EVENING_KICKER} / ${EVENING_BRIEFING_TITLE}`;
 }
+export const EVENING_SECTION_DAY_LABEL = "Your day & tomorrow";
 export const EVENING_READ_FULL_LABEL = "Read the full evening briefing";
 export const EVENING_SOURCES_LABEL = "What informed this?";
+export const MORNING_SOURCES_LABEL = EVENING_SOURCES_LABEL;
 export const EVENING_RECAP_KICKER = "01";
 export const EVENING_RECAP_HEADING = "What happened today";
 export const EVENING_OPEN_LOOPS_KICKER = "02";

@@ -143,7 +143,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
     await page.goto("/today");
     await expect(page.locator(".cmd-wrap")).toBeVisible();
     // Every widget the page shows is populated, otherwise the width check proves nothing.
-    await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+    await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
     await expect(page.getByText("Write the launch brief").first()).toBeVisible();
     await page.getByRole("button", { name: "Read the full morning briefing" }).click();
@@ -332,7 +332,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await page.goto("/today");
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
@@ -592,7 +592,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
   await page.goto("/today");
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.locator(".today-hero .wx-now").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Team standup").first()).toBeVisible();
@@ -831,7 +831,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   await page.goto("/today");
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeVisible();
-  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.getByText(/^Overnight low/).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
   await expect(page.getByText("Team standup").first()).toBeVisible();
@@ -900,7 +900,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
   }
 });
 
-test("today hero band spans the content with an unclipped headline", async ({ page }) => {
+test("today morning hero is inset with an unclipped headline", async ({ page }) => {
   await page.clock.setFixedTime(new Date(NOW));
   const morningDefinition = createMockBriefingDefinition("briefing-hero", "Morning", {
     briefingType: "morning",
@@ -947,7 +947,8 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
       innerW: window.innerWidth
     };
   });
-  expect(Math.abs(desktop.heroW - desktop.contentW)).toBeLessThanOrEqual(1);
+  // The surface's 24px horizontal padding combines with the 16px morning inset.
+  expect(Math.abs(desktop.heroW - (desktop.contentW - 80))).toBeLessThanOrEqual(1);
   expect(desktop.h1Clipped).toBe(false);
   expect(desktop.fontSize).toBeGreaterThanOrEqual(40);
   expect(desktop.fontSize).toBeLessThanOrEqual(48);
@@ -977,7 +978,8 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
       scrollW: document.documentElement.scrollWidth
     };
   });
-  expect(Math.abs(phone.heroW - phone.innerW)).toBeLessThanOrEqual(1);
+  // 12px surface padding plus the 6px phone inset on each side.
+  expect(Math.abs(phone.heroW - (phone.innerW - 36))).toBeLessThanOrEqual(1);
   expect(phone.h1Clipped).toBe(false);
   expect(phone.fontSize).toBeGreaterThanOrEqual(28);
   expect(phone.fontSize).toBeLessThanOrEqual(34);
