@@ -291,9 +291,49 @@
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text);
 }
-.nw-twlead__photo {
+.nw-twlead__frame {
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
+}
+
+/* Drawn topic art: the palette class sets the plate (background) and the line ink (color). */
+.nw-leadart--climate {
+  background: var(--news-art-climate-plate);
+  color: var(--news-art-climate-ink);
+}
+.nw-leadart--world {
+  background: var(--news-art-world-plate);
+  color: var(--news-art-world-ink);
+}
+.nw-leadart--culture {
+  background: var(--news-art-culture-plate);
+  color: var(--news-art-culture-ink);
+}
+.nw-leadart--technology {
+  background: var(--news-art-technology-plate);
+  color: var(--news-art-technology-ink);
+}
+.nw-leadart__line {
+  stroke: currentColor;
+}
+.nw-leadart__gold {
+  stroke: var(--news-art-gold);
+}
+.nw-leadart__label {
+  background: inherit;
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: var(--weight-bold);
+  line-height: 1.2;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+@media (max-width: 720px) {
+  .nw-leadart__label {
+    font-size: 7px;
+    letter-spacing: 0.65px;
+  }
 }
 .nw-twlead__tag {
   font-family: var(--font-sans);
