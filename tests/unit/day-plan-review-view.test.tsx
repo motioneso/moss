@@ -88,6 +88,7 @@ function stubController(overrides: Partial<DayPlanReviewController> = {}): DayPl
     notice: null,
     busy: false,
     choiceFor: (entry) => defaultChoiceFor(entry),
+    expectOwnWrite: () => undefined,
     setPlacement: () => undefined,
     dismissApproval: () => undefined,
     setTime: () => undefined,

@@ -205,8 +205,7 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
               {evening.status}
             </span>
           )}
-          {/* After a successful save the plan's own new revision raises this notice; it is moot there. */}
-          {evening.reviewNotice && !done ? (
+          {evening.reviewNotice ? (
             <span className="evening-plan__notice" role="status">
               {evening.reviewNotice}
             </span>

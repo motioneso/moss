@@ -91,6 +91,11 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     for (const key of keys) void queryClient.invalidateQueries({ queryKey: key });
   }, [input.localDay, input.timeZone, input.morningDefinitionId, queryClient]);
 
+  // A caller that writes the plan itself marks the next revision as its own.
+  const expectOwnWrite = useCallback(() => {
+    quietRef.current = true;
+  }, []);
+
   const reloadAfterConflict = useCallback(() => {
     quietRef.current = false;
     void queryClient.invalidateQueries({
@@ -340,6 +345,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     notice,
     busy,
     choiceFor,
+    expectOwnWrite,
     setPlacement,
     dismissApproval,
     setTime,

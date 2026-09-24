@@ -307,9 +307,11 @@ function Harness(props: { plan: DayPlanDto; seen: (controller: DayPlanReviewCont
   return null;
 }
 
-async function mountHook(
-  plan: DayPlanDto
-): Promise<{ current: () => DayPlanReviewController; client: QueryClient }> {
+async function mountHook(plan: DayPlanDto): Promise<{
+  current: () => DayPlanReviewController;
+  client: QueryClient;
+  rerender: (next: DayPlanDto) => Promise<void>;
+}> {
   let latest: DayPlanReviewController | null = null;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -318,22 +320,25 @@ async function mountHook(
   document.body.appendChild(container);
   const root = createRoot(container);
   liveRoots.push(root);
-  await act(async () => {
-    root.render(
-      createElement(
-        QueryClientProvider,
-        { client },
-        createElement(Harness, {
-          plan,
-          seen: (controller) => {
-            latest = controller;
-          }
-        })
-      )
-    );
-  });
+  const rerender = async (next: DayPlanDto) => {
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(Harness, {
+            plan: next,
+            seen: (controller) => {
+              latest = controller;
+            }
+          })
+        )
+      );
+    });
+  };
+  await rerender(plan);
   if (!latest) throw new Error("hook did not render");
-  return { current: () => latest as DayPlanReviewController, client };
+  return { current: () => latest as DayPlanReviewController, client, rerender };
 }
 
 beforeEach(() => {
@@ -548,30 +553,7 @@ describe("useDayPlanReview writes", () => {
 
   it("keeps choices and marks rows when a save hits a 409", async () => {
     const first = plan();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    liveRoots.push(root);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    let latest: DayPlanReviewController | null = null;
-    const renderPlan = async (value: DayPlanDto) => {
-      await act(async () => {
-        root.render(
-          createElement(
-            QueryClientProvider,
-            { client },
-            createElement(Harness, {
-              plan: value,
-              seen: (controller) => {
-                latest = controller;
-              }
-            })
-          )
-        );
-      });
-    };
-    await renderPlan(first);
-    const current = () => latest as DayPlanReviewController;
+    const { current, rerender: renderPlan } = await mountHook(first);
     await act(async () => {
       current().setPlacement("b3", "add", "2026-09-10T18:00:00.000Z");
     });
@@ -601,6 +583,22 @@ describe("useDayPlanReview writes", () => {
     expect(current().changedIds).toEqual(["b2"]);
     expect(current().stalePreview).toBe(true);
     expect(current().preview).toBe(null);
+    expect(current().notice).toMatch(/changed since it was read/);
+  });
+
+  it("stays quiet when the caller marks the new revision as its own write", async () => {
+    const first = plan();
+    const { current, rerender: renderPlan } = await mountHook(first);
+    await act(async () => {
+      current().expectOwnWrite();
+    });
+    await renderPlan({ ...first, revision: first.revision + 1 });
+    expect(current().revision).toBe(first.revision + 1);
+    expect(current().notice).toBe(null);
+    expect(current().stalePreview).toBe(false);
+
+    // Only the next revision is ours; a later outside change still warns.
+    await renderPlan({ ...first, revision: first.revision + 2 });
     expect(current().notice).toMatch(/changed since it was read/);
   });
 
@@ -741,6 +739,7 @@ describe("DayPlanReview view", () => {
       notice: null,
       busy: false,
       choiceFor: (block) => choices[block.id] ?? defaultChoiceFor(block),
+      expectOwnWrite: () => undefined,
       setPlacement: () => undefined,
       dismissApproval: () => undefined,
       setTime: () => undefined,
