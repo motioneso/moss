@@ -34,7 +34,7 @@ test("signs in and renders shell navigation", async ({ page }) => {
 
   await page.getByRole("button", { name: /Account menu/ }).click();
   await expect(page.getByRole("button", { name: /Notifications/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Settings & permissions/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
 });
 
 test("gates a protected route behind sign-in when unauthenticated", async ({ page }) => {

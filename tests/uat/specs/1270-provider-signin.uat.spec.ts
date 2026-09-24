@@ -54,13 +54,13 @@ async function skipOnboarding(page: Page): Promise<void> {
   await expect(userMenu).toBeVisible();
 }
 
-// Nav path mirrors cli-terminal.uat.spec.ts:49-52: usermenu -> Settings & permissions -> Admin /
+// Nav path mirrors cli-terminal.uat.spec.ts:49-52: usermenu -> Settings -> Admin /
 // Setup (segmented control) -> the "Assistant & AI" admin section. Personal mode has a section of
 // the SAME label, but settings-page.tsx only ever mounts one mode's nav group at a time, so the
 // button reference is unambiguous once Admin / Setup has been selected.
 async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings & permissions" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Assistant & AI" }).click();
 }
