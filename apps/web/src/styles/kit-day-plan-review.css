@@ -229,6 +229,8 @@
 [data-briefing-surface="review"] .brief-reader__headline {
   font-family: var(--font-display);
   font-weight: 700;
+  /* Headline-top to lede-top matches the mockup: 49px desktop. */
+  margin-bottom: 18px;
 }
 
 [data-briefing-surface="review"] .plan-review__lede {
@@ -298,6 +300,11 @@
 }
 
 @media (max-width: 480px) {
+  /* Phone headline-top to lede-top matches the mockup: 47px. */
+  [data-briefing-surface="review"] .brief-reader__headline {
+    margin-bottom: 16px;
+  }
+
   /* Review keeps one footer row on narrow phones: Back left, Save right.
      The shell stacks footer zones here; the Review dialog opts back out. */
   .brief-reader:has([data-briefing-surface="review"]) .brief-reader__footer {
