@@ -156,7 +156,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.national_team_follows",
       description:
-        "Follow a national team, like the US women's team, without following its whole tournament. Its stories show on their own, and the tournament stays out of Following standings unless it is running."
+        "Following a team in a tournament, like a national team at the World Cup or a club in the Champions League, shows only that team's stories. The tournament is under Following in standings only while it is running."
     }
   ],
   navigation: [
