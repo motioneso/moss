@@ -18,6 +18,9 @@ import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
   EVENING_REVIEW_BLOCKS_AUTO,
   EVENING_REVIEW_BLOCKS_PROPOSE,
+  EVENING_REVIEW_CHANGES_AUTO,
+  EVENING_REVIEW_CHANGES_PROPOSE,
+  EVENING_REVIEW_EXISTING_STAY,
   EVENING_REVIEW_FOOTNOTE,
   EVENING_REVIEW_KEEP_HEADING,
   EVENING_REVIEW_MESSAGE,
@@ -173,26 +176,6 @@ export function ReviewSection(props: {
               </div>
             );
           })}
-          <div className="evening-plan__review-links">
-            <button
-              type="button"
-              className="evening-plan__link"
-              disabled={review.busy || evening.busy}
-              onClick={() => void review.runPreview()}
-            >
-              Preview changes
-            </button>
-            {failed ? (
-              <button
-                type="button"
-                className="evening-plan__link"
-                disabled={review.busy}
-                onClick={() => void review.retry()}
-              >
-                Retry
-              </button>
-            ) : null}
-          </div>
           {review.approval ? (
             <section className="evening-plan__notes" aria-labelledby="evening-plan-confirm">
               <h4 id="evening-plan-confirm">Confirm calendar changes</h4>
@@ -229,6 +212,55 @@ export function ReviewSection(props: {
               </div>
             </section>
           ) : null}
+          {!review.approval ? (
+            <div className="evening-plan__notes">
+              <h4>
+                {evening.policyMode === "auto"
+                  ? EVENING_REVIEW_CHANGES_AUTO
+                  : EVENING_REVIEW_CHANGES_PROPOSE}
+              </h4>
+              {changed.length > 0 ? (
+                changed.map((block) => {
+                  const pending = block.pendingChange!;
+                  const title = `\u201c${blockTitle(block, props.summaries)}\u201d`;
+                  return (
+                    <p key={block.id}>
+                      {pending.kind === "remove"
+                        ? `Remove ${title}.`
+                        : `${pending.kind === "add" ? "Add" : "Move"} ${title} ${
+                            pending.kind === "add" ? "at" : "to"
+                          } ${timeLabel(pending.startsAt, props.locale)}.`}
+                    </p>
+                  );
+                })
+              ) : (
+                <p>{EVENING_REVIEW_NO_CHANGES}</p>
+              )}
+              {evening.policyMode !== "auto" && kept.length + changed.length > 0 ? (
+                <p>{EVENING_REVIEW_EXISTING_STAY}</p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="evening-plan__review-links">
+            <button
+              type="button"
+              className="evening-plan__link"
+              disabled={review.busy || evening.busy}
+              onClick={() => void review.runPreview()}
+            >
+              Preview changes
+            </button>
+            {failed ? (
+              <button
+                type="button"
+                className="evening-plan__link"
+                disabled={review.busy}
+                onClick={() => void review.retry()}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
           {notes.length > 0 ? (
             <div className="evening-plan__notes">
               <h4>{EVENING_REVIEW_NOTES_HEADING}</h4>

@@ -879,7 +879,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(
     dialog.locator('section[aria-label="Changes"]').getByText("Water the plants")
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+  await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
 
   // Exactly one draft save; suggest mode never previews or applies.
@@ -898,7 +898,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       "no sideways scroll at " + width + "px"
     ).toBe(true);
-    const save = dialog.getByRole("button", { name: "Save tomorrow's plan" });
+    const save = dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ });
     const box = await save.boundingBox();
     expect(box, "footer inside the viewport at " + width + "px").not.toBeNull();
   }

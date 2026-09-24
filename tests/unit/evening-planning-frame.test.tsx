@@ -510,7 +510,7 @@ describe("evening step navigation", () => {
     });
     expect(fourth.getAttribute("aria-current")).toBe("step");
     expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
-      "Save tomorrow's plan"
+      "Save proposed plan"
     );
   });
 
@@ -636,7 +636,7 @@ describe("evening steps 2 to 4 (V8)", () => {
       ([...nav.querySelectorAll("button")][3] as HTMLButtonElement).click();
     });
     const save = [...document.body.querySelectorAll(".brief-reader__footer-actions button")].find(
-      (button) => button.textContent === "Save tomorrow's plan"
+      (button) => button.textContent === "Save proposed plan"
     ) as HTMLButtonElement;
     await act(async () => {
       save.click();
@@ -679,7 +679,7 @@ describe("evening steps 2 to 4 (V8)", () => {
     const heading = document.getElementById("evening-review-heading") as HTMLElement;
     expect(document.activeElement).toBe(heading);
     expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
-      "Save tomorrow's plan"
+      "Save proposed plan"
     );
   });
 });

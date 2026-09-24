@@ -617,7 +617,10 @@ export async function prepareSelectedEntry(
       if (await tomorrow.isChecked()) await group.getByLabel("Keep it on my list").check();
       else await tomorrow.check();
     },
-    planningSaved: () => dialog().getByRole("button", { name: "Save tomorrow's plan" }).click(),
+    planningSaved: () =>
+      dialog()
+        .getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ })
+        .click(),
     expectSavedText: () =>
       expect(dialog()).toContainText("Saved. The blocks are proposed for the morning."),
     closeDialogs: () => closeDialogs(page).then(() => undefined),

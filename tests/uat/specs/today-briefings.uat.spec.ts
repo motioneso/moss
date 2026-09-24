@@ -623,7 +623,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
     await checkLayout(page, width);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await planDialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+  await planDialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(planDialog).toContainText("Saved. The blocks are proposed for the morning.");
   const creates = requests.filter(
     (r) => r.method === "POST" && r.url.endsWith("/api/calendar/day-plans")

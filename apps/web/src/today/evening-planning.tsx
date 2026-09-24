@@ -23,6 +23,7 @@ import {
   EVENING_LEAVE_LABEL,
   EVENING_NEXT_LABELS,
   EVENING_STEP_NAMES,
+  SAVE_PROPOSED_LABEL,
   SAVE_TOMORROW_LABEL
 } from "./today-labels.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
@@ -217,7 +218,7 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
               </Button>
             ) : (
               <Button variant="primary" disabled={evening.busy} onClick={() => void save()}>
-                {SAVE_TOMORROW_LABEL}
+                {evening.policyMode === "auto" ? SAVE_TOMORROW_LABEL : SAVE_PROPOSED_LABEL}
               </Button>
             )}
           </div>

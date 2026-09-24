@@ -233,6 +233,7 @@ export function acceptAllOutcomeLine(applied: number, failed: number, pending: n
 /** Evening planning surface (T20). */
 export const PLAN_TOMORROW_LABEL = "Plan tomorrow";
 export const SAVE_TOMORROW_LABEL = "Save tomorrow's plan";
+export const SAVE_PROPOSED_LABEL = "Save proposed plan";
 export const EVENING_REVIEW_NOT_READY = "Your evening review is not ready yet";
 export const NO_ROOM_FOUND = "No room found";
 
@@ -281,13 +282,17 @@ export const EVENING_REVIEW_PROSE_PROPOSE =
   "Your settings keep task blocks as proposals. Saving carries these suggestions into the morning without adding them to your calendar.";
 export const EVENING_REVIEW_BLOCKS_AUTO = "Task blocks to schedule";
 export const EVENING_REVIEW_BLOCKS_PROPOSE = "Task blocks to propose";
+export const EVENING_REVIEW_CHANGES_AUTO = "Changes to existing Moss blocks";
+export const EVENING_REVIEW_CHANGES_PROPOSE = "Proposed calendar changes";
+export const EVENING_REVIEW_EXISTING_STAY =
+  "Existing blocks stay on the calendar until changes are accepted.";
 export const EVENING_REVIEW_UNSCHEDULED_HEADING = "Leave unscheduled";
 export const EVENING_REVIEW_NOTES_HEADING = "What you want Moss to remember";
 export const EVENING_REVIEW_FOOTNOTE =
   "Only the blocks listed above are included. Your tasks stay on your list.";
 export const EVENING_REVIEW_KEEP_HEADING = "Keep as they are";
 export const EVENING_REVIEW_NO_CHANGE_HEADING = "No change";
-export const EVENING_REVIEW_NO_CHANGES = "Nothing changes tomorrow.";
+export const EVENING_REVIEW_NO_CHANGES = "No task-block times change.";
 
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {
