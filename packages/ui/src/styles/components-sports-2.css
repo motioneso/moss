@@ -513,8 +513,8 @@
   background: transparent;
 }
 .sp-carousel__dot[aria-current] {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fg);
+  border-color: var(--accent-fg);
 }
 /* A tab reads as a scoreline, not a chip: hairline box, caps-tracked team names, tabular score.
    No pill, no accent fill — the ink underline is what says "showing". */
@@ -696,7 +696,7 @@
 .sp-newsband__featurekicker {
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 .sp-newsband__title--feature {
   font-size: var(--text-2xl);
@@ -715,7 +715,7 @@
 .sp-newsband__artkicker {
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 .sp-newsband__img {
   border-radius: var(--radius-sm);
@@ -746,7 +746,7 @@
 .sp-newsband__more {
   font-family: var(--font-sans);
   font-size: var(--text-xs);
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 /* Combined brief rail (mrb5reqq): the per-league "In brief" clusters merge into one
    full-width rail under the mosaic; CSS columns wrap the tail like agate type. */

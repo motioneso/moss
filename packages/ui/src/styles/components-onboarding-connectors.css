@@ -123,7 +123,7 @@
 }
 
 .onb-json-upload:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--forest-soft);
 }
 
@@ -198,7 +198,7 @@
 
 .onb-acct__health .dot {
   border-radius: var(--radius-pill);
-  background: var(--accent);
+  background: var(--accent-fg);
 }
 
 .onb-acct__sep,

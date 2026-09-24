@@ -60,7 +60,7 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
                 <MonthChip
                   key={e.id}
                   block={e.kind === "block"}
-                  color={e.kind === "block" ? "var(--accent)" : "var(--steel)"}
+                  color={e.kind === "block" ? "var(--accent-fg)" : "var(--steel)"}
                   time={!e.allDay ? fmtTime(e.startMin).replace(":00", "") : undefined}
                   title={e.title}
                   onClick={() => onPick(e)}

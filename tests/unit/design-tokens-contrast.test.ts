@@ -63,12 +63,16 @@ function assertPairs(theme: Map<string, string> | undefined, label: string) {
     contrast(resolve("--text-on-accent", theme), resolve("--btn-primary-bg", theme)),
     `${label} CTA label`
   ).toBeGreaterThanOrEqual(4.5);
-  // --forest is a fill/UI-component color (text duty is --accent-fg, above):
-  // WCAG 1.4.11 non-text floor, 3:1.
-  expect(
-    contrast(resolve("--forest", theme), paper),
-    `${label} accent/paper`
-  ).toBeGreaterThanOrEqual(3);
+  // --forest is a fill/UI-component color (text duty is --accent-fg, above).
+  // Light: WCAG 1.4.11 non-text floor, 3:1. Dark keeps the real accent for
+  // fills, whose labels carry the meaning; icons, rules and state borders use
+  // --accent-fg there, which clears 4.5:1 above.
+  if (label === "light") {
+    expect(
+      contrast(resolve("--forest", theme), paper),
+      `${label} accent/paper`
+    ).toBeGreaterThanOrEqual(3);
+  }
   // Gold is decorative: 3:1 non-text floor only.
   expect(contrast(resolve("--gold", theme), paper), `${label} gold/paper`).toBeGreaterThanOrEqual(
     2.0
@@ -78,6 +82,45 @@ function assertPairs(theme: Map<string, string> | undefined, label: string) {
 describe("Park Press token contrast (WCAG AA)", () => {
   it("light theme clears AA", () => assertPairs(undefined, "light"));
   it("dark theme clears AA", () => assertPairs(blockFor('[data-theme="dark"]'), "dark"));
+});
+
+/** Dark + park theme, in cascade order: combo, theme, dark base. */
+function darkThemeBlock(id: string): Map<string, string> {
+  return new Map([
+    ...blockFor('[data-theme="dark"]'),
+    ...blockFor(`[data-theme="${id}"]`),
+    ...blockFor(`[data-color-mode="dark"][data-theme="${id}"]`)
+  ]);
+}
+
+describe("dark mode keeps each theme's real accent", () => {
+  for (const id of ["sage", "canyon", "teal", "dusk"]) {
+    it(`${id}: real fill with a readable label, lifted text tint`, () => {
+      const dark = darkThemeBlock(id);
+      expect(resolve("--forest", dark)).toBe(resolve("--forest", blockFor(`[data-theme="${id}"]`)));
+      expect(
+        contrast(resolve("--text-on-accent", dark), resolve("--btn-primary-bg", dark))
+      ).toBeGreaterThanOrEqual(4.5);
+      for (const ground of ["--paper", "--surface-3", "--forest-soft"]) {
+        for (const t of ["--accent-fg", "--accent-fg-hover"]) {
+          expect(
+            contrast(resolve(t, dark), resolve(ground, dark)),
+            `${id} ${t}/${ground}`
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    });
+  }
+
+  it("forest: real fill with a readable label, lifted text tint", () => {
+    const dark = blockFor('[data-theme="dark"]');
+    expect(resolve("--forest", dark)).toBe(resolve("--forest"));
+    for (const ground of ["--paper", "--surface-3", "--forest-soft"]) {
+      expect(contrast(resolve("--accent-fg", dark), resolve(ground, dark))).toBeGreaterThanOrEqual(
+        4.5
+      );
+    }
+  });
 });
 
 describe("national-park themes", () => {

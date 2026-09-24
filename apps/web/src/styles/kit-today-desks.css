@@ -28,7 +28,7 @@
 .jds-brief--sports .desk-number {
   font-size: 10px;
   font-weight: 700;
-  color: var(--forest);
+  color: var(--accent-fg);
   border-bottom: 2px solid var(--gold);
   padding-bottom: 5px;
 }
@@ -328,7 +328,7 @@
   margin-top: 18px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__item {
   margin-bottom: 17px;
@@ -457,7 +457,7 @@
   text-transform: none;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__time {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-variant-numeric: tabular-nums;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__note {
@@ -492,7 +492,7 @@
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-board__score {
   min-width: 22px;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 15px;
   line-height: 1.3;
   text-align: right;
@@ -505,7 +505,7 @@
   line-height: 1.4;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__statusline {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 9px;
   font-weight: 600;
 }

@@ -42,7 +42,7 @@
 
 .jds-brief--sports .sp-tksub {
   margin-top: 18px;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: var(--tracking-caps);
@@ -145,7 +145,7 @@
 }
 
 .jds-brief--sports .sp-lead__tag {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 10px;
   font-weight: 700;
 }
@@ -224,7 +224,7 @@
 
 .jds-brief--sports .sp-tonight__kicker {
   grid-area: k;
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 10px;
   font-weight: 700;
 }

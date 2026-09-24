@@ -424,7 +424,7 @@
 }
 .jds-chip--toggle[aria-pressed="true"],
 .jds-chip--toggle.is-selected {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   background: var(--accent-soft);
   color: var(--accent-soft-fg);
 }
@@ -551,7 +551,7 @@
 /* The board hero's "credible matches" label, baseline-aligned beside the 72px count — same
    eyebrow size (--text-2xs already matches its 11px override), just accent-toned. */
 .jds-eyebrow--accent {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 
 /* Small muted secondary text — a note under a heading, an inline aside label. Normal case/weight,
@@ -631,7 +631,7 @@
   cursor: pointer;
 }
 .jds-card-title:hover {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 /* Job Search's match-row headline (OppRow, the board's highest-traffic surface): same role as a
    card title, but the mockup wants it heavier and tighter than the base — weight 800 not 600,
@@ -699,7 +699,7 @@
   position: relative;
 }
 .jds-indicator--ready .jds-indicator__dot {
-  background: var(--accent);
+  background: var(--accent-fg);
 }
 .jds-indicator--drift .jds-indicator__dot {
   background: var(--amber);
@@ -720,7 +720,7 @@
   animation: jds-pulse 2.4s var(--ease-quiet) infinite;
 }
 .jds-indicator--ready.jds-indicator--live .jds-indicator__dot {
-  color: var(--accent);
+  color: var(--accent-fg);
 }
 .jds-indicator--drift.jds-indicator--live .jds-indicator__dot {
   color: var(--amber);
@@ -804,7 +804,7 @@
   background: var(--surface-2);
 }
 .jds-table tbody tr[aria-selected="true"] td:first-child {
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent-fg);
 }
 
 /* Numeric column. Digits only line up if they are the same width, and a score column read down

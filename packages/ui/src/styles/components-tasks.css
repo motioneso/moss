@@ -14,7 +14,7 @@
   background: var(--surface);
 }
 .tk-tagfield:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .tk-tagfield .ic {
@@ -101,12 +101,12 @@
   border-color: var(--border-strong);
 }
 .tk-listbtn.is-open {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .tk-listbtn__dot {
   border-radius: 50%;
-  background: var(--forest);
+  background: var(--accent-fg);
 }
 .tk-listbtn__chev {
   color: var(--text-faint);
@@ -169,7 +169,7 @@
   box-shadow: var(--shadow-xs);
 }
 .tk-add:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .tk-add__plus {
@@ -314,7 +314,7 @@
   color: var(--forest-ink);
 }
 .tk-quad--do .tk-quad__tag .dot {
-  background: var(--accent);
+  background: var(--accent-fg);
 }
 .tk-quad--schedule .tk-quad__head {
   background: var(--steel-soft);
@@ -377,7 +377,7 @@
 }
 .tk-textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .tk-tagedit {
@@ -386,7 +386,7 @@
   background: var(--surface);
 }
 .tk-tagedit:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .tk-tagedit input {
@@ -408,7 +408,7 @@
   font-size: 11.5px;
 }
 .tk-tagsugg__btn:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   color: var(--accent-fg);
 }
 .tk-sub__box {
@@ -465,7 +465,7 @@
   background: var(--surface);
 }
 .tk-peoplefield:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
 }
 .tk-peoplefield input {
@@ -522,7 +522,7 @@
   border-radius: var(--radius-lg);
 }
 .tk-act-composer:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 3px var(--forest-soft);
   background: var(--surface);
 }
