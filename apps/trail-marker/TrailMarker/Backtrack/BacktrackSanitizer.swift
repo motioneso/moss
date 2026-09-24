@@ -11,11 +11,21 @@ enum BacktrackSanitizer {
 
     // MARK: - Fields
 
-    /// Recognised lines, in order: normalised, a secret split across two lines rejoined, then
-    /// every line redacted.
+    /// Recognised lines, in order: normalised and redacted one by one, then a secret that exists
+    /// only across a line break (a token cut in two, a grouped card number) masked on both sides.
+    /// Lines are never merged before redacting: merging can erase the word boundaries a rule needs
+    /// and let a secret through that each line alone would have lost.
     static func lines(_ raw: [String]) -> [String] {
-        let normalised = raw.map(normalise).filter { !$0.isEmpty }
-        return rejoinSplitSecrets(normalised).map(redact)
+        var out = raw.map(normalise).filter { !$0.isEmpty }.map(redact)
+        guard out.count > 1 else { return out }
+        for index in 0..<(out.count - 1) {
+            var first = out[index]
+            var second = out[index + 1]
+            maskAcrossBreak(&first, &second)
+            out[index] = first
+            out[index + 1] = second
+        }
+        return out.filter { !$0.isEmpty }
     }
 
     /// A window title or an app name.
@@ -26,14 +36,12 @@ enum BacktrackSanitizer {
     /// A web address, or nil when it isn't one. Only http(s); userinfo, query and fragment are
     /// dropped, and any path segment that looks like a secret or a long token becomes "…".
     static func address(_ raw: String) -> String? {
-        guard var components = URLComponents(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+        guard let components = URLComponents(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
               let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
-              let host = components.host, !host.isEmpty
+              let host = components.percentEncodedHost, !host.isEmpty
         else { return nil }
-        components.user = nil
-        components.password = nil
-        components.query = nil
-        components.fragment = nil
+        // Built by hand from scheme, host, port and path only, so userinfo, query and fragment
+        // can't come along. A display address for recall, not a URL to open.
         let segments = components.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false).map {
             segment -> String in
             let text = String(segment)
@@ -42,8 +50,8 @@ enum BacktrackSanitizer {
             if redact(decoded) != decoded || matches(longToken, decoded) { return "…" }
             return text
         }
-        components.percentEncodedPath = segments.joined(separator: "/")
-        return components.string
+        let port = components.port.map { ":\($0)" } ?? ""
+        return "\(scheme)://\(host.lowercased())\(port)\(segments.joined(separator: "/"))"
     }
 
     // MARK: - Redaction
@@ -137,29 +145,37 @@ enum BacktrackSanitizer {
             .joined(separator: " ")
     }
 
-    /// Recognition breaks a long token (or a grouped card number) across lines. When the end of one
-    /// line and the start of the next redact differently together than apart, the two lines are
-    /// joined first, so the whole secret is masked rather than two harmless-looking halves. Joined
-    /// with a space when that is what makes the difference (a grouped card number), without one
-    /// otherwise (a token cut mid-word).
-    private static func rejoinSplitSecrets(_ lines: [String]) -> [String] {
-        var out: [String] = []
-        for line in lines {
-            if let previous = out.last {
-                let tail = previous.split(separator: " ").suffix(4).joined(separator: " ")
-                let head = line.split(separator: " ").prefix(4).joined(separator: " ")
-                if redact(tail + " " + head) != redact(tail) + " " + redact(head) {
-                    out[out.count - 1] = previous + " " + line
-                    continue
-                }
-                if redact(tail + head) != redact(tail) + redact(head) {
-                    out[out.count - 1] = previous + line
-                    continue
-                }
-            }
-            out.append(line)
+    /// Recognition breaks a long token, or a grouped card number, across lines. Each line is already
+    /// redacted on its own; this masks what is a secret only when the two halves are read together.
+    /// It only ever adds masks, never removes one.
+    private static func maskAcrossBreak(_ first: inout String, _ second: inout String) {
+        var head = first.split(separator: " ").map(String.init)
+        var tail = second.split(separator: " ").map(String.init)
+        guard let end = head.last, let start = tail.first else { return }
+
+        // A token cut mid-word: neither half is a secret, the two joined are.
+        let joined = end + start
+        if redact(end) == end, redact(start) == start, redact(joined) != joined {
+            head[head.count - 1] = redacted
+            tail[0] = redacted
         }
-        return out
+
+        // A grouped card number: the digit groups at the end of one line and the start of the next.
+        let leading = head.reversed().prefix { isDigitGroup($0) }.count
+        let trailing = tail.prefix { isDigitGroup($0) }.count
+        if leading > 0, trailing > 0 {
+            let digits = (head.suffix(leading) + tail.prefix(trailing)).joined().filter(\.isNumber)
+            if (13...19).contains(digits.count), passesLuhn(digits) {
+                head = Array(head.dropLast(leading)) + ["[card]"]
+                tail = Array(tail.dropFirst(trailing))
+            }
+        }
+        first = head.joined(separator: " ")
+        second = tail.joined(separator: " ")
+    }
+
+    private static func isDigitGroup(_ word: String) -> Bool {
+        !word.isEmpty && word.count <= 6 && word.allSatisfy { $0.isNumber || $0 == "-" } && word.contains { $0.isNumber }
     }
 
     private static func matches(_ expression: NSRegularExpression, _ text: String) -> Bool {

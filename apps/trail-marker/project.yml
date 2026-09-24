@@ -64,8 +64,16 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: TrailMarkerTests
+    # Backtrack plan §4.5: every test build checks that Backtrack data has no way out but its
+    # sink, and that the check itself still catches planted violations.
+    preBuildScripts:
+      - name: Backtrack source check
+        basedOnDependencyAnalysis: false
+        script: |
+          "$SRCROOT/scripts/check-backtrack-sources.sh" && "$SRCROOT/scripts/check-backtrack-sources.sh" --self-test
     settings:
       base:
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         PRODUCT_BUNDLE_IDENTIFIER: com.moss.trailmarker.tests
         GENERATE_INFOPLIST_FILE: YES
         BUNDLE_LOADER: "$(TEST_HOST)"

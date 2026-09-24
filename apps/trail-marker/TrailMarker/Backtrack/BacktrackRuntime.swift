@@ -174,13 +174,13 @@ final class BacktrackRuntime: ObservableObject {
             .store(in: &cancellables)
 
         let workspace = NSWorkspace.shared.notificationCenter
-        observe(workspace, NSWorkspace.willSleepNotification) { $0.sleeping = true }
-        observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.sleeping = true }
-        observe(workspace, NSWorkspace.didWakeNotification) { $0.sleeping = false }
-        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.sleeping = false }
+        observe(workspace, NSWorkspace.willSleepNotification) { $0.noteSleeping(true) }
+        observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.noteSleeping(true) }
+        observe(workspace, NSWorkspace.didWakeNotification) { $0.noteSleeping(false) }
+        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.noteSleeping(false) }
         let distributed = DistributedNotificationCenter.default()
-        observe(distributed, Notification.Name("com.apple.screenIsLocked")) { $0.screenLocked = true }
-        observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { $0.screenLocked = false }
+        observe(distributed, Notification.Name("com.apple.screenIsLocked")) { $0.noteScreenLocked(true) }
+        observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { $0.noteScreenLocked(false) }
         observe(NotificationCenter.default, ProcessInfo.thermalStateDidChangeNotification) { _ in }
         observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { _ in }
         publish()
@@ -197,6 +197,18 @@ final class BacktrackRuntime: ObservableObject {
             }
         }
         observers.append((center, token))
+    }
+
+    /// The system's lock and sleep signals land here (and tests call these directly, rather
+    /// than posting real system-wide notifications other apps also hear).
+    func noteScreenLocked(_ locked: Bool) {
+        screenLocked = locked
+        inputsMayHaveChanged()
+    }
+
+    func noteSleeping(_ asleep: Bool) {
+        sleeping = asleep
+        inputsMayHaveChanged()
     }
 
     // MARK: - What the person can do
