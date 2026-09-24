@@ -3,6 +3,7 @@ import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
 
 import { AiRepository } from "@moss/ai";
+import { getConnectorSyncAt, ConnectorsRepository } from "@moss/connectors";
 import type { DatasetClient } from "@moss/datasets";
 import { DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
@@ -10,6 +11,7 @@ import type { MossModuleManifest, ToolExecute } from "@moss/module-sdk";
 import { configureNewsBriefingService, NewsPrefsRepository } from "@moss/news";
 
 import { withToolSavepoint } from "../../packages/briefings/src/savepoint.js";
+import { resolveChatFreshness } from "../../packages/chat/src/live/persistence.js";
 import { NewsPersonalizationRepository } from "../../packages/news/src/personalization-repository.js";
 import { connectionStrings } from "./test-database.js";
 import {
@@ -136,6 +138,21 @@ describe("briefing savepoints on the worker transaction", () => {
       expect(statements.slice(from)).not.toContain(`ROLLBACK TO SAVEPOINT ${name}`);
       expect(await readProbe(scopedDb)).toBe("kept");
       expect(await savepointGone(scopedDb, name)).toBe(true);
+    });
+  });
+
+  it("keeps the chat transaction usable after email and calendar freshness reads", async () => {
+    const connectors = new ConnectorsRepository();
+    await workerContext.withDataContext(userAContext(), async (scopedDb) => {
+      const result = await resolveChatFreshness(
+        scopedDb,
+        new Set(["email.listVisibleMessages", "calendar.listVisibleEvents"]),
+        new Date("2026-09-24T12:00:00.000Z"),
+        { connectorSyncAt: (db, kind) => getConnectorSyncAt(connectors, db, kind) }
+      );
+      expect(result?.sources.map((source) => source.source)).toEqual(["email", "calendar"]);
+      await setProbe(scopedDb, "chat-turn-saved");
+      expect(await readProbe(scopedDb)).toBe("chat-turn-saved");
     });
   });
 

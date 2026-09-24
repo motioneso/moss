@@ -61,6 +61,30 @@ describe("resolveChatFreshness", () => {
     expect(result!.sources.find((s) => s.source === "email")?.asOf).toBe(emailAt.toISOString());
   });
 
+  it("serializes connector lookups on the shared transaction", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const calls: string[] = [];
+    const result = await resolveChatFreshness(
+      scopedDb,
+      new Set(["email.listVisibleMessages", "calendar.listVisibleEvents"]),
+      CAPTURED,
+      {
+        connectorSyncAt: async (_db, kind) => {
+          calls.push(kind);
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await Promise.resolve();
+          active -= 1;
+          return null;
+        }
+      }
+    );
+    expect(calls).toEqual(["email", "calendar"]);
+    expect(maxActive).toBe(1);
+    expect(result?.sources.map((source) => source.source)).toEqual(["email", "calendar"]);
+  });
+
   it("returns asOf: null for vault (no vaultLastWriteAt in V1)", async () => {
     const result = await resolveChatFreshness(scopedDb, new Set(["notes.search"]), CAPTURED, {});
     expect(result!.sources.find((s) => s.source === "vault")?.asOf).toBeNull();

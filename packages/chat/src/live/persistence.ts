@@ -110,26 +110,24 @@ export async function resolveChatFreshness(
   if (sourceKeys.size === 0) return null;
 
   const capturedAtIso = capturedAt.toISOString();
-  const entries: SourceFreshnessEntry[] = await Promise.all(
-    [...sourceKeys].map(async (source): Promise<SourceFreshnessEntry> => {
-      if (REALTIME_SOURCES_CHAT.has(source)) {
-        return { source, freshnessKind: "realtime", asOf: capturedAtIso };
+  const entries: SourceFreshnessEntry[] = [];
+  for (const source of sourceKeys) {
+    if (REALTIME_SOURCES_CHAT.has(source)) {
+      entries.push({ source, freshnessKind: "realtime", asOf: capturedAtIso });
+    } else if (CONNECTOR_SOURCES_CHAT.has(source)) {
+      let asOf: string | null = null;
+      try {
+        const t = (await opts.connectorSyncAt?.(scopedDb, source as "email" | "calendar")) ?? null;
+        asOf = t ? t.toISOString() : null;
+      } catch {
+        // keep asOf as null on error
       }
-      if (CONNECTOR_SOURCES_CHAT.has(source)) {
-        let asOf: string | null = null;
-        try {
-          const t =
-            (await opts.connectorSyncAt?.(scopedDb, source as "email" | "calendar")) ?? null;
-          asOf = t ? t.toISOString() : null;
-        } catch {
-          // keep asOf as null on error
-        }
-        return { source, freshnessKind: "connector_sync", asOf };
-      }
+      entries.push({ source, freshnessKind: "connector_sync", asOf });
+    } else {
       // vault — V1: asOf: null (no vaultLastWriteAt dep for chat)
-      return { source, freshnessKind: "vault_write", asOf: null };
-    })
-  );
+      entries.push({ source, freshnessKind: "vault_write", asOf: null });
+    }
+  }
 
   return { version: 1, capturedAt: capturedAtIso, sources: entries };
 }
