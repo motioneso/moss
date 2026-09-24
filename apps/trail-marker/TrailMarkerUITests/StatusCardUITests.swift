@@ -11,6 +11,10 @@ final class StatusCardUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments += ["-TMHostCardInWindow", "YES"]
         app.launch()
+        // The first launch after a fresh build can take well over ten seconds to draw the card;
+        // wait for it once here so no test's own short timeout races a cold start. The harness
+        // now starts running every launch (#2646), so Pause All is what appears.
+        XCTAssertTrue(app.buttons["Pause All"].waitForExistence(timeout: 30), "the card never appeared running")
     }
 
     override func tearDown() {

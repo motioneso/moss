@@ -20,8 +20,16 @@ final class CardHarness {
         UserDefaults().removePersistentDomain(forName: Self.suite)
         let defaults = UserDefaults(suiteName: Self.suite) ?? .standard
         let preferences = PreferencesStore(defaults: defaults)
+        // Every launch starts linked, running, with Focus on and switched on (#2646).
+        // `removePersistentDomain` alone isn't enough: a value the previous launch wrote (a test
+        // that ended paused) can still be read back, which made each UI test depend on the one
+        // before it. Reset through the same instance the runtimes read.
+        preferences.clearAll()
+        preferences.connectionEnabled = true
+        preferences.focusSwitchedOff = false
         preferences.focusConsent = true
         let keychain = KeychainStore(service: Self.suite)
+        if let identity = Self.identity { _ = keychain.delete(for: identity) }
         let transport = LocalTransport()
         connection = ConnectionRuntime(keychain: keychain, preferences: preferences, transportFactory: { _ in transport })
         focus = FocusRuntime(
@@ -31,12 +39,16 @@ final class CardHarness {
         )
     }
 
+    private static var identity: LinkedIdentity? {
+        guard case .success(let instance) = InstanceURL.parse("https://moss.example.com") else { return nil }
+        return LinkedIdentity(
+            instance: instance, deviceId: "harness", accountName: "Harness", accountEmail: "harness@example.com"
+        )
+    }
+
     func show() {
         focus.start()
-        if case .success(let instance) = InstanceURL.parse("https://moss.example.com") {
-            let identity = LinkedIdentity(
-                instance: instance, deviceId: "harness", accountName: "Harness", accountEmail: "harness@example.com"
-            )
+        if let identity = Self.identity {
             connection.send(.linkCompleted(identity, credential: "tm1_harness", generation: connection.currentGeneration))
         }
 
