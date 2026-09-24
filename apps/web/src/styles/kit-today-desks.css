@@ -299,7 +299,7 @@
   padding: 0;
   color: var(--ink);
 }
-.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__photo {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__frame {
   margin-bottom: 17px;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlead__tag,

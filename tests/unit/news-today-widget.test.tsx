@@ -6,6 +6,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from "rea
 import { describe, expect, it } from "vitest";
 
 import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
+import { drawLeadContours } from "../../packages/news/src/web/lead-art.js";
 import { NewsTodayWidget } from "../../packages/news/src/web/today-widget.js";
 import { newsQueryKeys } from "../../packages/news/src/web/query-keys.js";
 
@@ -224,5 +225,73 @@ describe("News Today widget", () => {
 
     expect(renderer!.root.findAllByProps({ src: "/api/news/images/today-1" }).length).toBe(0);
     expect(renderer!.root.findAllByProps({ children: "Today story 1" }).length).toBe(1);
+    expect(leadArt(renderer!).length).toBe(1);
+  });
+
+  it("shows only the photo when the lead has one that loads", async () => {
+    const renderer = await renderWidget(Array.from({ length: 4 }, (_, index) => story(index + 1)));
+
+    const frame = renderer.root.findByProps({ className: "nw-twlead__frame" });
+    expect(frame.findAllByType("img").map((image) => image.props.src)).toEqual([
+      "/api/news/images/today-1"
+    ]);
+    expect(leadArt(renderer).length).toBe(0);
+  });
+
+  it("draws decorative topic art in the photo frame when the lead has no photo", async () => {
+    const lead = { ...story(1), imageUrl: null, topicKey: "culture", topicLabel: "Culture" };
+    const renderer = await renderWidget([lead, story(2), story(3)]);
+
+    const frame = renderer.root.findByProps({ className: "nw-twlead__frame" });
+    expect(frame.findAllByType("img").length).toBe(0);
+    const [art] = leadArt(renderer);
+    expect(art!.props.className).toBe("nw-leadart nw-leadart--culture");
+    expect(art!.props["aria-hidden"]).toBe("true");
+    expect(art!.findAllByType("path").length).toBeGreaterThan(3);
+    // The terrain follows the topic, not just the colors.
+    const drawn = art!.findAllByType("path").map((path) => path.props.d);
+    for (const line of drawLeadContours(art!.props["data-seed"], "culture")) {
+      expect(drawn).toContain(line.d);
+    }
+    // The rest of the lead is unchanged.
+    expect(renderer.root.findAllByProps({ children: "Today story 1" }).length).toBe(1);
+    expect(renderer.root.findAllByProps({ className: "nw-twlead__dek" }).length).toBe(1);
+  });
+
+  it("draws a different picture for a different lead story", async () => {
+    const first = await renderWidget([{ ...story(1), imageUrl: null }]);
+    const second = await renderWidget([{ ...story(1), imageUrl: null, title: "Another lead" }]);
+    const again = await renderWidget([{ ...story(1), imageUrl: null }]);
+
+    const seedOf = (renderer: ReactTestRenderer): unknown =>
+      leadArt(renderer)[0]!.props["data-seed"];
+    expect(seedOf(first)).not.toBe(seedOf(second));
+    expect(seedOf(first)).toBe(seedOf(again));
   });
 });
+
+function leadArt(renderer: ReactTestRenderer): ReactTestInstance[] {
+  return renderer.root.findAll(
+    (node) => typeof node.type === "string" && node.props.className?.startsWith?.("nw-leadart ")
+  );
+}
+
+async function renderWidget(topStories: NewsHeadline[]): Promise<ReactTestRenderer> {
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+  const data: NewsOverviewResponse = {
+    topStories,
+    rankedStories: topStories,
+    sourceGroups: [],
+    activeTopics: [],
+    enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+    degraded: false
+  };
+  client.setQueryData(newsQueryKeys.overview, data);
+  let renderer: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(QueryClientProvider, { client }, createElement(NewsTodayWidget))
+    );
+  });
+  return renderer!;
+}
