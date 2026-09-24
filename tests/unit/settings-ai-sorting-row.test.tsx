@@ -17,6 +17,7 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
 
 import {
   SORTING_DISCLOSURE,
+  SYSTEM_ONE_SORTING_NOTE,
   SortingModelRow
 } from "../../apps/web/src/settings/settings-ai-sorting-row.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
@@ -154,6 +155,21 @@ describe("SortingModelRow", () => {
       select(renderer).props.onChange({ target: { value: "" } });
     });
     expect(deleteAiServiceBinding).toHaveBeenCalledWith("sorting");
+  });
+
+  it("tells a System One user it answers sorting questions and the main model handles the rest", async () => {
+    const systemOneProvider = [provider("p-so", "TypeSafe", "system-one")];
+    const systemOneModel = [model("jev-latest", "p-so", "system-one", "TypeSafe", ["json"])];
+    const renderer = await render(
+      { kind: "model", modelId: "jev-latest" },
+      systemOneModel,
+      systemOneProvider
+    );
+    const rendered = text(renderer);
+    expect(rendered).toContain(SYSTEM_ONE_SORTING_NOTE);
+    expect(rendered).toContain("answers News and Sports sorting questions with a yes or no");
+    expect(rendered).not.toContain("Sorting keeps using your main model");
+    expect(rendered).not.toContain(SORTING_DISCLOSURE);
   });
 
   it("offers a json model even when its provider has no stored credential", async () => {

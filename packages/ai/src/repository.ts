@@ -1386,12 +1386,42 @@ export class AiRepository {
    * Null when the job is strict, an admin pin is set, the job has its own module binding, no
    * sorting model is bound, or the bound model no longer qualifies. A module.worker binding is the
    * generic default and does not bypass the sorting model.
+   *
+   * `acceptSystemOne` is for jobs that ask yes/no sorting questions, which a System One model can
+   * answer. Jobs still on the free-form JSON path leave it false, so a System One model is skipped.
    */
   async resolveSortingModel(
     scopedDb: DataContextDb,
     service: ModuleServiceKey,
-    options: { requireExplicitBinding?: boolean } = {}
+    options: { requireExplicitBinding?: boolean; acceptSystemOne?: boolean } = {}
   ): Promise<AiConfiguredModelSafeRow | null> {
+    const modelId = await this.readGatedSortingModelId(scopedDb, service, options);
+    if (!modelId) return null;
+
+    const kinds: AiProviderKind[] = options.acceptSystemOne
+      ? [...SORTING_PROVIDER_KINDS, "system-one"]
+      : [...SORTING_PROVIDER_KINDS];
+    const model = await this.safeModelQuery(scopedDb)
+      .where("models.id", "=", modelId)
+      .where("models.status", "=", "active")
+      .where("providers.status", "=", "active")
+      .where("providers.purpose", "=", "assistant")
+      .where("providers.provider_kind", "in", kinds)
+      .where(sql<boolean>`${"json"} = any(${sql.ref("models.capabilities")})`)
+      .executeTakeFirst();
+    return model ?? null;
+  }
+
+  /**
+   * The shared gate in front of the sorting-model lookup: the binding exists, the job is not
+   * strict, no admin pin is set, and the job has no exact per-job binding of its own. Returns the
+   * bound model id, or null when today's path must run alone.
+   */
+  private async readGatedSortingModelId(
+    scopedDb: DataContextDb,
+    service: ModuleServiceKey,
+    options: { requireExplicitBinding?: boolean }
+  ): Promise<string | null> {
     assertDataContextDb(scopedDb);
     if (options.requireExplicitBinding) return null;
 
@@ -1415,16 +1445,7 @@ export class AiRepository {
     ) {
       return null;
     }
-
-    const model = await this.safeModelQuery(scopedDb)
-      .where("models.id", "=", binding.modelId)
-      .where("models.status", "=", "active")
-      .where("providers.status", "=", "active")
-      .where("providers.purpose", "=", "assistant")
-      .where("providers.provider_kind", "in", [...SORTING_PROVIDER_KINDS])
-      .where(sql<boolean>`${"json"} = any(${sql.ref("models.capabilities")})`)
-      .executeTakeFirst();
-    return model ?? null;
+    return binding.modelId;
   }
 
   /**

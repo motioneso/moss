@@ -1,7 +1,7 @@
 # Sorting model
 
 Status: draft rev 4, after three GPT 6 Astra reviews (last verdict: approve with changes, applied); Ben removed all sorting time limits 2026-09-22 to match the main model. Approval covers slice 1 only (sections 3 to 6).
-Each later slice in section 7 needs its own approved contract and compatibility tests first. Issue #2594. Research:
+Each later slice in section 7 needs its own approved contract and compatibility tests first; slice 2 was approved by an owner ruling on 2026-09-22 and is recorded there. Issue #2594. Research:
 `docs/research/2026-09-22-sorting-model-fit-audit.md`. Related: System One provider spec (PR #2585,
 task #2586).
 
@@ -155,10 +155,19 @@ Model for each job
 
 ## 7. Later slices
 
-2. **Jev adapter and question format** (after #2586 merges). A typed question format (pick one,
-   yes/no, score, fields) with a full answer contract: bounds, the yes/no threshold, what a
-   missing confidence means, and strict consistency checks. The story matcher's evidence lists
-   become per-code yes/no questions so Jev can answer them. The focus feature keeps its own
+2. **Sorting questions** (owner ruling, 2026-09-22: general, not a Jev special case). When any
+   sorting model is bound and a job opts in, the job asks yes/no questions with a confidence, one
+   per item, and matches on yes at or above a named threshold. This replaces sending the old
+   evidence prompt to the sorting model. The story matcher asks one question per (story, saved
+   rule): the story's headline, source label, team, competition and topic travel as data, and the
+   rule's terms and reason travel in the same untrusted data half. Evidence lists stay empty on this
+   path, so the "big news overrides a less-like-this rule" behaviour does not fire here yet. One
+   general function in the AI package runs the questions with two backends chosen by provider kind:
+   a System One model answers named choice questions through `generateChoices`, and every other
+   sorting-capable provider answers a small structured JSON request with a yes/no and a confidence
+   per question id. Requests are packed under the 12,000-byte cap and run a small bounded number at
+   once. A failed sorting run falls back to the main model's evidence prompt for the rest of the
+   run; a run with no sorting model keeps that prompt unchanged. The focus feature keeps its own
    approved behaviour and interface.
 3. **More jobs.**
    - Email category and sign-in code split into a new job key with its own setup gate defined in
@@ -177,9 +186,9 @@ Model for each job
    per-job binding still beats it.
 4. **Focus judgment.** Decided by Ben, 2026-09-22: the Trail Marker focus judge **is** the
    sorting model, with no row of its own. The sorting binding therefore also accepts a System One
-   model; the judge runs on it through choice questions, while sorting jobs skip a System One model
-   and use today's path until slice 2. With nothing bound, focus judges nothing (it is never
-   defaulted).
+   model; the judge runs on it through choice questions. Since slice 2, sorting jobs use a System One
+   model too, through the same choice questions; a job still on the free-form JSON path keeps
+   skipping it. With nothing bound, focus judges nothing (it is never defaulted).
 
 ## 9. Not in this spec
 

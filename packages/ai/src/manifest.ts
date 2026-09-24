@@ -203,9 +203,9 @@ export const aiModuleManifest = {
     {
       id: "ai.sorting_model",
       description:
-        "Sorting model: an optional row under Services on Settings > Assistant & AI. An admin " +
-        "picks a small, fast JSON-capable model for sorting and picking out details, or Use main " +
-        "model. News and Sports try it first, then use the main model.",
+        "Sorting model: a row under Services on Settings > Assistant & AI. An admin picks a small, " +
+        "fast model for sorting, or Use main model. News and Sports ask it yes/no questions per " +
+        "story and preference, falling back to the main model.",
       remediations: [
         {
           id: "ai.sorting_model.use_main_model",

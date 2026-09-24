@@ -22,11 +22,12 @@ export const SORTING_DISCLOSURE =
 export const TRAIL_MARKER_DISCLOSURE = "Trail Marker's app and window titles also go here.";
 
 export const SYSTEM_ONE_SORTING_NOTE =
-  "Trail Marker's app and window titles go to TypeSafe. Sorting keeps using your main model.";
+  "Trail Marker's app and window titles go to TypeSafe. It also answers News and Sports sorting " +
+  "questions with a yes or no. Your main model still handles other sorting work.";
 
 // Models the sorting model may be: the model and its provider are active, it has the json
-// capability, and its provider kind is one generateStructured executes, or System One, which only
-// judges Trail Marker focus. The save route applies this same rule.
+// capability, and its provider kind is one generateStructured executes, or System One, which
+// answers the sorting questions as choices. The save route applies this same rule.
 function eligibleSortingModels(models: readonly AiConfiguredModelDto[]): AiConfiguredModelDto[] {
   return models.filter(
     (model) =>
