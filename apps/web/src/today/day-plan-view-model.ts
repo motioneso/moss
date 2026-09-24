@@ -7,7 +7,7 @@ import {
   localDay
 } from "@moss/shared";
 
-import { byStart, isToday } from "./today-labels.js";
+import { ampm, byStart, isToday, timeLabel } from "./today-labels.js";
 
 export type DayItemState =
   | "committed"
@@ -31,6 +31,11 @@ export const DAY_ITEM_STATE_LABELS: Record<DayItemState, string> = {
     default "Change pending"/"Proposed, not on the calendar yet" text. Off
     by default; only the morning reader's rail turns it on. */
 const PROPOSED_WITH_TIME_LABEL = "Proposed";
+
+/** Q6: the reader's rail drops "the" from the committed caption word
+    ("On calendar" beside the end time), leaving Today's own longer
+    "On the calendar" alone. */
+const READER_ON_CALENDAR_LABEL = "On calendar";
 
 const KIND_LABELS: Partial<Record<DayPlanBlockKind | "travel" | "task", string>> = {
   prep: "Preparation",
@@ -151,9 +156,27 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
       // A row Moss is suggesting for the first time (nothing on the calendar
       // yet, but it has a time) gets the short caption only when the caller
       // opted in; the state itself never changes.
-      const label =
-        input.proposedCaption === "short" && !hasActualPlacement && startsAt !== null
+      // Q6 names exactly two short forms, "Proposed" for a placement Moss is
+      // suggesting for the first time and "On calendar" once it is on the
+      // calendar; every other state (an edit pending on an already-placed
+      // block, unscheduled, done) keeps its long-form word untouched.
+      const readerCaptionWord =
+        !hasActualPlacement && startsAt !== null
           ? PROPOSED_WITH_TIME_LABEL
+          : state === "committed"
+            ? READER_ON_CALENDAR_LABEL
+            : null;
+      // Q6: the reader's rail leads those two forms with the block's end
+      // time ("11:00am · On calendar"); Today's own rail is untouched.
+      const readerEndsAt =
+        startsAt !== null && durationMinutes !== null && durationMinutes > 0
+          ? new Date(Date.parse(startsAt) + durationMinutes * 60000).toISOString()
+          : null;
+      const label =
+        input.proposedCaption === "short" && readerCaptionWord !== null
+          ? readerEndsAt !== null
+            ? `${timeLabel(readerEndsAt, input.locale)}${ampm(readerEndsAt, input.locale)} · ${readerCaptionWord}`
+            : readerCaptionWord
           : DAY_ITEM_STATE_LABELS[state];
       return {
         order: index,
