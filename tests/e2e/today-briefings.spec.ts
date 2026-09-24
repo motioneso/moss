@@ -647,7 +647,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
   expect(reviewBackBox!.x + reviewBackBox!.width).toBeLessThanOrEqual(321);
 
   // The briefing tab hands back to the open morning reader on the same run.
-  await expect(page.getByRole("tab", { name: "Your day, prepared." })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Review task blocks" })).toHaveAttribute(
     "aria-selected",
     "true"
   );

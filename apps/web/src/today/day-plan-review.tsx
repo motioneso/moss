@@ -132,7 +132,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
       title={title}
       opener={props.opener}
       onClose={props.onClose}
-      reviewTabLabel={title}
+      reviewTabLabel="Review task blocks"
       onSelectReviewTab={() => undefined}
       selectedTab="review"
       onSelectBriefingTab={props.onSelectBriefingTab}
@@ -152,7 +152,6 @@ export function DayPlanReview(props: DayPlanReviewProps) {
               >
                 {ACCEPT_ALL_LABEL}
               </Button>
-              <hr className="plan-review__accept-rule" aria-hidden="true" />
             </div>
           ) : null}
           <ul className="plan-review__rows">
@@ -271,6 +270,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
           <DayPlanSection
             showEditorialHeading={false}
             proposedCaption="short"
+            snapshot
             dayPlan={{
               plan: { ...displayPlan, blocks: timedBlocks },
               tasks: [...props.tasks],
