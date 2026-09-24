@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **National team follows no longer pull in the whole World Cup.** Following a national team now shows that team's own news and keeps its tournament's standings out of the way unless the tournament is running. [PR #2663](https://github.com/motioneso/moss/pull/2663)
 - **Morning briefings no longer fail when you follow sports teams.** Morning briefings now finish even if one source has a problem, and they can include your followed teams again. [PR #2658](https://github.com/motioneso/moss/pull/2658)
 - **Readable account name in the sidebar.** The account name in the sidebar is readable again, and the Settings entry in the account menu no longer spills out of its box. [PR #2656](https://github.com/motioneso/moss/pull/2656)
 - **Photos and team logos stay on Today.** Sports photos and team logos no longer disappear until a hard refresh, and more news stories on Today now show their photo. [PR #2654](https://github.com/motioneso/moss/pull/2654)
