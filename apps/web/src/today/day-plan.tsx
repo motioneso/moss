@@ -287,7 +287,10 @@ export function DayPlanSection(props: DayPlanSectionProps) {
           <div className="tl-note">
             {status}
             {notice}
-            {showReview ? <ReviewButton onReview={props.onReview!} solid={today} /> : null}
+            {/* Placed blocks on the Today page need no button, as in the mockup. */}
+            {showReview && !(today && !proposed) ? (
+              <ReviewButton onReview={props.onReview!} solid={today} />
+            ) : null}
           </div>
         ) : null}
         {items.length === 0 ? (
