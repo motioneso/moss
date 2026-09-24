@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Dark mode keeps your theme colors.** In dark mode every color theme now keeps its real accent color instead of switching to a pale version, and Sage looks right again. [PR #2653](https://github.com/motioneso/moss/pull/2653)
 - **Cleaner followed teams on Today.** Your followed teams and leagues on the Today page now appear as newspaper-style columns with their logos and colors. [PR #2652](https://github.com/motioneso/moss/pull/2652)
 - **Trail-map texture on the Today header.** The Today header now has a faint trail-map pattern behind it. [PR #2651](https://github.com/motioneso/moss/pull/2651)
 
