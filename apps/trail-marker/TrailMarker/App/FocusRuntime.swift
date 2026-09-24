@@ -43,6 +43,8 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var state: FocusWatchState = .off
     @Published private(set) var lastJudgment: RememberedJudgment?
     @Published private(set) var consent: Bool
+    /// The menu's Focus switch is off: Focus pauses on its own, the connection stays up.
+    @Published private(set) var focusSwitchedOff: Bool
     @Published private(set) var allowedBundleIds: Set<String>
     /// Apps the person chose never to have watched; wins over everything else, like the denylist.
     @Published private(set) var excludedBundleIds: Set<String>
@@ -126,6 +128,7 @@ final class FocusRuntime: ObservableObject {
         self.freshWindowIdentity = freshWindowIdentity
         self.visionDescriberFactory = visionDescriberFactory
         self.consent = preferences.focusConsent
+        self.focusSwitchedOff = preferences.focusSwitchedOff
         self.allowedBundleIds = preferences.focusAllowedBundleIds
         self.excludedBundleIds = preferences.focusExcludedBundleIds
         self.watchEntireDesktop = preferences.focusWatchEntireDesktop
@@ -146,7 +149,7 @@ final class FocusRuntime: ObservableObject {
         // once the person has answered. Without it a build that never got the first answer (a new
         // signing identity, an install made after Focus was already on) would never ask at all.
         if consent { nudges.requestAuthorization() }
-        apply(machine.handle(.launched(consent: consent), now: Date()))
+        apply(machine.handle(.launched(consent: consent, switchedOff: focusSwitchedOff), now: Date()))
         send(.accessibilityChanged(granted: permissions.accessibility == .granted))
 
         connection.$state
@@ -188,6 +191,7 @@ final class FocusRuntime: ObservableObject {
     func resetForEndedLink() {
         cancelAllTasks()
         consent = preferences.focusConsent
+        focusSwitchedOff = preferences.focusSwitchedOff
         allowedBundleIds = preferences.focusAllowedBundleIds
         excludedBundleIds = preferences.focusExcludedBundleIds
         watchEntireDesktop = preferences.focusWatchEntireDesktop
@@ -201,7 +205,7 @@ final class FocusRuntime: ObservableObject {
         visionTestResult = nil
         visionTestCapture = nil
         machine = FocusMachine(policy: currentPolicy)
-        apply(machine.handle(.launched(consent: consent), now: Date()))
+        apply(machine.handle(.launched(consent: consent, switchedOff: focusSwitchedOff), now: Date()))
         send(.accessibilityChanged(granted: permissions.accessibility == .granted))
         send(.connectionChanged(isConnected: isConnected))
     }
@@ -209,6 +213,8 @@ final class FocusRuntime: ObservableObject {
     // MARK: - What the person can do
 
     func setConsent(_ value: Bool) { send(.userToggleConsent(value)) }
+    /// The menu's Focus switch.
+    func setFocusSwitch(on: Bool) { send(.userSwitchedFocus(on: on)) }
     func testNudge() { send(.userTestNudge) }
 
     func setAllowed(_ bundleId: String, allowed: Bool) {
@@ -303,6 +309,11 @@ final class FocusRuntime: ObservableObject {
             visionTestResult = .failure(.focusOff)
             return
         }
+        guard !focusSwitchedOff else {
+            visionTestCapture = nil
+            visionTestResult = .failure(.focusSwitchedOff)
+            return
+        }
         // `observer.current` reads nil while Trail Marker's own Settings window is frontmost,
         // which it is right now — `lastKnownApp` is the real app that was in front just before.
         visionTestCapture = nil
@@ -368,7 +379,7 @@ final class FocusRuntime: ObservableObject {
             }
             // Paused, Focus turned off or the Mac slept while the picture was being taken: it is
             // dropped here and never reaches the vision source (#2643).
-            guard !Task.isCancelled, !self.connectionPaused, self.consent else { return }
+            guard !Task.isCancelled, !self.connectionPaused, self.consent, !self.focusSwitchedOff else { return }
             // Recorded before describe() runs, so a describe failure still shows what was
             // actually captured — the two are separate questions and separate places to be wrong.
             self.visionTestCapture = (appName: app.appName, image: image)
@@ -385,7 +396,7 @@ final class FocusRuntime: ObservableObject {
 
     /// Sends a correction to Moss, so it is refused while paused or with Focus off (#2643).
     func correct(_ verdict: FocusVerdict) {
-        guard !connectionPaused, consent else { return }
+        guard !connectionPaused, consent, !focusSwitchedOff else { return }
         guard let remembered = lastJudgment, let identity = connection.identity,
             let credential = keychain.read(for: identity)
         else { return }
@@ -436,6 +447,9 @@ final class FocusRuntime: ObservableObject {
             case .persistConsent(let value):
                 consent = value
                 preferences.focusConsent = value
+            case .persistFocusSwitchedOff(let value):
+                focusSwitchedOff = value
+                preferences.focusSwitchedOff = value
             case .requestNotificationPermission:
                 nudges.requestAuthorization()
             case .showNudge(let title):
@@ -454,7 +468,7 @@ final class FocusRuntime: ObservableObject {
     }
 
     /// Everything that may send is gated on this, and it is checked again after every await.
-    private var shouldObserve: Bool { consent && isConnected }
+    private var shouldObserve: Bool { consent && !focusSwitchedOff && isConnected }
 
     private func updateObserving() {
         if shouldObserve, !observing {

@@ -43,7 +43,6 @@ struct ConnectionPane: View {
                         .foregroundStyle(.secondary)
                     Button("Set Up Trail Marker", action: onSetUp)
                         .buttonStyle(.borderedProminent)
-                        .tint(TrailMarkerTokens.Color.forest)
                 }
             }
         }

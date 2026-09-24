@@ -3,6 +3,9 @@ import Foundation
 enum FocusWatchState: Equatable {
     /// The person has not turned Focus on.
     case off
+    /// Focus is on, but the person switched it off from the menu for now. Nothing is observed or
+    /// sent; distinct from the connection's Pause All, which stops everything.
+    case switchedOff
     /// Focus is on and connected, but no Moss calendar block covers now.
     case noBlock
     case watching(blockId: String, title: String, endsAt: Date)
@@ -13,9 +16,11 @@ enum FocusWatchState: Equatable {
 }
 
 enum FocusEvent: Equatable {
-    case launched(consent: Bool)
+    case launched(consent: Bool, switchedOff: Bool = false)
     case connectionChanged(isConnected: Bool)
     case userToggleConsent(Bool)
+    /// The menu's Focus switch (Ben, 2026-09-23): pauses only Focus, keeping the connection.
+    case userSwitchedFocus(on: Bool)
     case userTestNudge
     case contextLoaded(FocusContext, generation: Int)
     case contextFailed(CompanionError, generation: Int)
@@ -45,6 +50,7 @@ enum FocusEffect: Equatable {
     case scheduleDwell(after: TimeInterval, generation: Int, change: Int)
     case cancelAll
     case persistConsent(Bool)
+    case persistFocusSwitchedOff(Bool)
     case requestNotificationPermission
     case showNudge(title: String)
     case showTestNudge
@@ -71,6 +77,7 @@ struct FocusMachine {
     private(set) var policy: ObservationPolicy
 
     private var consent = false
+    private var switchedOff = false
     private var connected = false
     private var accessibilityGranted = false
     private var currentApp: Observation?
@@ -90,14 +97,21 @@ struct FocusMachine {
         self.policy = policy
     }
 
-    private var isActive: Bool { consent && connected }
+    private var isActive: Bool { consent && !switchedOff && connected }
 
     mutating func handle(_ event: FocusEvent, now: Date) -> [FocusEffect] {
         var effects: [FocusEffect] = []
 
         switch event {
-        case .launched(let consent):
+        case .launched(let consent, let switchedOff):
             self.consent = consent
+            self.switchedOff = switchedOff
+
+        case .userSwitchedFocus(let on):
+            let wasActive = isActive
+            switchedOff = !on
+            effects.append(.persistFocusSwitchedOff(!on))
+            effects += activityChanged(wasActive: wasActive)
 
         case .connectionChanged(let isConnected):
             let wasActive = isActive
@@ -259,6 +273,8 @@ struct FocusMachine {
     private mutating func refreshState(now: Date) {
         if !consent {
             state = .off
+        } else if switchedOff {
+            state = .switchedOff
         } else if !connected || failed {
             state = .unreachable
         } else if contextLoadedOnce && !judgmentReady {

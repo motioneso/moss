@@ -22,6 +22,9 @@ final class PreferencesStore {
         static let autoCheckUpdates = "autoCheckUpdates"
         static let permissionsPromptShown = "permissionsPromptShown"
         static let focusConsent = "focusConsent"
+        /// The menu's Focus switch, off. A new key on purpose: the retired `focusPaused` is deleted
+        /// on launch, so an old stored value can never pause anyone (Backtrack plan §3.4).
+        static let focusSwitchedOff = "focusSwitchedOff"
         /// Retired: removed on every launch, never read.
         static let retiredFocusPaused = "focusPaused"
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
@@ -83,6 +86,11 @@ final class PreferencesStore {
     var focusConsent: Bool {
         get { defaults.bool(forKey: Key.focusConsent) }
         set { defaults.set(newValue, forKey: Key.focusConsent) }
+    }
+
+    var focusSwitchedOff: Bool {
+        get { defaults.bool(forKey: Key.focusSwitchedOff) }
+        set { defaults.set(newValue, forKey: Key.focusSwitchedOff) }
     }
 
     /// Apps the person allowed. Empty means nothing is ever observed, unless
@@ -148,7 +156,7 @@ final class PreferencesStore {
     func clearAccountData() {
         for key in [
             Key.displayName, Key.pendingDisplayName,
-            Key.focusConsent, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
+            Key.focusConsent, Key.focusSwitchedOff, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
             Key.focusWatchEntireDesktop,
             Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
         ] {

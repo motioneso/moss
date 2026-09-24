@@ -328,6 +328,8 @@ struct FocusPane: View {
             return "Paused: resume to test."
         case .focusOff:
             return "Turn Focus on to test."
+        case .focusSwitchedOff:
+            return "Focus is paused from the menu: switch it back on to test."
         }
     }
 
@@ -376,6 +378,7 @@ struct FocusPane: View {
         let info = FocusMenuInfo(state: focus.state, goalLine: focus.goalLine, hasLastJudgment: false)
         switch focus.state {
         case .off: return "Focus is off."
+        case .switchedOff: return "Focus is paused from the menu, so nothing is watched. Switch it back on there."
         case .watching: return info.statusLine ?? "Watching"
         case .noBlock:
             return "No Moss calendar block is on right now. Trail Marker only watches during blocks Moss created."
@@ -390,6 +393,7 @@ struct FocusPane: View {
     private var statusSymbol: String {
         switch focus.state {
         case .off: return "circle"
+        case .switchedOff: return "pause.circle"
         case .watching: return "checkmark.circle.fill"
         case .noBlock: return "calendar"
         case .unreachable: return focus.connectionPaused ? "pause.circle.fill" : "exclamationmark.circle.fill"

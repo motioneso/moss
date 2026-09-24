@@ -296,13 +296,21 @@ Order items consistently:
 
 1. Status summary.
 2. Connected instance and account.
-3. State-specific primary action: Pause, Resume, Retry, or Sign In.
-4. Open Moss.
-5. Settings…
-6. Log Out… when linked.
-7. Quit Trail Marker.
+3. State-specific primary action: Pause All, Resume All, Retry, or Sign In. While running, **Pause All** is a quieter outlined button with a pause icon; while paused, **Resume All** is the prominent forest button with a play icon, so the paused state reads at a glance (Ben, 2026-09-23).
+4. One switch row per feature that is turned on in Settings (Focus; Backtrack when it ships). Each
+   switch pauses or resumes only its feature; the connection stays up.
+5. Open Moss.
+6. Settings…
+7. Log Out… when linked.
+8. Quit Trail Marker.
 
-There is one pause, the connection's Pause / Resume above; no separate Pause Focus exists in the menu or in Settings (Ben, 2026-09-23).
+Pause All stops everything, including the connection to Moss. While it is on, the feature switches
+keep their positions but are greyed and can't be changed, so Resume All brings back exactly what was
+running. A switched-off Focus reads "Focus paused" in the status line, so it is never confused with
+the connection's "Paused" (Ben, 2026-09-23; supersedes the single-Pause note of the same day).
+
+Controls use the Moss forest (`#173E2B`) as the app's accent colour, not the system blue: the primary
+button, the switches and the Settings sidebar selection (Ben, 2026-09-23).
 
 Check for Updates lives in Settings, under Updates, not in the menu.
 
