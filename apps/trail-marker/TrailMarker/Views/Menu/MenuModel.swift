@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// A menu-independent description of what the status-bar menu should contain for a given
@@ -19,6 +20,8 @@ struct MenuItemDescriptor: Equatable {
         case primaryAction
         /// Pauses or resumes Focus alone; the connection stays up.
         case focusSwitch
+        /// A second feature's switch (Backtrack, Debug builds only in its Phase 1).
+        case featureSwitch
         case lastJudgment
         case openMoss
         case settings
@@ -46,6 +49,22 @@ struct MenuItemDescriptor: Equatable {
     static func toggle(_ title: String, role: Role, isOn: Bool, enabled: Bool) -> MenuItemDescriptor {
         MenuItemDescriptor(kind: .toggle, title: title, role: role, isEnabled: enabled, isOn: isOn)
     }
+}
+
+/// A second feature's menu row and the menu-bar recording dot, owned by that feature's runtime and
+/// read by the card and the menu bar. Kept feature-neutral so nothing outside the feature names it:
+/// in a build without the feature, `row` is always nil and the dot never shows.
+@MainActor
+final class FeatureSwitchState: ObservableObject {
+    struct Row: Equatable {
+        let title: String
+        let isOn: Bool
+    }
+
+    /// Nil hides the row (the feature is off in Settings).
+    @Published var row: Row?
+    @Published var showsRecordingDot = false
+    var onToggle: ((Bool) -> Void)?
 }
 
 /// What the menu needs to know about Focus. The goal is the current Moss calendar block, so the
@@ -114,7 +133,8 @@ enum MenuModel {
     }
 
     static func items(
-        state: ConnectionState, identity: LinkedIdentity?, focus: FocusMenuInfo? = nil
+        state: ConnectionState, identity: LinkedIdentity?, focus: FocusMenuInfo? = nil,
+        feature: FeatureSwitchState.Row? = nil
     ) -> [MenuItemDescriptor] {
         var items: [MenuItemDescriptor] = [.item(statusTitle(for: state), role: .status, enabled: false)]
 
@@ -133,11 +153,18 @@ enum MenuModel {
 
         items.append(.separator)
         items.append(.item(primaryActionTitle(for: state), role: .primaryAction))
-        // One switch per feature that is turned on in Settings (only Focus until Backtrack ships).
-        // Pause All greys it but keeps its position, so Resume All restores what was running.
+        // One switch per feature that is turned on in Settings. Pause All greys them but keeps
+        // their positions, so Resume All restores what was running.
+        var switches: [MenuItemDescriptor] = []
         if focusOn, let focus {
+            switches.append(.toggle("Focus", role: .focusSwitch, isOn: focus.state != .switchedOff, enabled: !connectionPaused))
+        }
+        if identity != nil, let feature {
+            switches.append(.toggle(feature.title, role: .featureSwitch, isOn: feature.isOn, enabled: !connectionPaused))
+        }
+        if !switches.isEmpty {
             items.append(.separator)
-            items.append(.toggle("Focus", role: .focusSwitch, isOn: focus.state != .switchedOff, enabled: !connectionPaused))
+            items.append(contentsOf: switches)
             items.append(.separator)
         }
         if focusOn, let focus {

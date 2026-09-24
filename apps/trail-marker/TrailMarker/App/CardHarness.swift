@@ -14,14 +14,23 @@ final class CardHarness {
 
     private let connection: ConnectionRuntime
     private let focus: FocusRuntime
+    private let backtrack: BacktrackRuntime
     private var windows: [NSWindow] = []
 
     init() {
         UserDefaults().removePersistentDomain(forName: Self.suite)
         let defaults = UserDefaults(suiteName: Self.suite) ?? .standard
         let preferences = PreferencesStore(defaults: defaults)
+        // Every launch starts linked, running, with Focus on and switched on (#2646).
+        // `removePersistentDomain` alone isn't enough: a value the previous launch wrote (a test
+        // that ended paused) can still be read back, which made each UI test depend on the one
+        // before it. Reset through the same instance the runtimes read.
+        preferences.clearAll()
+        preferences.connectionEnabled = true
+        preferences.focusSwitchedOff = false
         preferences.focusConsent = true
         let keychain = KeychainStore(service: Self.suite)
+        if let identity = Self.identity { _ = keychain.delete(for: identity) }
         let transport = LocalTransport()
         connection = ConnectionRuntime(keychain: keychain, preferences: preferences, transportFactory: { _ in transport })
         focus = FocusRuntime(
@@ -29,23 +38,33 @@ final class CardHarness {
             preferences: preferences, keychain: keychain, transportFactory: { _ in transport },
             freshWindowIdentity: { _ in nil }
         )
+        backtrack = BacktrackRuntime(
+            connection: connection, permissions: PermissionsService(), focus: focus, preferences: preferences,
+            sink: BacktrackDebugRing(), services: .inert()
+        )
+    }
+
+    private static var identity: LinkedIdentity? {
+        guard case .success(let instance) = InstanceURL.parse("https://moss.example.com") else { return nil }
+        return LinkedIdentity(
+            instance: instance, deviceId: "harness", accountName: "Harness", accountEmail: "harness@example.com"
+        )
     }
 
     func show() {
         focus.start()
-        if case .success(let instance) = InstanceURL.parse("https://moss.example.com") {
-            let identity = LinkedIdentity(
-                instance: instance, deviceId: "harness", accountName: "Harness", accountEmail: "harness@example.com"
-            )
+        backtrack.start()
+        if let identity = Self.identity {
             connection.send(.linkCompleted(identity, credential: "tm1_harness", generation: connection.currentGeneration))
         }
 
         let card = StatusCardView(
-            connection: connection, focus: focus,
+            connection: connection, focus: focus, feature: backtrack.menuState,
             perform: { [weak self] role in self?.perform(role) }, dismiss: {}
         )
         let window = NSWindow(contentViewController: NSHostingController(rootView: card))
         window.title = "Trail Marker card (test harness)"
+        Self.placeOnScreen(window)
         window.makeKeyAndOrderFront(nil)
         windows.append(window)
         NSApp.setActivationPolicy(.regular)
@@ -59,15 +78,23 @@ final class CardHarness {
         case .settings:
             let settings = SettingsWindow(
                 connection: connection, permissions: PermissionsService(), focus: focus,
-                updater: UpdaterService(), loginItem: LoginItemService(), onSetUp: {}
+                updater: UpdaterService(), loginItem: LoginItemService(), onSetUp: {}, backtrack: backtrack
             )
             let window = NSWindow(contentViewController: NSHostingController(rootView: settings))
             window.title = "Settings"
+            Self.placeOnScreen(window)
             window.makeKeyAndOrderFront(nil)
             windows.append(window)
         default:
             break
         }
+    }
+
+    /// Top-left of the visible screen. Left alone, a window can open partly off a small display
+    /// (CI's is), and XCUITest can't click a control it can't see.
+    private static func placeOnScreen(_ window: NSWindow) {
+        guard let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+        window.setFrameTopLeftPoint(NSPoint(x: visible.minX + 20, y: visible.maxY - 20))
     }
 
     /// Answers every companion request locally: a healthy heartbeat, and no calendar block.
