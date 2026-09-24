@@ -2,17 +2,24 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { FollowedLeagueCard, FollowedNextMatch, FollowedTeamCard } from "@moss/shared";
+import type {
+  FollowedLeagueCard,
+  FollowedNextMatch,
+  FollowedTeamCard,
+  FollowedTeamNews
+} from "@moss/shared";
 import { localDay, type LocaleSettingsDto } from "@moss/shared";
 
 import { TOURNAMENT_COMPETITIONS } from "./competitions.js";
 import { formatDate, formatTime, useUserLocale } from "./locale.js";
 import { Crest, FormPips, LiveDot } from "./sports-parts.js";
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
+import { teamBarColor } from "./team-colors.js";
 
 // Server sends "#0 · -7.5 pts" when ESPN has no real rank/points for a league (MLB GB leaks
 // into points) — a nonsense line is worse than none. Also hidden for knockout tournaments,
@@ -514,12 +521,13 @@ export function TickerTeam(props: {
   // mockup's card is air, not a wall of links.
   const secondary = showNews ? stories.slice(1, 3) : stories.slice(0, 2);
   return (
-    <article className="sp-tk">
-      {/* Identity header (V3): crest at md so it anchors the row, name with the standing
-          stacked directly beneath, recent-form pips on the right edge. The live signal stays
-          folded into the name row (eyebrow row cut per mratgoq4). */}
+    <article className="sp-tk" style={teamAccentStyle(card)}>
+      {/* Identity line: crest over a short team-color rule, name with the standing beneath,
+          recent-form pips on the right edge. The live signal stays folded into the name row. */}
       <header className="sp-tk__head">
-        <Crest name={card.name} crestUrl={card.crestUrl} size="md" />
+        <span className="sp-tk__mark">
+          <Crest name={card.name} crestUrl={card.crestUrl} size="md" />
+        </span>
         <div className="sp-tk__ident">
           <div className="sp-tk__hd">
             <span className="sp-tk__name">{card.name}</span>
@@ -534,9 +542,8 @@ export function TickerTeam(props: {
         </div>
         <FormPips form={card.form} detail={card.formDetail} />
       </header>
-      {/* Body: media-left split when the lead story carries art; otherwise the text column runs
-          full width (no artless placeholder plate — minimalist card, nothing to fake). alt="" on
-          the art: the linked headline beside it already names the story. */}
+      {/* Body: wide lead-story photo over the text column; an artless story runs text only.
+          alt="" on the art because the linked headline beneath already names the story. */}
       <div className="sp-tk__body">
         {showNews && lead?.imageUrl && lead.imageUrl !== failedImage ? (
           <img
@@ -551,11 +558,9 @@ export function TickerTeam(props: {
           {showNews ? (
             lead ? (
               <div className="sp-tk__lead sp-fbhost">
+                <StoryKicker story={lead} fallback={card.competitionLabel} />
                 <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                   {lead.title}
-                  {lead.publisherDomain === "espn.com" || !lead.publisherLabel
-                    ? null
-                    : ` · ${lead.publisherLabel}`}
                 </a>
                 <StoryFeedbackMenu
                   storyRef={lead.storyRef}
@@ -654,17 +659,18 @@ export function TickerTeam(props: {
           ) : null}
         </div>
       </div>
-      {/* Footer bar: the V3 inverted strip. A live game shows its current score here (#963 —
-          supersedes mrawrk0e's hide-while-live rule; the score left the body for this bar).
-          Otherwise the next fixture renders as one line of text — opponent as TEXT on THIS
-          surface (mockup "vs Rockies", reversing mrawvc48 here only; /sports keeps its crest
-          footer). Today games read "Today · 6:45 PM" (mrawhf6q). */}
+      {/* Footer: a live game shows its current score (#963); otherwise the next fixture as a
+          labelled text line. /sports keeps its crest footer bar. */}
       {card.status === "live" ? (
-        <div className="sp-tk__next sp-next">
-          <LiveNowContent scoreText={card.primary} />
+        <div className="sp-tk__next sp-tk__next--live">
+          <span className="sp-tk__nextlabel">
+            <LiveDot />
+            Live now
+          </span>
+          <strong className="sp-tk__nextmain">{card.primary}</strong>
         </div>
       ) : card.nextMatch ? (
-        <NextGameBar next={card.nextMatch} />
+        <NextGameLine next={card.nextMatch} />
       ) : null}
     </article>
   );
@@ -696,9 +702,11 @@ export function TickerLeague(props: {
   const secondary = stories.slice(1, 3);
   const kindLabel = card.kind === "tournament" ? "Tournament" : "League";
   return (
-    <article className="sp-tk">
+    <article className="sp-tk sp-tk--league">
       <header className="sp-tk__head">
-        <Crest name={card.competitionLabel} crestUrl={card.logoUrl} size="md" />
+        <span className="sp-tk__mark">
+          <Crest name={card.competitionLabel} crestUrl={card.logoUrl} size="md" />
+        </span>
         <div className="sp-tk__ident">
           <div className="sp-tk__hd">
             <span className="sp-tk__name">{card.competitionLabel}</span>
@@ -726,11 +734,9 @@ export function TickerLeague(props: {
         <div className="sp-tk__col">
           {lead ? (
             <div className="sp-tk__lead sp-fbhost">
+              <StoryKicker story={lead} fallback={card.competitionLabel} />
               <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
-                {lead.publisherDomain === "espn.com" || !lead.publisherLabel
-                  ? null
-                  : ` · ${lead.publisherLabel}`}
               </a>
               <StoryFeedbackMenu
                 storyRef={lead.storyRef}
@@ -766,38 +772,60 @@ export function TickerLeague(props: {
           team card's Next-game bar — a whole competition has no single "next fixture". Each row is
           the score line + a state chip (Live/Final detail). Rendered only when results exist. */}
       {card.results.length > 0 ? (
-        <ul className="sp-tk__scores">
-          {card.results.map((r) => (
-            <li key={`${r.startsAt}-${r.line}`} className="sp-tk__scorerow">
-              <span className="sp-tk__scoreline">{r.line}</span>
-              <span
-                className={`sp-tk__scorechip${r.state === "live" ? " sp-tk__scorechip--live" : ""}`}
-              >
-                {r.state === "live" ? (
-                  <>
-                    <LiveDot />
-                    {r.detail}
-                  </>
-                ) : (
-                  r.detail
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="sp-tk__results">
+          <span className="sp-tk__scoreshead">Recent results</span>
+          <ul className="sp-tk__scores">
+            {card.results.map((r) => (
+              <li key={`${r.startsAt}-${r.line}`} className="sp-tk__scorerow">
+                <span className="sp-tk__scoreline">{r.line}</span>
+                <span
+                  className={`sp-tk__scorechip${r.state === "live" ? " sp-tk__scorechip--live" : ""}`}
+                >
+                  {r.state === "live" ? (
+                    <>
+                      <LiveDot />
+                      {r.detail}
+                    </>
+                  ) : (
+                    r.detail
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </article>
   );
 }
 
-// /today footer wrapper: the shared bar content in this surface's full-bleed container. The
-// container class (.sp-tk__next) supplies the /today bleed; .sp-next + venue modifier supply
-// the shared look, matched to the /sports footer (Ben 2026-07-09 "similar look across the
-// bottom"). homeAway is "home"|"away" → --home solid accent / --away soft steel.
-function NextGameBar(props: { next: FollowedNextMatch }) {
+// Team brand color as a CSS custom property. The Today stylesheet spends it on one short rule
+// under the crest; unmapped teams get no property and fall back to the theme accent there.
+function teamAccentStyle(card: FollowedTeamCard): CSSProperties | undefined {
+  const color = teamBarColor(card.competitionKey, card.teamKey);
+  return color ? ({ "--team-accent": color.bg } as CSSProperties) : undefined;
+}
+
+// Small caps line above the lead headline: the publisher, or the competition when the story
+// carries no publisher label.
+function StoryKicker(props: { story: FollowedTeamNews; fallback: string }) {
+  const label = props.story.publisherLabel || props.fallback;
+  return label ? <span className="sp-tk__kicker">{label}</span> : null;
+}
+
+// /today next-fixture footer: a "Next game" label over the opponent line, kickoff beneath.
+// Games later today read "Today · 6:45 PM" (mrawhf6q); the local-day rule is nextMatchIsToday.
+function NextGameLine(props: { next: FollowedNextMatch }) {
+  const locale = useUserLocale();
+  const { opponent, when } = nextMatchParts(props.next, locale);
+  const isToday = nextMatchIsToday(props.next, locale);
   return (
-    <div className="sp-tk__next sp-next">
-      <NextGameContent next={props.next} />
+    <div className="sp-tk__next">
+      <span className="sp-tk__nextlabel">Next game</span>
+      <strong className="sp-tk__nextmain">{opponent}</strong>
+      <span className="sp-tk__nextwhen">
+        {isToday ? `Today · ${formatTime(props.next.startsAt, locale)}` : when}
+      </span>
     </div>
   );
 }
