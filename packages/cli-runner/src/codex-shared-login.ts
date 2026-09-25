@@ -8,9 +8,10 @@
  * Codex rewrites its login file when it refreshes its tokens, and the refresh retires the old
  * refresh token. So before any user's Codex runs, the runner looks at every user's copy and makes
  * the most recently issued one for the shared account the shared login. Identity and issue time
- * come from the access token's own claims, never from the file's editable fields, so a copy
- * holding another account's tokens is never promoted. Only a completed administrator sign-in
- * changes the shared account.
+ * come from the access token's own claims, never from the file's editable fields, and a copy is
+ * promoted only once OpenAI's signature on that token checks out. So a copy holding another
+ * account's tokens, or claims nobody signed, is never promoted. Only a completed administrator
+ * sign-in changes the shared account.
  */
 import { randomUUID } from "node:crypto";
 import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } from "node:constants";
@@ -21,6 +22,7 @@ import type { TmuxIo } from "@moss/ai";
 
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import type { AgentHomePrepareRun } from "./agent-home-prepare-run.js";
+import { openAiCodexTokenVerifier, type CodexTokenVerifier } from "./codex-token-verify.js";
 import { Mutex } from "./mutex.js";
 import { listUserUidSlots } from "./uid-allocator.js";
 
@@ -34,7 +36,6 @@ export interface CodexHomeAccess {
 
 export type CodexLoginPlan =
   | { readonly action: "seed"; readonly raw: string }
-  | { readonly action: "promote"; readonly raw: string }
   | { readonly action: "keep" }
   | { readonly action: "none" };
 
@@ -42,6 +43,7 @@ export type CodexLoginSyncResult = "seeded" | "promoted" | "kept" | "none";
 
 interface ParsedCodexLogin {
   readonly raw: string;
+  readonly accessToken: string;
   /** The account named by the access token's claims, or null when they cannot vouch for it. */
   readonly accountId: string | null;
   /** When the access token was issued, in seconds. */
@@ -92,6 +94,7 @@ function parseCodexLogin(raw: string | null): ParsedCodexLogin | null {
     Number.isFinite(claims.issuedAt);
   return {
     raw,
+    accessToken,
     accountId: identified ? tokens.account_id : null,
     issuedAt: identified ? (claims.issuedAt as number) : Number.NEGATIVE_INFINITY
   };
@@ -107,7 +110,11 @@ function supersedes(candidate: ParsedCodexLogin | null, current: ParsedCodexLogi
   );
 }
 
-/** Decide what one user's copy needs, given the shared login. Unusable files count as absent. */
+/**
+ * Decide what one user's copy needs, given the shared login. Unusable files count as absent. A
+ * copy that claims a newer refresh is kept: promotion happens only after its signature checks out,
+ * and overwriting it could throw away the only live refresh token.
+ */
 export function planCodexLoginSync(
   instanceRaw: string | null,
   userRaw: string | null
@@ -116,7 +123,7 @@ export function planCodexLoginSync(
   const user = parseCodexLogin(userRaw);
   if (!instance) return user ? { action: "keep" } : { action: "none" };
   if (user && user.raw === instance.raw) return { action: "keep" };
-  if (user && supersedes(user, instance)) return { action: "promote", raw: user.raw };
+  if (user && supersedes(user, instance)) return { action: "keep" };
   return { action: "seed", raw: instance.raw };
 }
 
@@ -170,27 +177,45 @@ async function withLock<T>(homeBase: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Promote the newest same-account copy among `candidates`. Returns the shared login after. */
+/**
+ * Promote the newest same-account copy among `candidates` whose token OpenAI signed. Returns the
+ * shared login after.
+ */
 async function publishNewest(
   homeBase: string,
   instanceRaw: string | null,
-  candidates: readonly (string | null)[]
+  candidates: readonly (string | null)[],
+  verify: CodexTokenVerifier
 ): Promise<string | null> {
   const instance = parseCodexLogin(instanceRaw);
   if (!instance) return instanceRaw;
-  let newest = instance;
-  for (const raw of candidates) {
-    const candidate = parseCodexLogin(raw);
-    if (supersedes(candidate, newest)) newest = candidate as ParsedCodexLogin;
+  const newer = candidates
+    .map(parseCodexLogin)
+    .filter((candidate): candidate is ParsedCodexLogin => supersedes(candidate, instance))
+    .sort((a, b) => b.issuedAt - a.issuedAt);
+  for (const candidate of newer) {
+    if (!(await verify(candidate.accessToken).catch(() => false))) continue;
+    await writeInstance(homeBase, candidate.raw);
+    return candidate.raw;
   }
-  if (newest === instance) return instanceRaw;
-  await writeInstance(homeBase, newest.raw);
-  return newest.raw;
+  return instanceRaw;
 }
 
+/** Peer copies read at once. Each read is a process run as that user. */
+const PEER_READ_CONCURRENCY = 4;
+
 /** Read other users' copies. One unreadable home never blocks another user's launch. */
-function readPeers(peers: readonly CodexHomeAccess[]): Promise<(string | null)[]> {
-  return Promise.all(peers.map((peer) => peer.read().catch(() => null)));
+async function readPeers(peers: readonly CodexHomeAccess[]): Promise<(string | null)[]> {
+  const results: (string | null)[] = new Array<string | null>(peers.length).fill(null);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < peers.length) {
+      const index = next++;
+      results[index] = await peers[index]!.read().catch(() => null);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PEER_READ_CONCURRENCY, peers.length) }, worker));
+  return results;
 }
 
 /**
@@ -201,7 +226,8 @@ function readPeers(peers: readonly CodexHomeAccess[]): Promise<(string | null)[]
 export async function syncCodexLoginIntoHome(
   homeBase: string,
   home: CodexHomeAccess,
-  peers: readonly CodexHomeAccess[] = []
+  peers: readonly CodexHomeAccess[] = [],
+  verify: CodexTokenVerifier = openAiCodexTokenVerifier()
 ): Promise<CodexLoginSyncResult> {
   return withLock(homeBase, async () => {
     const [instanceRaw, userRaw, peerRaws] = await Promise.all([
@@ -209,15 +235,13 @@ export async function syncCodexLoginIntoHome(
       home.read(),
       readPeers(peers)
     ]);
-    const sharedRaw = await publishNewest(homeBase, instanceRaw, peerRaws);
+    const sharedRaw = await publishNewest(homeBase, instanceRaw, [userRaw, ...peerRaws], verify);
+    if (sharedRaw !== instanceRaw && sharedRaw === userRaw) return "promoted";
     const plan = planCodexLoginSync(sharedRaw, userRaw);
     switch (plan.action) {
       case "seed":
         await home.write(plan.raw);
         return "seeded";
-      case "promote":
-        await writeInstance(homeBase, plan.raw);
-        return "promoted";
       case "keep":
         return "kept";
       case "none":
@@ -229,11 +253,13 @@ export async function syncCodexLoginIntoHome(
 /** Carry the newest refresh held in any of `homes` back to the shared login. */
 export async function publishNewestCodexLogin(
   homeBase: string,
-  homes: readonly CodexHomeAccess[]
+  homes: readonly CodexHomeAccess[],
+  verify: CodexTokenVerifier = openAiCodexTokenVerifier()
 ): Promise<boolean> {
   return withLock(homeBase, async () => {
     const instanceRaw = await readInstance(homeBase);
-    return (await publishNewest(homeBase, instanceRaw, await readPeers(homes))) !== instanceRaw;
+    const peerRaws = await readPeers(homes);
+    return (await publishNewest(homeBase, instanceRaw, peerRaws, verify)) !== instanceRaw;
   });
 }
 
@@ -271,6 +297,9 @@ export function ownerCodexHomeAccess(
       ])
   };
 }
+
+/** Bounds on reading one user's login as that user, who controls both the file and the process. */
+export const CODEX_LOGIN_READ_LIMITS = { timeoutMs: 5_000, maxOutputBytes: 65_536 } as const;
 
 /** Every other user's Codex home that holds a slot, each read through its own account. */
 export function codexPeerHomes(

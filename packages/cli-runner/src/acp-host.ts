@@ -51,6 +51,7 @@ import {
 } from "./agent-home-prepare-run.js";
 import {
   codexPeerHomes,
+  CODEX_LOGIN_READ_LIMITS,
   ownerCodexHomeAccess,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
@@ -418,7 +419,12 @@ export class AcpHost {
         if (codexAuth) {
           const access = (home: string, identity: { uid: number; gid: number }) =>
             this.deps.codexHomeAccess?.(home, identity) ??
-            ownerCodexHomeAccess(home, identity, createOwnerIo(identity), runAgentHomePrepare);
+            ownerCodexHomeAccess(
+              home,
+              identity,
+              createOwnerIo(identity, CODEX_LOGIN_READ_LIMITS),
+              runAgentHomePrepare
+            );
           await syncCodexLoginIntoHome(
             homeBase,
             access(agentHome, { uid, gid }),

@@ -44,6 +44,7 @@ import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
 import {
   codexPeerHomes,
+  CODEX_LOGIN_READ_LIMITS,
   ownerCodexHomeAccess,
   promoteCodexLogin,
   publishNewestCodexLogin,
@@ -191,7 +192,7 @@ function ownerCodexAccess(
   return ownerCodexHomeAccess(
     agentHome,
     identity,
-    createOwnerIo(identity),
+    createOwnerIo(identity, CODEX_LOGIN_READ_LIMITS),
     runAgentHomePrepareAsOwner
   );
 }
@@ -225,7 +226,7 @@ export async function resolveIsolatedUserRuntime(
   if (opts?.syncCodexLogin) {
     await syncCodexLoginIntoHome(
       config.homeBase,
-      ownerCodexHomeAccess(agentHome, slot, io, runAgentHomePrepareAsOwner),
+      ownerCodexAccess(agentHome, slot),
       codexPeerHomes(config.homeBase, userId, ownerCodexAccess)
     );
   }

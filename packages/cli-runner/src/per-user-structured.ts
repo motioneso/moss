@@ -24,6 +24,7 @@ import {
 } from "./owned-fs.js";
 import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
 import {
+  CODEX_LOGIN_READ_LIMITS,
   codexPeerHomes,
   ownerCodexHomeAccess,
   syncCodexLoginIntoHome,
@@ -115,7 +116,12 @@ export async function preparePerUserStructuredLaunch(
   // a refresh this call made back to the shared login.
   const codexAccess = (home: string, id: { uid: number; gid: number }) =>
     deps.codexHomeAccess?.(home, id) ??
-    ownerCodexHomeAccess(home, id, createOwnerIo(id), runAgentHomePrepareAsOwner);
+    ownerCodexHomeAccess(
+      home,
+      id,
+      createOwnerIo(id, CODEX_LOGIN_READ_LIMITS),
+      runAgentHomePrepareAsOwner
+    );
   const codexHome =
     params.provider === "openai-compatible" ? codexAccess(agentHome, identity) : undefined;
   if (codexHome) {
@@ -235,12 +241,66 @@ const READ_AS_OWNER =
 const WRITE_AS_OWNER =
   "const fs=require('node:fs');fs.writeFileSync(process.env.OWNER_IO_PATH,fs.readFileSync(0),{mode:0o600})";
 
+/** Caps on one owner-run command: when it must finish, and how much it may print. */
+export interface OwnerRunLimits {
+  readonly timeoutMs: number;
+  readonly maxOutputBytes: number;
+}
+
+/**
+ * Run a command, and with `limits`, kill it and report failure once it overruns its deadline or
+ * prints past the cap.
+ */
+export function runBounded(
+  command: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  input: string,
+  limits?: OwnerRunLimits
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, [...args], { stdio: ["pipe", "pipe", "pipe"], env });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (code: number): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    };
+    const abort = (): void => {
+      child.kill("SIGKILL");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      finish(1);
+    };
+    const timer = limits ? setTimeout(abort, limits.timeoutMs) : undefined;
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      if (limits && stdout.length > limits.maxOutputBytes) abort();
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      if (!limits || stderr.length < limits.maxOutputBytes) stderr += chunk;
+    });
+    child.once("error", () => finish(1));
+    child.once("close", (code) => finish(code ?? 1));
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(input);
+  });
+}
+
 /**
  * Io for a launch's own files, run as the owner through setpriv. The runner's capabilities do not
  * cover reading or writing inside a folder it has handed over. Paths travel by env and content by
- * stdin or stdout, never by argv.
+ * stdin or stdout, never by argv. With `limits`, every command is bounded by them.
  */
-export function createOwnerIo(identity: { readonly uid: number; readonly gid: number }): TmuxIo {
+export function createOwnerIo(
+  identity: { readonly uid: number; readonly gid: number },
+  limits?: OwnerRunLimits
+): TmuxIo {
   const run = (
     cmd: string,
     args: readonly string[],
@@ -248,22 +308,8 @@ export function createOwnerIo(identity: { readonly uid: number; readonly gid: nu
     input?: string
   ): Promise<{ code: number; stdout: string; stderr: string }> => {
     const dropped = buildSetprivDropCommand(cmd, args, identity);
-    return new Promise((resolve) => {
-      const child = spawn(dropped.command, [...dropped.args], {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: { ...buildSanitizedCliEnv(process.env), ...extraEnv }
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => (stdout += chunk));
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk: string) => (stderr += chunk));
-      child.once("error", () => resolve({ code: 1, stdout, stderr }));
-      child.once("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
-      child.stdin.on("error", () => undefined);
-      child.stdin.end(input ?? "");
-    });
+    const env = { ...buildSanitizedCliEnv(process.env), ...extraEnv };
+    return runBounded(dropped.command, dropped.args, env, input ?? "", limits);
   };
   return {
     run: async (cmd, args, opts) => {
