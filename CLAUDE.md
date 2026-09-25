@@ -90,7 +90,6 @@ never bare-`git commit`, and never `checkout`/`stash`/`reset` while another sess
 Before any commit or tree-wide git action here, use the `shared-checkout` skill — even a
 path-scoped commit is unsafe on a co-edited file, and the skill has the only safe procedure.
 
-
 - **Leave your worktree clean when you finish.** Commit and push anything worth keeping (docs,
   plans, handoffs), delete everything else you created (scratch scripts, logs, screenshots, test
   output), and stop any server or browser you started. An hourly sweeper removes worktrees whose
