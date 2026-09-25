@@ -31,28 +31,47 @@ describe("app-map integrity and truthfulness", () => {
 
   it("every app map setting resolves to a canonical settings section", () => {
     const validSectionPattern = /^\/settings\?section=([a-z0-9_-]+)(&module=([a-z0-9_-]+))?$/;
+    const coreSectionIds = new Set(CORE_APP_SETTINGS.map((s) => s.id));
+    const moduleIds = new Set(getBuiltInModuleManifests().map((m) => m.id));
 
     for (const setting of appMap.settings) {
+      const match = validSectionPattern.exec(setting.path ?? "");
       expect(
-        validSectionPattern.test(setting.path),
+        match !== null,
         `Setting "${setting.id}" has non-canonical path "${setting.path}"`
       ).toBe(true);
+      if (!match) continue;
+      // A stale section or module name must fail: the section has to exist on the
+      // real Settings page and the module has to be a real built-in module.
+      expect(
+        coreSectionIds.has(match[1]!),
+        `Setting "${setting.id}" points at unknown settings section "${match[1]}"`
+      ).toBe(true);
+      if (match[2]) {
+        expect(match[1], `Setting "${setting.id}" names a module but misses section=modules`).toBe(
+          "modules"
+        );
+        expect(
+          moduleIds.has(match[3]!),
+          `Setting "${setting.id}" points at unknown module "${match[3]}"`
+        ).toBe(true);
+      }
     }
   });
 
   it("contains no duplicate screen IDs or duplicate setting IDs", () => {
+    // Bare IDs: the map is one shared namespace for Moss, so the same id declared
+    // twice reads as two different things even when the owners differ.
     const screenIds = new Set<string>();
     for (const screen of appMap.screens) {
-      const key = `${screen.moduleId}:${screen.id}`;
-      expect(screenIds.has(key), `Duplicate screen key "${key}"`).toBe(false);
-      screenIds.add(key);
+      expect(screenIds.has(screen.id!), `Duplicate screen id "${screen.id}"`).toBe(false);
+      screenIds.add(screen.id!);
     }
 
     const settingIds = new Set<string>();
     for (const setting of appMap.settings) {
-      const key = `${setting.moduleId}:${setting.id}`;
-      expect(settingIds.has(key), `Duplicate setting key "${key}"`).toBe(false);
-      settingIds.add(key);
+      expect(settingIds.has(setting.id!), `Duplicate setting id "${setting.id}"`).toBe(false);
+      settingIds.add(setting.id!);
     }
   });
 

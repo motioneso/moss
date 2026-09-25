@@ -166,12 +166,9 @@ export const notesModuleManifest = {
   features: [
     {
       id: "notes.vault_sync",
-<<<<<<< ours
       description:
         "Sync Markdown notes from the folder you link in Settings, Data sources: new and changed " +
         "files are read into Moss on a schedule, and notes stay on disk where they are.",
-=======
-      description: "Ingest and synchronize Markdown notes from the connected local folder.",
       errors: [
         {
           code: "notes.folder_missing",
@@ -180,7 +177,6 @@ export const notesModuleManifest = {
           description: "No notes folder is selected in Data sources."
         }
       ],
->>>>>>> theirs
       remediations: [
         {
           id: "notes.configure_folder",
@@ -192,7 +188,6 @@ export const notesModuleManifest = {
     {
       id: "notes.semantic_search",
       description:
-<<<<<<< ours
         "Search your notes by meaning, not just exact words, using embeddings, so closely related " +
         "wording still matches."
     },
@@ -201,13 +196,6 @@ export const notesModuleManifest = {
       description:
         "Ask the assistant to create, edit, or delete Markdown notes in your linked notes folder. " +
         "Deleting is immediate and permanent; there is no trash."
-=======
-        "Semantically search note contents through local embeddings and keyword matching."
-    },
-    {
-      id: "notes.assistant_authoring",
-      description: "Let the assistant create, edit, or delete notes in the linked notes root."
->>>>>>> theirs
     }
   ],
   proactiveMonitor: notesMonitorProvider

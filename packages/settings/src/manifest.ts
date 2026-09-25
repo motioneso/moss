@@ -64,37 +64,6 @@ export const settingsModuleManifest: MossModuleManifest = {
     required: true
   },
   notifications: { supported: true },
-  navigation: [
-    {
-      id: "settings",
-      label: "Settings",
-      description: "Open personal and instance settings.",
-      path: "/settings",
-      icon: "settings",
-      order: 1000,
-      permissionId: "settings.view"
-    }
-  ],
-  settings: [
-    {
-      id: "priority-settings",
-      label: "Priorities",
-      description: "Tell your assistant which goals and commitments matter most.",
-      path: "/settings?section=priorities",
-      scope: "user",
-      order: 30,
-      permissionId: "settings.write"
-    },
-    {
-      id: "admin-settings",
-      label: "Admin",
-      description: "Manage instance access, modules, AI providers, and host settings.",
-      path: "/settings?section=people",
-      scope: "admin",
-      order: 1000,
-      permissionId: "settings.manage"
-    }
-  ],
   permissions: [
     {
       id: "settings.view",

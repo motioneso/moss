@@ -43,17 +43,6 @@ export const briefingsModuleManifest = {
     migrationDirectories: ["packages/briefings/sql"],
     ownedTables: ["app.briefing_definitions", "app.briefing_runs"]
   },
-  navigation: [
-    {
-      id: "briefings",
-      label: "Briefings",
-      description: "Review generated morning and evening briefings.",
-      path: "/briefings",
-      icon: "newspaper",
-      order: 50,
-      permissionId: "briefings.view"
-    }
-  ],
   permissions: [
     {
       id: "briefings.view",
@@ -164,7 +153,7 @@ export const briefingsModuleManifest = {
         {
           id: "briefings.refresh.wait",
           description: "Wait for the queued run, then read it again from the briefing history.",
-          path: "/briefings"
+          path: "/today"
         }
       ]
     },
@@ -187,7 +176,7 @@ export const briefingsModuleManifest = {
         {
           id: "briefings.history.reread",
           description: "Pick the newest run in the briefing history and read it instead.",
-          path: "/briefings"
+          path: "/today"
         }
       ]
     },
@@ -200,7 +189,7 @@ export const briefingsModuleManifest = {
         {
           id: "briefings.source_gaps.review",
           description: "Open the briefing to see which sources are missing and why.",
-          path: "/briefings"
+          path: "/today"
         }
       ]
     },
@@ -228,7 +217,7 @@ export const briefingsModuleManifest = {
         {
           id: "briefings.plan_handoff.refresh",
           description: "Read the current plan, then queue a fresh briefing run from it.",
-          path: "/briefings"
+          path: "/today"
         }
       ]
     }

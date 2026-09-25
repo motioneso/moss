@@ -59,20 +59,6 @@ export const chatModuleManifest = {
       "app.chat_skills"
     ]
   },
-  navigation: [
-    {
-      id: "chat",
-      label: "Chat",
-      description:
-        "Talk with your assistant and review prior conversations. Past conversations are " +
-        "listed most recently active first, each with a short preview of the last message. " +
-        "The per-reply feedback menu closes if you click elsewhere or press Escape.",
-      path: "/chat",
-      icon: "message-square",
-      order: 45,
-      permissionId: "chat.view"
-    }
-  ],
   permissions: [
     {
       id: "chat.view",
@@ -331,18 +317,6 @@ export const chatModuleManifest = {
       inputSchema: chatSetResponseStyleInputSchema,
       outputSchema: chatSetResponseStyleOutputSchema,
       execute: chatSetResponseStyleExecute
-    }
-  ],
-  features: [
-    {
-      id: "chat.response_styles",
-      description:
-        "Configure assistant brevity (concise, balanced, or detailed) with sample response previews."
-    },
-    {
-      id: "chat.thread_history",
-      description:
-        "Review, switch between, and clear prior conversation threads ordered by recent activity."
     }
   ]
 } satisfies MossModuleManifest;

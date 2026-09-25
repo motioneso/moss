@@ -283,7 +283,6 @@ export const wellnessModuleManifest = {
   features: [
     {
       id: "wellness.mood_checkins",
-<<<<<<< ours
       description:
         "Log a daily mood check-in with emotion, energy and a short note; Wellness keeps the history " +
         "and charts past check-ins. Insights summarise trends once there are enough check-ins."
@@ -293,23 +292,12 @@ export const wellnessModuleManifest = {
       description:
         "Keep a medication list with schedules and as-needed doses. The day view asks about scheduled " +
         "doses, and 30-day adherence shows up in Wellness insights and in briefings when allowed."
-=======
-      description: "Log daily mood check-ins, reflective notes, and emotional trend history."
-    },
-    {
-      id: "wellness.medication_tracking",
-      description: "Track medications, log doses, and review adherence streaks."
->>>>>>> theirs
     },
     {
       id: "wellness.therapy_notes",
       description:
-<<<<<<< ours
         "Keep therapy notes that stay private: the assistant never reads them, and the data " +
         "export includes them with everything else."
-=======
-        "Maintain private therapy notes isolated from assistant context unless consented."
->>>>>>> theirs
     }
   ]
 } satisfies MossModuleManifest;

@@ -191,11 +191,7 @@ export const sportsModuleManifest = {
       id: "sports.follows",
       label: "Sports",
       description:
-<<<<<<< ours
         "Pick teams and leagues; add news sources (homepage or subreddit). Rows show photo status; Stop using Moss's photos forgets Moss's instruction, feed and article photos stay. A team saved before permanent numbers asks once which was meant.",
-=======
-        "Choose the teams and leagues shown in Sports, and add custom news sources: a publication's homepage or a subreddit such as r/nfl.",
->>>>>>> theirs
       path: "/settings?section=modules&module=sports",
       scope: "user",
       order: 35,

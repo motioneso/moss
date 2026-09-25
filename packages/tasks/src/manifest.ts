@@ -814,17 +814,12 @@ export const tasksModuleManifest = {
     {
       id: "tasks.lists_and_tags",
       description:
-<<<<<<< ours
         "Organize tasks into lists with filterable tags; rename, reassign, or delete lists and " +
         "tags without losing the tasks in them."
-=======
-        "Organize tasks into named lists and filterable tags with quick one-line capture."
->>>>>>> theirs
     },
     {
       id: "tasks.priority_matrix",
       description:
-<<<<<<< ours
         "Rank tasks across the do / schedule / delegate / eliminate matrix, plus a focus list of " +
         "overdue and at-risk tasks for today."
     },
@@ -844,18 +839,6 @@ export const tasksModuleManifest = {
       description:
         "Describe what you are looking for in your own words; Tasks interprets it into a filtered " +
         "search of your tasks."
-=======
-        "View tasks ranked by importance and urgency across Eisenhower quadrants (Do First, Schedule, Delegate, Later)."
-    },
-    {
-      id: "tasks.breakdown",
-      description: "Break down complex tasks into manageable subtasks."
-    },
-    {
-      id: "tasks.due_and_reminders",
-      description:
-        "Schedule due dates, reminders, effort estimates, and recurring tasks with overdue tracking."
->>>>>>> theirs
     }
   ],
   proactiveMonitor: tasksMonitorProvider

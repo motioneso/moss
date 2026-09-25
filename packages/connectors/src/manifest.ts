@@ -264,7 +264,6 @@ export const connectorsModuleManifest = {
     {
       id: "connectors.google_sync",
       description:
-<<<<<<< ours
         "A connected Google account keeps its calendar events and email in Moss without you " +
         "asking: a background sync brings in what is new so it can show up on Today and in " +
         "briefings.",
@@ -285,14 +284,10 @@ export const connectorsModuleManifest = {
           path: "/settings?section=connected"
         }
       ]
-=======
-        "Continuous background synchronization of connected Google Calendar events and Gmail obligations."
->>>>>>> theirs
     },
     {
       id: "connectors.imap_sync",
       description:
-<<<<<<< ours
         "An email account connected directly (IMAP) is checked on a schedule and its newer " +
         "messages are brought into Moss, where the same next actions are drawn from them as " +
         "from Google mail.",
@@ -315,9 +310,6 @@ export const connectorsModuleManifest = {
           path: "/settings?section=connected"
         }
       ]
-=======
-        "Periodic IMAP message polling and obligation triage for connected email accounts."
->>>>>>> theirs
     }
   ]
 } satisfies MossModuleManifest;
