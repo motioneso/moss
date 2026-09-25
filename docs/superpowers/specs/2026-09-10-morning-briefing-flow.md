@@ -83,6 +83,8 @@ Ben approved the desktop/phone proposal with “yes (thumbs up)” on 2026-09-25
 - Delayed email names its last update and possible unseen replies, while saying calendar and task times are current. Refresh targets email freshness.
 - With no evening plan, use task deadlines and calendar facts as the priority source and do not imply an evening conversation happened.
 
+**Refresh implementation prerequisite:** The approved Refresh email CTA remains part of the design. Do not wire a dead control or treat an async enqueue as a completed refresh. The current Google sync refreshes calendar and email together, while IMAP has no manual refresh route or durable job-bound completion status. Implement the owner-scoped Google/IMAP refresh and completion contract, then trigger and poll one new briefing run after success or partial completion, under [task #2709](https://github.com/motioneso/moss/issues/2709). This prerequisite does not change the approved CTA or its visual treatment.
+
 P9 implementation may proceed within this approved treatment. The inventory above and the local mockup interaction check are not live-path proof; live error/retry recovery remains unverified.
 
 ## Preserved approved references

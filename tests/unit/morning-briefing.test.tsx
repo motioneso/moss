@@ -89,6 +89,50 @@ describe("MorningBriefingReader report", () => {
     expect(html).not.toContain("Earlier reports");
   });
 
+  it("attributes priorities to task deadlines and calendar without evening intent", async () => {
+    const run = fullRun();
+    const noEveningIntent: BriefingRunDto = {
+      ...run,
+      structuredPayload: {
+        ...run.structuredPayload,
+        planContext: { ...run.structuredPayload.planContext!, eveningIntent: null }
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noEveningIntent)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("No evening plan was saved.");
+    expect(html).toContain("priorities come from task deadlines and your calendar");
+  });
+
+  it("names delayed email separately from the other briefing sources", async () => {
+    const run = fullRun();
+    const delayed: BriefingRunDto = {
+      ...run,
+      sourceMetadata: {
+        ...run.sourceMetadata,
+        sourceTimestamps: {
+          version: 1,
+          capturedAt: NOW,
+          sources: [
+            { source: "email", freshnessKind: "connector_sync", asOf: "2026-09-10T03:00:00.000Z" },
+            { source: "calendar", freshnessKind: "connector_sync", asOf: NOW },
+            { source: "tasks", freshnessKind: "realtime", asOf: NOW }
+          ]
+        }
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(delayed)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("Email hasn’t updated since");
+    expect(html).toContain("newer replies this briefing hasn’t seen");
+    expect(html).toContain("Calendar and task details remain available");
+    expect(html).not.toContain("Some sources are over a day old: Email");
+  });
+
   it("marks unavailable references without their cached content", async () => {
     const run: BriefingRunDto = {
       ...fullRun(),
@@ -305,12 +349,12 @@ describe("MorningBriefingReader retry", () => {
             runs: [],
             tasks: [task("task-1", "Book the launch room")],
             locale,
-            dayPlan: undefined,
             events: [],
             now: new Date(NOW),
             dayPlanLoading: false,
             dayPlanError: false,
             calendarError: false,
+            dayPlan: acceptPlanResponse(),
             opener: null,
             onClose: () => undefined,
             onOpenTask: () => undefined,
@@ -335,6 +379,78 @@ describe("MorningBriefingReader retry", () => {
     });
     expect(posts).toHaveLength(1);
     expect(document.body.innerHTML).toContain("Protect the launch window");
+    expect(document.body.innerHTML).toContain("Review proposed blocks");
+    expect(document.body.innerHTML).toContain("Accept all time blocks");
+  });
+
+  it("shows feedback and preserves task-block choices when a retry request fails", async () => {
+    const failedDetail: GetBriefingRunResponse = {
+      state: "failed",
+      run: null,
+      latest: false,
+      plan: null
+    };
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      const url = String(input);
+      if (url.endsWith("/run") && init?.method === "POST")
+        return Response.json({ message: "temporary failure" }, { status: 503 });
+      return Response.json(failedDetail);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } }
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(MorningBriefingReader, {
+            definitionId: "def-morning",
+            initialRunId: "run-full",
+            runs: [],
+            tasks: [
+              task("t1", "Draft proposal"),
+              task("t2", "Send follow-up"),
+              task("t3", "Book room")
+            ],
+            locale,
+            dayPlan: acceptPlanResponse(),
+            events: [],
+            now: new Date(NOW),
+            dayPlanLoading: false,
+            dayPlanError: false,
+            calendarError: false,
+            opener: null,
+            onClose: () => undefined,
+            onOpenTask: () => undefined,
+            onReview: () => undefined,
+            controller: stubReaderController()
+          })
+        )
+      );
+    });
+    await flushQueries();
+    const retry = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent === "Try again"
+    );
+    expect(retry, "expected the retry button on a failed run").toBeDefined();
+    await act(async () => {
+      retry!.click();
+    });
+    await flushQueries();
+
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "The retry request couldn’t be confirmed"
+    );
+    expect(document.body.innerHTML).toContain("Review proposed blocks");
+    expect(document.body.innerHTML).toContain("Accept all time blocks");
+    expect(retry!.disabled).toBe(false);
   });
 });
 

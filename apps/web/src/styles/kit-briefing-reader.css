@@ -99,6 +99,20 @@
 .brief-reader__plan-changed {
   margin: 0 0 var(--space-2);
 }
+.brief-reader__plan-source {
+  margin: var(--space-3) 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--line-strong);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.brief-reader__retry-error {
+  margin: var(--space-3) 0;
+  color: var(--danger-fg);
+  font-size: 13px;
+  line-height: 1.5;
+}
 .brief-reader__plan ul,
 .brief-reader__intent ul,
 .brief-reader__earlier ul {
@@ -481,6 +495,22 @@
   padding: 0 0 0 var(--space-4);
   font-size: 11px;
   line-height: 1.7;
+  color: var(--text-muted);
+}
+.brief-reader__email-delay {
+  margin: 18px 0;
+  padding: 13px 16px;
+  border-left: 3px solid var(--gold);
+  background: var(--sage-light);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.brief-reader__email-delay p {
+  margin: 0;
+}
+.brief-reader__email-delay p + p {
+  margin-top: 5px;
   color: var(--text-muted);
 }
 
