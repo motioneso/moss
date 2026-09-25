@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { GameSummary } from "@moss/shared";
 
 import { createEspnDatasetAdapter } from "../../packages/sports/src/source/espn-source.js";
-import { SportsService, isoDaysInclusive } from "../../packages/sports/src/sports-service.js";
+import {
+  SportsService,
+  addIsoDays,
+  isoDaysInclusive
+} from "../../packages/sports/src/sports-service.js";
 import { makeDeps, makeSource, side, userA } from "./sports-service.test.js";
 
 // #2679: ESPN answers `scoreboard?dates=YYYYMMDD-YYYYMMDD` with HTTP 400 "Failed to get events
@@ -34,6 +38,11 @@ describe("isoDaysInclusive", () => {
   it("returns the single day when both ends match", () => {
     expect(isoDaysInclusive("2026-07-01", "2026-07-01")).toEqual(["2026-07-01"]);
   });
+
+  it("shifts by calendar days across month and year ends", () => {
+    expect(addIsoDays("2026-11-01", -1)).toBe("2026-10-31");
+    expect(addIsoDays("2026-12-29", 4)).toBe("2027-01-02");
+  });
 });
 
 describe("SportsService scoreboard window, one request per day (#2679)", () => {
@@ -57,15 +66,39 @@ describe("SportsService scoreboard window, one request per day (#2679)", () => {
     const yesterday = game("y1", "2026-06-30T23:00:00.000Z");
     const shared = game("both", "2026-07-01T03:00:00.000Z");
     const today = game("t1", "2026-07-01T23:00:00.000Z");
+    const days: string[] = [];
     const source = makeSource({
-      getScoreboard: async (_key, day) =>
-        day === "2026-06-30" ? [yesterday, shared] : [shared, today]
+      getScoreboard: async (_key, day) => {
+        days.push(day);
+        return day === "2026-06-30" ? [yesterday, shared] : [shared, today];
+      }
     });
     const service = new SportsService({ ...makeDeps({ source }), now: () => NOW });
     const overview = await service.getOverview(userA);
     const ids = overview.scoreboard.flatMap((group) => group.games.map((g) => g.id));
+    expect([...new Set(days)].sort()).toEqual(["2026-06-30", "2026-07-01"]);
+    expect(ids).toContain("y1");
+    expect(ids).toContain("t1");
     expect(ids.filter((id) => id === "both")).toHaveLength(1);
     expect(overview.degraded).toBe(false);
+  });
+
+  it("steps back one Eastern calendar day on the night of the fall clock change", async () => {
+    // 23:30 EST on Nov 1. 24 h earlier is 00:30 EDT on Nov 1, so an instant-based lookback
+    // lands on today and drops Oct 31.
+    const days: string[] = [];
+    const source = makeSource({
+      getScoreboard: async (_key, day) => {
+        days.push(day);
+        return [];
+      }
+    });
+    const service = new SportsService({
+      ...makeDeps({ source }),
+      now: () => new Date("2026-11-02T04:30:00.000Z")
+    });
+    await service.getOverview(userA);
+    expect([...new Set(days)].sort()).toEqual(["2026-10-31", "2026-11-01"]);
   });
 
   it("keeps the day that loaded and reports degraded when another day fails", async () => {
@@ -85,6 +118,54 @@ describe("SportsService scoreboard window, one request per day (#2679)", () => {
     expect(overview.degraded).toBe(true);
     const ids = overview.scoreboard.flatMap((group) => group.games.map((g) => g.id));
     expect(ids).toContain("t1");
+  });
+});
+
+describe("SportsService tournament fixture window (#2679)", () => {
+  it("fetches eight single days, at most four at a time, and keeps each day's games", async () => {
+    const complete = {
+      sections: [
+        {
+          label: "Group A",
+          rows: ["a", "b"].map((teamKey, i) => ({
+            teamKey,
+            sourceTeamId: null,
+            name: teamKey,
+            rank: i + 1,
+            points: null,
+            wins: 1 - i,
+            losses: i,
+            draws: 0,
+            winPercent: null,
+            qualifies: true,
+            qualificationNote: null,
+            qualificationColor: null
+          }))
+        }
+      ]
+    };
+    const days: string[] = [];
+    let inFlight = 0;
+    let peak = 0;
+    const source = makeSource({
+      getStandings: async () => complete,
+      getScoreboard: async (_key, day) => {
+        days.push(day);
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return [{ ...game(`g-${day}`, `${day}T18:00:00.000Z`), competitionKey: "fifa.world" }];
+      }
+    });
+    const service = new SportsService({
+      ...makeDeps({ source }),
+      now: () => new Date("2026-07-01T18:00:00.000Z")
+    });
+    const { fixtures } = await service.getStandings("fifa.world");
+    expect([...days].sort()).toEqual(isoDaysInclusive("2026-06-28", "2026-07-05"));
+    expect(peak).toBe(4);
+    expect(fixtures.map((g) => g.id)).toEqual([...days].sort().map((day) => `g-${day}`));
   });
 });
 

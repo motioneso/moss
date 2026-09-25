@@ -206,6 +206,13 @@ export function isoDaysInclusive(from: IsoDate, to: IsoDate): IsoDate[] {
   return days;
 }
 
+/** `day` shifted by `n` calendar days. Eastern days are not 24 h apart across DST, so never step by DAY_MS from an instant. */
+export function addIsoDays(day: IsoDate, n: number): IsoDate {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS)
+    .toISOString()
+    .slice(0, 10) as IsoDate;
+}
+
 // The overview scoreboard is fetched as yesterday..today (Eastern): a Pacific user's evening
 // crosses ESPN's midnight at 9 PM local, after which "today" alone returns tomorrow's slate
 // while tonight's live/final games sit under the previous ESPN day (#761's other edge). The
@@ -429,7 +436,7 @@ export class SportsService {
     const state: DegradeState = { degraded: coverage.degraded };
     const today = this.today();
     // Scoreboard window start — see currentTeamGame (followed-card.ts) for why one Eastern day isn't enough.
-    const dayBefore = localDay(new Date(this.now().getTime() - DAY_MS), ESPN_TIMEZONE);
+    const dayBefore = addIsoDays(today, -1);
     // Zero follows (team or whole-league) → fetch the default slate instead of nothing (#764).
     const competitionKeys =
       follows.length > 0
@@ -962,9 +969,9 @@ export class SportsService {
     competitionKey: string,
     state: DegradeState
   ): Promise<GameSummary[]> {
-    const now = this.now();
-    const day = localDay(new Date(now.getTime() - 3 * DAY_MS), ESPN_TIMEZONE);
-    const endDay = localDay(new Date(now.getTime() + 4 * DAY_MS), ESPN_TIMEZONE);
+    const today = this.today();
+    const day = addIsoDays(today, -3);
+    const endDay = addIsoDays(today, 4);
     const games = await this.scoreboardForDays(competitionKey, day, endDay, state);
     return [...games].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }
@@ -992,7 +999,7 @@ export class SportsService {
       const follows = rawFollows.filter((f) => catalogEntry(f.competitionKey) !== undefined);
       const state: DegradeState = { degraded: false };
       const today = this.today();
-      const dayBefore = localDay(new Date(now.getTime() - DAY_MS), ESPN_TIMEZONE);
+      const dayBefore = addIsoDays(today, -1);
       const competitionKeys =
         follows.length > 0
           ? [...new Set(follows.map((f) => f.competitionKey))]

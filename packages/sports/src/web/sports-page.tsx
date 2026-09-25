@@ -188,7 +188,7 @@ export function SportsPage() {
           Without this the page silently reads as a quiet day. */}
       {data.degraded ? (
         <p className="sp-lede" role="status">
-          Some scores and stories could not be updated just now, so parts of this page may be
+          Some sports information could not be updated just now, so parts of this page may be
           missing.
         </p>
       ) : null}

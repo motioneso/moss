@@ -172,7 +172,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.refresh_trouble_notice",
       description:
-        "When Moss cannot get fresh scores, standings or stories from ESPN, the Sports page says some of it could not be updated and parts may be missing, instead of looking like a quiet day."
+        "When Moss cannot refresh scores, standings or stories, the main Sports page says some sports information could not be updated, instead of looking like a quiet day. The standings view shows no such notice."
     },
     {
       id: "sports.remembered_standings",
