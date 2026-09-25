@@ -1,13 +1,12 @@
 # Messaging channels: Moss reaches Ben's phone, and he can reach it back
 
-**Status:** draft, third pass 2026-09-15 after Ben's second read. Not approved.
-**Issue:** #2387. This spec is up for review in PR #2505.
+**Status:** draft, third pass 2026-09-15 after Ben's second read. Settings screen mockups
+agreed with Ben on 2026-09-25 (section 9).
+**Issue:** #2387. The spec merged in PR #2505.
 
-**Blocked before any build starts.** Ben draws the mockups for the two settings screens, in his
-own session. Section 9 says what each screen must do. Moss requires agreed mockups before a
-module is built (DEVELOPMENT_STANDARDS, Design System Guardrails), so this is a gate and not
-follow-up work. Do not move issue #2387 to ready-for-agent until the mockups exist, even after
-this spec merges.
+**Design gate met.** Moss requires agreed mockups before a module is built
+(DEVELOPMENT_STANDARDS, Design System Guardrails). Section 9 now carries the agreed mockups for
+both settings screens.
 **Author:** Claude, from the 2026-09-13 comparison of Moss with Octop.
 
 ## 1. Context
@@ -40,8 +39,8 @@ here so they are not argued again.
   rewrite.
 - Outbound ships alone first, as its own complete thing. Slice 1 (section 8) puts
   notifications on his phone with no reply path at all.
-- The settings screens are Ben's to design. Section 9 describes what they must do and stays
-  flagged as awaiting his mockups.
+- The settings screens are Ben's to design. Section 9 describes what they must do and carries
+  the mockups he agreed on 2026-09-25.
 
 Three more points were settled later on 2026-09-15, after Ben read the second pass.
 
@@ -712,8 +711,7 @@ also refuses any update whose chat type is not private, so the settings are belt
 
 ## 8. Slices
 
-Neither slice starts until Ben's mockups for the two settings screens exist (section 9).
-Slice 1 builds both screens, so the design gate lands on the first slice, not the second.
+Slice 1 builds both settings screens from the agreed mockups in section 9.
 
 Outbound ships alone first. Ben called that ideal on 2026-09-15, and slice 1 is a complete,
 shippable thing with no reply path at all.
@@ -732,14 +730,23 @@ shippable thing with no reply path at all.
 Each slice is its own pull request series with its own live-path proof. Slice 1 proves
 through receipt; slice 2 proves through an approval.
 
-## 9. Settings screens (mockups are an open item)
+## 9. Settings screens
 
-Ben's rule stands. No module is built before its screens are designed with him and the
-mockups sit in this spec. The screens below are described by what they must let him do, not
-drawn. Ben draws the mockups himself in a separate session (settled 2026-09-15); this
-section waits for them.
+Ben agreed these mockups on 2026-09-25. They are built from the live settings markup
+(`pane__card`, `set-row`, `fld`, `jds-*` primitives) and captured on the dark theme. The
+requirements under each screen still bind; the mockups show how each one reads.
 
-Admin screen, "Messaging bot" (admin scope).
+Admin screen, "Messaging bot" (admin scope). It sits in the admin settings under
+"AI & extensions", after "Instance modules".
+
+| State                                   | Mockup                                                        |
+| --------------------------------------- | ------------------------------------------------------------- |
+| Not connected (`Stopped, no token`)     | ![](assets/2026-09-14-messaging-channels/shot-a-none.jpg)     |
+| Token rejected on save                  | ![](assets/2026-09-14-messaging-channels/shot-a-rejected.jpg) |
+| Connected and listening                 | ![](assets/2026-09-14-messaging-channels/shot-a-ok.jpg)       |
+| Telegram unreachable                    | ![](assets/2026-09-14-messaging-channels/shot-a-down.jpg)     |
+| Another Moss process is listening       | ![](assets/2026-09-14-messaging-channels/shot-a-dup.jpg)      |
+| Disconnected, existing bindings waiting | ![](assets/2026-09-14-messaging-channels/shot-a-off.jpg)      |
 
 - Paste the bot token. On save, Moss checks it with `getMe` and shows "Connected as @name" or
   the real refusal ("Telegram rejected this token"). The token is never shown again.
@@ -754,7 +761,19 @@ Admin screen, "Messaging bot" (admin scope).
   "bot disconnected" until an admin reconnects the same bot. Connecting a different bot
   means users link again (5.8).
 
-User screen, "Messaging" under the user's own settings (user scope).
+User screen, "Messaging" under the user's own settings (user scope). It sits in the personal
+settings under "Connections", after "Integrations".
+
+| State                                  | Mockup                                                       |
+| -------------------------------------- | ------------------------------------------------------------ |
+| No bot connected yet                   | ![](assets/2026-09-14-messaging-channels/shot-u-nobot.jpg)   |
+| Bot connected, no phones linked        | ![](assets/2026-09-14-messaging-channels/shot-u-none.jpg)    |
+| Linking, waiting for the message       | ![](assets/2026-09-14-messaging-channels/shot-u-linking.jpg) |
+| Link code expired                      | ![](assets/2026-09-14-messaging-channels/shot-u-expired.jpg) |
+| Phones linked, one no longer reachable | ![](assets/2026-09-14-messaging-channels/shot-u-linked.jpg)  |
+
+Loading uses the existing settings pattern: a pane renders nothing until its query returns.
+The "Own bot: coming later" badge holds the place for the optional own-bot path (5.11).
 
 - "Link a phone" produces the code and the tap-to-open link, with a countdown and "make a new
   code". State reads "waiting for your message" until the binding lands, then the row appears.
@@ -765,11 +784,10 @@ User screen, "Messaging" under the user's own settings (user scope).
   first", and for the single-user case links straight to the admin screen.
 - Not in version one, but the layout should leave room for it: an optional "use my own bot"
   path where the user pastes their own token instead of using the instance bot (5.11).
-- Loading, empty, error and broken states are named at mockup time, per the standards.
 
-Design system. `jds-*` primitives only, tokens for colour, no module-local colour, run the
-invented-class audit before the pull request. Which primitives each screen is built from is
-decided in the mockup discussion, not here.
+Design system. `@moss/ui` and `@moss/settings-ui` primitives only (`Group`, `Row`, `Field`,
+`Note`, `Switch`, `Badge`, `Indicator`, `EmptyState`, `Button`), tokens for colour, no
+module-local colour. Run the invented-class audit before the pull request.
 
 ## 10. Decisions Ben is likely to want to argue with
 
