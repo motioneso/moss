@@ -1114,8 +1114,12 @@ describe("SportsService.today() timezone handling (#761)", () => {
     });
     const service = new SportsService({ ...makeDeps({ source }), now: () => LATE_EVENING_ET });
     await service.getOverview(userA);
-    expect(seenRanges).toEqual([{ day: "2026-07-03", endDay: ET_DATE }]);
-    expect(seenRanges[0]?.endDay).not.toBe(UTC_DATE);
+    // One request per Eastern day (#2679: ESPN rejects multi-day ranges), never a range.
+    expect(seenRanges).toEqual([
+      { day: "2026-07-03", endDay: undefined },
+      { day: ET_DATE, endDay: undefined }
+    ]);
+    expect(seenRanges.map((r) => r.day)).not.toContain(UTC_DATE);
   });
 
   it("uses the Eastern calendar date for the briefing's followed-facts lookup too", async () => {
@@ -1131,7 +1135,10 @@ describe("SportsService.today() timezone handling (#761)", () => {
       fakeScopedDb,
       userA.actorUserId
     );
-    expect(seenRanges).toEqual([{ day: "2026-07-03", endDay: ET_DATE }]);
+    expect(seenRanges).toEqual([
+      { day: "2026-07-03", endDay: undefined },
+      { day: ET_DATE, endDay: undefined }
+    ]);
     expect(facts.length).toBeGreaterThan(0);
     expect(evidence.games.length).toBeGreaterThan(0);
   });
@@ -1147,7 +1154,10 @@ describe("SportsService.today() timezone handling (#761)", () => {
     });
     const service = new SportsService(makeDeps({ source }));
     await service.getOverview(userA);
-    expect(seenRanges).toEqual([{ day: "2026-06-30", endDay: TODAY }]);
+    expect(seenRanges).toEqual([
+      { day: "2026-06-30", endDay: undefined },
+      { day: TODAY, endDay: undefined }
+    ]);
   });
 });
 

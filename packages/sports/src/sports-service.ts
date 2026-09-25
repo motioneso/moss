@@ -192,6 +192,20 @@ const ESPN_TIMEZONE = "America/New_York";
 
 const DAY_MS = 86_400_000;
 
+// ESPN rejects multi-day `dates=` ranges (#2679), so each window day is its own request. This caps
+// how many of one window's day requests are in flight at once.
+const SCOREBOARD_DAY_CONCURRENCY = 4;
+
+/** Every ISO calendar day from `from` to `to` inclusive. Pure date arithmetic, so DST-safe. */
+export function isoDaysInclusive(from: IsoDate, to: IsoDate): IsoDate[] {
+  const days: IsoDate[] = [];
+  const end = Date.parse(`${to}T00:00:00Z`);
+  for (let t = Date.parse(`${from}T00:00:00Z`); t <= end; t += DAY_MS) {
+    days.push(new Date(t).toISOString().slice(0, 10) as IsoDate);
+  }
+  return days;
+}
+
 // The overview scoreboard is fetched as yesterday..today (Eastern): a Pacific user's evening
 // crosses ESPN's midnight at 9 PM local, after which "today" alone returns tomorrow's slate
 // while tonight's live/final games sit under the previous ESPN day (#761's other edge). The
@@ -415,8 +429,6 @@ export class SportsService {
     const state: DegradeState = { degraded: coverage.degraded };
     const today = this.today();
     // Scoreboard window start — see currentTeamGame (followed-card.ts) for why one Eastern day isn't enough.
-    // ESPN accepts `dates=YYYYMMDD-YYYYMMDD`, so yesterday..today is a single fetch (and a
-    // single cache entry) rather than two.
     const dayBefore = localDay(new Date(this.now().getTime() - DAY_MS), ESPN_TIMEZONE);
     // Zero follows (team or whole-league) → fetch the default slate instead of nothing (#764).
     const competitionKeys =
@@ -475,12 +487,7 @@ export class SportsService {
             };
           }
           const [scoreboard, standingsTable, teams] = await Promise.all([
-            this.cached<GameSummary[]>(
-              "scoreboard",
-              { competitionKey: key, day: dayBefore, endDay: today },
-              [],
-              state
-            ),
+            this.scoreboardForDays(key, dayBefore, today, state),
             this.cached<StandingsTable>(
               "standings",
               { competitionKey: key },
@@ -958,12 +965,7 @@ export class SportsService {
     const now = this.now();
     const day = localDay(new Date(now.getTime() - 3 * DAY_MS), ESPN_TIMEZONE);
     const endDay = localDay(new Date(now.getTime() + 4 * DAY_MS), ESPN_TIMEZONE);
-    const games = await this.cached<GameSummary[]>(
-      "scoreboard",
-      { competitionKey, day, endDay },
-      [],
-      state
-    );
+    const games = await this.scoreboardForDays(competitionKey, day, endDay, state);
     return [...games].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }
 
@@ -1009,12 +1011,7 @@ export class SportsService {
             return;
           }
           const [board, teams, headlines] = await Promise.all([
-            this.cached<GameSummary[]>(
-              "scoreboard",
-              { competitionKey, day: dayBefore, endDay: today },
-              [],
-              state
-            ),
+            this.scoreboardForDays(competitionKey, dayBefore, today, state),
             this.teamsFor(competitionKey, state),
             this.cached<SourceHeadline[]>("headlines", { competitionKey }, [], state)
           ]);
@@ -1187,6 +1184,46 @@ export class SportsService {
     const result = await this.datasetClient.getDataset<T>(datasetKey, params, { fallback });
     if (result.degraded) state.degraded = true;
     return result.data;
+  }
+
+  /**
+   * Scoreboard games for every Eastern day in `fromDay`..`toDay`, one dataset read per day.
+   * ESPN answers `dates=YYYYMMDD-YYYYMMDD` with HTTP 400 "Failed to get events endpoint"
+   * (verified live 2026-09-24, #2679) while single days still work. Each day is its own cache
+   * entry, and any day served from the fallback marks `state` degraded. Games are deduped by id
+   * and returned in day order. Never throws.
+   */
+  private async scoreboardForDays(
+    competitionKey: string,
+    fromDay: IsoDate,
+    toDay: IsoDate,
+    state: DegradeState
+  ): Promise<GameSummary[]> {
+    const days = isoDaysInclusive(fromDay, toDay);
+    const perDay: GameSummary[][] = new Array(days.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < days.length) {
+        const index = next++;
+        perDay[index] = await this.cached<GameSummary[]>(
+          "scoreboard",
+          { competitionKey, day: days[index] },
+          [],
+          state
+        );
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(SCOREBOARD_DAY_CONCURRENCY, days.length) }, worker)
+    );
+    const seen = new Set<string>();
+    const games: GameSummary[] = [];
+    for (const game of perDay.flat()) {
+      if (game.id !== "" && seen.has(game.id)) continue;
+      if (game.id !== "") seen.add(game.id);
+      games.push(game);
+    }
+    return games;
   }
 
   private async teamsFor(

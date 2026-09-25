@@ -192,6 +192,13 @@ function render(overview: SportsOverviewResponse): string {
 }
 
 describe("SportsPage", () => {
+  it("says parts of the page may be missing when the source fetch degraded (#2679)", () => {
+    expect(render(makeOverview({ degraded: true }))).toContain(
+      "Some scores and stories could not be updated just now"
+    );
+    expect(render(makeOverview())).not.toContain("could not be updated");
+  });
+
   it("renders the broadsheet masthead", () => {
     const html = render(makeOverview());
     // Masthead pared to a section-nav + live-event line — the nameplate/brand strip was cut

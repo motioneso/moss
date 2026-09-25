@@ -184,6 +184,15 @@ export function SportsPage() {
 
       <AmbiguousFollowNotice follows={data.ambiguousFollows} />
 
+      {/* A source fetch failed and the page is built from cached or empty fallbacks (#2679).
+          Without this the page silently reads as a quiet day. */}
+      {data.degraded ? (
+        <p className="sp-lede" role="status">
+          Some scores and stories could not be updated just now, so parts of this page may be
+          missing.
+        </p>
+      ) : null}
+
       {hasFollows ? (
         <>
           {/* Front-page lead (mrbalm9x, Ben 2026-07-07): the biggest thing on the page leads,
