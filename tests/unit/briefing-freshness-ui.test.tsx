@@ -117,4 +117,21 @@ describe("delayedEmailSource", () => {
     };
     expect(delayedEmailSource(realtime)).toBeNull();
   });
+
+  it("ignores invalid capture and email timestamps", () => {
+    const invalidCapture: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: "not-a-date",
+      sources: [
+        { source: "email", freshnessKind: "connector_sync", asOf: "2026-06-28T08:00:00.000Z" }
+      ]
+    };
+    const invalidEmailTime: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [{ source: "email", freshnessKind: "connector_sync", asOf: "not-a-date" }]
+    };
+    expect(delayedEmailSource(invalidCapture)).toBeNull();
+    expect(delayedEmailSource(invalidEmailTime)).toBeNull();
+  });
 });

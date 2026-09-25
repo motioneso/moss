@@ -247,7 +247,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
               {failed ? (
                 <>
                   {retryMutation.isError ? (
-                    <p className="brief-reader__retry-error" role="alert">
+                    <p className="brief-reader__retry-error" role="status">
                       The retry request couldn’t be confirmed. Your task-block choices are still
                       here; try again.
                     </p>
@@ -377,6 +377,12 @@ function ReportBody(props: {
   const freshness = parseBriefingFreshness(run.sourceMetadata);
   const delayedEmail = delayedEmailSource(freshness);
   const gaps = readGaps(run.sourceMetadata);
+  const dayPlanReadFailed = gaps.some(
+    (gap) => gap.source === "day_plan" && gap.reason === "tool_failed"
+  );
+  const noEveningPlan =
+    !dayPlanReadFailed &&
+    (run.structuredPayload.planContext === null || planContext?.eveningIntent === null);
   const news = readEditorial(run.sourceMetadata, "news", isNewsBriefingEvidence);
   const sports = readEditorial(run.sourceMetadata, "sports", isSportsBriefingEvidence);
 
@@ -392,9 +398,10 @@ function ReportBody(props: {
       </p>
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
       {headline.rest ? <BriefingProse summaryText={headline.rest} /> : null}
-      {planContext?.eveningIntent === null ? (
+      {noEveningPlan ? (
         <p className="brief-reader__plan-source">
-          No evening plan was saved. Today’s priorities come from task deadlines and your calendar.
+          No evening plan was available for this briefing. Moss used today’s available sources,
+          including tasks and calendar.
         </p>
       ) : null}
       {props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable" ? (

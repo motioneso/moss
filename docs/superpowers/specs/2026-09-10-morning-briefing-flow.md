@@ -56,8 +56,9 @@ contains pending edits. No draft-storage narration is added to the product copy.
 - Overlapping task times or calendar commitments prevent applying the plan. The conflict names the
   affected items and offers the prepared task times. Meetings, lunch, and travel stay in place.
 - A simulated save failure leaves Today unchanged and retains all review choices for retry.
-- With no evening plan, the report uses task deadlines and the calendar without claiming an
-  evening conversation occurred.
+- When no evening plan is available, the report names its available source context, including
+  tasks and calendar, without claiming those are the only sources or that an evening conversation
+  occurred.
 - With delayed email, a targeted notice identifies the last update and the possibility of unseen
   replies. Calendar and task information remain available. Refresh demonstrates recovery.
 - When the briefing is unavailable, the schedule and review remain usable; Try again demonstrates
@@ -80,8 +81,8 @@ Ben approved the desktop/phone proposal with “yes (thumbs up)” on 2026-09-25
 - An unavailable briefing affects the report body only; available calendar/task information and review remain reachable.
 - While retry is pending, keep the unavailable copy and disable Try again. On success, restore the report and retain pending block choices.
 - A missing/loading/failed day plan keeps its existing status treatment. A valid zero-block plan remains a valid empty schedule; show any available calendar events and tasks and keep the reader's adjustment/review actions.
-- Delayed email names its last update and possible unseen replies, while saying calendar and task times are current. Refresh targets email freshness.
-- With no evening plan, use task deadlines and calendar facts as the priority source and do not imply an evening conversation happened.
+- Delayed email names its last update and possible unseen replies; calendar and task details remain available. Refresh targets email freshness.
+- When no evening plan is available for this briefing, say: “No evening plan was available for this briefing. Moss used today’s available sources, including tasks and calendar.” Do not imply these are the only sources or that an evening conversation happened.
 
 **Refresh implementation prerequisite:** The approved Refresh email CTA remains part of the design. Do not wire a dead control or treat an async enqueue as a completed refresh. The current Google sync refreshes calendar and email together, while IMAP has no manual refresh route or durable job-bound completion status. Implement the owner-scoped Google/IMAP refresh and completion contract, then trigger and poll one new briefing run after success or partial completion, under [task #2709](https://github.com/motioneso/moss/issues/2709). This prerequisite does not change the approved CTA or its visual treatment.
 

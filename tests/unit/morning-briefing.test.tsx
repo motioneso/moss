@@ -89,7 +89,47 @@ describe("MorningBriefingReader report", () => {
     expect(html).not.toContain("Earlier reports");
   });
 
-  it("attributes priorities to task deadlines and calendar without evening intent", async () => {
+  it("explains the source context when no evening plan is available", async () => {
+    const run = fullRun();
+    const noPlan: BriefingRunDto = {
+      ...run,
+      structuredPayload: {
+        ...run.structuredPayload,
+        planContext: null
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noPlan)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("No evening plan was available for this briefing.");
+    expect(html).toContain("Moss used today’s available sources, including tasks and calendar.");
+  });
+
+  it("does not attribute missing plans to an absent payload or failed plan read", async () => {
+    const run = fullRun();
+    const payloadWithoutContext = { ...run.structuredPayload };
+    delete payloadWithoutContext.planContext;
+    const legacyRun: BriefingRunDto = { ...run, structuredPayload: payloadWithoutContext };
+    const failedPlanRead: BriefingRunDto = {
+      ...run,
+      sourceMetadata: {
+        ...run.sourceMetadata,
+        gaps: [{ source: "day_plan", reason: "tool_failed" }]
+      },
+      structuredPayload: { ...run.structuredPayload, planContext: null }
+    };
+
+    for (const candidate of [legacyRun, failedPlanRead]) {
+      const client = seedClient([
+        [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(candidate)]
+      ]);
+      const html = await renderReader(client);
+      expect(html).not.toContain("No evening plan was available for this briefing.");
+    }
+  });
+
+  it("explains when the saved plan has no evening intent", async () => {
     const run = fullRun();
     const noEveningIntent: BriefingRunDto = {
       ...run,
@@ -102,8 +142,7 @@ describe("MorningBriefingReader report", () => {
       [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noEveningIntent)]
     ]);
     const html = await renderReader(client);
-    expect(html).toContain("No evening plan was saved.");
-    expect(html).toContain("priorities come from task deadlines and your calendar");
+    expect(html).toContain("No evening plan was available for this briefing.");
   });
 
   it("names delayed email separately from the other briefing sources", async () => {
@@ -445,9 +484,9 @@ describe("MorningBriefingReader retry", () => {
     });
     await flushQueries();
 
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      "The retry request couldn’t be confirmed"
-    );
+    expect(
+      document.querySelector('.brief-reader__retry-error[role="status"]')?.textContent
+    ).toContain("The retry request couldn’t be confirmed");
     expect(document.body.innerHTML).toContain("Review proposed blocks");
     expect(document.body.innerHTML).toContain("Accept all time blocks");
     expect(retry!.disabled).toBe(false);
