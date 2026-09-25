@@ -8,6 +8,9 @@
 name: cli-tools-manifest
 
 on:
+  # TEMPORARY for the live proof; removed before merge.
+  push:
+    branches: [feat/2689-cli-tools-manifest]
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
