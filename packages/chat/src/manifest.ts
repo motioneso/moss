@@ -332,5 +332,17 @@ export const chatModuleManifest = {
       outputSchema: chatSetResponseStyleOutputSchema,
       execute: chatSetResponseStyleExecute
     }
+  ],
+  features: [
+    {
+      id: "chat.response_styles",
+      description:
+        "Configure assistant brevity (concise, balanced, or detailed) with sample response previews."
+    },
+    {
+      id: "chat.thread_history",
+      description:
+        "Review, switch between, and clear prior conversation threads ordered by recent activity."
+    }
   ]
 } satisfies MossModuleManifest;

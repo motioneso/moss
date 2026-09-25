@@ -270,6 +270,7 @@ export const memoryModuleManifest: MossModuleManifest = {
   features: [
     {
       id: "memory.associative_graph",
+<<<<<<< ours
       description:
         "Keep what Moss learns about you as a graph of people, things and facts, and recall the " +
         "relevant parts when answering. In Memory settings you can pin an important fact or " +
@@ -286,6 +287,13 @@ export const memoryModuleManifest: MossModuleManifest = {
       description:
         "Read your linked notes into Moss by splitting each note into passages and keeping them " +
         "with an embedding model, so you can search your notes by meaning."
+=======
+      description: "Maintain an associative graph of user facts, preferences, and relationships."
+    },
+    {
+      id: "memory.candidate_review",
+      description: "Review and approve candidate memories discovered during conversations."
+>>>>>>> theirs
     }
   ]
 };
