@@ -1,7 +1,6 @@
 # Messaging channels: Moss reaches Ben's phone, and he can reach it back
 
-**Status:** draft, third pass 2026-09-15 after Ben's second read. Settings screen mockups
-agreed with Ben on 2026-09-25 (section 9).
+**Status:** approved by Ben on 2026-09-25, with the settings screen mockups in section 9.
 **Issue:** #2387. The spec merged in PR #2505.
 
 **Design gate met.** Moss requires agreed mockups before a module is built
