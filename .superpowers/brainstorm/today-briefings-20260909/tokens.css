@@ -1,0 +1,11 @@
+/* Standalone design exploration. Bone/forest/gold derive from the agreed Moss direction. */
+@font-face{font-family:Archivo;src:url('archivo-black.ttf') format('truetype');font-weight:900;font-display:swap}
+:root{
+  --bone:#f2eee4;--paper:var(--bone);--surface:#faf8f1;--forest:#294b39;--forest-deep:#1d382b;--forest-hover:#345942;
+  --gold:#c2872b;--gold-light:#e9bd69;--ink:#282c25;--muted:#676c60;--line:#c6cbbc;--line-strong:#9ba591;
+  --sage:#dce3d6;--sage-light:#e7ebdf;--canyon:#85503c;--steel:#47666b;--amber:#815514;--amber-bg:#f0e1bf;
+  --dialog-backdrop:rgb(20 35 26 / .42);--shadow:0 12px 44px rgb(18 31 24 / .18);--focus:#805316;
+  --font-display:Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif;--font-sans:'Helvetica Neue',Helvetica,Arial,sans-serif;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;
+  --radius:4px;--row-height:76px;--nav-width:210px;--picker-height:88px;
+}

@@ -27,7 +27,7 @@ regress, and unfinished sibling regions remain explicit guards rather than mocku
 
 2.1 The mockup images under `docs/superpowers/specs/assets/2026-09-10-*/` on origin/main
 (32 PNG files, listed in section 4). A visible difference from the image is a defect.
-2.2 The approved study that produced them, `/home/ben/Jarv1s/.superpowers/brainstorm/today-briefings-20260909/`
+2.2 The approved study that produced them, `~/Jarv1s/.superpowers/brainstorm/today-briefings-20260909/`
 (`study.css` 416 lines, `morning-briefing.css` 81, `evening-plan.css` 163, `tokens.css` 11).
 It supplies exact measurements (sizes, gaps, radii, weights, colours) when the image is
 ambiguous. It is a reference for numbers, never copied wholesale into the product.
