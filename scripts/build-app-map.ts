@@ -46,7 +46,6 @@ export function buildAppMap(input: BuildAppMapInput) {
         scope: "user" as const
       }))
   );
-
   const settings = input.manifests.flatMap((manifest) =>
     (manifest.settings ?? [])
       .filter((surface) => !coreSettingIds.has(surface.id) && !coreSettingPaths.has(surface.path))

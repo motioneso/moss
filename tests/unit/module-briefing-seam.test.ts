@@ -214,15 +214,16 @@ describe("briefings manifest refresh and history entries (T13B)", () => {
     expect(codes).toContain("briefing_run_not_available");
   });
 
-  it("points every briefings remediation at the module's own entry or the AI provider settings", async () => {
+  it("points every briefings remediation at Today or the AI provider settings", async () => {
     const { briefingsModuleManifest } = await import("@moss/briefings");
     const paths = (briefingsModuleManifest.features ?? []).flatMap((feature) =>
       (feature.remediations ?? []).map((remediation) => remediation.path)
     );
     expect(paths.length).toBeGreaterThan(0);
+    expect(paths).toContain("/today");
     expect(paths).toContain("/settings?section=aiproviders");
     for (const path of paths) {
-      expect(["/briefings", "/settings?section=aiproviders"]).toContain(path);
+      expect(["/today", "/settings?section=aiproviders"]).toContain(path);
     }
   });
 });

@@ -46,6 +46,7 @@ This plan aligns all App Map screen and setting URLs with real web routes in `ap
    - Update `ai.user-settings` path to `"/settings?section=assistant"`.
 
 #### Verification:
+
 Run `pnpm build:app-map` and verify with a node snippet that all module settings paths in `dist/app-map.json` start with `/settings?section=`.
 
 ---
@@ -68,7 +69,9 @@ Run `pnpm build:app-map` and verify with a node snippet that all module settings
    - Remove `admin-settings` (`path: "/settings/admin"`) from `settingsModuleManifest.settings` (since admin sections are individually declared in `CORE_APP_SETTINGS`: `people`, `aiproviders`, `instmods`, `audit`, `oversight`, `host`).
 
 #### Verification:
+
 Run `pnpm build:app-map` and verify:
+
 - Screens count matches actual top-level web routes (`today`, `notifications`, `settings`, `tasks`, `calendar`, `wellness`, `sports`, `news`, `workshop`).
 - Zero duplicate screen or setting IDs.
 
@@ -122,6 +125,7 @@ Run `pnpm build:app-map` and verify:
      - `chat.export`: Exporting chat threads and turns to Markdown or JSON.
 
 #### Verification:
+
 Run `pnpm build:app-map` and verify `features.length >= 35`, with matching errors and remediations.
 
 ---
@@ -144,6 +148,7 @@ Run `pnpm build:app-map` and verify `features.length >= 35`, with matching error
    - Verify `pnpm verify:static` runs `pnpm build:app-map` and passes cleanly.
 
 #### Verification:
+
 Run `pnpm test:unit tests/unit/app-map-integrity.test.ts`.
 
 ---

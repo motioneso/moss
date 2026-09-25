@@ -18,13 +18,38 @@ describe("app-map integrity and truthfulness", () => {
   it("every app map screen has a truthful route in webRoutes", () => {
     const validPaths = new Set([
       ...webRoutes.map((r) => r.path),
-      "/workshop" // contributed via MODULE_WEB_ROUTES in virtual:moss-module-web
+      // The workshop screen is contributed at runtime via MODULE_WEB_ROUTES in the
+      // virtual:moss-module-web bundle, so the static route metadata this test can
+      // import never lists it. Accept it explicitly instead of failing a real screen.
+      "/workshop"
     ]);
 
     for (const screen of appMap.screens) {
       expect(
         validPaths.has(screen.path) || screen.path.startsWith("/m/"),
         `Screen "${screen.id}" has invalid path "${screen.path}"`
+      ).toBe(true);
+    }
+  });
+
+  it("every app map remediation points at a truthful route", () => {
+    const validPaths = new Set([
+      ...webRoutes.map((r) => r.path),
+      // Same runtime-contributed workshop route as above: invisible to this test's
+      // static import but reachable in the app, so an error link there stays valid.
+      "/workshop"
+    ]);
+    const validSectionPattern = /^\/settings\?section=([a-z0-9_-]+)(&module=([a-z0-9_-]+))?$/;
+
+    expect(appMap.remediations.length).toBeGreaterThan(0);
+    for (const remediation of appMap.remediations) {
+      const path = remediation.path ?? "";
+      const isWorkshopPath = path === "/workshop" || path.startsWith("/workshop/");
+      const isScreenPath = validPaths.has(path) || path.startsWith("/m/") || isWorkshopPath;
+      const isSettingsPath = validSectionPattern.test(path);
+      expect(
+        isScreenPath || isSettingsPath,
+        `Remediation "${remediation.id}" has invalid path "${remediation.path}"`
       ).toBe(true);
     }
   });
