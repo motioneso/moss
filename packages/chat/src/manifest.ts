@@ -136,6 +136,29 @@ export const chatModuleManifest = {
       ]
     },
     {
+      id: "chat.acp_per_user_mode_required",
+      description:
+        "Explains how to fix chat when the host runs the chat runner without per-user mode.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat.acp_per_user_mode_required",
+          class: "prerequisite",
+          remediationRef: "chat.acp_per_user_mode_required.host",
+          description:
+            "The chat runner refuses to start an agent because the host runs without per-user mode."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.acp_per_user_mode_required.host",
+          description:
+            "An administrator turns on per-user mode in the host environment file and recreates the app container; no Settings control changes this.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
       id: "chat.acp_queued_sends",
       description: "A second message during an active answer is queued and shown in the composer.",
       featureFlagId: "chat.module"
