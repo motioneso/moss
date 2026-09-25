@@ -45,6 +45,18 @@ On current main the two Claude copies differ. Background runs Claude Code 2.1.18
 while chat runs 2.1.257 bundled inside `claude-agent-sdk` 0.3.257. Codex is 0.144.5 in the recipe
 and 0.153.4 under `codex-acp`. That split is why chat kept working while background AI broke.
 
+Both chat adapters can run an external CLI in place of their bundled copy (checked against
+`claude-agent-acp` 0.75.1 and `codex-acp` 1.10.0):
+
+- `claude-agent-acp` passes `process.env.CLAUDE_CODE_EXECUTABLE` to the SDK as
+  `pathToClaudeCodeExecutable` and only resolves the bundled native binary when the variable is
+  unset (`claudeCliPath()` in `dist/acp-agent.js`). `packages/ai/src/adapters/sanitized-env.ts`
+  already sets it for the scripted UAT provider.
+- `codex-acp` documents `CODEX_PATH` as "run a specific Codex executable instead of the bundled
+  package dependency".
+- OpenCode has no separate adapter. Chat runs `opencode acp` from the same `opencode-ai` package
+  (`packages/cli-runner/src/acp-host.ts`), so it is already one copy.
+
 Relevant existing machinery:
 
 - The catalog is a supply-chain allowlist: exact versions, committed sha512 lockfiles,
@@ -86,27 +98,51 @@ Chat adapters are image dependencies today, so an instance can neither update th
 back. They become recipe entries installed onto the tools volume like the CLIs. The runner resolves
 the adapter from the tools volume and falls back to the image copy when none is installed.
 
-The unit of update is a **provider toolset**, meaning a provider's CLI and its chat adapter
-together. For example, the Claude toolset is `@anthropic-ai/claude-code` plus
-`@agentclientprotocol/claude-agent-acp`. The two are promoted or held back together, so chat and
-background never drift apart again.
+### 3.3 One CLI copy per provider
 
-### 3.3 Each instance checks a new toolset before its users get it
+Chat and background run the same CLI binary. The runner launches each chat adapter with its
+executable override pointing at the tools volume CLI:
+
+| Provider | Override                 | Value                                               |
+| -------- | ------------------------ | --------------------------------------------------- |
+| Claude   | `CLAUDE_CODE_EXECUTABLE` | the resolved `bin/claude` of the pinned CLI release |
+| Codex    | `CODEX_PATH`             | the resolved `bin/codex` of the pinned CLI release  |
+| OpenCode | none needed              | chat runs `opencode acp` from the CLI release       |
+
+- The bundled CLI inside the adapter package is never run while a tools volume CLI is installed.
+  The adapter's own install may still carry it, since `npm ci` pulls it as a dependency.
+- The value is the concrete release path, never the `current` symlink. A session keeps the binary it
+  started with even if `current` flips mid-session (section 6.5).
+- The override is set by the runner in the adapter's launch environment, alongside the existing
+  sanitized env. It is not a setting.
+- Fallback: with no tools volume CLI for the provider, the adapter runs its bundled copy, and the
+  card shows "Not installed" for the CLI as it does today.
+
+The unit of update is still a **provider toolset**, meaning a provider's CLI and its chat adapter
+together. For example, the Claude toolset is `@anthropic-ai/claude-code` plus
+`@agentclientprotocol/claude-agent-acp`. The two are promoted or held back together. With one CLI
+copy, drift between chat and background can no longer happen. The grouping now guards a different
+risk, which is an adapter release that expects CLI behaviour the paired CLI version lacks. Only the
+live check proves a given adapter and CLI pair work together.
+
+### 3.4 Each instance checks a new toolset before its users get it
 
 The central check proves the toolset installs and still accepts Moss's flags. It cannot prove this
 instance's sign-ins and models work with it. So each instance stages the new toolset beside the
 live one and runs a short live check with its own connection. It switches over only when the check
 passes. On a failure it keeps the old toolset and alerts the admins.
 
-### 3.4 Ben's answers (2026-09-24)
+### 3.5 Ben's answers (2026-09-24)
 
 - **Q1.** The question was whether to store a sign-in as a GitHub secret for a pre-merge live check.
   Ben answered that updates must work for every instance, and users must not have to update Moss to
   get new models. That answer drove 3.1 and 3.2. The pre-merge live check with GitHub secrets is
   dropped, because each instance's own check covers it.
-- **Q2.** New versions are taken the same day they are released, with no waiting period.
+- **Q2.** New versions are taken the same day they are released, with no waiting period. Section
+  4.3 proposes a 6-hour minimum release age against hijacked releases, which needs Ben's
+  confirmation.
 
-### 3.5 Other decisions
+### 3.6 Other decisions
 
 - Alerts go to instance admins as a push notification, a notice on the AI providers screen and an
   audit record. The result is also written where the daily health check (#2683) can read it, with
@@ -126,15 +162,17 @@ passes. On a failure it keeps the old toolset and alerts the admins.
 New workflow `.github/workflows/cli-tools-manifest.yml`, on `schedule` (every 6 hours) and
 `workflow_dispatch`.
 
-1. For each package in each toolset, read the newest stable version from the npm registry.
+1. For each package in each toolset, read the newest stable version from the npm registry whose
+   publish time is at least the minimum release age (section 4.3) in the past.
 2. If nothing is newer than the published manifest, exit.
 3. For each changed package, generate the lockfile with
    `npm install <pkg>@<version> --package-lock-only --ignore-scripts`. Check that every entry
    carries sha512 and that the per-arch native package names still exist.
-4. Run the offline contract check (section 5.1) against the new versions.
-5. On a pass, write `cli-tools.json` and the lockfiles. Sign the manifest and upload everything to
+4. Verify provenance and checksums for every package in the new lockfile (section 4.3).
+5. Run the offline contract check (section 5.1) against the new versions.
+6. On a pass, write `cli-tools.json` and the lockfiles. Sign the manifest and upload everything to
    the rolling GitHub release `cli-tools`. The workflow publishes; it opens no PR.
-6. On a failure, publish nothing for that toolset. Open or update one GitHub issue titled
+7. On a failure, publish nothing for that toolset. Open or update one GitHub issue titled
    "CLI tool update blocked: <package> <version>" with the failing step. Other toolsets still
    publish.
 
@@ -192,6 +230,51 @@ Manifest shape:
 - The fetch URL is fixed in code, with no setting (no hand-edited settings, per Ben's
   2026-09-01 ruling).
 
+### 4.3 Release trust checks (publisher)
+
+The publisher is the only place a new npm version enters the system, so it carries the checks
+against a hijacked or tampered release.
+
+**Provenance.** An npm provenance attestation proves a version was built and published by the
+maker's own CI pipeline from a named source repository, not uploaded from a stolen token on
+someone's laptop.
+
+- For each top-level package, and for each per-arch native package it pulls, the publisher runs
+  `npm audit signatures` against the generated lockfile. That checks both the registry signature
+  and any provenance attestation.
+- A package that carries provenance must have an attestation whose source repository matches the
+  expected one, recorded per package in the image catalog (for example `openai/codex` for
+  `@openai/codex`). A mismatch blocks the toolset.
+- A package that has carried provenance before and arrives without it blocks the toolset. That is
+  the signature of a release published outside the maker's pipeline.
+- A package that has never carried provenance is allowed, and the manifest records
+  `provenance: "none"` for it. At the time of writing `@openai/codex`, `claude-agent-acp` and
+  `codex-acp` carry provenance, while `@anthropic-ai/claude-code`, `@anthropic-ai/claude-agent-sdk`,
+  `@google/gemini-cli` and `opencode-ai` do not. For those packages the release age below is the
+  main guard.
+- The publisher records "has carried provenance" per package in the rolling release, so the rule
+  survives across runs. Once set, it is never cleared automatically.
+
+**Checksums.** Every lockfile entry must carry an `integrity` sha512. The publisher downloads each
+tarball, checks it against that sha512 and against the registry's `dist.integrity`, and fails on
+any mismatch. Instances then install with `npm ci`, which checks the same sha512 again, so the
+bytes an instance runs are the bytes the publisher checked.
+
+**Minimum release age.** The publisher only considers a version whose npm publish time is at least
+**6 hours** old.
+
+- Why a delay at all: hijacked npm releases are usually found and unpublished or deprecated within
+  hours. A short wait lets that happen before any instance fetches the version.
+- Why 6 hours: it matches the publish schedule and the instance fetch interval. A release still
+  reaches instances within about 12 to 18 hours, so a morning release usually lands the same day.
+  A longer wait would push most releases to the next day.
+- The tradeoff: this softens Q2's "same day, no waiting period". A release published late in the
+  evening lands the next day, and a model that needs a brand-new CLI waits up to 6 extra hours
+  before Moss can use it. Ben should confirm or change the 6 hours.
+- A version that is deprecated or unpublished during its wait is skipped.
+- A manual `workflow_dispatch` can skip the wait for one named package version, for an urgent fix.
+  Provenance and checksum checks still apply.
+
 ## 5. Checks
 
 ### 5.1 Offline contract check (manifest workflow)
@@ -243,8 +326,8 @@ Each call has a 90 second timeout. A timeout counts as a failure.
 3. An API job `ai.cli-version-check` runs the live check (section 5.2) against the candidate. Its
    payload is provider kind and candidate versions only. The runner gains a launch option that
    points one check session at the candidate releases. Only this job can set it.
-4. On a pass, the runner flips `current` for every package in the toolset, re-verifies hashes, and
-   deletes all but the new and the previous release.
+4. On a pass, the runner flips `current` for every package in the toolset and re-verifies hashes.
+   The flip affects new sessions only. Release cleanup follows section 6.5.
 5. On a failure, `current` stays on the old toolset. The candidate folders are kept for the next
    try, and the admins are alerted (section 7).
 6. A rejected candidate is retried once a day, when a newer manifest arrives, and when an admin
@@ -252,8 +335,8 @@ Each call has a 90 second timeout. A timeout counts as a failure.
 7. With no previous release (a fresh install), the candidate goes live straight away, because
    there is nothing to fall back to. A failed check still alerts.
 
-GC keeps the previous release until the next successful promote, so a manual rollback is always a
-single symlink flip per package.
+Cleanup keeps the previous release until the next successful promote, so a manual rollback is
+always a single symlink flip per package.
 
 At boot the runner re-hashes each live release against `state.json` before serving. A mismatch
 refuses that provider, as today.
@@ -282,6 +365,48 @@ The one-shot, structured and ACP engines match the provider's "version X or newe
 message, on stdout or stderr. They raise a named error, `cli_version_too_old`, with no model output
 attached. The user sees it in plain words (section 8.3). The error also queues an immediate
 `ai.cli-tools-refresh`.
+
+### 6.5 Sessions running at switch-over
+
+A switch applies to new sessions only. A running chat, persistent runtime, one-shot call, terminal
+login or check keeps the release it started on until it exits. Cleanup never deletes a release
+that a live process still uses.
+
+**Pinning at spawn.** Every launch path resolves `current` once, to the concrete
+`releases/<rand>` folder, and runs the binary by that path. No launch command goes through the
+`current` symlink. This covers the ACP adapter and its `CLAUDE_CODE_EXECUTABLE` / `CODEX_PATH`
+override (section 3.3), the persistent runtimes' `bash -lc` command, the one-shot and structured
+engines, terminal login and the live check.
+
+**Tracking use with leases.** The runner, the API and the worker share one container and one PID
+namespace, so a lease can name a process directly.
+
+- Before spawning, the launcher writes a lease file at
+  `providers/<p>/leases/<release>/<pid>-<starttime>` on the tools volume. `starttime` is field 22
+  of `/proc/<pid>/stat`, so a reused PID never matches an old lease.
+- One lease covers the whole process tree, because the tool's children run from the same release.
+  The lease names the top process the launcher spawned.
+- The launcher deletes its lease when that process exits. A crash can leave a lease behind, so
+  every reader treats a lease as live only while `/proc/<pid>/stat` exists with the same
+  `starttime`. A lease that fails that test is stale and is deleted on sight.
+- An adapter process pins both releases it uses, its own adapter release and the CLI release it
+  was pointed at, so it holds a lease in each.
+
+**Cleanup rule.** After a promote, and at every runner boot, the runner deletes a release folder
+only if all of these hold:
+
+1. It is not the live release that `current` points at.
+2. It is not the previous release, which is kept for rollback.
+3. It is not a staged candidate recorded in `state.json`.
+4. It has no live lease.
+
+A release that is skipped only because of a live lease is retried at the next promote, at the next
+boot, and on a daily sweep. Long-lived persistent runtimes are already reaped when idle, so an old
+release clears within a day in practice. A folder left behind wastes disk, while a folder deleted
+early would crash a running chat, so any doubt keeps the folder.
+
+**Boot re-hash.** The boot hash check (section 6.1) covers the live release. A release kept alive
+only by leases is not re-hashed, because nothing new starts from it.
 
 ## 7. Alerting
 
@@ -408,10 +533,10 @@ In the same PR as the screen change:
 - Check transcripts are deleted the same way one-shot transcripts are. No model output is logged,
   only pass or fail, the reason code and the attempt count.
 - Every candidate gets the same verify steps and the same self-update switch as a normal install.
-- Taking releases the same day (Q2) means a tampered npm release could reach instances before
-  anyone notices. The manifest publisher records each package's npm provenance attestation where
-  the publisher provides one, and blocks the toolset if a package that used to carry provenance
-  arrives without it.
+- Fast adoption means a tampered npm release could reach every instance within hours. The
+  publisher verifies registry signatures, provenance and tarball checksums, and waits a minimum
+  release age before taking a version (section 4.3).
+- A switch never deletes a release that a running process uses (section 6.5).
 - The signing code lives in `module-registry`. The runner and the publisher must reach it through
   a public export or a shared package, never by importing module internals (module isolation).
 
@@ -419,12 +544,12 @@ In the same PR as the screen change:
 
 Each slice is one PR with live proof on an isolated instance, per the Live-Path Gate.
 
-| Slice                                | Scope                                                                                                                                                                                                                        | Live proof                                                                                                                                                                                           |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. See the versions                  | Runner reports each toolset's versions. `cliTools` on the provider DTO. Card version line. `cli_version_too_old` recognised and shown. App map.                                                                              | Install Claude CLI 2.1.183 on an isolated instance with a model that needs a newer version. The error shows in plain words and the card shows 2.1.183.                                               |
-| 2. Chat adapters on the tools volume | Adapter packages become recipe entries. Runner resolves the adapter from the tools volume with fallback to the image copy. Toolset grouping.                                                                                 | On an isolated instance, chat runs through an adapter installed on the tools volume. Deleting it falls back to the image copy.                                                                       |
-| 3. Manifest publisher                | `cli-tools-manifest.yml`, lockfile generation, offline contract check, provenance check, signing, rolling release, issue on failure.                                                                                         | A manual dispatch publishes a signed manifest for a real newer version. A deliberately broken flag blocks that toolset and opens an issue.                                                           |
-| 4. Instance updater and gate         | `ai.cli-tools-refresh`, signature and sequence checks, candidate staging, `state.json`, `ai.cli-version-check`, live check, promote and hold back, image floor, push alert, audit record, card states, Check again, app map. | On an isolated instance, a working candidate promotes. A forced-failure candidate is held back while the old toolset keeps serving, and the admin gets a push. An old-sequence manifest is rejected. |
+| Slice                                | Scope                                                                                                                                                                                                                                                    | Live proof                                                                                                                                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. See the versions                  | Runner reports each toolset's versions. `cliTools` on the provider DTO. Card version line. `cli_version_too_old` recognised and shown. App map.                                                                                                          | Install Claude CLI 2.1.183 on an isolated instance with a model that needs a newer version. The error shows in plain words and the card shows 2.1.183.                                               |
+| 2. Chat adapters on the tools volume | Adapter packages become recipe entries. Runner resolves the adapter from the tools volume with fallback to the image copy. Adapters run the tools volume CLI through `CLAUDE_CODE_EXECUTABLE` / `CODEX_PATH`. Toolset grouping.                          | On an isolated instance, chat runs through an adapter installed on the tools volume. Deleting it falls back to the image copy.                                                                       |
+| 3. Manifest publisher                | `cli-tools-manifest.yml`, lockfile generation, provenance and checksum checks, minimum release age, offline contract check, signing, rolling release, issue on failure.                                                                                  | A manual dispatch publishes a signed manifest for a real newer version. A deliberately broken flag blocks that toolset and opens an issue.                                                           |
+| 4. Instance updater and gate         | `ai.cli-tools-refresh`, signature and sequence checks, candidate staging, `state.json`, `ai.cli-version-check`, live check, promote and hold back, release leases and cleanup, image floor, push alert, audit record, card states, Check again, app map. | On an isolated instance, a working candidate promotes. A forced-failure candidate is held back while the old toolset keeps serving, and the admin gets a push. An old-sequence manifest is rejected. |
 
 Slices 2 and 4 depend on 1. Slice 3 is independent. Codex checks for non-owner admins get simpler
 after #2687, but no slice depends on it.
