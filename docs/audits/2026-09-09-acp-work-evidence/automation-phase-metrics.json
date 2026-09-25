@@ -1,0 +1,50 @@
+{
+  "boundary": "2026-09-09T19:00:25.199Z",
+  "comparison": "Descriptive by prompt start; changing task mix and unequal exposure; not causal",
+  "phases": [
+    {
+      "phase": "Before user-confirmed routing fix",
+      "turns": 874,
+      "silent": 214,
+      "pure_silent": 208,
+      "by_provider": {
+        "@agentclientprotocol/codex-acp": {
+          "turns": 86,
+          "pure_silent": 14
+        },
+        "@agentclientprotocol/claude-agent-acp": {
+          "turns": 667,
+          "pure_silent": 134
+        },
+        "OpenCode": {
+          "turns": 119,
+          "pure_silent": 58
+        },
+        "antigravity-acp": {
+          "turns": 2,
+          "pure_silent": 2
+        }
+      }
+    },
+    {
+      "phase": "After user-confirmed routing fix",
+      "turns": 174,
+      "silent": 14,
+      "pure_silent": 14,
+      "by_provider": {
+        "@agentclientprotocol/codex-acp": {
+          "turns": 109,
+          "pure_silent": 12
+        },
+        "@agentclientprotocol/claude-agent-acp": {
+          "turns": 53,
+          "pure_silent": 1
+        },
+        "antigravity-acp": {
+          "turns": 12,
+          "pure_silent": 1
+        }
+      }
+    }
+  ]
+}

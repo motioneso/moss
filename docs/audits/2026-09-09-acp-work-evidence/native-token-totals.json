@@ -1,0 +1,580 @@
+{
+  "start_ms": 1788710100000.0,
+  "cutoff_ms": 1789016715981.0,
+  "providers": {
+    "@agentclientprotocol/claude-agent-acp": {
+      "sessions": 57,
+      "prompted_sessions": 39,
+      "native_matched_sessions": 40,
+      "native_usage": {
+        "input_tokens": 20718,
+        "output_tokens": 1724618,
+        "cache_read_input_tokens": 388318429,
+        "cache_creation_input_tokens": 20651392
+      },
+      "acp_usage": {
+        "inputTokens": 19850,
+        "outputTokens": 1652747,
+        "cachedReadTokens": 358598979,
+        "cachedWriteTokens": 19474526,
+        "totalTokens": 379746102
+      }
+    },
+    "@agentclientprotocol/codex-acp": {
+      "sessions": 24,
+      "prompted_sessions": 20,
+      "native_matched_sessions": 20,
+      "native_usage": {
+        "input_tokens": 469158262,
+        "cached_input_tokens": 453798144,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 863743,
+        "reasoning_output_tokens": 346832,
+        "total_tokens": 470022005
+      },
+      "acp_usage": {
+        "totalTokens": 17252088,
+        "inputTokens": 734684,
+        "cachedReadTokens": 16465408,
+        "outputTokens": 51996,
+        "thoughtTokens": 27073
+      }
+    },
+    "OpenCode": {
+      "sessions": 4,
+      "prompted_sessions": 2,
+      "native_matched_sessions": 2,
+      "native_usage": {
+        "total": 258038105,
+        "input": 7021814,
+        "output": 172620,
+        "reasoning": 116896,
+        "cache_read": 250726775,
+        "cache_write": 0
+      },
+      "acp_usage": {
+        "inputTokens": 2351014,
+        "outputTokens": 8598,
+        "totalTokens": 23577112,
+        "thoughtTokens": 13781,
+        "cachedReadTokens": 21203719
+      }
+    },
+    "antigravity-acp": {
+      "sessions": 6,
+      "prompted_sessions": 3,
+      "native_matched_sessions": 0,
+      "native_usage": {},
+      "acp_usage": {}
+    },
+    "unknown": {
+      "sessions": 3,
+      "prompted_sessions": 0,
+      "native_matched_sessions": 0,
+      "native_usage": {},
+      "acp_usage": {}
+    }
+  },
+  "silent_usage_direct_turn_windows": {
+    "@agentclientprotocol/claude-agent-acp": {
+      "silent_turns": 138,
+      "acp_tokens": 14711636,
+      "native_tokens": 14804845,
+      "pure_silent_turns": 135,
+      "pure_silent_acp_tokens": 13940814,
+      "pure_silent_native_tokens": 14034023
+    },
+    "@agentclientprotocol/codex-acp": {
+      "silent_turns": 27,
+      "acp_tokens": 2073585,
+      "native_tokens": 2092460,
+      "pure_silent_turns": 26,
+      "pure_silent_acp_tokens": 2054542,
+      "pure_silent_native_tokens": 2054542
+    },
+    "OpenCode": {
+      "silent_turns": 60,
+      "acp_tokens": 9815063,
+      "native_tokens": 10949897,
+      "pure_silent_turns": 58,
+      "pure_silent_acp_tokens": 9069678,
+      "pure_silent_native_tokens": 9069678
+    },
+    "antigravity-acp": {
+      "silent_turns": 3,
+      "acp_tokens": 0,
+      "native_tokens": 0,
+      "pure_silent_turns": 3,
+      "pure_silent_acp_tokens": 0,
+      "pure_silent_native_tokens": 0
+    }
+  },
+  "final_totals": {
+    "direct": {
+      "Claude": 410715157,
+      "Codex": 470022005,
+      "OpenCode": 258038105
+    },
+    "descendants": {
+      "Claude": 51631833,
+      "Codex": 7728370,
+      "OpenCode": 0
+    },
+    "combined": {
+      "Claude": 462346990,
+      "Codex": 477750375,
+      "OpenCode": 258038105
+    },
+    "direct_all": 1138775267,
+    "descendants_all": 59360203,
+    "combined_all": 1198135470,
+    "Gemini": null
+  },
+  "fingerprint_time_utc": "2026-09-10T05:14:04.478350+00:00",
+  "native_input_fingerprints": [
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s--claude-worktrees-build-acp-slice1-chat/e07b237e-2660-48bc-8883-891a1cb0db4c.jsonl",
+      "bytes": 18654702,
+      "sha256": "f33cbf14cabca93d95527d93028137f7d2c60760993417030be90aa455cfdfba",
+      "mtime_utc": "2026-09-08T18:03:06.291197+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s--claude-worktrees-build-acp-slice1-chat/e07b237e-2660-48bc-8883-891a1cb0db4c/subagents/agent-ace010f38250b6454.jsonl",
+      "bytes": 120378,
+      "sha256": "31d01cc5d04cdd6fa126ff8a7fa35bc07b4056188081ef0d84f82bc742725d4e",
+      "mtime_utc": "2026-09-08T17:00:39.927378+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/0826fc6d-c1c2-4fdd-a4dc-38d6e2e52110.jsonl",
+      "bytes": 340034,
+      "sha256": "fd8f259327df30d44d034e4169e13bb010fcd762367fbfa71ccc1c9cffdd4280",
+      "mtime_utc": "2026-09-10T05:04:25.084542+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/0ae210c8-62ba-4247-b8a6-6a454f000758.jsonl",
+      "bytes": 433252,
+      "sha256": "2ab9a75976320f1e5e489a4599c1ff96b6fb9db9f5080551191f79cbf893b53c",
+      "mtime_utc": "2026-09-09T03:24:37.791512+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/0bd6a2a7-295a-4907-91d6-50f3524831aa.jsonl",
+      "bytes": 3222641,
+      "sha256": "378fa140b8fea5ce40d76370730a565c935a0e1cba30c604a3701a87730ead76",
+      "mtime_utc": "2026-09-09T04:54:32.930133+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/0ef31b90-16a0-42af-a5aa-75c94b38a079.jsonl",
+      "bytes": 478443,
+      "sha256": "ba379afa620ac237076407c6e01bb56a3d15b62f11ca4cb4f07815fc5a0a1dc1",
+      "mtime_utc": "2026-09-09T18:52:55.459823+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/19d437bd-0442-4695-b779-1e5ca12a180d.jsonl",
+      "bytes": 2220862,
+      "sha256": "ede675fee36a3a2ead13b1a95b97895ba8e3d13d5c54c7af7050707961e0083d",
+      "mtime_utc": "2026-09-09T20:58:00.419458+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/1f3eccb3-762b-40ca-8982-b56f99078f60.jsonl",
+      "bytes": 409810,
+      "sha256": "25b99cb43283117a017f9b71a1770bcb2f83902ee72e5d8c4988be1bc43357cf",
+      "mtime_utc": "2026-09-09T19:32:13.510705+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/2659a4b0-c7cf-4119-865a-2f1dbc2609cf.jsonl",
+      "bytes": 1424472,
+      "sha256": "6f5e5ad3bb30c2dbde151f82f2f36866f711f58ca1036b9c47cf5a3e2358acfb",
+      "mtime_utc": "2026-09-06T20:39:08.770374+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/31336d03-a4bc-4929-90a8-097ced6691b2.jsonl",
+      "bytes": 1563592,
+      "sha256": "90e2656ed47ad88848e53729b5fd86be2d2d34c051ea7a4df86fcae24e19a418",
+      "mtime_utc": "2026-09-08T18:04:45.402752+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/316cf35a-870f-42ed-84da-b6f6201e39c1.jsonl",
+      "bytes": 689392,
+      "sha256": "6a971c766236fcba19560dcd932605dfce432238e5d746277033f9754521e1a9",
+      "mtime_utc": "2026-09-08T21:50:33.023430+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/42c7ce07-1e27-4aef-8fe9-8c067b37d664.jsonl",
+      "bytes": 413495,
+      "sha256": "446ac92cf16016bcbb709b78dcc73253ced3f1b9e02422bd59a9230f89b679aa",
+      "mtime_utc": "2026-09-08T20:37:26.134497+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/4354ab04-a832-4f7b-8010-65fb216e4be6.jsonl",
+      "bytes": 351802,
+      "sha256": "8b29d327a599d082760a6b4d02e6d76155013b34be168b98fa747d13d4ce5c6e",
+      "mtime_utc": "2026-09-07T20:06:36.977733+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/46c4a473-01f5-4940-b514-316ee97c3740.jsonl",
+      "bytes": 701419,
+      "sha256": "963b57b8b6f91b8969b79f555947be0919930aaf3e5b3dc5ac1180291643a99c",
+      "mtime_utc": "2026-09-10T05:03:59.096400+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/485fb26a-d6ef-4a37-8a7d-f32323895c2b.jsonl",
+      "bytes": 353968,
+      "sha256": "9a95b22513e89483cd77522f9357e1837900ba9a2fcc679f16de5763931c7726",
+      "mtime_utc": "2026-09-08T20:37:34.173537+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/495f5c24-a13c-4411-8454-eac80d62945e.jsonl",
+      "bytes": 423096,
+      "sha256": "25fa761b9ad86c1dd53ec8cb524c3790dbb9d5d0aba1f95f79bc097af2878216",
+      "mtime_utc": "2026-09-08T21:50:33.056430+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/505c8845-51ce-43f1-94c8-30e1f0c741c8.jsonl",
+      "bytes": 601799,
+      "sha256": "89f44be32c540b3a12d3a33afe0d240a1a6265e709ca0e1963a0c845b070b48c",
+      "mtime_utc": "2026-09-09T18:07:39.123933+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/65069a2d-01bd-4283-bb78-3f0343c80bf4.jsonl",
+      "bytes": 6912039,
+      "sha256": "1ba651cf8af413e818635dcab8b40afff2d33a397cb939a51f605f2cb4ba6b87",
+      "mtime_utc": "2026-09-08T18:04:44.926744+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6.jsonl",
+      "bytes": 1778166,
+      "sha256": "f2d419838a485926b8bf0c45afb88a72b69612d7322902d8e146c64827a3614d",
+      "mtime_utc": "2026-09-06T18:56:00.624841+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-a6ed59bb63a3d0fd7.jsonl",
+      "bytes": 884172,
+      "sha256": "e993ff88846dd096e2001358c2037c7ad589e90091eade61a4119314d3d463f7",
+      "mtime_utc": "2026-09-06T18:31:34.119967+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-a9fff5ca0e586873d.jsonl",
+      "bytes": 2931500,
+      "sha256": "4ca2e2f048aa1661dc17cbb1bc4cfbc4b5ae4fd5c94ef65abf30430e4e2dea62",
+      "mtime_utc": "2026-09-06T17:59:16.645728+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-aac04969281bea95e.jsonl",
+      "bytes": 155118,
+      "sha256": "6cb2a0d05ef7d2cb8283f1436b81e2dbf7c243bfa8d9e09491439b4b5330fc18",
+      "mtime_utc": "2026-09-06T16:24:40.246452+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-ab97d70330bc1467c.jsonl",
+      "bytes": 222309,
+      "sha256": "6bb4982147ce295d6832e08271a92c503bfb72801ce305cbc8b1edbd57403d88",
+      "mtime_utc": "2026-09-06T16:21:11.279626+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-ad66a5b5ecb1813f1.jsonl",
+      "bytes": 158690,
+      "sha256": "b79d2ded02cff94fd9b3ff58fd8187e120e0291af879c3f6bd11918f23eb7374",
+      "mtime_utc": "2026-09-06T16:27:56.751251+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/68dd41d8-3982-40d6-a8ce-ab2d64c154c4.jsonl",
+      "bytes": 1915312,
+      "sha256": "a36a97e57ad1b1ff1d0f2fd9c303ec3a97c672bbf9cf684ec2bc1c90afbfa72f",
+      "mtime_utc": "2026-09-09T23:29:58.903347+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/6fbebcdf-842e-402b-b9d5-0b4dc311af48.jsonl",
+      "bytes": 258454,
+      "sha256": "bdb7086499988741edd28ce6944194789eaaf2b23585af86b166ff0a237c0a4c",
+      "mtime_utc": "2026-09-10T05:04:29.250564+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/73a379fb-a951-4667-b8e7-741494275e20.jsonl",
+      "bytes": 361978,
+      "sha256": "ee1567c7e62f9a8d4514abb4db835473f5095d6b1c89aa10f88d34d1181568b3",
+      "mtime_utc": "2026-09-10T00:45:36.620233+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/77a32c83-1be1-46a4-9a66-e9422021ad7e.jsonl",
+      "bytes": 3811297,
+      "sha256": "97420bcd0b6c538e7f4a0e62513b7042625f1607d58a982db84b5ac9961ddf08",
+      "mtime_utc": "2026-09-08T06:04:24.464561+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/77c156f1-d295-4716-882f-cf5f6e3d8b97.jsonl",
+      "bytes": 1272598,
+      "sha256": "93421779e7e9a32e2d78d3afba99b729ca39f1fcd24d5f336a100b511275e2d2",
+      "mtime_utc": "2026-09-08T21:50:33.028430+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/9146c68c-1bca-4e9f-8989-d2461295afd6.jsonl",
+      "bytes": 8147288,
+      "sha256": "7493228d636d9d73e577bb640e4bee12f339c9ebc0af581c0484e329bf33ac23",
+      "mtime_utc": "2026-09-10T00:45:09.171110+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/96200a82-147d-4d48-a392-bf3875178bcf.jsonl",
+      "bytes": 630403,
+      "sha256": "9a44677bad12b469f1fcbcc7484948a8b5ab2ea9815c548366030dcfda1d6cb7",
+      "mtime_utc": "2026-09-10T03:30:39.534609+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/9bdfe5b2-2a2a-4a8b-87aa-c5f52ca9469b.jsonl",
+      "bytes": 753493,
+      "sha256": "19a66ebe69125d772c2031991df6a06cb23fbb3491c137df9828f91af1253579",
+      "mtime_utc": "2026-09-09T07:22:19.564966+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/a3d25f41-5bff-4cf1-b257-4d612669fef8.jsonl",
+      "bytes": 8820684,
+      "sha256": "43213989b4a494e46eebb867451568bffa058eacf5d82d791bbbed2a6b2a5c00",
+      "mtime_utc": "2026-09-09T22:59:56.121032+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/c23c2739-953b-42a2-b00d-702b03b8680c.jsonl",
+      "bytes": 327332,
+      "sha256": "014890e83b6dec06b489932a65e01473a99dd37eca0a684ad0bd86c5e35dedae",
+      "mtime_utc": "2026-09-09T18:52:55.461823+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/ce3bf06d-61f3-4ff0-a158-006acd8f95a4.jsonl",
+      "bytes": 734633,
+      "sha256": "b8c8f822085b4639dd2f309e603faef98ccf3e8e64152ad978803212d76a01a5",
+      "mtime_utc": "2026-09-06T17:17:47.581096+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/d4d6031f-61d4-4c0c-9df5-ec8c864dd335.jsonl",
+      "bytes": 467644,
+      "sha256": "443829d28691f711278748ba1224d261cb31897216bc7a90153f750c992cc713",
+      "mtime_utc": "2026-09-08T21:50:33.046430+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/de24bf4c-b68d-403b-add3-96287e34f960.jsonl",
+      "bytes": 501270,
+      "sha256": "b8d7ee21217f416bea086b3d69277aca4f1e16f61f5395cff3d911b8f91c3f3f",
+      "mtime_utc": "2026-09-09T15:55:19.323256+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/e1eb468f-b9bb-411b-9c8e-aafda286a98d.jsonl",
+      "bytes": 817225,
+      "sha256": "f16ab3db1885fa9d025b9974554146e9ca53283f8249963e2b7f4b18949c89d0",
+      "mtime_utc": "2026-09-09T21:18:44.861066+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/e6c65725-5268-4466-9b32-bb56d6c6f817.jsonl",
+      "bytes": 2512367,
+      "sha256": "9db2d5ef96e0b41b8643dccd83ca9748b8f4ea26d8803998aec6b49414c197bd",
+      "mtime_utc": "2026-09-09T22:47:25.817030+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/e95964f0-73a8-443d-b0dc-6472da0c9ff9.jsonl",
+      "bytes": 10258016,
+      "sha256": "437674fe53451bfcbe6d5781b97ede8ffb0f0cd4654136bfaa6f578c66349872",
+      "mtime_utc": "2026-09-09T18:52:55.396823+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/e95964f0-73a8-443d-b0dc-6472da0c9ff9/subagents/agent-a4b423c8322dd52fa.jsonl",
+      "bytes": 406276,
+      "sha256": "c015d2333c7566571878301c53fef5c368ac45b77ab22a590be8f741d1f4a39d",
+      "mtime_utc": "2026-09-09T05:02:07.605166+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/e95964f0-73a8-443d-b0dc-6472da0c9ff9/subagents/agent-ad05a2a8bcba96417.jsonl",
+      "bytes": 364375,
+      "sha256": "3582d3595c744f2f809105be49a8ed87fe0bbc598e93f15b886d4577df265205",
+      "mtime_utc": "2026-09-09T05:14:25.151531+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/f0dae1b1-e9cb-44df-a9a6-51a39d6457fb.jsonl",
+      "bytes": 656476,
+      "sha256": "b49af0bf3a5ad0d8338239a9266dd7b497cf40b559fe9785f1de1ee87d88023f",
+      "mtime_utc": "2026-09-09T23:02:40.797585+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/f548b796-f2c5-4a7c-979c-c1bc94ffc9f9.jsonl",
+      "bytes": 654818,
+      "sha256": "7529a0027776c13b22623d810f3515f8f0201f4d95c18958c7e9f0217540b102",
+      "mtime_utc": "2026-09-10T00:18:39.452452+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/f653baaa-9ba4-4e5d-a5d7-4f4b38027f76.jsonl",
+      "bytes": 524819,
+      "sha256": "8a3eac7977dbf33880a92ed0b81a86411f510ef987a4d73a52259177ebbe307e",
+      "mtime_utc": "2026-09-08T18:04:45.099747+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/f87bdde3-be5b-4cf6-a28c-84b1238a3278.jsonl",
+      "bytes": 2667608,
+      "sha256": "e38f93988d4156700c979b3d3468408ff68759823253051f5355d9cac8a64faf",
+      "mtime_utc": "2026-09-08T06:06:03.443065+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/fdbe68ec-7a70-4917-b02e-3b2340e4d50b.jsonl",
+      "bytes": 3346360,
+      "sha256": "ebf979d6608fb93c1996ad5e9abca643a411d204aa55c29e3804f9d92e083250",
+      "mtime_utc": "2026-09-08T18:04:44.926744+00:00"
+    },
+    {
+      "file": "~/.claude/projects/-home-ben-Jarv1s/ffb90204-1490-4344-8cab-b9d32317c276.jsonl",
+      "bytes": 906435,
+      "sha256": "35a1e8e655546037dfb7758bdec961b241953f49576c63e2736c4849cc2d346f",
+      "mtime_utc": "2026-09-09T07:22:29.901964+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/07/rollout-2026-09-07T17-43-36-01a07e78-6bc4-74b2-95f3-155b9f6f7c79.jsonl",
+      "bytes": 5115049,
+      "sha256": "759eb5786a21ec5865e291338dc19b115bae801ea6e41e91464d9b57ea53cea7",
+      "mtime_utc": "2026-09-08T16:01:29.484470+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/07/rollout-2026-09-07T22-03-35-01a07f66-7274-7d20-8dfc-76a0860dc52d.jsonl",
+      "bytes": 8874119,
+      "sha256": "672065ce91ccd5a8e7cea322422f0d9a0cfd4d471030a9da338ebd7ce39a0a8b",
+      "mtime_utc": "2026-09-08T07:03:28.143616+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T11-34-04-01a0824c-76ca-79d3-9189-2cd5c6e2e0d1.jsonl",
+      "bytes": 2283955,
+      "sha256": "c0fc0c45f43edb0a70babc504194bb6e12b0569ab5e9d711a940886074fd9633",
+      "mtime_utc": "2026-09-08T21:37:24.098879+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T11-34-04-01a0824c-78da-7692-88e3-e2010cc3ebf6.jsonl",
+      "bytes": 14553368,
+      "sha256": "1958171332e4f8288accb8f57fd4202be6adf6144964b6c02af4f148c3d30afa",
+      "mtime_utc": "2026-09-08T21:37:07.235761+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T12-33-56-01a08283-4646-7951-a511-cf85e3820a0f.jsonl",
+      "bytes": 1383695,
+      "sha256": "7716330d56c6f7d7338416e827ab608f2a0e3f29c0b5eb18bb1bdac6623eb934",
+      "mtime_utc": "2026-09-08T20:41:41.271113+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T12-34-10-01a08283-7ef0-7691-b5d9-43a100813d3e.jsonl",
+      "bytes": 1308300,
+      "sha256": "7399c87adeb3d9d2b9256c545aa08dfaa5b61f0d3848cac03c3c1adcf7716f50",
+      "mtime_utc": "2026-09-08T19:37:38.653292+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T14-52-10-01a08301-d378-7502-9255-9fb60a5521e4.jsonl",
+      "bytes": 3231073,
+      "sha256": "3d78f45d38019f3a3df8162e7db43fb69b5e01e2338b22a08f2d5d516cc09ee4",
+      "mtime_utc": "2026-09-09T03:26:49.223124+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T14-52-12-01a08301-db36-7110-be75-2e73e6a2b6af.jsonl",
+      "bytes": 66943548,
+      "sha256": "10d7d5b4e7835eae2dce4cbe4ef4a98a26a2d32323102b946639befa85c47d49",
+      "mtime_utc": "2026-09-09T07:22:09.452969+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T20-26-52-01a08434-43b2-7d91-8d38-893ec0b2a503.jsonl",
+      "bytes": 2300535,
+      "sha256": "aabd7b275f613020e167b4c0c22051f80f49d6f7e9ed0c7f923866167512a67b",
+      "mtime_utc": "2026-09-09T16:42:42.413146+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T00-22-09-01a0850b-ac5d-7f31-9b41-bc2e903929c9.jsonl",
+      "bytes": 118742,
+      "sha256": "9f17b2ac5c9b29a4032519e8640f41410fe121d2eef458f497e3aad6d220c5e0",
+      "mtime_utc": "2026-09-09T07:22:37.051963+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T08-46-21-01a086d9-45d2-7dd2-b87e-71c5312acfaf.jsonl",
+      "bytes": 273467,
+      "sha256": "290b517d3ac4a445b35480c16dd9a0db73f8fee3ab99d05a7b99464c8297b401",
+      "mtime_utc": "2026-09-09T18:34:43.246212+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T09-42-46-01a0870c-ebc0-7cc2-a9b6-2faeb4bcf8e8.jsonl",
+      "bytes": 176788,
+      "sha256": "4baa753a6f1c6483f12aa28be007f7186bad201647526adfb47f6f0246fbafe8",
+      "mtime_utc": "2026-09-09T16:43:11.850333+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T11-55-23-01a08786-559b-7cb3-ab06-5963ba5c753e.jsonl",
+      "bytes": 4735686,
+      "sha256": "72ec943bf500db6bbdb25c82a3a6c97d17930d3d7a6cde09f775874a4dd51f61",
+      "mtime_utc": "2026-09-09T23:08:26.837250+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T11-55-23-01a08786-57c9-73f3-bb01-109b4228a4ee.jsonl",
+      "bytes": 1166671,
+      "sha256": "76c54011f47ccf423520691811176dc23e730e6aa712538fd24198ff1c1b3262",
+      "mtime_utc": "2026-09-09T22:33:36.131066+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T11-56-23-01a08787-4076-79b0-98b6-70be0fbd5d80.jsonl",
+      "bytes": 269016,
+      "sha256": "4a1ff553f0b25532038242b285ce3600dd3747c689ecfcb6d505e26024996d02",
+      "mtime_utc": "2026-09-09T20:58:20.655666+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T13-58-21-01a087f6-ea72-7fa0-9bb6-9d0d1c140929.jsonl",
+      "bytes": 1276002,
+      "sha256": "3136af203c64508c6005edf47693d9956924343b80d8b836cc4c62a3aa4b2251",
+      "mtime_utc": "2026-09-10T05:04:47.079661+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T15-33-39-01a0884e-2bb1-7ae1-ae48-47b31e670541.jsonl",
+      "bytes": 1780376,
+      "sha256": "9ad8afb0ca6c693e8eed16c6600128b49420705ce72f0e65340c0128d4a762a8",
+      "mtime_utc": "2026-09-10T01:21:26.265436+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T16-08-30-01a0886e-131f-7531-9f97-83fdc28d98f7.jsonl",
+      "bytes": 2242025,
+      "sha256": "6f614286668787d21ab0d3220d7ecd5c5ca433de226af7545fe3ec221f952be6",
+      "mtime_utc": "2026-09-09T23:19:29.672708+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T16-19-31-01a08878-2875-7a51-ad66-6f438748e2ed.jsonl",
+      "bytes": 5950091,
+      "sha256": "83a9cb7257861ee11bf6caef656787301dca03aebfbc39f924c235dc37fd4ba1",
+      "mtime_utc": "2026-09-10T00:14:19.981621+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T16-31-17-01a08882-ef80-7be3-abdb-97b763192cb7.jsonl",
+      "bytes": 1274131,
+      "sha256": "675da82f3f5d0b537ed08a701fe013a0adbc5f31805c0b0708bb0b4db550823a",
+      "mtime_utc": "2026-09-10T01:18:17.878414+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T16-31-27-01a08883-16d3-7851-96d4-bd7b897312d3.jsonl",
+      "bytes": 1151043,
+      "sha256": "a6c9800fd2f95cca20923cd82ae424583483c87fdb2994a434574dfbb5a5925e",
+      "mtime_utc": "2026-09-10T01:19:25.260781+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T17-14-20-01a088aa-592e-7723-9ead-755fad837f10.jsonl",
+      "bytes": 4250039,
+      "sha256": "7e2abc01429c8e31b9824b716b84df616f84bbeabbd56c2ab64bef7b51fed667",
+      "mtime_utc": "2026-09-10T00:34:23.561298+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T17-34-27-01a088bc-c52f-7a50-b087-0eef5febb18e.jsonl",
+      "bytes": 15686467,
+      "sha256": "33a5b43089a602190add1fb05c976b9e4a9e8534365e7fc5fdf21cf1ebe991e1",
+      "mtime_utc": "2026-09-10T05:13:59.548445+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T18-21-31-01a088e7-dd2d-70d1-8fbb-8b9066058d8e.jsonl",
+      "bytes": 1250112,
+      "sha256": "f1bf3fd78e6825bcf181c229812dad2df4fc937e3f5452b826d73920ec45b9d4",
+      "mtime_utc": "2026-09-10T02:37:12.211904+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T19-32-07-01a08928-7ee9-7e81-8e4c-72da77774fa1.jsonl",
+      "bytes": 755197,
+      "sha256": "71fc8cb0c0dae1dc3caa7b72a4c6ef01b58fa7bef250dd2e090daf1905d86193",
+      "mtime_utc": "2026-09-10T02:33:56.226973+00:00"
+    },
+    {
+      "file": "~/.codex/sessions/2026/09/09/rollout-2026-09-09T19-32-21-01a08928-b2f9-75e3-96a0-4ad57bb530d8.jsonl",
+      "bytes": 907895,
+      "sha256": "6fae525fa3dec7e6faa2f036f410f51a070224eb03b671c0a03aae7046444542",
+      "mtime_utc": "2026-09-10T02:35:07.255506+00:00"
+    }
+  ]
+}

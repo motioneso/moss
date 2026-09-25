@@ -1,0 +1,112 @@
+{
+  "captured_at": "2026-09-10T05:46:51.219548+00:00",
+  "room": "moss-work",
+  "settings": {
+    "backlogCap": 15,
+    "fullBriefEveryTurns": 10,
+    "fullBriefEveryTokens": 40000,
+    "agentsWakeEachOther": false
+  },
+  "participants": [
+    {
+      "id": "claude-fitz",
+      "name": "Scout",
+      "status": "idle",
+      "contextUsed": 76329,
+      "contextSize": 200000,
+      "turns": 1,
+      "model": "sonnet",
+      "muted": false
+    },
+    {
+      "id": "claude-pm",
+      "name": "PM-Claude",
+      "status": "idle",
+      "contextUsed": null,
+      "contextSize": null,
+      "turns": 0,
+      "model": "opus[1m]",
+      "muted": true
+    },
+    {
+      "id": "claude-architect",
+      "name": "Architect",
+      "status": "idle",
+      "contextUsed": 64788,
+      "contextSize": 200000,
+      "turns": 22,
+      "model": "fable",
+      "muted": false
+    },
+    {
+      "id": "claude-reviewer",
+      "name": "Reviewer",
+      "status": "idle",
+      "contextUsed": 48217,
+      "contextSize": 200000,
+      "turns": 3,
+      "model": "fable",
+      "muted": false
+    },
+    {
+      "id": "claude-prover",
+      "name": "Prover",
+      "status": "idle",
+      "contextUsed": 64533,
+      "contextSize": 1000000,
+      "turns": 11,
+      "model": "sonnet[1m]",
+      "muted": false
+    },
+    {
+      "id": "claude-sonnet-builder",
+      "name": "Sonnet-Builder",
+      "status": "idle",
+      "contextUsed": 86843,
+      "contextSize": 200000,
+      "turns": 17,
+      "model": "sonnet",
+      "muted": false
+    },
+    {
+      "id": "codex-astra-reviewer",
+      "name": "Astra-Reviewer",
+      "status": "idle",
+      "contextUsed": 101713,
+      "contextSize": 258400,
+      "turns": 13,
+      "model": "gpt-6-astra",
+      "muted": false
+    },
+    {
+      "id": "codex-luna-builder",
+      "name": "Luna-Builder",
+      "status": "thinking",
+      "contextUsed": 79209,
+      "contextSize": 258400,
+      "turns": 23,
+      "model": "gpt-5.6-luna",
+      "muted": false
+    },
+    {
+      "id": "gemini-gemini-builder",
+      "name": "Gemini-Builder",
+      "status": "idle",
+      "contextUsed": null,
+      "contextSize": null,
+      "turns": 12,
+      "model": "gemini-3.8-flash-high",
+      "muted": false
+    },
+    {
+      "id": "codex-pm-codex",
+      "name": "PM",
+      "status": "idle",
+      "contextUsed": 98703,
+      "contextSize": 258400,
+      "turns": 75,
+      "model": "gpt-5.6-sol",
+      "muted": false
+    }
+  ]
+}
