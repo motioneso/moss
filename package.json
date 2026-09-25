@@ -56,6 +56,7 @@
     "smoke:compose:prod": "tsx scripts/smoke-compose.ts --compose-file infra/docker-compose.prod.yml --build",
     "uat:provision:smoke": "tsx tests/uat/provisioner.ts",
     "test:uat": "tsx tests/uat/run-uat.ts",
+    "test:uat:no-plan-review": "tsx tests/uat/run-uat.ts no-plan-review.uat.spec.ts",
     "test:e2e": "playwright test",
     "test:sw": "playwright test --config playwright.sw.config.ts",
     "start:worker": "pnpm --filter @moss/worker start",
