@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Background AI tasks work again with the newest Claude models.** Job scoring, briefings and email reading stopped working when Moss used the newest Claude model, and now run again. [PR #2688](https://github.com/motioneso/moss/pull/2688)
 - **Moss knows where every setting lives.** Moss now points you to the right settings page when you ask it where to change something. [PR #2677](https://github.com/motioneso/moss/pull/2677)
 - **Background AI jobs keep working after heavy use.** Background AI jobs like briefing writing and email sorting no longer stop working after heavy use. [PR #2675](https://github.com/motioneso/moss/pull/2675)
 - **Sports scores are back.** Scores, results and schedules show up again on the Sports page and the Today card, and the Sports page now tells you when it could not get fresh scores. [PR #2684](https://github.com/motioneso/moss/pull/2684)
