@@ -1,0 +1,260 @@
+{
+  "issue": 39,
+  "slug": "2026-09-25",
+  "weekOf": "September 21, 2026",
+  "summary": "A redesigned Today page, an early Trail Marker app for Mac, a fast sorting model for News and Sports, and a long list of fixes.",
+  "intro": "This was a busy week, and most of it landed on the page you open first. Today got a full redesign for mornings and evenings, the Mac gained an early focus companion called Trail Marker, and News and Sports got quicker. A lot of background AI work also got its footing back, so briefings and email sorting should feel dependable again.",
+  "headline": {
+    "title": "Today, redesigned for morning and evening",
+    "body": [
+      "The Today page now follows its approved design from top to bottom. Mornings open with a greeting, a compact weather strip and an \"In this briefing\" index that jumps to each section. The morning reader has a new frame, and when your plan shifts it names the block that moved and its new time. Evenings get their own header, a recap of the day and a list of loose ends.",
+      "Evening planning is rebuilt too. You reflect on the day with a few quick choices and a note, then shape tomorrow by picking a steady, lighter or full day and naming the one thing that matters most. Before anything is saved, you review each proposed change."
+    ],
+    "prs": [
+      2557,
+      2587,
+      2641,
+      2648,
+      2642,
+      2590,
+      2592,
+      2582,
+      2649,
+      2551,
+      2583,
+      2589,
+      2575
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Trail Marker for Mac (early build)",
+          "body": "Trail Marker is a small menu-bar app that links to your Moss account. You approve it from your browser, and it shows up under Active sessions, where you can sign it out.",
+          "prs": [
+            2564,
+            2568,
+            2573
+          ]
+        },
+        {
+          "title": "Gentle focus check-ins",
+          "body": "During a focus block you scheduled in Moss, Trail Marker can notice which app you're in and nudge you if you've drifted. When an app's title isn't enough to go on, it can look at the screen once.",
+          "prs": [
+            2578,
+            2584
+          ]
+        },
+        {
+          "title": "Apps Trail Marker never watches",
+          "body": "Pick apps, like your banking app, that Trail Marker will never look at, even when it watches your whole screen.",
+          "prs": [
+            2634
+          ]
+        },
+        {
+          "title": "A sorting model for News and Sports",
+          "body": "Choose a small, fast model to check stories against your preferences. Refreshes get much quicker, and Moss falls back to your main model if the small one doesn't answer.",
+          "prs": [
+            2623,
+            2627,
+            2662
+          ]
+        },
+        {
+          "title": "A redesigned Sports section on Today",
+          "body": "Last night's scores, a lead story with a photo and tonight's games now sit together in one section. Your followed teams and leagues appear as newspaper-style clippings with their logos and colors.",
+          "prs": [
+            2558,
+            2652,
+            2666,
+            2581,
+            2567
+          ]
+        },
+        {
+          "title": "More women's leagues",
+          "body": "Sports now covers more women's competitions, including the Women's Pro Baseball League. The standings picker also opens on the league and division you last looked at.",
+          "prs": [
+            2669
+          ]
+        },
+        {
+          "title": "Artwork when a story has no photo",
+          "body": "If the lead story on Today has no photo, Moss draws a contour print in the story's topic colors so the space doesn't sit empty.",
+          "prs": [
+            2657
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "A simpler Trail Marker menu",
+          "body": "One Pause All button stops everything, a separate switch pauses just Focus, and the menu wears Moss's forest green. Judge Now and Check for Updates are gone, because Trail Marker checks your focus by itself.",
+          "prs": [
+            2631,
+            2635,
+            2645,
+            2632
+          ]
+        },
+        {
+          "title": "Dark mode that keeps its color",
+          "body": "Every theme keeps its real accent color in dark mode, dividers are easier to see, and hover highlights use a soft tint instead of a bright block.",
+          "prs": [
+            2653,
+            2655
+          ]
+        },
+        {
+          "title": "Sports page cards match Today",
+          "body": "The team cards on the Sports page now share the clean look of the Today cards, with the next game written along the bottom.",
+          "prs": [
+            2667
+          ]
+        },
+        {
+          "title": "Smarter email sorting",
+          "body": "Mail from a standard mail account is judged by its message text, not just its subject line. Marketing mail from strangers gets set aside sooner, without an extra review.",
+          "prs": [
+            2598,
+            2600
+          ]
+        },
+        {
+          "title": "Safer hands-off mode",
+          "body": "When Moss runs without asking, it no longer takes risky actions like sending a reply or forgetting a memory. Those still wait for your go-ahead.",
+          "prs": [
+            2541
+          ]
+        },
+        {
+          "title": "A trail-map texture on Today",
+          "body": "The Today header now carries a faint trail-map pattern.",
+          "prs": [
+            2651
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Morning and evening briefings are written by the AI you signed in with again, instead of arriving as a plain list.",
+      "prs": [
+        2665
+      ]
+    },
+    {
+      "text": "Briefings finish even when one source has trouble, and they include your followed teams again.",
+      "prs": [
+        2658
+      ]
+    },
+    {
+      "text": "If Moss can't write your briefing, Today keeps its normal header rather than showing a raw list of counts.",
+      "prs": [
+        2664
+      ]
+    },
+    {
+      "text": "Background AI jobs like email sorting and job scoring work with the newest Claude models, sign in correctly for everyone, and keep going after heavy use.",
+      "prs": [
+        2688,
+        2693,
+        2675
+      ]
+    },
+    {
+      "text": "Once an administrator connects Codex, everyone on the same Moss can use it without signing in themselves.",
+      "prs": [
+        2694
+      ]
+    },
+    {
+      "text": "Sports scores, results and schedules are back, and the Sports page tells you when it couldn't get fresh ones.",
+      "prs": [
+        2684
+      ]
+    },
+    {
+      "text": "Soccer teams you follow show their next match.",
+      "prs": [
+        2614
+      ]
+    },
+    {
+      "text": "Following a national team shows that team's own news, not the whole World Cup.",
+      "prs": [
+        2663
+      ]
+    },
+    {
+      "text": "Sports photos and team logos stay put without a hard refresh, and more news stories on Today show their photo.",
+      "prs": [
+        2654,
+        2556
+      ]
+    },
+    {
+      "text": "Trail Marker looks only at the window you're using, stops everything while paused, and forgets its settings when you log out.",
+      "prs": [
+        2644
+      ]
+    },
+    {
+      "text": "Saving tomorrow's plan no longer shows a false warning that the plan changed.",
+      "prs": [
+        2650
+      ]
+    },
+    {
+      "text": "Ask Moss where a setting lives and it points you to the right page.",
+      "prs": [
+        2622,
+        2677
+      ]
+    },
+    {
+      "text": "People you keep in a notes folder appear in People after a sync.",
+      "prs": [
+        2616
+      ]
+    },
+    {
+      "text": "Adding a news source finishes right away instead of waiting for your news to refresh.",
+      "prs": [
+        2617
+      ]
+    },
+    {
+      "text": "Host details in Settings show the real version and commit, and a pinned install tells you when a newer version is out.",
+      "prs": [
+        2601
+      ]
+    },
+    {
+      "text": "The account name in the sidebar is readable again, and the Settings entry fits its box.",
+      "prs": [
+        2656
+      ]
+    },
+    {
+      "text": "Chat skill suggestions use the same font as the rest of the app.",
+      "prs": [
+        2668
+      ]
+    },
+    {
+      "text": "When chat can't start because of how the server is set up, it now says how to fix it.",
+      "prs": [
+        2544
+      ]
+    }
+  ]
+}
