@@ -96,6 +96,7 @@ path-scoped commit is unsafe on a co-edited file, and the skill has the only saf
   output), and stop any server or browser you started. An hourly sweeper removes worktrees whose
   work is merged and whose tree is clean; one stray untracked file keeps the whole worktree alive.
   This applies however you were launched: Claude, Codex, Muse, OpenCode, a pane or a headless run.
+
 ## Scope guardrails
 
 - **Do not casually build:** real OAuth callbacks, real connector sync, full email/calendar clients,
