@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Moss knows where every setting lives.** Moss now points you to the right settings page when you ask it where to change something. [PR #2677](https://github.com/motioneso/moss/pull/2677)
 - **Background AI jobs keep working after heavy use.** Background AI jobs like briefing writing and email sorting no longer stop working after heavy use. [PR #2675](https://github.com/motioneso/moss/pull/2675)
 - **Sports scores are back.** Scores, results and schedules show up again on the Sports page and the Today card, and the Sports page now tells you when it could not get fresh scores. [PR #2684](https://github.com/motioneso/moss/pull/2684)
 - **Briefings are written by your AI subscription.** Morning and evening briefings are now written by the AI model you signed in with, instead of arriving as a plain list. [PR #2665](https://github.com/motioneso/moss/pull/2665)
