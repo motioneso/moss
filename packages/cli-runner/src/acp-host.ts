@@ -50,6 +50,7 @@ import {
   type AgentHomeSecretFile
 } from "./agent-home-prepare-run.js";
 import {
+  codexPeerHomes,
   ownerCodexHomeAccess,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
@@ -411,18 +412,18 @@ export class AcpHost {
         if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
         const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? runAgentHomePrepareAsOwner;
-        // #2687: the instance's shared Codex login goes into this user's own home first. The
-        // step below then checks the copy, as the user, before Codex starts.
+        // #2687: the instance's shared Codex login goes into this user's own home first, after
+        // any newer refresh another user holds is carried back to it. The step below then checks
+        // the copy, as the user, before Codex starts.
         if (codexAuth) {
-          const access =
-            this.deps.codexHomeAccess?.(agentHome, { uid, gid }) ??
-            ownerCodexHomeAccess(
-              agentHome,
-              { uid, gid },
-              createOwnerIo({ uid, gid }),
-              runAgentHomePrepare
-            );
-          await syncCodexLoginIntoHome(homeBase, access);
+          const access = (home: string, identity: { uid: number; gid: number }) =>
+            this.deps.codexHomeAccess?.(home, identity) ??
+            ownerCodexHomeAccess(home, identity, createOwnerIo(identity), runAgentHomePrepare);
+          await syncCodexLoginIntoHome(
+            homeBase,
+            access(agentHome, { uid, gid }),
+            codexPeerHomes(homeBase, userId, access)
+          );
         }
         await runAgentHomePrepare(
           { dirs: prepareDirs, denyFile },

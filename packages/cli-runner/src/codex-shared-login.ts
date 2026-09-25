@@ -6,9 +6,11 @@
  * own home as their own account, with a copy of that file seeded before each launch or check.
  *
  * Codex rewrites its login file when it refreshes its tokens, and the refresh retires the old
- * refresh token. So a user's copy that Codex refreshed more recently, for the same account,
- * becomes the shared login; every other copy is replaced by the shared login. A different account
- * never replaces the shared login this way. Only a completed administrator sign-in does that.
+ * refresh token. So before any user's Codex runs, the runner looks at every user's copy and makes
+ * the most recently issued one for the shared account the shared login. Identity and issue time
+ * come from the access token's own claims, never from the file's editable fields, so a copy
+ * holding another account's tokens is never promoted. Only a completed administrator sign-in
+ * changes the shared account.
  */
 import { randomUUID } from "node:crypto";
 import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } from "node:constants";
@@ -20,6 +22,7 @@ import type { TmuxIo } from "@moss/ai";
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import type { AgentHomePrepareRun } from "./agent-home-prepare-run.js";
 import { Mutex } from "./mutex.js";
+import { listUserUidSlots } from "./uid-allocator.js";
 
 /** Read and write one user's Codex login file, as that user. */
 export interface CodexHomeAccess {
@@ -39,8 +42,10 @@ export type CodexLoginSyncResult = "seeded" | "promoted" | "kept" | "none";
 
 interface ParsedCodexLogin {
   readonly raw: string;
-  readonly accountId: string;
-  readonly refreshedAt: number;
+  /** The account named by the access token's claims, or null when they cannot vouch for it. */
+  readonly accountId: string | null;
+  /** When the access token was issued, in seconds. */
+  readonly issuedAt: number;
 }
 
 const locks = new Map<string, Mutex>();
@@ -48,6 +53,22 @@ const locks = new Map<string, Mutex>();
 /** The shared Codex login file in the runner's auth home. */
 export function instanceCodexAuthPath(homeBase: string): string {
   return join(homeBase, ".codex", "auth.json");
+}
+
+const AUTH_CLAIMS = "https://api.openai.com/auth";
+
+function tokenClaims(token: string): { accountId?: unknown; issuedAt?: unknown } | null {
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      iat?: unknown;
+      [AUTH_CLAIMS]?: { chatgpt_account_id?: unknown };
+    };
+    return { accountId: claims[AUTH_CLAIMS]?.chatgpt_account_id, issuedAt: claims.iat };
+  } catch {
+    return null;
+  }
 }
 
 function parseCodexLogin(raw: string | null): ParsedCodexLogin | null {
@@ -59,21 +80,31 @@ function parseCodexLogin(raw: string | null): ParsedCodexLogin | null {
     return null;
   }
   if (!parsed || typeof parsed !== "object") return null;
-  const record = parsed as {
-    tokens?: { access_token?: unknown; account_id?: unknown };
-    last_refresh?: unknown;
-  };
-  const accessToken = record.tokens?.access_token;
-  const accountId = record.tokens?.account_id;
+  const tokens = (parsed as { tokens?: { access_token?: unknown; account_id?: unknown } }).tokens;
+  const accessToken = tokens?.access_token;
   if (typeof accessToken !== "string" || accessToken.length === 0) return null;
-  if (typeof accountId !== "string" || accountId.length === 0) return null;
-  const refreshedAt =
-    typeof record.last_refresh === "string" ? Date.parse(record.last_refresh) : Number.NaN;
+  if (typeof tokens?.account_id !== "string" || tokens.account_id.length === 0) return null;
+  const claims = tokenClaims(accessToken);
+  const identified =
+    claims !== null &&
+    claims.accountId === tokens.account_id &&
+    typeof claims.issuedAt === "number" &&
+    Number.isFinite(claims.issuedAt);
   return {
     raw,
-    accountId,
-    refreshedAt: Number.isNaN(refreshedAt) ? Number.NEGATIVE_INFINITY : refreshedAt
+    accountId: identified ? tokens.account_id : null,
+    issuedAt: identified ? (claims.issuedAt as number) : Number.NEGATIVE_INFINITY
   };
+}
+
+/** True when `candidate` is the same account as `current`, issued strictly later. */
+function supersedes(candidate: ParsedCodexLogin | null, current: ParsedCodexLogin): boolean {
+  return (
+    candidate !== null &&
+    candidate.accountId !== null &&
+    candidate.accountId === current.accountId &&
+    candidate.issuedAt > current.issuedAt
+  );
 }
 
 /** Decide what one user's copy needs, given the shared login. Unusable files count as absent. */
@@ -85,9 +116,7 @@ export function planCodexLoginSync(
   const user = parseCodexLogin(userRaw);
   if (!instance) return user ? { action: "keep" } : { action: "none" };
   if (user && user.raw === instance.raw) return { action: "keep" };
-  if (user && user.accountId === instance.accountId && user.refreshedAt > instance.refreshedAt) {
-    return { action: "promote", raw: user.raw };
-  }
+  if (user && supersedes(user, instance)) return { action: "promote", raw: user.raw };
   return { action: "seed", raw: instance.raw };
 }
 
@@ -141,16 +170,47 @@ async function withLock<T>(homeBase: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Promote the newest same-account copy among `candidates`. Returns the shared login after. */
+async function publishNewest(
+  homeBase: string,
+  instanceRaw: string | null,
+  candidates: readonly (string | null)[]
+): Promise<string | null> {
+  const instance = parseCodexLogin(instanceRaw);
+  if (!instance) return instanceRaw;
+  let newest = instance;
+  for (const raw of candidates) {
+    const candidate = parseCodexLogin(raw);
+    if (supersedes(candidate, newest)) newest = candidate as ParsedCodexLogin;
+  }
+  if (newest === instance) return instanceRaw;
+  await writeInstance(homeBase, newest.raw);
+  return newest.raw;
+}
+
+/** Read other users' copies. One unreadable home never blocks another user's launch. */
+function readPeers(peers: readonly CodexHomeAccess[]): Promise<(string | null)[]> {
+  return Promise.all(peers.map((peer) => peer.read().catch(() => null)));
+}
+
 /**
  * Bring one user's Codex login in line with the shared login before Codex runs in their home.
- * Seeds the shared login, carries a newer refresh back to it, or leaves the user's copy alone.
+ * A newer refresh held in this home or any `peers` home is carried back to the shared login
+ * first, so this user never starts from a refresh token another user's Codex already retired.
  */
 export async function syncCodexLoginIntoHome(
   homeBase: string,
-  home: CodexHomeAccess
+  home: CodexHomeAccess,
+  peers: readonly CodexHomeAccess[] = []
 ): Promise<CodexLoginSyncResult> {
   return withLock(homeBase, async () => {
-    const plan = planCodexLoginSync(await readInstance(homeBase), await home.read());
+    const [instanceRaw, userRaw, peerRaws] = await Promise.all([
+      readInstance(homeBase),
+      home.read(),
+      readPeers(peers)
+    ]);
+    const sharedRaw = await publishNewest(homeBase, instanceRaw, peerRaws);
+    const plan = planCodexLoginSync(sharedRaw, userRaw);
     switch (plan.action) {
       case "seed":
         await home.write(plan.raw);
@@ -163,6 +223,17 @@ export async function syncCodexLoginIntoHome(
       case "none":
         return "none";
     }
+  });
+}
+
+/** Carry the newest refresh held in any of `homes` back to the shared login. */
+export async function publishNewestCodexLogin(
+  homeBase: string,
+  homes: readonly CodexHomeAccess[]
+): Promise<boolean> {
+  return withLock(homeBase, async () => {
+    const instanceRaw = await readInstance(homeBase);
+    return (await publishNewest(homeBase, instanceRaw, await readPeers(homes))) !== instanceRaw;
   });
 }
 
@@ -199,4 +270,15 @@ export function ownerCodexHomeAccess(
         { path, content: raw, kind: "codex-auth" }
       ])
   };
+}
+
+/** Every other user's Codex home that holds a slot, each read through its own account. */
+export function codexPeerHomes(
+  homeBase: string,
+  exceptUserId: string | undefined,
+  access: (agentHome: string, identity: { uid: number; gid: number }) => CodexHomeAccess
+): CodexHomeAccess[] {
+  return listUserUidSlots(homeBase)
+    .filter((slot) => slot.userId !== exceptUserId)
+    .map((slot) => access(join(homeBase, "agents", slot.userId), slot));
 }

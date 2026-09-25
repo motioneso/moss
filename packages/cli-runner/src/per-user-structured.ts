@@ -24,6 +24,7 @@ import {
 } from "./owned-fs.js";
 import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
 import {
+  codexPeerHomes,
   ownerCodexHomeAccess,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
@@ -109,19 +110,21 @@ export async function preparePerUserStructuredLaunch(
     ? await deps.prepareOwnerHome(deps.homeBase, owner, identity)
     : await prepareOwnerHome(deps.homeBase, owner, identity, deps.applyOwnership);
 
-  // #2687: Codex runs with the instance's shared login, copied into the owner's home. The same
-  // step after the call carries a token refresh Codex made back to the shared login.
+  // #2687: Codex runs with the instance's shared login, copied into the owner's home after any
+  // newer refresh another user holds is carried back to it. The same step after the call carries
+  // a refresh this call made back to the shared login.
+  const codexAccess = (home: string, id: { uid: number; gid: number }) =>
+    deps.codexHomeAccess?.(home, id) ??
+    ownerCodexHomeAccess(home, id, createOwnerIo(id), runAgentHomePrepareAsOwner);
   const codexHome =
-    params.provider === "openai-compatible"
-      ? (deps.codexHomeAccess?.(agentHome, identity) ??
-        ownerCodexHomeAccess(
-          agentHome,
-          identity,
-          createOwnerIo(identity),
-          runAgentHomePrepareAsOwner
-        ))
-      : undefined;
-  if (codexHome) await syncCodexLoginIntoHome(deps.homeBase, codexHome);
+    params.provider === "openai-compatible" ? codexAccess(agentHome, identity) : undefined;
+  if (codexHome) {
+    await syncCodexLoginIntoHome(
+      deps.homeBase,
+      codexHome,
+      codexPeerHomes(deps.homeBase, owner, codexAccess)
+    );
+  }
 
   // The working folder: persona written by the runner first, then both handed to the owner.
   const neutral = await prepareOwnedPathWithOwnership(deps.neutralBase, key, [key]);

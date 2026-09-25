@@ -13,27 +13,40 @@ import {
   instanceCodexAuthPath,
   planCodexLoginSync,
   promoteCodexLogin,
+  publishNewestCodexLogin,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
 } from "../../packages/cli-runner/src/codex-shared-login.js";
 import { preparePerUserStructuredLaunch } from "../../packages/cli-runner/src/per-user-structured.js";
 
-function login(account: string, token: string, lastRefresh: string): string {
+function jwt(claims: Record<string, unknown>): string {
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${part({ alg: "none" })}.${part(claims)}.sig`;
+}
+
+/** A login file whose access token names `account`, issued at `issuedAt`. */
+function login(account: string, token: string, issuedAt: string): string {
+  const iat = Math.floor(Date.parse(issuedAt) / 1000);
   return JSON.stringify({
     auth_mode: "chatgpt",
     OPENAI_API_KEY: null,
     tokens: {
       id_token: "id",
-      access_token: token,
+      access_token: jwt({
+        jti: token,
+        iat,
+        "https://api.openai.com/auth": { chatgpt_account_id: account }
+      }),
       refresh_token: `refresh-${token}`,
       account_id: account
     },
-    last_refresh: lastRefresh
+    last_refresh: issuedAt
   });
 }
 
-const OLD = "2026-09-18T14:31:26.650657596Z";
-const NEW = "2026-09-22T20:25:18.802308327Z";
+const OLD = "2026-09-18T14:31:26Z";
+const NEW = "2026-09-22T20:25:18Z";
+const FUTURE = "2030-01-01T00:00:00Z";
 
 const dirs: string[] = [];
 function tempHome(): string {
@@ -81,6 +94,29 @@ describe("planCodexLoginSync", () => {
   it("never lets a different account replace the shared login", () => {
     const other = login("acct-other", "other-token", NEW);
     expect(planCodexLoginSync(owner, other)).toEqual({ action: "seed", raw: owner });
+  });
+
+  it("never promotes another account's tokens relabelled as the shared account", () => {
+    // The file claims the owner's account and a far-future refresh, but its token says otherwise.
+    const forged = JSON.parse(login("acct-attacker", "attacker-token", FUTURE)) as {
+      tokens: { account_id: string };
+    };
+    forged.tokens.account_id = "acct-owner";
+    expect(planCodexLoginSync(owner, JSON.stringify(forged))).toEqual({
+      action: "seed",
+      raw: owner
+    });
+  });
+
+  it("judges freshness by the token's issue time, not the file's editable refresh time", () => {
+    const relabelled = JSON.parse(login("acct-owner", "older-token", "2026-09-01T00:00:00Z")) as {
+      last_refresh: string;
+    };
+    relabelled.last_refresh = FUTURE;
+    expect(planCodexLoginSync(owner, JSON.stringify(relabelled))).toEqual({
+      action: "seed",
+      raw: owner
+    });
   });
 
   it("leaves a user's own login alone while no shared login exists", () => {
@@ -134,11 +170,54 @@ describe("syncCodexLoginIntoHome", () => {
     expect(next.current).toBe(refreshed);
   });
 
+  it("hands a user another user's newer refresh, so nobody starts from a retired token", async () => {
+    const homeBase = tempHome();
+    writeInstance(homeBase, login("acct-owner", "owner-token", OLD));
+    const refreshed = login("acct-owner", "refreshed-token", NEW);
+    const userA = memoryHome(refreshed);
+    const userB = memoryHome(null);
+    const unreadable: CodexHomeAccess = {
+      read: async () => {
+        throw new Error("home not ready");
+      },
+      write: async () => undefined
+    };
+    expect(await syncCodexLoginIntoHome(homeBase, userB, [unreadable, userA])).toBe("seeded");
+    expect(userB.current).toBe(refreshed);
+    expect(readFileSync(instanceCodexAuthPath(homeBase), "utf8")).toBe(refreshed);
+  });
+
+  it("ignores another user's copy of a different account", async () => {
+    const homeBase = tempHome();
+    const owner = login("acct-owner", "owner-token", OLD);
+    writeInstance(homeBase, owner);
+    const other = memoryHome(login("acct-other", "other-token", NEW));
+    const user = memoryHome(null);
+    await syncCodexLoginIntoHome(homeBase, user, [other]);
+    expect(user.current).toBe(owner);
+    expect(readFileSync(instanceCodexAuthPath(homeBase), "utf8")).toBe(owner);
+  });
+
   it("reports none when nobody has connected Codex", async () => {
     const homeBase = tempHome();
     const user = memoryHome(null);
     expect(await syncCodexLoginIntoHome(homeBase, user)).toBe("none");
     expect(user.current).toBeNull();
+  });
+});
+
+describe("publishNewestCodexLogin", () => {
+  it("carries the newest refresh any user holds back to the shared login", async () => {
+    const homeBase = tempHome();
+    writeInstance(homeBase, login("acct-owner", "owner-token", OLD));
+    const newest = login("acct-owner", "newest-token", NEW);
+    const homes = [
+      memoryHome(login("acct-owner", "middle-token", "2026-09-20T00:00:00Z")),
+      memoryHome(newest)
+    ];
+    expect(await publishNewestCodexLogin(homeBase, homes)).toBe(true);
+    expect(readFileSync(instanceCodexAuthPath(homeBase), "utf8")).toBe(newest);
+    expect(await publishNewestCodexLogin(homeBase, homes)).toBe(false);
   });
 });
 

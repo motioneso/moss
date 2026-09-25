@@ -38,13 +38,17 @@ import { buildSetprivDropCommand } from "./setpriv.js";
 import { CliRunnerServer } from "./server.js";
 import { TerminalHost } from "./terminal-host.js";
 import { ensureOwnedTopLevel, prepareOwnedPathWithOwnership } from "./owned-fs.js";
+import { createOwnerIo } from "./per-user-structured.js";
 import { allocateUidSlot } from "./uid-allocator.js";
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
 import {
+  codexPeerHomes,
   ownerCodexHomeAccess,
   promoteCodexLogin,
-  syncCodexLoginIntoHome
+  publishNewestCodexLogin,
+  syncCodexLoginIntoHome,
+  type CodexHomeAccess
 } from "./codex-shared-login.js";
 
 export interface CliRunnerConfig {
@@ -179,6 +183,19 @@ export function sourceSelfUpdateDisableEnv(
   return set;
 }
 
+/** One user's Codex login, read and written through their own account. */
+function ownerCodexAccess(
+  agentHome: string,
+  identity: { readonly uid: number; readonly gid: number }
+): CodexHomeAccess {
+  return ownerCodexHomeAccess(
+    agentHome,
+    identity,
+    createOwnerIo(identity),
+    runAgentHomePrepareAsOwner
+  );
+}
+
 /**
  * Resolve one isolated login runtime with owner-switched commands and credential reads. With
  * `syncCodexLogin`, the instance's shared Codex login is brought into the user's home first, so a
@@ -208,7 +225,8 @@ export async function resolveIsolatedUserRuntime(
   if (opts?.syncCodexLogin) {
     await syncCodexLoginIntoHome(
       config.homeBase,
-      ownerCodexHomeAccess(agentHome, slot, io, runAgentHomePrepareAsOwner)
+      ownerCodexHomeAccess(agentHome, slot, io, runAgentHomePrepareAsOwner),
+      codexPeerHomes(config.homeBase, userId, ownerCodexAccess)
     );
   }
   return {
@@ -363,6 +381,14 @@ export function createCliRunner(
     installService,
     loginService,
     resolveUserRuntime,
+    // #2687: model listing reads the shared Codex login, so it first picks up any newer refresh.
+    beforeModelList: async (provider) => {
+      if (provider !== "openai-compatible" || !config.perUserUid) return;
+      await publishNewestCodexLogin(
+        config.homeBase,
+        codexPeerHomes(config.homeBase, undefined, ownerCodexAccess)
+      ).catch(() => undefined);
+    },
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).
     cliPresent: (provider: ProviderKind) => cliAvailable(provider),
     multiplexerUsable: () => tmuxAvailable(),

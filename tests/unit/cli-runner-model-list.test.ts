@@ -353,6 +353,33 @@ describe("engine-host listProviderModels", () => {
     expect(calls).toHaveLength(2);
     expect(await host.listProviderModels("google")).toMatchObject({ status: "unsupported" });
   });
+
+  it("gives the runner a chance to pick up a newer Codex refresh before reading the login", async () => {
+    const home = await homeWithCodexAuth();
+    const order: string[] = [];
+    const { f } = fakeFetch(async () => {
+      order.push("fetch");
+      return jsonResponse({ models: [] });
+    });
+    const host = new CliChatEngineHost({
+      io: {
+        run: vi.fn().mockResolvedValue({ code: 0, stdout: "codex-cli 0.139.0\n" }),
+        readFile: vi.fn().mockResolvedValue(""),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        sleep: vi.fn().mockResolvedValue(undefined)
+      },
+      neutralBase: "/tmp/neutral-base",
+      homeBase: home,
+      singleUser: true,
+      cliPresent: async () => false,
+      fetch: f,
+      beforeModelList: async (provider) => {
+        order.push(`before:${provider}`);
+      }
+    });
+    await host.listProviderModels("openai-compatible");
+    expect(order).toEqual(["before:openai-compatible", "fetch"]);
+  });
 });
 
 describe("#2242: a rejected credential clears the saved 'the login works' answer", () => {
