@@ -28,6 +28,8 @@ export interface CatalogEntry {
   // its `espnLeague`, so the screen shows it as a news-only league. Static data only — request
   // parameters can never steer the fetch target.
   readonly newsFeedUrl?: string | null;
+  // Short publisher name shown beside the league label on feed stories.
+  readonly newsFeedPublisher?: string | null;
 }
 
 // Base paths for the two ESPN logo schemes, factored out so the entries below read as data.
@@ -677,7 +679,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
     espnSport: "baseball",
     espnLeague: "usa.wpbl",
     confederation: "INTL",
-    newsFeedUrl: "https://www.womensprobaseballleague.com/feed/"
+    newsFeedUrl: "https://www.womensprobaseballleague.com/feed/",
+    newsFeedPublisher: "WPBL"
   },
   // AFC, CAF, and the remaining CONMEBOL/CONCACAF feeder leagues from spec Appendix A
   // (#907 slice 4 — the final batch). All live-probed via scripts/probe-espn-leagues.mjs;

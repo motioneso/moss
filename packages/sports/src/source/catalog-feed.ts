@@ -122,7 +122,7 @@ export async function readCatalogFeeds(params: {
           imageHeight: null,
           summary: item.summary,
           teamKeys: [],
-          publisherLabel: entry.label,
+          publisherLabel: entry.newsFeedPublisher ?? host,
           publisherDomain: host
         });
       }

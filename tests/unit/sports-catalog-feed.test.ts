@@ -43,6 +43,7 @@ describe("refreshCatalogFeeds (#2661 news-only competitions)", () => {
       expect(headline.competitionLabel).toBe("Women's Pro Baseball League");
       expect(headline.sportKey).toBe("baseball");
       expect(headline.publisherDomain).toBe("www.womensprobaseballleague.com");
+      expect(headline.publisherLabel).toBe("WPBL");
       expect(headline.publishedAt).toBeTruthy();
       // No roster yet, so nothing is team-scoped.
       expect(headline.teamKeys).toEqual([]);
