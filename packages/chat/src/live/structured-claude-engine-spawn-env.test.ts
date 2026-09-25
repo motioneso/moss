@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
@@ -114,5 +114,67 @@ describe("ClaudePrintChatEngine passes the configured home folder into every spa
 
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0]!.options.env).toBeUndefined();
+  });
+});
+
+/**
+ * #2692 - the runner reads the instance login itself and hands it over in the child's env. The
+ * child shell may run as a per-user account that cannot read the runner's 0600 token file, so the
+ * command line must never read that file, and must never carry the token.
+ */
+describe("ClaudePrintChatEngine hands the instance login over in env, never in the command", () => {
+  const token = "sk-ant-oat01-runner-read-token";
+
+  function setup(): { homeBase: string; neutralDir: string; credentialFile: string } {
+    const homeBase = tempDir("cpce-home-");
+    const neutralDir = tempDir("cpce-neutral-");
+    const credentialFile = join(tempDir("cpce-tokens-"), "anthropic");
+    writeFileSync(credentialFile, `${token}\n`, { mode: 0o600 });
+    return { homeBase, neutralDir, credentialFile };
+  }
+
+  it("submit() puts the token in env and keeps the token file out of the command", async () => {
+    const { homeBase, neutralDir, credentialFile } = setup();
+    const engine = new ClaudePrintChatEngine("thread", stubIo(), { homeBase, credentialFile });
+    await engine.launch({ neutralDir, personaPath: join(neutralDir, "persona.md") });
+
+    await engine.submit("hello");
+
+    expect(spawnCalls).toHaveLength(1);
+    const env = spawnCalls[0]!.options.env as Record<string, string>;
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);
+    expect(spawnCalls[0]!.command).not.toContain(credentialFile);
+    expect(spawnCalls[0]!.command).not.toContain(token);
+    expect(spawnCalls[0]!.command).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
+  });
+
+  it("launchStructured() puts the token in env and keeps the token file out of the command", async () => {
+    const { homeBase, neutralDir, credentialFile } = setup();
+    const engine = new ClaudePrintChatEngine("thread", stubIo(), { homeBase, credentialFile });
+
+    await engine.launchStructured({
+      neutralDir,
+      personaPath: join(neutralDir, "persona.md"),
+      schema: { type: "object", properties: {} }
+    });
+
+    expect(spawnCalls).toHaveLength(1);
+    const env = spawnCalls[0]!.options.env as Record<string, string>;
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);
+    expect(spawnCalls[0]!.command).not.toContain(credentialFile);
+    expect(spawnCalls[0]!.command).not.toContain(token);
+    expect(spawnCalls[0]!.command).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
+  });
+
+  it("sets no token when the token file is missing", async () => {
+    const { homeBase, neutralDir } = setup();
+    const credentialFile = join(neutralDir, "absent");
+    const engine = new ClaudePrintChatEngine("thread", stubIo(), { homeBase, credentialFile });
+    await engine.launch({ neutralDir, personaPath: join(neutralDir, "persona.md") });
+
+    await engine.submit("hello");
+
+    const env = spawnCalls[0]!.options.env as Record<string, string>;
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 });
