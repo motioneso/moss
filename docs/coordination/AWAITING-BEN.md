@@ -75,6 +75,17 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+- **#2521 p9 degraded briefing presentation (blocks p9 implementation only).** Review the
+  [desktop/phone decision sheet](../superpowers/specs/assets/2026-09-10-morning-briefing/p9-degraded-decision-sheet.png).
+  Recommendation: keep the existing reader shell, Review task blocks tab, schedule area, and plan
+  actions when the briefing fails; replace only the report body with the unavailable message and
+  retry action. Keep retry disabled while pending, restore the report on success, and retain pending
+  task-block choices. Keep a missing/loading plan distinct from a valid zero-block plan; keep delayed
+  email freshness and no-evening copy source-specific. The sheet uses the approved ready state and proposed recovery scenarios from the recovered
+  interactive study. It uses fictional data and is not a fresh live capture. **Question:** Approve this p9 treatment as shown, or what should change?
+  The question is also recorded on issue #2521. Other #2521 screen lanes may continue.
+
+
 <!-- Resolved 2026-09-03: false alarm. Home Assistant was never disconnected. It lives in the new
 integrations table (packages/integrations), not the old connector_definitions table the proof lane
 queried. On 2026-09-03 the dev API listed it enabled with 75/75 tools and a live refresh returned 200.
