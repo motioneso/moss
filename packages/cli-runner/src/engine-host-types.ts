@@ -9,6 +9,8 @@ import type { AdmitCapablePool, ReapReason, RpcLaunchResult, SweepIdlePool } fro
 
 import type { InstallService } from "./install-service.js";
 import type { LoginService, LoginUserRuntime } from "./login-service.js";
+import type { OwnershipApplier, purgeOwnedPath } from "./owned-fs.js";
+import type { PerUserStructuredDeps } from "./per-user-structured.js";
 
 export interface EngineHostDeps {
   readonly io: TmuxIo;
@@ -37,6 +39,12 @@ export interface EngineHostDeps {
    * tests inject a fake because a non-root process cannot switch owner.
    */
   readonly createSlotIo?: (slot: { readonly uid: number; readonly gid: number }) => TmuxIo;
+  /** Test seam for handing per-user folders to their owner; defaults to a real chown. */
+  readonly applyOwnership?: OwnershipApplier;
+  /** Test seam for removing a per-user working folder as its owner. */
+  readonly purgeOwnedPath?: typeof purgeOwnedPath;
+  /** Test seam for preparing a per-user home; defaults to the ACP chat steps. */
+  readonly prepareOwnerHome?: PerUserStructuredDeps["prepareOwnerHome"];
   /** Presence-only PATH probe for `probeProvider` (§4.8). */
   readonly cliPresent: (provider: ProviderKind) => Promise<boolean>;
   /** Optional multiplexer-usable check surfaced by `probeProvider` (§4.8 / §9.1). */

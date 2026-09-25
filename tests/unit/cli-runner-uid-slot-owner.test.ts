@@ -54,6 +54,13 @@ function makeHost(homeBase: string, neutralBase: string, io: TmuxIo = fakeIo()):
     homeBase,
     perUserUid: true,
     createSlotIo: () => fakeIo(),
+    // A non-root test cannot hand folders to another UID or remove them as that UID.
+    applyOwnership: async () => undefined,
+    purgeOwnedPath: async () => undefined,
+    prepareOwnerHome: async (base, owner) => {
+      mkdirSync(join(base, "agents", owner), { recursive: true });
+      return join(base, "agents", owner);
+    },
     singleUser: false,
     cliPresent: async () => true,
     launchTimeoutMs: 2_000

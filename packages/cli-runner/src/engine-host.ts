@@ -65,6 +65,11 @@ import {
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
 import { perUserSessionIo, pruneUidSlotTable } from "./per-user-slot.js";
+import {
+  isStructuredLaunch,
+  preparePerUserStructuredLaunch,
+  type PerUserStructuredLaunch
+} from "./per-user-structured.js";
 export type {
   EngineHostDeps,
   PersistentRuntimeLiveConfig,
@@ -283,13 +288,11 @@ export class CliChatEngineHost {
     this.applyPersistentRuntimeParams(params);
     const key = sanitizeSessionKey(sessionKey);
 
-    // (1) ADMISSION under the server-wide mutex. Compute liveKeys = mux ∪ reservations
-    // and admit only if no DIFFERENT key is live; then atomically reserve K. This closes
-    // the cross-key concurrent-launch TOCTOU (two launches both passing the gate before
-    // either's jarv1s-live-<K> session exists).
+    // (1) ADMISSION under the server-wide mutex: admit only if no DIFFERENT key is live (mux ∪
+    // reservations), then atomically reserve K, closing the cross-key concurrent-launch TOCTOU.
     const release = await this.admissionMutex.acquire();
-    // #347: declared before the try so it is accessible after the mutex block.
     let sessionIo = this.deps.io;
+    let perUser: PerUserStructuredLaunch | undefined;
     try {
       if (this.deps.singleUser) {
         const liveKeys = await this.currentLiveKeys();
@@ -298,19 +301,20 @@ export class CliChatEngineHost {
             throw new CliChatUnavailableError("live chat is busy with another session");
           }
         }
-        // §L.6.1 UNIFIED exclusivity gate: a chat launch is also blocked while a provider login
-        // is in flight (the login CLI runs same-UID and touches the auth volume — "at most one
-        // untrusted CLI at a time", the #347 stand-in). Reuses the `unavailable` code, no wire change.
+        // §L.6.1 UNIFIED exclusivity gate: no chat launch while a provider login is in flight
+        // ("at most one untrusted CLI at a time", the #347 stand-in).
         if (this.deps.loginService && (await this.deps.loginService.isLoginActive())) {
           throw new CliChatUnavailableError("a provider login is in progress");
         }
       }
-      // #347: allocate the UID slot under the mutex so concurrent launches cannot race on the slot
-      // file, and before reservations.add so a slot failure leaves no orphan reservation. With
-      // `perUserUid` off (the default) `sessionIo` stays `this.deps.io` and the CLI runs as the
-      // runner's own UID; the per-user path needs a root container (see EngineHostDeps).
+      // #347: allocate the UID slot under the mutex, before reservations.add, so a slot failure
+      // leaves no orphan reservation. Off (the default), the CLI runs as the runner's own UID.
+      // #2674: a structured launch runs as its owner, in the owner's own home and login.
       if (this.deps.perUserUid && this.deps.homeBase) {
-        sessionIo = perUserSessionIo({ ...this.deps, homeBase: this.deps.homeBase }, key, params);
+        const deps = { ...this.deps, homeBase: this.deps.homeBase };
+        if (isStructuredLaunch(params)) {
+          perUser = await preparePerUserStructuredLaunch(deps, key, params);
+        } else sessionIo = perUserSessionIo(deps, key, params);
       }
       this.reservations.add(key);
     } catch (err) {
@@ -322,19 +326,13 @@ export class CliChatEngineHost {
       release();
     }
 
-    // (2) Out-of-lock mux-create + launch, BOUNDED by a timeout (§4.1.0a). The finally
-    // releases the reservation on success OR any failure OR timeout — a wedged tmux can
-    // never strand K and freeze the gate (fail-safe; release guaranteed by settle AND
-    // by timeout).
+    // (2) Out-of-lock mux-create + launch, BOUNDED by a timeout (§4.1.0a). The finally releases
+    // the reservation on success, failure or timeout, so a wedged tmux never strands K.
 
-    // #1350: the engine is chosen by the ONE shared selector, so a provider configured
-    // `non_interactive` gets the one-shot (`claude -p` / agy exec) engine here exactly as it
-    // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
-    // engine, which made #1239's flip a no-op on every containerized deploy and took prod
-    // chat down completely.
     const engine = await createStructuredEngine(params.provider as ProviderKind, key, sessionIo, {
       mux: this.deps.mux,
-      homeBase: this.deps.homeBase,
+      homeBase: perUser?.agentHome ?? this.deps.homeBase,
+      childIdentity: perUser?.childIdentity,
       ownsDrain: true,
       executionMode: params.executionMode,
       needsStructuredOutput: params.needsStructuredOutput,
@@ -349,20 +347,23 @@ export class CliChatEngineHost {
       persistentPool: this.deps.persistentRuntimePool,
       // #363: the 0600 token file the claude launch reads CLAUDE_CODE_OAUTH_TOKEN from at
       // runtime (claude-scoped; only used by buildClaudeCommand, only if the file exists).
-      credentialFile: this.deps.homeBase
-        ? providerTokenPath(this.deps.homeBase, params.provider)
-        : undefined,
+      credentialFile:
+        this.deps.homeBase && !perUser
+          ? providerTokenPath(this.deps.homeBase, params.provider)
+          : undefined,
       // #1157: surface silently-discarded composer input (char count only — never content) so
       // a stuck previous turn is visible in daemon logs instead of vanishing without a trace.
       onDiagnostic: (event) =>
         console.warn(`[engine-host] ${key} diagnostic ${event.kind} paneChars=${event.paneChars}`)
     });
-    const neutralDir = deriveNeutralDir(this.deps.neutralBase, key);
+    const neutralDir = perUser?.neutralDir ?? deriveNeutralDir(this.deps.neutralBase, key);
 
     // #342: seed the provider CLI's first-run state (claude onboarding + per-dir trust) BEFORE
     // launch so the engine-launched REPL skips its wizard and starts authenticated (the token is
     // already injected via the launch line). Per-provider; non-claude providers no-op.
-    if (this.deps.homeBase) {
+    // A per-user structured launch skips this: `claude --print` has no wizard, and the owner's
+    // home is not the runner's to write.
+    if (this.deps.homeBase && !perUser) {
       await ensureProviderLaunchReady(
         this.deps.homeBase,
         params.provider as ProviderKind,
@@ -370,22 +371,18 @@ export class CliChatEngineHost {
       );
     }
 
-    // Review B4 follow-up — `params.schema` present means this is a structured one-shot call
-    // (email extraction via `CliStructuredAdapter`). `createStructuredEngine` already built the bounded
-    // print engine for it (`needsStructuredOutput` above), so the launch call itself must be
-    // `launchStructured`, not the ordinary `launch` — the ordinary one never spawns the
-    // JSON-stream child process the structured submit/read verbs below depend on.
+    // Review B4 follow-up: a `params.schema` launch must use `launchStructured`; the ordinary
+    // `launch` never spawns the JSON-stream child the structured submit/read verbs depend on.
     if (params.schema && !hasStructuredMethods(engine)) {
       this.reservations.delete(key);
+      await perUser?.childIdentity.release();
       throw new CliChatUnavailableError("CLI structured stream is unavailable");
     }
     const launchOpts = {
       neutralDir,
-      // The in-process engine ignores personaPath when personaText is present; pass a
-      // path under the neutral dir to keep types satisfied (§4.1.1a — server writes
-      // the persona FILE from personaText).
-      personaPath: `${neutralDir}/persona.md`,
-      personaText: params.personaText,
+      // §4.1.1a: the engine writes the persona from personaText; a per-user launch wrote it already.
+      personaPath: perUser?.personaPath ?? `${neutralDir}/persona.md`,
+      personaText: perUser ? undefined : params.personaText,
       mcpToken: params.mcpToken,
       mcpServerUrl: params.mcpServerUrl,
       replayBatch: params.replayBatch,
@@ -421,6 +418,7 @@ export class CliChatEngineHost {
       // late orphan can't enter liveKeys and block the gate (§4.1.0a).
       await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
       await removeNeutralDir(this.deps.io, this.deps.neutralBase, key).catch(() => undefined);
+      if (!timedOut) await perUser?.childIdentity.release();
       this.engines.delete(key);
       // LATE-SUCCESS ORPHAN REAP (§4.1.0a, ~the 144-147 race): when we timed out, the raw
       // launch promise is still running and may create the jarv1s-live-<key> mux session
@@ -434,11 +432,12 @@ export class CliChatEngineHost {
             () => false // rejected late = no late session created; nothing to reap
           )
           .then(async (resolvedLate) => {
-            if (!resolvedLate) return;
+            if (!resolvedLate) return perUser?.childIdentity.release();
             await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(
               () => undefined
             );
             await removeNeutralDir(this.deps.io, this.deps.neutralBase, key).catch(() => undefined);
+            await perUser?.childIdentity.release();
             this.engines.delete(key);
           });
       }
