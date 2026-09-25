@@ -273,3 +273,181 @@ regression; pre-P1 shared-page guards preserved except approved changes; every
 approved task merged and timeline row checked. If final reconciliation finds a
 gap, the feature stays open and PM records a bounded correction before dispatch.
 No implicit 'final polish' task or slice-only completion claim.
+
+## Completion addendum — 2026-09-25 (Astra)
+
+Status: proposed execution detail for the remaining #2521 work. This preserves
+existing approvals; it does not approve a new data contract or degraded-state design.
+All agents implementing product code must use **gpt-6-luna, xhigh reasoning**,
+per Ben's instruction. Astra owns synthesis; independent agents review and prove.
+
+### Later approved authority: VP-SCREENS-R1
+
+Ben approved VP-SCREENS-R1 on September 23, after VP-PLAN-R2. Its authoritative
+source is the design room's `workspace/plans/screen-tasks-replan.md`, reflected in
+the [#2521 delivery timeline](https://github.com/motioneso/moss/issues/2521).
+The following rules supersede conflicting regional-stage rules above:
+
+- Remaining product tasks own whole screens, using the existing keys below.
+- Owned-screen pixel scores are advisory; Ben's visual acceptance decides parity.
+  Pixel guards against the exact base remain blocking. Preserve populated data,
+  exact viewport/state, accessible behavior, static, review, CI and live proof.
+- The reader task owns the shared dialog header, tabs and paper. Review and
+  evening tasks guard below that frame band; final design acceptance follows
+  the merged frame. Other shared edits require explicit ownership before dispatch.
+- Only a label/state harness change forced by that screen's UI belongs in its
+  task. Other harness/tooling work needs a separate decision. The parked capture
+  origin, service-worker install, reader size-table and sports-fixture tasks stay
+  parked and are not conditions for closing #2521.
+- Prepare comparison sheets with at most four screens each. Ben's recorded
+  acceptance completes the design leg; a screenshot or passing score alone does not.
+
+### 1. Reconcile and prepare, without rebuilding completed work
+
+The open checkboxes do not mean every implementation is absent: #2641, #2648,
+#2642 and #2649 merged screen work, and #2650 corrected the stale-plan warning.
+For each existing task, record merged PR, current implementation, remaining defect,
+proof head and visual acceptance separately. Check Meds Escape/focus and the V5
+rail heading against their merged fixes; reconcile every V7/V8 F1–F5 ledger item.
+Keep `p9-degraded-briefing-presentation` explicitly pending its design decision.
+
+Retain the 32 committed reference PNGs as visual authority. **Before UI dispatch,
+inventory and recover the approved mockup's existing HTML/CSS/JavaScript**, presently
+missing from main, from the recovered study. Both this plan and implementation use
+that existing code where available: map each screen's study structure, measurements,
+styles and interactions to its current production component; reuse exact compatible
+structure and values rather than recreating them from images. Publish only reviewed,
+public-safe study sources or bounded extracts and repair stale links. Translate into
+existing Moss primitives/tokens; retain production data, permissions and persistence.
+Do not copy fictional data, in-memory action behavior or obsolete implementation
+patches. Each UI dispatch names its study source and intended reuse.
+
+Restore to the existing cited source location,
+`~/Jarv1s/.superpowers/brainstorm/today-briefings-20260909/`, from the private
+recovery snapshot's `00-Jarv1s/untracked.tar.gz`; keep archive location and unrelated
+contents private. Review `README.md`, `index.html`, `tokens.css`, the six CSS/JS
+files below and `check*.cjs` before publishing. Include only local assets needed
+to run the study; the 32 catalog references are already committed. Additional
+archived flow captures remain private unless specifically needed and vetted.
+
+| Existing approved study code                                                                                      | Production reuse target                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `study.js`, `study.css`                                                                                           | `today-{page,hero,rail,timeline}.tsx`, `day-plan.tsx`, `news-desk.tsx`, `module-today-widgets.tsx`, `kit-today*.css`: hero/weather placement, preparation, section hierarchy and spacing.                                   |
+| `morning-briefing.js` (`morningRead`, `morningReview`, `morningSnapshot`, `morningWorld`), `morning-briefing.css` | `morning-briefing.tsx`, `briefing-report-shell.tsx`, `day-plan-review.tsx`, `briefing-dialog.tsx`, `kit-briefing-reader.css`: report structure, sources, 1120×910 desktop frame, 310px supporting rail and phone treatment. |
+| `evening-plan.js`, `evening-plan.css`                                                                             | `evening-planning*.tsx`, `evening-mode.tsx`, `kit-evening-planning.css`: shared frame, two capacity choices, review/saved details and morning handoff.                                                                      |
+
+Current components already port much of the chrome: preserve matching code and
+reuse only missing or incorrect portions. Study tokens are local design values;
+map them to existing production tokens. Study checks describe interactions but
+do not replace real-app checks: fixed replies and global in-tab state are demonstrations.
+In particular, `morningRead()` supplies the editorial report while
+`morningSnapshot()` supplies only its supporting schedule. Port that separation.
+Adapt compatible `check-morning.cjs` assertions for responsive overflow/footer,
+materials/source detail, conflicts, save retry, focus restoration and section links.
+
+Use the existing disposable-stack harness for a fresh baseline and the existing
+case manifests for bounded corrections. Read `verify-gate` before any DB-touching
+command. `MOSS_PARITY_OUT` must name a fresh private evidence directory; the existing
+full command is `pnpm test:uat -- visual-parity`. The fixture signs in and populates
+the real app; an unauthenticated production browser is not the proof path.
+
+### 2. Fix the confirmed disappearing popup first
+
+Ben identified the **Review task blocks tab** and confirmed **only the popup
+disappeared**. `today-page.tsx` closes the reader before its replacement can render;
+the replacement requires `dayPlanQuery.data?.plan`. Own the transition and all its
+entry points together. Check readiness before leaving Read; retain a visible reader
+and useful existing loading/error/no-plan feedback when Review cannot open. Open
+Review normally when a current plan exists. Do not create a plan merely to open a tab.
+Distinguish a missing saved plan from a valid plan with zero task blocks; the latter
+must remain reviewable. Include the direct Today review entry in the caller audit.
+
+Acceptance: a regression fails on the existing transition and passes after the fix;
+no-plan, loading and failed-plan states retain a usable dialog; automatic/proposed
+plans still reach Review with keyboard focus and return behavior intact. Add one
+real UI no-plan case, separate from the 32 populated captures: the existing visual
+fixture always creates a plan and cannot prove this bug fixed. Record dialog
+visibility and page errors. Update the Today app-map error/remediation in this PR.
+
+### 3. Finish the existing screen tasks with parallel ownership
+
+After the transition fix, dispatch these bounded lanes where files do not overlap.
+Each dispatch declares files, state/capture names, guards and one stop condition.
+The coordinator owns shared-file integration; builders never overwrite another lane.
+
+| Existing task                                 | Remaining work and acceptance                                                                                                                                                                                                                                          | Order / ownership                                                                                                                            |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `screen-morning-today`                        | Compare and correct the whole morning page, especially compact weather placement and hero hierarchy; exercise section links, Meds and timeline actions. Own all 8 morning Today references.                                                                            | Parallel with reader/evening; Today hero, page presentation and Today styles. Serialize any `today-page.tsx` edit behind the popup fix.      |
+| `screen-morning-reader`                       | Make Read an operational report: priority, overnight changes, preparation/follow-up/travel, editorial sections; schedule supports it. Remove repeated dashboard lists. Preparation opens inside the reader with return. Own 6 Read references and shared dialog frame. | Parallel with Today/evening body work; reader components/styles, shared dialog. Inventory existing report data and preview capability first. |
+| `screen-review`                               | Reconcile merged Review against 5 references; preserve accept-all, partial acceptance, explicit unscheduling, conflicts, failed-save retry and focus.                                                                                                                  | Audit/tests may parallelize; shared-frame-dependent capture and design acceptance follow reader merge. Review-only components/styles.        |
+| `p8-commitments`, then `screen-evening-steps` | Verify step 2's merged state and 2 references; correct capacity from 3 choices to the approved 2 without changing saved-plan meaning; finish steps 3/4 and changed review, 5 references. Preserve selections across Back/Next.                                         | Evening owner; steps follow verified step-2 readiness. Shared evening stylesheet has one owner.                                              |
+| `screen-evening-finish`                       | Restore saved rail details, including existing blocks and “not on calendar”; phone “New this morning”; make both evening hero links work. Verify save-once, reload and morning handoff. Own 4 references.                                                              | After evening steps and morning Today integrate; same evening owner or explicit handoff.                                                     |
+
+Reader scope boundary: Today and Read currently reuse `summaryText`; the approved
+reader task barred DTO/writer changes. First reuse persisted briefing evidence,
+action rows and existing presentation seams. If the approved report needs a distinct
+narrative that these cannot supply, document the minimum writer/contract amendment,
+old-run fallback and tests before changing that contract. Do not disguise a schema
+or generation change as CSS, invent source facts, or execute archived actions
+against the current plan without revalidation. A headline/excerpt alone is not proof
+that the requested full report now exists.
+
+The existing `View ↗` action-row link targets an email/Gmail source. It is not
+evidence that preparation materials open incorrectly. Preserve email-action link
+semantics while separately locating or supplying source-grounded preparation
+references and the approved in-reader material view. Reuse actor-visible read APIs;
+do not treat external email URLs as material-preview inputs.
+
+### 4. Complete the degraded-briefing decision and slice
+
+Give `p9-degraded-briefing-presentation` a bounded design handoff while the other
+screen lanes run. Reuse `morning-briefing.js` scenarios `unavailable`, `email-delayed`
+and `no-evening`; inventory which are already implemented. `email-delayed` concerns
+email freshness specifically; `no-evening` changes priority/source copy without
+inventing evening intent or turning the report into an empty state. Prepare one
+desktop/phone proposal showing an unavailable report, available schedule/review,
+source freshness and a retry action, with loading/retry-success behavior specified.
+Separate unavailable report from absent plan and valid zero-block plan. Present
+the concrete proposal to Ben and record the unresolved presentation decision in
+the spec before implementation; this approval applies only to p9.
+
+After that decision, one Luna/xhigh builder implements only the approved gaps in
+the existing reader/Today recovery components, serialized with their screen owners,
+and updates the app-map errors/remediations. Acceptance uses a real UI failure
+then recovery: report failure leaves available schedule/review usable, delayed
+email shows truthful freshness, retry restores the report without losing pending
+choices, and phone/keyboard controls remain reachable. Add the approved desktop
+and phone state references to p9's own evidence; they supplement the existing
+32-reference matrix. Independent review, final-head proof and Ben's design
+acceptance complete the task. If it spans multiple independent states, dispatch
+one state pair at a time under the same task rather than expanding a single session.
+
+### 5. Prove each correction, then accept the integrated result
+
+For each slice: builder implements and runs targeted regressions plus the required
+static gate, updates the matching app-map declarations and release note, then stops
+at the pushed head. Independent reviewer and prover work in parallel on that head.
+Prover owns the populated browser run; do not duplicate it in the builder lane.
+Required CI, review, live interaction evidence and visual acceptance must agree on
+the final head before merge. Rebase or shared-frame changes invalidate affected proof.
+
+Use the existing case-selection harness, exact-base guards and named raw captures,
+reference comparisons, diffs and reports. Keep T20/T21 and Chromium boundaries,
+required shared-page guards, phone/zoom/keyboard checks and dark/canyon contrast
+checks applicable to the touched surfaces. A capture failure gets one bounded retry;
+a repeat failure is diagnosed and scoped, not an open-ended tooling run.
+
+Final acceptance covers **32 images on the integrated head**: Today 10, morning
+reader/review 11, evening planning 11. The screen rows above own 30; the two previously
+completed evening reflection images remain explicit regression/final-acceptance
+items. The complete existing harness also captures eight route guards. Independently
+review each raw capture beside its reference; report structural differences rather
+than trusting masks. Retain the separate no-plan bug proof and saved-plan interaction
+proofs: images alone cannot establish them.
+
+Present Ben the resulting comparison sheets in this conversation, record his
+acceptance or concrete fix list, and update #2521 only from that evidence. Architect
+then reconciles all original issue items and every screen against the merged plan.
+An unresolved degraded-state design or other required item must be completed or
+explicitly dispositioned before closing the issue. Current-head proof, visual
+acceptance and a truthful tracker are the finish condition.
