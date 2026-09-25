@@ -5,7 +5,19 @@ export const SOCCER_COMPETITIONS: ReadonlySet<string> = new Set([
   "eng.1",
   "usa.1",
   "uefa.champions",
-  "fifa.world"
+  "fifa.world",
+  // #2661 women's football. The set is only consulted to order a scoreline, so every soccer
+  // competition added here reads home-first like the rest of the sport.
+  "eng.w.1",
+  "esp.w.1",
+  "fra.w.1",
+  "ned.w.1",
+  "aus.w.1",
+  "fifa.wwc",
+  "uefa.wchampions",
+  "uefa.weuro",
+  "concacaf.w.gold",
+  "fifa.w.olympics"
 ]);
 
 /**
@@ -14,7 +26,15 @@ export const SOCCER_COMPETITIONS: ReadonlySet<string> = new Set([
  */
 export const TOURNAMENT_COMPETITIONS: ReadonlySet<string> = new Set([
   "uefa.champions",
-  "fifa.world"
+  "fifa.world",
+  // #2661, and the reviewer follow-up from #2660: the Women's World Cup was missing, and the
+  // new women's tournaments belong here too. A group-stage line under a knockout bracket reads
+  // as a league position, so compact surfaces hide it.
+  "fifa.wwc",
+  "uefa.wchampions",
+  "uefa.weuro",
+  "concacaf.w.gold",
+  "fifa.w.olympics"
 ]);
 
 /**

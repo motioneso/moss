@@ -717,10 +717,11 @@ describe("sports routes", () => {
     expect(body.partial).toBe(false);
     // fast-json-stringify strip check: `partial` must be on the wire.
     expect(res.body).toContain('"partial"');
-    // Every catalog league is "cached" here, so the fake's cacheOnly fall-through serves each
-    // one via the normal handler exactly once (no league skipped for the warm-fill cap) —
+    // Every ESPN-backed catalog league is "cached" here, so the fake's cacheOnly fall-through
+    // serves each one via the normal handler exactly once (no league skipped for the warm-fill
+    // cap). A news-only competition has no ESPN roster and is skipped entirely (#2661) —
     // distinguishes this warm-cache path from the cold-cache cap test below.
-    expect(liveFetches).toBe(SPORTS_CATALOG.length);
+    expect(liveFetches).toBe(SPORTS_CATALOG.filter((entry) => !entry.newsFeedUrl).length);
     await app.close();
   });
 
