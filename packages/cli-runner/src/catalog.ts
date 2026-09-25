@@ -80,12 +80,13 @@ const RAW_CATALOG: Record<RpcProviderKind, CatalogEntry> = {
     recipe: {
       kind: "npm",
       pkg: "@anthropic-ai/claude-code",
-      // PINNED 2026-06-20: current stable published EXACT version (`npm view`).
-      version: "2.1.183",
+      // PINNED 2026-09-24: EXACT published version (`npm view`). Claude models from
+      // claude-opus-5-5 on need CLI 2.1.280 or newer; 2.1.183 rejected them with a 400.
+      version: "2.1.282",
       // COMMITTED full-tree-sha512 lockfile; install runs `npm ci --ignore-scripts`.
       lockfile: "packages/cli-runner/recipes/anthropic/npm-shrinkwrap.json",
       binary: "claude",
-      // claude 2.1.183 ships per-arch native binaries via optionalDependencies (the
+      // claude ships per-arch native binaries via optionalDependencies (the
       // wrapper's postinstall normally copies them; with --ignore-scripts the install
       // service places the host-arch binary EXPLICITLY, §A.1.3).
       archOptionalDeps: true,
