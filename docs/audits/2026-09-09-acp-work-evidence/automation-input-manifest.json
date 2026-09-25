@@ -1,0 +1,120 @@
+{
+  "captured_at": "2026-09-10T05:49:24.761416+00:00",
+  "files": [
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs",
+      "bytes": 12628,
+      "sha256": "32f3748f6bce4dc632bd42c3edf4d6b32c48d7065c796f13ed916998f84ffe11"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak",
+      "bytes": 5847,
+      "sha256": "dd6b2b574b40edf28e8f96877906dda4e8179152592f2884f1f62f46cca1f322"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1788977167",
+      "bytes": 7496,
+      "sha256": "4321ef775871b6da8b2128b72615a94fe5c15283ac9f642775f89346ba38ea7d"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1788982016",
+      "bytes": 8133,
+      "sha256": "73b7d67db0e8eec889ff573fc6a12a30751909d7f47450fa20b981226abdbd04"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1788987152",
+      "bytes": 8981,
+      "sha256": "dc72cd53b41b09885ce09221a6c5cc2dc7aab3f37085557522c3908b39be241c"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1788987309",
+      "bytes": 9152,
+      "sha256": "067018fe94a8f8116aa8f89543573749047c9f3f47021a817fda52d7dcc01419"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1788988092",
+      "bytes": 11819,
+      "sha256": "98a644ea7eb7dd21ad16911dd8049c2cab1a490b158e10f057fede622f607c84"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1788988187",
+      "bytes": 11979,
+      "sha256": "bdefce67d0a4d79862164941c6a71e6420cbc053a5e5ec2ec2473dcbbbddb1db"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-memory-guard.mjs.bak-1789001047",
+      "bytes": 12137,
+      "sha256": "a02d5bee123ccbcfe861d20dc0cc10ce59b2a3cffc6b5427981606c5a6b3662c"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-repatch.mjs",
+      "bytes": 8108,
+      "sha256": "2857767a735a56a45007e11546ff48b9c2e46bb68830868504c756f38c56f23a"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-stall-watchdog.mjs",
+      "bytes": 15600,
+      "sha256": "68e32e35c180055492c6631cc642f22f7ea1dfabb3b8b8737018a56c2234631e"
+    },
+    {
+      "file": "~/.claude/scripts/viberoom-stall-watchdog.mjs.bak-1788992866",
+      "bytes": 15307,
+      "sha256": "08614325637536688996fa94d613e966ae9dc577e700f9ca8a26cea40e8e0b8f"
+    },
+    {
+      "file": "~/.config/systemd/user/viberoom-memory-guard.service",
+      "bytes": 224,
+      "sha256": "1a2f216ba432c15f9afc74433595f7f58bcb40919b8f27bd412772bda9b74999"
+    },
+    {
+      "file": "~/.config/systemd/user/viberoom-repatch.path",
+      "bytes": 320,
+      "sha256": "fda95027ed95a355fa446d223751a2daca9a593997000ac94ca22e3d56d7ec73"
+    },
+    {
+      "file": "~/.config/systemd/user/viberoom-repatch.service",
+      "bytes": 378,
+      "sha256": "007e8c1dc787a33aa89953d6106e08ff39d1eb94e18f61f10634b77ac75d9d59"
+    },
+    {
+      "file": "~/.config/systemd/user/viberoom-stall-watchdog.service",
+      "bytes": 353,
+      "sha256": "9b288aa63b80015f5939e9579157ba0909d40e745bf05d0c64f646d63cdb1335"
+    },
+    {
+      "file": "~/.config/systemd/user/viberoom-stall-watchdog.service.d/live.conf",
+      "bytes": 38,
+      "sha256": "2bc1a18654e2047513ed0b2ff91b9c2a35be01b66feb22a0e47bc0ad5eaa173f"
+    },
+    {
+      "file": "~/.viberoom/server.log",
+      "bytes": 65752,
+      "sha256": "315817e209f54e8399e8feda3935063acde3f2e5813f77fb364860ab4724e4eb"
+    },
+    {
+      "file": "~/.viberoom-memory-guard/guard.log",
+      "bytes": 12843,
+      "sha256": "1acbe80e94413cafc25370e65fa6807425d3a0f39dda3daa8f3b507985fa74f6"
+    },
+    {
+      "file": "~/.viberoom-repatch.log",
+      "bytes": 124,
+      "sha256": "bcfc271384a1216437eaa214999e00985de2d4ff9c73715a1481574408a5a652"
+    },
+    {
+      "file": "~/.viberoom-watchdog/watchdog.log",
+      "bytes": 7878,
+      "sha256": "8bc2d8ebb745a346ebea4fbc2d6059bb1a1ec24645195df48b03e9d8d94dba3b"
+    },
+    {
+      "file": "~/viberoom-token-work.md",
+      "bytes": 9269,
+      "sha256": "8e63c886f13b45dcd5473b4ab8f831df93f7fffe747131e7ed1c5ee284531990"
+    },
+    {
+      "file": "~/viberoom-watchdog-plan.md",
+      "bytes": 4608,
+      "sha256": "5a5d0f92dcee2de810b140ecf82ef65a87e25f95d4583cb33d90ebb83ed85073"
+    }
+  ]
+}

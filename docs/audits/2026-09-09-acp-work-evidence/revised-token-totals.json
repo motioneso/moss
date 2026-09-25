@@ -1,0 +1,47 @@
+{
+  "window_unchanged": true,
+  "original_three_provider_subtotal": {
+    "direct": {
+      "Claude": 410715157,
+      "Codex": 470022005,
+      "OpenCode": 258038105
+    },
+    "descendants": {
+      "Claude": 51631833,
+      "Codex": 7728370,
+      "OpenCode": 0
+    },
+    "combined": {
+      "Claude": 462346990,
+      "Codex": 477750375,
+      "OpenCode": 258038105
+    },
+    "direct_all": 1138775267,
+    "descendants_all": 59360203,
+    "combined_all": 1198135470,
+    "Gemini": null
+  },
+  "newly_recovered_gemini": 132686735,
+  "revised_combined": 1330822205,
+  "revised_cache_reads": 1271450806,
+  "revised_cache_read_fraction": 0.9553874298332736,
+  "revised_pure_silent_tokens": 25214992,
+  "revised_silent_tokens": 27903951,
+  "gemini_sessions": [
+    {
+      "session_id": "99386afd-a2cf-4292-80bb-2d22bea07749",
+      "normalized_total_including_cache": 43110,
+      "acp_file": "Gemini-Builder-2026-09-08T18-34-05-009Z.jsonl"
+    },
+    {
+      "session_id": "0717446d-30ac-4fd0-8532-9f4aff6e66e7",
+      "normalized_total_including_cache": 124996,
+      "acp_file": "Gemini-Builder-2026-09-09T18-56-23-275Z.jsonl"
+    },
+    {
+      "session_id": "3c5b5eb9-1907-45fd-b0fd-d03e7688f27c",
+      "normalized_total_including_cache": 132518629,
+      "acp_file": "Gemini-Builder-2026-09-10T00-43-25-035Z.jsonl"
+    }
+  ]
+}

@@ -170,6 +170,11 @@ export const sportsModuleManifest = {
         "The Women's Pro Baseball League can be followed for news from the league's own site. It has no scores or standings, so its standings area says none are available and its stories still show."
     },
     {
+      id: "sports.refresh_trouble_notice",
+      description:
+        "When Moss cannot refresh scores, standings or stories, the main Sports page says some sports information could not be updated, instead of looking like a quiet day. The standings view shows no such notice."
+    },
+    {
       id: "sports.remembered_standings",
       description:
         "The standings picker opens the competition and division you last looked at, on any device, until you pick another. A finished tournament you last opened still opens."

@@ -1,0 +1,128 @@
+[
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-08T11:39:20-07:00",
+    "end": "2026-09-08T12:16:48-07:00",
+    "rc": "0",
+    "seconds": 2248.0,
+    "file": "build_acp_slice1_chat-20260908-113919.log",
+    "lines": 359
+  },
+  {
+    "gate": "pnpm verify:static",
+    "start": "2026-09-08T12:53:21-07:00",
+    "end": "2026-09-08T12:56:01-07:00",
+    "rc": "0",
+    "seconds": 160.0,
+    "file": "build_acp_slice1_chat-20260908-125321.log",
+    "lines": 81
+  },
+  {
+    "gate": "pnpm test:unit",
+    "start": "2026-09-08T12:56:11-07:00",
+    "end": "2026-09-08T12:59:58-07:00",
+    "rc": "0",
+    "seconds": 227.0,
+    "file": "build_acp_slice1_chat-20260908-125611.log",
+    "lines": 28
+  },
+  {
+    "gate": "pnpm verify:static",
+    "start": "2026-09-08T20:57:30-07:00",
+    "end": "2026-09-08T20:58:51-07:00",
+    "rc": "1",
+    "seconds": 81.0,
+    "file": "build_acp_slice1_chat-20260908-205730.log",
+    "lines": 26
+  },
+  {
+    "gate": "pnpm test:unit",
+    "start": "2026-09-08T21:26:46-07:00",
+    "end": "2026-09-08T21:30:36-07:00",
+    "rc": "0",
+    "seconds": 230.0,
+    "file": "build_acp_slice1_chat-20260908-212646.log",
+    "lines": 28
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-08T22:12:44-07:00",
+    "end": "2026-09-08T22:49:25-07:00",
+    "rc": "0",
+    "seconds": 2201.0,
+    "file": "build_acp_slice1_chat-20260908-221244.log",
+    "lines": 359
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T00:47:22-07:00",
+    "end": "2026-09-09T00:47:45-07:00",
+    "rc": "1",
+    "seconds": 23.0,
+    "file": "build_acp_slice1_chat-20260909-004721.log",
+    "lines": 30
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T00:48:41-07:00",
+    "end": "2026-09-09T00:50:04-07:00",
+    "rc": "1",
+    "seconds": 83.0,
+    "file": "build_acp_slice1_chat-20260909-004841.log",
+    "lines": 31
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T00:50:53-07:00",
+    "end": "2026-09-09T00:52:15-07:00",
+    "rc": "1",
+    "seconds": 82.0,
+    "file": "build_acp_slice1_chat-20260909-005053.log",
+    "lines": 36
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T00:58:59-07:00",
+    "end": "2026-09-09T01:36:37-07:00",
+    "rc": "0",
+    "seconds": 2258.0,
+    "file": "build_acp_slice1_chat-20260909-005859.log",
+    "lines": 359
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T10:02:50-07:00",
+    "end": "2026-09-09T10:40:25-07:00",
+    "rc": "1",
+    "seconds": 2255.0,
+    "file": "build_acp_slice1_chat-20260909-100250.log",
+    "lines": 394
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T10:41:14-07:00",
+    "end": "2026-09-09T11:17:29-07:00",
+    "rc": "0",
+    "seconds": 2175.0,
+    "file": "build_acp_slice1_chat-20260909-104113.log",
+    "lines": 359
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T12:23:47-07:00",
+    "end": "2026-09-09T13:00:12-07:00",
+    "rc": "0",
+    "seconds": 2185.0,
+    "file": "build_acp_slice1_chat-20260909-122347.log",
+    "lines": 359
+  },
+  {
+    "gate": "pnpm verify:foundation",
+    "start": "2026-09-09T14:17:57-07:00",
+    "end": "2026-09-09T14:54:15-07:00",
+    "rc": "0",
+    "seconds": 2178.0,
+    "file": "build_acp_slice1_chat-20260909-141757.log",
+    "lines": 359
+  }
+]

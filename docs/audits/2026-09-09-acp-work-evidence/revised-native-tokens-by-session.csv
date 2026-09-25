@@ -1,0 +1,109 @@
+file,agent,provider,session_id,prompt_count,native_total
+AGY-2026-09-07T21-14-50-153Z.jsonl,AGY,unknown,,0,
+Architect-2026-09-07T20-33-34-733Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,65069a2d-01bd-4283-bb78-3f0343c80bf4,62,28966955
+Architect-2026-09-08T18-06-22-605Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,3e8eb73f-92b3-4ece-9088-3b9511933dcb,0,0
+Architect-2026-09-08T18-19-45-991Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,8f56efd7-b701-4950-a301-7b243bceabff,0,0
+Architect-2026-09-08T18-33-17-072Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,77c156f1-d295-4716-882f-cf5f6e3d8b97,13,4851150
+Architect-2026-09-08T21-51-18-079Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,9bdfe5b2-2a2a-4a8b-87aa-c5f52ca9469b,6,2938017
+Architect-2026-09-09T07-22-19-542Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,de24bf4c-b68d-403b-add3-96287e34f960,2,1321245
+Architect-2026-09-09T18-54-59-775Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,f0dae1b1-e9cb-44df-a9a6-51a39d6457fb,7,2022732
+Architect-2026-09-09T23-02-40-792Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,f548b796-f2c5-4a7c-979c-c1bc94ffc9f9,5,1807104
+Architect-2026-09-10T00-18-39-447Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,96200a82-147d-4d48-a392-bf3875178bcf,7,1866055
+Architect-2026-09-10T03-30-39-476Z.jsonl,Architect,@agentclientprotocol/claude-agent-acp,0826fc6d-c1c2-4fdd-a4dc-38d6e2e52110,3,331780
+Astra-Reviewer-2026-09-08T00-43-35-774Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a07e78-6bc4-74b2-95f3-155b9f6f7c79,13,7311082
+Astra-Reviewer-2026-09-08T18-07-19-514Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a08233-fd72-7a91-92fe-be08a80ca323,0,
+Astra-Reviewer-2026-09-08T18-20-34-491Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a08240-1de3-7360-a48b-0cd9c1ce3d4d,0,
+Astra-Reviewer-2026-09-08T18-34-03-771Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a0824c-76ca-79d3-9189-2cd5c6e2e0d1,7,5230440
+Astra-Reviewer-2026-09-08T21-52-09-298Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a08301-d378-7502-9255-9fb60a5521e4,9,9016107
+Astra-Reviewer-2026-09-09T03-26-51-943Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a08434-43b2-7d91-8d38-893ec0b2a503,6,3853898
+Astra-Reviewer-2026-09-09T16-42-45-632Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a0870c-ebc0-7cc2-a9b6-2faeb4bcf8e8,1,53093
+Astra-Reviewer-2026-09-09T18-55-23-137Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a08786-57c9-73f3-bb01-109b4228a4ee,4,1721712
+Astra-Reviewer-2026-09-09T22-33-39-008Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a0884e-2bb1-7ae1-ae48-47b31e670541,5,3586543
+Astra-Reviewer-2026-09-10T01-21-31-386Z.jsonl,Astra-Reviewer,@agentclientprotocol/codex-acp,01a088e7-dd2d-70d1-8fbb-8b9066058d8e,4,1562839
+Builder-2026-09-07T20-36-55-650Z.jsonl,Builder,OpenCode,ses_f82696543ffeLPAkavjVcgCe1t,44,248285344
+Fable-2026-09-06T16-02-31-614Z.jsonl,Fable,@agentclientprotocol/claude-agent-acp,ce3bf06d-61f3-4ff0-a158-006acd8f95a4,39,4287222
+Fitz-2026-09-06T15-54-50-406Z.jsonl,Fitz,@agentclientprotocol/claude-agent-acp,6725525a-3913-4bbc-bec5-5fcf0c84bcb6,66,11854810
+Fitz-2026-09-06T18-58-16-265Z.jsonl,Fitz,@agentclientprotocol/claude-agent-acp,0f9f6706-23b2-49a3-af2d-657f11be122a,0,0
+Fitz-2026-09-07T06-07-15-360Z.jsonl,Fitz,@agentclientprotocol/claude-agent-acp,f87bdde3-be5b-4cf6-a28c-84b1238a3278,16,11078305
+Foble-2026-09-06T16-04-25-591Z.jsonl,Foble,@agentclientprotocol/claude-agent-acp,2659a4b0-c7cf-4119-865a-2f1dbc2609cf,73,9730988
+Foble-2026-09-06T18-58-20-112Z.jsonl,Foble,@agentclientprotocol/claude-agent-acp,f51e1e8e-7df5-4cff-bc1b-76b03987d56c,0,0
+Foble-2026-09-07T06-07-18-694Z.jsonl,Foble,@agentclientprotocol/claude-agent-acp,4354ab04-a832-4f7b-8010-65fb216e4be6,0,125847
+Gemini-2026-09-06T17-09-29-414Z.jsonl,Gemini,unknown,,0,
+Gemini-Build-2026-09-08T17-39-33-860Z.jsonl,Gemini-Build,unknown,,0,
+Gemini-Builder-2026-09-08T18-08-36-139Z.jsonl,Gemini-Builder,antigravity-acp,,0,
+Gemini-Builder-2026-09-08T18-22-52-028Z.jsonl,Gemini-Builder,antigravity-acp,,0,
+Gemini-Builder-2026-09-08T18-34-05-009Z.jsonl,Gemini-Builder,antigravity-acp,99386afd-a2cf-4292-80bb-2d22bea07749,2,43110
+Gemini-Builder-2026-09-08T21-52-14-064Z.jsonl,Gemini-Builder,antigravity-acp,74ec7ced-64fc-4b8d-a3b9-a3d2f97aea40,0,
+Gemini-Builder-2026-09-09T18-56-23-275Z.jsonl,Gemini-Builder,antigravity-acp,0717446d-30ac-4fd0-8532-9f4aff6e66e7,2,124996
+Gemini-Builder-2026-09-10T00-43-25-035Z.jsonl,Gemini-Builder,antigravity-acp,3c5b5eb9-1907-45fd-b0fd-d03e7688f27c,10,132518629
+Luna-Builder-2026-09-08T05-03-34-019Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a07f66-7274-7d20-8dfc-76a0860dc52d,12,31981373
+Luna-Builder-2026-09-08T18-07-20-610Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a08233-fff4-7de3-b962-1d54d359194c,0,
+Luna-Builder-2026-09-08T18-20-35-457Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a08240-2231-7ee3-8768-165ad13f8c25,0,
+Luna-Builder-2026-09-08T18-34-04-471Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a0824c-78da-7692-88e3-e2010cc3ebf6,9,69007330
+Luna-Builder-2026-09-08T21-52-11-671Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a08301-db36-7110-be75-2e73e6a2b6af,15,224432785
+Luna-Builder-2026-09-09T07-22-09-436Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a0850b-ac5d-7f31-9b41-bc2e903929c9,1,37918
+Luna-Builder-2026-09-09T18-55-22-625Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a08786-559b-7cb3-ab06-5963ba5c753e,5,8963803
+Luna-Builder-2026-09-09T23-08-29-973Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a0886e-131f-7531-9f97-83fdc28d98f7,2,3768255
+Luna-Builder-2026-09-09T23-19-30-745Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a08878-2875-7a51-ad66-6f438748e2ed,6,24291561
+Luna-Builder-2026-09-10T00-14-19-977Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a088aa-592e-7723-9ead-755fad837f10,4,5555546
+Luna-Builder-2026-09-10T00-34-27-246Z.jsonl,Luna-Builder,@agentclientprotocol/codex-acp,01a088bc-c52f-7a50-b087-0eef5febb18e,7,64983470
+Muse-2026-09-06T15-56-58-356Z.jsonl,Muse,OpenCode,ses_f88900ba6ffearyzRG2wpz8pJN,75,9752761
+Muse-2026-09-06T18-58-17-904Z.jsonl,Muse,OpenCode,ses_f87ea0afeffeSTUs3gLG1893Db,0,
+Muse-2026-09-07T06-07-16-600Z.jsonl,Muse,OpenCode,ses_f858593d3ffe0PqOcdFpGeqA20,0,
+PM-2026-09-07T20-08-18-650Z.jsonl,PM,@agentclientprotocol/claude-agent-acp,fdbe68ec-7a70-4917-b02e-3b2340e4d50b,180,23023078
+PM-2026-09-08T18-06-10-046Z.jsonl,PM,@agentclientprotocol/claude-agent-acp,3c151b44-25c9-4c70-868a-25b4a79f1aef,0,0
+PM-2026-09-08T18-19-34-025Z.jsonl,PM,@agentclientprotocol/claude-agent-acp,5d58418f-f97e-4f96-84cb-436adfceb9ef,0,0
+PM-2026-09-08T18-33-05-346Z.jsonl,PM,@agentclientprotocol/claude-agent-acp,316cf35a-870f-42ed-84da-b6f6201e39c1,33,3429447
+PM-2026-09-08T21-51-05-823Z.jsonl,PM,@agentclientprotocol/claude-agent-acp,ffb90204-1490-4344-8cab-b9d32317c276,47,6561530
+PM-2026-09-09T07-22-29-895Z.jsonl,PM,@agentclientprotocol/claude-agent-acp,0ef31b90-16a0-42af-a5aa-75c94b38a079,9,906675
+PM-2026-09-09T20-58-20-659Z.jsonl,PM,@agentclientprotocol/codex-acp,01a087f6-ea72-7fa0-9bb6-9d0d1c140929,66,4152069
+PM-Claude-2026-09-09T18-55-11-215Z.jsonl,PM-Claude,@agentclientprotocol/claude-agent-acp,f52d6969-8a55-4c33-b338-ffae4d611463,0,0
+PM-Codex-2026-09-09T15-46-20-774Z.jsonl,PM-Codex,@agentclientprotocol/codex-acp,01a086d9-45d2-7dd2-b87e-71c5312acfaf,10,293326
+PM-Codex-2026-09-09T18-56-22-728Z.jsonl,PM-Codex,@agentclientprotocol/codex-acp,01a08787-4076-79b0-98b6-70be0fbd5d80,9,218855
+Prover-2026-09-07T20-39-48-728Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,31336d03-a4bc-4929-90a8-097ced6691b2,20,9648085
+Prover-2026-09-08T18-06-53-721Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,cf93b22b-0514-41ba-8288-1b3248c5cc26,0,0
+Prover-2026-09-08T18-20-10-026Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,5b151ef1-2f17-4b51-b3a6-b81c1fb9a6ad,0,0
+Prover-2026-09-08T18-33-40-654Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,d4d6031f-61d4-4c0c-9df5-ec8c864dd335,8,768182
+Prover-2026-09-08T21-51-44-548Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,505c8845-51ce-43f1-94c8-30e1f0c741c8,6,1103200
+Prover-2026-09-09T18-07-39-092Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,c23c2739-953b-42a2-b00d-702b03b8680c,3,234977
+Prover-2026-09-09T18-55-23-701Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,e6c65725-5268-4466-9b32-bb56d6c6f817,2,8985292
+Prover-2026-09-09T22-47-25-810Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,a3d25f41-5bff-4cf1-b257-4d612669fef8,3,6605000
+Prover-2026-09-09T22-59-56-115Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,9146c68c-1bca-4e9f-8989-d2461295afd6,5,4673526
+Prover-2026-09-10T00-45-09-166Z.jsonl,Prover,@agentclientprotocol/claude-agent-acp,73a379fb-a951-4667-b8e7-741494275e20,1,127394
+Reviewer-2026-09-07T20-38-38-546Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,77a32c83-1be1-46a4-9a66-e9422021ad7e,25,15142003
+Reviewer-2026-09-08T18-06-38-998Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,2dc055bf-3dc6-4d24-9453-d7537c432dc4,0,0
+Reviewer-2026-09-08T18-19-57-984Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,c813ec4e-3238-48ed-b9f3-89e87abbdc80,0,0
+Reviewer-2026-09-08T18-33-28-760Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,485fb26a-d6ef-4a37-8a7d-f32323895c2b,1,78548
+Reviewer-2026-09-08T21-51-32-104Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,22938486-097d-4d9e-81b2-22bf8ece293c,0,0
+Reviewer-2026-09-09T18-55-35-381Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,46c4a473-01f5-4940-b514-316ee97c3740,2,1479462
+Reviewer-2026-09-10T05-03-59-067Z.jsonl,Reviewer,@agentclientprotocol/claude-agent-acp,6fbebcdf-842e-402b-b9d5-0b4dc311af48,1,94955
+Scout-2026-09-08T06-06-03-390Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,f653baaa-9ba4-4e5d-a5d7-4f4b38027f76,2,858536
+Scout-2026-09-08T18-05-57-374Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,4b03ad90-5859-4316-bdd5-be38ed88f0c8,0,0
+Scout-2026-09-08T18-19-21-526Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,087b1685-3441-4427-81d3-2203b2c5a3e4,0,0
+Scout-2026-09-08T18-32-53-467Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,42c7ce07-1e27-4aef-8fe9-8c067b37d664,1,87947
+Scout-2026-09-08T21-50-53-313Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,0ae210c8-62ba-4247-b8a6-6a454f000758,1,93209
+Scout-2026-09-09T03-24-37-671Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,015008b0-a0df-4470-9db2-1525c4655a82,0,0
+Scout-2026-09-09T18-56-21-550Z.jsonl,Scout,@agentclientprotocol/claude-agent-acp,1f3eccb3-762b-40ca-8982-b56f99078f60,1,423707
+Sonnet-Builder-2026-09-07T22-38-53-174Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,e07b237e-2660-48bc-8883-891a1cb0db4c,26,122277621
+Sonnet-Builder-2026-09-08T18-07-08-014Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,473df335-6ffc-497e-83f0-2ff75de026b0,0,0
+Sonnet-Builder-2026-09-08T18-20-22-476Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,287fa38d-9f52-4746-a1e5-2f4a28f1716a,0,0
+Sonnet-Builder-2026-09-08T18-33-52-252Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,495f5c24-a13c-4411-8454-eac80d62945e,2,178081
+Sonnet-Builder-2026-09-08T21-51-56-838Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,0bd6a2a7-295a-4907-91d6-50f3524831aa,9,24463797
+Sonnet-Builder-2026-09-09T04-54-32-897Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,e95964f0-73a8-443d-b0dc-6472da0c9ff9,16,62154056
+Sonnet-Builder-2026-09-09T18-54-48-338Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,19d437bd-0442-4695-b779-1e5ca12a180d,7,17830797
+Sonnet-Builder-2026-09-09T20-58-00-411Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,e1eb468f-b9bb-411b-9c8e-aafda286a98d,5,4780646
+Sonnet-Builder-2026-09-09T21-18-44-752Z.jsonl,Sonnet-Builder,@agentclientprotocol/claude-agent-acp,68dd41d8-3982-40d6-a8ce-ab2d64c154c4,5,13523196
+~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-aac04969281bea95e.jsonl,Fitz,Claude,descendant of 6725525a-3913-4bbc-bec5-5fcf0c84bcb6,not ACP room prompt,568098
+~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-a6ed59bb63a3d0fd7.jsonl,Fitz,Claude,descendant of 6725525a-3913-4bbc-bec5-5fcf0c84bcb6,not ACP room prompt,13599474
+~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-a9fff5ca0e586873d.jsonl,Fitz,Claude,descendant of 6725525a-3913-4bbc-bec5-5fcf0c84bcb6,not ACP room prompt,33823413
+~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-ad66a5b5ecb1813f1.jsonl,Fitz,Claude,descendant of 6725525a-3913-4bbc-bec5-5fcf0c84bcb6,not ACP room prompt,416971
+~/.claude/projects/-home-ben-Jarv1s/6725525a-3913-4bbc-bec5-5fcf0c84bcb6/subagents/agent-ab97d70330bc1467c.jsonl,Fitz,Claude,descendant of 6725525a-3913-4bbc-bec5-5fcf0c84bcb6,not ACP room prompt,775343
+~/.claude/projects/-home-ben-Jarv1s--claude-worktrees-build-acp-slice1-chat/e07b237e-2660-48bc-8883-891a1cb0db4c/subagents/agent-ace010f38250b6454.jsonl,Sonnet-Builder,Claude,descendant of e07b237e-2660-48bc-8883-891a1cb0db4c,not ACP room prompt,241250
+~/.claude/projects/-home-ben-Jarv1s/e95964f0-73a8-443d-b0dc-6472da0c9ff9/subagents/agent-a4b423c8322dd52fa.jsonl,Sonnet-Builder,Claude,descendant of e95964f0-73a8-443d-b0dc-6472da0c9ff9,not ACP room prompt,1547877
+~/.claude/projects/-home-ben-Jarv1s/e95964f0-73a8-443d-b0dc-6472da0c9ff9/subagents/agent-ad05a2a8bcba96417.jsonl,Sonnet-Builder,Claude,descendant of e95964f0-73a8-443d-b0dc-6472da0c9ff9,not ACP room prompt,659407
+~/.codex/sessions/2026/09/09/rollout-2026-09-09T19-32-07-01a08928-7ee9-7e81-8e4c-72da77774fa1.jsonl,Astra-Reviewer,Codex,descendant of 01a088e7-dd2d-70d1-8fbb-8b9066058d8e,not ACP room prompt,625839
+~/.codex/sessions/2026/09/09/rollout-2026-09-09T16-31-27-01a08883-16d3-7851-96d4-bd7b897312d3.jsonl,Astra-Reviewer,Codex,descendant of 01a0884e-2bb1-7ae1-ae48-47b31e670541,not ACP room prompt,1674270
+~/.codex/sessions/2026/09/09/rollout-2026-09-09T19-32-21-01a08928-b2f9-75e3-96a0-4ad57bb530d8.jsonl,Astra-Reviewer,Codex,descendant of 01a088e7-dd2d-70d1-8fbb-8b9066058d8e,not ACP room prompt,769707
+~/.codex/sessions/2026/09/09/rollout-2026-09-09T16-31-17-01a08882-ef80-7be3-abdb-97b763192cb7.jsonl,Astra-Reviewer,Codex,descendant of 01a0884e-2bb1-7ae1-ae48-47b31e670541,not ACP room prompt,1545841
+~/.codex/sessions/2026/09/08/rollout-2026-09-08T12-34-10-01a08283-7ef0-7691-b5d9-43a100813d3e.jsonl,Astra-Reviewer,Codex,descendant of 01a0824c-76ca-79d3-9189-2cd5c6e2e0d1,not ACP room prompt,1326557
+~/.codex/sessions/2026/09/08/rollout-2026-09-08T12-33-56-01a08283-4646-7951-a511-cf85e3820a0f.jsonl,Astra-Reviewer,Codex,descendant of 01a0824c-76ca-79d3-9189-2cd5c6e2e0d1,not ACP room prompt,1786156

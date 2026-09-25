@@ -1,0 +1,85 @@
+[
+  {
+    "sessionId": "bc805669-ab81-4003-bb7d-93b78e52815a",
+    "path": "~/.claude/projects/-home-ben/bc805669-ab81-4003-bb7d-93b78e52815a.jsonl",
+    "bytes": 565251,
+    "models": {
+      "claude-sonnet-5": 48
+    },
+    "user_messages": 6,
+    "first": "2026-09-08T21:45:46.013Z",
+    "last": "2026-09-08T21:50:40.361Z",
+    "sha256": "e6d3016292f433c11e556083976a7035b6a5bcd999bbf17a55f7e7a188ee9b77"
+  },
+  {
+    "sessionId": "396016af-97d0-43ec-8aff-380936d706da",
+    "path": "~/.claude/projects/-home-ben/396016af-97d0-43ec-8aff-380936d706da.jsonl",
+    "bytes": 901953,
+    "models": {
+      "claude-sonnet-5": 97
+    },
+    "user_messages": 14,
+    "first": "2026-09-08T23:13:51.674Z",
+    "last": "2026-09-09T04:26:12.759Z",
+    "sha256": "2e9037363adb503a8ff3deb72b0050b95f66e1fae776e251f0adb89697c277dd"
+  },
+  {
+    "sessionId": "de8a90e9-128b-4d37-b311-39d2ec6d36a5",
+    "path": "~/.claude/projects/-home-ben/de8a90e9-128b-4d37-b311-39d2ec6d36a5.jsonl",
+    "bytes": 950740,
+    "models": {
+      "claude-opus-5": 152
+    },
+    "user_messages": 12,
+    "first": "2026-09-09T07:05:06.553Z",
+    "last": "2026-09-09T08:47:59.660Z",
+    "sha256": "3e5f40e6718b1a6657cc56f76cab4ec2c50a9346063cb881628fd60232f688c0"
+  },
+  {
+    "sessionId": "2d8bbaa5-7e26-464e-84f5-476468f1b8c4",
+    "path": "~/.claude/projects/-home-ben/2d8bbaa5-7e26-464e-84f5-476468f1b8c4.jsonl",
+    "bytes": 1402308,
+    "models": {
+      "claude-sonnet-5": 205,
+      "<synthetic>": 1
+    },
+    "user_messages": 21,
+    "first": "2026-09-08T14:19:37.996Z",
+    "last": "2026-09-08T17:57:36.067Z",
+    "sha256": "e7c24b39175a210c6e3e0a6b0839f9b7c6264f48d0cfd6f27504abc3cfc6f10e"
+  },
+  {
+    "sessionId": "c75f2856-2a1f-45d4-8ba0-dfdbbbdf537a",
+    "path": "~/.claude/projects/-home-ben/c75f2856-2a1f-45d4-8ba0-dfdbbbdf537a.jsonl",
+    "bytes": 6244837,
+    "models": {
+      "claude-opus-5": 938
+    },
+    "user_messages": 124,
+    "first": "2026-09-09T15:43:26.328Z",
+    "last": "2026-09-10T02:03:06.435Z",
+    "sha256": "e215ff31abc4dd7a7170225c13ec8b62db4b3438b0147f23e14d173e64930f29"
+  },
+  {
+    "sessionId": "a123aa4b-2bf4-48fc-974e-5fb72336e633",
+    "path": "~/.claude/projects/-home-ben/a123aa4b-2bf4-48fc-974e-5fb72336e633.jsonl",
+    "bytes": 1153364,
+    "models": {
+      "claude-opus-5": 129,
+      "claude-sonnet-5": 9
+    },
+    "user_messages": 19,
+    "first": "2026-09-06T08:05:54.614Z",
+    "last": "2026-09-07T21:18:14.501Z",
+    "sha256": "9ab2e3879ad5ba8490a2443910cd36d609886404405d636769ff87a079e353ad"
+  },
+  {
+    "sessionId": "396016af research child",
+    "path": "~/.claude/projects/-home-ben/396016af-97d0-43ec-8aff-380936d706da/subagents/agent-ab6d43402580aa47e.jsonl",
+    "models": {
+      "claude-opus-5": 43
+    },
+    "bytes": 285923,
+    "sha256": "b4f2d12524a5a624535c521eee8a93dec4292e66b25b42755e8ca17ebd8448cb"
+  }
+]
