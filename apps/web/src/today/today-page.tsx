@@ -44,7 +44,7 @@ import { buildTodayHeroContent, splitHeadline, TodayHero } from "./today-hero";
 import { parseBriefingFreshness } from "./briefing-freshness";
 import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
-import { MorningBriefingReader } from "./morning-briefing";
+import { dayPlanReviewUnavailableMessage, MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
 import { TodayDock, TodayRail } from "./today-rail";
 import { DayPlanReview } from "./day-plan-review";
@@ -116,6 +116,7 @@ export function TodayPage(props: {
   } | null>(null);
   const readerOpener = useRef<HTMLElement | null>(null);
   const [review, setReview] = useState(false);
+  const [reviewAttempted, setReviewAttempted] = useState(false);
   const readerBeforeReview = useRef<{ definitionId: string; runId: string } | null>(null);
   const reviewOpener = useRef<HTMLElement | null>(null);
   const [planningAnchor, setPlanningAnchor] = useState<HTMLElement | null>(null);
@@ -168,6 +169,30 @@ export function TodayPage(props: {
     timeZone: locale.timezone,
     morningDefinitionId: morningDefinition?.id ?? null
   });
+  const reviewUnavailableMessage = reviewAttempted
+    ? dayPlanReviewUnavailableMessage({
+        dayPlan: dayPlanQuery.data,
+        loading: dayPlanQuery.isPending,
+        error: dayPlanQuery.isError
+      })
+    : null;
+  const openDayPlanReview = (anchor: HTMLElement | null, fromReader: boolean) => {
+    if (
+      dayPlanReviewUnavailableMessage({
+        dayPlan: dayPlanQuery.data,
+        loading: dayPlanQuery.isPending,
+        error: dayPlanQuery.isError
+      })
+    ) {
+      setReviewAttempted(true);
+      return;
+    }
+    setReviewAttempted(false);
+    reviewOpener.current = fromReader ? readerOpener.current : anchor;
+    readerBeforeReview.current = fromReader ? reader : null;
+    if (fromReader) setReader(null);
+    setReview(true);
+  };
   const todayMode = deriveTodayMode(eveningDefinition, locale, now);
   const eveningTimeZone = effectiveEveningTimeZone(eveningDefinition, locale);
   const latestEveningRun = latestEveningRunForToday(
@@ -568,11 +593,14 @@ export function TodayPage(props: {
               }
               onOpenTask={(id) => setDialog({ id })}
               onReview={(anchor) => {
-                reviewOpener.current = anchor;
-                readerBeforeReview.current = null;
-                setReview(true);
+                openDayPlanReview(anchor, false);
               }}
             />
+            {reviewUnavailableMessage && !reader ? (
+              <p className="cmd-empty" role="status">
+                {reviewUnavailableMessage}
+              </p>
+            ) : null}
 
             {todayMode === "day" ? startHereSection : null}
 
@@ -676,10 +704,7 @@ export function TodayPage(props: {
             }}
             onReview={() => {
               // The review replaces the reader: one dialog owns inert and focus.
-              reviewOpener.current = readerOpener.current;
-              readerBeforeReview.current = reader;
-              setReader(null);
-              setReview(true);
+              openDayPlanReview(null, true);
             }}
           />
         ) : null}

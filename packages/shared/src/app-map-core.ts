@@ -298,6 +298,13 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "permission",
     remediationRef: "core.ai.ask_user",
     description: "An agent action was not approved, so it was not done."
+  },
+  {
+    code: "core.today.day_plan_review_unavailable",
+    class: "prerequisite",
+    remediationRef: "core.today.review_when_plan_available",
+    description:
+      "Task block review is unavailable while today's saved plan is missing, loading, or unreadable."
   }
 ];
 
@@ -306,6 +313,13 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.ask_user",
     description: "Ask the user to approve the action before trying it again.",
     path: "/",
+    scope: "user"
+  },
+  {
+    id: "core.today.review_when_plan_available",
+    description:
+      "Keep reading the briefing; try Review task blocks again after the saved plan loads.",
+    path: "/today",
     scope: "user"
   }
 ];
