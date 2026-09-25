@@ -5,7 +5,8 @@ const browserName = process.env.MOSS_UAT_BROWSER ?? "chromium";
 if (browserName !== "chromium" && browserName !== "firefox") {
   throw new Error(`Unsupported MOSS_UAT_BROWSER: ${browserName}`);
 }
-const browserDevice = browserName === "firefox" ? devices["Desktop Firefox"] : devices["Desktop Chrome"];
+const browserDevice =
+  browserName === "firefox" ? devices["Desktop Firefox"] : devices["Desktop Chrome"];
 if (!baseURL) {
   throw new Error(
     "JARVIS_UAT_BASE_URL is not set — tests/uat/playwright.uat.config.ts must be invoked via " +

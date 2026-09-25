@@ -56,11 +56,7 @@ async function createMorningRun(
       cadence: "manual",
       enabled: true,
       scheduleMetadata: { targetTime: "07:00", timezone: timeZone },
-      selectedToolNames: [
-        "tasks.list",
-        "calendar.listVisibleEvents",
-        "news.topHeadlinesToday"
-      ]
+      selectedToolNames: ["tasks.list", "calendar.listVisibleEvents", "news.topHeadlinesToday"]
     })
   });
   expect(definition.status).toBe(201);
@@ -92,7 +88,9 @@ async function createMorningRun(
   throw new Error("UAT morning briefing run did not reach a populated terminal state");
 }
 
-test("Review keeps the real morning reader open when no plan is saved", async ({ page }, testInfo) => {
+test("Review keeps the real morning reader open when no plan is saved", async ({
+  page
+}, testInfo) => {
   test.setTimeout(180_000);
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   const pageErrors: string[] = [];
