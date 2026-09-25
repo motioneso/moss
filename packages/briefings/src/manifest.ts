@@ -208,8 +208,8 @@ export const briefingsModuleManifest = {
       id: "briefings.ai_writing",
       description:
         "Briefings are written by the summarization model chosen in the admin AI settings, " +
-        "signed in by API key or subscription login. Without a working model a briefing " +
-        "still arrives as a plain list of the gathered items.",
+        "signed in by API key or subscription login. Without a working model no written " +
+        "briefing appears and Today keeps its normal header.",
       remediations: [
         {
           id: "briefings.ai_writing.configure",
