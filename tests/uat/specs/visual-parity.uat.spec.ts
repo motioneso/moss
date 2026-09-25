@@ -509,6 +509,7 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       CASE_SELECTION.mode === "default" &&
       (entry.state !== lastState || entry.viewport.w !== lastWidth)
     ) {
+      const savedStateAlreadyReached = entry.state === "evening-saved" && entry.state === lastState;
       if (entry.state === "reader-partial-review")
         await mirrorBlock(page, localDay(), await localeTz(page), 0);
       if (entry.state.startsWith("reader-automatic"))
@@ -520,12 +521,14 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
           .getByLabel("Tomorrow")
           .click();
       }
-      if (entry.state === "evening-saved") {
+      if (entry.state === "evening-saved" && !savedStateAlreadyReached) {
         const dialog = page.getByRole("dialog");
         await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
         await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
       }
-      await driveState(page, entry.state, entry.viewport);
+      // The phone handoff reuses the saved state at a new viewport; the save
+      // closes its transient dialog, so only captureEntry should resize it.
+      if (!savedStateAlreadyReached) await driveState(page, entry.state, entry.viewport);
       lastState = entry.state;
       lastWidth = entry.viewport.w;
     }
