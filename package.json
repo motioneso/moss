@@ -100,7 +100,8 @@
     "spike:db:down": "docker compose -f spikes/auth-rls-safety/docker-compose.yml down -v",
     "test:spike": "vitest run spikes",
     "test:spike:auth": "vitest run spikes/auth-rls-safety/test/auth-rls-safety.test.ts",
-    "test:spike:pgboss": "vitest run spikes/pg-boss-rls/test/pg-boss-rls.test.ts"
+    "test:spike:pgboss": "vitest run spikes/pg-boss-rls/test/pg-boss-rls.test.ts",
+    "test:uat:visual-parity": "pnpm test:uat -- visual-parity"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
