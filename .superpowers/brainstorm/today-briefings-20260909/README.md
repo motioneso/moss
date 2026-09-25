@@ -26,6 +26,12 @@ From `~/Jarv1s`, start the loopback-only preview server in one terminal:
 node .superpowers/brainstorm/today-briefings-20260909/server.cjs
 ```
 
+Install Playwright's Chromium browser once before running the checks:
+
+```sh
+pnpm exec playwright install chromium
+```
+
 In another terminal, run the responsive checks:
 
 ```sh
