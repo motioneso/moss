@@ -172,7 +172,8 @@ export const briefingsModuleManifest = {
       id: "briefings.history",
       description:
         "List past briefing runs newest first, or read one run by id with its pending, " +
-        "failed or ready state. Earlier reports stay dated and read-only.",
+        "failed or ready state. Earlier reports stay dated and read-only. A run written " +
+        "without AI returns empty summary text, so its source list is never shown.",
       errors: [
         {
           code: "briefing_run_not_available",
