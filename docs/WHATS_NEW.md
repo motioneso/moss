@@ -29,10 +29,24 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-25
+
+#### Fixed
+
+- **Codex works for everyone once an administrator connects it.** When an administrator connects Codex, everyone on the same Moss instance can now chat and run background tasks with it, without signing in themselves. [PR #2694](https://github.com/motioneso/moss/pull/2694)
+- **Background AI tasks sign in reliably for every user.** Background tasks such as email sorting now sign in to Claude correctly for each person on a shared Moss instance. [PR #2693](https://github.com/motioneso/moss/pull/2693)
+
 ### 2026-09-24
 
 #### Fixed
 
+- **Background AI tasks work again with the newest Claude models.** Job scoring, briefings and email reading stopped working when Moss used the newest Claude model, and now run again. [PR #2688](https://github.com/motioneso/moss/pull/2688)
+- **Moss knows where every setting lives.** Moss now points you to the right settings page when you ask it where to change something. [PR #2677](https://github.com/motioneso/moss/pull/2677)
+- **Background AI jobs keep working after heavy use.** Background AI jobs like briefing writing and email sorting no longer stop working after heavy use. [PR #2675](https://github.com/motioneso/moss/pull/2675)
+- **Sports scores are back.** Scores, results and schedules show up again on the Sports page and the Today card, and the Sports page now tells you when it could not get fresh scores. [PR #2684](https://github.com/motioneso/moss/pull/2684)
+- **Briefings are written by your AI subscription.** Morning and evening briefings are now written by the AI model you signed in with, instead of arriving as a plain list. [PR #2665](https://github.com/motioneso/moss/pull/2665)
+- **Backup briefing text no longer takes over Today.** When Moss cannot write your briefing, the Today page now keeps its normal header instead of showing a raw list of counts. [PR #2664](https://github.com/motioneso/moss/pull/2664)
+- **Clearer chat error when per-user mode is off.** Chat now explains how to fix it when the server is set up without per-user mode, instead of showing a generic unavailable message. [PR #2544](https://github.com/motioneso/moss/pull/2544)
 - **National team follows no longer pull in the whole World Cup.** Following a national team now shows that team's own news and keeps its tournament's standings out of the way unless the tournament is running. [PR #2663](https://github.com/motioneso/moss/pull/2663)
 - **Morning briefings no longer fail when you follow sports teams.** Morning briefings now finish even if one source has a problem, and they can include your followed teams again. [PR #2658](https://github.com/motioneso/moss/pull/2658)
 - **Readable account name in the sidebar.** The account name in the sidebar is readable again, and the Settings entry in the account menu no longer spills out of its box. [PR #2656](https://github.com/motioneso/moss/pull/2656)
