@@ -1,6 +1,6 @@
 # Feature Health Alerts
 
-**Status:** Draft, awaiting Ben's approval
+**Status:** Approved by Ben on 2026-09-25
 **Date:** 2026-09-25
 **Owner:** Ben
 **GitHub:** issue #2683 (related #2689 / PR 2691)
@@ -222,7 +222,8 @@ people is kept for the screen.
 ### 6.3 Recipients
 
 Every active instance admin (section 3.6). Admins are read with the worker's system handle from
-`app.users` where `is_instance_admin` and status is active.
+`app.users` where `is_instance_admin` and status is active. The check opens an actor-scoped
+`DataContext` for each admin before calling `NotificationsRepository.create`.
 
 ### 6.4 Push rules
 
