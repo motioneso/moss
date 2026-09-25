@@ -30,6 +30,7 @@ export { RpcConnection } from "./chat-engine-rpc-client.js";
 // #1350 — the ONE structured-engine-selection rule. The cli-runner's EngineHost must build its engine
 // through this, not by hand, or `execution_mode` silently means nothing on a containerized deploy.
 export * from "./structured-engine-selection.js";
+export type { StructuredChildIdentity } from "./structured-claude-engine.js";
 export { buildLaunchCommand, type LaunchCommandContext } from "./module-build-launch-commands.js";
 export {
   writeClaudePermissionHook,

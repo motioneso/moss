@@ -31,38 +31,114 @@ interface UidSlot {
  */
 export function allocateUidSlot(homeBase: string, actorUserId: string): UidSlot {
   const slotFilePath = path.join(homeBase, SLOT_FILE);
-  let slots: Record<string, number> = {};
-
-  if (fs.existsSync(slotFilePath)) {
-    try {
-      slots = JSON.parse(fs.readFileSync(slotFilePath, "utf8")) as Record<string, number>;
-    } catch {
-      slots = {};
-    }
-  }
+  const slots = readSlots(slotFilePath);
 
   if (actorUserId in slots) {
     const slot = slots[actorUserId] as number;
     return { uid: UID_BASE + slot, gid: GID_BASE + slot };
   }
 
-  const existing = Object.values(slots);
-  // Slot 0 is reserved as sentinel; real slots start at 1.
-  const nextSlot = existing.length === 0 ? 1 : Math.max(...existing) + 1;
+  // Lowest free number. Slot 0 is reserved as sentinel; real slots start at 1. Holes only
+  // appear after `pruneUidSlots`, which runs once the startup sweep has cleared every file a
+  // pruned slot could still own.
+  const taken = new Set(Object.values(slots));
+  let nextSlot = 1;
+  while (taken.has(nextSlot)) nextSlot += 1;
   if (nextSlot > MAX_SLOTS) {
     throw new Error("[cli-runner] UID slot overflow: maximum user slots exhausted");
   }
 
   slots[actorUserId] = nextSlot;
+  writeSlots(slotFilePath, slots);
 
+  return { uid: UID_BASE + nextSlot, gid: GID_BASE + nextSlot };
+}
+
+/**
+ * Keys minted fresh for one throwaway launch. Before #2674 the engine host keyed slots by
+ * session key, so each of these took a slot for good. They are never user ids, which are UUIDs.
+ */
+const PER_CALL_KEY_PREFIXES = ["structured-", "settings-check-"] as const;
+
+const OWNER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Whose slot a chat-engine launch runs in. Slots belong to people: a launch that names its
+ * user gets that user's slot, the same one their chat agent and logins use. A per-call launch
+ * that names no user is refused, because keying it by session would take a new slot per call.
+ * Other unnamed launches (the bounded onboarding checks) keep their session key.
+ */
+export function uidSlotOwner(
+  sessionKey: string,
+  launch: {
+    readonly userId?: unknown;
+    readonly needsStructuredOutput?: boolean;
+    readonly schema?: unknown;
+  }
+): string {
+  if (launch.userId !== undefined) {
+    if (typeof launch.userId !== "string" || !OWNER_ID_RE.test(launch.userId)) {
+      throw new Error("launch.userId must match [A-Za-z0-9_-]{1,64}");
+    }
+    return launch.userId;
+  }
+  if (
+    launch.needsStructuredOutput === true ||
+    launch.schema !== undefined ||
+    PER_CALL_KEY_PREFIXES.some((prefix) => sessionKey.startsWith(prefix))
+  ) {
+    throw new Error("launch names no owning user: refusing a per-call UID slot");
+  }
+  return sessionKey;
+}
+
+/**
+ * Drop per-call entries left by the old session-keyed allocation, keeping every other entry
+ * at its current number. Returns how many entries were dropped. Call only while no session
+ * is live and after the neutral base is cleared (the runner's startup sweep).
+ */
+export function pruneUidSlots(homeBase: string): number {
+  const slotFilePath = path.join(homeBase, SLOT_FILE);
+  if (!fs.existsSync(slotFilePath)) return 0;
+  const slots = readSlots(slotFilePath);
+  const kept: Record<string, number> = {};
+  let dropped = 0;
+  for (const [key, slot] of Object.entries(slots)) {
+    if (PER_CALL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) dropped += 1;
+    else kept[key] = slot;
+  }
+  if (dropped > 0) writeSlots(slotFilePath, kept);
+  return dropped;
+}
+
+/**
+ * The user who holds the slot for `uid`, or undefined when no user does. Per-call entries left
+ * by the old session-keyed allocation are not users, so they return undefined too.
+ */
+export function uidSlotUser(homeBase: string, uid: number): string | undefined {
+  const slots = readSlots(path.join(homeBase, SLOT_FILE));
+  const holder = Object.keys(slots).find((key) => UID_BASE + (slots[key] as number) === uid);
+  if (holder === undefined) return undefined;
+  if (PER_CALL_KEY_PREFIXES.some((prefix) => holder.startsWith(prefix))) return undefined;
+  return OWNER_ID_RE.test(holder) ? holder : undefined;
+}
+
+function readSlots(slotFilePath: string): Record<string, number> {
+  if (!fs.existsSync(slotFilePath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(slotFilePath, "utf8")) as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+function writeSlots(slotFilePath: string, slots: Record<string, number>): void {
   // Atomic write: tmp → rename (atomic on Linux, same filesystem).
   // Mode 0600: root-only; the map contains actorUserIds (PII, not for per-user UID reads).
   const tmpPath = slotFilePath + ".tmp";
   fs.writeFileSync(tmpPath, JSON.stringify(slots), { encoding: "utf8", mode: 0o600 });
   fs.chmodSync(tmpPath, 0o600); // override umask — must be root-only before rename
   fs.renameSync(tmpPath, slotFilePath);
-
-  return { uid: UID_BASE + nextSlot, gid: GID_BASE + nextSlot };
 }
 
 /**

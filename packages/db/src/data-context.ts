@@ -72,6 +72,23 @@ export class DataContextRunner {
   }
 }
 
+/**
+ * The RLS actor bound to this scoped transaction, or undefined when none can be read. Lets a
+ * caller that only holds the scoped handle say whose work it is doing (#2674), without widening
+ * `AccessContext` or threading the id through every call site.
+ */
+export async function readScopedActorUserId(scopedDb: DataContextDb): Promise<string | undefined> {
+  try {
+    const result = await sql<{
+      actor: string | null;
+    }>`select current_setting('app.actor_user_id', true) as actor`.execute(scopedDb.db);
+    const actor = result.rows[0]?.actor;
+    return actor && isUuid(actor) ? actor : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function assertDataContextDb(value: unknown): asserts value is DataContextDb {
   if (
     !value ||

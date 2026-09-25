@@ -21,7 +21,7 @@ import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import type { AcpPermissionDecider } from "@moss/acp";
 import type { RpcConnection } from "./chat-engine-rpc-client.js";
 
-import { ClaudePrintChatEngine } from "./structured-claude-engine.js";
+import { ClaudePrintChatEngine, type StructuredChildIdentity } from "./structured-claude-engine.js";
 import { CliChatEngineImpl } from "./module-build-cli-engine.js";
 import type { CliChatEngineDiagnostic } from "./module-build-cli-engine-opts.js";
 import { GeminiPrintChatEngine } from "./structured-gemini-engine.js";
@@ -83,6 +83,8 @@ export interface ChatEngineSelectionOpts {
    * from every ordinary Anthropic chat session too (review finding B4).
    */
   readonly needsStructuredOutput?: boolean;
+  /** #2674: run the structured child as the owning user's slot (cli-runner, per-user mode). */
+  readonly childIdentity?: StructuredChildIdentity;
   /** ACP chat wiring; only the composition root supplies this for the chat profile. */
   readonly acpConnection?: RpcConnection;
   readonly acpUserId?: string;
@@ -126,7 +128,8 @@ function buildFallbackEngine(
       return new ClaudePrintChatEngine(sessionKey, io, {
         mux: opts.mux,
         homeBase: opts.homeBase,
-        credentialFile: opts.credentialFile
+        credentialFile: opts.credentialFile,
+        childIdentity: opts.childIdentity
       });
     }
     return new GeminiPrintChatEngine(sessionKey, io, {

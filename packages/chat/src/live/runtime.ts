@@ -286,7 +286,8 @@ function createRpcEngineFactory(opts: {
       connection,
       engineOpts?.executionMode,
       opts.readPersistentRuntimeConfig,
-      engineOpts?.needsStructuredOutput
+      engineOpts?.needsStructuredOutput,
+      engineOpts?.userId
     );
   return { factory, connection };
 }

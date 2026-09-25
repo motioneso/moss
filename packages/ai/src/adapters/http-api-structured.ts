@@ -65,6 +65,11 @@ export type GenerateStructuredProviderInput = {
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  /**
+   * #2674: the user this call runs for. A CLI-backed adapter runs the CLI in this user's
+   * per-user slot; the cli-runner refuses a structured launch without it.
+   */
+  readonly actorUserId?: string;
 };
 
 export type StructuredProviderResult =

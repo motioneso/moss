@@ -82,12 +82,28 @@ function scrubPromptFragments(stderrTail: string, sanitizedPrompt: string): stri
  */
 const DEFAULT_TRANSCRIPT_DIR_GRACE_MS = 15_000;
 
+/**
+ * Runs the structured child as another account: the owning user's per-user slot (#2674).
+ * The cli-runner builds it, because only it can switch accounts.
+ */
+export interface StructuredChildIdentity {
+  /** Wraps the child's command so it switches account before it runs. */
+  wrap(command: string, args: readonly string[]): { command: string; args: string[] };
+  /** Signals the child's process group as that account. */
+  signalGroup(pid: number, signal: NodeJS.Signals): Promise<void>;
+  /** Extra child env, such as the login token. Never logged. */
+  readonly env?: Readonly<Record<string, string>>;
+  /** Removes the account's working folder once the child has stopped. Must not throw. */
+  release(): Promise<void>;
+}
+
 export interface ClaudePrintChatEngineOpts {
   readonly mux?: Multiplexer;
   readonly homeBase?: string;
   readonly sessionId?: string;
   readonly credentialFile?: string;
   readonly transcriptDirGraceMs?: number;
+  readonly childIdentity?: StructuredChildIdentity;
 }
 
 export class ClaudePrintChatEngine implements CliChatEngine {
@@ -96,6 +112,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
 
   private readonly homeBase?: string;
   private readonly credentialFile?: string;
+  private readonly childIdentity?: StructuredChildIdentity;
   private readonly sessionId: string;
 
   private launchOpts: EngineLaunchOpts | null = null;
@@ -130,6 +147,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   ) {
     this.homeBase = opts.homeBase;
     this.credentialFile = opts.credentialFile;
+    this.childIdentity = opts.childIdentity;
     this.sessionId = opts.sessionId ?? randomUUID();
     this.transcriptDirGraceMs = opts.transcriptDirGraceMs ?? DEFAULT_TRANSCRIPT_DIR_GRACE_MS;
   }
@@ -158,13 +176,19 @@ export class ClaudePrintChatEngine implements CliChatEngine {
 
     const capture = { stderrTail: "", exitCode: null as number | null, prompt: sanitizedPrompt };
     this.currentCapture = capture;
-    this.currentProcess = spawn("bash", ["-lc", launchLine], {
-      cwd: this.launchOpts.neutralDir,
+    const identity = this.childIdentity;
+    const launch = identity
+      ? identity.wrap("bash", ["-lc", launchLine])
+      : { command: "bash", args: ["-lc", launchLine] };
+    this.currentProcess = spawn(launch.command, launch.args, {
+      ...(identity ? {} : { cwd: this.launchOpts.neutralDir }),
       detached: true,
       stdio: ["ignore", "ignore", "pipe"],
       ...(this.homeBase === undefined
         ? {}
-        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
+        : {
+            env: { ...buildSanitizedCliEnv(process.env), ...identity?.env, HOME: this.homeBase }
+          })
     });
     this.currentProcess.on("error", () => undefined);
     // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
@@ -221,13 +245,21 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.launchOpts = opts;
     this.personaPath = await this.resolvePersonaPath(opts);
     const command = await this.buildStructuredCommand(opts);
-    const child = spawn("bash", ["-lc", command], {
-      cwd: opts.neutralDir,
+    const identity = this.childIdentity;
+    // With an identity the command's own `cd` enters the folder after the account switch; the
+    // runner cannot enter a folder it has handed over.
+    const launch = identity
+      ? identity.wrap("bash", ["-lc", command])
+      : { command: "bash", args: ["-lc", command] };
+    const child = spawn(launch.command, launch.args, {
+      ...(identity ? {} : { cwd: opts.neutralDir }),
       detached: true,
       stdio: ["pipe", "pipe", "pipe"],
       ...(this.homeBase === undefined
         ? {}
-        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
+        : {
+            env: { ...buildSanitizedCliEnv(process.env), ...identity?.env, HOME: this.homeBase }
+          })
     });
     this.structuredProcess = child;
     this.structuredExited = false;
@@ -319,7 +351,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
         this.hasSubmitted &&
         this.submitStartedAt !== null &&
         Date.now() - this.submitStartedAt > this.transcriptDirGraceMs &&
-        !existsSync(dirname(this.transcriptPathValue))
+        !(await this.folderExists(dirname(this.transcriptPathValue)))
       ) {
         throw new CliTranscriptLocationMismatchError(
           `the app expects the model program's answer file under ` +
@@ -357,10 +389,28 @@ export class ClaudePrintChatEngine implements CliChatEngine {
 
   async interrupt(): Promise<void> {
     if (this.structuredProcess !== null) {
-      this.structuredProcess.kill("SIGINT");
+      const pid = this.structuredProcess.pid;
+      if (this.childIdentity && pid) {
+        await this.childIdentity.signalGroup(pid, "SIGINT").catch(() => undefined);
+      } else {
+        this.structuredProcess.kill("SIGINT");
+      }
       return;
     }
-    if (this.currentProcess !== null) this.currentProcess.kill("SIGINT");
+    if (this.currentProcess !== null) {
+      const pid = this.currentProcess.pid;
+      if (this.childIdentity && pid) {
+        await this.childIdentity.signalGroup(pid, "SIGINT").catch(() => undefined);
+      } else {
+        this.currentProcess.kill("SIGINT");
+      }
+    }
+  }
+
+  /** The owner's folders are closed to the runner, so with an identity the check runs as the owner. */
+  private async folderExists(path: string): Promise<boolean> {
+    if (!this.childIdentity) return existsSync(path);
+    return (await this.io.run("test", ["-d", path]).catch(() => ({ code: 1 }))).code === 0;
   }
 
   async kill(): Promise<void> {
@@ -370,13 +420,26 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.structuredOutput = "";
     this.structuredExited = true;
     this.submitStartedAt = null;
+    try {
+      await this.stopChild(child);
+    } finally {
+      await this.childIdentity?.release().catch(() => undefined);
+    }
+  }
+
+  private async stopChild(child: ChildProcess | null): Promise<void> {
     if (child === null || child.exitCode !== null || child.signalCode !== null) return;
 
     const exited = new Promise<void>((resolve) => {
       child.once("exit", () => resolve());
       child.once("error", () => resolve());
     });
+    const identity = this.childIdentity;
     const signal = (kind: NodeJS.Signals) => {
+      if (identity && child.pid) {
+        void identity.signalGroup(child.pid, kind).catch(() => undefined);
+        return;
+      }
       try {
         if (child.pid) process.kill(-child.pid, kind);
         else child.kill(kind);
@@ -391,7 +454,8 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     ]);
     if (!graceful) {
       signal("SIGKILL");
-      await exited;
+      // Bounded: a signal that could not be delivered must not wedge the session queue.
+      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5_000))]);
     }
   }
 
