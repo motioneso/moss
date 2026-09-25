@@ -123,9 +123,11 @@ export async function startJobSearchFixtureContainer(projectName: string): Promi
  * teardown helper that can fail is a teardown helper that leaks.
  */
 export async function removeJobSearchFixtureContainer(projectName: string): Promise<void> {
-  await runCommand("docker", ["rm", "--force", jobSearchFixtureContainerName(projectName)]).catch(
-    () => {}
+  const name = jobSearchFixtureContainerName(projectName);
+  const existing = await runCapture("docker", ["ps", "-aq", "--filter", `name=^/${name}$`]).catch(
+    () => "unknown" // Discovery failure must not prevent the cleanup attempt.
   );
+  if (existing.trim()) await runCommand("docker", ["rm", "--force", name]).catch(() => {});
 }
 
 /**
@@ -849,8 +851,11 @@ export async function provisionForUat(
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
     // follows would then fail on an otherwise clean run.
     const teardownCompose = async () => {
-      await removeBriefingWriterFixtureContainer(projectName);
-      await removeJobSearchFixtureContainer(projectName);
+      // Only fixtures this attempt started. The ESPN fixture shares the job-search container.
+      if (briefingWriterFixtureBaseUrl !== undefined) {
+        await removeBriefingWriterFixtureContainer(projectName);
+      }
+      if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
           console.error(`teardown failed for ${projectName}:`, error);
