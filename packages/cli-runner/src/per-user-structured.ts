@@ -7,9 +7,10 @@
  */
 
 import { spawn } from "node:child_process";
+import { rmdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ProviderKind } from "@moss/ai";
+import { transcriptGlobDir, type ProviderKind, type TmuxIo } from "@moss/ai";
 import type { StructuredChildIdentity } from "@moss/chat/live";
 
 import {
@@ -62,6 +63,8 @@ export interface PerUserStructuredLaunch {
   /** Written and handed to the owner before launch, so the engine never writes it. */
   readonly personaPath: string;
   readonly childIdentity: StructuredChildIdentity;
+  /** File and command io that runs as the owner, for the owner's folders the runner cannot enter. */
+  readonly io: TmuxIo;
 }
 
 /** True for a launch that goes through the structured one-shot verbs. */
@@ -119,6 +122,7 @@ export async function preparePerUserStructuredLaunch(
     agentHome,
     neutralDir,
     personaPath,
+    io: createOwnerIo(identity),
     childIdentity: {
       wrap: (command, args) => {
         const dropped = buildSetprivDropCommand(command, args, identity);
@@ -127,7 +131,12 @@ export async function preparePerUserStructuredLaunch(
       signalGroup: (pid, signal) => signalGroupAs(pid, signal, identity),
       env,
       release: async () => {
-        await purge(neutralDir, identity).catch((err: unknown) => {
+        // Structured prompts can carry private module data, so the call's transcript in the
+        // owner's home goes too (#981). The runner's own purge looks only in the shared home.
+        await purge(transcriptGlobDir("anthropic", neutralDir, agentHome), identity).catch(
+          () => undefined
+        );
+        await removeOwnedFolder(neutralDir, identity, purge).catch((err: unknown) => {
           console.warn(
             `[engine-host] ${key} working folder removal failed: ${
               err instanceof Error ? err.name : "UnknownError"
@@ -172,4 +181,83 @@ export async function signalGroupAs(
       else reject(new Error(`stop command for pid ${pid} exited with code ${String(code)}`));
     });
   });
+}
+
+/**
+ * Remove a folder the owner holds inside a runner-owned parent. The owner empties it, because the
+ * runner cannot enter it. The owner cannot unlink it from the runner's parent, so that last step
+ * fails as the owner and the runner removes the now-empty folder itself.
+ */
+export async function removeOwnedFolder(
+  path: string,
+  identity: { readonly uid: number; readonly gid: number },
+  purge: typeof purgeOwnedPath = purgeOwnedPath
+): Promise<void> {
+  await purge(path, identity).catch(() => undefined);
+  await rmdir(path).catch((err: NodeJS.ErrnoException) => {
+    if (err.code !== "ENOENT") throw err;
+  });
+}
+
+const READ_AS_OWNER =
+  "process.stdout.write(require('node:fs').readFileSync(process.env.OWNER_IO_PATH))";
+const WRITE_AS_OWNER =
+  "const fs=require('node:fs');fs.writeFileSync(process.env.OWNER_IO_PATH,fs.readFileSync(0),{mode:0o600})";
+
+/**
+ * Io for a launch's own files, run as the owner through setpriv. The runner's capabilities do not
+ * cover reading or writing inside a folder it has handed over. Paths travel by env and content by
+ * stdin or stdout, never by argv.
+ */
+export function createOwnerIo(identity: { readonly uid: number; readonly gid: number }): TmuxIo {
+  const run = (
+    cmd: string,
+    args: readonly string[],
+    extraEnv: NodeJS.ProcessEnv = {},
+    input?: string
+  ): Promise<{ code: number; stdout: string; stderr: string }> => {
+    const dropped = buildSetprivDropCommand(cmd, args, identity);
+    return new Promise((resolve) => {
+      const child = spawn(dropped.command, [...dropped.args], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...buildSanitizedCliEnv(process.env), ...extraEnv }
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => (stdout += chunk));
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk: string) => (stderr += chunk));
+      child.once("error", () => resolve({ code: 1, stdout, stderr }));
+      child.once("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+      child.stdin.on("error", () => undefined);
+      child.stdin.end(input ?? "");
+    });
+  };
+  return {
+    run: async (cmd, args, opts) => {
+      if (opts?.cwd === undefined) return run(cmd, args, opts?.env);
+      // The runner cannot enter the owner's folder, so the change of folder runs as the owner.
+      return run(
+        "sh",
+        ["-c", 'cd "$1" && shift && exec "$@"', "sh", opts.cwd, cmd, ...args],
+        opts.env
+      );
+    },
+    async readFile(path) {
+      const result = await run(process.execPath, ["-e", READ_AS_OWNER], { OWNER_IO_PATH: path });
+      if (result.code !== 0) throw new Error("could not read the file as its owner");
+      return result.stdout;
+    },
+    async writeFile(path, content) {
+      const result = await run(
+        process.execPath,
+        ["-e", WRITE_AS_OWNER],
+        { OWNER_IO_PATH: path },
+        content
+      );
+      if (result.code !== 0) throw new Error("could not write the file as its owner");
+    },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  };
 }

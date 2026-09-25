@@ -64,7 +64,7 @@ import {
 } from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
-import { perUserSessionIo, pruneUidSlotTable } from "./per-user-slot.js";
+import * as perUserSlot from "./per-user-slot.js";
 import {
   isStructuredLaunch,
   preparePerUserStructuredLaunch,
@@ -314,7 +314,8 @@ export class CliChatEngineHost {
         const deps = { ...this.deps, homeBase: this.deps.homeBase };
         if (isStructuredLaunch(params)) {
           perUser = await preparePerUserStructuredLaunch(deps, key, params);
-        } else sessionIo = perUserSessionIo(deps, key, params);
+          sessionIo = perUser.io;
+        } else sessionIo = perUserSlot.perUserSessionIo(deps, key, params);
       }
       this.reservations.add(key);
     } catch (err) {
@@ -863,6 +864,7 @@ export class CliChatEngineHost {
       await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
     }
     // (b) purge every marker-backed private transcript before the neutral dirs are erased.
+    await perUserSlot.clearOwnedStructuredFolders(this.deps);
     const purgedTranscripts = await purgePrivateTranscriptMarkers(
       this.deps.io,
       this.deps.neutralBase,
@@ -874,7 +876,7 @@ export class CliChatEngineHost {
       // (c) once every pointed-to private folder is confirmed purged, remove residual neutral dirs.
       // (c.1) #2674: then drop per-call UID slots, only once every removal succeeded, so a
       // reused slot number never inherits files a dead session left.
-      if (await this.clearNeutralBase()) pruneUidSlotTable(this.deps.homeBase);
+      if (await this.clearNeutralBase()) perUserSlot.pruneUidSlotTable(this.deps.homeBase);
       else console.warn("[engine-host] neutral clean-out incomplete; UID slots left unpruned");
     } else if (this.deps.homeBase) {
       console.warn("[engine-host] startup purge incomplete; per-call UID slots left unpruned");

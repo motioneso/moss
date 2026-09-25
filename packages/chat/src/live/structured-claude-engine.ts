@@ -176,13 +176,19 @@ export class ClaudePrintChatEngine implements CliChatEngine {
 
     const capture = { stderrTail: "", exitCode: null as number | null, prompt: sanitizedPrompt };
     this.currentCapture = capture;
-    this.currentProcess = spawn("bash", ["-lc", launchLine], {
-      cwd: this.launchOpts.neutralDir,
+    const identity = this.childIdentity;
+    const launch = identity
+      ? identity.wrap("bash", ["-lc", launchLine])
+      : { command: "bash", args: ["-lc", launchLine] };
+    this.currentProcess = spawn(launch.command, launch.args, {
+      ...(identity ? {} : { cwd: this.launchOpts.neutralDir }),
       detached: true,
       stdio: ["ignore", "ignore", "pipe"],
       ...(this.homeBase === undefined
         ? {}
-        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
+        : {
+            env: { ...buildSanitizedCliEnv(process.env), ...identity?.env, HOME: this.homeBase }
+          })
     });
     this.currentProcess.on("error", () => undefined);
     // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
@@ -345,7 +351,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
         this.hasSubmitted &&
         this.submitStartedAt !== null &&
         Date.now() - this.submitStartedAt > this.transcriptDirGraceMs &&
-        !existsSync(dirname(this.transcriptPathValue))
+        !(await this.folderExists(dirname(this.transcriptPathValue)))
       ) {
         throw new CliTranscriptLocationMismatchError(
           `the app expects the model program's answer file under ` +
@@ -391,7 +397,20 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       }
       return;
     }
-    if (this.currentProcess !== null) this.currentProcess.kill("SIGINT");
+    if (this.currentProcess !== null) {
+      const pid = this.currentProcess.pid;
+      if (this.childIdentity && pid) {
+        await this.childIdentity.signalGroup(pid, "SIGINT").catch(() => undefined);
+      } else {
+        this.currentProcess.kill("SIGINT");
+      }
+    }
+  }
+
+  /** The owner's folders are closed to the runner, so with an identity the check runs as the owner. */
+  private async folderExists(path: string): Promise<boolean> {
+    if (!this.childIdentity) return existsSync(path);
+    return (await this.io.run("test", ["-d", path]).catch(() => ({ code: 1 }))).code === 0;
   }
 
   async kill(): Promise<void> {

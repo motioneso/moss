@@ -6,7 +6,15 @@
  * home (the one ACP chat uses), the owner's slot identity, and a login token handed over in env.
  */
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,7 +37,7 @@ function fakeChild(): EventEmitter & Record<string, unknown> {
   };
   child.stdout = stream();
   child.stderr = stream();
-  child.stdin = { destroyed: false, write: () => {}, end: () => {} };
+  child.stdin = { destroyed: false, write: () => {}, end: () => {}, on: () => {} };
   child.pid = 4242;
   child.exitCode = null;
   child.signalCode = null;
@@ -46,10 +54,12 @@ vi.mock("node:child_process", async (importOriginal) => {
       spawnCalls.push({ command, args, options });
       const child = fakeChild();
       if (command === "setpriv" && args.includes("-e")) {
-        // The owner's stop command succeeds, and the CLI child it signalled exits.
+        // A helper run as the owner succeeds; a stop helper also ends the CLI child it signalled.
+        const stopping = Boolean((options.env as Record<string, string>)?.STRUCTURED_STOP_PID);
         setImmediate(() => {
           child.emit("exit", 0);
-          cliChildren.at(-1)?.emit("exit", null);
+          child.emit("close", 0);
+          if (stopping) cliChildren.at(-1)?.emit("exit", null);
         });
       } else if (args.some((a) => a.includes("claude"))) {
         cliChildren.push(child);
@@ -103,8 +113,11 @@ function setup(perUserUid = true) {
     applyOwnership: async (_handle, uid, gid) => {
       handedOver.push({ uid, gid });
     },
+    // Empties the folder as the owner would; the owner cannot unlink it from the runner's parent.
     purgeOwnedPath: async (path, identity) => {
       purged.push({ path, identity });
+      if (!existsSync(path)) return;
+      for (const name of readdirSync(path)) rmSync(join(path, name), { recursive: true });
     },
     singleUser: false,
     cliPresent: async () => true,
@@ -170,7 +183,7 @@ describe("#2674 a structured call runs in its owner's home", () => {
   });
 
   it("stops the child as the owner and removes the working folder as the owner", async () => {
-    const { host, neutralBase, purged } = setup();
+    const { host, homeBase, neutralBase, purged } = setup();
     const key = "structured-33333333-cccc-4ccc-8ccc-333333333333";
     await host.launch(key, {
       provider: "anthropic",
@@ -187,12 +200,50 @@ describe("#2674 a structured call runs in its owner's home", () => {
     const stop = spawnCalls.slice(cliChild + 1).find((c) => c.args.includes("-e"));
     expect(stop?.command).toBe("setpriv");
     expect((stop?.options.env as Record<string, string>).STRUCTURED_STOP_PID).toBe("4242");
+    // The call's transcript in the owner's home goes first, then the working folder.
+    const owner = expect.objectContaining({ uid: expect.any(Number) });
     expect(purged).toEqual([
-      {
-        path: join(neutralBase, key),
-        identity: expect.objectContaining({ uid: expect.any(Number) })
-      }
+      { path: expect.stringContaining(join(homeBase, "agents", USER, ".claude")), identity: owner },
+      { path: join(neutralBase, key), identity: owner }
     ]);
+    expect(existsSync(join(neutralBase, key))).toBe(false);
+  });
+
+  it("runs an ordinary one-shot call as the owner, prompt file included", async () => {
+    const { host, homeBase, neutralBase } = setup();
+    const key = "structured-55555555-eeee-4eee-8eee-555555555555";
+    await host.launch(key, {
+      provider: "anthropic",
+      personaText: "You produce structured JSON only.",
+      executionMode: "non_interactive",
+      needsStructuredOutput: true,
+      userId: USER
+    });
+    await Promise.race([
+      host.submit(key, { attemptId: "attempt-1", text: "Say hello." }).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 1_500))
+    ]);
+
+    const slots = JSON.parse(readFileSync(join(homeBase, "uid-slots.json"), "utf8"));
+    const uid = 100_000 + (slots[USER] as number);
+    const promptWrite = spawnCalls.find(
+      (c) => (c.options.env as Record<string, string>)?.OWNER_IO_PATH !== undefined
+    );
+    expect(promptWrite?.command).toBe("setpriv");
+    expect(promptWrite?.args).toContain(`--reuid=${uid}`);
+    expect((promptWrite?.options.env as Record<string, string>).OWNER_IO_PATH).toBe(
+      join(neutralBase, key, ".jarvis-claude-print-prompt.txt")
+    );
+    expect(promptWrite?.args.join(" ")).not.toContain("Say hello.");
+
+    const call = cliSpawn();
+    expect(call.command).toBe("setpriv");
+    expect(call.args).toContain(`--reuid=${uid}`);
+    expect(call.options.cwd).toBeUndefined();
+    const env = call.options.env as Record<string, string>;
+    expect(env.HOME).toBe(join(homeBase, "agents", USER));
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe("sk-ant-oat01-test-token");
+    await host.kill(key);
   });
 
   it("keeps the shared home when per-user UIDs are off", async () => {
