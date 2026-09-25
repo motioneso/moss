@@ -150,13 +150,19 @@ export function proposeTomorrowBlocks(
       (taskId): taskId is string => taskId !== null
     )
   );
+  const priorityCommitments = priorityTaskIds.filter((taskId) => committed.has(taskId));
+  const followThroughCommitments = committedTaskIds.filter(
+    (taskId) => !priorityTaskIds.includes(taskId)
+  );
+  const orderedCommitments = [...priorityCommitments, ...followThroughCommitments];
+  // The steady-day choice means one main task plus one follow-through block.
+  // Full day uses the open time for every selected commitment; light keeps its one priority block.
   const ordered =
     capacity === "light"
-      ? priorityTaskIds.filter((taskId) => committed.has(taskId)).slice(0, 1)
-      : [
-          ...priorityTaskIds.filter((taskId) => committed.has(taskId)),
-          ...committedTaskIds.filter((taskId) => !priorityTaskIds.includes(taskId))
-        ];
+      ? priorityCommitments.slice(0, 1)
+      : capacity === "normal"
+        ? orderedCommitments.slice(0, 2)
+        : orderedCommitments;
   let cursor = localTimeToIso(tomorrowKey, startWallTime, timeZone);
   const out = [...kept];
   for (const taskId of ordered) {
