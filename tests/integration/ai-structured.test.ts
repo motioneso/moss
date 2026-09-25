@@ -7,7 +7,13 @@ import {
   generateStructured,
   type GenerateStructuredProviderInput
 } from "@moss/ai";
-import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
+import {
+  DataContextRunner,
+  createDatabase,
+  readScopedActorUserId,
+  type AccessContext,
+  type MossDatabase
+} from "@moss/db";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
@@ -136,6 +142,15 @@ afterAll(async () => {
   globalThis.fetch = realFetch;
   if (previousSecretKey === undefined) delete process.env.JARVIS_AI_SECRET_KEY;
   else process.env.JARVIS_AI_SECRET_KEY = previousSecretKey;
+});
+
+describe("#2674 readScopedActorUserId", () => {
+  it("returns the actor bound to the scoped transaction", async () => {
+    const actor = await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      readScopedActorUserId(scopedDb)
+    );
+    expect(actor).toBe(ids.adminUser);
+  });
 });
 
 describe("module service binding CRUD (repository)", () => {

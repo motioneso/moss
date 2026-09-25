@@ -1,7 +1,7 @@
 import { Ajv, type ErrorObject } from "ajv";
 import type { FastifyBaseLogger } from "fastify";
 
-import type { DataContextDb } from "@moss/db";
+import { readScopedActorUserId, type DataContextDb } from "@moss/db";
 import type { AiModelTier, ModuleServiceKey } from "@moss/shared";
 
 import { HttpApiAdapter } from "../adapters/http-api.js";
@@ -46,6 +46,26 @@ const OPERATOR_SAFE_ERROR_NAMES = new Set([
  * would leak private response content into application logs. Everything not on the allow-list below
  * collapses to "provider_error_unclassified" rather than falling back to the raw text.
  */
+/**
+ * #2674: a fixed reason code for a cli-runner refusal, so "UID slot overflow" is visible in the
+ * worker log. It matches known refusal phrases and never logs the message itself, because a
+ * wrapped runner error can carry arbitrary text.
+ */
+const RUNNER_REFUSAL_REASONS: readonly (readonly [RegExp, string])[] = [
+  [/UID slot overflow/, "uid_slot_overflow"],
+  [/names no owning user/, "launch_missing_owner"],
+  [/launch\.userId must match/, "launch_invalid_owner"],
+  [/live chat is busy/, "runner_busy"],
+  [/provider login is in progress/, "provider_login_in_progress"],
+  [/could not allocate UID slot/, "uid_slot_allocation_failed"]
+];
+
+export function operatorSafeReason(error: unknown): { readonly reason?: string } {
+  if (!(error instanceof Error) || !OPERATOR_SAFE_ERROR_NAMES.has(error.name)) return {};
+  const match = RUNNER_REFUSAL_REASONS.find(([pattern]) => pattern.test(error.message));
+  return { reason: match ? match[1] : "unrecognized" };
+}
+
 export function classifyStructuredProviderErrorCode(error: unknown): string {
   if (!(error instanceof Error)) return "provider_error_unclassified";
   if (OPERATOR_SAFE_ERROR_NAMES.has(error.name)) return error.name;
@@ -228,11 +248,14 @@ async function runOnModel(
   }
   const providerKind = model.provider_kind as ProviderKind;
   let adapter: StructuredProviderAdapter;
+  let actorUserId: string | undefined;
   if (provider.auth_method === "cli") {
     // #982/#869/#981 D3: CLI credentials are sealed markers, not API keys. Route before decrypt so
     // AES-GCM can never see `{ cli: true }`; composition root supplies chat's CLI implementation.
     if (!deps.createCliStructuredAdapter) return { ok: false, error: "needs_config" };
     adapter = deps.createCliStructuredAdapter(providerKind);
+    // #2674: the CLI runs in this user's per-user slot.
+    actorUserId = await readScopedActorUserId(scopedDb);
   } else {
     let credential;
     try {
@@ -278,7 +301,8 @@ async function runOnModel(
           telemetry: input.telemetry,
           priority: input.priority,
           scope: input.scope,
-          closeScope: input.closeScope
+          closeScope: input.closeScope,
+          ...(actorUserId ? { actorUserId } : {})
         }),
         signal
       );
@@ -328,7 +352,8 @@ async function runOnModel(
           // errors in general are not guaranteed operator-safe (the #2229 comment this replaced
           // pointed at a credential-decryption catch that protects a different operation). Log only
           // a fixed diagnostic code, never the message text itself.
-          code: classifyStructuredProviderErrorCode(error)
+          code: classifyStructuredProviderErrorCode(error),
+          ...operatorSafeReason(error)
         },
         "ai.structured provider error"
       );

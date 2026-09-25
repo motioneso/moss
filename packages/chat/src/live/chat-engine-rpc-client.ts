@@ -835,7 +835,9 @@ export class ChatEngineRpcClient implements CliChatEngine {
      */
     private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>,
     /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
-    private readonly needsStructuredOutput = false
+    private readonly needsStructuredOutput = false,
+    /** #2674: forwarded to `RpcLaunchParams.userId`, which picks the runner's UID slot. */
+    private readonly userId?: string
   ) {
     this.startsToolClientPerTurn = executionMode === "non_interactive";
   }
@@ -888,6 +890,7 @@ export class ChatEngineRpcClient implements CliChatEngine {
       provider: this.provider,
       executionMode: this.executionMode,
       needsStructuredOutput: this.needsStructuredOutput,
+      ...(this.userId !== undefined ? { userId: this.userId } : {}),
       personaText: opts.personaText ?? "",
       ...(opts.mcpToken !== undefined ? { mcpToken: opts.mcpToken } : {}),
       ...(opts.mcpServerUrl !== undefined ? { mcpServerUrl: opts.mcpServerUrl } : {}),

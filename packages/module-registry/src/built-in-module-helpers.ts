@@ -124,7 +124,8 @@ export function createDefaultPersonaPreview(
                 model: modelInput,
                 messages,
                 schema,
-                maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS
+                maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS,
+                actorUserId: input.actorUserId
               })
             );
           } catch (error) {

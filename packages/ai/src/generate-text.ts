@@ -1,4 +1,4 @@
-import type { DataContextDb } from "@moss/db";
+import { readScopedActorUserId, type DataContextDb } from "@moss/db";
 import type { ModuleServiceKey } from "@moss/shared";
 
 import { HttpApiAdapter } from "./adapters/http-api.js";
@@ -82,6 +82,8 @@ export async function generateText(
     // A login provider stores a sealed marker, not a key. Route before decrypt.
     const createCli = deps.createCliStructuredAdapter;
     if (!createCli) return { ok: false, error: "needs_config" };
+    // #2674: the CLI runs in this user's per-user slot.
+    const actorUserId = await readScopedActorUserId(scopedDb);
     run = async () =>
       readText(
         await createCli(kind).generateStructured({
@@ -91,7 +93,8 @@ export async function generateText(
           schema: TEXT_SCHEMA,
           maxOutputTokens: input.maxOutputTokens,
           signal: input.signal,
-          priority: input.priority
+          priority: input.priority,
+          ...(actorUserId ? { actorUserId } : {})
         })
       );
   } else {

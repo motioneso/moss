@@ -344,6 +344,12 @@ export interface RpcLaunchParams {
    * method's `{offset}` return shape, so "launch" is reused rather than adding a new method.
    */
   readonly schema?: Record<string, unknown>;
+  /**
+   * #2674 — the user who owns this launch. With per-user UIDs on, the runner runs the CLI in this
+   * user's slot, the same one their chat agent uses. Required for structured launches: their
+   * session keys are minted per call, so keying the slot by session would take a new slot each time.
+   */
+  readonly userId?: string;
 }
 
 /**
