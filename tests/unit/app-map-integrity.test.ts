@@ -117,6 +117,25 @@ describe("app-map integrity and truthfulness", () => {
     }
   });
 
+  it("finds the Assistant & AI settings page for plain model wordings", () => {
+    // The map builder drops the AI module's shadow settings entry because core
+    // already owns this path, so only the core wording ever reaches Moss. Search
+    // the built map the way the map read service does: a case-insensitive
+    // substring over the entry.
+    const assistantEntries = appMap.settings.filter(
+      (setting) => setting.path === "/settings?section=assistant"
+    );
+    expect(assistantEntries).toHaveLength(1);
+    for (const phrase of ["ai model", "which model", "change model"]) {
+      const hits = assistantEntries.filter((entry) =>
+        JSON.stringify(entry).toLowerCase().includes(phrase)
+      );
+      expect(hits.length, `expected "${phrase}" to find the Assistant & AI page`).toBeGreaterThan(
+        0
+      );
+    }
+  });
+
   it("every app map description is non-empty and module descriptions meet the 240-char limit", () => {
     const allSurfaces = [
       ...appMap.screens.map((s) => ({
