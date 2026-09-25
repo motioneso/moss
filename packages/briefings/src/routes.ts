@@ -47,6 +47,7 @@ import {
 import { projectPlanContext, type DayPlanReadPort } from "./plan-context.js";
 import { reconcileOwnedSchedules, reconcileSchedule, timezoneFor } from "./schedule.js";
 import { deriveBriefingFeedbackItems } from "./feedback-targets.js";
+import { displaySummaryText } from "./run-display.js";
 
 export interface BriefingsRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -768,7 +769,7 @@ function serializeRun(
     status: run.status,
     runKind: run.run_kind,
     briefingType: run.briefing_type,
-    summaryText: run.summary_text,
+    summaryText: displaySummaryText(run.summary_text, run.source_metadata),
     sourceMetadata,
     feedbackItems,
     structuredPayload,
