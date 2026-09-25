@@ -22,6 +22,12 @@ import {
   writeOwnedFile,
   type OwnershipApplier
 } from "./owned-fs.js";
+import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
+import {
+  ownerCodexHomeAccess,
+  syncCodexLoginIntoHome,
+  type CodexHomeAccess
+} from "./codex-shared-login.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
@@ -42,6 +48,11 @@ export interface PerUserStructuredDeps {
     owner: string,
     slot: { readonly uid: number; readonly gid: number }
   ) => Promise<string>;
+  /** Test seam for a user's Codex login; defaults to access through the user's own account. */
+  readonly codexHomeAccess?: (
+    agentHome: string,
+    identity: { readonly uid: number; readonly gid: number }
+  ) => CodexHomeAccess;
 }
 
 /** The owner's per-user home, created and handed over exactly as ACP chat does it. */
@@ -98,6 +109,20 @@ export async function preparePerUserStructuredLaunch(
     ? await deps.prepareOwnerHome(deps.homeBase, owner, identity)
     : await prepareOwnerHome(deps.homeBase, owner, identity, deps.applyOwnership);
 
+  // #2687: Codex runs with the instance's shared login, copied into the owner's home. The same
+  // step after the call carries a token refresh Codex made back to the shared login.
+  const codexHome =
+    params.provider === "openai-compatible"
+      ? (deps.codexHomeAccess?.(agentHome, identity) ??
+        ownerCodexHomeAccess(
+          agentHome,
+          identity,
+          createOwnerIo(identity),
+          runAgentHomePrepareAsOwner
+        ))
+      : undefined;
+  if (codexHome) await syncCodexLoginIntoHome(deps.homeBase, codexHome);
+
   // The working folder: persona written by the runner first, then both handed to the owner.
   const neutral = await prepareOwnedPathWithOwnership(deps.neutralBase, key, [key]);
   const neutralDir = neutral.path;
@@ -136,6 +161,9 @@ export async function preparePerUserStructuredLaunch(
         await purge(transcriptGlobDir("anthropic", neutralDir, agentHome), identity).catch(
           () => undefined
         );
+        if (codexHome) {
+          await syncCodexLoginIntoHome(deps.homeBase, codexHome).catch(() => undefined);
+        }
         await removeOwnedFolder(neutralDir, identity, purge).catch((err: unknown) => {
           console.warn(
             `[engine-host] ${key} working folder removal failed: ${

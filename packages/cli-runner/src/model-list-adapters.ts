@@ -21,11 +21,11 @@
  */
 
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 import type { TmuxIo } from "@moss/ai";
 import type { RpcListProviderModelsResult, RpcProviderKind } from "@moss/chat/live";
 
+import { instanceCodexAuthPath } from "./codex-shared-login.js";
 import { readProviderToken } from "./provider-token-store.js";
 
 /** Bound on every vendor call (spec §1). */
@@ -220,9 +220,9 @@ const anthropicAdapter: ModelListAdapter = async (deps) => {
   return { status: "ok", models: filterAnthropicModels(outcome.json) };
 };
 
-/** `<homeBase>/.codex/auth.json` — the file the codex CLI writes at login. */
+/** The instance's shared Codex login, the same file every user's Codex home is seeded from. */
 export function codexAuthPath(homeBase: string): string {
-  return path.join(homeBase, ".codex", "auth.json");
+  return instanceCodexAuthPath(homeBase);
 }
 
 async function readCodexAuth(

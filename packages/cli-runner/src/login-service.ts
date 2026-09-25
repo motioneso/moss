@@ -94,6 +94,14 @@ export interface LoginServiceDeps {
     provider: RpcProviderKind,
     runtime: LoginUserRuntime
   ) => Promise<void>;
+  /**
+   * #2687: runs once a sign-in settles ready, before the flow reports it. Codex uses it to make
+   * the new sign-in the instance's shared login. A failure settles the flow as an error.
+   */
+  readonly onLoginReady?: (
+    provider: RpcProviderKind,
+    runtime: LoginUserRuntime | undefined
+  ) => Promise<void>;
   /** Resolve the isolated HOME and UID/GID used by Codex for one authenticated user. */
   readonly resolveUserRuntime?: (
     provider: RpcProviderKind,
@@ -264,7 +272,7 @@ export class LoginService {
       const pre = await probePromise;
       if (flow.initialProbe === probePromise) flow.initialProbe = undefined;
       if (pre.status === "ready") {
-        return this.settle(flow, "ready");
+        return await this.settleReady(flow);
       }
 
       // Open the captured login session + run the login command (no secret in the launch line).
@@ -472,7 +480,7 @@ export class LoginService {
       // §L.9.1 runtime smoke: a bounded non-interactive re-confirmation that auth actually works
       // (a second clean probe), not merely a printed success line.
       const smoke = await this.deps.probe(flow.provider, { runtime });
-      if (smoke.status === "ready") return this.settle(flow, "ready");
+      if (smoke.status === "ready") return await this.settleReady(flow);
       return this.settle(flow, "error", "login smoke check failed");
     }
     if (probe.status === "error") {
@@ -605,6 +613,18 @@ export class LoginService {
       );
       throw new Error(`login command send failed: ${redactSecrets(sent.stderr)}`);
     }
+  }
+
+  /** Settle a ready flow once the ready hook has run; a hook failure settles it as an error. */
+  private async settleReady(flow: LoginFlow): Promise<LoginFlowOutcome> {
+    if (flow.provider === "openai-compatible" && this.deps.onLoginReady) {
+      try {
+        await this.deps.onLoginReady(flow.provider, flow.runtime);
+      } catch {
+        return this.settle(flow, "error", "Codex signed in, but Moss could not share the sign-in");
+      }
+    }
+    return this.settle(flow, "ready");
   }
 
   /** Settle the flow to a terminal status, tearing down the session + clearing the slot. */

@@ -44,6 +44,17 @@ import {
 import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 import { codexAuthPath } from "./acp-codex-auth.js";
+import {
+  runAgentHomePrepareAsOwner,
+  type AgentHomePrepareRequest,
+  type AgentHomeSecretFile
+} from "./agent-home-prepare-run.js";
+import {
+  ownerCodexHomeAccess,
+  syncCodexLoginIntoHome,
+  type CodexHomeAccess
+} from "./codex-shared-login.js";
+import { createOwnerIo } from "./per-user-structured.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
@@ -121,6 +132,14 @@ export interface AcpHostDeps {
    * needing real root. Production always uses the default.
    */
   readonly allocateUidSlot?: (homeBase: string, userId: string) => { uid: number; gid: number };
+  /**
+   * Test seam for reading and writing a user's Codex login. Defaults to access through the
+   * user's own account, which needs the runner's setpriv capabilities.
+   */
+  readonly codexHomeAccess?: (
+    agentHome: string,
+    identity: { readonly uid: number; readonly gid: number }
+  ) => CodexHomeAccess;
   /** Deletes a private folder as its owning account; injected so tests never shell out to setpriv. */
   readonly purgePrivateFolder?: (
     cwd: string,
@@ -140,18 +159,7 @@ export interface AcpHostDeps {
   readonly readProcStatus?: (pid: number) => ReturnType<typeof readProcStatus>;
 }
 
-/** Argument passed as one JSON string to agent-home-prepare.mjs. */
-export interface AgentHomePrepareRequest {
-  readonly dirs: readonly string[];
-  readonly denyFile: { readonly path: string; readonly permissionKeys: readonly string[] } | null;
-}
-
-export interface AgentHomeSecretFile {
-  readonly path: string;
-  readonly sourcePath?: string;
-  readonly content?: string;
-  readonly kind?: "codex-auth";
-}
+export type { AgentHomePrepareRequest, AgentHomeSecretFile } from "./agent-home-prepare-run.js";
 
 export interface AcpSpawnResult {
   readonly cwd: string;
@@ -272,47 +280,6 @@ export function defaultResolveAdapterTarget(kind: AcpProviderKind): AcpAdapterTa
     command: process.execPath,
     args: [createRequire(import.meta.url).resolve(entry)]
   };
-}
-
-/**
- * Run the below-top-level preparation step as the person's own slot: setpriv
- * switches identity, then the runner's own Node binary runs the script,
- * given the request as one JSON argv element (never through a shell, so
- * nothing in it is ever interpolated). A non-zero exit fails the launch with
- * the step's own stderr (task 5b, Architect ruling, 2026-09-08).
- */
-async function defaultRunAgentHomePrepare(
-  request: AgentHomePrepareRequest,
-  identity: { uid: number; gid: number },
-  secretFiles: readonly AgentHomeSecretFile[] = []
-): Promise<void> {
-  const script = createRequire(import.meta.url).resolve("./agent-home-prepare.mjs");
-  const { command, args } = buildSetprivDropCommand(
-    process.execPath,
-    [script, JSON.stringify(request)],
-    identity
-  );
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: ["pipe", "ignore", "pipe"],
-      env: buildSanitizedCliEnv(process.env)
-    });
-    child.stdin.end(JSON.stringify(secretFiles));
-    let stderr = "";
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
-    });
-    child.once("error", (error) => reject(error));
-    child.once("exit", (code) => {
-      if (code === 0) resolve();
-      else
-        reject(
-          new Error(
-            `AcpHost: could not prepare the agent's home: ${stderr.trim() || `exit code ${String(code)}`}`
-          )
-        );
-    });
-  });
 }
 
 /**
@@ -443,7 +410,20 @@ export class AcpHost {
         const prepareDirs = [sessionDir];
         if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
-        const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
+        const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? runAgentHomePrepareAsOwner;
+        // #2687: the instance's shared Codex login goes into this user's own home first. The
+        // step below then checks the copy, as the user, before Codex starts.
+        if (codexAuth) {
+          const access =
+            this.deps.codexHomeAccess?.(agentHome, { uid, gid }) ??
+            ownerCodexHomeAccess(
+              agentHome,
+              { uid, gid },
+              createOwnerIo({ uid, gid }),
+              runAgentHomePrepare
+            );
+          await syncCodexLoginIntoHome(homeBase, access);
+        }
         await runAgentHomePrepare(
           { dirs: prepareDirs, denyFile },
           { uid, gid },

@@ -30,6 +30,10 @@ import {
   type AgentHomeSecretFile
 } from "../../packages/cli-runner/src/acp-host.js";
 import { allocateUidSlot as realAllocateUidSlot } from "../../packages/cli-runner/src/uid-allocator.js";
+import {
+  instanceCodexAuthPath,
+  type CodexHomeAccess
+} from "../../packages/cli-runner/src/codex-shared-login.js";
 
 // These tests exercise spawn routing (folders, env, deny files), not the real
 // chown privilege boundary. Rather than stub the handover out, they give the
@@ -83,6 +87,18 @@ type AgentHomePrepare = (
   identity: { uid: number; gid: number },
   secretFiles?: readonly AgentHomeSecretFile[]
 ) => Promise<void>;
+
+// Reads and writes a user's Codex login plainly; the real one switches to the user's account.
+function plainCodexHomeAccess(agentHome: string): CodexHomeAccess {
+  const path = join(agentHome, ".codex", "auth.json");
+  return {
+    read: async () => (existsSync(path) ? readFileSync(path, "utf8") : null),
+    write: async (raw) => {
+      ensureDirTreeSync(join(agentHome, ".codex"));
+      writeFileSync(path, raw, { mode: 0o600 });
+    }
+  };
+}
 
 async function fakeAgentHomePrepare(request: AgentHomePrepareRequest): Promise<void> {
   for (const dir of request.dirs) ensureDirTreeSync(dir);
@@ -156,6 +172,7 @@ function makeHost(dir: string, child: FakeChild) {
       return child as never;
     },
     runAgentHomePrepare: fakeAgentHomePrepare,
+    codexHomeAccess: plainCodexHomeAccess,
     purgePrivateFolder: fakePurgePrivateFolder
   });
   return { host, lastSpawn: () => lastSpawn };
@@ -708,7 +725,8 @@ describe("task 5b launch follows the row", () => {
         seen.push({ command: opts.command, args: opts.args, cwd: opts.cwd, env: opts.env });
         return child as never;
       },
-      runAgentHomePrepare
+      runAgentHomePrepare,
+      codexHomeAccess: plainCodexHomeAccess
     });
     return { host, seen };
   }
@@ -813,6 +831,36 @@ describe("task 5b launch follows the row", () => {
       expect(seen[1]?.env.HOME).toBe(second.home);
       expect(seen.every(({ env }) => env.CODEX_HOME === undefined)).toBe(true);
       expect(seen.every(({ env }) => env.CLAUDE_CODE_OAUTH_TOKEN === undefined)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("gives a user who never signed in to Codex the instance owner's login, in their own home", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const ownerLogin = JSON.stringify({
+        tokens: { access_token: "owner-token", account_id: "owner-account" },
+        last_refresh: "2026-09-18T14:31:26Z"
+      });
+      mkdirSync(join(home, ".codex"), { recursive: true });
+      writeFileSync(instanceCodexAuthPath(home), ownerLogin, { mode: 0o600 });
+      const child = new FakeChild();
+      const handedOff: Array<readonly AgentHomeSecretFile[]> = [];
+      const { host, seen } = makeUserHost(dir, home, child, async (request, _identity, files) => {
+        handedOff.push(files ?? []);
+        await fakeAgentHomePrepare(request);
+      });
+      const spawned = await host.spawn("chat:user-b:codex", "proj", "openai", "user-b", "chat");
+      const userCopy = join(home, "agents", "user-b", ".codex", "auth.json");
+      expect(spawned.home).toBe(join(home, "agents", "user-b"));
+      expect(seen[0]?.env.HOME).toBe(spawned.home);
+      expect(readFileSync(userCopy, "utf8")).toBe(ownerLogin);
+      expect(handedOff[0]?.[0]?.sourcePath).toBe(userCopy);
+      expect(readFileSync(instanceCodexAuthPath(home), "utf8")).toBe(ownerLogin);
+      expect(seen.every(({ env }) => !JSON.stringify(env).includes("owner-token"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
@@ -981,7 +1029,8 @@ describe("not-ready rows refuse at the launcher", () => {
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         runAgentHomePrepare: async () => {
           throw new Error("Not logged in (no usable Codex credential in your runner home)");
-        }
+        },
+        codexHomeAccess: plainCodexHomeAccess
       });
       await expect(host.spawn("chat:user-1:a", "proj", "openai", "user-1", "chat")).rejects.toThrow(
         /Not logged in \(no usable Codex credential in your runner home\)/

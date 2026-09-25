@@ -95,6 +95,61 @@ describe("per-user Codex login boundaries", () => {
     await service.cancel("openai-compatible", loginId, "user-a");
   });
 
+  it("shares a completed Codex sign-in with the whole instance, and only Codex", async () => {
+    const { io } = loginIo();
+    const homeBase = await mkdtemp(join(tmpdir(), "per-user-login-"));
+    const userHome = join(homeBase, "agents", "user-a");
+    const shared: Array<{ provider: string; home?: string }> = [];
+    const service = new LoginService({
+      io,
+      homeBase,
+      adapters: LOGIN_ADAPTERS,
+      resolveUserRuntime: async (_provider, userId) => ({
+        userId,
+        homeBase: userHome,
+        uid: 100001,
+        gid: 100001,
+        io
+      }),
+      probe: async () => ({ status: "ready" }),
+      onLoginReady: async (provider, runtime) => {
+        shared.push({ provider, home: runtime?.homeBase });
+      },
+      settleMs: 0
+    });
+    const codexLogin = service.reserve("openai-compatible", "user-a");
+    expect((await service.start(codexLogin)).status).toBe("ready");
+    const claudeLogin = service.reserve("anthropic", "user-a");
+    expect((await service.start(claudeLogin)).status).toBe("ready");
+    expect(shared).toEqual([{ provider: "openai-compatible", home: userHome }]);
+  });
+
+  it("reports an error when a Codex sign-in cannot be shared", async () => {
+    const { io } = loginIo();
+    const homeBase = await mkdtemp(join(tmpdir(), "per-user-login-"));
+    const service = new LoginService({
+      io,
+      homeBase,
+      adapters: LOGIN_ADAPTERS,
+      resolveUserRuntime: async (_provider, userId) => ({
+        userId,
+        homeBase: join(homeBase, "agents", userId),
+        uid: 100001,
+        gid: 100001,
+        io
+      }),
+      probe: async () => ({ status: "ready" }),
+      onLoginReady: async () => {
+        throw new Error("disk full");
+      },
+      settleMs: 0
+    });
+    const loginId = service.reserve("openai-compatible", "user-a");
+    const out = await service.start(loginId);
+    expect(out.status).toBe("error");
+    expect(out.message).toBe("Codex signed in, but Moss could not share the sign-in");
+  });
+
   it("keeps non-Codex probe and rejection scope shared", async () => {
     const { io } = loginIo();
     const resolved: string[] = [];

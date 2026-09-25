@@ -1,7 +1,7 @@
 import type { AcpProviderKind } from "@moss/acp";
 
 export const CODEX_SIGN_IN_REQUIRED_MESSAGE =
-  "Codex is not signed in for this account. Sign-in is currently available only to administrators in Settings, Assistant & AI, using this same Moss account.";
+  "Codex is not connected yet. An administrator connects it once for everyone under Settings, Assistant & AI.";
 
 const SIGN_IN_EXPIRED_MESSAGES = {
   anthropic:
