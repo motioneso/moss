@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Backup briefing text no longer takes over Today.** When Moss cannot write your briefing, the Today page now keeps its normal header instead of showing a raw list of counts. [PR #2664](https://github.com/motioneso/moss/pull/2664)
 - **Clearer chat error when per-user mode is off.** Chat now explains how to fix it when the server is set up without per-user mode, instead of showing a generic unavailable message. [PR #2544](https://github.com/motioneso/moss/pull/2544)
 - **National team follows no longer pull in the whole World Cup.** Following a national team now shows that team's own news and keeps its tournament's standings out of the way unless the tournament is running. [PR #2663](https://github.com/motioneso/moss/pull/2663)
 - **Morning briefings no longer fail when you follow sports teams.** Morning briefings now finish even if one source has a problem, and they can include your followed teams again. [PR #2658](https://github.com/motioneso/moss/pull/2658)
