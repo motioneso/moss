@@ -29,6 +29,80 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-24
+
+#### Fixed
+
+- **National team follows no longer pull in the whole World Cup.** Following a national team now shows that team's own news and keeps its tournament's standings out of the way unless the tournament is running. [PR #2663](https://github.com/motioneso/moss/pull/2663)
+- **Morning briefings no longer fail when you follow sports teams.** Morning briefings now finish even if one source has a problem, and they can include your followed teams again. [PR #2658](https://github.com/motioneso/moss/pull/2658)
+- **Readable account name in the sidebar.** The account name in the sidebar is readable again, and the Settings entry in the account menu no longer spills out of its box. [PR #2656](https://github.com/motioneso/moss/pull/2656)
+- **Photos and team logos stay on Today.** Sports photos and team logos no longer disappear until a hard refresh, and more news stories on Today now show their photo. [PR #2654](https://github.com/motioneso/moss/pull/2654)
+- **No false warning after saving tomorrow's plan.** Saving tomorrow's plan in the evening no longer shows a warning that the plan changed. [PR #2650](https://github.com/motioneso/moss/pull/2650)
+
+#### Changed
+
+- **Sports page team cards match Today.** The team cards along the top of the Sports page now use the same clean look as the sports cards on Today, with the next game shown as text at the bottom of each card. [PR #2667](https://github.com/motioneso/moss/pull/2667)
+- **Chat skill suggestions use the normal font.** The skill suggestions that pop up while you type in chat now use the same font as the rest of the app. [PR #2668](https://github.com/motioneso/moss/pull/2668)
+- **Next game lines up across your team cards on Today.** On Today, each team's next game now sits at the bottom of its card, so they line up neatly across the row. [PR #2666](https://github.com/motioneso/moss/pull/2666)
+- **Faster News and Sports filters.** Your News and Sports filters now remember which stories they have already checked, so refreshing the page is quicker. [PR #2662](https://github.com/motioneso/moss/pull/2662)
+- **Faster story filters with a sorting model.** When you set a sorting model, News and Sports use it to check stories against your saved preferences, so refreshes are much faster. [PR #2627](https://github.com/motioneso/moss/pull/2627)
+- **Smoother dark mode details.** In dark mode, divider lines are easier to see and hover highlights now use a soft tint of your theme color instead of a bright block. [PR #2655](https://github.com/motioneso/moss/pull/2655)
+- **Dark mode keeps your theme colors.** In dark mode every color theme now keeps its real accent color instead of switching to a pale version, and Sage looks right again. [PR #2653](https://github.com/motioneso/moss/pull/2653)
+- **Cleaner followed teams on Today.** Your followed teams and leagues on the Today page now appear as newspaper-style columns with their logos and colors. [PR #2652](https://github.com/motioneso/moss/pull/2652)
+- **Trail-map texture on the Today header.** The Today header now has a faint trail-map pattern behind it. [PR #2651](https://github.com/motioneso/moss/pull/2651)
+
+#### Added
+
+- **More women's leagues and standings that remember where you were.** Sports now covers more women's competitions and the Women's Pro Baseball League, and the standings picker opens the league and division you last looked at. [PR #2669](https://github.com/motioneso/moss/pull/2669)
+- **Artwork for news stories without a photo.** When the lead story on Today has no photo, Moss now shows a drawn contour print in the story's topic colors instead of an empty space. [PR #2657](https://github.com/motioneso/moss/pull/2657)
+
+### 2026-09-23
+
+#### Changed
+
+- **Pause All and a Focus switch.** The Trail Marker menu now has Pause All, plus a switch to pause just Focus, in Moss's forest green. [PR #2645](https://github.com/motioneso/moss/pull/2645)
+- **Pause and Resume in the Trail Marker menu.** The Trail Marker menu now has one Pause / Resume button that stops everything, replacing Disconnect and Pause Focus. [PR #2635](https://github.com/motioneso/moss/pull/2635)
+- **Simpler Trail Marker menu.** The Trail Marker menu no longer has Judge Now or Check for Updates; Trail Marker checks your focus on its own, and updates are in Settings. [PR #2631](https://github.com/motioneso/moss/pull/2631)
+
+#### Fixed
+
+- **Trail Marker privacy fixes.** Trail Marker now only ever looks at the window you're using, stops everything while paused, and forgets its settings when you log out. [PR #2644](https://github.com/motioneso/moss/pull/2644)
+- **Trail Marker approval page styling.** The page where you approve a Mac for Trail Marker now uses Moss's usual heading style. [PR #2632](https://github.com/motioneso/moss/pull/2632)
+
+#### Added
+
+- **Choose apps Trail Marker never watches.** You can now pick apps, like your banking app, that Trail Marker never looks at, even when it watches your whole screen. [PR #2634](https://github.com/motioneso/moss/pull/2634)
+
+### 2026-09-22
+
+#### Fixed
+
+- **Next match for soccer teams.** Soccer teams you follow now show their next match on the Sports page. [PR #2614](https://github.com/motioneso/moss/pull/2614)
+- **Better email reviews for non-Gmail mailboxes.** Email arriving over a standard mail account is now reviewed using its message text instead of only its subject line. [PR #2598](https://github.com/motioneso/moss/pull/2598)
+- **Assistant knows where settings live again.** The assistant no longer points at settings pages that no longer exist, and now describes Wellness, Memory, Notes, Tasks, Chat and connected accounts according to what they really do today. [PR #2622](https://github.com/motioneso/moss/pull/2622)
+- **Host details show the app version and commit.** The Environment, Version, Commit and Deploy mode fields under Settings > Host > Technical details now show real values instead of being blank, and on a pinned release Moss tells you when a newer version is available. [PR #2601](https://github.com/motioneso/moss/pull/2601)
+
+#### Changed
+
+- **Clearer Mac linking; Trail Marker can now judge focus with Jev.** When you link a Mac, the approval page now lists exactly what that Mac will be able to do, and Settings explains how to connect it. Trail Marker's focus judgment can now use TypeSafe's Jev model, in addition to any other model you've configured. [PR #2584](https://github.com/motioneso/moss/pull/2584)
+- **Marketing mail sorted straight away.** Marketing mail from senders you do not know is now left out sooner, without the extra review. [PR #2600](https://github.com/motioneso/moss/pull/2600)
+
+#### Added
+
+- **Trail Marker focus check-ins.** While a focus block you scheduled in Moss is on, Trail Marker can check which app you are in, and — when the title alone isn't enough to tell — can look at the screen once to describe it, then nudge you if you've drifted off task. [PR #2578](https://github.com/motioneso/moss/pull/2578)
+- **Sorting model.** Pick a small, fast model to sort and filter your news and sports stories. If it does not answer, Moss tries your main model instead. [PR #2623](https://github.com/motioneso/moss/pull/2623)
+
+### 2026-09-20
+
+#### Added
+
+- **Trail Marker for Mac (early build).** A Mac menu-bar app can now link to your account and show up under Active sessions; it does not observe your activity. [PR #2568](https://github.com/motioneso/moss/pull/2568)
+- **Link a Mac to your account.** You can now approve a Mac companion app from your browser and see or sign out each linked Mac from Active sessions. [PR #2564](https://github.com/motioneso/moss/pull/2564)
+
+#### Changed
+
+- **Trail Marker menu and setup window redesign.** The Trail Marker menu-bar card and setup window now follow the approved design. [PR #2573](https://github.com/motioneso/moss/pull/2573)
+
 ### 2026-09-15
 
 #### Changed
