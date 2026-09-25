@@ -12,7 +12,7 @@ export const uatLevel = {
   withBriefingWriterFixture: true
 } as const;
 
-test.use({ browserName: "firefox", viewport: { width: 1280, height: 1800 } });
+test.use({ viewport: { width: 1280, height: 1800 } });
 
 const WRITER_HEADLINE = "A steady day with room for deep work.";
 const NO_PLAN_STATUS = "There is no saved plan to review today.";
@@ -97,6 +97,8 @@ test("Review keeps the real morning reader open when no plan is saved", async ({
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  expect(page.context().browser()?.browserType().name()).toBe("firefox");
+  expect(page.viewportSize()).toEqual({ width: 1280, height: 1800 });
 
   await signIn(page);
   const locale = await json(page, "/api/me/locale");
@@ -130,7 +132,7 @@ test("Review keeps the real morning reader open when no plan is saved", async ({
   await expect(reader).toBeVisible();
   await expect(reader.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
   await expect(reader).toContainText(WRITER_HEADLINE);
-  const review = reader.getByRole("button", { name: "Review task blocks" });
+  const review = reader.getByRole("tab", { name: "Review task blocks" });
   await expect(review).toBeVisible();
 
   await review.click();
