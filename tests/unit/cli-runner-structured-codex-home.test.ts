@@ -30,7 +30,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-const { preparePerUserStructuredLaunch } =
+const { createOwnerIo, preparePerUserStructuredLaunch } =
   await import("../../packages/cli-runner/src/per-user-structured.js");
 
 const dirs: string[] = [];
@@ -64,5 +64,29 @@ describe("per-user background Codex call", () => {
     expect(spawned).toHaveLength(1);
     expect(spawned[0]!.env.HOME).toBe(agentHome);
     expect(spawned[0]!.env.CODEX_HOME).toBe(join(agentHome, ".codex"));
+  });
+});
+
+describe("bounded owner io", () => {
+  // The runner may not signal another account's process, so the owner's side enforces the deadline.
+  it("runs a bounded command under a deadline the owner enforces", async () => {
+    const io = createOwnerIo(
+      { uid: 100002, gid: 100002 },
+      {
+        limits: { timeoutMs: 5_000, maxOutputBytes: 1024 }
+      }
+    );
+    await io.run("node", ["-e", "0"]);
+    expect(spawned).toHaveLength(1);
+    const args = spawned[0]!.args;
+    const afterSwitch = args.slice(args.indexOf("--") + 1);
+    expect(afterSwitch.slice(0, 5)).toEqual(["timeout", "-s", "KILL", "5", "node"]);
+  });
+
+  it("leaves an unbounded command as it is", async () => {
+    const io = createOwnerIo({ uid: 100002, gid: 100002 });
+    await io.run("node", ["-e", "0"]);
+    const args = spawned[0]!.args;
+    expect(args.slice(args.indexOf("--") + 1)[0]).toBe("node");
   });
 });

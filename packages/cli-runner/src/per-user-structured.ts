@@ -248,8 +248,8 @@ export interface OwnerRunLimits {
 }
 
 /**
- * Run a command, and with `limits`, kill it and report failure once it overruns its deadline or
- * prints past the cap.
+ * Run a command, and with `limits`, stop reading and report failure once it overruns its deadline
+ * or prints past the cap. The kill reaches only a process the runner may signal.
  */
 export function runBounded(
   command: string,
@@ -309,7 +309,14 @@ export function createOwnerIo(
     extraEnv: NodeJS.ProcessEnv = {},
     input?: string
   ): Promise<{ code: number; stdout: string; stderr: string }> => {
-    const dropped = buildSetprivDropCommand(cmd, args, identity);
+    // The runner may not signal the owner's process, so `timeout` enforces the deadline as the owner.
+    const dropped = opts.limits
+      ? buildSetprivDropCommand(
+          "timeout",
+          ["-s", "KILL", String(Math.ceil(opts.limits.timeoutMs / 1000)), cmd, ...args],
+          identity
+        )
+      : buildSetprivDropCommand(cmd, args, identity);
     const env = { ...buildSanitizedCliEnv(process.env), ...homeEnv, ...extraEnv };
     return runBounded(dropped.command, dropped.args, env, input ?? "", opts.limits);
   };

@@ -24,6 +24,7 @@ const KEY_TTL_MS = 60 * 60 * 1000;
 const REFETCH_FLOOR_MS = 5 * 60 * 1000;
 const CLOCK_SKEW_S = 5 * 60;
 const FETCH_TIMEOUT_MS = 5_000;
+const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 function decodePart(part: string | undefined): Record<string, unknown> | null {
   if (!part) return null;
@@ -76,6 +77,8 @@ export function createCodexTokenVerifier(
   };
 
   return async (accessToken) => {
+    // Base64url decoding skips stray characters, so only the exact compact form is accepted.
+    if (!COMPACT_JWS.test(accessToken)) return false;
     const [head, body, signature] = accessToken.split(".");
     const header = decodePart(head);
     const claims = decodePart(body);

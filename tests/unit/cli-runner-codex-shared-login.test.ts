@@ -360,3 +360,20 @@ describe("structured Codex launch", () => {
     expect(asked).toBe(false);
   });
 });
+
+describe("createCodexTokenVerifier", () => {
+  const token = jwt({ iat: Math.floor(Date.parse(OLD) / 1000) });
+
+  it("accepts a token OpenAI signed", async () => {
+    expect(await verify(token)).toBe(true);
+  });
+
+  it.each([
+    ["an extra segment", `${token}.garbage`],
+    ["a stray character in the signature", `${token}!`],
+    ["padding on the signature", `${token}=`],
+    ["an empty segment", token.replace(/\.[^.]+\./, "..")]
+  ])("rejects a signed token with %s", async (_label, altered) => {
+    expect(await verify(altered)).toBe(false);
+  });
+});
