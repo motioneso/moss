@@ -1,0 +1,188 @@
+{
+  "ci_status_calls": {
+    "count": 458,
+    "by_agent": {
+      "Architect": 10,
+      "Astra-Reviewer": 3,
+      "Builder": 18,
+      "Foble": 1,
+      "Gemini-Builder": 175,
+      "Luna-Builder": 170,
+      "PM": 4,
+      "Prover": 19,
+      "Reviewer": 6,
+      "Sonnet-Builder": 52
+    }
+  },
+  "pr2427_checks": {
+    "count": 195,
+    "by_agent": {
+      "Astra-Reviewer": 1,
+      "Builder": 1,
+      "Gemini-Builder": 59,
+      "Luna-Builder": 94,
+      "Reviewer": 1,
+      "Sonnet-Builder": 39
+    }
+  },
+  "gate_status_wait_calls": {
+    "count": 52,
+    "by_agent": {
+      "Luna-Builder": 34,
+      "Sonnet-Builder": 18
+    }
+  },
+  "static_launch_calls": {
+    "count": 28,
+    "by_agent": {
+      "Luna-Builder": 27,
+      "Sonnet-Builder": 1
+    }
+  },
+  "unit_launch_calls": {
+    "count": 25,
+    "by_agent": {
+      "Gemini-Builder": 1,
+      "Luna-Builder": 23,
+      "Sonnet-Builder": 1
+    }
+  },
+  "typecheck_launch_calls": {
+    "count": 75,
+    "by_agent": {
+      "Builder": 11,
+      "Gemini-Builder": 7,
+      "Luna-Builder": 30,
+      "Sonnet-Builder": 27
+    }
+  },
+  "vitest_calls": {
+    "count": 188,
+    "by_agent": {
+      "Astra-Reviewer": 20,
+      "Builder": 37,
+      "Gemini-Builder": 28,
+      "Luna-Builder": 79,
+      "Sonnet-Builder": 24
+    }
+  },
+  "standalone_sleeps": {
+    "count": 193,
+    "requested_seconds": 7387.0,
+    "by_agent": {
+      "Gemini-Builder": 153,
+      "Luna-Builder": 40
+    }
+  },
+  "gates": {
+    "pnpm test:unit": {
+      "count": 2,
+      "passed": 2,
+      "seconds": 457.0,
+      "median_pass_seconds": 228.5
+    },
+    "pnpm verify:foundation": {
+      "count": 10,
+      "passed": 6,
+      "seconds": 15688.0,
+      "median_pass_seconds": 2193.0
+    },
+    "pnpm verify:static": {
+      "count": 2,
+      "passed": 1,
+      "seconds": 241.0,
+      "median_pass_seconds": 160.0
+    }
+  },
+  "gemini_view_file": {
+    "calls": 461,
+    "failed": 451,
+    "first_failed": 1789001072741,
+    "last_failed": 1789006109441
+  },
+  "gate_pipe_blocks": 10,
+  "graph_project_errors": 17,
+  "tool_counts": {
+    "all": 8066,
+    "failed_status": 813,
+    "kinds": {
+      "execute": 5477,
+      "read": 1138,
+      "fetch": 34,
+      "edit": 998,
+      "other": 172,
+      "think": 29,
+      "search": 218
+    }
+  },
+  "ci": {
+    "runs": 98,
+    "CI_runs": 53,
+    "unique_heads": 53,
+    "conclusions": {
+      "modules-registry-check:success": 44,
+      "CI:success": 41,
+      "CI:failure": 12,
+      "modules-registry-check:failure": 1
+    },
+    "jobs": 583,
+    "job_seconds": 151665.0,
+    "by_job": {
+      "Build ${{ matrix.arch }} image": {
+        "count": 53,
+        "seconds": 0,
+        "failures": 0
+      },
+      "Build and publish images": {
+        "count": 53,
+        "seconds": 0,
+        "failures": 0
+      },
+      "CI gate": {
+        "count": 53,
+        "seconds": 165.0,
+        "failures": 12
+      },
+      "Compose deployment smoke": {
+        "count": 53,
+        "seconds": 19162.0,
+        "failures": 1
+      },
+      "Detect change scope": {
+        "count": 53,
+        "seconds": 286.0,
+        "failures": 0
+      },
+      "Prod compose deployment smoke": {
+        "count": 53,
+        "seconds": 9926.0,
+        "failures": 3
+      },
+      "Verify docs": {
+        "count": 53,
+        "seconds": 0,
+        "failures": 0
+      },
+      "Verify integration tests (1/2)": {
+        "count": 53,
+        "seconds": 41809.0,
+        "failures": 1
+      },
+      "Verify integration tests (2/2)": {
+        "count": 53,
+        "seconds": 39386.0,
+        "failures": 1
+      },
+      "Verify static checks and unit tests": {
+        "count": 53,
+        "seconds": 24730.0,
+        "failures": 11
+      },
+      "Verify web and browser tests": {
+        "count": 53,
+        "seconds": 16201.0,
+        "failures": 1
+      }
+    }
+  }
+}
