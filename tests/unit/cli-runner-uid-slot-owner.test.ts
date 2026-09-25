@@ -40,9 +40,16 @@ function fakeIo(): TmuxIo {
   };
 }
 
-function makeHost(homeBase: string, neutralBase: string): CliChatEngineHost {
+function okIo(): TmuxIo {
+  return {
+    ...fakeIo(),
+    run: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })) as unknown as TmuxIo["run"]
+  };
+}
+
+function makeHost(homeBase: string, neutralBase: string, io: TmuxIo = fakeIo()): CliChatEngineHost {
   return new CliChatEngineHost({
-    io: fakeIo(),
+    io,
     neutralBase,
     homeBase,
     perUserUid: true,
@@ -164,10 +171,22 @@ describe("#2674 the runner prunes per-call slots during its startup sweep", () =
       join(homeBase, "uid-slots.json"),
       JSON.stringify({ [`structured-${randomUUID()}`]: 1, [USER_A]: 2 })
     );
-    const host = makeHost(homeBase, neutralBase);
+    const host = makeHost(homeBase, neutralBase, okIo());
 
     await host.startupSweep();
 
     expect(readSlots(homeBase)).toEqual({ [USER_A]: 2 });
+  });
+
+  it("leaves per-call slots alone when the neutral clean-out fails", async () => {
+    const homeBase = tempDir("uid-2674-home-");
+    const neutralBase = tempDir("uid-2674-neutral-");
+    const slots = { [`structured-${randomUUID()}`]: 1, [USER_A]: 2 };
+    writeFileSync(join(homeBase, "uid-slots.json"), JSON.stringify(slots));
+    const host = makeHost(homeBase, neutralBase, fakeIo());
+
+    await host.startupSweep();
+
+    expect(readSlots(homeBase)).toEqual(slots);
   });
 });

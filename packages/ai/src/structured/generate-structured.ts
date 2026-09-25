@@ -47,13 +47,23 @@ const OPERATOR_SAFE_ERROR_NAMES = new Set([
  * collapses to "provider_error_unclassified" rather than falling back to the raw text.
  */
 /**
- * #2674: the refusal text for errors whose message is operator-safe by contract (the cli-runner
- * redacts it before it crosses the socket). Without it a runner refusal such as "UID slot
- * overflow" reaches the logs only as its class name. Every other error logs no text at all.
+ * #2674: a fixed reason code for a cli-runner refusal, so "UID slot overflow" is visible in the
+ * worker log. It matches known refusal phrases and never logs the message itself, because a
+ * wrapped runner error can carry arbitrary text.
  */
+const RUNNER_REFUSAL_REASONS: readonly (readonly [RegExp, string])[] = [
+  [/UID slot overflow/, "uid_slot_overflow"],
+  [/names no owning user/, "launch_missing_owner"],
+  [/launch\.userId must match/, "launch_invalid_owner"],
+  [/live chat is busy/, "runner_busy"],
+  [/provider login is in progress/, "provider_login_in_progress"],
+  [/could not allocate UID slot/, "uid_slot_allocation_failed"]
+];
+
 export function operatorSafeReason(error: unknown): { readonly reason?: string } {
   if (!(error instanceof Error) || !OPERATOR_SAFE_ERROR_NAMES.has(error.name)) return {};
-  return { reason: error.message.slice(0, 200) };
+  const match = RUNNER_REFUSAL_REASONS.find(([pattern]) => pattern.test(error.message));
+  return { reason: match ? match[1] : "unrecognized" };
 }
 
 export function classifyStructuredProviderErrorCode(error: unknown): string {

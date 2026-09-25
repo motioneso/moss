@@ -64,13 +64,7 @@ import {
 } from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
-import {
-  allocateUidSlot,
-  migrateNeutralDir,
-  pruneUidSlots,
-  uidSlotOwner
-} from "./uid-allocator.js";
-import { createSanitizedTmuxIo } from "./runner-io.js";
+import { perUserSessionIo, pruneUidSlotTable } from "./per-user-slot.js";
 export type {
   EngineHostDeps,
   PersistentRuntimeLiveConfig,
@@ -311,24 +305,12 @@ export class CliChatEngineHost {
           throw new CliChatUnavailableError("a provider login is in progress");
         }
       }
-      // #347: allocate the UID slot under the mutex so concurrent launches for different users
-      // cannot race on the slot file (the read-modify-write is not atomic end-to-end, only the
-      // final tmp→rename is). Done before reservations.add so a slot-allocation failure leaves no
-      // orphan reservation. Falls back to the shared root io when homeBase is absent (test /
-      // in-process host scenarios).
-      //
-      // Gated on `perUserUid` (default OFF): when off, `sessionIo` stays as `this.deps.io`, so the
-      // CLI runs as the cli-runner's own process UID (the host operator uid that owns the auth +
-      // neutral volumes) — no setuid, no foreign-uid spawn into a uid-1000-owned dir. The per-user
-      // setuid path requires a root container AND the (in-progress) file-permission model; see the
-      // `perUserUid` doc on EngineHostDeps.
+      // #347: allocate the UID slot under the mutex so concurrent launches cannot race on the slot
+      // file, and before reservations.add so a slot failure leaves no orphan reservation. With
+      // `perUserUid` off (the default) `sessionIo` stays `this.deps.io` and the CLI runs as the
+      // runner's own UID; the per-user path needs a root container (see EngineHostDeps).
       if (this.deps.perUserUid && this.deps.homeBase) {
-        const slot = allocateUidSlot(this.deps.homeBase, uidSlotOwner(key, params));
-        const neutralDirForMigration = deriveNeutralDir(this.deps.neutralBase, key);
-        migrateNeutralDir(neutralDirForMigration, slot.uid, slot.gid);
-        sessionIo = this.deps.createSlotIo
-          ? this.deps.createSlotIo(slot)
-          : createSanitizedTmuxIo(process.env, slot);
+        sessionIo = perUserSessionIo({ ...this.deps, homeBase: this.deps.homeBase }, key, params);
       }
       this.reservations.add(key);
     } catch (err) {
@@ -891,10 +873,10 @@ export class CliChatEngineHost {
     const purgedAcp = await this.acp.sweepPrivateMarkers().catch(() => false);
     if (purgedTranscripts && purgedAcp) {
       // (c) once every pointed-to private folder is confirmed purged, remove residual neutral dirs.
-      await this.clearNeutralBase();
-      // (c.1) #2674: drop per-call UID slots left by the old session-keyed allocation. Only
-      // after the clean-out, so a freed number can never inherit files a dead session left.
-      this.pruneUidSlotTable();
+      // (c.1) #2674: then drop per-call UID slots, only once every removal succeeded, so a
+      // reused slot number never inherits files a dead session left.
+      if (await this.clearNeutralBase()) pruneUidSlotTable(this.deps.homeBase);
+      else console.warn("[engine-host] neutral clean-out incomplete; UID slots left unpruned");
     } else if (this.deps.homeBase) {
       console.warn("[engine-host] startup purge incomplete; per-call UID slots left unpruned");
     }
@@ -912,26 +894,16 @@ export class CliChatEngineHost {
     await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
-  private pruneUidSlotTable(): void {
-    if (!this.deps.homeBase) return;
-    try {
-      const dropped = pruneUidSlots(this.deps.homeBase);
-      if (dropped > 0) console.log(`[engine-host] pruned ${dropped} per-call UID slot entries`);
-    } catch (err) {
-      console.warn(
-        `[engine-host] UID slot prune failed: ${err instanceof Error ? err.name : "UnknownError"}`
-      );
-    }
-  }
-
   /** `rm -rf <neutralBase>/* ` then recreate the shared traversable base (`0711`). */
-  private async clearNeutralBase(): Promise<void> {
+  /** Returns true only when the listing and every removal succeeded. */
+  private async clearNeutralBase(): Promise<boolean> {
     // Remove children individually (not the base itself) so the mount point/volume root
     // is preserved; recreate the base so the first launch's mkdir -p is a no-op.
     const listed = await this.deps.io.run("ls", ["-A", this.deps.neutralBase]).catch(() => ({
       code: 1,
       stdout: ""
     }));
+    let cleared = listed.code === 0;
     if (listed.code === 0) {
       for (const name of listed.stdout
         .split("\n")
@@ -939,13 +911,15 @@ export class CliChatEngineHost {
         .filter(
           (name) => name.length > 0 && name !== ACP_DEADLINE_DIR && name !== ACP_PRIVATE_MARKER_DIR
         )) {
-        await this.deps.io
+        const removed = await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
-          .catch(() => undefined);
+          .catch(() => ({ code: 1 }));
+        if (removed.code !== 0) cleared = false;
       }
     }
     await this.deps.io.run("mkdir", ["-p", this.deps.neutralBase]).catch(() => undefined);
     await this.deps.io.run("chmod", ["711", this.deps.neutralBase]).catch(() => undefined);
+    return cleared;
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────

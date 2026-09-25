@@ -103,10 +103,29 @@ describe("#2674 generateStructured names the acting user for a CLI provider", ()
     expect(deps.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         code: "CliChatUnavailableError",
-        reason: "[cli-runner] UID slot overflow: maximum user slots exhausted"
+        reason: "uid_slot_overflow"
       }),
       "ai.structured provider error"
     );
+  });
+
+  it("logs a fixed code, never the message, for an unrecognised runner refusal", async () => {
+    const adapter: StructuredProviderAdapter = {
+      generateStructured: async () => {
+        throw new CliChatUnavailableError("EACCES: /home/private-user-notes.txt");
+      }
+    };
+    const deps = cliDeps(adapter);
+
+    await generateStructured(
+      scopedDb,
+      { service: "module.demo-module", schema, prompt: "extract" },
+      deps
+    );
+
+    const [fields] = deps.warn.mock.calls[0] as [Record<string, unknown>];
+    expect(fields.reason).toBe("unrecognized");
+    expect(JSON.stringify(fields)).not.toContain("private-user-notes");
   });
 
   it("logs no text for an error that is not operator-safe", async () => {
