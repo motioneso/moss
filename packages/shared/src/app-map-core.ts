@@ -218,7 +218,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
       "on the login's default. The page also identifies the OpenCode ACP card and its saved model setting, " +
-      "and the normal Codex ACP row hands the signed-in credential into that user's isolated runner home, " +
+      "and the normal Codex ACP row hands the instance's shared Codex connection into each user's own isolated runner home, " +
       "and provides a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header. CLI provider " +
       "cards run the ACP adapter's initialize check automatically and show 'Not logged in' when it is refused; " +
@@ -228,10 +228,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "provider rejection, distinct from a missing or malformed Codex runner credential. Chat checks CLI sign-ins when the " +
       "ACP adapter initializes. The page also includes an OpenCode ACP card with a saved Chat model setting; " +
       "the saved choice is passed to the ACP chat launch and applied when the agent advertises that option. " +
-      "Codex sign-in is per user and is checked in that user's isolated runner home; a missing or malformed " +
-      "credential is reported as not signed in for that account rather than as a provider failure. " +
-      "The current Codex sign-in surface is administrator-only under Settings, Assistant & AI, and " +
-      "the administrator must use the same Moss account; other users do not have a recovery path there. " +
+      "Codex is connected once for the whole instance: an administrator signs in under Settings, " +
+      "Assistant & AI, and every user's chat and background work then use that connection while " +
+      "running in their own isolated runner home, as their own account. When Codex refreshes the " +
+      "connection for one user, the refreshed connection is shared with everyone. If Codex has never " +
+      "been connected, users see 'Codex is not connected yet' rather than a provider failure. If a " +
+      "sign-in completes but cannot be saved for everyone, the sign-in reports 'Codex signed in, but " +
+      "Moss could not share the sign-in'. " +
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
@@ -247,8 +250,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "field below it is described as giving consistent results for every model, including " +
       "local ones. Shared CLI software is usable by separate Moss accounts; runner startup " +
       "automatically repairs the older installation-directory permission defect using the pinned " +
-      "version, so users need no reinstall action. Codex sign-in remains administrator-only for " +
-      "the same account.",
+      "version, so users need no reinstall action. Only administrators can connect Codex.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

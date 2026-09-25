@@ -22,6 +22,14 @@ import {
   writeOwnedFile,
   type OwnershipApplier
 } from "./owned-fs.js";
+import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
+import {
+  CODEX_LOGIN_READ_LIMITS,
+  codexPeerHomes,
+  ownerCodexHomeAccess,
+  syncCodexLoginIntoHome,
+  type CodexHomeAccess
+} from "./codex-shared-login.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
@@ -42,6 +50,11 @@ export interface PerUserStructuredDeps {
     owner: string,
     slot: { readonly uid: number; readonly gid: number }
   ) => Promise<string>;
+  /** Test seam for a user's Codex login; defaults to access through the user's own account. */
+  readonly codexHomeAccess?: (
+    agentHome: string,
+    identity: { readonly uid: number; readonly gid: number }
+  ) => CodexHomeAccess;
 }
 
 /** The owner's per-user home, created and handed over exactly as ACP chat does it. */
@@ -98,6 +111,27 @@ export async function preparePerUserStructuredLaunch(
     ? await deps.prepareOwnerHome(deps.homeBase, owner, identity)
     : await prepareOwnerHome(deps.homeBase, owner, identity, deps.applyOwnership);
 
+  // #2687: Codex runs with the instance's shared login, copied into the owner's home after any
+  // newer refresh another user holds is carried back to it. The same step after the call carries
+  // a refresh this call made back to the shared login.
+  const codexAccess = (home: string, id: { uid: number; gid: number }) =>
+    deps.codexHomeAccess?.(home, id) ??
+    ownerCodexHomeAccess(
+      home,
+      id,
+      createOwnerIo(id, { limits: CODEX_LOGIN_READ_LIMITS }),
+      runAgentHomePrepareAsOwner
+    );
+  const codexHome =
+    params.provider === "openai-compatible" ? codexAccess(agentHome, identity) : undefined;
+  if (codexHome) {
+    await syncCodexLoginIntoHome(
+      deps.homeBase,
+      codexHome,
+      codexPeerHomes(deps.homeBase, owner, codexAccess)
+    );
+  }
+
   // The working folder: persona written by the runner first, then both handed to the owner.
   const neutral = await prepareOwnedPathWithOwnership(deps.neutralBase, key, [key]);
   const neutralDir = neutral.path;
@@ -122,7 +156,7 @@ export async function preparePerUserStructuredLaunch(
     agentHome,
     neutralDir,
     personaPath,
-    io: createOwnerIo(identity),
+    io: createOwnerIo(identity, { home: agentHome }),
     childIdentity: {
       wrap: (command, args) => {
         const dropped = buildSetprivDropCommand(command, args, identity);
@@ -136,6 +170,9 @@ export async function preparePerUserStructuredLaunch(
         await purge(transcriptGlobDir("anthropic", neutralDir, agentHome), identity).catch(
           () => undefined
         );
+        if (codexHome) {
+          await syncCodexLoginIntoHome(deps.homeBase, codexHome).catch(() => undefined);
+        }
         await removeOwnedFolder(neutralDir, identity, purge).catch((err: unknown) => {
           console.warn(
             `[engine-host] ${key} working folder removal failed: ${
@@ -204,35 +241,84 @@ const READ_AS_OWNER =
 const WRITE_AS_OWNER =
   "const fs=require('node:fs');fs.writeFileSync(process.env.OWNER_IO_PATH,fs.readFileSync(0),{mode:0o600})";
 
+/** Caps on one owner-run command: when it must finish, and how much it may print. */
+export interface OwnerRunLimits {
+  readonly timeoutMs: number;
+  readonly maxOutputBytes: number;
+}
+
+/**
+ * Run a command, and with `limits`, stop reading and report failure once it overruns its deadline
+ * or prints past the cap. The kill reaches only a process the runner may signal.
+ */
+export function runBounded(
+  command: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  input: string,
+  limits?: OwnerRunLimits
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, [...args], { stdio: ["pipe", "pipe", "pipe"], env });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (code: number): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    };
+    const abort = (): void => {
+      child.kill("SIGKILL");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      finish(1);
+    };
+    const timer = limits ? setTimeout(abort, limits.timeoutMs) : undefined;
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      if (limits && stdout.length > limits.maxOutputBytes) abort();
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      if (!limits || stderr.length < limits.maxOutputBytes) stderr += chunk;
+    });
+    child.once("error", () => finish(1));
+    child.once("close", (code) => finish(code ?? 1));
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(input);
+  });
+}
+
 /**
  * Io for a launch's own files, run as the owner through setpriv. The runner's capabilities do not
  * cover reading or writing inside a folder it has handed over. Paths travel by env and content by
- * stdin or stdout, never by argv.
+ * stdin or stdout, never by argv. With `limits`, every command is bounded by them. With `home`,
+ * every command runs in the owner's home, where Codex finds its login.
  */
-export function createOwnerIo(identity: { readonly uid: number; readonly gid: number }): TmuxIo {
+export function createOwnerIo(
+  identity: { readonly uid: number; readonly gid: number },
+  opts: { readonly limits?: OwnerRunLimits; readonly home?: string } = {}
+): TmuxIo {
+  const homeEnv = opts.home ? { HOME: opts.home, CODEX_HOME: join(opts.home, ".codex") } : {};
   const run = (
     cmd: string,
     args: readonly string[],
     extraEnv: NodeJS.ProcessEnv = {},
     input?: string
   ): Promise<{ code: number; stdout: string; stderr: string }> => {
-    const dropped = buildSetprivDropCommand(cmd, args, identity);
-    return new Promise((resolve) => {
-      const child = spawn(dropped.command, [...dropped.args], {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: { ...buildSanitizedCliEnv(process.env), ...extraEnv }
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => (stdout += chunk));
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk: string) => (stderr += chunk));
-      child.once("error", () => resolve({ code: 1, stdout, stderr }));
-      child.once("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
-      child.stdin.on("error", () => undefined);
-      child.stdin.end(input ?? "");
-    });
+    // The runner may not signal the owner's process, so `timeout` enforces the deadline as the owner.
+    const dropped = opts.limits
+      ? buildSetprivDropCommand(
+          "timeout",
+          ["-s", "KILL", String(Math.ceil(opts.limits.timeoutMs / 1000)), cmd, ...args],
+          identity
+        )
+      : buildSetprivDropCommand(cmd, args, identity);
+    const env = { ...buildSanitizedCliEnv(process.env), ...homeEnv, ...extraEnv };
+    return runBounded(dropped.command, dropped.args, env, input ?? "", opts.limits);
   };
   return {
     run: async (cmd, args, opts) => {

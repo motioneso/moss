@@ -273,7 +273,7 @@ describe("AcpChatEngine", () => {
 
   it("uses the truthful Codex remediation for launch and prompt auth failures", async () => {
     const expected =
-      "Codex is not signed in for this account. Sign-in is currently available only to administrators in Settings, Assistant & AI, using this same Moss account.";
+      "Codex is not connected yet. An administrator connects it once for everyone under Settings, Assistant & AI.";
 
     const launchFailure = new AcpChatEngine("openai-compatible", "chat:u1:launch", {
       tunnel: new PromptErrorTunnel(true),

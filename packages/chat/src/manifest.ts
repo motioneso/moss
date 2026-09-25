@@ -116,7 +116,7 @@ export const chatModuleManifest = {
         {
           id: "chat.acp_sign_in_expired.settings",
           description:
-            "For Codex, an administrator signs in under Settings, Assistant & AI using the same Moss account; other providers keep their existing sign-in path.",
+            "For Codex, an administrator connects it once for everyone under Settings, Assistant & AI; other providers keep their existing sign-in path.",
           path: "/settings?section=aiproviders"
         }
       ]
