@@ -41,6 +41,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Sports page team cards match Today.** The team cards along the top of the Sports page now use the same clean look as the sports cards on Today, with the next game shown as text at the bottom of each card. [PR #2667](https://github.com/motioneso/moss/pull/2667)
 - **Chat skill suggestions use the normal font.** The skill suggestions that pop up while you type in chat now use the same font as the rest of the app. [PR #2668](https://github.com/motioneso/moss/pull/2668)
 - **Next game lines up across your team cards on Today.** On Today, each team's next game now sits at the bottom of its card, so they line up neatly across the row. [PR #2666](https://github.com/motioneso/moss/pull/2666)
 - **Faster News and Sports filters.** Your News and Sports filters now remember which stories they have already checked, so refreshing the page is quicker. [PR #2662](https://github.com/motioneso/moss/pull/2662)
