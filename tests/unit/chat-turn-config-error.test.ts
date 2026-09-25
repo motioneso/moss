@@ -70,8 +70,6 @@ describe("POST /api/chat/turn without per-user mode", () => {
     });
 
     expect(response.statusCode).toBe(500);
-    expect(response.json<{ error: string }>().error).toBe(
-      "Live chat is temporarily unavailable."
-    );
+    expect(response.json<{ error: string }>().error).toBe("Live chat is temporarily unavailable.");
   });
 });
