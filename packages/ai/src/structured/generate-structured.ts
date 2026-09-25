@@ -1,7 +1,7 @@
 import { Ajv, type ErrorObject } from "ajv";
 import type { FastifyBaseLogger } from "fastify";
 
-import type { DataContextDb } from "@moss/db";
+import { readScopedActorUserId, type DataContextDb } from "@moss/db";
 import type { AiModelTier, ModuleServiceKey } from "@moss/shared";
 
 import { HttpApiAdapter } from "../adapters/http-api.js";
@@ -46,6 +46,16 @@ const OPERATOR_SAFE_ERROR_NAMES = new Set([
  * would leak private response content into application logs. Everything not on the allow-list below
  * collapses to "provider_error_unclassified" rather than falling back to the raw text.
  */
+/**
+ * #2674: the refusal text for errors whose message is operator-safe by contract (the cli-runner
+ * redacts it before it crosses the socket). Without it a runner refusal such as "UID slot
+ * overflow" reaches the logs only as its class name. Every other error logs no text at all.
+ */
+export function operatorSafeReason(error: unknown): { readonly reason?: string } {
+  if (!(error instanceof Error) || !OPERATOR_SAFE_ERROR_NAMES.has(error.name)) return {};
+  return { reason: error.message.slice(0, 200) };
+}
+
 export function classifyStructuredProviderErrorCode(error: unknown): string {
   if (!(error instanceof Error)) return "provider_error_unclassified";
   if (OPERATOR_SAFE_ERROR_NAMES.has(error.name)) return error.name;
@@ -228,11 +238,14 @@ async function runOnModel(
   }
   const providerKind = model.provider_kind as ProviderKind;
   let adapter: StructuredProviderAdapter;
+  let actorUserId: string | undefined;
   if (provider.auth_method === "cli") {
     // #982/#869/#981 D3: CLI credentials are sealed markers, not API keys. Route before decrypt so
     // AES-GCM can never see `{ cli: true }`; composition root supplies chat's CLI implementation.
     if (!deps.createCliStructuredAdapter) return { ok: false, error: "needs_config" };
     adapter = deps.createCliStructuredAdapter(providerKind);
+    // #2674: the CLI runs in this user's per-user slot.
+    actorUserId = await readScopedActorUserId(scopedDb);
   } else {
     let credential;
     try {
@@ -278,7 +291,8 @@ async function runOnModel(
           telemetry: input.telemetry,
           priority: input.priority,
           scope: input.scope,
-          closeScope: input.closeScope
+          closeScope: input.closeScope,
+          ...(actorUserId ? { actorUserId } : {})
         }),
         signal
       );
@@ -328,7 +342,8 @@ async function runOnModel(
           // errors in general are not guaranteed operator-safe (the #2229 comment this replaced
           // pointed at a credential-decryption catch that protects a different operation). Log only
           // a fixed diagnostic code, never the message text itself.
-          code: classifyStructuredProviderErrorCode(error)
+          code: classifyStructuredProviderErrorCode(error),
+          ...operatorSafeReason(error)
         },
         "ai.structured provider error"
       );

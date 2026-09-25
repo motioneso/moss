@@ -77,6 +77,7 @@ function readStructuredReplyText(result: {
 
 async function getReplyText(
   deps: ProjectReplyDependencies,
+  actorUserId: string,
   model: AiConfiguredModelSafeRow,
   provider: AiProviderWithSealedCredential,
   project: WorkshopProject,
@@ -102,7 +103,8 @@ async function getReplyText(
         model: modelInput,
         messages,
         schema,
-        maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS
+        maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS,
+        actorUserId
       });
     return readStructuredReplyText(result);
   }
@@ -191,7 +193,7 @@ export async function attemptProjectReply(
     if (!picked) return { delivered: false };
 
     const replyText = await withTimeout(
-      getReplyText(deps, picked.model, picked.provider, project, userEntry),
+      getReplyText(deps, access.actorUserId, picked.model, picked.provider, project, userEntry),
       PROJECT_REPLY_TIMEOUT_MS,
       (error) =>
         console.warn(

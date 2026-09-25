@@ -32,6 +32,11 @@ export interface EngineHostDeps {
    * never opt in (every current caller) get the proven single-identity topology for free.
    */
   readonly perUserUid?: boolean;
+  /**
+   * Builds the owner-switched io for one per-user slot. Defaults to the sanitized setpriv io;
+   * tests inject a fake because a non-root process cannot switch owner.
+   */
+  readonly createSlotIo?: (slot: { readonly uid: number; readonly gid: number }) => TmuxIo;
   /** Presence-only PATH probe for `probeProvider` (§4.8). */
   readonly cliPresent: (provider: ProviderKind) => Promise<boolean>;
   /** Optional multiplexer-usable check surfaced by `probeProvider` (§4.8 / §9.1). */

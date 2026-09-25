@@ -64,7 +64,12 @@ import {
 } from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
-import { allocateUidSlot, migrateNeutralDir } from "./uid-allocator.js";
+import {
+  allocateUidSlot,
+  migrateNeutralDir,
+  pruneUidSlots,
+  uidSlotOwner
+} from "./uid-allocator.js";
 import { createSanitizedTmuxIo } from "./runner-io.js";
 export type {
   EngineHostDeps,
@@ -318,10 +323,12 @@ export class CliChatEngineHost {
       // setuid path requires a root container AND the (in-progress) file-permission model; see the
       // `perUserUid` doc on EngineHostDeps.
       if (this.deps.perUserUid && this.deps.homeBase) {
-        const slot = allocateUidSlot(this.deps.homeBase, key);
+        const slot = allocateUidSlot(this.deps.homeBase, uidSlotOwner(key, params));
         const neutralDirForMigration = deriveNeutralDir(this.deps.neutralBase, key);
         migrateNeutralDir(neutralDirForMigration, slot.uid, slot.gid);
-        sessionIo = createSanitizedTmuxIo(process.env, slot);
+        sessionIo = this.deps.createSlotIo
+          ? this.deps.createSlotIo(slot)
+          : createSanitizedTmuxIo(process.env, slot);
       }
       this.reservations.add(key);
     } catch (err) {
@@ -885,6 +892,11 @@ export class CliChatEngineHost {
     if (purgedTranscripts && purgedAcp) {
       // (c) once every pointed-to private folder is confirmed purged, remove residual neutral dirs.
       await this.clearNeutralBase();
+      // (c.1) #2674: drop per-call UID slots left by the old session-keyed allocation. Only
+      // after the clean-out, so a freed number can never inherit files a dead session left.
+      this.pruneUidSlotTable();
+    } else if (this.deps.homeBase) {
+      console.warn("[engine-host] startup purge incomplete; per-call UID slots left unpruned");
     }
     // (d) §A.3.2 tools-volume sweep, distinct from the auth-volume sweep above: clears
     // orphaned `.staging/*` and unreferenced GC releases, before the first installProvider.
@@ -898,6 +910,18 @@ export class CliChatEngineHost {
     await this.deps.loginService?.startupSweep().catch(() => undefined);
     // (f) orphaned-build sweep: after the clean-out, never beside it.
     await this.acp.reapOrphanedExecs().catch(() => undefined);
+  }
+
+  private pruneUidSlotTable(): void {
+    if (!this.deps.homeBase) return;
+    try {
+      const dropped = pruneUidSlots(this.deps.homeBase);
+      if (dropped > 0) console.log(`[engine-host] pruned ${dropped} per-call UID slot entries`);
+    } catch (err) {
+      console.warn(
+        `[engine-host] UID slot prune failed: ${err instanceof Error ? err.name : "UnknownError"}`
+      );
+    }
   }
 
   /** `rm -rf <neutralBase>/* ` then recreate the shared traversable base (`0711`). */

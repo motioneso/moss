@@ -140,7 +140,8 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       await writeFile(personaPath, "You produce structured JSON only.\n", { mode: 0o600 });
       const activeEngine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
         executionMode: "non_interactive",
-        needsStructuredOutput: true
+        needsStructuredOutput: true,
+        ...(input.actorUserId ? { userId: input.actorUserId } : {})
       });
       engine = activeEngine;
       const stopped = new Promise<never>((_, reject) => {
@@ -242,7 +243,8 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       if (!session) {
         const engine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
           executionMode: "non_interactive",
-          needsStructuredOutput: true
+          needsStructuredOutput: true,
+          userId: input.scope!.actorUserId
         });
         if (!isCliStructuredEngine(engine)) {
           await engine.kill().catch(() => undefined);
