@@ -28,7 +28,9 @@ const exemptFiles = new Set<string>([
   "tests/unit/sports-service.test.ts",
   "packages/module-registry/src/index.ts",
   // Hand-maintained Kysely table types; grows with schema, not refactorable smaller.
-  "packages/db/src/types.ts"
+  "packages/db/src/types.ts",
+  // #2521 restores this historical Study prototype stylesheet intact.
+  ".superpowers/brainstorm/today-briefings-20260909/study.css"
 ]);
 const checkedExtensions = new Set([
   ".css",

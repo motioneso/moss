@@ -28,6 +28,9 @@ infra/env.production.local
 # Superpowers local server/runtime state; content snapshots may be committed intentionally.
 .superpowers/**/state/
 
+# Generated visual checks for the restored Today briefing study.
+/.superpowers/brainstorm/today-briefings-20260909/captures/
+
 # Local design-system archive/import
 Jarvis Design System.zip
 Jarvis Design System/

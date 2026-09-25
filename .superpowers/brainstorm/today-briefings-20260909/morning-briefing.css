@@ -1,0 +1,355 @@
+/* Morning shares the evening dialog's approved type, spacing, and native controls. */
+#morning-briefing {
+  width: min(1120px, calc(100% - 48px));
+  height: min(910px, calc(100dvh - 48px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border-radius: 4px;
+}
+#morning-briefing[open] {
+  display: flex;
+  flex-direction: column;
+}
+#morning-briefing .planning-layout {
+  grid-template-columns: minmax(0, 1fr) 310px;
+}
+#morning-briefing .planning-side {
+  position: static;
+}
+.morning-nav button[aria-current="page"] {
+  color: var(--forest);
+  border-bottom-color: var(--forest);
+  font-weight: 700;
+}
+.morning-dateline {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-bottom: 12px;
+}
+#morning-briefing .morning-lead {
+  font-size: 16px;
+  color: var(--ink);
+  line-height: 1.6;
+}
+.morning-change {
+  padding: 17px 19px;
+  border-left: 3px solid var(--gold);
+  background: var(--sage-light);
+  margin: 23px 0;
+}
+.morning-change .eyebrow {
+  font-size: 9px;
+  color: var(--forest);
+}
+.morning-change h4 {
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  margin: 8px 0;
+}
+.morning-change p,
+.morning-reading p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.morning-change details {
+  margin-top: 12px;
+  font-size: 11px;
+}
+.morning-change summary,
+.morning-sources summary {
+  cursor: pointer;
+  color: var(--forest);
+  font-weight: 600;
+}
+.morning-change details p {
+  font-size: 11px;
+  margin-top: 10px;
+}
+.morning-reading h4 {
+  font-size: 15px;
+  margin: 24px 0 8px;
+}
+.morning-reading .text-button {
+  font-size: 11px;
+  margin-top: 10px;
+}
+.morning-sources {
+  border-top: 1px solid var(--line);
+  padding-top: 17px;
+  margin-top: 26px;
+  font-size: 11px;
+}
+.morning-sources dl {
+  margin: 12px 0 0;
+}
+.morning-sources dt {
+  font-weight: 600;
+  margin-top: 12px;
+}
+.morning-sources dd {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.morning-placement {
+  font-size: 12px !important;
+  color: var(--forest) !important;
+  margin-top: 22px;
+}
+.morning-schedule {
+  margin-top: 16px;
+}
+.morning-schedule .snapshot-entry {
+  font-size: 11px;
+  grid-template-columns: 55px minmax(0, 1fr);
+}
+.morning-schedule .draft-entry {
+  grid-template-columns: 50px minmax(0, 1fr);
+}
+.morning-unscheduled {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 14px;
+  font-size: 12px;
+}
+.morning-unscheduled p {
+  color: var(--muted);
+  margin-top: 8px;
+  font-size: 11px;
+}
+.morning-accept-all {
+  margin: 0 0 20px;
+  font-size: 11px;
+}
+.morning-task {
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 19px 0 22px;
+  margin: 0;
+  min-width: 0;
+}
+.morning-task legend {
+  float: left;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 5px;
+}
+.morning-task > p {
+  clear: both;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 13px;
+}
+.morning-task-fields {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 12px;
+}
+.morning-task-fields label {
+  font-size: 10px;
+  color: var(--forest);
+  font-weight: 600;
+  display: grid;
+  gap: 6px;
+}
+.morning-task select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  font-size: 12px;
+  padding: 9px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+}
+.morning-task select:disabled {
+  opacity: 0.55;
+}
+.morning-diff {
+  border-top: 2px solid var(--forest);
+  padding-top: 15px;
+  margin-top: 4px;
+}
+.morning-diff h4 {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.morning-diff p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.morning-material-title {
+  margin-top: 24px;
+}
+@media (max-width: 900px) {
+  #morning-briefing .planning-layout {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+@media (max-width: 680px) {
+  #morning-briefing {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    max-width: 100%;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    inset: 0;
+  }
+  #morning-briefing .planning-layout {
+    display: block;
+  }
+  #morning-briefing .morning-nav {
+    justify-content: flex-start;
+    gap: 28px;
+    min-height: 49px;
+  }
+  #morning-briefing .morning-nav button {
+    max-width: none;
+    display: block;
+    font-size: 11px;
+  }
+  #morning-briefing .morning-lead {
+    font-size: 14px;
+  }
+  .morning-change {
+    padding: 14px;
+    margin: 20px 0;
+  }
+  .morning-change h4 {
+    font-size: 19px;
+  }
+  .morning-change p,
+  .morning-reading p {
+    font-size: 12px;
+  }
+  .morning-task-fields {
+    gap: 8px;
+  }
+  .morning-task select {
+    font-size: 11px;
+    padding: 8px;
+  }
+}
+.morning-world {
+  border-top: 2px solid var(--forest);
+  margin-top: 30px;
+  padding-top: 22px;
+  scroll-margin-top: 22px;
+}
+.morning-world > .eyebrow {
+  color: var(--forest);
+  font-size: 9px;
+}
+.morning-world h3 {
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+  margin: 10px 0 17px;
+}
+.morning-world img {
+  display: block;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+  margin-bottom: 18px;
+}
+.morning-world p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.75;
+  margin-bottom: 15px;
+}
+.morning-world p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.morning-world .text-button {
+  font-size: 11px;
+}
+.morning-tonight {
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+  margin-top: 17px;
+}
+.morning-tonight h4 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.morning-world-jumps {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+}
+.morning-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.morning-footer-actions .text-button {
+  font-size: 11px;
+}
+.morning-coverage {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+.morning-coverage label {
+  cursor: pointer;
+}
+.morning-coverage input {
+  accent-color: var(--forest);
+  margin: 0;
+}
+.morning-accept-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 680px) {
+  #morning-briefing .morning-nav {
+    flex-wrap: wrap;
+    gap: 0 20px;
+  }
+  .morning-world-jumps {
+    gap: 14px;
+  }
+  #morning-briefing .morning-world-jumps button {
+    font-size: 10px;
+  }
+  .morning-footer {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .morning-footer-actions {
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: flex-end;
+    flex: 1;
+  }
+  .morning-footer-actions:has([data-morning="accept-all"]) {
+    flex-basis: 100%;
+    justify-content: space-between;
+  }
+  .morning-footer-actions .solid {
+    max-width: none !important;
+  }
+  .morning-world h3 {
+    font-size: 24px;
+  }
+  .morning-world img {
+    height: 170px;
+  }
+  .morning-world p {
+    font-size: 12px;
+  }
+  .morning-coverage {
+    margin-left: 0;
+  }
+}
