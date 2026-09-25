@@ -42,6 +42,82 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Restored standalone CommonJS preview checks use Node and Playwright browser globals.
+    files: [".superpowers/brainstorm/today-briefings-20260909/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        ...globals.node,
+        ...globals.browser
+      }
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off"
+    }
+  },
+  {
+    // These ordered classic scripts share top-level bindings through index.html.
+    files: [".superpowers/brainstorm/today-briefings-20260909/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        ...globals.browser
+      }
+    }
+  },
+  {
+    files: [".superpowers/brainstorm/today-briefings-20260909/evening-plan.js"],
+    languageOptions: {
+      globals: {
+        loopDecision: "writable",
+        mode: "writable",
+        query: "readonly",
+        render: "readonly",
+        scheduling: "readonly",
+        tomorrowSaved: "writable"
+      }
+    }
+  },
+  {
+    files: [".superpowers/brainstorm/today-briefings-20260909/morning-briefing.js"],
+    languageOptions: {
+      globals: {
+        accepted: "writable",
+        announce: "readonly",
+        heading: "readonly",
+        minuteLabel: "readonly",
+        mode: "writable",
+        planningDialog: "readonly",
+        query: "readonly",
+        quietNight: "readonly",
+        render: "readonly",
+        safeText: "readonly",
+        schedule: "readonly",
+        scheduling: "readonly"
+      }
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          varsIgnorePattern: "^(morningAgenda|morningSlot)$"
+        }
+      ]
+    }
+  },
+  {
+    files: [".superpowers/brainstorm/today-briefings-20260909/study.js"],
+    languageOptions: {
+      globals: {
+        morningAgenda: "readonly",
+        morningSaved: "readonly",
+        morningSlot: "readonly",
+        openEveningPlan: "readonly",
+        openMorningBriefing: "readonly"
+      }
+    }
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: {
