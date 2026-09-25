@@ -340,6 +340,9 @@ export async function renderReader(
     readonly tasks?: readonly TaskDto[];
     readonly controller?: DayPlanReviewController;
     readonly dayPlan?: GetDayPlanResponse;
+    readonly dayPlanLoading?: boolean;
+    readonly dayPlanError?: boolean;
+    readonly onReview?: (anchor: HTMLElement) => void;
   } = {}
 ): Promise<string> {
   const runId = options.runId ?? "run-full";
@@ -361,13 +364,13 @@ export async function renderReader(
           dayPlan: options.dayPlan,
           events: [],
           now: new Date(NOW),
-          dayPlanLoading: false,
-          dayPlanError: false,
+          dayPlanLoading: options.dayPlanLoading ?? false,
+          dayPlanError: options.dayPlanError ?? false,
           calendarError: false,
           opener: null,
           onClose: () => undefined,
           onOpenTask: () => undefined,
-          onReview: () => undefined,
+          onReview: options.onReview ?? (() => undefined),
           controller: options.controller ?? stubReaderController()
         })
       )

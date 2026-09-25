@@ -59,6 +59,17 @@ export interface MorningBriefingReaderProps {
   readonly controller: DayPlanReviewController;
 }
 
+export function dayPlanReviewUnavailableMessage(input: {
+  readonly dayPlan: GetDayPlanResponse | undefined;
+  readonly loading: boolean;
+  readonly error: boolean;
+}): string | null {
+  if (input.loading) return "Today's plan is still loading.";
+  if (input.error) return "Today's plan couldn't be loaded.";
+  if (input.dayPlan?.plan == null) return "There is no saved plan to review today.";
+  return null;
+}
+
 /** Full morning report for one run, from the run response only. Nothing here writes. */
 export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   const queryClient = useQueryClient();
@@ -82,6 +93,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       setSelectedRunId(data.runId);
     }
   });
+  const [reviewAttempted, setReviewAttempted] = useState(false);
 
   // The Read tab always reads "Review task blocks"; the automatic Read's
   // own footer button always reads "Adjust task blocks" (B10). This is
@@ -90,6 +102,13 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   // automatic-read surface, never on proposed-read.
   const reviewTabLabel = "Review task blocks";
   const footerAdjustLabel = "Adjust task blocks";
+  const reviewUnavailableMessage = reviewAttempted
+    ? dayPlanReviewUnavailableMessage({
+        dayPlan: props.dayPlan,
+        loading: props.dayPlanLoading,
+        error: props.dayPlanError
+      })
+    : null;
   // Every Read-tab state (proposed or automatic) takes the same wide frame;
   // the attribute just names which one this report is.
   const hasAutomaticPlacement = (props.dayPlan?.plan?.blocks ?? []).some(
@@ -118,8 +137,20 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     await props.controller.acceptAllAdditions();
     setAcceptPhase("done");
   };
-  const openReaderReview = (event: { currentTarget: HTMLElement }) =>
+  const openReaderReview = (event: { currentTarget: HTMLElement }) => {
+    if (
+      dayPlanReviewUnavailableMessage({
+        dayPlan: props.dayPlan,
+        loading: props.dayPlanLoading,
+        error: props.dayPlanError
+      })
+    ) {
+      setReviewAttempted(true);
+      return;
+    }
+    setReviewAttempted(false);
     props.onReview(event.currentTarget);
+  };
   // Jump links scroll their section to the report top and move keyboard
   // focus to its heading, instead of leaving focus behind on the link.
   const jumpTo = (sectionId: string) => (event: { preventDefault: () => void }) => {
@@ -189,6 +220,11 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       }
       report={
         <div data-briefing-surface={briefingSurface}>
+          {reviewUnavailableMessage ? (
+            <p className="cmd-empty" role="status">
+              {reviewUnavailableMessage}
+            </p>
+          ) : null}
           {detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
             <ReportBody
               detail={detail}

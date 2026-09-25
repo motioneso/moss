@@ -345,6 +345,49 @@ describe("MorningBriefingReader review footer", () => {
     return [...footer.querySelectorAll("button")].map((node) => node.textContent ?? "");
   }
 
+  it.each([
+    ["no saved plan", {}, "There is no saved plan to review today."],
+    ["loading plan", { dayPlanLoading: true }, "Today's plan is still loading."],
+    ["failed plan", { dayPlanError: true }, "Today's plan couldn't be loaded."]
+  ] as const)(
+    "keeps the report open when Review is clicked with a %s",
+    async (_state, options, message) => {
+      const onReview = vi.fn();
+      await renderReader(
+        seedClient([[queryKeys.briefings.run("def-morning", "run-full"), readyDetail(fullRun())]]),
+        { ...options, onReview }
+      );
+
+      const reviewTab = [...document.body.querySelectorAll("button")].find(
+        (button) => button.textContent === "Review task blocks"
+      );
+      expect(reviewTab, "expected the Review task blocks tab").toBeDefined();
+      await act(async () => reviewTab!.click());
+
+      expect(onReview).not.toHaveBeenCalled();
+      expect(document.body.innerHTML).toContain("Protect the launch window");
+      expect(document.querySelector('[role="status"]')?.textContent).toContain(message);
+    }
+  );
+
+  it("allows Review with a saved plan that has zero task blocks", async () => {
+    const plan = acceptPlanResponse();
+    if (!plan.plan) throw new Error("plan missing for the empty-review case");
+    const onReview = vi.fn();
+    await renderReader(seedClient([]), {
+      dayPlan: { ...plan, plan: { ...plan.plan, blocks: [] } },
+      onReview
+    });
+
+    const reviewTab = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent === "Review task blocks"
+    );
+    expect(reviewTab, "expected the Review task blocks tab").toBeDefined();
+    await act(async () => reviewTab!.click());
+
+    expect(onReview).toHaveBeenCalledTimes(1);
+  });
+
   it("puts Review proposed blocks first, then Accept all, in the proposed surface", async () => {
     await renderReader(seedClient([]), { dayPlan: acceptPlanResponse() });
     expect(footerButtons()).toEqual([
