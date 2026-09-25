@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { ActiveModulesResolver, AiRepository, AiSecretCipher } from "@moss/ai";
-import { HttpApiAdapter, parseAiApiKeyCredential } from "@moss/ai";
-import type { ChatTurn, GenerateChatInput, ProviderKind } from "@moss/ai";
+import { HttpApiAdapter, generateText } from "@moss/ai";
+import type {
+  ChatTurn,
+  GenerateChatInput,
+  GenerateStructuredDeps,
+  GenerateTextResult,
+  ProviderKind
+} from "@moss/ai";
 import type { FocusSignalInput } from "@moss/priority";
 import type { BriefingDefinition, BriefingRunStatus, DataContextDb } from "@moss/db";
 import type { CalendarSignalSettings, EmailSignalSettings } from "./signals.js";
@@ -99,6 +105,8 @@ export interface ComposeDeps {
     apiKey: string,
     baseUrl: string | null
   ) => { generateChat: GenerateChatFn };
+  /** Chat's CLI transport for subscription-login providers, injected by the composition root. */
+  readonly createCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
   /**
    * External modules ship JSON manifests with no in-process `execute`, so the composer
    * cannot resolve them through findExecute(). The composition root injects a worker
@@ -588,10 +596,14 @@ export async function buildPersonaBlock(
 
 export type SynthesisFailureReason = "no_model" | "credential_error" | "synthesis_failed";
 
+// Bounds how long a briefing run holds its transaction open waiting for the model, including
+// time queued behind other CLI runs.
+const SYNTHESIS_TIMEOUT_MS = 180_000;
+const BRIEFINGS_SERVICE_KEY = "module.briefings" as const;
+
 /**
- * Provider-agnostic synthesis: select the user's economy summarization model, decrypt the
- * provider credential IN WORKER SCOPE ONLY, and run one generateChat call. Never log raw
- * errors from the credential block — they can carry the decrypted key.
+ * Provider-agnostic synthesis: select the user's economy summarization model and run it through
+ * the shared text entry point, which handles both API-key and subscription-login providers.
  */
 export async function synthesizeWithConfiguredModel(
   scopedDb: DataContextDb,
@@ -609,44 +621,42 @@ export async function synthesizeWithConfiguredModel(
   if (!model) {
     return { ok: false, reason: "no_model" };
   }
-  let apiKey: string;
-  let baseUrl: string | null;
+  let result: GenerateTextResult;
   try {
-    const provider = await withToolSavepoint(scopedDb, () =>
-      deps.aiRepository.selectProviderWithCredential(scopedDb, model.provider_config_id)
+    result = await generateText(
+      scopedDb,
+      {
+        service: BRIEFINGS_SERVICE_KEY,
+        model,
+        messages,
+        maxOutputTokens: ECONOMY_MAX_OUTPUT_TOKENS,
+        signal: AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS),
+        priority: "background"
+      },
+      {
+        repository: {
+          selectProviderWithCredential: (db, providerConfigId) =>
+            withToolSavepoint(db, () =>
+              deps.aiRepository.selectProviderWithCredential(db, providerConfigId)
+            )
+        },
+        cipher: deps.cipher,
+        createAdapter: deps.createAdapter ?? defaultCreateAdapter,
+        createCliStructuredAdapter: deps.createCliStructuredAdapter
+      }
     );
-    if (!provider?.encrypted_credential) {
-      return { ok: false, reason: "credential_error" };
-    }
-    const credential = parseAiApiKeyCredential(
-      deps.cipher.decryptJson(provider.encrypted_credential)
-    );
-    if (!credential) {
-      return { ok: false, reason: "credential_error" };
-    }
-    apiKey = credential.apiKey;
-    baseUrl = provider.base_url;
   } catch {
-    // Never log the raw error — it can carry the decrypted key.
     return { ok: false, reason: "credential_error" };
   }
-  try {
-    const adapter = (deps.createAdapter ?? defaultCreateAdapter)(
-      model.provider_kind as ProviderKind,
-      apiKey,
-      baseUrl
-    );
-    const { text } = await adapter.generateChat({
-      model: { provider_kind: model.provider_kind, provider_model_id: model.provider_model_id },
-      messages,
-      maxOutputTokens: ECONOMY_MAX_OUTPUT_TOKENS
-    });
+  if (!result.ok) {
     return {
-      ok: true,
-      text,
-      model: { id: model.id, display_name: model.display_name, tier: model.tier }
+      ok: false,
+      reason: result.error === "needs_config" ? "credential_error" : "synthesis_failed"
     };
-  } catch {
-    return { ok: false, reason: "synthesis_failed" };
   }
+  return {
+    ok: true,
+    text: result.text,
+    model: { id: model.id, display_name: model.display_name, tier: model.tier }
+  };
 }
