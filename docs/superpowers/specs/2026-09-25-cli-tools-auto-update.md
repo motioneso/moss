@@ -26,7 +26,7 @@ Blind "always latest" is not safe either. Two CLI releases broke Moss with no mo
 
 - `--tools "Read,Glob,Grep"` started hiding every `mcp__jarvis__*` tool, so chat answered but
   could never act (#2317, PR 2318).
-- Structured replies arrived inside a ```` ```json ```` fence and failed `JSON.parse` (#1888,
+- Structured replies arrived inside a ` ```json ` fence and failed `JSON.parse` (#1888,
   PR 1940).
 
 A new version must prove it still works the way Moss uses it, on each instance, before that
@@ -36,10 +36,10 @@ instance's users depend on it.
 
 Two separate families, with separate versions of the same provider's tool.
 
-| Family | Packages | Where the version is pinned | Where it lives at runtime | Used by |
-|---|---|---|---|---|
-| Recipe tools | `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli` | `RAW_CATALOG` in `packages/cli-runner/src/catalog.ts` plus a committed `recipes/<provider>/npm-shrinkwrap.json` | Tools volume (`/data/cli-tools`), `providers/<p>/releases/<rand>`, `current` symlink, `bin/<binary>` | One-shot and structured background calls, terminal login, model listing |
-| Chat adapters | `@agentclientprotocol/claude-agent-acp` (bundles `@anthropic-ai/claude-agent-sdk`, which carries its own Claude Code build), `@agentclientprotocol/codex-acp` (depends on `@openai/codex`), `opencode-ai` | `packages/cli-runner/package.json` and `pnpm-lock.yaml` | Baked into the image under `node_modules` | ACP chat |
+| Family        | Packages                                                                                                                                                                                                  | Where the version is pinned                                                                                     | Where it lives at runtime                                                                            | Used by                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Recipe tools  | `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli`                                                                                                                                        | `RAW_CATALOG` in `packages/cli-runner/src/catalog.ts` plus a committed `recipes/<provider>/npm-shrinkwrap.json` | Tools volume (`/data/cli-tools`), `providers/<p>/releases/<rand>`, `current` symlink, `bin/<binary>` | One-shot and structured background calls, terminal login, model listing |
+| Chat adapters | `@agentclientprotocol/claude-agent-acp` (bundles `@anthropic-ai/claude-agent-sdk`, which carries its own Claude Code build), `@agentclientprotocol/codex-acp` (depends on `@openai/codex`), `opencode-ai` | `packages/cli-runner/package.json` and `pnpm-lock.yaml`                                                         | Baked into the image under `node_modules`                                                            | ACP chat                                                                |
 
 On current main the two Claude copies differ. Background runs Claude Code 2.1.183 from the recipe,
 while chat runs 2.1.257 bundled inside `claude-agent-sdk` 0.3.257. Codex is 0.144.5 in the recipe
@@ -64,7 +64,7 @@ Relevant existing machinery:
 ### 3.1 Tool versions travel separately from the Moss image
 
 Moss CI publishes a signed **tool manifest** that lists vetted versions and their lockfiles. Every
-instance fetches it daily and updates its tools on the tools volume. A self-hoster on an old Moss
+instance fetches it every 6 hours and updates its tools on the tools volume. A self-hoster on an old Moss
 release still gets new tool versions without upgrading Moss.
 
 The version pinned in the image stays as the floor. It is what a fresh instance installs before its
@@ -72,10 +72,10 @@ first manifest fetch, and what an instance runs if it can never reach the manife
 
 The obvious alternatives were rejected.
 
-| Option | Why not |
-|---|---|
-| A scheduled PR that bumps the pin in the image | Users would have to upgrade Moss to get a new tool, which Ben ruled out. |
-| Each instance installs npm `latest` directly | Drops the catalog's supply-chain rule. No lockfile, no hash pinning, and no central check that Moss's flags still exist. |
+| Option                                         | Why not                                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| A scheduled PR that bumps the pin in the image | Users would have to upgrade Moss to get a new tool, which Ben ruled out.                                                 |
+| Each instance installs npm `latest` directly   | Drops the catalog's supply-chain rule. No lockfile, no hash pinning, and no central check that Moss's flags still exist. |
 
 The manifest keeps the supply-chain rule. Each entry is an exact version plus a full sha512
 lockfile, and the whole manifest is signed.
@@ -149,10 +149,20 @@ Manifest shape:
   "toolsets": {
     "anthropic": {
       "packages": [
-        { "role": "cli", "pkg": "@anthropic-ai/claude-code", "version": "2.1.290",
-          "lockfile": "anthropic-cli-2.1.290.json", "lockfileSha256": "..." },
-        { "role": "chat-adapter", "pkg": "@agentclientprotocol/claude-agent-acp", "version": "0.76.0",
-          "lockfile": "anthropic-adapter-0.76.0.json", "lockfileSha256": "..." }
+        {
+          "role": "cli",
+          "pkg": "@anthropic-ai/claude-code",
+          "version": "2.1.290",
+          "lockfile": "anthropic-cli-2.1.290.json",
+          "lockfileSha256": "..."
+        },
+        {
+          "role": "chat-adapter",
+          "pkg": "@agentclientprotocol/claude-agent-acp",
+          "version": "0.76.0",
+          "lockfile": "anthropic-adapter-0.76.0.json",
+          "lockfileSha256": "..."
+        }
       ],
       "minMossVersion": "..."
     }
@@ -409,12 +419,12 @@ In the same PR as the screen change:
 
 Each slice is one PR with live proof on an isolated instance, per the Live-Path Gate.
 
-| Slice | Scope | Live proof |
-|---|---|---|
-| 1. See the versions | Runner reports each toolset's versions. `cliTools` on the provider DTO. Card version line. `cli_version_too_old` recognised and shown. App map. | Install Claude CLI 2.1.183 on an isolated instance with a model that needs a newer version. The error shows in plain words and the card shows 2.1.183. |
-| 2. Chat adapters on the tools volume | Adapter packages become recipe entries. Runner resolves the adapter from the tools volume with fallback to the image copy. Toolset grouping. | On an isolated instance, chat runs through an adapter installed on the tools volume. Deleting it falls back to the image copy. |
-| 3. Manifest publisher | `cli-tools-manifest.yml`, lockfile generation, offline contract check, provenance check, signing, rolling release, issue on failure. | A manual dispatch publishes a signed manifest for a real newer version. A deliberately broken flag blocks that toolset and opens an issue. |
-| 4. Instance updater and gate | `ai.cli-tools-refresh`, signature and sequence checks, candidate staging, `state.json`, `ai.cli-version-check`, live check, promote and hold back, image floor, push alert, audit record, card states, Check again, app map. | On an isolated instance, a working candidate promotes. A forced-failure candidate is held back while the old toolset keeps serving, and the admin gets a push. An old-sequence manifest is rejected. |
+| Slice                                | Scope                                                                                                                                                                                                                        | Live proof                                                                                                                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. See the versions                  | Runner reports each toolset's versions. `cliTools` on the provider DTO. Card version line. `cli_version_too_old` recognised and shown. App map.                                                                              | Install Claude CLI 2.1.183 on an isolated instance with a model that needs a newer version. The error shows in plain words and the card shows 2.1.183.                                               |
+| 2. Chat adapters on the tools volume | Adapter packages become recipe entries. Runner resolves the adapter from the tools volume with fallback to the image copy. Toolset grouping.                                                                                 | On an isolated instance, chat runs through an adapter installed on the tools volume. Deleting it falls back to the image copy.                                                                       |
+| 3. Manifest publisher                | `cli-tools-manifest.yml`, lockfile generation, offline contract check, provenance check, signing, rolling release, issue on failure.                                                                                         | A manual dispatch publishes a signed manifest for a real newer version. A deliberately broken flag blocks that toolset and opens an issue.                                                           |
+| 4. Instance updater and gate         | `ai.cli-tools-refresh`, signature and sequence checks, candidate staging, `state.json`, `ai.cli-version-check`, live check, promote and hold back, image floor, push alert, audit record, card states, Check again, app map. | On an isolated instance, a working candidate promotes. A forced-failure candidate is held back while the old toolset keeps serving, and the admin gets a push. An old-sequence manifest is rejected. |
 
 Slices 2 and 4 depend on 1. Slice 3 is independent. Codex checks for non-owner admins get simpler
 after #2687, but no slice depends on it.
