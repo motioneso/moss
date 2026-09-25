@@ -58,12 +58,16 @@ interface EspnCompetitor {
   readonly records?: readonly { readonly summary?: string }[];
   // Hockey scoreboard events carry each side's own "goal leaders" here — see hockeyScorers below
   // for the caveat that this list can be shorter than the actual number of distinct scorers.
+  // The NHL team /schedule endpoint sends a single category object here instead of an array
+  // (verified live 2026-09-24, #2679), so readers must not assume array methods exist.
+  readonly leaders?: EspnLeaderCategory | readonly EspnLeaderCategory[];
+}
+
+interface EspnLeaderCategory {
+  readonly name?: string;
   readonly leaders?: readonly {
-    readonly name?: string;
-    readonly leaders?: readonly {
-      readonly displayValue?: string;
-      readonly athlete?: { readonly shortName?: string; readonly displayName?: string };
-    }[];
+    readonly displayValue?: string;
+    readonly athlete?: { readonly shortName?: string; readonly displayName?: string };
   }[];
 }
 
@@ -187,7 +191,7 @@ function soccerScorers(
   details: EspnScoringDetails | undefined,
   teamId: string | undefined
 ): readonly string[] | null {
-  const goals = (details ?? [])
+  const goals = (Array.isArray(details) ? (details as EspnScoringDetails) : [])
     .filter((d) => isSoccerGoal(d) && d?.team?.id === teamId)
     .flatMap((d) =>
       (d?.athletesInvolved ?? []).map((a) => ({
@@ -205,8 +209,14 @@ function soccerScorers(
 // listed) — so a team with several different scorers may show one fewer name than goals scored.
 // That is a gap in what the provider hands back, not a bug in this parsing.
 function hockeyScorers(leaders: EspnCompetitor["leaders"]): readonly string[] | null {
-  const goals = (leaders ?? []).find((category) => category?.name === "goals");
-  const names = (goals?.leaders ?? [])
+  const categories: readonly EspnLeaderCategory[] = Array.isArray(leaders)
+    ? leaders
+    : leaders
+      ? [leaders as EspnLeaderCategory]
+      : [];
+  const goals = categories.find((category) => category?.name === "goals");
+  const goalLeaders = goals?.leaders;
+  const names = (Array.isArray(goalLeaders) ? goalLeaders : [])
     .map((leader) => {
       const name = leader?.athlete?.shortName ?? leader?.athlete?.displayName;
       if (name == null) return null;
@@ -227,7 +237,8 @@ function toSide(
   // null every schedule score — soccer draws then fell through resultOf()'s winner check and
   // rendered as losses in the form pips (live feedback mrawhx9c).
   const scoreRaw = competitor?.score;
-  const scoreValue = typeof scoreRaw === "object" ? scoreRaw.value : scoreRaw;
+  const scoreValue =
+    scoreRaw !== null && typeof scoreRaw === "object" ? scoreRaw.value : (scoreRaw ?? undefined);
   const score = scoreValue === undefined || scoreValue === "" ? null : Number(scoreValue);
   return {
     teamKey,
@@ -352,11 +363,10 @@ export interface EspnTeamsParams {
 
 export interface EspnScoreboardParams {
   readonly competitionKey: string;
+  // One Eastern day. ESPN rejects `dates=YYYYMMDD-YYYYMMDD` ranges with HTTP 400 "Failed to get
+  // events endpoint" (verified live 2026-09-24, #2679), so multi-day windows are one dataset read
+  // per day in the service layer (see SportsService.scoreboardForDays).
   readonly day: IsoDate;
-  // When present, the scoreboard is fetched over the inclusive `day`..`endDay` range instead of
-  // the single `day` (ESPN accepts `dates=YYYYMMDD-YYYYMMDD`) — used for tournament fixtures
-  // that span several days (#839 follow-up).
-  readonly endDay?: IsoDate;
 }
 
 export interface EspnScheduleParams {
@@ -464,10 +474,9 @@ async function getScoreboard(
   fetchFn: typeof fetch,
   params: EspnScoreboardParams
 ): Promise<GameSummary[]> {
-  const { competitionKey, day, endDay } = params;
+  const { competitionKey, day } = params;
   const { sport, league } = resolve(competitionKey);
-  const start = day.replace(/-/g, "");
-  const dates = endDay ? `${start}-${endDay.replace(/-/g, "")}` : start;
+  const dates = day.replace(/-/g, "");
   const data = (await fetchJson(
     fetchFn,
     `${SITE_BASE}/${sport}/${league}/scoreboard?dates=${dates}`,
