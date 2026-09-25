@@ -238,7 +238,7 @@ describe("briefing savepoints on the worker transaction", () => {
     vi.spyOn(aiRepository, "selectModelForCapability").mockResolvedValue({
       id: "savepoint-model",
       provider_config_id: "savepoint-provider",
-      provider_kind: "openai",
+      provider_kind: "openai-compatible",
       display_name: "Savepoint model",
       tier: "economy"
     } as unknown as Awaited<ReturnType<AiRepository["selectModelForCapability"]>>);

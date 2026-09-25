@@ -72,6 +72,7 @@ describe("evening briefing compose (spec 2026-07-02, #695)", () => {
     deps.aiRepository = {
       selectModelForCapability: async () => ({
         provider_config_id: "test",
+        provider_kind: "anthropic",
         id: "test",
         display_name: "test",
         tier: "economy"
@@ -115,6 +116,7 @@ describe("evening briefing compose (spec 2026-07-02, #695)", () => {
     deps.aiRepository = {
       selectModelForCapability: async () => ({
         provider_config_id: "test",
+        provider_kind: "anthropic",
         id: "test",
         display_name: "test",
         tier: "economy"
