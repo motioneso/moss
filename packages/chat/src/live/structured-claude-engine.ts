@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import {
@@ -101,6 +102,7 @@ export interface ClaudePrintChatEngineOpts {
   readonly mux?: Multiplexer;
   readonly homeBase?: string;
   readonly sessionId?: string;
+  /** The runner's 0600 login token file. The runner reads it and hands the token over in env. */
   readonly credentialFile?: string;
   readonly transcriptDirGraceMs?: number;
   readonly childIdentity?: StructuredChildIdentity;
@@ -184,11 +186,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       ...(identity ? {} : { cwd: this.launchOpts.neutralDir }),
       detached: true,
       stdio: ["ignore", "ignore", "pipe"],
-      ...(this.homeBase === undefined
-        ? {}
-        : {
-            env: { ...buildSanitizedCliEnv(process.env), ...identity?.env, HOME: this.homeBase }
-          })
+      ...(await this.childEnv())
     });
     this.currentProcess.on("error", () => undefined);
     // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
@@ -255,11 +253,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       ...(identity ? {} : { cwd: opts.neutralDir }),
       detached: true,
       stdio: ["pipe", "pipe", "pipe"],
-      ...(this.homeBase === undefined
-        ? {}
-        : {
-            env: { ...buildSanitizedCliEnv(process.env), ...identity?.env, HOME: this.homeBase }
-          })
+      ...(await this.childEnv())
     });
     this.structuredProcess = child;
     this.structuredExited = false;
@@ -459,6 +453,33 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     }
   }
 
+  /**
+   * The child's env. The runner reads the login token here, in its own process, because the
+   * child may run as a per-user account that cannot read the token file (#2692).
+   */
+  private async childEnv(): Promise<{ env?: NodeJS.ProcessEnv }> {
+    const loginEnv = await this.readLoginEnv();
+    const extra = { ...loginEnv, ...this.childIdentity?.env };
+    if (this.homeBase === undefined && Object.keys(extra).length === 0) return {};
+    return {
+      env: {
+        ...buildSanitizedCliEnv(process.env),
+        ...extra,
+        ...(this.homeBase === undefined ? {} : { HOME: this.homeBase })
+      }
+    };
+  }
+
+  private async readLoginEnv(): Promise<Record<string, string>> {
+    if (!this.credentialFile) return {};
+    try {
+      const token = (await readFile(this.credentialFile, "utf8")).trim();
+      return token.length > 0 ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {};
+    } catch {
+      return {};
+    }
+  }
+
   private async resolvePersonaPath(opts: EngineLaunchOpts): Promise<string> {
     if (opts.personaText === undefined) return opts.personaPath;
     await this.io.run("mkdir", ["-p", opts.neutralDir]);
@@ -469,16 +490,12 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   }
 
   private async buildCommand(opts: EngineLaunchOpts, promptPath: string): Promise<string> {
-    const claudeCmd =
-      this.credentialFile && existsSync(this.credentialFile)
-        ? `CLAUDE_CODE_OAUTH_TOKEN="$(cat ${shellQuote(this.credentialFile)})" claude`
-        : "claude";
     const sessionFlag = this.hasSubmitted
       ? `--resume ${this.sessionId}`
       : `--session-id ${this.sessionId}`;
     const parts = [
       `cd ${shellQuote(opts.neutralDir)} &&`,
-      claudeCmd,
+      "claude",
       "-p",
       sessionFlag,
       "--permission-mode dontAsk"
@@ -525,13 +542,9 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   private async buildStructuredCommand(
     opts: EngineLaunchOpts & { readonly schema: Record<string, unknown> }
   ): Promise<string> {
-    const claudeCmd =
-      this.credentialFile && existsSync(this.credentialFile)
-        ? `CLAUDE_CODE_OAUTH_TOKEN="$(cat ${shellQuote(this.credentialFile)})" claude`
-        : "claude";
     const parts = [
       `cd ${shellQuote(opts.neutralDir)} &&`,
-      claudeCmd,
+      "claude",
       "--print",
       "--input-format stream-json",
       "--output-format stream-json",
