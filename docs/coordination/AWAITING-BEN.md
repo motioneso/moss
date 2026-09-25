@@ -75,8 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-- **#2521 morning reader body decision.** The current full reader repeats the saved summary and task action rows already shown on Today. A fictional comparison sheet at `docs/superpowers/specs/assets/2026-09-10-morning-briefing/today-morning-reader-decision-sheet.png` compares that synthetic current-reader simulation with a source-derived mockup based on the restored `morningRead()` structure; neither capture establishes live production parity. Recommendation: keep the reader shell, tabs, schedule rail, and Review controls; replace the repeated action-list body with a grounded operational report using only the saved summary, provenance, action rows, and current plan context; leave action controls on Today. Prior calendar event versions and a materials manifest are unavailable, so the report must make no before/after event or materials claims. Reader UI changes are paused pending Ben's ruling. Decision request: [issue comment](https://github.com/motioneso/moss/issues/2521#issuecomment-5839987420). The fictional image was sent with `needs-ben --image`. **Does this treatment look right, or what should change?**
-
 <!-- Resolved 2026-09-03: false alarm. Home Assistant was never disconnected. It lives in the new
 integrations table (packages/integrations), not the old connector_definitions table the proof lane
 queried. On 2026-09-03 the dev API listed it enabled with 75/75 tools and a live refresh returned 200.
