@@ -78,7 +78,8 @@ export const uatLevel = {
   withJobSearchFixture: true,
   withSportsPublicSourceFixtures: true,
   chatScript: "phase1-smoke",
-  withEspnFixture: true
+  withEspnFixture: true,
+  withBriefingWriterFixture: true
 } as const;
 const OUT =
   process.env.MOSS_PARITY_OUT ??
