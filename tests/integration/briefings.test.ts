@@ -166,11 +166,13 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
       "app.briefing_runs"
     ]);
     expect(registration?.manifest.database?.migrations).toContain("sql/0116_briefing_type.sql");
-    expect(registration?.manifest.navigation?.[0]).toMatchObject({
-      id: "briefings",
-      path: "/briefings",
-      permissionId: "briefings.view"
-    });
+    // Briefings render on Today, so the module declares no navigation entry of its own.
+    expect(registration?.manifest.navigation ?? []).toEqual([]);
+    const remediationPaths = (briefingsModuleManifest.features ?? []).flatMap((feature) =>
+      (feature.remediations ?? []).map((remediation) => remediation.path)
+    );
+    expect(remediationPaths).toContain("/today");
+    expect(remediationPaths).not.toContain("/briefings");
     expect(registration?.manifest.jobs?.[0]).toMatchObject({
       queueName: BRIEFINGS_RUN_QUEUE,
       metadataOnly: true,
