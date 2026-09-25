@@ -59,11 +59,17 @@ export async function readCatalogFeeds(params: {
         return;
       }
       const cacheKey = `catalog-feed:${url}`;
-      const cached = signal ? undefined : cache.get<readonly ExtractedHeadline[]>(cacheKey, now());
+      // The page always passes a cancel signal, so the cache is read regardless of it. A failed
+      // refresh serves the last stories saved rather than none.
+      const cached = cache.get<readonly ExtractedHeadline[]>(cacheKey, now());
       let items = cached?.fresh ? cached.value : null;
-      if (!items) {
+      const stale = cached?.value ?? null;
+      if (!items) items = await refresh();
+      if (!items) items = stale;
+      if (!items) return;
+      async function refresh(): Promise<readonly ExtractedHeadline[] | null> {
         const held = await limiter.acquireAll([host], deadline, now, signal);
-        if (!held) return;
+        if (!held) return null;
         let response: Awaited<ReturnType<SportsSafeFetchPort>>;
         try {
           response = await fetch(url, {
@@ -77,13 +83,13 @@ export async function readCatalogFeeds(params: {
             signal
           });
         } catch {
-          return;
+          return null;
         } finally {
           for (const value of held) limiter.release(value);
         }
-        if (!response.ok || !isPublicFeedDocument(response.body)) return;
+        if (!response.ok || !isPublicFeedDocument(response.body)) return null;
         const fetchedAt = new Date(now()).toISOString();
-        items = parsePublicFeedItems(response.body).map((item) => ({
+        const fresh = parsePublicFeedItems(response.body).map((item) => ({
           id: item.id,
           title: item.title,
           url: item.url,
@@ -93,10 +99,11 @@ export async function readCatalogFeeds(params: {
         const cachedAt = now();
         cache.set(
           cacheKey,
-          items,
+          fresh,
           cachedAt + HEADLINE_TTL_MS,
           cachedAt + HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS
         );
+        return fresh;
       }
       const fallbackTime = new Date(now()).toISOString();
       for (const item of items) {

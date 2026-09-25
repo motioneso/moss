@@ -68,6 +68,33 @@ describe("refreshCatalogFeeds (#2661 news-only competitions)", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("serves the cache even when the page passes a cancel signal", async () => {
+    const fetch = vi.fn(async (url: string) => success(url, WPBL_RSS, "application/rss+xml"));
+    const { reader } = makeReader([], fetch as SportsSafeFetchPort, { now: () => 1_000_000 });
+    const signal = new AbortController().signal;
+    await reader.refreshCatalogFeeds(["wpbl"], { signal });
+    const second = await reader.refreshCatalogFeeds(["wpbl"], { signal });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(second).toHaveLength(2);
+  });
+
+  it("serves the last saved stories when a refresh fails", async () => {
+    let now = 1_000_000;
+    let feedUp = true;
+    const fetch = vi.fn(async (url: string) =>
+      feedUp
+        ? success(url, WPBL_RSS, "application/rss+xml")
+        : ({ ok: false, reason: "network" } as const)
+    );
+    const { reader } = makeReader([], fetch as unknown as SportsSafeFetchPort, { now: () => now });
+    await reader.refreshCatalogFeeds(["wpbl"]);
+    feedUp = false;
+    now += 11 * 60 * 1000;
+    const headlines = await reader.refreshCatalogFeeds(["wpbl"]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(headlines).toHaveLength(2);
+  });
+
   it("returns no stories rather than throwing when the feed fails", async () => {
     const failing = vi.fn(async () => ({ ok: false, reason: "network" }) as const);
     const { reader } = makeReader([], failing as unknown as SportsSafeFetchPort, {
