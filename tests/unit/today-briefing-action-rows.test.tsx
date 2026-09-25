@@ -51,6 +51,51 @@ describe("BriefingActionRowsSection", () => {
     expect(html.match(/>Dismiss</g)?.length).toBe(1);
   });
 
+  it("counts visible loose ends with active rows but excludes catch-up and inactive rows", () => {
+    const rows = [
+      actionRow({
+        taskId: "task-suggested",
+        category: "needs_action",
+        primaryAction: { kind: "view", href: "https://mail.example.com/thread/1" }
+      }),
+      actionRow({ taskId: "task-accepted" }),
+      actionRow({ taskId: "task-dismissed" })
+    ];
+    const catchUp = {
+      source: "email" as const,
+      itemCount: 4,
+      summaryText: `The garden walk moved to Saturday &amp; volunteers should arrive &quot;early&quot;.\n${"Routine digests arrived too. ".repeat(12)}`,
+      asOf: null
+    };
+    const html = renderSection({
+      run: run({ rows, catchUp }),
+      tasks: [
+        task({ id: "task-suggested", status: "suggested" }),
+        task({ id: "task-accepted", status: "todo" }),
+        task({ id: "task-dismissed", status: "archived" })
+      ],
+      looseEndsCount: 2
+    });
+
+    expect(html).toContain("3 need you");
+    expect(html).not.toContain("4 need you");
+    expect(html).toMatch(/4(?:<!-- -->)? informational (?:<!-- -->)?messages/);
+    expect(html).toContain("The garden walk moved to Saturday &amp; volunteers");
+    expect(html).toContain(" · Routine digests arrived too.");
+    expect(html).not.toContain("&amp;amp;");
+    expect(html.match(/<a\b/g)?.length).toBe(1);
+    expect(html).toContain('href="https://mail.example.com/thread/1"');
+    const summaryMarkup = html.match(/<p class="cmd-leadin">([\s\S]*?)<\/p>/)?.[1] ?? "";
+    expect(summaryMarkup).toMatch(/…$/);
+  });
+
+  it("shows the loose-end count without claiming there is nothing waiting", () => {
+    const html = renderSection({ run: null, tasks: [], looseEndsCount: 2 });
+
+    expect(html).toContain("2 need you");
+    expect(html).not.toContain("You're caught up");
+  });
+
   it("omits fallback suggestions without a reply cache id", () => {
     const suggestionMetadata = {
       version: 1 as const,
@@ -391,6 +436,7 @@ describe("BriefingActionRowsSection", () => {
 function renderSection(input: {
   readonly run: BriefingRunDto | null;
   readonly tasks: readonly TaskDto[];
+  readonly looseEndsCount?: number;
   readonly loading?: boolean;
 }): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -415,6 +461,7 @@ function renderSection(input: {
             run: input.run,
             loading: input.loading ?? false,
             tasks: input.tasks,
+            looseEndsCount: input.looseEndsCount ?? 0,
             locale,
             chatAvailable: true,
             onOpenTask: () => undefined
