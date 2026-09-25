@@ -169,6 +169,14 @@ export const notesModuleManifest = {
       description:
         "Sync Markdown notes from the folder you link in Settings, Data sources: new and changed " +
         "files are read into Moss on a schedule, and notes stay on disk where they are.",
+      errors: [
+        {
+          code: "notes.folder_missing",
+          class: "prerequisite",
+          remediationRef: "notes.configure_folder",
+          description: "No notes folder is selected in Data sources."
+        }
+      ],
       remediations: [
         {
           id: "notes.configure_folder",

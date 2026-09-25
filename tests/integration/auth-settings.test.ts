@@ -281,12 +281,11 @@ describe("M3 auth, users, settings", () => {
     expect(deniedResponse.statusCode).toBe(401);
     expect(allowedResponse.statusCode).toBe(200);
     expect(modules.map((module) => module.id)).toEqual(expectedBuiltInModuleIds);
+    // Chat is a drawer, briefings render on Today, and settings has no nav entry,
+    // so none of them appears in the app-shell navigation list.
     expect(modules.flatMap((module) => module.navigation).map((entry) => entry.path)).toEqual([
-      "/settings",
       "/tasks",
       "/calendar",
-      "/chat",
-      "/briefings",
       "/wellness",
       "/sports",
       "/news",

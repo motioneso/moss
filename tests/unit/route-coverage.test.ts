@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getBuiltInModuleManifests } from "@moss/module-registry";
+import { CORE_APP_SETTINGS } from "@moss/shared";
 
 function manifestPaths(id: string): { method: string; path: string }[] {
   const manifest = getBuiltInModuleManifests().find((m) => m.id === id);
@@ -22,16 +23,18 @@ describe("manifest routes[] reconciliation", () => {
     expect(manifest?.settings?.[0]?.entry).toBe("./settings");
   });
 
-  it("settings manifest declares personal priority surface and preference routes", () => {
-    const manifest = getBuiltInModuleManifests().find((m) => m.id === "settings");
-    expect(manifest?.settings).toContainEqual(
+  it("core owns the personal priority surface and settings declares preference routes", () => {
+    expect(CORE_APP_SETTINGS).toContainEqual(
       expect.objectContaining({
-        id: "priority-settings",
+        id: "priorities",
         label: "Priorities",
         path: "/settings?section=priorities",
-        scope: "user",
-        permissionId: "settings.write"
+        scope: "user"
       })
+    );
+    const manifest = getBuiltInModuleManifests().find((m) => m.id === "settings");
+    expect((manifest?.settings ?? []).map((surface) => surface.id)).not.toContain(
+      "priority-settings"
     );
 
     const paths = manifestPaths("settings");

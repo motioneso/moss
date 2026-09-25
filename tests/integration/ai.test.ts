@@ -187,7 +187,7 @@ describe("AI provider foundation", () => {
     ]);
     expect(manifest?.settings?.[0]).toMatchObject({
       id: "ai.user-settings",
-      path: "/settings/ai",
+      path: "/settings?section=assistant",
       permissionId: "ai.manage"
     });
     expect(registration?.queueDefinitions.map((q) => q.name)).toEqual(["ai-purge-audit-log"]);
