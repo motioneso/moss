@@ -65,17 +65,17 @@ contains pending edits. No draft-storage narration is added to the product copy.
 - Leaving every task unscheduled is supported without removing fixed calendar commitments.
 - Changing the scheduling preference does not silently accept or remove saved morning decisions.
 
-## P9 degraded-state presentation — awaiting Ben
+## P9 degraded-state presentation — approved 2026-09-25
 
-The September 10 reader and interaction approvals remain locked. This is a narrow presentation decision for p9 in issue #2521; it does not reopen Today, the reader frame, or evening planning.
+Ben approved the desktop/phone proposal with “yes (thumbs up)” on 2026-09-25. The ruling is recorded on [issue #2521](https://github.com/motioneso/moss/issues/2521#issuecomment-5839545144). This approves the pictured treatment and the state boundaries below; it does not reopen the September 10 reader and interaction approvals, Today, or evening planning.
 
-**Decision requested:** Keep the current reader shell, Review task blocks tab, schedule area, and plan actions when the briefing report is unavailable, and replace only the report body with the unavailable message and Try again shown in the p9 decision sheet? Also approve the source-specific email warning and the no-evening copy shown by the recovered study, or identify the change needed.
+**Approved treatment:** Keep the current reader shell, Review task blocks tab, schedule area, and plan actions when the briefing report is unavailable. Replace only the report body with the unavailable message and Try again shown in the decision sheet. Use the source-specific email warning and no-evening copy shown by the recovered study.
 
-[Desktop and phone decision sheet](assets/2026-09-10-morning-briefing/p9-degraded-decision-sheet.png) shows the approved ready state and proposed unavailable/email-delayed states from the recovered September 9 study source in PR #2703. All content is fictional. The visual-parity baseline attempt produced no captures, so these mockup images are not presented as fresh live screenshots.
+[Approved desktop and phone decision sheet](assets/2026-09-10-morning-briefing/p9-degraded-decision-sheet.png) shows the ready state and approved unavailable/email-delayed treatments from the recovered September 9 study source in PR #2703. All content is fictional. The visual-parity baseline attempt produced no captures, so these mockup images are not fresh live screenshots.
 
 **Current implementation inventory (origin/main, September 25):** `MorningBriefingReader` already displays an unavailable message and Try again while preserving the reader shell, review tab, and `DayPlanSection` schedule rail. Retry disables the button while the request is pending and selects the new run on success. `DayPlanSection` has separate loading, plan-error, calendar-error, and valid-empty treatments. The reader's review tab and footer actions remain available when the briefing report fails. A local interaction check against the recovered study confirmed that three unsaved task-block choices survive Try again; this is mockup evidence, not live UI proof.
 
-**Proposed state boundaries:**
+**Approved state boundaries:**
 
 - An unavailable briefing affects the report body only; available calendar/task information and review remain reachable.
 - While retry is pending, keep the unavailable copy and disable Try again. On success, restore the report and retain pending block choices.
@@ -83,7 +83,7 @@ The September 10 reader and interaction approvals remain locked. This is a narro
 - Delayed email names its last update and possible unseen replies, while saying calendar and task times are current. Refresh targets email freshness.
 - With no evening plan, use task deadlines and calendar facts as the priority source and do not imply an evening conversation happened.
 
-Only p9 implementation is blocked on this ruling. Other #2521 screen lanes can proceed. After Ben's decision, record the approved state references in p9's evidence and implement only the ruled gaps.
+P9 implementation may proceed within this approved treatment. The inventory above and the local mockup interaction check are not live-path proof; live error/retry recovery remains unverified.
 
 ## Preserved approved references
 
