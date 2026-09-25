@@ -119,6 +119,12 @@ final class BacktrackRuntime: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var didStart = false
+    /// Kill-gate measurement (#2638): timings and counts only.
+    private let metrics = BacktrackMetrics()
+    /// The generation whose chain began with a change check, so a capture can tell a periodic
+    /// pass from a switch (which skips the check).
+    private var checkedGeneration: Int?
+    private var heldTrigger = "switch"
 
     init(
         connection: ConnectionRuntime,
@@ -147,6 +153,7 @@ final class BacktrackRuntime: ObservableObject {
     func start() {
         guard !didStart else { return }
         didStart = true
+        metrics.start()
         inputs = currentInputs()
         apply(machine.handle(.started(inputs, at: services.clock())))
         observer.start { [weak self] observation in
@@ -305,10 +312,12 @@ final class BacktrackRuntime: ObservableObject {
                 tasks = []
                 held = nil
             case .emit(let segment):
+                metrics.emittedLines = segment.lines.count
                 sink.accept(segment)
             case .discardAll:
                 held = nil
                 services.thumbnails.reset()
+                metrics.reset()
                 sink.discardAll()
             }
         }
@@ -366,14 +375,16 @@ final class BacktrackRuntime: ObservableObject {
             noteSkipped(observation, "its window couldn't be identified, or it is never watched")
             return send(.failed(generation: generation, at: services.clock()))
         }
+        checkedGeneration = generation
+        let step = BacktrackStopwatch()
         do {
             let image = try await services.capture.capture(
                 window, pid: observation.pid, maxDimension: Self.thumbnailMaxDimension
             )
             guard !Task.isCancelled else { return }
-            let changed = services.thumbnails.changed(
-                DedupeKey(bundleId: observation.bundleId, frame: window.frame), thumbnail: image
-            )
+            let key = DedupeKey(bundleId: observation.bundleId, frame: window.frame)
+            let changed = services.thumbnails.changed(key, thumbnail: image)
+            metrics.thumbnail(step, distance: metrics.distance(key, image: image), changed: changed)
             send(.thumbnailChecked(generation: generation, changed: changed, at: services.clock()))
         } catch {
             guard !Task.isCancelled else { return }
@@ -386,8 +397,11 @@ final class BacktrackRuntime: ObservableObject {
     /// identical, the picture bound to the fresh window, the fields painted black, the address read
     /// from that same window.
     private func capture(_ observation: Observation, generation: Int) async {
+        let trigger = checkedGeneration == generation ? "changed" : "switch"
+        let step = BacktrackStopwatch()
         let failed = { [weak self] in
             guard let self, !Task.isCancelled else { return }
+            self.metrics.skipped("capture")
             self.send(.failed(generation: generation, at: self.services.clock()))
         }
         guard let window = freshWindow(for: observation) else {
@@ -411,6 +425,7 @@ final class BacktrackRuntime: ObservableObject {
             return failed()
         }
         guard !Task.isCancelled else { return }
+        let distance = metrics.distance(DedupeKey(bundleId: observation.bundleId, frame: window.frame), image: image)
         guard let after = locateSecureFields(observation, window: window), after == before else {
             noteSkipped(observation, "a password field moved or appeared during the picture")
             return failed()
@@ -425,6 +440,8 @@ final class BacktrackRuntime: ObservableObject {
             "Backtrack: \(observation.appName) · \(before.count) password field(s) masked (\(locateMilliseconds) ms) · "
                 + (address == nil ? "no address exposed" : "address read")
         )
+        metrics.capture(trigger: trigger, step, distance: distance)
+        heldTrigger = trigger
         held = (generation, masked, address)
         send(.captured(generation: generation, at: services.clock()))
     }
@@ -432,11 +449,16 @@ final class BacktrackRuntime: ObservableObject {
     private func recognize(generation: Int) async {
         guard let held, held.generation == generation else { return }
         self.held = nil
+        let trigger = heldTrigger
+        let step = BacktrackStopwatch()
         do {
             let lines = try await services.recognizer.recognize(held.image)
             guard !Task.isCancelled else { return }
+            metrics.emittedLines = nil
             send(.recognized(generation: generation, lines: lines, address: held.address, at: services.clock()))
+            metrics.recognition(trigger: trigger, step, lines: lines.count)
         } catch {
+            metrics.skipped("ocr")
             guard !Task.isCancelled else { return }
             focusDebug("Backtrack: skipped — the text couldn't be recognised")
             send(.failed(generation: generation, at: services.clock()))
