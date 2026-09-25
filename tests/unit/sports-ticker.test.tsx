@@ -67,22 +67,19 @@ describe("SportsTicker", () => {
     ]);
     expect(html).toContain("sp-ticker");
     expect(html).toContain("Minnesota Vikings");
-    // standing + form stay in the header sub-row under the team name (mrawlzb7)
-    expect(html).toContain("sp-feat__sub");
+    // standing + form sit in the card head beside the team name
+    expect(html).toContain("sp-tk__head");
     expect(html).toContain("sp-formpip");
     expect(html).toContain("2nd · NFC North");
-    // #963: the live score moves into the footer strip (same .sp-next bar as next-game),
-    // with a LIVE token; the body slot goes back to the news lede like any non-live card.
-    expect(html).toContain("sp-feat__next");
-    expect(html).toContain("sp-next__livetag");
+    // #963: the live score takes the footer slot; the body slot goes back to the news lede
+    expect(html).toContain("sp-tk__next--live");
+    expect(html).toContain("Live now");
     expect(html).toContain("MIN 21 – 14 DAL");
     expect(html).toContain("Vikings lead late in Dallas");
     // the bold body score is gone — no score-styled body element renders
-    expect(html).not.toContain("sp-feat__score");
-    // live strip shows the score, never the upcoming fixture, even though nextMatch is set
-    expect(html).not.toContain("sp-next__venue");
-    // the competition/status eyebrow row stays removed (live feedback mratgoq4)
-    expect(html).not.toContain("sp-feat__comp");
+    expect(html).not.toContain("sp-tk__score");
+    // live footer shows the score, never the upcoming fixture, even though nextMatch is set
+    expect(html).not.toContain("Green Bay Packers");
   });
 
   it("puts the Live label beside a long name and the five form pips in the same head", () => {
@@ -97,9 +94,9 @@ describe("SportsTicker", () => {
   it("shows the No-recent-news placeholder on a storyless live card (#963)", () => {
     const html = render([card({ stories: [] })]);
     expect(html).toContain("No recent news");
-    expect(html).toContain("sp-next__livetag");
+    expect(html).toContain("sp-tk__next--live");
     expect(html).toContain("MIN 21 – 14 DAL");
-    expect(html).not.toContain("sp-feat__score");
+    expect(html).not.toContain("sp-tk__score");
   });
 
   it("caps a live card at two secondary stories — the strip needs its room (#963)", () => {
@@ -129,14 +126,36 @@ describe("SportsTicker", () => {
     expect(noisy).not.toContain("-2 pts");
   });
 
-  it("shows the next-game footer with opponent crest, no visible name (non-live)", () => {
+  it("shows the text next-game footer, same as Today (non-live)", () => {
     const html = render([card({ status: "news", primary: "", stories: [story()] })]);
-    expect(html).toContain("sp-feat__next");
-    // opponent identity is the crest (initials swatch here — no crestUrl) plus an
-    // sr-only name; the visible "vs Green Bay Packers" line is gone (mrawvc48)
-    expect(html).toContain("sp-sronly");
+    expect(html).toContain("sp-tk__next");
+    expect(html).toContain("Next game");
     expect(html).toContain("vs Green Bay Packers");
-    expect(html).not.toContain("sp-feat__nextlbl");
+    expect(html).not.toContain("sp-tk__next--live");
+  });
+
+  it("renders the Today card in the strip, without the story feedback menu (#2074)", () => {
+    const stories = [
+      story({ title: "Lede", url: "https://example.com/a", storyRef: "ref-a" }),
+      story({ title: "Second", url: "https://example.com/b", storyRef: "ref-b" })
+    ];
+    const html = render([card({ status: "news", primary: "", stories })]);
+    expect(html).toMatch(/aria-label="Followed teams"[^>]*>\s*<article class="sp-tk"/);
+    expect(html).not.toContain("sp-feat");
+    expect(html).not.toContain("sp-feedback");
+    // Today keeps the menu on the same card.
+    const client = new QueryClient();
+    const today = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(TickerTeam, {
+          card: card({ status: "news", primary: "", stories }),
+          surface: "today"
+        })
+      )
+    );
+    expect(today).toContain("sp-feedback");
   });
 
   it("fills the pre-game today primary with news — footer carries the fixture", () => {
@@ -152,7 +171,7 @@ describe("SportsTicker", () => {
     ]);
     expect(html).not.toContain("Vikings @ Cowboys");
     expect(html).toContain("Vikings name their starter");
-    expect(html).toContain("sp-feat__next");
+    expect(html).toContain("sp-tk__next");
     // no story at all → honest placeholder, still no fixture duplication
     const bare = render([
       card({ status: "today", primary: "Vikings @ Cowboys", todayGameState: "pre" })
@@ -189,7 +208,7 @@ describe("SportsTicker", () => {
         }
       })
     ]);
-    expect(html).toContain("sp-feat__result");
+    expect(html).toContain("sp-tk__result");
     expect(html).toContain(">9–3<");
     expect(html).not.toContain("L 9–3");
     expect(html).toContain("lost");
@@ -198,7 +217,7 @@ describe("SportsTicker", () => {
     // the cheap combined text tail is gone
     expect(html).not.toContain("L 3–9 vs Blue Jays");
     // most sports/most games have no scorer data — no scorer list should render at all
-    expect(html).not.toContain("sp-feat__scorers");
+    expect(html).not.toContain("sp-tk__scorers");
   });
 
   it("keeps the score in home-left order when the followed team plays away (#2253)", () => {
@@ -250,9 +269,9 @@ describe("SportsTicker", () => {
         }
       })
     ]);
-    expect(html).toContain("sp-feat__scorers--home");
+    expect(html).toContain("sp-tk__scorers--home");
     expect(html).toContain("A. Isak (2)");
-    expect(html).toContain("sp-feat__scorers--away");
+    expect(html).toContain("sp-tk__scorers--away");
     expect(html).toContain("Z. Benson");
   });
 
@@ -278,13 +297,13 @@ describe("SportsTicker", () => {
         }
       })
     ]);
-    expect(html).toContain("sp-feat__scorers--home");
+    expect(html).toContain("sp-tk__scorers--home");
     expect(html).toContain("A. Isak (2)");
     // the empty away list is still in the markup, reserving its share of the row's width
-    expect(html).toContain("sp-feat__scorers--away");
+    expect(html).toContain("sp-tk__scorers--away");
   });
 
-  it("leads with the first story and links the rest — up to three per club (mrb0pk1n)", () => {
+  it("leads with the first story and links the next two (mrb0pk1n)", () => {
     // stories[0] takes the primary slot (thumb + title); the remainder render as the small
     // text links. "No recent news" only appears when the club truly has no stories (mrathm2y).
     const html = render([
@@ -300,7 +319,7 @@ describe("SportsTicker", () => {
     ]);
     expect(html).not.toContain("No recent news");
     expect(html).toContain("Vikings sign a new kicker");
-    expect(html).toContain("sp-feat__stories");
+    expect(html).toContain("sp-tk__stories");
     expect(html).toContain("Camp battle at corner");
     expect(html).toContain("Schedule quirks explained");
   });
@@ -381,8 +400,6 @@ describe("TickerTeam", () => {
     expect(html).toContain("Next game");
     expect(html).toContain("vs Green Bay Packers");
     expect(html).not.toContain("sp-tk__next--live");
-    // the /today footer is a text line, not the shared /sports crest bar
-    expect(html).not.toContain("sp-next");
   });
 
   it("puts the publisher in a kicker above the headline instead of trailing it", () => {

@@ -163,15 +163,15 @@ test("#2253: the Sports page ticker shows the same finished-game row", async ({ 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/sports");
 
-  // The Sports desk draws its own, larger card, so this is a different row from Today's.
-  const row = page.locator(".sp-feat__result").first();
+  // The Sports page strip draws the same card as Today, inside its own scroller.
+  const row = page.locator(".sp-ticker .sp-tk__result").first();
   await expect(row).toBeVisible();
   await expect(row).toContainText("Isak 6, 8");
-  await expect(row.locator(".sp-feat__score")).toHaveText("2–0");
+  await expect(row.locator(".sp-tk__score")).toHaveText("2–0");
   await expectBenOrder(page, row);
 
   await page
-    .locator(".sp-ticker, .sp-feat")
+    .locator(".sp-ticker")
     .first()
     .screenshot({ path: "tests/screenshots/2253-sports-desktop.png" });
 });

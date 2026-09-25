@@ -50,10 +50,8 @@
 .sp-ticker__scroll:focus-visible {
   outline: 2px solid var(--focus-ring);
 }
-/* /today followed-team card, "Minimalist Sports Card V3" anatomy (Ben mockup 2026-07-09):
-   identity header / media-left body / inverted next-game bar. TickerTeam only renders inside
-   .sp-tkgrid now (the /sports strip moved to .sp-feat, mrb7mwhv), so the card idiom lives here
-   directly — the old 240px scroll-strip variant (fixed width, right-hand divider) is retired. */
+/* Followed-team card base (TickerTeam). Today's .sp-tkgrid and the /sports Followed strip
+   restyle it as flat clippings columns in sports-8-clippings.css. */
 .sp-tk {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -96,8 +94,8 @@
   font-weight: 700;
   color: var(--text);
 }
-/* Storyless pre-game/idle card: muted italic placeholder, mirrors .sp-feat__lead--empty so the
-   /today widget and /sports strip read the same "nothing here yet" (never the matchup, mrawrk0e). */
+/* Storyless pre-game/idle card: muted italic placeholder, an honest "nothing here yet" (never
+   the matchup, mrawrk0e). */
 .sp-tk__newstx--empty {
   font-weight: 400;
   color: var(--text-muted);
@@ -106,42 +104,6 @@
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   color: var(--text-subtle);
-}
-/* ---- Shared next-game footer bar (.sp-next) ----
-   One footer treatment for BOTH /today (TickerTeam) and /sports (FeaturedTeamCard) so the two
-   pages read as siblings across the bottom (Ben 2026-07-09). Layout + venue color live here; the
-   per-surface container classes (.sp-tk__next / .sp-feat__next) supply only the bleed offsets,
-   which differ because the two cards have different side/bottom padding. */
-.sp-next {
-  /* One accent bar for ALL next matches (Ben 2026-07-09: "have this be the accent color of the
-     theme") — no home/away color; venue reads from the "vs"/"@" token instead. --accent ground /
-     --text-on-accent text is the same pairing primary buttons use, so it re-points per park theme
-     and keeps its authored contrast in both light and dark. */
-  background: var(--accent);
-  color: var(--text-on-accent);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-}
-/* "vs" (home) / "@" (away) venue token — the only home/away signal now (Ben 2026-07-09), leading
-   the left group ahead of the opponent crest. */
-.sp-next__venue {
-  font-weight: 600;
-}
-/* Live-score strip (#963): while a game is in progress the footer bar carries the current
-   score instead of the next fixture — same .sp-next ground. The LIVE token takes the venue
-   token's slot; same 2xs uppercase voice as .sp-tk__live / .sp-feat__flag. */
-.sp-next__livetag {
-  font-size: var(--text-2xs);
-  font-weight: 700;
-}
-/* The pulse dot is accent-on-accent inside this bar — repaint it in the bar's text color. */
-.sp-next__livetag .sp-livedot {
-  background: currentColor;
-}
-/* Score rides the .sp-next__when right-float slot; tabular figures so a changing score
-   doesn't jitter the bar. */
-.sp-next__score {
-  font-weight: 600;
 }
 /* Visually hidden, screen-reader reachable — carries the opponent name the crest replaced
    (mrawvc48). Scoped sp- utility; the app shell has no global sr-only class. */
@@ -192,92 +154,6 @@
   font-weight: 600;
   color: var(--text);
 }
-/* ---- Featured desk strip (mrb7mwhv) ----
-   The /sports followed strip trades the 240px dense .sp-tk for a roomy, image-forward card:
-   far more space per team so the strip reads editorial, not busy (Ben: "not so compact and
-   busy"). Only the desk strip renders .sp-feat; /today keeps the compact .sp-tk. Serif name +
-   gold/live flag pull in the sports-desk idiom without dragging in the parked page reskin. */
-.sp-feat {
-  border-right: 1px solid var(--border-subtle);
-}
-.sp-feat__banner {
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-/* Broadcast-bug status flag over the banner corner. Live = solid accent so it reads against
-   any photo; today = gold (our warmest park token — no rust token exists, mrb7mwhv). */
-.sp-feat__flag {
-  font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-  border-radius: var(--radius-sm);
-}
-.sp-feat__flag--live {
-  background: var(--accent-fg);
-  color: var(--surface);
-}
-.sp-feat__flag--today {
-  background: var(--gold);
-  color: var(--gold-ink);
-}
-/* The three .sp-feat display slots (team name, lead headline, matchup) are set in --font-display
-   (bold Swiss, same face as the masthead + hero) for editorial weight. Since 2026-07-08
-   --font-display aliases --font-sans's exact stack (see tokens.css) so these never diverge from
-   the score/body font on non-Mac devices — the "out of place" clash Ben flagged (/sports #1). */
-.sp-feat__name {
-  font-family: var(--font-display);
-  font-size: var(--text-xl);
-  font-weight: 700;
-  color: var(--text);
-}
-.sp-feat__standing {
-  font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  color: var(--text-subtle);
-}
-.sp-feat__lead {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  /* Bold the lead so it reads as the headline, separated from the story links below it
-     (Ben 2026-07-09 /sports annotation #1) — mirrors the bold .sp-tk__newstx lede on /today. */
-  font-weight: 700;
-  color: var(--text);
-}
-/* Storyless placeholder (mrawrk0e): a pre-game/idle club with no news. Muted, non-interactive —
-   it's a <span>, not a link — so it reads as an honest "nothing here yet" rather than a headline. */
-.sp-feat__lead--empty {
-  color: var(--text-muted);
-}
-.sp-feat__score {
-  font-family: var(--font-sans);
-  font-size: var(--text-xl);
-  font-weight: 700;
-  color: var(--text);
-}
-.sp-feat__matchup {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  color: var(--text);
-}
-.sp-feat__stories li::before {
-  color: var(--text-faint);
-}
-.sp-feat__storylink {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-.sp-feat__storylink:hover {
-  color: var(--text);
-}
-/* /sports footer shares the .sp-next look with /today (Ben 2026-07-09 "similar look across the
-   bottom") but floats instead of bleeding: unlike /today's flush bar, this keeps a little
-   breathing room below the box (Ben 2026-07-09 "space the bottom again"). Pinned toward the base
-   (auto top) but inset by the card's own side + bottom padding, as a rounded block. */
-.sp-feat__next {
-  border-radius: 6px;
-}
-
 /* --------------------------------------------- /today Sports desk: main story + brief list */
 
 /* World-of-sport lead + briefs (Ben 2026-07-09: the Sports desk opens like the News desk — a main
@@ -806,9 +682,8 @@
   color: var(--text);
 }
 
-/* Goal-scorer lists beside the crests on finished games (Today ticker and Sports feature row). */
-.sp-tk__scorers,
-.sp-feat__scorers {
+/* Goal-scorer lists beside the crests on finished games (followed-team cards). */
+.sp-tk__scorers {
   font-size: var(--text-xs);
   line-height: var(--leading-snug);
 }

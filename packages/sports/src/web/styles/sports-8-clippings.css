@@ -8,6 +8,11 @@
    the crest; leagues and unmapped teams use the theme accent. Mixing in the text color
    softens loud brand reds and keeps near-black brand colors visible on the dark theme. */
 
+/* The /sports Followed strip renders the same team columns in a horizontal scroller, so the
+   card rules below match both .sp-tkgrid and .sp-ticker__scroll. The :is() keeps each rule's
+   specificity what it was for Today. Grid layout stays Today-only; the strip's own layout is
+   at the end of this file. */
+
 .jds-brief--sports .desk-cards__head {
   display: flex;
   align-items: baseline;
@@ -38,7 +43,7 @@
 
 /* Columns carry no side padding, so every column's content box is the same width. The
    dividing rules sit in the middle of the column gap instead. */
-.jds-brief--sports .sp-tkgrid .sp-tk {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk {
   position: relative;
   gap: 0;
   padding: 22px 0 20px;
@@ -79,53 +84,53 @@
 
 /* Identity line */
 
-.jds-brief--sports .sp-tkgrid .sp-tk__head {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__head {
   align-items: flex-start;
   gap: var(--space-3);
   margin-bottom: 18px;
   padding-bottom: 0;
   border-bottom: 0;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__mark {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__mark {
   flex: none;
   display: grid;
   place-items: center;
   padding-bottom: 5px;
   border-bottom: 3px solid color-mix(in srgb, var(--team-accent, var(--accent)) 82%, var(--text));
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__ident {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__ident {
   gap: 3px;
   padding-top: 2px;
 }
 /* The name column keeps at least 12rem. When the column is too narrow for that and the
    form pips, the pips wrap to their own line; the Live label wraps under a long name. */
-.jds-brief--sports .sp-tkgrid .sp-tk__head {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__head {
   flex-wrap: wrap;
   row-gap: var(--space-2);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__ident {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__ident {
   flex: 1 1 12rem;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__hd {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__hd {
   flex-wrap: wrap;
   row-gap: 4px;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__name {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__name {
   font-size: 16px;
   letter-spacing: -0.01em;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__standing {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__standing {
   font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 
 /* Story: wide photo, kicker, headline, secondary links */
 
-.jds-brief--sports .sp-tkgrid .sp-tk__body {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__body {
   display: block;
   min-height: 0;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__media {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__media {
   display: block;
   width: 100%;
   aspect-ratio: 5 / 2;
@@ -134,10 +139,10 @@
   border-radius: 0;
   filter: saturate(0.75);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__col {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__col {
   gap: 0;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__kicker {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__kicker {
   display: block;
   margin-bottom: 7px;
   font-size: 10px;
@@ -146,7 +151,7 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__newstx {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__newstx {
   font-family: var(--font-sans);
   font-size: 21px;
   font-weight: 700;
@@ -155,41 +160,41 @@
   -webkit-line-clamp: 4;
   text-wrap: pretty;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__newstx--empty {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__newstx--empty {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 400;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__stories {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__stories {
   gap: 6px;
   margin-top: var(--space-3);
   padding-top: 9px;
   border-top: 1px solid var(--border);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__stories li {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__stories li {
   padding-left: 0;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__stories li::before {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__stories li::before {
   content: none;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__storylink {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__storylink {
   font-size: var(--text-2xs);
   line-height: 1.45;
   color: var(--accent-fg);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__storylink:hover {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__storylink:hover {
   color: var(--text);
 }
 
 /* League recent results */
 
-.jds-brief--sports .sp-tkgrid .sp-tk__results {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__results {
   margin-top: 13px;
   padding-top: 9px;
   border-top: 1px solid var(--border);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__scoreshead,
-.jds-brief--sports .sp-tkgrid .sp-tk__nextlabel {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__scoreshead,
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__nextlabel {
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -199,17 +204,17 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__scores {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__scores {
   gap: 2px;
   margin: 0;
   padding: 0;
   border-top: 0;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__scoreline {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__scoreline {
   font-size: var(--text-2xs);
   font-weight: 400;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__scorechip {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__scorechip {
   font-size: 10px;
   color: var(--text-muted);
 }
@@ -218,29 +223,29 @@
 
 /* Pinned to the card base so every footer in a row lines up. Cards in a row share its height,
    and the body keeps the 18px minimum gap above the footer. */
-.jds-brief--sports .sp-tkgrid .sp-tk__body:has(+ .sp-tk__next) {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__body:has(+ .sp-tk__next) {
   margin-bottom: 18px;
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__next {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__next {
   display: block;
   margin: auto 0 0;
   padding: 12px 0 0;
   border-top: 1px solid var(--border);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__nextmain {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__nextmain {
   display: block;
   font-size: var(--text-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--accent-fg);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__nextwhen {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__nextwhen {
   display: block;
   margin-top: 3px;
   font-size: var(--text-2xs);
   color: var(--text-muted);
 }
-.jds-brief--sports .sp-tkgrid .sp-tk__result {
+:is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__result {
   justify-content: flex-start;
 }
 
@@ -293,4 +298,19 @@
   .jds-brief--sports .sp-tkgrid .sp-tk__next {
     margin-top: 15px;
   }
+}
+
+/* /sports Followed strip: an accent top rule and thin vertical rules between cards, as on
+   Today. The strip's sizing and docking live in sports-4-grid.css. */
+
+.sp-ticker__scroll {
+  border-top: 1px solid var(--accent);
+}
+.sp-ticker__scroll > .sp-tk + .sp-tk::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24px;
+  border-left: 1px solid var(--border);
 }
