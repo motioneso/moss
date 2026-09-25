@@ -2,13 +2,14 @@
 //
 // VP-P0 shared populated seed, driven by tests/fixtures/visual-parity/seed-manifest.json.
 // Tasks, meetings and events are created through the API; news and sports arrive
-// through the existing fixture seam; weather location is set by API, forecast live.
+// through the existing fixture seam; weather is fixed at the browser API boundary.
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { expect, type Page } from "@playwright/test";
+import type { GetWeatherTodayResponse } from "@moss/shared";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 
@@ -40,6 +41,41 @@ export function addDay(day: string): string {
   const d = new Date(`${day}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
+}
+export async function installParityWeatherFixture(
+  page: Page,
+  day: string
+): Promise<GetWeatherTodayResponse> {
+  let forecastDate = day;
+  const fixture: GetWeatherTodayResponse = {
+    data: {
+      temp: 66,
+      feelsLike: 64,
+      condition: "Overcast",
+      icon: "cloud",
+      location: "San Francisco",
+      unit: "imperial",
+      humidity: 61,
+      dewPoint: 54,
+      windSpeed: 8,
+      lat: 37.7749,
+      lon: -122.4194,
+      forecast: Array.from({ length: 5 }, () => {
+        forecastDate = addDay(forecastDate);
+        return { date: forecastDate, icon: "cloud", high: 68, low: 51 };
+      })
+    }
+  };
+  await page.route("**/api/weather/today", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(fixture)
+        })
+      : route.fallback()
+  );
+  return fixture;
 }
 export function localIso(day: string, time: string): string {
   const offset =

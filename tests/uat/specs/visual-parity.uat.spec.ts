@@ -4,12 +4,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, join as joinPath, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
+import type { GetWeatherTodayResponse } from "@moss/shared";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import {
   captureEntry,
   guardCapture,
   reportLine,
+  runWeatherReadinessChecks,
   waitForRoutePopulated,
   waitForStablePopulated,
   writeComparisonControls,
@@ -44,6 +46,7 @@ import {
   disableSeededCustomSources,
   driveState,
   forceChrome,
+  installParityWeatherFixture,
   json,
   localDay,
   localeTz,
@@ -163,11 +166,51 @@ async function signIn(page: Page): Promise<void> {
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
 }
-async function seedAll(
-  page: Page
-): Promise<{ day: string; timeZone: string; ids: Record<string, string> }> {
+async function assertWeatherPreflight(page: Page, fixture: GetWeatherTodayResponse): Promise<void> {
+  runWeatherReadinessChecks();
+  const weather = fixture.data;
+  if (weather === null) throw new Error("parity preflight: weather fixture has no data");
+  const firstForecastDay = weather.forecast[0];
+  if (!firstForecastDay) throw new Error("parity preflight: weather fixture has no forecast");
+  await expect(page.locator(".today-hero")).toHaveAttribute("data-mode", "day");
+  await expect(page.locator("#weather .wx-now strong")).toContainText(`${weather.temp}°`);
+  await expect(page.locator("#weather .wx-outlook strong")).toHaveText(weather.condition);
+  const outlook = `High ${firstForecastDay.high}° · Low ${firstForecastDay.low}°`;
+  await expect(page.locator("#weather .wx-outlook span")).toHaveText(outlook);
+  console.log(
+    `[parity-weather-preflight] rendered ${JSON.stringify({
+      temperature: `${weather.temp}°${weather.unit === "metric" ? "C" : "F"}`,
+      condition: weather.condition,
+      outlook
+    })}`
+  );
+}
+async function openTodayWithWeatherPreflight(
+  page: Page,
+  day: string,
+  weatherFixture: GetWeatherTodayResponse
+): Promise<void> {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname === "/api/weather/today",
+    { timeout: 10_000 }
+  );
+  await openToday(page, new Date(localIso(day, "08:00")));
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual(weatherFixture);
+  await assertWeatherPreflight(page, weatherFixture);
+}
+async function seedAll(page: Page): Promise<{
+  day: string;
+  timeZone: string;
+  ids: Record<string, string>;
+  weatherFixture: GetWeatherTodayResponse;
+}> {
   const m = manifest() as unknown as ParityManifest;
   const day = localDay();
+  const weatherFixture = await installParityWeatherFixture(page, day);
   await signIn(page);
   const timeZone = await localeTz(page);
   const accountId = await armCalendar(page);
@@ -225,7 +268,7 @@ async function seedAll(
     localIso(day, "20:00")
   );
   await setWeatherLocation(page, m.weather.location);
-  return { day, timeZone, ids };
+  return { day, timeZone, ids, weatherFixture };
 }
 async function assertFixtureSeam(page: Page, m: ParityManifest): Promise<void> {
   const news = await overview(page, "/api/news/overview", "topStories", 180000);
@@ -381,11 +424,11 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   }
   await forceChrome(page);
   const setupStartedAt = Date.now();
-  await seedAll(page);
+  const seed = await seedAll(page);
   const setupMs = Date.now() - setupStartedAt;
   const m = manifest() as unknown as ParityManifest;
   if (process.env.PARITY_GUARD_ONLY === "1") {
-    await openToday(page, new Date(localIso(localDay(), "08:00")));
+    await openTodayWithWeatherPreflight(page, seed.day, seed.weatherFixture);
     await populatedMorning(page, m);
     for (const guard of CASE_SELECTION.guards) {
       await page.goto(guard.path);
@@ -400,7 +443,7 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
     writeFileSync(join(OUT, "guard-report.md"), `# guard captures\n`);
     return;
   }
-  await openToday(page, new Date(localIso(localDay(), "08:00")));
+  await openTodayWithWeatherPreflight(page, seed.day, seed.weatherFixture);
   await populatedMorning(page, m);
   await assertFixtureSeam(page, m);
   await assertSportsSourceSeam(page);

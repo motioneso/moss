@@ -501,11 +501,9 @@ async function routeVisible(
 
 type WeatherSnapshot = {
   readonly elementPresent: boolean;
-  readonly locationText: string | null;
   readonly currentTemperatureText: string | null;
   readonly conditionText: string | null;
-  readonly tileCount: number;
-  readonly firstTile: { readonly label: string | null; readonly temperature: string | null } | null;
+  readonly outlookText: string | null;
   readonly unavailableLoadingText: string | null;
 };
 
@@ -516,23 +514,12 @@ async function weatherSnapshot(page: Page): Promise<WeatherSnapshot> {
       const value = root?.querySelector(selector)?.textContent?.replace(/\s+/g, " ").trim();
       return value ? value.slice(0, 180) : null;
     };
-    const tiles = root?.querySelectorAll(".jds-weather-chip__day") ?? [];
     const unavailable = root?.querySelector(".cmd-empty, .empty-state, .pane__loading");
     return {
       elementPresent: root !== null,
-      locationText: text(".jds-weather-chip__location"),
-      currentTemperatureText: text(".wx-row .jds-brief__title"),
-      conditionText: text(".wx-row > div > div:nth-child(2)"),
-      tileCount: tiles.length,
-      firstTile:
-        tiles.length > 0
-          ? {
-              label:
-                tiles[0]?.querySelector(".jds-weather-chip__label")?.textContent?.trim() || null,
-              temperature:
-                tiles[0]?.querySelector(".jds-weather-chip__temp")?.textContent?.trim() || null
-            }
-          : null,
+      currentTemperatureText: text(".wx-now strong"),
+      conditionText: text(".wx-outlook strong"),
+      outlookText: text(".wx-outlook span"),
       unavailableLoadingText:
         unavailable?.textContent?.replace(/\s+/g, " ").trim().slice(0, 180) ?? null
     };
@@ -553,14 +540,9 @@ function isWeatherPopulated(snapshot: WeatherSnapshot): boolean {
   const nonempty = (value: string | null): boolean => Boolean(value?.trim());
   return Boolean(
     snapshot.elementPresent &&
-    nonempty(snapshot.locationText) &&
     nonempty(snapshot.currentTemperatureText) &&
     nonempty(snapshot.conditionText) &&
-    Number.isInteger(snapshot.tileCount) &&
-    snapshot.tileCount > 0 &&
-    snapshot.firstTile !== null &&
-    nonempty(snapshot.firstTile.label) &&
-    nonempty(snapshot.firstTile.temperature) &&
+    nonempty(snapshot.outlookText) &&
     !nonempty(snapshot.unavailableLoadingText)
   );
 }
@@ -608,7 +590,7 @@ async function waitForWeather(
     } catch {
       // Diagnostics are best effort and must not replace the readiness result.
     }
-    matched.push(`weather tiles: ${await page.locator("#weather .jds-weather-chip__day").count()}`);
+    matched.push(`weather outlook: ${snapshot.outlookText}`);
   } catch (error) {
     try {
       await logWeatherSnapshot(page, route, "failure");
@@ -620,33 +602,27 @@ async function waitForWeather(
 }
 
 export function runWeatherReadinessChecks(): void {
-  const smoke3: WeatherSnapshot = {
+  const day: WeatherSnapshot = {
     elementPresent: true,
-    locationText: "San Francisco",
     currentTemperatureText: "66°F",
     conditionText: "Overcast",
-    tileCount: 5,
-    firstTile: { label: "Now", temperature: "66°" },
+    outlookText: "High 68° · Low 51°",
     unavailableLoadingText: null
   };
-  const alternative = { ...smoke3, locationText: "Tokyo", currentTemperatureText: "21°C" };
-  assert.equal(isWeatherPopulated(smoke3), true);
-  assert.equal(isWeatherPopulated(alternative), true);
+  const evening = { ...day, outlookText: "Overnight low 51°" };
+  const metric = { ...day, currentTemperatureText: "21°C" };
+  assert.equal(isWeatherPopulated(day), true);
+  assert.equal(isWeatherPopulated(evening), true);
+  assert.equal(isWeatherPopulated(metric), true);
   const reject = (label: string, patch: Partial<WeatherSnapshot>): void =>
-    assert.equal(isWeatherPopulated({ ...smoke3, ...patch }), false, label);
+    assert.equal(isWeatherPopulated({ ...day, ...patch }), false, label);
   reject("absent root", { elementPresent: false });
-  reject("missing location", { locationText: null });
-  reject("blank location", { locationText: "   " });
   reject("missing temperature", { currentTemperatureText: null });
   reject("blank temperature", { currentTemperatureText: "   " });
   reject("missing condition", { conditionText: null });
   reject("blank condition", { conditionText: "   " });
-  reject("zero tiles", { tileCount: 0 });
-  reject("absent first tile", { firstTile: null });
-  reject("missing tile label", { firstTile: { label: null, temperature: "66°" } });
-  reject("blank tile label", { firstTile: { label: "   ", temperature: "66°" } });
-  reject("missing tile temperature", { firstTile: { label: "Now", temperature: null } });
-  reject("blank tile temperature", { firstTile: { label: "Now", temperature: "   " } });
+  reject("missing outlook", { outlookText: null });
+  reject("blank outlook", { outlookText: "   " });
   reject("unavailable/loading text", { unavailableLoadingText: "Weather isn't available" });
 }
 
