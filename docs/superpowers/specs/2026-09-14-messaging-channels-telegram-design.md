@@ -129,16 +129,16 @@ Two existing packages change, each at one declared seam.
 
 ### 5.1 The pieces
 
-| Piece             | Where it runs             | What it does                                                                                                                               |
-| ----------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bot connection    | API, settings route       | Admin pastes the BotFather token. Moss verifies it with one call, stores it encrypted, shows "Connected as @name".                         |
-| Link codes        | API, settings route       | A signed-in user asks for a code. Moss stores its hash with the user id and a ten-minute expiry.                                           |
+| Piece             | Where it runs             | What it does                                                                                                                                                                                                            |
+| ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bot connection    | API, settings route       | Admin pastes the BotFather token. Moss verifies it with one call, stores it encrypted, shows "Connected as @name".                                                                                                      |
+| Link codes        | API, settings route       | A signed-in user asks for a code. Moss stores its hash with the user id and a ten-minute expiry.                                                                                                                        |
 | Receiver          | API process, one instance | Long-polls Telegram for new messages and button presses. Resolves each to a bound user or to "unknown", redeems link codes, answers strangers, and puts everything else on the inbound queue. Holds no assistant state. |
-| Inbound queue     | Postgres (pg-boss)        | One job per inbound message or button press. Carries ids only (5.4). The message text waits in an owner-only holding row until the handler takes it. |
-| Inbound handler   | API process               | Works the inbound queue. Runs the bound user's chat turn on the `telegram` surface, or resolves a button press, and sends the reply back.  |
-| Approval cards    | API process               | Renders a pending action request as a message with Approve and Deny buttons; a button press resolves it through the existing resolve path. |
-| Outbound delivery | Worker                    | A registered notification delivery target. Loads the notification inside the recipient's data context and sends it to each linked chat.    |
-| Settings screens  | Web                       | Admin connects the bot. Each user links and unlinks phones. Section 9.                                                                     |
+| Inbound queue     | Postgres (pg-boss)        | One job per inbound message or button press. Carries ids only (5.4). The message text waits in an owner-only holding row until the handler takes it.                                                                    |
+| Inbound handler   | API process               | Works the inbound queue. Runs the bound user's chat turn on the `telegram` surface, or resolves a button press, and sends the reply back.                                                                               |
+| Approval cards    | API process               | Renders a pending action request as a message with Approve and Deny buttons; a button press resolves it through the existing resolve path.                                                                              |
+| Outbound delivery | Worker                    | A registered notification delivery target. Loads the notification inside the recipient's data context and sends it to each linked chat.                                                                                 |
+| Settings screens  | Web                       | Admin connects the bot. Each user links and unlinks phones. Section 9.                                                                                                                                                  |
 
 ### 5.2 A Telegram chat is a chat surface
 
@@ -472,9 +472,9 @@ must not bake in things that are true of Telegram and false elsewhere.
 type ChannelPlatform = "telegram"; // the one list a second platform adds to
 
 interface ChannelCapabilities {
-  readonly maxTextLength: number;      // adapter splits at this; callers never do
-  readonly inlineButtons: boolean;     // false: approval cards fall back to "reply approve or deny"
-  readonly editSentMessage: boolean;   // false: state changes are sent as a new message
+  readonly maxTextLength: number; // adapter splits at this; callers never do
+  readonly inlineButtons: boolean; // false: approval cards fall back to "reply approve or deny"
+  readonly editSentMessage: boolean; // false: state changes are sent as a new message
 }
 
 interface ChannelAdapter {
