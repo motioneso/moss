@@ -281,6 +281,36 @@ existing approvals; it does not approve a new data contract or degraded-state de
 All agents implementing product code must use **gpt-6-luna, xhigh reasoning**,
 per Ben's instruction. Astra owns synthesis; independent agents review and prove.
 
+### Ben decides whether existing components and features stay, change or go
+
+This gate applies during **both planning and implementation**. Whenever an agent
+must decide whether to keep, alter or remove an existing component or feature,
+pause dependent work and ask Ben through `needs-ben` with screenshots. An agent's
+recommendation or interpretation of a mockup is not approval for that decision.
+Independent work may continue while the decision is pending.
+
+Prepare a side-by-side sheet showing the current-head populated component and
+its approved mockup or proposed state, with at most four screens per sheet. Use
+the design room’s `workspace/tools/screen_check.py` without `--send` when a custom decision
+caption is needed, or an equivalent existing comparison tool. Name the component,
+the specific keep/change/remove options, the recommendation and its effect on
+behavior. Send the concrete decision through:
+
+```sh
+needs-ben --image <sheet> <agent-name> "<specific keep/change/remove options and recommendation>"
+```
+
+Add an entry to the project's `AWAITING-BEN` file when present, watch
+`~/.needs-ben/replies/`, and record Ben's ruling on #2521 or its task record before
+resuming dependent implementation. No reply is not approval. Keep the screenshot
+and ruling linked in the task's evidence. This supplements final visual acceptance
+and applies to decisions in every lane below, including proposed removals of
+repeated reader content and changes to capacity controls. Initial decision sheets
+cover the full weather row versus compact hero weather; repeated summary/plan/action
+lists versus report sections; and three capacity choices versus the study's two.
+Show any lost behavior before recommending a replacement. The approved mockup
+informs these decisions; it does not bypass this explicit keep/change/remove gate.
+
 ### Later approved authority: VP-SCREENS-R1
 
 Ben approved VP-SCREENS-R1 on September 23, after VP-PLAN-R2. Its authoritative
@@ -337,11 +367,13 @@ archived flow captures remain private unless specifically needed and vetted.
 | `evening-plan.js`, `evening-plan.css`                                                                             | `evening-planning*.tsx`, `evening-mode.tsx`, `kit-evening-planning.css`: shared frame, two capacity choices, review/saved details and morning handoff.                                                                      |
 
 Current components already port much of the chrome: preserve matching code and
-reuse only missing or incorrect portions. Study tokens are local design values;
+reuse candidate missing or incorrect portions after any required Ben decision.
+Study tokens are local design values;
 map them to existing production tokens. Study checks describe interactions but
 do not replace real-app checks: fixed replies and global in-tab state are demonstrations.
 In particular, `morningRead()` supplies the editorial report while
-`morningSnapshot()` supplies only its supporting schedule. Port that separation.
+`morningSnapshot()` supplies only its supporting schedule. Use that separation
+in the proposed reader decision sheet, then implement Ben's recorded ruling.
 Adapt compatible `check-morning.cjs` assertions for responsive overflow/footer,
 materials/source detail, conflicts, save retry, focus restoration and section links.
 
@@ -375,13 +407,13 @@ After the transition fix, dispatch these bounded lanes where files do not overla
 Each dispatch declares files, state/capture names, guards and one stop condition.
 The coordinator owns shared-file integration; builders never overwrite another lane.
 
-| Existing task                                 | Remaining work and acceptance                                                                                                                                                                                                                                          | Order / ownership                                                                                                                            |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `screen-morning-today`                        | Compare and correct the whole morning page, especially compact weather placement and hero hierarchy; exercise section links, Meds and timeline actions. Own all 8 morning Today references.                                                                            | Parallel with reader/evening; Today hero, page presentation and Today styles. Serialize any `today-page.tsx` edit behind the popup fix.      |
-| `screen-morning-reader`                       | Make Read an operational report: priority, overnight changes, preparation/follow-up/travel, editorial sections; schedule supports it. Remove repeated dashboard lists. Preparation opens inside the reader with return. Own 6 Read references and shared dialog frame. | Parallel with Today/evening body work; reader components/styles, shared dialog. Inventory existing report data and preview capability first. |
-| `screen-review`                               | Reconcile merged Review against 5 references; preserve accept-all, partial acceptance, explicit unscheduling, conflicts, failed-save retry and focus.                                                                                                                  | Audit/tests may parallelize; shared-frame-dependent capture and design acceptance follow reader merge. Review-only components/styles.        |
-| `p8-commitments`, then `screen-evening-steps` | Verify step 2's merged state and 2 references; correct capacity from 3 choices to the approved 2 without changing saved-plan meaning; finish steps 3/4 and changed review, 5 references. Preserve selections across Back/Next.                                         | Evening owner; steps follow verified step-2 readiness. Shared evening stylesheet has one owner.                                              |
-| `screen-evening-finish`                       | Restore saved rail details, including existing blocks and “not on calendar”; phone “New this morning”; make both evening hero links work. Verify save-once, reload and morning handoff. Own 4 references.                                                              | After evening steps and morning Today integrate; same evening owner or explicit handoff.                                                     |
+| Existing task                                 | Remaining work and acceptance                                                                                                                                                                                                                                                                                                    | Order / ownership                                                                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `screen-morning-today`                        | Compare the whole morning page; present the weather-row/compact-hero decision before replacing the current component, then implement the ruling; exercise section links, Meds and timeline actions. Own all 8 morning Today references.                                                                                          | Parallel with reader/evening; Today hero, page presentation and Today styles. Serialize any `today-page.tsx` edit behind the popup fix.      |
+| `screen-morning-reader`                       | Make Read an operational report: priority, overnight changes, preparation/follow-up/travel, editorial sections; schedule supports it. Present repeated dashboard lists as keep/change/remove candidates; implement Ben's ruling. Preparation opens inside the reader with return. Own 6 Read references and shared dialog frame. | Parallel with Today/evening body work; reader components/styles, shared dialog. Inventory existing report data and preview capability first. |
+| `screen-review`                               | Reconcile merged Review against 5 references; preserve accept-all, partial acceptance, explicit unscheduling, conflicts, failed-save retry and focus.                                                                                                                                                                            | Audit/tests may parallelize; shared-frame-dependent capture and design acceptance follow reader merge. Review-only components/styles.        |
+| `p8-commitments`, then `screen-evening-steps` | Verify step 2's merged state and 2 references; present the 3-versus-2 capacity choices for Ben's ruling, explaining any lost behavior, then implement the decision; finish steps 3/4 and changed review, 5 references. Preserve selections across Back/Next.                                                                     | Evening owner; steps follow verified step-2 readiness. Shared evening stylesheet has one owner.                                              |
+| `screen-evening-finish`                       | Restore saved rail details, including existing blocks and “not on calendar”; phone “New this morning”; make both evening hero links work. Verify save-once, reload and morning handoff. Own 4 references.                                                                                                                        | After evening steps and morning Today integrate; same evening owner or explicit handoff.                                                     |
 
 Reader scope boundary: Today and Read currently reuse `summaryText`; the approved
 reader task barred DTO/writer changes. First reuse persisted briefing evidence,
