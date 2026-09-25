@@ -42,6 +42,20 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Restored standalone CommonJS preview checks use Node and Playwright browser globals.
+    files: [".superpowers/brainstorm/today-briefings-20260909/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        ...globals.node,
+        ...globals.browser
+      }
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off"
+    }
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: {
