@@ -261,7 +261,7 @@
 /* Hover/focus result popup on a form pip (Ben 2026-07-09 /today follow-cards: "add the result of
    the last match when the user hovers over the L or W… a nice little stylized pop-up"). It opens
    INWARD — down from the pip and anchored to the pip's right edge so it grows leftward — because
-   both host cards (.sp-tk, .sp-feat) clip with overflow:hidden and the pip row is right-aligned;
+   the host card (.sp-tk) can clip with overflow:hidden and the pip row is right-aligned;
    an outward popup would be sheared off at the card edge. */
 .sp-formpip--pop {
   position: relative;

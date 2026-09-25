@@ -56,14 +56,7 @@ interface Rect {
   width: number;
   height: number;
 }
-const DISPLAY_TEXT = [
-  ".nw-twlead__title",
-  ".nw-twlist__title",
-  ".desk-title",
-  ".sp-feat__name",
-  ".sp-feat__lead",
-  ".sp-tk__name"
-];
+const DISPLAY_TEXT = [".nw-twlead__title", ".nw-twlist__title", ".desk-title", ".sp-tk__name"];
 function centerCrop(png: PNG, w: number, h: number): PNG {
   const out = new PNG({ width: w, height: h });
   const dx = Math.max(0, Math.floor((png.width - w) / 2));

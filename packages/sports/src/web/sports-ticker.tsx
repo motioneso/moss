@@ -260,7 +260,7 @@ export function SportsTicker(props: {
           aria-label="Followed teams"
         >
           {ordered.map((card) => (
-            <FeaturedTeamCard
+            <TickerTeam
               key={`${card.competitionKey}:${card.teamKey}`}
               card={card}
               hiddenStoryRefs={props.hiddenStoryRefs}
@@ -283,215 +283,12 @@ export function SportsTicker(props: {
   );
 }
 
-// Desk-strip card (mrb7mwhv): the /sports followed strip deliberately diverges from the
-// compact /today widget. Ben wanted far more room per team — "not so compact and busy" — and
-// the strip to lead the page, so this is the roomy, image-forward variant: a wide lead-story
-// banner, a team name at display size, and generous spacing. /today keeps the dense
-// TickerTeam below. The team-semantics helpers (standingIsSane, NextGameContent, Crest/FormPips)
-// are shared so the two layouts can't drift on what a team's status/standing means.
-function FeaturedTeamCard(props: {
-  card: FollowedTeamCard;
-  hiddenStoryRefs?: ReadonlySet<string>;
-  onStoryChanged?: StoryFeedbackChange;
-  surface?: "sports" | "today";
-}) {
-  const { card, surface = "sports" } = props;
-  // Body slot rule (#963 supersedes the live half of mrawrk0e): pre-game/idle AND live cards
-  // lead with news — a live game's score lives in the footer strip now, not the body — while
-  // a finished game still leads with its result.
-  const showNews =
-    card.status === "news" ||
-    card.status === "live" ||
-    (card.status === "today" && card.todayGameState !== "final");
-  const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
-  const lead = stories[0] ?? null;
-  // The footer bar renders for an upcoming fixture OR a live game (#963). A card with no
-  // footer at all spends that space on one more headline instead of leaving a gap (Ben
-  // 2026-07-09 /sports: "for teams/leagues not active and without the next game bar, add
-  // another story headline"). Footer-bearing cards keep the tighter two-link cap.
-  const hasFooterBar = card.status === "live" || Boolean(card.nextMatch);
-  const storyCap = hasFooterBar ? 2 : 3;
-  // A score card never spent stories[0] on its headline, so its link list starts at 0; a news
-  // card already showed stories[0] as the headline, so its list starts at 1. Cap governed by
-  // hasNextBar above — air, not a wall of headlines (mrb7mwhv).
-  const secondary = showNews ? stories.slice(1, 1 + storyCap) : stories.slice(0, storyCap);
-  const isScore = !showNews && /\d/.test(card.primary);
-
-  return (
-    <article className="sp-feat">
-      {/* Lead-story art is the banner even on score cards — it fills the new width and gives the
-          strip the image-forward, editorial feel Ben referenced. Crest plate is the artless
-          fallback. alt="" — the headline/name beside it already names the content. The status
-          flag overlays the banner's top-left the way a broadcast bug sits on a video frame. */}
-      <div className="sp-feat__banner">
-        {lead?.imageUrl ? (
-          <img className="sp-feat__img" src={lead.imageUrl} alt="" loading="lazy" />
-        ) : (
-          <span className="sp-feat__plate">
-            <Crest name={card.name} crestUrl={card.crestUrl} size="lg" />
-          </span>
-        )}
-        {card.status === "live" ? (
-          <span className="sp-feat__flag sp-feat__flag--live">
-            <LiveDot />
-            Live
-          </span>
-        ) : card.status === "today" ? (
-          <span className="sp-feat__flag sp-feat__flag--today">Today</span>
-        ) : null}
-      </div>
-      <div className="sp-feat__body">
-        <div className="sp-feat__idn">
-          <Crest name={card.name} crestUrl={card.crestUrl} size="sm" />
-          <h3 className="sp-feat__name">{card.name}</h3>
-        </div>
-        {/* Always render the sub row — even when a team has no standing OR form — so its fixed
-            height is reserved on every card and the news/lead below lines up across the four-up
-            strip regardless of league (Ben 2026-07-08 /sports annotation #2: "reserve this space
-            for all teams/leagues so the news sections line up, even if there's nothing to draw
-            from"). The standing chip and form pips stay conditional INSIDE the reserved row. */}
-        <div className="sp-feat__sub">
-          {standingIsSane(card) ? <span className="sp-feat__standing">{card.standing}</span> : null}
-          <FormPips form={card.form} detail={card.formDetail} />
-        </div>
-        {/* Headline slot: a live/final score reads as the lede in tabular figures; otherwise the
-            lead story headline carries it, set in the display face. */}
-        {showNews ? (
-          lead ? (
-            <div className="sp-feat__leadwrap sp-fbhost">
-              <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
-                {lead.title}
-                {lead.publisherDomain === "espn.com" || !lead.publisherLabel
-                  ? null
-                  : ` · ${lead.publisherLabel}`}
-              </a>
-              {surface !== "sports" ? (
-                <StoryFeedbackMenu
-                  storyRef={lead.storyRef}
-                  surface={surface}
-                  onChanged={props.onStoryChanged ?? (() => undefined)}
-                />
-              ) : null}
-            </div>
-          ) : (
-            // Storyless pre-game/idle card: an honest placeholder, NEVER the matchup — the Next
-            // footer already carries the fixture, so echoing card.primary here is the duplication
-            // mrawrk0e forbids (the else-branch used to leak it, contradicting this card's own
-            // "news-or-score, never matchup" rule). Mirrors TickerTeam's "No recent news" so the
-            // /sports strip and the /today widget stay in lockstep (top-area feedback 2026-07-07).
-            <span className="sp-feat__lead sp-feat__lead--empty">No recent news</span>
-          )
-        ) : card.resultMatch ? (
-          // Finished game: home team's crest on the left, away team's crest on the right, score
-          // in the middle (Ben: "home to the left"), with each team's goal scorers (soccer and
-          // hockey only — null for every other sport) sitting on that team's outer side. The
-          // crest still carries the opponent's identity visually; the sr-only line keeps both
-          // team names reachable for screen readers.
-          (() => {
-            const rm = card.resultMatch;
-            const home =
-              rm.homeAway === "home"
-                ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
-                : {
-                    name: rm.opponentName,
-                    crestUrl: rm.opponentCrestUrl,
-                    scorers: rm.opponentScorers
-                  };
-            const away =
-              rm.homeAway === "away"
-                ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
-                : {
-                    name: rm.opponentName,
-                    crestUrl: rm.opponentCrestUrl,
-                    scorers: rm.opponentScorers
-                  };
-            // #2253: reserve the space on BOTH outer sides whenever either team has scorer data,
-            // so a one-sided list (or hockey's frequent single-team gap) doesn't pull the crests
-            // off center — but render neither, as before, on the far more common game with no
-            // scorer data at all.
-            const hasScorers = Boolean(home.scorers || away.scorers);
-            return (
-              <div className="sp-feat__result">
-                {hasScorers ? (
-                  <ul className="sp-feat__scorers sp-feat__scorers--home">
-                    {(home.scorers ?? []).map((s) => (
-                      <li key={s}>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
-                <p className="sp-feat__score">{`${rm.homeScore}–${rm.awayScore}`}</p>
-                <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
-                {hasScorers ? (
-                  <ul className="sp-feat__scorers sp-feat__scorers--away">
-                    {(away.scorers ?? []).map((s) => (
-                      <li key={s}>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <span className="sp-sronly">
-                  {home.name} vs {away.name}, {resultWord(rm.resultLabel)}
-                </span>
-              </div>
-            );
-          })()
-        ) : (
-          <p className={isScore ? "sp-feat__score" : "sp-feat__matchup"}>
-            {card.primary.replace(/\s*·\s*Scheduled$/i, "")}
-          </p>
-        )}
-        {secondary.length > 0 ? (
-          <ul className="sp-feat__stories">
-            {secondary.map((story) => (
-              <li className="sp-fbhost" key={story.storyRef}>
-                <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
-                  {story.title}
-                  {story.publisherDomain === "espn.com" || !story.publisherLabel
-                    ? null
-                    : ` · ${story.publisherLabel}`}
-                </a>
-                {surface !== "sports" ? (
-                  <StoryFeedbackMenu
-                    storyRef={story.storyRef}
-                    surface={surface}
-                    onChanged={props.onStoryChanged ?? (() => undefined)}
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {/* Footer strip (#963): a live game shows its current score here — the same dark
-            .sp-next bar the next fixture uses (shared with /today, Ben 2026-07-09), so the
-            strip is the one place a live card differs from its neighbors. Otherwise the
-            upcoming fixture renders as before; no footer when there is neither. */}
-        {card.status === "live" ? (
-          <div className="sp-feat__next sp-next">
-            <LiveNowContent scoreText={card.primary} />
-          </div>
-        ) : card.nextMatch ? (
-          <div className="sp-feat__next sp-next">
-            <NextGameContent next={card.nextMatch} />
-          </div>
-        ) : null}
-      </div>
-    </article>
-  );
-}
-
-// Exported for the Today widget (mrb4mhxt): one card component for both surfaces, so every
-// desk-page refinement (thumbnails, cut status pills, standing+form in the identity block)
-// shows up on /today for free instead of drifting in a parallel FollowedCard copy.
+// Followed-team card for both the Today sports desk and the /sports Followed strip, so the two
+// surfaces cannot drift. Anatomy: crest + name over standing with form pips right; a wide lead
+// photo, source kicker and headline; secondary links; then the next game or the live score,
+// docked to the card base. Both surfaces style it from sports-8-clippings.css.
 //
-// Layout follows Ben's "Minimalist Sports Card V3" mockup (2026-07-09): header row = crest +
-// (name over standing) with form pips right-aligned; body = lead-story art as a left media
-// column with the headline + bulleted secondary links beside it; footer = full-width inverted
-// "Next game" bar. Supersedes the mrawlzb7 standing/form sub-row and the mra5xnt2 40px inline
-// thumb. Never-red form pips and the news-or-score primary-slot rule (mrawrk0e) are unchanged.
+// The /sports strip hides the story feedback menu (#2074); Today keeps it.
 export function TickerTeam(props: {
   card: FollowedTeamCard;
   hiddenStoryRefs?: ReadonlySet<string>;
@@ -499,12 +296,13 @@ export function TickerTeam(props: {
   surface?: "sports" | "today";
 }) {
   const { card, surface = "sports" } = props;
+  const showFeedback = surface !== "sports";
   // Pre-game today cards drop the matchup line (the Next footer already names the fixture,
   // mrawrk0e) — but blanking the whole primary slot left those cards a hollow void next to
   // their news-status neighbors (top-area feedback 2026-07-07). Only the matchup text was
   // redundant; fill the slot with news instead so every non-score card shares one anatomy.
   // #963 extends that to live: the in-progress score moved to the footer strip, so the live
-  // body shows news too — same rule as FeaturedTeamCard, both surfaces in lockstep.
+  // body shows news too.
   const showNews =
     card.status === "news" ||
     card.status === "live" ||
@@ -515,8 +313,7 @@ export function TickerTeam(props: {
   const [failedImage, setFailedImage] = useState<string | null>(null);
   const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
   const lead = stories[0] ?? null;
-  // Same slicing rule as FeaturedTeamCard: a news card spent stories[0] on its headline so
-  // bullets start at 1; a score/result card never did, so its freshest story leads the bullets
+  // A news card spent stories[0] on its headline so bullets start at 1; a score/result card never did, so its freshest story leads the bullets
   // (the old flat slice(1) silently dropped it on score cards). Two bullets max — the V3
   // mockup's card is air, not a wall of links.
   const secondary = showNews ? stories.slice(1, 3) : stories.slice(0, 2);
@@ -562,11 +359,13 @@ export function TickerTeam(props: {
                 <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                   {lead.title}
                 </a>
-                <StoryFeedbackMenu
-                  storyRef={lead.storyRef}
-                  surface={surface}
-                  onChanged={props.onStoryChanged ?? (() => undefined)}
-                />
+                {showFeedback ? (
+                  <StoryFeedbackMenu
+                    storyRef={lead.storyRef}
+                    surface={surface}
+                    onChanged={props.onStoryChanged ?? (() => undefined)}
+                  />
+                ) : null}
               </div>
             ) : (
               <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
@@ -574,10 +373,9 @@ export function TickerTeam(props: {
           ) : card.resultMatch ? (
             // Finished game: home team's crest on the left, away team's crest on the right, score
             // in the middle (Ben: "home to the left"), with each team's goal scorers (soccer and
-            // hockey only — null for every other sport) sitting on that team's outer side. Same
-            // treatment as FeaturedTeamCard on /sports (#867, #885). The crest still carries the
-            // opponent's identity visually; the sr-only line keeps both team names reachable for
-            // screen readers.
+            // hockey only — null for every other sport) sitting on that team's outer side
+            // (#867, #885). The crest still carries the opponent's identity visually; the
+            // sr-only line keeps both team names reachable for screen readers.
             (() => {
               const rm = card.resultMatch;
               const home =
@@ -596,9 +394,9 @@ export function TickerTeam(props: {
                       crestUrl: rm.opponentCrestUrl,
                       scorers: rm.opponentScorers
                     };
-              // #2253: same fix as FeaturedTeamCard above — reserve both outer slots whenever
-              // either side has scorer data, so a one-sided list doesn't drag the crests off
-              // center; render neither when the game has no scorer data at all.
+              // #2253: reserve both outer slots whenever either side has scorer data, so a
+              // one-sided list doesn't drag the crests off center; render neither when the game
+              // has no scorer data at all.
               const hasScorers = Boolean(home.scorers || away.scorers);
               return (
                 <div className="sp-tk__result">
@@ -648,11 +446,13 @@ export function TickerTeam(props: {
                       ? null
                       : ` · ${story.publisherLabel}`}
                   </a>
-                  <StoryFeedbackMenu
-                    storyRef={story.storyRef}
-                    surface={surface}
-                    onChanged={props.onStoryChanged ?? (() => undefined)}
-                  />
+                  {showFeedback ? (
+                    <StoryFeedbackMenu
+                      storyRef={story.storyRef}
+                      surface={surface}
+                      onChanged={props.onStoryChanged ?? (() => undefined)}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -660,7 +460,7 @@ export function TickerTeam(props: {
         </div>
       </div>
       {/* Footer: a live game shows its current score (#963); otherwise the next fixture as a
-          labelled text line. /sports keeps its crest footer bar. */}
+          labelled text line. */}
       {card.status === "live" ? (
         <div className="sp-tk__next sp-tk__next--live">
           <span className="sp-tk__nextlabel">
@@ -813,7 +613,7 @@ function StoryKicker(props: { story: FollowedTeamNews; fallback: string }) {
   return label ? <span className="sp-tk__kicker">{label}</span> : null;
 }
 
-// /today next-fixture footer: a "Next game" label over the opponent line, kickoff beneath.
+// Next-fixture footer: a "Next game" label over the opponent line, kickoff beneath.
 // Games later today read "Today · 6:45 PM" (mrawhf6q); the local-day rule is nextMatchIsToday.
 function NextGameLine(props: { next: FollowedNextMatch }) {
   const locale = useUserLocale();
@@ -827,64 +627,5 @@ function NextGameLine(props: { next: FollowedNextMatch }) {
         {isToday ? `Today · ${formatTime(props.next.startsAt, locale)}` : when}
       </span>
     </div>
-  );
-}
-
-// Live-score footer content for BOTH surfaces (#963): while a game is in progress, the strip
-// that normally carries the next fixture carries the current score instead — same dark
-// .sp-next bar, so live and upcoming read as one system across the card bases. Composition
-// mirrors NextGameContent: status token on the left (where the venue token sits), score
-// floated right in the kickoff slot. scoreText is card.primary — the server already writes
-// scoreLine(game) there for a live game, so no new data crosses the contract.
-function LiveNowContent(props: { scoreText: string }) {
-  return (
-    <>
-      <span className="sp-next__livetag">
-        <LiveDot />
-        Live
-      </span>
-      <span className="sp-next__when sp-next__score">{props.scoreText}</span>
-    </>
-  );
-}
-
-// Shared next-game footer content for BOTH surfaces — /today and /sports render it identically
-// so the two pages read as siblings across the bottom (Ben 2026-07-09). Composition (Ben
-// 2026-07-09 "change the bottom bar again"): venue token + opponent crest hug the LEFT, the
-// date/time floats to the RIGHT (space-between via .sp-next__when margin-left:auto). The old
-// bold "Next game:" label is gone — the bar's position under the card already says "next game".
-//
-// The crest carries the opponent identity visually (mrawvc48, supersedes the visible "vs Green
-// Bay Packers" line from mra387k7), so the name is sr-only: sighted users see logo + kickoff,
-// screen readers still hear "vs Green Bay Packers". For a game later today the date is dead
-// weight — "Today · 6:45 PM" reads faster than "Tue, Jul 7" (mrawhf6q).
-//
-// nextMatchIsToday is computed here from the fixture instant + persisted locale (not a prop):
-// card.status is ESPN-Eastern and stayed "today" after a game went final, so the footer kept
-// reading "Today" for a fixture that had already rolled to tomorrow (#877 finding 1). Keeping
-// the derivation in one component means only one place can get the local-day rule wrong.
-function NextGameContent(props: { next: FollowedNextMatch }) {
-  const locale = useUserLocale();
-  const { opponent, when } = nextMatchParts(props.next, locale);
-  const isToday = nextMatchIsToday(props.next, locale);
-  // Venue now reads from the "vs"/"@" token instead of a home/away color — one dark bar for all
-  // next matches (Ben 2026-07-09: dropped the color-coding as too much). aria-hidden because the
-  // sr-only opponent below already carries "vs"/"at <team>" for assistive tech.
-  const venue = props.next.homeAway === "home" ? "vs" : "@";
-  return (
-    <>
-      <span className="sp-next__venue" aria-hidden="true">
-        {venue}
-      </span>
-      <Crest
-        name={props.next.opponentName}
-        crestUrl={props.next.opponentCrestUrl ?? null}
-        size="sm"
-      />
-      <span className="sp-next__when">
-        <span className="sp-sronly">{opponent}</span>
-        {isToday ? `Today · ${formatTime(props.next.startsAt, locale)}` : when}
-      </span>
-    </>
   );
 }
