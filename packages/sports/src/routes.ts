@@ -22,6 +22,7 @@ import {
   sportsStandingsPreferencesResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
+  type SportsStandingsLastViewed,
   updateSportsSourceAssignmentsSchema,
   updateSportsEspnCoverageSchema,
   updateSportsStandingsPreferencesSchema,
@@ -58,27 +59,96 @@ import { SportsSourceRequestError, SportsSourceService } from "./source/service.
 
 type SportsSourcePreviewStore = ReturnType<typeof createSportsPreviewStore>;
 const STANDINGS_PREFERENCES_KEY = "sports.standings_competition_keys";
+// #2661: the last competition (and inner view) the viewer opened in the standings picker. Kept
+// under its own key so saving one preference never overwrites the other.
+const STANDINGS_LAST_VIEWED_KEY = "sports.standings_last_viewed";
 
-function parseStandingsPreferences(body: unknown): readonly string[] {
+interface ParsedStandingsPreferences {
+  readonly selectedCompetitionKeys?: readonly string[];
+  readonly lastViewed?: SportsStandingsLastViewed | null;
+}
+
+function parseStandingsPreferences(body: unknown): ParsedStandingsPreferences {
   if (
     body === null ||
     typeof body !== "object" ||
     Array.isArray(body) ||
-    Object.keys(body).length !== 1 ||
-    !("selectedCompetitionKeys" in body)
+    Object.keys(body).length === 0
   ) {
     throw new HttpError(400, "Invalid standings preferences");
   }
-  const keys = body.selectedCompetitionKeys;
-  if (
-    !Array.isArray(keys) ||
-    keys.length > 64 ||
-    keys.some((key) => typeof key !== "string") ||
-    new Set(keys).size !== keys.length
-  ) {
-    throw new HttpError(400, "Invalid standings competition keys");
+  const record = body as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (key !== "selectedCompetitionKeys" && key !== "lastViewed") {
+      throw new HttpError(400, "Invalid standings preferences");
+    }
   }
-  return keys as readonly string[];
+  const result: {
+    selectedCompetitionKeys?: readonly string[];
+    lastViewed?: SportsStandingsLastViewed | null;
+  } = {};
+  if ("selectedCompetitionKeys" in record) {
+    const keys = record.selectedCompetitionKeys;
+    if (
+      !Array.isArray(keys) ||
+      keys.length > 64 ||
+      keys.some((key) => typeof key !== "string") ||
+      new Set(keys).size !== keys.length
+    ) {
+      throw new HttpError(400, "Invalid standings competition keys");
+    }
+    result.selectedCompetitionKeys = keys as readonly string[];
+  }
+  if ("lastViewed" in record) {
+    result.lastViewed = parseLastViewed(record.lastViewed);
+  }
+  return result;
+}
+
+function parseLastViewed(value: unknown): SportsStandingsLastViewed | null {
+  if (value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpError(400, "Invalid last-viewed standings");
+  }
+  const record = value as Record<string, unknown>;
+  const allowed = new Set(["competitionKey", "viewKey", "viewLabel"]);
+  if (Object.keys(record).some((key) => !allowed.has(key))) {
+    throw new HttpError(400, "Invalid last-viewed standings");
+  }
+  const competitionKey = record.competitionKey;
+  if (typeof competitionKey !== "string" || competitionKey.length === 0) {
+    throw new HttpError(400, "Invalid last-viewed standings competition");
+  }
+  const readNullableString = (candidate: unknown, max: number): string | null => {
+    if (candidate === undefined || candidate === null) return null;
+    if (typeof candidate !== "string" || candidate.length > max) {
+      throw new HttpError(400, "Invalid last-viewed standings view");
+    }
+    return candidate;
+  };
+  return {
+    competitionKey,
+    viewKey: readNullableString(record.viewKey, 100),
+    viewLabel: readNullableString(record.viewLabel, 200)
+  };
+}
+
+// Stored shape read back from preferences: anything unexpected (a retired key, a bad shape) is
+// treated as "never picked" rather than failing the whole read.
+function storedLastViewed(value: unknown): SportsStandingsLastViewed | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const competitionKey = record.competitionKey;
+  if (typeof competitionKey !== "string" || catalogEntry(competitionKey) === undefined) return null;
+  const viewKey = typeof record.viewKey === "string" ? record.viewKey : null;
+  const viewLabel = typeof record.viewLabel === "string" ? record.viewLabel : null;
+  return { competitionKey, viewKey, viewLabel };
+}
+
+function orderedSelectedKeys(stored: unknown): string[] | null {
+  if (!Array.isArray(stored)) return null;
+  const selected = new Set(stored.filter((key): key is string => typeof key === "string"));
+  return SPORTS_CATALOG.map((entry) => entry.competitionKey).filter((key) => selected.has(key));
 }
 
 export interface SportsRoutesDependencies {
@@ -170,15 +240,17 @@ export function registerSportsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const stored = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          preferencesRepository.get(db, STANDINGS_PREFERENCES_KEY)
+        const [stored, storedView] = await dependencies.dataContext.withDataContext(
+          accessContext,
+          (db) =>
+            Promise.all([
+              preferencesRepository.get(db, STANDINGS_PREFERENCES_KEY),
+              preferencesRepository.get(db, STANDINGS_LAST_VIEWED_KEY)
+            ])
         );
-        if (!Array.isArray(stored)) return { selectedCompetitionKeys: null };
-        const selected = new Set(stored.filter((key): key is string => typeof key === "string"));
         return {
-          selectedCompetitionKeys: SPORTS_CATALOG.map((entry) => entry.competitionKey).filter(
-            (key) => selected.has(key)
-          )
+          selectedCompetitionKeys: orderedSelectedKeys(stored),
+          lastViewed: storedLastViewed(storedView)
         };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -193,17 +265,42 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = parseStandingsPreferences(request.body);
-        const requested = new Set(input);
-        if (input.some((key) => !catalogEntry(key))) {
+        if (input.selectedCompetitionKeys?.some((key) => !catalogEntry(key))) {
           throw new HttpError(400, "Standings preferences contain an unknown competition");
         }
-        const selectedCompetitionKeys = SPORTS_CATALOG.map((entry) => entry.competitionKey).filter(
-          (key) => requested.has(key)
-        );
-        await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          preferencesRepository.upsert(db, STANDINGS_PREFERENCES_KEY, selectedCompetitionKeys)
-        );
-        return { selectedCompetitionKeys };
+        if (input.lastViewed && !catalogEntry(input.lastViewed.competitionKey)) {
+          throw new HttpError(400, "Last-viewed standings contain an unknown competition");
+        }
+        return await dependencies.dataContext.withDataContext(accessContext, async (db) => {
+          if (input.selectedCompetitionKeys !== undefined) {
+            const requested = new Set(input.selectedCompetitionKeys);
+            const selectedCompetitionKeys = SPORTS_CATALOG.map(
+              (entry) => entry.competitionKey
+            ).filter((key) => requested.has(key));
+            await preferencesRepository.upsert(
+              db,
+              STANDINGS_PREFERENCES_KEY,
+              selectedCompetitionKeys
+            );
+          }
+          if ("lastViewed" in input) {
+            // A null value is stored as null rather than removed: the row keeps its place and the
+            // read path already treats a non-object as "never picked".
+            await preferencesRepository.upsert(
+              db,
+              STANDINGS_LAST_VIEWED_KEY,
+              input.lastViewed ?? null
+            );
+          }
+          const [stored, storedView] = await Promise.all([
+            preferencesRepository.get(db, STANDINGS_PREFERENCES_KEY),
+            preferencesRepository.get(db, STANDINGS_LAST_VIEWED_KEY)
+          ]);
+          return {
+            selectedCompetitionKeys: orderedSelectedKeys(stored),
+            lastViewed: storedLastViewed(storedView)
+          };
+        });
       } catch (error) {
         return handleRouteError(error, reply);
       }

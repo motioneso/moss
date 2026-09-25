@@ -42,6 +42,22 @@ describe("sports standings preferences — owner isolation", () => {
     });
   }
 
+  async function putLastViewed(
+    cookie: string,
+    lastViewed: {
+      competitionKey: string;
+      viewKey: string | null;
+      viewLabel: string | null;
+    } | null
+  ) {
+    return server.inject({
+      method: "PUT",
+      url: "/api/sports/standings-preferences",
+      headers: { cookie },
+      payload: { lastViewed }
+    });
+  }
+
   async function get(cookie: string): Promise<SportsStandingsPreferencesResponse> {
     const response = await server.inject({
       method: "GET",
@@ -72,9 +88,34 @@ describe("sports standings preferences — owner isolation", () => {
 
     expect((await put(admin, ["nba"])).statusCode).toBe(200);
     expect((await put(alice, ["eng.1", "nfl"])).statusCode).toBe(200);
+    // #2661: the last-viewed pick is owner-only too, down to the inner view.
+    expect(
+      (
+        await putLastViewed(admin, {
+          competitionKey: "fifa.wwc",
+          viewKey: "sec:1",
+          viewLabel: "Group A"
+        })
+      ).statusCode
+    ).toBe(200);
+    expect(
+      (
+        await putLastViewed(alice, {
+          competitionKey: "uefa.wchampions",
+          viewKey: null,
+          viewLabel: null
+        })
+      ).statusCode
+    ).toBe(200);
 
-    expect(await get(admin)).toEqual({ selectedCompetitionKeys: ["nba"] });
-    expect(await get(alice)).toEqual({ selectedCompetitionKeys: ["nfl", "eng.1"] });
-    expect(await get(bob)).toEqual({ selectedCompetitionKeys: null });
+    expect(await get(admin)).toEqual({
+      selectedCompetitionKeys: ["nba"],
+      lastViewed: { competitionKey: "fifa.wwc", viewKey: "sec:1", viewLabel: "Group A" }
+    });
+    expect(await get(alice)).toEqual({
+      selectedCompetitionKeys: ["nfl", "eng.1"],
+      lastViewed: { competitionKey: "uefa.wchampions", viewKey: null, viewLabel: null }
+    });
+    expect(await get(bob)).toEqual({ selectedCompetitionKeys: null, lastViewed: null });
   });
 });

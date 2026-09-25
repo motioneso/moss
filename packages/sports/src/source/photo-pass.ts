@@ -1,4 +1,6 @@
 import type { SportsSafeFetchPort } from "./discovery.js";
+import type { DomainConcurrencyLimiter } from "./feed-shared.js";
+import { FETCH_TIMEOUT_MS, MAX_RESPONSE_BYTES } from "./feed-shared.js";
 import { applySportsPhotoRule, type SportsPhotoRule } from "./photo-rule.js";
 import {
   extractFeedPhoto,
@@ -7,12 +9,7 @@ import {
   parseFeedPhotoItems
 } from "./photo.js";
 import { SPORTS_PHOTO_DEADLINE_MARGIN_MS } from "./photo-store.js";
-import type {
-  DomainConcurrencyLimiter,
-  ExtractedHeadline,
-  RequestGroup
-} from "./public-source-reader.js";
-import { FETCH_TIMEOUT_MS, MAX_RESPONSE_BYTES } from "./public-source-reader.js";
+import type { ExtractedHeadline, RequestGroup } from "./public-source-reader.js";
 
 /**
  * #2237 the pass that puts a photo on a story before it is stored. It lives beside the reader

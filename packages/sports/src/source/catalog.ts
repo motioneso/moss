@@ -21,6 +21,15 @@ export interface CatalogEntry {
   readonly logoUrl?: string | null;
   // FIFA confederation grouping for the follow picker's browse mode (#907).
   readonly confederation: Confederation;
+  // #2661: a competition ESPN does not carry at all can still be followable for its own news.
+  // When set, the Sports news refresh reads this public RSS/Atom feed through the same safe-fetch
+  // and feed-parsing path the custom-source reader already uses, and files the stories under this
+  // competition. There are no scores or standings for such a competition: ESPN returns nothing for
+  // its `espnLeague`, so the screen shows it as a news-only league. Static data only — request
+  // parameters can never steer the fetch target.
+  readonly newsFeedUrl?: string | null;
+  // Short publisher name shown beside the league label on feed stories.
+  readonly newsFeedPublisher?: string | null;
 }
 
 // Base paths for the two ESPN logo schemes, factored out so the entries below read as data.
@@ -84,8 +93,9 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   // college sports"). Every ESPN league slug below was probed live on 2026-09-03 and returns
   // standings groups: college-football (FBS, 12 conference groups), mens/womens-college-basketball
   // (31 conferences each), wnba (2 conferences), college-baseball, mens-college-hockey. NOT added
-  // because ESPN's standings endpoint returns nothing for them: pwhl, nba-g-league, and wpbl
-  // (women's pro baseball) — WPBL cannot be sourced from ESPN at all.
+  // because ESPN's standings endpoint returns nothing for them: pwhl and nba-g-league. WPBL
+  // (women's pro baseball) also has no ESPN data, but it is in the catalog as a news-only entry
+  // (#2661) backed by its own RSS feed — see `newsFeedUrl` below.
   // Logos: only wnba resolves under /i/teamlogos/leagues/500; every college slug tried
   // (college-football, mens-college-basketball, womens-college-basketball, college-baseball,
   // mens-college-hockey, ncaa, ncaaf, ncaam, ncaaw, ncaab, cfb) 404s, so those carry no logo.
@@ -538,6 +548,139 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
     espnSport: "soccer",
     espnLeague: "fifa.wwc",
     confederation: "INTL"
+  },
+  // Women's competitions (#2661). Every ESPN key below was probed live on 2026-09-24 (site API
+  // /teams returns 200 with a roster) before landing here. The German Frauen-Bundesliga and the
+  // Italian Serie A Femminile are not on ESPN under any key tried (ger.w.1, ger.frauen.1, ita.w.1)
+  // and are deliberately absent — no invented keys. mex.w.1 (Liga MX Femenil) also returns no
+  // teams, so it is left out. Tournaments follow the #2660 rule: they only sit under Following in
+  // standings while their season is running (see sports-service.ts).
+  {
+    competitionKey: "eng.w.1",
+    label: "Women's Super League",
+    sportLabel: "Soccer",
+    regionLabel: "England",
+    kind: "league",
+    marquee: false,
+    standingsShape: "table",
+    espnSport: "soccer",
+    espnLeague: "eng.w.1",
+    confederation: "UEFA"
+  },
+  {
+    competitionKey: "esp.w.1",
+    label: "Liga F",
+    sportLabel: "Soccer",
+    regionLabel: "Spain",
+    kind: "league",
+    marquee: false,
+    standingsShape: "table",
+    espnSport: "soccer",
+    espnLeague: "esp.w.1",
+    confederation: "UEFA"
+  },
+  {
+    competitionKey: "fra.w.1",
+    label: "Première Ligue",
+    sportLabel: "Soccer",
+    regionLabel: "France",
+    kind: "league",
+    marquee: false,
+    standingsShape: "table",
+    espnSport: "soccer",
+    espnLeague: "fra.w.1",
+    confederation: "UEFA"
+  },
+  {
+    competitionKey: "ned.w.1",
+    label: "Vrouwen Eredivisie",
+    sportLabel: "Soccer",
+    regionLabel: "Netherlands",
+    kind: "league",
+    marquee: false,
+    standingsShape: "table",
+    espnSport: "soccer",
+    espnLeague: "ned.w.1",
+    confederation: "UEFA"
+  },
+  {
+    competitionKey: "aus.w.1",
+    label: "A-League Women",
+    sportLabel: "Soccer",
+    regionLabel: "Australia",
+    kind: "league",
+    marquee: false,
+    standingsShape: "table",
+    espnSport: "soccer",
+    espnLeague: "aus.w.1",
+    confederation: "AFC"
+  },
+  {
+    competitionKey: "uefa.wchampions",
+    label: "UEFA Women's Champions League",
+    sportLabel: "Soccer",
+    regionLabel: "Europe",
+    kind: "tournament",
+    marquee: false,
+    standingsShape: "groups",
+    espnSport: "soccer",
+    espnLeague: "uefa.wchampions",
+    confederation: "UEFA"
+  },
+  {
+    competitionKey: "uefa.weuro",
+    label: "UEFA Women's European Championship",
+    sportLabel: "Soccer",
+    regionLabel: "Europe",
+    kind: "tournament",
+    marquee: false,
+    standingsShape: "groups",
+    espnSport: "soccer",
+    espnLeague: "uefa.weuro",
+    confederation: "UEFA"
+  },
+  {
+    competitionKey: "concacaf.w.gold",
+    label: "Concacaf W Gold Cup",
+    sportLabel: "Soccer",
+    regionLabel: "North America",
+    kind: "tournament",
+    marquee: false,
+    standingsShape: "groups",
+    espnSport: "soccer",
+    espnLeague: "concacaf.w.gold",
+    confederation: "CONCACAF"
+  },
+  {
+    competitionKey: "fifa.w.olympics",
+    label: "Women's Olympic Soccer Tournament",
+    sportLabel: "Soccer",
+    regionLabel: "International",
+    kind: "tournament",
+    marquee: false,
+    standingsShape: "groups",
+    espnSport: "soccer",
+    espnLeague: "fifa.w.olympics",
+    confederation: "INTL"
+  },
+  // #2661: WPBL has no ESPN league at all — `usa.wpbl` returns no teams, scores or standings — so
+  // its only content is the league's own RSS feed, read through the existing public-feed path.
+  // The four clubs (Boston, New York, Los Angeles, San Francisco) are not followable until a
+  // reliable roster source exists; the league itself is followable for news. Recorded as a gap in
+  // the spec.
+  {
+    competitionKey: "wpbl",
+    label: "Women's Pro Baseball League",
+    sportLabel: "Baseball",
+    regionLabel: "United States",
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "baseball",
+    espnLeague: "usa.wpbl",
+    confederation: "INTL",
+    newsFeedUrl: "https://www.womensprobaseballleague.com/feed/",
+    newsFeedPublisher: "WPBL"
   },
   // AFC, CAF, and the remaining CONMEBOL/CONCACAF feeder leagues from spec Appendix A
   // (#907 slice 4 — the final batch). All live-probed via scripts/probe-espn-leagues.mjs;

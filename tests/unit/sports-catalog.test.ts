@@ -58,7 +58,17 @@ describe("sports catalog", () => {
         "ncaam",
         "ncaaw",
         "ncaa-baseball",
-        "ncaa-hockey"
+        "ncaa-hockey",
+        "aus.w.1",
+        "concacaf.w.gold",
+        "eng.w.1",
+        "esp.w.1",
+        "fifa.w.olympics",
+        "fra.w.1",
+        "ned.w.1",
+        "uefa.wchampions",
+        "uefa.weuro",
+        "wpbl"
       ].sort()
     );
   });
@@ -93,7 +103,13 @@ describe("sports catalog", () => {
     expect(nwsl?.standingsShape).toBe("table");
     expect(nwsl?.confederation).toBe("CONCACAF");
     // ESPN serves no standings for these, so they must stay out of the catalog.
-    for (const key of ["pwhl", "wpbl", "nba-g-league"]) expect(catalogEntry(key)).toBeUndefined();
+    for (const key of ["pwhl", "nba-g-league"]) expect(catalogEntry(key)).toBeUndefined();
+    // #2661: WPBL has no ESPN data either, but it is in the catalog as a news-only entry backed
+    // by its own RSS feed, so it is followable and its stories come from that feed.
+    const wpbl = catalogEntry("wpbl");
+    expect(wpbl?.kind).toBe("league");
+    expect(wpbl?.sportLabel).toBe("Baseball");
+    expect(wpbl?.newsFeedUrl).toBe("https://www.womensprobaseballleague.com/feed/");
   });
   it("groups the new top flights into their confederations (#907 slice 3)", () => {
     expect(catalogEntry("bra.1")?.confederation).toBe("CONMEBOL");
@@ -228,6 +244,46 @@ describe("sports catalog", () => {
     expect(e?.kind).toBe("tournament");
     expect(e?.standingsShape).toBe("groups");
     expect(e?.confederation).toBe("INTL");
+  });
+  // #2661: the women's additions. ESPN-backed ones must be table leagues in their confederation;
+  // the four tournaments must be group-stage tournaments; WPBL is the one news-only entry.
+  it("adds the ESPN-backed women's leagues and tournaments (#2661)", () => {
+    const leagues: Record<string, [string, string, string]> = {
+      "eng.w.1": ["eng.w.1", "England", "UEFA"],
+      "esp.w.1": ["esp.w.1", "Spain", "UEFA"],
+      "fra.w.1": ["fra.w.1", "France", "UEFA"],
+      "ned.w.1": ["ned.w.1", "Netherlands", "UEFA"],
+      "aus.w.1": ["aus.w.1", "Australia", "AFC"]
+    };
+    for (const [key, [espnLeague, region, confederation]] of Object.entries(leagues)) {
+      const entry = catalogEntry(key);
+      expect(entry?.espnLeague).toBe(espnLeague);
+      expect(entry?.espnSport).toBe("soccer");
+      expect(entry?.kind).toBe("league");
+      expect(entry?.standingsShape).toBe("table");
+      expect(entry?.regionLabel).toBe(region);
+      expect(entry?.confederation).toBe(confederation);
+      expect(entry?.newsFeedUrl).toBeUndefined();
+    }
+    const tournaments: Record<string, string> = {
+      "uefa.wchampions": "UEFA",
+      "uefa.weuro": "UEFA",
+      "concacaf.w.gold": "CONCACAF",
+      "fifa.w.olympics": "INTL"
+    };
+    for (const [key, confederation] of Object.entries(tournaments)) {
+      const entry = catalogEntry(key);
+      expect(entry?.espnLeague).toBe(key);
+      expect(entry?.espnSport).toBe("soccer");
+      expect(entry?.kind).toBe("tournament");
+      expect(entry?.standingsShape).toBe("groups");
+      expect(entry?.confederation).toBe(confederation);
+    }
+    // The German and Italian women's leagues are not on ESPN under any key tried; leaving them
+    // out is deliberate, not an oversight.
+    for (const key of ["ger.w.1", "ger.frauen.1", "ita.w.1", "mex.w.1"]) {
+      expect(catalogEntry(key)).toBeUndefined();
+    }
   });
   it("tags every entry with a confederation (#907)", () => {
     for (const entry of SPORTS_CATALOG) expect(entry.confederation).toBeTruthy();
