@@ -104,7 +104,8 @@ export const aiModuleManifest = {
     {
       id: "ai.user-settings",
       label: "AI Providers",
-      description: "Configure the personal assistant's model, routing, and response behavior.",
+      description:
+        "Change the AI model for chat: choose which model answers, change model routing and response behavior.",
       path: "/settings?section=assistant",
       scope: "user",
       order: 40,

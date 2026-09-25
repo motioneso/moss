@@ -43,6 +43,18 @@ export const briefingsModuleManifest = {
     migrationDirectories: ["packages/briefings/sql"],
     ownedTables: ["app.briefing_definitions", "app.briefing_runs"]
   },
+  settings: [
+    {
+      id: "briefings.settings",
+      label: "Briefings",
+      description:
+        "Set the morning briefing time, the evening wind-down and its time, and which " +
+        "sources feed the morning briefing: news, sports, read tools, email and calendar signals.",
+      path: "/settings?section=modules&module=briefings",
+      scope: "user",
+      permissionId: "briefings.update"
+    }
+  ],
   permissions: [
     {
       id: "briefings.view",
