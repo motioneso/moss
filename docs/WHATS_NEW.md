@@ -52,6 +52,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **More women's leagues and standings that remember where you were.** Sports now covers more women's competitions and the Women's Pro Baseball League, and the standings picker opens the league and division you last looked at. [PR #2669](https://github.com/motioneso/moss/pull/2669)
 - **Artwork for news stories without a photo.** When the lead story on Today has no photo, Moss now shows a drawn contour print in the story's topic colors instead of an empty space. [PR #2657](https://github.com/motioneso/moss/pull/2657)
 
 ### 2026-09-23
