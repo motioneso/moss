@@ -53,4 +53,5 @@ export type {
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";
 /** Re-exported so tunnel backers can build protocol handlers without an SDK dependency. */
-export { ClientSideConnection } from "@agentclientprotocol/sdk";
+export { ClientSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
+export type { Client as AcpClientHandler } from "@agentclientprotocol/sdk";

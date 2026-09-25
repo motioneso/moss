@@ -1,0 +1,116 @@
+# #2689: publishes the signed CLI tools manifest to the rolling GitHub Release tagged `cli-tools`
+# (spec docs/superpowers/specs/2026-09-25-cli-tools-auto-update.md, section 4).
+#
+# Every six hours, and on manual dispatch, the publisher looks for newer provider CLI and chat
+# adapter versions, runs the trust and contract checks, and republishes the manifest when a
+# toolset passes. A blocked toolset keeps its previous entry and gets a GitHub issue.
+# Serialized because each run reads the previous manifest's sequence number.
+name: cli-tools-manifest
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Check this package at a specific version instead of latest (npm name)"
+        required: false
+        default: ""
+      version:
+        description: "Exact version for the package above"
+        required: false
+        default: ""
+      break_check_for:
+        description: "Self-test: toolset whose flag check is deliberately broken (anthropic, openai-compatible, google)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: cli-tools-manifest
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Download the current manifest and lockfiles (absent on first publish)
+        run: |
+          mkdir -p /tmp/cli-tools-prev
+          gh release download cli-tools --pattern '*.json' --pattern '*.sig' --dir /tmp/cli-tools-prev \
+            || echo "no existing cli-tools release; publishing fresh"
+      - name: Check candidates and build the manifest
+        env:
+          MOSS_MODULE_CATALOG_SIGNING_KEY_ID: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_KEY_ID }}
+          MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BREAK_CHECK_FOR: ${{ inputs.break_check_for }}
+        run: |
+          args=(--out dist/cli-tools --work /tmp/cli-tools-work --previous /tmp/cli-tools-prev
+                --require-signature --file-issues)
+          if [ -n "$INPUT_PACKAGE" ]; then args+=(--pin "$INPUT_PACKAGE@$INPUT_VERSION"); fi
+          if [ -n "$INPUT_BREAK_CHECK_FOR" ]; then args+=(--break-check-for "$INPUT_BREAK_CHECK_FOR"); fi
+          mkdir -p dist/cli-tools
+          pnpm tsx scripts/cli-tools/publish-cli-tools-manifest.ts "${args[@]}"
+      - name: Ensure the rolling release exists
+        run: |
+          gh release view cli-tools \
+            || gh release create cli-tools --title "CLI tools manifest" --latest=false \
+                 --notes "Rolling release of the signed provider CLI manifest. Assets are managed by the cli-tools-manifest workflow; do not edit by hand."
+      # The manifest and its signature upload as separate assets. An instance that reads a
+      # mismatched pair between the two uploads rejects it and retries on its next check.
+      - name: Upload assets
+        run: |
+          if [ -z "$(ls -A dist/cli-tools)" ]; then
+            echo "nothing new passed; release unchanged"
+            exit 0
+          fi
+          gh release upload cli-tools dist/cli-tools/* --clobber
+      - name: Prune lockfiles the manifest no longer names
+        run: |
+          if [ ! -f dist/cli-tools/cli-tools.json ]; then exit 0; fi
+          # The signature and provenance history must stay in the keep list, or every publish
+          # deletes what it just uploaded.
+          jq -r '[.toolsets[].packages[].lockfile] + ["cli-tools.json", "cli-tools.json.sig", "provenance-history.json"] | .[]' \
+            dist/cli-tools/cli-tools.json > /tmp/keep.txt
+          gh api "repos/${{ github.repository }}/releases/tags/cli-tools" \
+            --jq '.assets[] | "\(.id)\t\(.name)"' | while IFS=$'\t' read -r id name; do
+            if ! grep -qxF "$name" /tmp/keep.txt; then
+              echo "pruning $name"
+              gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id"
+            fi
+          done
+
+      # A blocked toolset files its own issue from the script. This step covers a crash, where
+      # nothing publishes and no toolset-level issue exists.
+      - name: File an issue if the publisher crashed
+        if: failure()
+        run: |
+          TITLE="CLI tools manifest publish is failing"
+          EXISTING="$(gh issue list --state open --label bug --search "$TITLE in:title" \
+            --json number --jq '.[0].number // empty')"
+          BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit: ${{ github.sha }}
+
+          No provider CLI updates reach instances until this publishes again."
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label bug --body "$BODY"
+          fi
