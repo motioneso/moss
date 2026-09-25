@@ -1,6 +1,6 @@
 # Keep the AI Command-Line Tools Up To Date
 
-**Status:** Draft, awaiting Ben's approval
+**Status:** Approved by Ben, 2026-09-25
 **Date:** 2026-09-25
 **Owner:** Ben
 **GitHub:** issue #2689 (follows #2674 / PR 2688; related #2683, #2687)
@@ -151,7 +151,7 @@ passes. On a failure it keeps the old toolset and alerts the admins.
 - Alerts go to instance admins as a push notification, a notice on the AI providers screen and an
   audit record. The result is also written where the daily health check (#2683) can read it, with
   no dependency on #2683 shipping first.
-- No setting to pause updates. A held-back toolset is automatic, and admins get a "Check again"
+- No setting to pause updates. A held-back toolset is automatic, and admins get a "Retry"
   button.
 - The live check uses the model the instance already binds for each provider. It never names a
   model (provider-agnostic invariant).
@@ -327,7 +327,7 @@ Each call has a 90 second timeout. A timeout counts as a failure.
 5. On a failure, `current` stays on the old toolset. The candidate folders are kept for the next
    try, and the admins are alerted (section 7).
 6. A rejected candidate is retried once a day, when a newer manifest arrives, and when an admin
-   presses "Check again". It is not retried on every boot.
+   presses "Retry". It is not retried on every boot.
 7. With no previous release (a fresh install), the candidate goes live straight away, because
    there is nothing to fall back to. A failed check still alerts.
 
@@ -433,74 +433,29 @@ Only one screen changes: the provider card on **Settings > AI providers**
 
 ### 8.1 Mockups
 
-Today's card line reads "Claude CLI". It gains the running version and the last check. The version
-shown is the toolset's CLI version.
+Approved by Ben 2026-09-25. The card keeps its layout. The auth line shows the running version, and
+a single badge carries any state. No callout boxes.
 
-Up to date:
+![Card states](assets/2026-09-25-cli-tools-auto-update/card-states.png)
 
-```
-+-------------------------------------------------------------------------+
-| [C]  Claude   (o Connected) (o Default)             [Log in] [Terminal] |
-|      >_ Claude CLI 2.1.282 - up to date, checked today at 04:10         |
-|      Chat checks this sign-in when the ACP adapter initializes.         |
-|  ...models list unchanged...                                            |
-+-------------------------------------------------------------------------+
-```
-
-Trying a new version (candidate staged, check running):
-
-```
-+-------------------------------------------------------------------------+
-| [C]  Claude   (o Connected) (o Default)             [Log in] [Terminal] |
-|      >_ Claude CLI 2.1.282 - trying 2.1.290 now                         |
-|  ...                                                                    |
-+-------------------------------------------------------------------------+
-```
-
-Held back (the check failed):
-
-```
-+-------------------------------------------------------------------------+
-| [C]  Claude   (o Connected) (o Default)             [Log in] [Terminal] |
-|      >_ Claude CLI 2.1.282 - checked today at 04:10                     |
-|  +-------------------------------------------------------------------+  |
-|  | ! Update held back. Claude CLI 2.1.290 could not use Moss's       |  |
-|  |   tools in a test chat, so Moss kept 2.1.282. Moss tries again    |  |
-|  |   tomorrow.                                        [Check again]  |  |
-|  +-------------------------------------------------------------------+  |
-|  ...                                                                    |
-+-------------------------------------------------------------------------+
-```
-
-Needs a newer Moss, or can't check:
-
-```
-+-------------------------------------------------------------------------+
-| [C]  Claude   (o Connected) (o Default)             [Log in] [Terminal] |
-|      >_ Claude CLI 2.1.282 - checked today at 04:10                     |
-|  +-------------------------------------------------------------------+  |
-|  | i Claude CLI 2.1.300 needs a newer version of Moss. Upgrade Moss  |  |
-|  |   to use it.                                                      |  |
-|  +-------------------------------------------------------------------+  |
-+-------------------------------------------------------------------------+
-
-   ...or, when the manifest has been unreachable for three days:
-
-|  | ! Can't check for updates. Moss has not reached its update list  |  |
-|  |   since 22 Sep. Claude CLI 2.1.282 is still running.             |  |
-|  |                                                    [Check again]  |  |
-```
+| State                        | Auth line            | Badge                                 | Action |
+| ---------------------------- | -------------------- | ------------------------------------- | ------ |
+| Up to date                   | `Claude CLI 2.1.282` | none                                  | none   |
+| Checking a candidate         | `Claude CLI 2.1.282` | steel, "Updating to 2.1.290"          | none   |
+| Held back                    | `Claude CLI 2.1.282` | amber, "2.1.290 held back"            | Retry  |
+| Needs a newer Moss           | `Claude CLI 2.1.282` | neutral, "2.1.300 needs a newer Moss" | none   |
+| Manifest unreachable 3+ days | `Claude CLI 2.1.282` | amber, "Can't check for updates"      | Retry  |
 
 Rules:
 
-- The notice uses the existing card callout styling and `jds-*` primitives. It invents no new
-  components (the design-system skill applies at build).
-- "Check again" queues `ai.cli-tools-refresh` and then `ai.cli-version-check` for that provider. It
-  shows "Checking..." until they finish.
-- Failure reasons in the notice come from a fixed list, never raw tool output. The list is "could
-  not use Moss's tools in a test chat", "did not return usable answers to a background request",
-  "did not answer in time", and "could not be installed".
-- The OpenCode card gets the same version line and notices.
+- Existing `jds-badge` tones and a quiet small `jds-btn`. No new components (the design-system
+  skill applies at build).
+- The held-back reason shows as the badge tooltip. Reasons come from a fixed list, never raw tool
+  output: "couldn't use Moss's tools in a test chat", "didn't return usable answers to a background
+  request", "didn't answer in time", "couldn't be installed".
+- "Retry" queues `ai.cli-tools-refresh` and then `ai.cli-version-check` for that provider. The badge
+  reads "Checking..." until they finish.
+- The OpenCode card gets the same version line and badges.
 
 ### 8.2 API
 
@@ -514,16 +469,16 @@ Rules:
 In the same PR as the screen change:
 
 - `aiproviders` description in `packages/shared/src/app-map-core.ts`: add the version line, the
-  four states, and the "Check again" button.
+  four states, and the "Retry" button.
 - Errors with remediations:
   - `cli_version_too_old`, shown to users as "The installed AI tool is too old for this model.
     Moss updates it automatically; an admin can check Settings > AI providers." The remediation
-    tells an admin to press Check again.
-  - `cli_update_held_back`, with the remediation "Moss keeps the older version and retries daily;
-    press Check again after the provider fixes its tool."
+    tells an admin to press Retry.
+  - `cli_update_held_back`, with the remediation "Moss keeps the older version and retries at the next check;
+    press Retry after the provider fixes its tool."
   - `cli_update_needs_newer_moss`, with the remediation "Upgrade Moss."
   - `cli_update_cannot_check`, with the remediation "Check the instance can reach github.com, then
-    press Check again."
+    press Retry."
 
 ## 9. Security
 
@@ -547,12 +502,12 @@ In the same PR as the screen change:
 
 Each slice is one PR with live proof on an isolated instance, per the Live-Path Gate.
 
-| Slice                                | Scope                                                                                                                                                                                                                                                    | Live proof                                                                                                                                                                                           |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. See the versions                  | Runner reports each toolset's versions. `cliTools` on the provider DTO. Card version line. `cli_version_too_old` recognised and shown. App map.                                                                                                          | Install Claude CLI 2.1.183 on an isolated instance with a model that needs a newer version. The error shows in plain words and the card shows 2.1.183.                                               |
-| 2. Chat adapters on the tools volume | Adapter packages become recipe entries. Runner resolves the adapter from the tools volume with fallback to the image copy. Adapters run the tools volume CLI through `CLAUDE_CODE_EXECUTABLE` / `CODEX_PATH`. Toolset grouping.                          | On an isolated instance, chat runs through an adapter installed on the tools volume. Deleting it falls back to the image copy.                                                                       |
-| 3. Manifest publisher                | `cli-tools-manifest.yml`, lockfile generation, provenance and checksum checks, offline contract check, signing, rolling release, issue on failure.                                                                                                       | A manual dispatch publishes a signed manifest for a real newer version. A deliberately broken flag blocks that toolset and opens an issue.                                                           |
-| 4. Instance updater and gate         | `ai.cli-tools-refresh`, signature and sequence checks, candidate staging, `state.json`, `ai.cli-version-check`, live check, promote and hold back, release leases and cleanup, image floor, push alert, audit record, card states, Check again, app map. | On an isolated instance, a working candidate promotes. A forced-failure candidate is held back while the old toolset keeps serving, and the admin gets a push. An old-sequence manifest is rejected. |
+| Slice                                | Scope                                                                                                                                                                                                                                              | Live proof                                                                                                                                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. See the versions                  | Runner reports each toolset's versions. `cliTools` on the provider DTO. Card version line. `cli_version_too_old` recognised and shown. App map.                                                                                                    | Install Claude CLI 2.1.183 on an isolated instance with a model that needs a newer version. The error shows in plain words and the card shows 2.1.183.                                               |
+| 2. Chat adapters on the tools volume | Adapter packages become recipe entries. Runner resolves the adapter from the tools volume with fallback to the image copy. Adapters run the tools volume CLI through `CLAUDE_CODE_EXECUTABLE` / `CODEX_PATH`. Toolset grouping.                    | On an isolated instance, chat runs through an adapter installed on the tools volume. Deleting it falls back to the image copy.                                                                       |
+| 3. Manifest publisher                | `cli-tools-manifest.yml`, lockfile generation, provenance and checksum checks, offline contract check, signing, rolling release, issue on failure.                                                                                                 | A manual dispatch publishes a signed manifest for a real newer version. A deliberately broken flag blocks that toolset and opens an issue.                                                           |
+| 4. Instance updater and gate         | `ai.cli-tools-refresh`, signature and sequence checks, candidate staging, `state.json`, `ai.cli-version-check`, live check, promote and hold back, release leases and cleanup, image floor, push alert, audit record, card states, Retry, app map. | On an isolated instance, a working candidate promotes. A forced-failure candidate is held back while the old toolset keeps serving, and the admin gets a push. An old-sequence manifest is rejected. |
 
 Slices 2 and 4 depend on 1. Slice 3 is independent. Codex checks for non-owner admins get simpler
 after #2687, but no slice depends on it.
