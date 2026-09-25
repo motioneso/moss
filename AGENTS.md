@@ -20,3 +20,11 @@ linked doc **in full** and follow it.
 - Every product change must keep Moss's app map truthful in the same PR. Add, change, or remove the
   matching core declarations in `packages/shared/src/app-map-core.ts` or the owning module
   manifest's `navigation`, `settings`, and `features` metadata, including errors and remediations.
+
+## Finishing Work
+
+- **Leave your worktree clean when you finish.** Commit and push anything worth keeping (docs,
+  plans, handoffs), delete everything else you created (scratch scripts, logs, screenshots, test
+  output), and stop any server or browser you started. An hourly sweeper removes worktrees whose
+  work is merged and whose tree is clean; one stray untracked file keeps the whole worktree alive.
+  This applies however you were launched: Claude, Codex, Muse, OpenCode, a pane or a headless run.
