@@ -422,7 +422,7 @@ export class AcpHost {
             ownerCodexHomeAccess(
               home,
               identity,
-              createOwnerIo(identity, CODEX_LOGIN_READ_LIMITS),
+              createOwnerIo(identity, { limits: CODEX_LOGIN_READ_LIMITS }),
               runAgentHomePrepare
             );
           await syncCodexLoginIntoHome(

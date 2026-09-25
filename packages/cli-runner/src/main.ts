@@ -192,7 +192,7 @@ function ownerCodexAccess(
   return ownerCodexHomeAccess(
     agentHome,
     identity,
-    createOwnerIo(identity, CODEX_LOGIN_READ_LIMITS),
+    createOwnerIo(identity, { limits: CODEX_LOGIN_READ_LIMITS }),
     runAgentHomePrepareAsOwner
   );
 }

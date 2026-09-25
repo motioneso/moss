@@ -119,7 +119,7 @@ export async function preparePerUserStructuredLaunch(
     ownerCodexHomeAccess(
       home,
       id,
-      createOwnerIo(id, CODEX_LOGIN_READ_LIMITS),
+      createOwnerIo(id, { limits: CODEX_LOGIN_READ_LIMITS }),
       runAgentHomePrepareAsOwner
     );
   const codexHome =
@@ -156,7 +156,7 @@ export async function preparePerUserStructuredLaunch(
     agentHome,
     neutralDir,
     personaPath,
-    io: createOwnerIo(identity),
+    io: createOwnerIo(identity, { home: agentHome }),
     childIdentity: {
       wrap: (command, args) => {
         const dropped = buildSetprivDropCommand(command, args, identity);
@@ -295,12 +295,14 @@ export function runBounded(
 /**
  * Io for a launch's own files, run as the owner through setpriv. The runner's capabilities do not
  * cover reading or writing inside a folder it has handed over. Paths travel by env and content by
- * stdin or stdout, never by argv. With `limits`, every command is bounded by them.
+ * stdin or stdout, never by argv. With `limits`, every command is bounded by them. With `home`,
+ * every command runs in the owner's home, where Codex finds its login.
  */
 export function createOwnerIo(
   identity: { readonly uid: number; readonly gid: number },
-  limits?: OwnerRunLimits
+  opts: { readonly limits?: OwnerRunLimits; readonly home?: string } = {}
 ): TmuxIo {
+  const homeEnv = opts.home ? { HOME: opts.home, CODEX_HOME: join(opts.home, ".codex") } : {};
   const run = (
     cmd: string,
     args: readonly string[],
@@ -308,8 +310,8 @@ export function createOwnerIo(
     input?: string
   ): Promise<{ code: number; stdout: string; stderr: string }> => {
     const dropped = buildSetprivDropCommand(cmd, args, identity);
-    const env = { ...buildSanitizedCliEnv(process.env), ...extraEnv };
-    return runBounded(dropped.command, dropped.args, env, input ?? "", limits);
+    const env = { ...buildSanitizedCliEnv(process.env), ...homeEnv, ...extraEnv };
+    return runBounded(dropped.command, dropped.args, env, input ?? "", opts.limits);
   };
   return {
     run: async (cmd, args, opts) => {
