@@ -27,7 +27,10 @@ try {
     fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
   );
   try {
-    if (!fs.fstatSync(fd).isFile()) throw new Error("regular file");
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) throw new Error("regular file");
+    // A real login file is a few kilobytes; a larger one is refused before it is read.
+    if (stat.size > 65536) throw new Error("too large");
     process.stdout.write(fs.readFileSync(fd, "utf8"));
   } finally {
     fs.closeSync(fd);

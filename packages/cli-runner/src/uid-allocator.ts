@@ -111,6 +111,19 @@ export function pruneUidSlots(homeBase: string): number {
   return dropped;
 }
 
+/** Every person holding a slot, without per-call entries. */
+export function listUserUidSlots(
+  homeBase: string
+): { readonly userId: string; readonly uid: number; readonly gid: number }[] {
+  const slots = readSlots(path.join(homeBase, SLOT_FILE));
+  return Object.entries(slots)
+    .filter(
+      ([key]) =>
+        OWNER_ID_RE.test(key) && !PER_CALL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+    )
+    .map(([userId, slot]) => ({ userId, uid: UID_BASE + slot, gid: GID_BASE + slot }));
+}
+
 /**
  * The user who holds the slot for `uid`, or undefined when no user does. Per-call entries left
  * by the old session-keyed allocation are not users, so they return undefined too.

@@ -10,7 +10,7 @@
  * governs the CLI SUBPROCESS env it builds, which drops all three.
  */
 
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 import { cliAvailable, tmuxAvailable, type ProviderKind } from "@moss/ai";
 
@@ -38,8 +38,19 @@ import { buildSetprivDropCommand } from "./setpriv.js";
 import { CliRunnerServer } from "./server.js";
 import { TerminalHost } from "./terminal-host.js";
 import { ensureOwnedTopLevel, prepareOwnedPathWithOwnership } from "./owned-fs.js";
+import { createOwnerIo } from "./per-user-structured.js";
 import { allocateUidSlot } from "./uid-allocator.js";
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
+import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
+import {
+  codexPeerHomes,
+  CODEX_LOGIN_READ_LIMITS,
+  ownerCodexHomeAccess,
+  promoteCodexLogin,
+  publishNewestCodexLogin,
+  syncCodexLoginIntoHome,
+  type CodexHomeAccess
+} from "./codex-shared-login.js";
 
 export interface CliRunnerConfig {
   readonly socketPath: string;
@@ -173,10 +184,28 @@ export function sourceSelfUpdateDisableEnv(
   return set;
 }
 
-/** Resolve one isolated login runtime with owner-switched commands and credential reads. */
+/** One user's Codex login, read and written through their own account. */
+function ownerCodexAccess(
+  agentHome: string,
+  identity: { readonly uid: number; readonly gid: number }
+): CodexHomeAccess {
+  return ownerCodexHomeAccess(
+    agentHome,
+    identity,
+    createOwnerIo(identity, { limits: CODEX_LOGIN_READ_LIMITS }),
+    runAgentHomePrepareAsOwner
+  );
+}
+
+/**
+ * Resolve one isolated login runtime with owner-switched commands and credential reads. With
+ * `syncCodexLogin`, the instance's shared Codex login is brought into the user's home first, so a
+ * readiness check sees the login their chat will use (#2687).
+ */
 export async function resolveIsolatedUserRuntime(
   config: Pick<CliRunnerConfig, "perUserUid" | "homeBase">,
-  userId: string
+  userId: string,
+  opts?: { readonly syncCodexLogin?: boolean }
 ): Promise<LoginUserRuntime> {
   if (!config.perUserUid) {
     throw new Error("per-user CLI isolation is disabled; refusing shared-home login");
@@ -194,6 +223,13 @@ export async function resolveIsolatedUserRuntime(
       return baseIo.run(dropped.command, dropped.args, { env: opts?.env });
     }
   };
+  if (opts?.syncCodexLogin) {
+    await syncCodexLoginIntoHome(
+      config.homeBase,
+      ownerCodexAccess(agentHome, slot),
+      codexPeerHomes(config.homeBase, userId, ownerCodexAccess)
+    );
+  }
   return {
     userId,
     homeBase: agentHome,
@@ -242,8 +278,12 @@ export function createCliRunner(
   // (§L.6.2), and detects completion via the SAME §4.8 probe. Its adapters are the validated
   // login allowlist (§L.1.3, consistency-checked against the install catalog). It participates
   // in the host's §L.6.1 unified exclusivity gate (login ⟂ chat).
+  // #2687: every check brings the shared Codex login into the user's home, except while that
+  // user is signing in, so the check cannot overwrite the sign-in it is waiting for.
   const resolveUserRuntime = (userId: string): Promise<LoginUserRuntime> =>
-    resolveIsolatedUserRuntime(config, userId);
+    resolveIsolatedUserRuntime(config, userId, {
+      syncCodexLogin: loginService.activeLoginId("openai-compatible", userId) === undefined
+    });
   // #2242 (round 3): read once per runner process, as the model-list path does — the real
   // vendor request needs the installed tool's version or the answer comes back empty.
   const readCodexVersionOnce = createCodexVersionReader(io);
@@ -294,6 +334,12 @@ export function createCliRunner(
     // otherwise stops on its sign-in-method menu and never prints the authorization URL.
     // Deliberately google-only: claude and codex need a working DIR to seed against (per-folder
     // trust), which the login flow does not have, and both already log in without seeding.
+    // #2687: a completed Codex sign-in becomes the instance's shared login.
+    onLoginReady: async (provider, runtime) => {
+      if (provider !== "openai-compatible" || !runtime?.readCodexAuthFile) return;
+      const raw = await runtime.readCodexAuthFile(join(runtime.homeBase, ".codex", "auth.json"));
+      await promoteCodexLogin(config.homeBase, raw);
+    },
     prepareProvider: async (provider: RpcProviderKind, runtime: LoginUserRuntime) => {
       if (provider === "google") await ensureGeminiOnboarded(runtime.homeBase);
     }
@@ -336,6 +382,14 @@ export function createCliRunner(
     installService,
     loginService,
     resolveUserRuntime,
+    // #2687: model listing reads the shared Codex login, so it first picks up any newer refresh.
+    beforeModelList: async (provider) => {
+      if (provider !== "openai-compatible" || !config.perUserUid) return;
+      await publishNewestCodexLogin(
+        config.homeBase,
+        codexPeerHomes(config.homeBase, undefined, ownerCodexAccess)
+      ).catch(() => undefined);
+    },
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).
     cliPresent: (provider: ProviderKind) => cliAvailable(provider),
     multiplexerUsable: () => tmuxAvailable(),
