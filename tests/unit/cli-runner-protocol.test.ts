@@ -239,7 +239,7 @@ describe("serveConnection (§3.4/§3.7)", () => {
         t: "req",
         id: 21,
         method: "listProviderModels",
-        params: { provider: "anthropic" }
+        params: { provider: "anthropic", acpAgentId: "claude-acp" }
       })
     );
     await new Promise((r) => setTimeout(r, 5));
@@ -247,7 +247,7 @@ describe("serveConnection (§3.4/§3.7)", () => {
     const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 21) as RpcOk;
     expect(ok.t).toBe("ok");
     expect(ok.result).toEqual({ status: "ok", models: [{ id: "claude-fable-5-1" }] });
-    expect(spy).toHaveBeenCalledWith("anthropic");
+    expect(spy).toHaveBeenCalledWith("anthropic", "claude-acp");
 
     channel.feed(
       encodeFrame({ t: "req", id: 22, method: "listProviderModels", params: { provider: "agy" } })
