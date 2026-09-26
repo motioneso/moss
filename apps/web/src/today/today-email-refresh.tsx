@@ -49,6 +49,7 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
   const queryClient = useQueryClient();
   const [refreshId, setRefreshId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
+  const [runJobId, setRunJobId] = useState<string | null>(null);
   const requestKey = useRef<string | null>(null);
   const startedRunForRefresh = useRef(new Set<string>());
   const invalidatedRunId = useRef<string | null>(null);
@@ -64,6 +65,7 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
     onMutate: () => {
       setRefreshId(null);
       setRunId(null);
+      setRunJobId(null);
       invalidatedRunId.current = null;
     },
     onSuccess: (result) => {
@@ -89,7 +91,10 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
         `/api/briefings/definitions/${encodeURIComponent(props.definitionId)}/run`,
         { method: "POST", body: { idempotencyKey: completedRefreshId } }
       ),
-    onSuccess: (result) => setRunId(result.runId)
+    onSuccess: (result) => {
+      setRunJobId(result.jobId);
+      setRunId(result.runId);
+    }
   });
 
   const refreshStatus = refreshQuery.data?.status;
@@ -107,8 +112,8 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
 
   const runQuery = useQuery({
     queryKey: queryKeys.briefings.run(props.definitionId, runId ?? ""),
-    queryFn: () => getBriefingRun(props.definitionId, runId ?? ""),
-    enabled: runId !== null,
+    queryFn: () => getBriefingRun(props.definitionId, runId ?? "", runJobId ?? undefined),
+    enabled: runId !== null && runJobId !== null,
     refetchInterval: (query) =>
       query.state.error || (query.state.data && query.state.data.state !== "pending")
         ? false

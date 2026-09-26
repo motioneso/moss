@@ -77,11 +77,14 @@ beforeEach(() => {
     }
     throw new Error(`Unexpected request: ${path}`);
   });
-  vi.mocked(getBriefingRun).mockResolvedValue({
-    state: "pending",
-    run: null,
-    latest: false,
-    plan: null
+  vi.mocked(getBriefingRun).mockImplementation(async (_definitionId, _runId, jobId) => {
+    if (!jobId) throw new Error("in-flight briefing status lookup requires its job ID");
+    return {
+      state: "pending",
+      run: null,
+      latest: false,
+      plan: null
+    };
   });
 });
 
@@ -151,7 +154,7 @@ describe("TodayEmailRefreshAction", () => {
     expect(
       vi.mocked(requestJson).mock.calls.filter(([path]) => path === RUN_ENDPOINT)
     ).toHaveLength(1);
-    expect(getBriefingRun).toHaveBeenCalledWith(DEFINITION_ID, RUN_ID);
+    expect(getBriefingRun).toHaveBeenCalledWith(DEFINITION_ID, RUN_ID, "briefing-job");
 
     await act(async () => {
       queryClient?.setQueryData(queryKeys.briefings.runs(DEFINITION_ID), { runs: [] });
@@ -216,7 +219,7 @@ describe("TodayEmailRefreshAction", () => {
     });
     await settle();
 
-    expect(getBriefingRun).toHaveBeenCalledWith(DEFINITION_ID, RUN_ID);
+    expect(getBriefingRun).toHaveBeenCalledWith(DEFINITION_ID, RUN_ID, "briefing-job");
     expect(findStatusText(mounted.root)).toContain(
       "couldn’t prepare an updated briefing. Your current report and plan choices are still available."
     );
