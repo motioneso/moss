@@ -111,7 +111,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "assistant",
     label: "Assistant & AI",
     description:
-      "Change the AI model for chat: choose which model answers, change model routing and response behavior. Also choose assistant behavior, persona dials, and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
+      "Change the AI model for chat: choose which model answers, change model routing and response behavior. When YOLO is active for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as YOLO in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning YOLO off restores confirmation for the next eligible request. Also choose assistant behavior, persona dials, and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
