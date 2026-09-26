@@ -269,14 +269,25 @@ clocks.
    - Web fetch is silent except toward loopback, private ranges, link-local and bare hostnames,
      which ask with the address on the card. Web search is silent.
    - Writes inside the folder are ordinary use; the forbidden zone refuses; elsewhere asks. Shell
-     always asks, marked destructive.
+     is classified as asking, marked destructive.
    - Moss's own tools are waved through at the agent-side prompt: the tool server's gateway already
      decides the real call with its own card, allowlist and audit.
    - Mode changes and tools never offered (subagents, skills, slash commands) refuse; a refusal
      makes a wrong launch list visible.
      The record: the pending row and every audit line carry the agent session id, tool call id, real
      tool name, session folder, the paths named (capped) and the decision word; never a command or
-     contents. Every ask outcome and every refusal writes an audit line; silent allows write nothing.
+     contents. Every ask outcome and every refusal writes an audit line; ordinary policy allows
+     write nothing.
+   - **YOLO correction (2026-09-26, requested by Ben):** For built-in requests classified as asking,
+     resolve the existing effective actor YOLO setting on each request. When active, allow without
+     a pending row, approval card, or person-decided event; record approval mode `yolo` and agent
+     decision `allowed`. Otherwise retain the existing human approval flow. Hard refusals remain
+     refused, including unknown names, unavailable tools, malformed reads and forbidden paths.
+     Codex native commands are recognized only in an established OpenAI session, with a matching
+     tool-call announcement and the pinned adapter's structured command/cwd permission envelope.
+     Inferred read/search command announcements remain shell asks; display titles grant nothing.
+     Announced forbidden file locations remain refused. Session profiles and the runner sandbox
+     are unchanged.
      The card reads "The agent wants to use <real name>" followed by the paths, address or command.
 5. **Unattended sessions never raise a card.** A permission request in an unattended session is
    answered from the same policy; anything the policy would have asked a person about is refused

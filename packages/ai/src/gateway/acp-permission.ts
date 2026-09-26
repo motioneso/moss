@@ -3,7 +3,8 @@
  *
  * Same approval system as every other ask, not a second one: the automatic
  * policy (`@moss/acp`) allows in-folder reads and writes outright and refuses
- * the unrecognised without a row, while anything needing a person creates the
+ * the unrecognised without a row. Effective actor YOLO auto-approves eligible
+ * asks; otherwise anything needing a person creates the
  * same pending row and emits the same `action_request` event the approval
  * card already listens for. Lives here rather than in gateway.ts so that file
  * stays under the size gate; the class keeps a thin delegate.
@@ -14,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import {
   ACP_DESTRUCTIVE_TOOL_NAMES,
   acpRequestFamily,
+  classifyAcpPermission,
   decideAcpPermission,
   extractAcpCommand,
   extractAcpPaths,
@@ -22,6 +24,7 @@ import {
   type AcpToolCallLocation
 } from "@moss/acp";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { ToolContext } from "@moss/module-sdk";
 import type { ActionAuditAgentSummary, ActionAuditInputSummary } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
@@ -70,6 +73,7 @@ export interface AcpPermissionGatewayDeps {
   readonly confirmations: ConfirmationRegistry;
   readonly notifier: SessionNotifier;
   readonly confirmTimeoutMs: number;
+  readonly yoloMode?: (ctx: ToolContext) => Promise<boolean>;
 }
 
 const ACP_TOOL_MODULE_ID = "acp-builtin";
@@ -80,7 +84,7 @@ const MAX_SUMMARY_PATH_LENGTH = 200;
 /** The card shows the agent's own description at most this long. */
 const MAX_CARD_TEXT = 200;
 
-type AcpAuditMode = "auto" | "confirmed" | "rejected" | "cancelled" | "timeout";
+type AcpAuditMode = "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
 type AcpActionKind = "write" | "outbound" | "destructive";
 
 /**
@@ -106,7 +110,7 @@ function acpActionKind(request: AcpBuiltInRequest): AcpActionKind {
 function acpAgentSummary(
   request: AcpBuiltInRequest,
   cwd: string,
-  decision: "asked" | "refused",
+  decision: ActionAuditAgentSummary["decision"],
   reason: string | null
 ): ActionAuditAgentSummary {
   const family = acpRequestFamily(request);
@@ -233,12 +237,33 @@ export async function requestAcpBuiltInPermission(
     locations: request.locations ?? null
   };
   const actionKind = acpActionKind(builtIn);
-  const summarize = (decision: "asked" | "refused", reason: string | null) => ({
+  const summarize = (decision: ActionAuditAgentSummary["decision"], reason: string | null) => ({
     ...summarizeAssistantToolInput(input),
     agent: acpAgentSummary(builtIn, request.cwd, decision, reason)
   });
 
   const startedAt = Date.now();
+  // Reuse the effective actor setting on every eligible ask; never override hard denials.
+  if (
+    classifyAcpPermission(builtIn, folders).verdict === "ask" &&
+    (await deps.yoloMode?.({ actorUserId, requestId, chatSessionId })) === true
+  ) {
+    await writeAcpAuditLine(deps, access, chatSessionId, {
+      toolName: builtIn.toolName ?? "(unnamed)",
+      actionKind,
+      mode: "yolo",
+      outcome: "success",
+      errorClass: null,
+      durationMs: Date.now() - startedAt,
+      inputSummary: summarize("allowed", "yolo")
+    });
+    return {
+      decision: "allow",
+      reason: "Allowed by YOLO mode.",
+      asked: false,
+      holdDurationMs: null
+    };
+  }
   let humanHoldDurationMs: number | null = null;
   const result = await decideAcpPermission(builtIn, folders, async () => {
     const toolName = builtIn.toolName ?? "";

@@ -671,3 +671,117 @@ async function waitForAnswer(
     .map((line) => JSON.parse(line))
     .find((msg) => msg.id === id && msg.result !== undefined);
 }
+
+// codex-acp 1.10.0 createCommandExecutionUpdate/createCommandActionEvent and
+// commandToolCall shapes, with a harmless command and synthetic paths.
+const codexCommand = { command: "printf hello", cwd: "/runner/session/acp/proj" };
+const codexAnnouncement = {
+  toolCallId: "call-9",
+  kind: "execute",
+  title: "untrusted display title",
+  rawInput: codexCommand
+};
+const codexPermission = {
+  toolCallId: "call-9",
+  kind: "execute",
+  status: "pending",
+  title: "Run command",
+  rawInput: codexCommand
+};
+
+describe("Codex native command permission identity", () => {
+  it.each([
+    codexAnnouncement,
+    {
+      toolCallId: "call-9",
+      kind: "read",
+      title: "Read file",
+      locations: [{ path: "/tmp/input.txt" }]
+    },
+    { toolCallId: "call-9", kind: "search", title: "Search" }
+  ])("classifies correlated $kind command announcements as shell", async (announcement) => {
+    const agent = new ScriptedAgent();
+    const decide = vi.fn(async () => "allow" as const);
+    const client = new MossAcpClient(agent, {}, { decide });
+    const handle = await client.openSession("chat:user:proj", "proj", "openai", "user-1", "chat");
+    agent.agentAnnouncesToolCall(announcement);
+    agent.agentAsksPermission(91, codexPermission);
+    expect((await waitForAnswer(agent, 91)).result.outcome).toEqual({
+      outcome: "selected",
+      optionId: "allow"
+    });
+    expect(decide).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: "Bash", kind: "execute", rawInput: codexCommand }),
+      expect.anything()
+    );
+    await client.close(handle);
+  });
+
+  it.each([
+    ...["/home/agent", "../../../../proc"].map((cwd) => ({
+      provider: "openai" as const,
+      announcement: { ...codexAnnouncement, rawInput: { ...codexCommand, cwd } },
+      permission: { ...codexPermission, rawInput: { ...codexCommand, cwd } }
+    })),
+    {
+      provider: "anthropic" as const,
+      announcement: codexAnnouncement,
+      permission: codexPermission
+    },
+    {
+      provider: "openai" as const,
+      announcement: codexAnnouncement,
+      permission: { ...codexPermission, rawInput: {} }
+    },
+    {
+      provider: "openai" as const,
+      announcement: codexAnnouncement,
+      permission: { ...codexPermission, rawInput: { command: "", cwd: codexCommand.cwd } }
+    },
+    {
+      provider: "openai" as const,
+      announcement: codexAnnouncement,
+      permission: { ...codexPermission, kind: "other" }
+    },
+    {
+      provider: "openai" as const,
+      announcement: { ...codexAnnouncement, kind: "other" },
+      permission: codexPermission
+    },
+    {
+      provider: "openai" as const,
+      announcement: { ...codexAnnouncement, rawInput: {} },
+      permission: codexPermission
+    },
+    {
+      provider: "openai" as const,
+      announcement: {
+        toolCallId: "call-9",
+        kind: "read",
+        title: "Read",
+        locations: [{ path: "/proc/self/environ" }]
+      },
+      permission: codexPermission
+    },
+    {
+      provider: "openai" as const,
+      announcement: { ...codexAnnouncement, toolCallId: "different-call" },
+      permission: codexPermission
+    }
+  ])(
+    "refuses malformed, spoofed, forbidden or cross-provider identity %#",
+    async ({ provider, announcement, permission }) => {
+      const agent = new ScriptedAgent();
+      const decide = vi.fn(async () => "allow" as const);
+      const client = new MossAcpClient(agent, {}, { decide });
+      const handle = await client.openSession("chat:user:proj", "proj", provider, "user-1", "chat");
+      agent.agentAnnouncesToolCall(announcement);
+      agent.agentAsksPermission(92, permission);
+      expect((await waitForAnswer(agent, 92, 10000)).result.outcome).toEqual({
+        outcome: "cancelled"
+      });
+      expect(decide).not.toHaveBeenCalled();
+      await client.close(handle);
+    }
+  );
+});
