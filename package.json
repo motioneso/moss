@@ -56,6 +56,7 @@
     "smoke:compose:prod": "tsx scripts/smoke-compose.ts --compose-file infra/docker-compose.prod.yml --build",
     "uat:provision:smoke": "tsx tests/uat/provisioner.ts",
     "test:uat": "tsx tests/uat/run-uat.ts",
+    "test:uat:2521-evening-proof": "tsx tests/uat/run-uat.ts 2521-evening-planning.uat.spec.ts",
     "test:uat:no-plan-review": "MOSS_UAT_BROWSER=firefox tsx tests/uat/run-uat.ts no-plan-review.uat.spec.ts",
     "test:e2e": "playwright test",
     "test:sw": "playwright test --config playwright.sw.config.ts",
