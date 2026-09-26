@@ -430,6 +430,28 @@ semantics while separately locating or supplying source-grounded preparation
 references and the approved in-reader material view. Reuse actor-visible read APIs;
 do not treat external email URLs as material-preview inputs.
 
+#### Morning Read report amendment for `screen-morning-reader`
+
+The current Today hero and full reader both render the complete saved
+`summaryText`, while the reader also repeats the task action rows. The approved
+study's `morningRead()` instead makes the report the detailed reading surface and
+keeps `morningSnapshot()` as its supporting schedule. The minimum writer change is
+to ask the existing morning synthesis for a short lead followed by grounded
+sections for priorities, verified changes, preparation and follow-up. It must
+omit a section when the corresponding source gives no facts. The saved
+`summaryText` remains the contract; no migration, new DTO field or second model
+call is needed. Today shows only its lead, while Read shows the complete text and
+source provenance. Existing runs without sections still render as prose in Read;
+Today uses their first paragraph. Task action controls remain on Today, and Read
+keeps its schedule rail and Review controls.
+
+This amendment does not claim a previous calendar event version or a preparation
+material unless a stored actor-visible source provides it. Email `View` links
+keep their existing source behavior on Today. An in-reader material view requires
+a separately proven material reference in the saved run; a text-only report must
+not fabricate one. Verify both a newly written sectional report and an older
+single-paragraph run before claiming the reader distinct from Today.
+
 ### 4. Complete the degraded-briefing decision and slice
 
 Give `p9-degraded-briefing-presentation` a bounded design handoff while the other
