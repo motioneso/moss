@@ -3,6 +3,11 @@ packages:
   - "packages/*"
   - "spikes/*"
 
+# Keep ACP's bundled Codex aligned with the managed discovery recipe (#2720).
+# Preserve bundled startup for connected accounts without a separately installed CLI.
+overrides:
+  "@agentclientprotocol/codex-acp@1.10.0>@openai/codex": "0.157.1"
+
 # Native-build posture (P1 #58): record intent explicitly so a clean install
 # reproduces it. onnxruntime-node + sharp download pre-built binaries (no
 # compiler) and are required by @huggingface/transformers (M-A1 embeddings);
