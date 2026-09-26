@@ -83,6 +83,17 @@ function projectIntent(intent: DayPlanEveningIntent): BriefingPlanEveningIntentV
   };
 }
 
+function hasEveningIntent(intent: DayPlanEveningIntent | null): intent is DayPlanEveningIntent {
+  return (
+    intent !== null &&
+    (intent.capacity !== null ||
+      intent.notes !== null ||
+      intent.priorityTaskIds.length > 0 ||
+      intent.corrections.length > 0 ||
+      intent.commitments.length > 0)
+  );
+}
+
 /**
  * Pure projection of a saved plan into briefing context. Bounded and
  * sanitized; carries no task body, email or calendar content.
@@ -95,7 +106,7 @@ export function projectPlanContext(plan: DayPlanDto): BriefingPlanContextV1 {
     localDay: plan.localDay,
     timeZone: plan.timeZone,
     sourceRunId: plan.sourceRunId,
-    eveningIntent: plan.eveningIntent ? projectIntent(plan.eveningIntent) : null,
+    eveningIntent: hasEveningIntent(plan.eveningIntent) ? projectIntent(plan.eveningIntent) : null,
     blocks: plan.blocks.slice(0, BLOCK_CAP).map(projectBlock)
   };
 }

@@ -400,8 +400,8 @@ function ReportBody(props: {
       {headline.rest ? <BriefingProse summaryText={headline.rest} /> : null}
       {noEveningPlan ? (
         <p className="brief-reader__plan-source">
-          No evening plan was available for this briefing. Moss used today’s available sources,
-          including tasks and calendar.
+          No evening priorities were available for this briefing. Moss used today’s available
+          sources, including tasks and calendar.
         </p>
       ) : null}
       {props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable" ? (

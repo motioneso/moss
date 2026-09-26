@@ -258,7 +258,13 @@ test("P9 degraded briefing source attribution and retry recovery through Today",
   );
   expect(planRead.status).toBe(200);
   expect(planRead.body.plan.id).toBe(planId);
-  expect(planRead.body.plan.eveningIntent).toBeNull();
+  expect(planRead.body.plan.eveningIntent).toEqual({
+    priorityTaskIds: [],
+    capacity: null,
+    notes: null,
+    corrections: [],
+    commitments: []
+  });
   console.log(
     `[P9 persisted plan fixture] ${JSON.stringify({ planId, date: SERVER_DAY, eveningIntent: planRead.body.plan.eveningIntent })}`
   );
