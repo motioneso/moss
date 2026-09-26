@@ -39,12 +39,50 @@ interface PushDeviceRef {
   readonly endpointHash: string;
 }
 
+/** The slice of `navigator.locks` used to run push changes one at a time across tabs. */
+export interface PushLockManager {
+  request<T>(name: string, callback: () => Promise<T>): Promise<T>;
+}
+
+export interface PushLock {
+  run<T>(task: () => Promise<T>): Promise<T>;
+}
+
+const PUSH_LOCK_NAME = "moss.push.device";
+
+/**
+ * Runs Enable and Remove one at a time. Tasks queue within the page, and each also holds a
+ * Web Lock when the browser has one, so other tabs of this site wait too. Without Web Locks
+ * only this page is serialized.
+ */
+export function createPushLock(locks: PushLockManager | undefined): PushLock {
+  let tail: Promise<unknown> = Promise.resolve();
+  return {
+    run<T>(task: () => Promise<T>): Promise<T> {
+      const start = () => (locks ? locks.request(PUSH_LOCK_NAME, task) : task());
+      const result = tail.then(start, start);
+      tail = result.catch(() => undefined);
+      return result;
+    }
+  };
+}
+
+let pageLock: PushLock | undefined;
+
+function defaultPushLock(): PushLock {
+  pageLock ??= createPushLock(
+    typeof navigator !== "undefined" && "locks" in navigator ? navigator.locks : undefined
+  );
+  return pageLock;
+}
+
 export class PushCleanupIncompleteError extends Error {
   constructor(cause: unknown) {
     const reason = (cause instanceof Error ? cause.message : String(cause)).replace(/[.\s]*$/, ".");
     super(
-      `${reason} This browser also kept the push registration it had just made. Try again, ` +
-        "or clear it in this site's browser settings."
+      `${reason} This browser kept the push registration it had just made, and Moss may ` +
+        "or may not have saved it. Try again to finish turning push on, or clear it in this " +
+        "site's browser settings and remove any extra device listed here."
     );
     this.name = "PushCleanupIncompleteError";
   }
@@ -105,6 +143,16 @@ export async function removePushDevice(input: {
   readonly container: PushServiceWorkerContainer | undefined;
   readonly deleteOnServer: (deviceId: string) => Promise<unknown>;
   readonly pending: PendingRemovalStore;
+  readonly lock?: PushLock;
+}): Promise<RemovePushDeviceOutcome> {
+  return (input.lock ?? defaultPushLock()).run(() => removeUnlocked(input));
+}
+
+async function removeUnlocked(input: {
+  readonly device: PushDeviceRef;
+  readonly container: PushServiceWorkerContainer | undefined;
+  readonly deleteOnServer: (deviceId: string) => Promise<unknown>;
+  readonly pending: PendingRemovalStore;
 }): Promise<RemovePushDeviceOutcome> {
   const subscription = await currentSubscription(input.container).catch(() => null);
   const removedThisDevice =
@@ -132,6 +180,17 @@ export async function removePushDevice(input: {
  * that already existed is kept, because the server may still hold a working record for it.
  */
 export async function enablePush<T>(input: {
+  readonly container: PushServiceWorkerContainer | undefined;
+  readonly applicationServerKey: BufferSource;
+  readonly registerOnServer: (body: RegisterPushSubscriptionRequest) => Promise<T>;
+  readonly deleteOnServer: (deviceId: string) => Promise<unknown>;
+  readonly pending: PendingRemovalStore;
+  readonly lock?: PushLock;
+}): Promise<T> {
+  return (input.lock ?? defaultPushLock()).run(() => enableUnlocked(input));
+}
+
+async function enableUnlocked<T>(input: {
   readonly container: PushServiceWorkerContainer | undefined;
   readonly applicationServerKey: BufferSource;
   readonly registerOnServer: (body: RegisterPushSubscriptionRequest) => Promise<T>;

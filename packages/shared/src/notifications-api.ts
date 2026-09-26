@@ -170,7 +170,10 @@ export interface PushDeviceDto {
   /**
    * sha256 hex of the push endpoint, the uniqueness key the server already stores. The
    * settings page hashes its own current endpoint and compares, so "This device" follows the
-   * browser's real subscription. The owner's browser already holds the endpoint itself.
+   * browser's real subscription. Every device of the owner receives every device's value.
+   * It is a one-way comparison fingerprint, not a push credential: delivery needs the endpoint
+   * and its keys. Anyone holding a candidate endpoint can hash it to test for a match, so
+   * resistance to recovering the endpoint rests on the endpoint's unpredictable token.
    */
   readonly endpointHash: string;
   readonly label: string | null;

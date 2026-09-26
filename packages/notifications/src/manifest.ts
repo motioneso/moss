@@ -166,9 +166,17 @@ export const notificationsModuleManifest = {
           code: "push_browser_unsubscribe_failed",
           class: "transient",
           description:
-            "The browser would not cancel its own push registration, after removing this " +
-            "device or after turning push on failed. Nothing is sent to it. Try again, or " +
-            "clear it in this site's browser settings."
+            "Shown after removing this device when the browser would not cancel its own " +
+            "push registration. The device record is deleted, so Moss no longer sends to " +
+            "it. Clear the leftover in this site's browser settings if wanted."
+        },
+        {
+          code: "push_enable_cleanup_incomplete",
+          class: "transient",
+          description:
+            "Turning push on failed and the browser kept the registration it had just made. " +
+            "The server may or may not have saved the device. Try again to finish, or clear " +
+            "it in the browser's site settings and remove any extra device listed."
         },
         {
           code: "push_pending_removal_incomplete",

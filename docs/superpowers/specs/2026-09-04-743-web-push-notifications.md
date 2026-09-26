@@ -133,6 +133,12 @@ Push has been a visible `Coming soon` promise since #735. Ben asked to build it 
   record triggers `unsubscribe()`, before the server delete. If the unsubscribe succeeds but the
   delete fails, the record id is kept as a pending removal in local storage, and Enable deletes
   pending records before subscribing, so a new endpoint never sits beside the old record.
+- Enable and Remove run one at a time (#2308): both buttons are disabled while either runs, the
+  page queues them, and each holds the Web Lock `moss.push.device` when `navigator.locks` exists
+  so other tabs wait too. Without Web Locks only the one page is serialized.
+- A failed enable whose cleanup did not complete leaves the server outcome unknown (the record may
+  have been saved before the response was lost). The message says so and offers "try again",
+  which re-registers the same endpoint in place.
 - Delivery: as in 5.2. A disabled row shows in the device list as "Not reachable, remove and
   enable again".
 - Key pair missing at delivery time (should not happen): job fails with a logged reason that

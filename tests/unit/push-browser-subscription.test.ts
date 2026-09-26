@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createPushLock,
   enablePush,
   PushCleanupIncompleteError,
   removePushDevice,
   type PendingRemovalStore,
+  type PushLock,
+  type PushLockManager,
   type PushServiceWorkerContainer
 } from "../../apps/web/src/settings/push-browser-subscription.js";
 
@@ -268,6 +271,94 @@ describe("removePushDevice", () => {
   });
 });
 
+/** Exclusive named locks shared by every "tab" in a test, like navigator.locks. */
+function fakeLockManager(): PushLockManager & { requested: string[] } {
+  const tails = new Map<string, Promise<unknown>>();
+  const requested: string[] = [];
+  return {
+    requested,
+    request<T>(name: string, callback: () => Promise<T>): Promise<T> {
+      requested.push(name);
+      const previous = tails.get(name) ?? Promise.resolve();
+      const result = previous.then(callback, callback);
+      tails.set(
+        name,
+        result.catch(() => undefined)
+      );
+      return result;
+    }
+  };
+}
+
+/**
+ * Enable starts on an already registered browser and its server request is held; Remove is
+ * clicked meanwhile. Run one at a time, the browser ends unsubscribed with no record left.
+ */
+async function enableThenRemoveOverlapping(enableLock: PushLock, removeLock: PushLock) {
+  const browser = fakeBrowser();
+  const server = fakeServer();
+  const subscription = await browser.subscribeNow();
+  const record = server.add(subscription.endpoint);
+
+  let releaseRegistration: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    releaseRegistration = resolve;
+  });
+  const registerOnServer = vi.fn(async (body: { endpoint: string }) => {
+    await held;
+    return server.registerOnServer(body);
+  });
+
+  const enabling = enablePush({
+    container: browser.container,
+    applicationServerKey,
+    registerOnServer,
+    deleteOnServer: server.deleteOnServer,
+    pending: memoryPending(),
+    lock: enableLock
+  });
+  await vi.waitFor(() => expect(registerOnServer).toHaveBeenCalled());
+
+  const removing = removePushDevice({
+    device: record,
+    container: browser.container,
+    deleteOnServer: server.deleteOnServer,
+    pending: memoryPending(),
+    lock: removeLock
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const unsubscribedWhileEnabling = subscription.unsubscribe.mock.calls.length > 0;
+
+  releaseRegistration();
+  await enabling;
+  await removing;
+
+  return { browser, server, unsubscribedWhileEnabling };
+}
+
+describe("overlapping Enable and Remove", () => {
+  it("run one at a time within a page when Web Locks are unavailable", async () => {
+    const lock = createPushLock(undefined);
+
+    const result = await enableThenRemoveOverlapping(lock, lock);
+
+    expect(result.unsubscribedWhileEnabling).toBe(false);
+    expect(result.browser.state.current).toBeNull();
+    expect(result.server.records.size).toBe(0);
+  });
+
+  it("run one at a time across tabs through Web Locks", async () => {
+    const locks = fakeLockManager();
+
+    const result = await enableThenRemoveOverlapping(createPushLock(locks), createPushLock(locks));
+
+    expect(result.unsubscribedWhileEnabling).toBe(false);
+    expect(result.browser.state.current).toBeNull();
+    expect(result.server.records.size).toBe(0);
+    expect(new Set(locks.requested).size).toBe(1);
+  });
+});
+
 describe("enablePush after a partly failed removal", () => {
   it("finishes the pending removal before subscribing, leaving one record", async () => {
     const browser = fakeBrowser();
@@ -429,5 +520,7 @@ describe("notification settings push wiring", () => {
     expect(view).toContain("currentPushEndpointHash(");
     expect(view).not.toContain("moss.push.deviceId");
     expect(view).not.toContain("pushManager.subscribe(");
+    expect(view).toContain("const pushActionInFlight = busy || removeMutation.isPending;");
+    expect(view.match(/disabled=\{pushActionInFlight\}/g)).toHaveLength(2);
   });
 });

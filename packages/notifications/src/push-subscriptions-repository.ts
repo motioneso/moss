@@ -56,7 +56,11 @@ const DEVICE_COLUMNS = [
  */
 const ownerIsActor = sql<boolean>`owner_user_id = app.current_actor_user_id()`;
 
-/** sha256 hex of the endpoint URL: the uniqueness key, never reversible to the URL. */
+/**
+ * sha256 hex of the endpoint URL: the uniqueness key, and the owner-visible fingerprint the
+ * settings page matches against. One-way, but a holder of a candidate URL can hash it to test
+ * for a match; the URL's unpredictable token is what keeps it from being guessed.
+ */
 export function hashPushEndpoint(endpoint: string): string {
   return createHash("sha256").update(endpoint, "utf8").digest("hex");
 }

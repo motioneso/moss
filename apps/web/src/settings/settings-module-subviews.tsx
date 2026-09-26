@@ -703,6 +703,7 @@ function PushChannel() {
   }
 
   const devices = configQuery.data?.enabledDevices ?? [];
+  const pushActionInFlight = busy || removeMutation.isPending;
 
   return (
     <>
@@ -710,7 +711,12 @@ function PushChannel() {
         name="Push"
         desc="System notifications on this device."
         control={
-          <Button variant="secondary" size="sm" onClick={() => void enable()} disabled={busy}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void enable()}
+            disabled={pushActionInFlight}
+          >
             {busy ? "Enabling..." : "Enable on this device"}
           </Button>
         }
@@ -736,7 +742,7 @@ function PushChannel() {
                 variant="quiet"
                 size="sm"
                 onClick={() => removeMutation.mutate(device)}
-                disabled={removeMutation.isPending}
+                disabled={pushActionInFlight}
               >
                 Remove
               </Button>
