@@ -274,13 +274,20 @@ export function StandingsRail(props: {
   // The overview payload only carries standings for followed leagues; selecting a league outside
   // that set lazily fetches it via the dedicated standings route (#842). Tournaments always fetch
   // lazily too, because only that route carries the current-round `fixtures` (#839 follow-up).
+  const lazyEnabled = activeKey !== "" && (isTournament || !byKey.has(activeKey));
   const lazy = useQuery({
     queryKey: sportsQueryKeys.standings(activeKey),
     queryFn: () => getStandingsByLeague(activeKey),
-    enabled: activeKey !== "" && (isTournament || !byKey.has(activeKey))
+    enabled: lazyEnabled
   });
 
-  const { group: lazyGroup, fixtures, degraded } = unwrapStandings(lazy.data);
+  // A disabled query still returns its cached result. Once the overview carries this league, that
+  // cached table and its failure flag are stale, so only read them while the query is live.
+  const {
+    group: lazyGroup,
+    fixtures,
+    degraded
+  } = unwrapStandings(lazyEnabled ? lazy.data : undefined);
   const group = lazyGroup ?? byKey.get(activeKey) ?? null;
   const knockout = isTournament && fixtures.length > 0;
 

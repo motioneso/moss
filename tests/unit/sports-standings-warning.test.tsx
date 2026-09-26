@@ -28,4 +28,28 @@ describe("Sports standings rail refresh warning", () => {
     expect(html).not.toContain("Some sports information could not be updated");
     expect(renderRail(false)).not.toContain("could not be updated");
   });
+
+  it("drops the warning once the overview recovers with that league's rows (#2686)", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderPage = () =>
+      renderToString(createElement(QueryClientProvider, { client }, createElement(SportsPage)));
+    const nfl = { ...standingsGroup(), competitionKey: "nfl", competitionLabel: "NFL" };
+
+    // The standings source is failing, so the rail reads the league's own standings request.
+    client.setQueryData(sportsQueryKeys.overview, makeOverview({ standings: [] }));
+    client.setQueryData(sportsQueryKeys.standings("nfl"), {
+      group: { ...nfl, sections: [] },
+      fixtures: [],
+      degraded: true
+    });
+    expect(renderPage()).toContain("Standings could not be updated just now");
+
+    // The overview refreshes with NFL rows, which switches the league request off. Its cached
+    // failure must not outlive it.
+    client.setQueryData(sportsQueryKeys.overview, makeOverview({ standings: [nfl] }));
+    const recovered = renderPage();
+    expect(recovered).not.toContain("could not be updated");
+    expect(recovered).not.toContain("No standings available");
+    expect(recovered).toContain("Arsenal");
+  });
 });
