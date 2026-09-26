@@ -22,11 +22,16 @@
 
 import { readFile } from "node:fs/promises";
 
-import type { TmuxIo } from "@moss/ai";
-import type { RpcListProviderModelsResult, RpcProviderKind } from "@moss/chat/live";
+import { getAcpProviderRowByAgentId } from "@moss/acp";
+import type { ProviderKind, TmuxIo } from "@moss/ai";
+import {
+  recordProviderLoginRejected,
+  type RpcListProviderModelsResult,
+  type RpcProviderKind
+} from "@moss/chat/live";
 
 import { instanceCodexAuthPath } from "./codex-shared-login.js";
-import { readProviderToken } from "./provider-token-store.js";
+import { readProviderCredentialEnv, readProviderToken } from "./provider-token-store.js";
 
 /** Bound on every vendor call (spec §1). */
 export const MODEL_LIST_TIMEOUT_MS = 5_000;
@@ -58,6 +63,10 @@ export interface ModelListAdapterDeps {
 }
 
 export type ModelListAdapter = (deps: ModelListAdapterDeps) => Promise<RpcListProviderModelsResult>;
+
+type RunnerModelListDeps = Omit<ModelListAdapterDeps, "onLoginRejected"> & {
+  readonly beforeModelList?: (provider: RpcProviderKind, acpAgentId: string) => Promise<void>;
+};
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested directly)
@@ -277,11 +286,17 @@ const googleAdapter: ModelListAdapter = async () => ({
   message: "this provider cannot list its models yet"
 });
 
-/** THE registry: a provider absent here is `unsupported`. */
-export const MODEL_LIST_ADAPTERS: Readonly<Record<RpcProviderKind, ModelListAdapter>> = {
-  anthropic: anthropicAdapter,
-  "openai-compatible": codexAdapter,
-  google: googleAdapter
+const opencodeAdapter: ModelListAdapter = async () => ({
+  status: "unsupported",
+  message: "OpenCode model discovery is not supported yet"
+});
+
+/** THE identity-keyed registry: an ACP identity absent here is `unsupported`. */
+export const MODEL_LIST_ADAPTERS: Readonly<Record<string, ModelListAdapter>> = {
+  "claude-acp": anthropicAdapter,
+  "codex-acp": codexAdapter,
+  "antigravity-acp": googleAdapter,
+  opencode: opencodeAdapter
 };
 
 /**
@@ -296,7 +311,15 @@ export async function verifyProviderCredential(
   provider: RpcProviderKind,
   deps: ModelListAdapterDeps
 ): Promise<"accepted" | "refused" | "unknown"> {
-  const result = await listProviderModels(provider, deps);
+  // This login-check path is keyed to the historical catalog choice. Live provider model
+  // discovery uses the persisted ACP identity supplied by the configured provider row.
+  const agentId =
+    provider === "anthropic"
+      ? "claude-acp"
+      : provider === "openai-compatible"
+        ? "codex-acp"
+        : "antigravity-acp";
+  const result = await listProviderModels(provider, agentId, deps);
   if (result.status === "ok") return "accepted";
   if (result.status === "not_logged_in") return "refused";
   return "unknown";
@@ -305,13 +328,54 @@ export async function verifyProviderCredential(
 /** Run the provider's adapter; an adapter throw becomes a plain `error` (no secret can leak via message). */
 export async function listProviderModels(
   provider: RpcProviderKind,
-  deps: ModelListAdapterDeps
+  acpAgentIdOrDeps: string | ModelListAdapterDeps,
+  maybeDeps?: ModelListAdapterDeps
 ): Promise<RpcListProviderModelsResult> {
-  const adapter = MODEL_LIST_ADAPTERS[provider];
+  const acpAgentId =
+    typeof acpAgentIdOrDeps === "string" ? acpAgentIdOrDeps : catalogLoginAgentId(provider);
+  const deps = typeof acpAgentIdOrDeps === "string" ? maybeDeps : acpAgentIdOrDeps;
+  if (!deps) return { status: "unsupported" };
+  const row = getAcpProviderRowByAgentId(acpAgentId);
+  const compatible =
+    (provider === "anthropic" && row?.kind === "anthropic") ||
+    (provider === "openai-compatible" && (row?.kind === "openai" || row?.kind === "opencode")) ||
+    (provider === "google" && row?.kind === "google");
+  if (!compatible) return { status: "unsupported" };
+  const adapter = MODEL_LIST_ADAPTERS[acpAgentId];
   if (!adapter) return { status: "unsupported" };
   try {
     return await adapter(deps);
   } catch {
     return { status: "error", message: "model list failed unexpectedly" };
   }
+}
+
+/** Legacy runner-local callers are catalog/login keyed; API provider routes always send a row id. */
+export function catalogLoginAgentId(provider: RpcProviderKind): string {
+  if (provider === "anthropic") return "claude-acp";
+  if (provider === "openai-compatible") return "codex-acp";
+  return "antigravity-acp";
+}
+
+/** Resolve the runner-local credential hooks, then use the identity-keyed model-list adapter. */
+export async function listProviderModelsForRunner(
+  provider: RpcProviderKind,
+  requestedAgentId: string | undefined,
+  deps: RunnerModelListDeps
+): Promise<RpcListProviderModelsResult> {
+  const acpAgentId = requestedAgentId ?? catalogLoginAgentId(provider);
+  await deps.beforeModelList?.(provider, acpAgentId);
+  const credentialEnv =
+    deps.homeBase && acpAgentId !== "opencode"
+      ? await readProviderCredentialEnv(deps.homeBase, provider)
+      : undefined;
+  return listProviderModels(provider, acpAgentId, {
+    homeBase: deps.homeBase,
+    fetch: deps.fetch,
+    io: deps.io,
+    readCodexAuthFile: deps.readCodexAuthFile,
+    codexVersion: deps.codexVersion,
+    onLoginRejected: () =>
+      recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined)
+  });
 }

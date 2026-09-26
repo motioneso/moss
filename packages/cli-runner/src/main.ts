@@ -383,8 +383,8 @@ export function createCliRunner(
     loginService,
     resolveUserRuntime,
     // #2687: model listing reads the shared Codex login, so it first picks up any newer refresh.
-    beforeModelList: async (provider) => {
-      if (provider !== "openai-compatible" || !config.perUserUid) return;
+    beforeModelList: async (_provider, acpAgentId) => {
+      if (acpAgentId !== "codex-acp" || !config.perUserUid) return;
       await publishNewestCodexLogin(
         config.homeBase,
         codexPeerHomes(config.homeBase, undefined, ownerCodexAccess)

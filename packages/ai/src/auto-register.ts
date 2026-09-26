@@ -17,6 +17,7 @@ import type { AiModelTier, AiProviderKind, DataContextDb } from "@moss/db";
 import type { AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import { ModelDiscoveryService } from "./model-discovery.js";
+import { defaultCliAgentIdForProviderKind } from "./provider-identity.js";
 import type { AiRepository } from "./repository.js";
 
 /**
@@ -144,22 +145,36 @@ export class AiAutoRegisterService implements AiAutoRegisterPort {
     const def = DEFAULT_CHAT_MODELS[providerKind];
     if (!def) return; // no catalog default for this provider — nothing to register.
 
+    const defaultAgentId = defaultCliAgentIdForProviderKind(providerKind);
+    if (!defaultAgentId) return;
+
     // #2205: the row the founder clicked wins. A disabled one is reactivated BEFORE the gates below
     // run, so its existing models count and no duplicate config/model set is created.
     const clicked = options?.providerConfigId
-      ? await this.reactivateClickedProvider(scopedDb, options.providerConfigId, providerKind)
+      ? await this.reactivateClickedProvider(
+          scopedDb,
+          options.providerConfigId,
+          providerKind,
+          defaultAgentId
+        )
       : undefined;
 
     // #982/#869 D2: sentinel creation stays idempotent, but its gate must not skip static discovery.
-    const hasChatModel = await this.repository.hasChatModelForProviderKind(scopedDb, providerKind);
+    const hasChatModel = await this.repository.hasChatModelForProvider(
+      scopedDb,
+      providerKind,
+      defaultAgentId
+    );
     const existing =
-      clicked ?? (await this.repository.findReusableProviderByKind(scopedDb, providerKind));
+      clicked ??
+      (await this.repository.findReusableProviderByKind(scopedDb, providerKind, defaultAgentId));
     if (hasChatModel && !existing) return;
     const providerConfig =
       existing ??
       (await this.repository.createProvider(scopedDb, {
         providerKind,
         displayName: def.providerDisplayName,
+        acpAgentId: defaultAgentId,
         status: "active",
         authMethod: "cli",
         // CLI providers carry NO real credential — seal the same `{ cli: true }` marker the Admin
@@ -187,6 +202,7 @@ export class AiAutoRegisterService implements AiAutoRegisterPort {
           actorUserId: providerConfig.owner_user_id,
           providerId: providerConfig.id,
           providerKind: providerConfig.provider_kind,
+          acpAgentId: providerConfig.acp_agent_id,
           authMethod: providerConfig.auth_method,
           baseUrl: providerConfig.base_url,
           credential: { cli: true }
@@ -217,12 +233,14 @@ export class AiAutoRegisterService implements AiAutoRegisterPort {
   private async reactivateClickedProvider(
     scopedDb: DataContextDb,
     providerConfigId: string,
-    providerKind: AiProviderKind
+    providerKind: AiProviderKind,
+    acpAgentId: string
   ) {
     const target = await this.repository.findLoginTargetProvider(
       scopedDb,
       providerConfigId,
-      providerKind
+      providerKind,
+      acpAgentId
     );
     if (!target) return undefined;
     if (target.status === "active") return target;

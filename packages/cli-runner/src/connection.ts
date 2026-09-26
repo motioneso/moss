@@ -493,11 +493,14 @@ async function invoke(
       return host.installProvider(provider);
     }
     case "listProviderModels": {
-      // #2208: non-session; kind guard ⇒ bad_request. Every other outcome (not logged in,
+      // #2208: non-session; kind and persisted ACP identity guards ⇒ bad_request. Every other outcome (not logged in,
       // unsupported, vendor failure) is a normal RpcOk result, never an RpcErr.
-      const provider = (req.params as RpcListProviderModelsParams).provider;
+      const { provider, acpAgentId } = req.params as RpcListProviderModelsParams;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      return host.listProviderModels(provider);
+      if (typeof acpAgentId !== "string" || !acpAgentId.trim()) {
+        throw new BadRequestError("ACP agent identity is required");
+      }
+      return host.listProviderModels(provider, acpAgentId);
     }
     case "beginLogin": {
       // login-contract §L.2.2: kind guard FIRST (bad_request). The catalog/adapter-blocked gate

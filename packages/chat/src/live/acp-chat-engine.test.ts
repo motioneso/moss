@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AcpTunnel } from "@moss/acp";
+import type { AcpProviderKind, AcpTunnel } from "@moss/acp";
 
 import {
   AcpChatEngine,
@@ -130,6 +130,8 @@ class PromptErrorTunnel implements AcpTunnel {
 
 class PromptMockTunnel implements AcpTunnel {
   readonly sent: Array<{ method?: string; params?: Record<string, unknown> }> = [];
+  readonly spawnedProviders: AcpProviderKind[] = [];
+  modelValues: string[] | null = null;
   private readonly lines: string[] = [];
   private seq = 0;
   private killed = false;
@@ -137,7 +139,8 @@ class PromptMockTunnel implements AcpTunnel {
   usageToReturn: Record<string, unknown> | null = null;
   textToStream = "Hello there!";
 
-  async spawn() {
+  async spawn(_sessionKey: string, _projectId: string, providerKind: AcpProviderKind) {
+    this.spawnedProviders.push(providerKind);
     return { cwd: "/tmp/acp", home: "/tmp/home", pid: 1, uid: 1, gid: 1 };
   }
 
@@ -161,7 +164,29 @@ class PromptMockTunnel implements AcpTunnel {
         }
       });
     } else if (message.method === "session/new") {
-      this.emit({ jsonrpc: "2.0", id: message.id, result: { sessionId: "session-1" } });
+      this.emit({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          sessionId: "session-1",
+          ...(this.modelValues === null
+            ? {}
+            : {
+                configOptions: [
+                  {
+                    type: "select",
+                    id: "model",
+                    name: "Model",
+                    category: "model",
+                    currentValue: this.modelValues[0] ?? "default",
+                    options: this.modelValues.map((value) => ({ name: value, value }))
+                  }
+                ]
+              })
+        }
+      });
+    } else if (message.method === "session/set_config_option") {
+      this.emit({ jsonrpc: "2.0", id: message.id, result: { configOptions: [] } });
     } else if (message.method === "session/prompt") {
       this.emit({
         jsonrpc: "2.0",
@@ -242,9 +267,79 @@ class PromptMockTunnel implements AcpTunnel {
 }
 
 describe("AcpChatEngine", () => {
-  it("routes Codex and OpenCode independently", () => {
+  it("routes OpenAI-compatible chats to Codex", () => {
     expect(toAcpProviderKind("openai-compatible")).toBe("openai");
-    expect(toAcpProviderKind("openai-compatible", "muse-spark-1.3-free")).toBe("opencode");
+    expect(toAcpProviderKind("openai-compatible", "codex-acp")).toBe("openai");
+    expect(toAcpProviderKind("openai-compatible", "opencode")).toBe("opencode");
+  });
+
+  it("routes OpenCode only from the selected persisted agent identity", async () => {
+    const tunnel = new PromptMockTunnel();
+    tunnel.modelValues = ["default", "muse-spark-1.3-free"];
+    const engine = new AcpChatEngine("openai-compatible", "chat:u1:selected-opencode", {
+      tunnel,
+      acpAgentId: "opencode",
+      userId: "u1",
+      projectId: "selected-opencode",
+      log: vi.fn()
+    });
+
+    await engine.launch({
+      neutralDir: "/tmp/acp",
+      personaPath: "/tmp/acp/persona.md",
+      model: "default",
+      acpModel: "muse-spark-1.3-free"
+    });
+
+    expect(tunnel.spawnedProviders).toEqual(["opencode"]);
+    expect(
+      tunnel.sent.find((message) => message.method === "session/set_config_option")?.params
+    ).toMatchObject({ configId: "model", value: "muse-spark-1.3-free" });
+    await engine.kill();
+  });
+
+  it("keeps OpenAI-selected chat on Codex when a stale OpenCode model is present", async () => {
+    const tunnel = new PromptMockTunnel();
+    const engine = new AcpChatEngine("openai-compatible", "chat:u1:stale-opencode-model", {
+      tunnel,
+      userId: "u1",
+      projectId: "stale-opencode-model",
+      log: vi.fn()
+    });
+
+    await engine.launch({
+      neutralDir: "/tmp/acp",
+      personaPath: "/tmp/acp/persona.md",
+      model: "gpt-sol",
+      acpModel: "muse-spark-1.3-free"
+    });
+
+    expect(tunnel.spawnedProviders).toEqual(["openai"]);
+    await engine.kill();
+  });
+
+  it("applies the selected OpenAI model when Codex advertises the stale OpenCode model too", async () => {
+    const tunnel = new PromptMockTunnel();
+    tunnel.modelValues = ["gpt-sol", "muse-spark-1.3-free"];
+    const engine = new AcpChatEngine("openai-compatible", "chat:u1:selected-openai-model", {
+      tunnel,
+      userId: "u1",
+      projectId: "selected-openai-model",
+      log: vi.fn()
+    });
+
+    await engine.launch({
+      neutralDir: "/tmp/acp",
+      personaPath: "/tmp/acp/persona.md",
+      model: "gpt-sol",
+      acpModel: "muse-spark-1.3-free"
+    });
+
+    expect(tunnel.spawnedProviders).toEqual(["openai"]);
+    expect(
+      tunnel.sent.find((message) => message.method === "session/set_config_option")?.params
+    ).toMatchObject({ configId: "model", value: "gpt-sol" });
+    await engine.kill();
   });
 
   it("turns an authentication failure into the chat sign-in message", async () => {

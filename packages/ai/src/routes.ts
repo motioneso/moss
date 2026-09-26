@@ -53,7 +53,6 @@ import {
   type AiModelStatus,
   type AiModelTier,
   type AiProviderConfigDto,
-  type AiProviderExecutionMode,
   type AiProviderKind,
   type AiProviderStatus,
   type CreateAiConfiguredModelRequest,
@@ -79,7 +78,7 @@ import {
   boundedAssistantToolResultData
 } from "./gateway/output-validation.js";
 import { ToolInputValidationError, validateToolInput } from "./gateway/input-validation.js";
-import { cliAvailable, type ProviderKind as CliProviderKind } from "./cli-availability.js";
+import { cliAvailableForAcpAgent } from "./cli-availability.js";
 import { registerAiAdminPinRoutes } from "./admin-ai-pin-routes.js";
 import { registerAiServiceRoutes } from "./capability-route-routes.js";
 import { registerAiTranscriptionRoutes } from "./transcription-routes.js";
@@ -88,6 +87,10 @@ import { registerActionPolicyRoutes } from "./action-policy-routes.js";
 import { registerModuleBuildRoutes } from "./module-build-routes.js";
 import { registerProviderVisibilityRoutes } from "./provider-visibility-routes.js";
 import { createAiSecretCipher, type AiSecretCipher } from "./crypto.js";
+import {
+  defaultCliAgentIdForProviderKind,
+  isAcpAgentCompatibleWithProviderKind
+} from "./provider-identity.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import { serializeModel } from "./serialize-model.js";
 export { serializeModel } from "./serialize-model.js";
@@ -168,8 +171,6 @@ const WRITABLE_PROVIDER_STATUSES = new Set<Exclude<AiProviderStatus, "revoked">>
   "disabled"
 ]);
 const AUTH_METHODS = new Set<AiAuthMethod>(["cli", "api_key"]);
-const EXECUTION_MODES = new Set<AiProviderExecutionMode>(["interactive", "non_interactive"]);
-const CLI_PROVIDER_KINDS = new Set<CliProviderKind>(["anthropic", "openai-compatible", "google"]);
 const MODEL_STATUSES = new Set<AiModelStatus>(["active", "disabled"]);
 const MODEL_TIERS = new Set<AiModelTier>(["reasoning", "interactive", "economy"]);
 const MODEL_CAPABILITIES = new Set<AiModelCapability>(AI_MODEL_CAPABILITIES);
@@ -203,12 +204,26 @@ export function registerAiRoutes(
             const created = await repository.createProvider(scopedDb, {
               providerKind: body.providerKind,
               displayName: body.displayName,
+              acpAgentId: body.acpAgentId ?? null,
               baseUrl: body.baseUrl ?? null,
               status: body.status ?? "active",
               authMethod,
-              executionMode: body.executionMode,
               encryptedCredential
             });
+
+            // OpenCode exposes its own model choices after session/new, so it has no Codex model
+            // list to import. An explicitly added OpenCode connection gets the provider's
+            // selectable ACP default while any saved concrete OpenCode model remains optional.
+            if (created.auth_method === "cli" && created.acp_agent_id === "opencode") {
+              await repository.createModel(scopedDb, {
+                providerConfigId: created.id,
+                providerModelId: "default",
+                displayName: "OpenCode (default model)",
+                capabilities: ["chat"],
+                status: "active",
+                tier: "interactive"
+              });
+            }
 
             // #982/#869 D1/D2/D6: every connect-shaped path uses one reconciler. CLI statics are
             // active and replace stale/manual concrete rows; API fallback guesses remain unpersisted.
@@ -220,6 +235,7 @@ export function registerAiRoutes(
                   actorUserId: accessContext.actorUserId,
                   providerId: created.id,
                   providerKind: created.provider_kind,
+                  acpAgentId: created.acp_agent_id,
                   authMethod: created.auth_method,
                   baseUrl: created.base_url,
                   credential: authMethod === "cli" ? { cli: true } : (body.credentialPayload ?? {})
@@ -275,18 +291,39 @@ export function registerAiRoutes(
         const reconnectChanged =
           body.credentialPayload !== undefined ||
           body.baseUrl !== undefined ||
-          body.authMethod !== undefined;
+          body.authMethod !== undefined ||
+          body.acpAgentId !== undefined ||
+          body.providerKind !== undefined;
         const provider = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
             await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
+            const existing = (await repository.listProviders(scopedDb)).find(
+              (candidate) => candidate.id === request.params.id
+            );
+            if (!existing) return undefined;
+            const providerKind = body.providerKind ?? existing.provider_kind;
+            const authMethod = body.authMethod ?? existing.auth_method;
+            // A kind change cannot inherit an agent from the old protocol family. Select the
+            // established CLI for the new family unless the admin explicitly chose an agent.
+            const priorAgentId =
+              body.providerKind !== undefined && body.providerKind !== existing.provider_kind
+                ? undefined
+                : existing.acp_agent_id;
+            const providerIdentityChanged =
+              body.providerKind !== undefined ||
+              body.authMethod !== undefined ||
+              body.acpAgentId !== undefined;
+            const acpAgentId = providerIdentityChanged
+              ? resolveAcpAgentId(providerKind, authMethod, body.acpAgentId, priorAgentId)
+              : existing.acp_agent_id;
             const updated = await repository.updateProvider(scopedDb, request.params.id, {
-              providerKind: body.providerKind,
+              providerKind,
               displayName: body.displayName,
               baseUrl: body.baseUrl,
               status: body.status,
-              authMethod: body.authMethod,
-              executionMode: body.executionMode,
+              authMethod,
+              acpAgentId,
               encryptedCredential
             });
             if (!updated || !reconnectChanged) return updated;
@@ -308,6 +345,7 @@ export function registerAiRoutes(
                     actorUserId: accessContext.actorUserId,
                     providerId: updated.id,
                     providerKind: updated.provider_kind,
+                    acpAgentId: updated.acp_agent_id,
                     authMethod: updated.auth_method,
                     baseUrl: updated.base_url,
                     credential
@@ -828,19 +866,26 @@ function cleanCredentialPayload(payload: Record<string, unknown>): Record<string
 
 function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
   const value = requireObject(body);
-  const authMethod = optionalAuthMethod(value.authMethod);
+  const providerKind = requiredProviderKind(value.providerKind, "providerKind");
+  const authMethod = optionalAuthMethod(value.authMethod) ?? "api_key";
+  const acpAgentId = resolveAcpAgentId(
+    providerKind,
+    authMethod,
+    optionalNullableString(value.acpAgentId, "acpAgentId"),
+    undefined
+  );
 
   if (authMethod !== "cli" && value.credentialPayload === undefined) {
     throw new HttpError(400, "credentialPayload is required for api_key auth method");
   }
 
   return {
-    providerKind: requiredProviderKind(value.providerKind, "providerKind"),
+    providerKind,
     displayName: requiredString(value.displayName, "displayName"),
+    acpAgentId,
     baseUrl: optionalNullableString(value.baseUrl, "baseUrl"),
     status: optionalProviderStatus(value.status),
     authMethod,
-    executionMode: optionalExecutionMode(value.executionMode),
     credentialPayload:
       value.credentialPayload === undefined
         ? undefined
@@ -854,15 +899,39 @@ function parseUpdateProviderBody(body: unknown): UpdateAiProviderConfigRequest {
   return {
     providerKind: optionalProviderKind(value.providerKind, "providerKind"),
     displayName: optionalString(value.displayName, "displayName"),
+    acpAgentId: optionalNullableString(value.acpAgentId, "acpAgentId"),
     baseUrl: optionalNullableString(value.baseUrl, "baseUrl"),
     status: optionalProviderStatus(value.status),
     authMethod: optionalAuthMethod(value.authMethod),
-    executionMode: optionalExecutionMode(value.executionMode),
     credentialPayload:
       value.credentialPayload === undefined
         ? undefined
         : cleanCredentialPayload(requiredJsonObject(value.credentialPayload, "credentialPayload"))
   };
+}
+
+function resolveAcpAgentId(
+  providerKind: AiProviderKind,
+  authMethod: AiAuthMethod,
+  requestedAgentId: string | null | undefined,
+  previousAgentId: string | null | undefined
+): string | null {
+  if (authMethod === "api_key") {
+    if (requestedAgentId != null) {
+      throw new HttpError(400, "acpAgentId is only valid for CLI providers");
+    }
+    return null;
+  }
+
+  const agentId =
+    requestedAgentId ?? previousAgentId ?? defaultCliAgentIdForProviderKind(providerKind);
+  if (!agentId) {
+    throw new HttpError(400, `A CLI agent must be selected for ${providerKind}`);
+  }
+  if (!isAcpAgentCompatibleWithProviderKind(providerKind, agentId)) {
+    throw new HttpError(400, `ACP agent ${agentId} is not compatible with ${providerKind}`);
+  }
+  return agentId;
 }
 
 function parseCreateModelBody(body: unknown): CreateAiConfiguredModelRequest {
@@ -985,18 +1054,17 @@ export async function serializeProvider(
   provider: AiProviderConfigSafeRow
 ): Promise<AiProviderConfigDto> {
   const isCli = provider.auth_method === "cli";
-  const isCliProvider = CLI_PROVIDER_KINDS.has(provider.provider_kind as CliProviderKind);
   const cliAvailableFlag =
-    isCli && isCliProvider ? await cliAvailable(provider.provider_kind as CliProviderKind) : false;
+    isCli && provider.acp_agent_id ? await cliAvailableForAcpAgent(provider.acp_agent_id) : false;
 
   return {
     id: provider.id,
     providerKind: provider.provider_kind,
     displayName: provider.display_name,
+    acpAgentId: provider.acp_agent_id,
     baseUrl: provider.base_url,
     status: provider.status,
     authMethod: provider.auth_method,
-    executionMode: provider.execution_mode,
     hasCredential: isCli ? false : provider.has_credential,
     cliAvailable: cliAvailableFlag,
     // #870/H1: expose the single instance-default flag so the admin UI can render the radio state.
@@ -1125,17 +1193,6 @@ function optionalAuthMethod(value: unknown): AiAuthMethod | undefined {
   }
 
   throw new HttpError(400, "authMethod must be cli or api_key");
-}
-
-function optionalExecutionMode(value: unknown): AiProviderExecutionMode | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value === "string" && EXECUTION_MODES.has(value as AiProviderExecutionMode)) {
-    return value as AiProviderExecutionMode;
-  }
-
-  throw new HttpError(400, "executionMode must be interactive or non_interactive");
 }
 
 function optionalProviderStatus(value: unknown): Exclude<AiProviderStatus, "revoked"> | undefined {

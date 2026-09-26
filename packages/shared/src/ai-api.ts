@@ -66,11 +66,6 @@ export const aiAuthMethodSchema = {
   enum: ["cli", "api_key"]
 } as const;
 
-export const aiProviderExecutionModeSchema = {
-  type: "string",
-  enum: ["interactive", "non_interactive"]
-} as const;
-
 const aiProviderConfigSchema = {
   type: "object",
   additionalProperties: false,
@@ -78,10 +73,10 @@ const aiProviderConfigSchema = {
     "id",
     "providerKind",
     "displayName",
+    "acpAgentId",
     "baseUrl",
     "status",
     "authMethod",
-    "executionMode",
     "hasCredential",
     "cliAvailable",
     "isInstanceDefault",
@@ -93,10 +88,10 @@ const aiProviderConfigSchema = {
     id: { type: "string" },
     providerKind: aiProviderKindSchema,
     displayName: { type: "string" },
+    acpAgentId: { type: ["string", "null"] },
     baseUrl: { type: ["string", "null"] },
     status: aiProviderStatusSchema,
     authMethod: aiAuthMethodSchema,
-    executionMode: aiProviderExecutionModeSchema,
     hasCredential: { type: "boolean" },
     cliAvailable: { type: "boolean" },
     // #870/H1: single instance-default provider flag (migration 0147).
@@ -114,6 +109,7 @@ const aiConfiguredModelSchema = {
     "id",
     "providerConfigId",
     "providerKind",
+    "providerAcpAgentId",
     "providerDisplayName",
     "providerStatus",
     "providerModelId",
@@ -130,6 +126,7 @@ const aiConfiguredModelSchema = {
     id: { type: "string", format: "uuid" },
     providerConfigId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
     providerKind: { anyOf: [aiProviderKindSchema, { type: "null" }] },
+    providerAcpAgentId: { anyOf: [{ type: "string" }, { type: "null" }] },
     providerDisplayName: { type: "string" },
     providerStatus: aiProviderStatusSchema,
     providerModelId: { anyOf: [{ type: "string" }, { type: "null" }] },
@@ -323,10 +320,10 @@ export const createAiProviderConfigRequestSchema = {
   properties: {
     providerKind: aiProviderKindSchema,
     displayName: { type: "string" },
+    acpAgentId: { type: ["string", "null"] },
     baseUrl: { type: ["string", "null"] },
     status: writableAiProviderStatusSchema,
     authMethod: aiAuthMethodSchema,
-    executionMode: aiProviderExecutionModeSchema,
     credentialPayload: jsonObjectSchema
   }
 } as const;
@@ -337,10 +334,10 @@ export const updateAiProviderConfigRequestSchema = {
   properties: {
     providerKind: aiProviderKindSchema,
     displayName: { type: "string" },
+    acpAgentId: { type: ["string", "null"] },
     baseUrl: { type: ["string", "null"] },
     status: writableAiProviderStatusSchema,
     authMethod: aiAuthMethodSchema,
-    executionMode: aiProviderExecutionModeSchema,
     credentialPayload: jsonObjectSchema
   }
 } as const;

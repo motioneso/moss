@@ -226,6 +226,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
           actorUserId: defaultCliProvider.owner_user_id,
           providerId: defaultCliProvider.id,
           providerKind: defaultCliProvider.provider_kind,
+          acpAgentId: defaultCliProvider.acp_agent_id,
           authMethod: defaultCliProvider.auth_method,
           baseUrl: defaultCliProvider.base_url,
           credential: { cli: true }

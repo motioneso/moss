@@ -518,6 +518,8 @@ export interface RpcRecordLoginRejectedResult {
  */
 export interface RpcListProviderModelsParams {
   readonly provider: RpcProviderKind;
+  /** Persisted ACP agent identity for this CLI configuration (Codex and OpenCode are distinct). */
+  readonly acpAgentId: string;
 }
 /** result for method "listProviderModels" (#2208) — the shared `AiCliModelListResult` verbatim. */
 export type RpcListProviderModelsResult = AiCliModelListResult;

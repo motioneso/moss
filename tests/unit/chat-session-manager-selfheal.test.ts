@@ -92,6 +92,67 @@ function makeHarness(engines: ScriptedEngine[]) {
 }
 
 describe("ChatSessionManager self-heal (#1157)", () => {
+  it("does not replay a pending turn after switchProvider installs a different provider", async () => {
+    const codex = {
+      provider: "openai-compatible",
+      model: "gpt-5.6",
+      providerConfigId: "provider-1",
+      authMethod: "cli",
+      acpAgentId: "codex-acp",
+      executionMode: "non_interactive"
+    } as const;
+    const openCode = { ...codex, acpAgentId: "opencode" } as const;
+    let activeProvider: typeof codex | typeof openCode = codex;
+    let retrievalStarted!: () => void;
+    let releaseRetrieval!: (value: string) => void;
+    const retrievalStartedPromise = new Promise<void>((resolve) => {
+      retrievalStarted = resolve;
+    });
+    const deferredRetrieval = new Promise<string>((resolve) => {
+      releaseRetrieval = resolve;
+    });
+    const oldEngine = new ScriptedEngine({
+      submitError: new CliChatUnavailableError("the old engine was stopped")
+    });
+    const newEngine = new ScriptedEngine();
+    const engines = [oldEngine, newEngine];
+    const engineFactory = vi.fn(() => engines.shift()!);
+    const deps = makeMinimalDeps({
+      engineFactory,
+      serverOwnsDrain: true,
+      pollMs: 0,
+      passiveRetrieval: {
+        retrieve: vi.fn(() => {
+          retrievalStarted();
+          return deferredRetrieval;
+        })
+      },
+      persistence: {
+        resolveActiveProvider: vi.fn().mockImplementation(async () => activeProvider),
+        listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+        recordTurn: vi.fn().mockResolvedValue(undefined),
+        openNewConversation: vi.fn().mockResolvedValue(undefined),
+        getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+        touchExistingThread: vi.fn().mockResolvedValue(true)
+      }
+    });
+    const manager = new ChatSessionManager(deps as never);
+    const turn = manager.submitTurn("u1", "Ben", "old provider's pending turn");
+
+    await retrievalStartedPromise;
+    activeProvider = openCode;
+    await manager.switchProvider("u1", "Ben");
+    releaseRetrieval("");
+
+    await expect(turn).rejects.toMatchObject({
+      name: "ChatProviderChangedError",
+      message: expect.stringMatching(/provider changed.*try again/i)
+    });
+    expect(oldEngine.killed).toBe(true);
+    expect(newEngine.submitted).toEqual([]);
+    expect(engineFactory).toHaveBeenCalledTimes(2);
+  });
+
   it("heals a dead engine: evicts, relaunches with forced replay, resubmits once", async () => {
     const engineA = new ScriptedEngine({
       submitError: new CliChatUnavailableError("no live session for this sessionKey")

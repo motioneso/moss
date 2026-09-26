@@ -20,7 +20,12 @@ export type {
 export { acceptedOptionValues, findModelOption } from "./client.js";
 export { AcpCapabilityError, checkAcpProfile, checkAgentCapabilities } from "./capabilities.js";
 export type { AcpProfile, AcpSurface } from "./capabilities.js";
-export { getAcpProviderRow, listAcpProviderRows, opencodeDenyPermissionKeys } from "./providers.js";
+export {
+  getAcpProviderRow,
+  getAcpProviderRowByAgentId,
+  listAcpProviderRows,
+  opencodeDenyPermissionKeys
+} from "./providers.js";
 export type { AcpProviderKind, AcpProviderRow } from "./providers.js";
 export {
   acpRequestFamily,

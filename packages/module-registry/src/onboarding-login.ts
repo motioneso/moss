@@ -47,13 +47,16 @@ export function buildCliModelLister(deps: {
   readonly getConnection: () => RpcConnection | undefined;
 }): CliModelLister | undefined {
   if (!deps.enabled) return undefined;
-  return async (provider) => {
+  return async (provider, acpAgentId) => {
     const conn = deps.getConnection();
     if (!conn) throw new HttpError(503, UNAVAILABLE_MESSAGE);
     try {
       // AiProviderKind is a superset (ollama/custom) of the wire kind; the runner rejects the
       // extras with bad_request, and no CLI provider of those kinds can exist (routes gate them).
-      return await conn.listProviderModels({ provider: provider as OnboardingProviderKind });
+      return await conn.listProviderModels({
+        provider: provider as OnboardingProviderKind,
+        acpAgentId
+      });
     } catch (error) {
       if (error instanceof CliChatUnavailableError) throw new HttpError(503, UNAVAILABLE_MESSAGE);
       throw error;

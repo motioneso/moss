@@ -22,7 +22,7 @@ import {
 import { CHAT_SETTINGS_PREFERENCE_KEY, normalizeChatSettings } from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
-  AiProviderExecutionMode,
+  AiAuthMethod,
   ChatAttachmentDto,
   ChatSurface,
   ChatTurnUsageDto,
@@ -49,6 +49,7 @@ import type { ChatPersistencePort } from "./chat-session-manager.js";
 import type { ChatRepository } from "../repository.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { estimateTokens } from "./recall-seed.js";
+import { UnsupportedLegacyCliProviderError } from "./errors.js";
 import {
   capSummary,
   DEFAULT_REPLAY_MESSAGES,
@@ -156,10 +157,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   async resolveActiveProvider(actorUserId: string): Promise<{
     provider: ProviderKind;
     model: string;
-    executionMode: AiProviderExecutionMode;
+    providerConfigId: string;
+    authMethod: AiAuthMethod;
+    acpAgentId: string | null;
     acpModel?: string;
   }> {
-    const { model, acpModel } = await this.run(
+    const { model, openCodeModel } = await this.run(
       actorUserId,
       "resolve-provider",
       async (scopedDb) => {
@@ -169,7 +172,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           scopedDb,
           CHAT_SETTINGS_PREFERENCE_KEY
         );
-        return { model, acpModel: normalizeChatSettings(rawChatSettings).openCodeModel };
+        return { model, openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel };
       }
     );
 
@@ -181,8 +184,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     return {
       provider,
       model: model.provider_model_id,
-      executionMode: model.provider_execution_mode,
-      ...(provider === "openai-compatible" && acpModel ? { acpModel } : {})
+      providerConfigId: model.provider_config_id,
+      authMethod: model.provider_auth_method,
+      acpAgentId: model.provider_acp_agent_id,
+      ...(model.provider_acp_agent_id === "opencode" && openCodeModel
+        ? { acpModel: openCodeModel }
+        : {})
     };
   }
 
@@ -485,6 +492,9 @@ function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   const kind = model.provider_kind;
   if ((LIVE_PROVIDER_KINDS as readonly string[]).includes(kind)) {
     return kind as ProviderKind;
+  }
+  if (model.provider_auth_method === "cli" && !model.provider_acp_agent_id) {
+    throw new UnsupportedLegacyCliProviderError();
   }
   throw new Error(
     `Active chat model uses provider kind "${kind}", which has no live CLI engine in Phase 1.`

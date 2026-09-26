@@ -15,14 +15,20 @@ import type { AiProviderConfigDto, AiProviderKind } from "@moss/shared";
 import { supportsAutomatedProviderLogin } from "../../apps/web/src/settings/settings-provider-login-dialog.js";
 
 function providerCard(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {
+  const providerKind = overrides.providerKind ?? "google";
   return {
     id: "cfg-1",
-    providerKind: "google",
+    providerKind,
     displayName: "Gemini",
+    acpAgentId:
+      providerKind === "anthropic"
+        ? "claude-acp"
+        : providerKind === "openai-compatible"
+          ? "codex-acp"
+          : "antigravity-acp",
     baseUrl: null,
     status: "active",
     authMethod: "cli",
-    executionMode: "interactive",
     hasCredential: false,
     cliAvailable: true,
     isInstanceDefault: false,

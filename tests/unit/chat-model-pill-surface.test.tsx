@@ -85,6 +85,7 @@ function model(overrides: Partial<AiConfiguredModelDto>): AiConfiguredModelDto {
     id: "m-default",
     providerConfigId: "provider-a",
     providerKind: "anthropic",
+    providerAcpAgentId: null,
     providerDisplayName: "Anthropic",
     providerStatus: "active",
     providerModelId: "claude",

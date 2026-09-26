@@ -6,8 +6,8 @@
 
 import type { ProviderKind } from "@moss/ai";
 import type {
+  AiAuthMethod,
   AnswerProvenanceMetadataV1,
-  AiProviderExecutionMode,
   ChatAttachmentDto,
   ChatSurface,
   ChatTurnUsageDto,
@@ -38,7 +38,10 @@ export interface ChatPersistencePort {
   resolveActiveProvider(actorUserId: string): Promise<{
     provider: ProviderKind;
     model: string;
-    executionMode?: AiProviderExecutionMode;
+    /** Production persistence always supplies these; optional for legacy embedders and test ports. */
+    providerConfigId?: string;
+    authMethod?: AiAuthMethod;
+    acpAgentId?: string | null;
     acpModel?: string;
   }>;
   /** Prior stored turns split into recent verbatim turns + older rolling summary. */
@@ -127,9 +130,10 @@ export interface ChatSessionManagerDeps {
     provider: ProviderKind,
     sessionKey: string,
     opts?: {
-      readonly executionMode?: AiProviderExecutionMode;
       readonly conversationId?: string;
       readonly userId?: string;
+      readonly providerConfigId?: string;
+      readonly acpAgentId?: string | null;
       readonly acpModel?: string;
       readonly nextSequence?: () => number;
     }
