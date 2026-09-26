@@ -102,7 +102,15 @@ export const notificationsModuleManifest = {
           id: "notifications.push.manage_devices",
           description:
             "Remove push devices no longer in use, or turn push back on for a device, under " +
-            "Push notifications in Settings.",
+            "Push notifications in Settings. Removing the device you are on also asks this " +
+            "browser to cancel its push registration; other devices keep theirs.",
+          path: "/settings?section=modules&module=notifications"
+        },
+        {
+          id: "notifications.push.reload_page",
+          description:
+            "Reload the page so the app's background helper loads, then turn push on again " +
+            "under Push notifications in Settings.",
           path: "/settings?section=modules&module=notifications"
         },
         {
@@ -145,6 +153,38 @@ export const notificationsModuleManifest = {
             "Shown next to a device as 'Turned off after repeated delivery failures': " +
             "delivery failed five times in a row, so the device stopped receiving push. " +
             "Remove it, or turn push back on for that same device to start again."
+        },
+        {
+          code: "push_service_worker_missing",
+          class: "prerequisite",
+          remediationRef: "notifications.push.reload_page",
+          description:
+            "Shown as 'Push isn't ready on this page yet': the app's background helper " +
+            "has not loaded, so push cannot be turned on. Reload the page and try again."
+        },
+        {
+          code: "push_browser_unsubscribe_failed",
+          class: "transient",
+          description:
+            "Shown after removing this device when the browser would not cancel its own " +
+            "push registration. The device record is deleted, so Moss no longer sends to " +
+            "it. Clear the leftover in this site's browser settings if wanted."
+        },
+        {
+          code: "push_enable_cleanup_incomplete",
+          class: "transient",
+          description:
+            "Turning push on failed and the browser kept the registration it had just made. " +
+            "The server may or may not have saved the device. Try again to finish, or clear " +
+            "it in the browser's site settings and remove any extra device listed."
+        },
+        {
+          code: "push_pending_removal_incomplete",
+          class: "transient",
+          description:
+            "Shown as 'Couldn't finish removing this device's old registration': an earlier " +
+            "removal cancelled the browser's registration but the old device record could " +
+            "not be deleted, so push stays off until it is. Try again."
         }
       ]
     }

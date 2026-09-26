@@ -205,6 +205,7 @@ export function registerNotificationsRoutes(
 function serializePushDevice(subscription: PushSubscriptionDevice): PushDeviceDto {
   return {
     id: subscription.id,
+    endpointHash: subscription.endpoint_hash,
     label: subscription.user_agent_label,
     createdAt: toIsoString(subscription.created_at) ?? new Date(0).toISOString(),
     lastUsedAt: toIsoString(subscription.last_used_at),

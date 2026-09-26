@@ -166,6 +166,16 @@ export const markAllNotificationsReadRouteSchema = {
 
 export interface PushDeviceDto {
   readonly id: string;
+
+  /**
+   * sha256 hex of the push endpoint, the uniqueness key the server already stores. The
+   * settings page hashes its own current endpoint and compares, so "This device" follows the
+   * browser's real subscription. Every device of the owner receives every device's value.
+   * It is a one-way comparison fingerprint, not a push credential: delivery needs the endpoint
+   * and its keys. Anyone holding a candidate endpoint can hash it to test for a match, so
+   * resistance to recovering the endpoint rests on the endpoint's unpredictable token.
+   */
+  readonly endpointHash: string;
   readonly label: string | null;
   readonly createdAt: string;
   readonly lastUsedAt: string | null;
@@ -195,9 +205,10 @@ export interface DeletePushSubscriptionResponse {
 
 const pushDeviceDtoSchema = {
   type: "object",
-  required: ["id", "label", "createdAt", "lastUsedAt", "disabledAt"],
+  required: ["id", "endpointHash", "label", "createdAt", "lastUsedAt", "disabledAt"],
   properties: {
     id: { type: "string" },
+    endpointHash: { type: "string", pattern: "^[0-9a-f]{64}$" },
     label: nullableStringSchema,
     createdAt: { type: "string" },
     lastUsedAt: nullableStringSchema,
