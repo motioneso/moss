@@ -609,6 +609,7 @@ export function TodayPage(props: {
                 run={actionRowsRun}
                 loading={actionRowsLoading}
                 tasks={tasks}
+                looseEndsCount={looseEnds.length}
                 locale={locale}
                 chatAvailable={hasConnectedProvider(onboardingStatusQuery.data)}
                 onOpenTask={(id) => setDialog({ id })}

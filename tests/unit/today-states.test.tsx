@@ -349,6 +349,7 @@ describe("TodayPage remaining progress lines", () => {
           run: null,
           loading: true,
           tasks: [],
+          looseEndsCount: 0,
           locale,
           chatAvailable: false,
           onOpenTask: () => undefined

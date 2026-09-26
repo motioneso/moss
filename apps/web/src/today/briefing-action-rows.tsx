@@ -21,6 +21,7 @@ export interface BriefingActionRowsSectionProps {
   readonly run: BriefingRunDto | null;
   readonly loading: boolean;
   readonly tasks: readonly TaskDto[];
+  readonly looseEndsCount: number;
   readonly locale: LocaleSettingsDto;
   readonly chatAvailable: boolean;
   readonly onOpenTask: (taskId: string) => void;
@@ -67,6 +68,53 @@ const CATEGORY_ICON: Record<BriefingActionCategory, typeof Reply> = {
   time_sensitive_info: Clock
 };
 
+const CATCH_UP_PREVIEW_MAX_LENGTH = 180;
+const CATCH_UP_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  hellip: "…",
+  ldquo: "“",
+  lsquo: "‘",
+  lt: "<",
+  mdash: "—",
+  nbsp: " ",
+  ndash: "–",
+  quot: '"',
+  rdquo: "”",
+  rsquo: "’"
+};
+
+function compactCatchUpSummary(summaryText: string): string {
+  const summary = summaryText
+    .split(/[\r\n]+/)
+    .map(decodeCatchUpEntities)
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" · ");
+  if (summary.length <= CATCH_UP_PREVIEW_MAX_LENGTH) return summary;
+  return `${summary.slice(0, CATCH_UP_PREVIEW_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+function decodeCatchUpEntities(text: string): string {
+  return text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, reference: string) => {
+    if (reference.startsWith("#")) {
+      const codePoint = reference.toLowerCase().startsWith("#x")
+        ? Number.parseInt(reference.slice(2), 16)
+        : Number.parseInt(reference.slice(1), 10);
+      if (
+        !Number.isInteger(codePoint) ||
+        codePoint < 0 ||
+        codePoint > 0x10ffff ||
+        (codePoint >= 0xd800 && codePoint <= 0xdfff)
+      )
+        return entity;
+      return String.fromCodePoint(codePoint);
+    }
+    return CATCH_UP_ENTITIES[reference.toLowerCase()] ?? entity;
+  });
+}
+
 export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps) {
   const queryClient = useQueryClient();
   const chat = useChatControls();
@@ -100,9 +148,10 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
     );
   }
 
-  if (!props.run && displayed.length === 0) return null;
+  if (!props.run && displayed.length === 0 && props.looseEndsCount === 0) return null;
 
-  const countLabel = `${suggested.length} ${suggested.length === 1 ? "needs" : "need"} you`;
+  const needsYouCount = suggested.length + props.looseEndsCount;
+  const countLabel = `${needsYouCount} ${needsYouCount === 1 ? "needs" : "need"} you`;
   const freshness = buildFreshness(displayed, props.run?.createdAt ?? null);
 
   return (
@@ -112,9 +161,9 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
       </div>
       <div className="jds-brief__title">{countLabel}</div>
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
-      {displayed.length === 0 ? (
+      {displayed.length === 0 && props.looseEndsCount === 0 ? (
         <p className="cmd-empty">You&apos;re caught up — nothing is waiting on you.</p>
-      ) : (
+      ) : displayed.length > 0 ? (
         <div className="loose">
           {displayed.map((entry) => (
             <ActionRow
@@ -129,11 +178,18 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
             />
           ))}
         </div>
-      )}
+      ) : null}
       {catchUp && catchUp.itemCount > 0 ? (
         <div className="briefing-catchup">
-          <span className="jds-brief__kicker">Catch-up</span>
-          <p className="cmd-leadin">{catchUp.summaryText}</p>
+          <div className="jds-brief__head">
+            <span className="jds-brief__kicker">Catch-up</span>
+            <span className="jds-caption">
+              {catchUp.itemCount} informational {catchUp.itemCount === 1 ? "message" : "messages"}
+            </span>
+          </div>
+          <p className="cmd-leadin">
+            {compactCatchUpSummary(catchUp.summaryText) || "No safe summary is available yet."}
+          </p>
         </div>
       ) : null}
     </section>
