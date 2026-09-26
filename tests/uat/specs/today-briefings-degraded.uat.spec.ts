@@ -392,9 +392,7 @@ test("P9 degraded briefing source attribution and retry recovery through Today",
   await expect(emailNotice).toContainText("Email hasn’t updated since");
   await expect(emailNotice).toContainText("There may be newer replies this briefing hasn’t seen.");
   await expect(emailNotice.locator("time")).toHaveAttribute("datetime", emailAsOf);
-  await expect(reader.getByRole("status")).not.toContainText(
-    "The retry request couldn’t be confirmed."
-  );
+  await expect(reader.locator(".brief-reader__retry-error")).toHaveCount(0);
   console.log(
     "[P9 browser assertions] persisted delayed-email date/time and no-evening attribution are visible in the real Today reader; the first injected retry error cleared after the real retry succeeded."
   );
