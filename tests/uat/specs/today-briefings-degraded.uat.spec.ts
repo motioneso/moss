@@ -384,7 +384,7 @@ test("P9 degraded briefing source attribution and retry recovery through Today",
   );
 
   await expect(reader.locator(".brief-reader__plan-source")).toContainText(
-    "No evening plan was available for this briefing. Moss used today’s available sources, including tasks and calendar."
+    "No evening priorities were available for this briefing. Moss used today’s available sources, including tasks and calendar."
   );
   const emailNotice = reader.locator(".brief-reader__email-delay");
   await expect(emailNotice).toContainText("Email hasn’t updated since");

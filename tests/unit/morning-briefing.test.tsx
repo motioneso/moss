@@ -89,7 +89,7 @@ describe("MorningBriefingReader report", () => {
     expect(html).not.toContain("Earlier reports");
   });
 
-  it("explains the source context when no evening plan is available", async () => {
+  it("explains the source context when no evening priorities are available", async () => {
     const run = fullRun();
     const noPlan: BriefingRunDto = {
       ...run,
@@ -102,7 +102,7 @@ describe("MorningBriefingReader report", () => {
       [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noPlan)]
     ]);
     const html = await renderReader(client);
-    expect(html).toContain("No evening plan was available for this briefing.");
+    expect(html).toContain("No evening priorities were available for this briefing.");
     expect(html).toContain("Moss used today’s available sources, including tasks and calendar.");
   });
 
@@ -125,7 +125,7 @@ describe("MorningBriefingReader report", () => {
         [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(candidate)]
       ]);
       const html = await renderReader(client);
-      expect(html).not.toContain("No evening plan was available for this briefing.");
+      expect(html).not.toContain("No evening priorities were available for this briefing.");
     }
   });
 
@@ -142,7 +142,7 @@ describe("MorningBriefingReader report", () => {
       [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noEveningIntent)]
     ]);
     const html = await renderReader(client);
-    expect(html).toContain("No evening plan was available for this briefing.");
+    expect(html).toContain("No evening priorities were available for this briefing.");
   });
 
   it("names delayed email separately from the other briefing sources", async () => {
