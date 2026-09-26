@@ -25,6 +25,30 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function clearPrivateDetachTimer(
+  timers: Map<string, ReturnType<typeof setTimeout>>,
+  sessionKey: string
+): void {
+  const timer = timers.get(sessionKey);
+  if (!timer) return;
+  clearTimeout(timer);
+  timers.delete(sessionKey);
+}
+
+export function schedulePrivateDetachTimer(
+  timers: Map<string, ReturnType<typeof setTimeout>>,
+  sessionKey: string,
+  onTimeout: () => Promise<void>,
+  delayMs = 30_000
+): void {
+  const timer = setTimeout(() => {
+    timers.delete(sessionKey);
+    void onTimeout().catch(() => {});
+  }, delayMs);
+  timer.unref?.();
+  timers.set(sessionKey, timer);
+}
+
 /** Counts live subscribers across every surface for one actor. A key that fails to parse (a
  *  malformed external reconciliation key) can't belong to this actor. */
 export function countSubscribersFor(

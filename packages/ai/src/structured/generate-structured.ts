@@ -302,6 +302,7 @@ async function runOnModel(
           priority: input.priority,
           scope: input.scope,
           closeScope: input.closeScope,
+          ...(provider.auth_method === "cli" ? { acpAgentId: provider.acp_agent_id } : {}),
           ...(actorUserId ? { actorUserId } : {})
         }),
         signal

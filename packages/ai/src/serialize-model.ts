@@ -25,6 +25,7 @@ export function serializeModel(
     id: model.id,
     providerConfigId: isOwner ? model.provider_config_id : null,
     providerKind: isOwner ? model.provider_kind : null,
+    providerAcpAgentId: isOwner ? model.provider_acp_agent_id : null,
     providerDisplayName: displayProviderName,
     providerStatus: model.provider_status,
     providerModelId: isOwner ? model.provider_model_id : null,

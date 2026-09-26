@@ -94,6 +94,7 @@ export async function generateText(
           maxOutputTokens: input.maxOutputTokens,
           signal: input.signal,
           priority: input.priority,
+          acpAgentId: provider.acp_agent_id,
           ...(actorUserId ? { actorUserId } : {})
         })
       );

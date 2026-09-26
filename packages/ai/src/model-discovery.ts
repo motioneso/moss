@@ -24,7 +24,10 @@ interface CacheEntry {
  * tests) ⇒ CLI discovery reports `reason: "unavailable"` and returns no models. There is NO
  * typed-in fallback list any more: model ids are discovered or entered by hand, never shipped.
  */
-export type CliModelLister = (provider: AiProviderKind) => Promise<AiCliModelListResult>;
+export type CliModelLister = (
+  provider: AiProviderKind,
+  acpAgentId: string
+) => Promise<AiCliModelListResult>;
 
 /** Why CLI discovery returned no models. `unavailable` ⇒ no runner connection on this build. */
 export type ModelDiscoveryReason = AiCliModelListFailure | "unavailable" | "rejected_key";
@@ -32,6 +35,8 @@ export type ModelDiscoveryReason = AiCliModelListFailure | "unavailable" | "reje
 export interface ModelDiscoveryInput {
   readonly providerKind: AiProviderKind;
   readonly authMethod: AiAuthMethod;
+  /** Explicit persisted CLI identity; never inferred from the protocol family. */
+  readonly acpAgentId?: string | null;
   readonly baseUrl: string | null;
   readonly credential: unknown;
   readonly fetch?: typeof globalThis.fetch;
@@ -82,7 +87,7 @@ export class ModelDiscoveryService {
 
     const fetched =
       input.authMethod === "cli"
-        ? await this.fetchCliModels(input.providerKind)
+        ? await this.fetchCliModels(input.providerKind, input.acpAgentId)
         : await fetchApiKeyModels(input);
     if (fetched.reason !== undefined) {
       return {
@@ -108,13 +113,17 @@ export class ModelDiscoveryService {
   }
 
   /** #2208: CLI providers have no HTTP `/models`; the runner asks the vendor with the stored login. */
-  private async fetchCliModels(providerKind: AiProviderKind): Promise<{
+  private async fetchCliModels(
+    providerKind: AiProviderKind,
+    acpAgentId: string | null | undefined
+  ): Promise<{
     models: AiProviderDiscoveredModelDto[];
     reason?: ModelDiscoveryReason;
     message?: string;
   }> {
+    if (!acpAgentId) return { models: [], reason: "unsupported" };
     if (!this.cliModelLister) return { models: [], reason: "unavailable" };
-    const result = await this.cliModelLister(providerKind);
+    const result = await this.cliModelLister(providerKind, acpAgentId);
     if (result.status !== "ok") {
       return {
         models: [],

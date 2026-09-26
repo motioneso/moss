@@ -95,14 +95,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    # #1121: own explicit env_file list (not the shared *app-env-file anchor) — the second
-    # entry is the ONLY conduit for the opt-in real-token UAT run's CLAUDE_CODE_OAUTH_TOKEN.
-    # jarv1s deliberately keeps using the anchor alone and never gets this entry (see
-    # tests/unit/compose-seed-real-chat-token.test.ts).
     env_file:
       - path: ${JARVIS_ENV_FILE:-./env.production.local}
-        required: false
-      - path: ${JARVIS_UAT_REAL_CHAT_ENV_FILE:-/dev/null}
         required: false
     # #1025/#1000: UAT-only — seeds tiered dev/test data through the same
     # in-network connections migrate/module-install use (postgres has no
@@ -134,9 +128,6 @@ services:
     # vault files land in the volume the UAT run actually serves from.
     volumes:
       - jarv1s-vault-data:/data/vaults
-      # #1121: same project-scoped volume jarv1s mounts below — lets the opt-in
-      # real-chat token this service persists become visible to jarv1s's chat launch.
-      - jarv1s-cli-auth:/data/cli-auth
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,101 +1,209 @@
 // tests/uat/real-chat-env.ts
 //
-// #1121 real-chat token handling, split out of provisioner.ts (#1659: the file crossed the
-// 1000-line check:file-size cap). This is credential-decryption code and the only part of UAT
-// provisioning that touches secret material — a separate file, not a bigger one.
-import { execFile } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+// #2732: retires the #1121 stored-token path (a GPG-encrypted, once-persisted Anthropic token
+// that stopped working in July — provider-login/begin stalled at "awaiting_token" for good).
+// The replacement, proven live against a real throwaway stack in #2721, copies the HOST's own
+// signed-in Codex CLI login into the stack instead of asking anyone to mint and store a
+// dedicated-account token. This is credential-handling code and the only part of UAT
+// provisioning that touches secret material — a separate file, not folded into provisioner.ts.
+//
+// Trigger: a real Codex login file on the operator's own machine (~/.codex/auth.json by
+// default). A CI box has no such file, so real-chat runs stay opt-in and CI stays
+// credential-free without a separate on/off switch. The file's bytes travel from this process
+// into the container over stdin only — never through an argv, an env var, a temp file on disk,
+// or a log line — and the copy inside the container is removed at teardown.
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
-import type { UatEnvFile } from "./provisioner.js";
+const HOST_CODEX_AUTH_FILE_ENV = "JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE";
 
-const execFileAsync = promisify(execFile);
+/** Path to the host's own Codex login file. Overridable for tests; ~/.codex/auth.json by default. */
+export function hostCodexAuthPath(): string {
+  return process.env[HOST_CODEX_AUTH_FILE_ENV] ?? join(homedir(), ".codex", "auth.json");
+}
 
-// #1121: operator-provided path to a GPG-encrypted file holding the real chat token; absent by
-// default so this whole path is inert for CI/default runs (Coordinator constraint: "Default CI
-// remains credential-free and unchanged").
-const REAL_CHAT_TOKEN_TRIGGER_ENV = "JARVIS_UAT_REAL_CHAT_TOKEN_FILE";
-const REAL_CHAT_TOKEN_ENV_VAR = "CLAUDE_CODE_OAUTH_TOKEN";
-// #1121: same var docker-compose.prod.yml's `seed` service reads as its opt-in second env_file
-// entry (infra/docker-compose.prod.yml) — must be exported for compose interpolation, exactly
-// like uatComposeInterpolationEnv's vars in provisioner.ts.
-export const REAL_CHAT_ENV_FILE_RESULT_ENV = "JARVIS_UAT_REAL_CHAT_ENV_FILE";
+// #1121 precedent kept: the harness sets this on its own process env once real chat is
+// configured for a run, and run-uat.ts spawns Playwright with `...process.env`, so every spec
+// can read it as the single "was a real chat model configured for THIS run" signal.
+export const REAL_CHAT_CONFIGURED_ENV = "JARVIS_UAT_REAL_CHAT_CONFIGURED";
 
-/**
- * #1121 (Coordinator constraint 1): fail closed — the decrypted plaintext must contain EXACTLY
- * one nonempty key, CLAUDE_CODE_OAUTH_TOKEN. Never logs the content; every thrown message names
- * only the shape violation (key count, key name, malformed line), never a value.
- */
-export function validateSingleTokenEnvContent(content: string): void {
-  const lines = content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (lines.length === 0) {
-    throw new Error("real-chat token env file is empty");
-  }
-  const entries = lines.map((line): readonly [string, string] => {
-    const eq = line.indexOf("=");
-    if (eq <= 0) {
-      throw new Error("real-chat token env file has a malformed line (no key=value)");
-    }
-    return [line.slice(0, eq), line.slice(eq + 1)];
-  });
-  if (entries.length > 1) {
-    throw new Error(
-      `real-chat token env file must contain exactly one key (${REAL_CHAT_TOKEN_ENV_VAR}), found ${entries.length}`
-    );
-  }
-  const [key, value] = entries[0]!;
-  if (key !== REAL_CHAT_TOKEN_ENV_VAR) {
-    throw new Error(
-      `real-chat token env file's only key must be ${REAL_CHAT_TOKEN_ENV_VAR}, found a different key`
-    );
-  }
-  if (value.length === 0) {
-    throw new Error(
-      `real-chat token env file's ${REAL_CHAT_TOKEN_ENV_VAR} value must not be empty`
-    );
-  }
+export interface UatRealChatCodexAuth {
+  /** Removes the copied credential from the container. Safe to call more than once. */
+  readonly cleanup: () => Promise<void>;
+}
+
+interface UidSlot {
+  readonly uid: number;
+  readonly gid: number;
+  readonly home: string;
+}
+
+const UID_SLOT_RE = /^\{.*\}$/s;
+const OWNER_RE = /^\d+:\d+$/;
+
+function execDockerCompose(
+  buildComposeArgs: (extra: readonly string[]) => readonly string[],
+  extra: readonly string[],
+  input?: Buffer
+): string {
+  // #2732: stdio is fully piped (never "inherit") so a credential passed via `input` can never
+  // land on this process's own stdout/stderr — the proven shape from the #2721 proof script.
+  return execFileSync("docker", buildComposeArgs(extra), {
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    input,
+    maxBuffer: 10 * 1024 * 1024
+  }).trim();
 }
 
 /**
- * #1121 (Coordinator constraint 1): opt-in only — a no-op unless the operator set
- * JARVIS_UAT_REAL_CHAT_TOKEN_FILE to a GPG-encrypted file (real recipient key must already be in
- * the caller's default GPG keyring; argv below carries only paths, never token material).
- * Decrypts into a mode-0700 temp dir / mode-0600 file, validates its shape, and — only once
- * proven valid — exports JARVIS_UAT_REAL_CHAT_ENV_FILE so docker-compose.prod.yml's `seed`
- * service (and only that service) picks it up as its second env_file entry. Fails closed
- * (throws, cleans up the temp dir, never sets the result env var) on any invalid shape. This is
- * best-effort cleanup, not a guarantee of secure shredding.
+ * #2732: opt-in (see hostCodexAuthPath) — a no-op unless the host itself has a Codex login.
+ * Derives the cli-auth volume's owner UID/GID inside the running stack, allocates `actorUserId`
+ * an owner-scoped slot the same way a real per-user chat launch would, and writes the host's
+ * auth.json into that slot's ~/.codex/auth.json over stdin at mode 0600 — proven live in #2721.
+ * Throws (never silently skips) if the host file exists but the copy fails, so a misconfigured
+ * run fails loudly instead of quietly running with no real model.
  */
-export async function writeUatRealChatEnvFile(): Promise<UatEnvFile | undefined> {
-  const encryptedPath = process.env[REAL_CHAT_TOKEN_TRIGGER_ENV];
-  if (!encryptedPath) {
+export function installUatRealChatCodexAuth(
+  projectName: string,
+  actorUserId: string,
+  buildComposeArgs: (extra: readonly string[]) => readonly string[]
+): UatRealChatCodexAuth | undefined {
+  const authPath = hostCodexAuthPath();
+  if (!existsSync(authPath)) {
     return undefined;
   }
-  const dir = mkdtempSync(join(tmpdir(), "jarv1s-uat-real-chat-"));
-  chmodSync(dir, 0o700);
-  const path = join(dir, "real-chat.env");
-  try {
-    await execFileAsync("gpg", [
-      "--batch",
-      "--yes",
-      "--decrypt",
-      "--quiet",
-      "--output",
-      path,
-      encryptedPath
-    ]);
-    chmodSync(path, 0o600);
-    const content = readFileSync(path, "utf8");
-    validateSingleTokenEnvContent(content);
-  } catch (error) {
-    rmSync(dir, { force: true, recursive: true });
-    throw error;
+
+  const owner = execDockerCompose(buildComposeArgs, [
+    "exec",
+    "-T",
+    "jarv1s",
+    "stat",
+    "-c",
+    "%u:%g",
+    "/data/cli-auth"
+  ]);
+  if (!OWNER_RE.test(owner)) {
+    throw new Error(`[uat real-chat] invalid cli-auth owner metadata for ${projectName}`);
   }
-  process.env[REAL_CHAT_ENV_FILE_RESULT_ENV] = path;
-  return { path, cleanup: () => rmSync(dir, { force: true, recursive: true }) };
+
+  // Mirrors packages/cli-runner/src/uid-allocator.ts's allocateUidSlot exactly, run inside the
+  // container (as the volume's owner) so the slot file's own ownership never needs to change.
+  const slotScript =
+    "import { allocateUidSlot } from './packages/cli-runner/src/uid-allocator.ts'; " +
+    "import { mkdirSync } from 'node:fs'; " +
+    "const base='/data/cli-auth'; " +
+    `const user=${JSON.stringify(actorUserId)}; ` +
+    "const slot=allocateUidSlot(base,user); " +
+    "mkdirSync(base+'/agents',{recursive:true,mode:0o711}); " +
+    "const home=base+'/agents/'+user; " +
+    "mkdirSync(home,{recursive:true,mode:0o700}); " +
+    "console.log(JSON.stringify({...slot,home}));";
+  const slotOutput = execDockerCompose(buildComposeArgs, [
+    "exec",
+    "-T",
+    "--user",
+    owner,
+    "jarv1s",
+    "node_modules/.bin/tsx",
+    "-e",
+    slotScript
+  ]);
+  if (!UID_SLOT_RE.test(slotOutput)) {
+    throw new Error(`[uat real-chat] unexpected uid-slot output for ${projectName}`);
+  }
+  const slot = JSON.parse(slotOutput) as UidSlot;
+
+  // The existing container CHOWN capability hands over only this newly created actor directory.
+  execDockerCompose(buildComposeArgs, [
+    "exec",
+    "-T",
+    "--user",
+    "0:0",
+    "jarv1s",
+    "chown",
+    `${slot.uid}:${slot.gid}`,
+    slot.home
+  ]);
+
+  const writeScript =
+    "const fs=require('node:fs');const d=process.argv[1]+'/.codex';" +
+    "fs.mkdirSync(d,{recursive:true,mode:0o700});" +
+    "fs.writeFileSync(d+'/auth.json',fs.readFileSync(0),{mode:0o600});";
+  try {
+    execDockerCompose(
+      buildComposeArgs,
+      [
+        "exec",
+        "-T",
+        "--user",
+        `${slot.uid}:${slot.gid}`,
+        "jarv1s",
+        "node",
+        "-e",
+        writeScript,
+        slot.home
+      ],
+      readFileSync(authPath)
+    );
+  } catch {
+    throw new Error(`[uat real-chat] owner-scoped Codex credential copy failed for ${projectName}`);
+  }
+
+  let removed = false;
+  return {
+    cleanup: async () => {
+      if (removed) return;
+      removed = true;
+
+      // The owner-scoped slot copy this run wrote above.
+      let ownerCopyFailed = false;
+      try {
+        execDockerCompose(buildComposeArgs, [
+          "exec",
+          "-T",
+          "--user",
+          `${slot.uid}:${slot.gid}`,
+          "jarv1s",
+          "rm",
+          "-f",
+          `${slot.home}/.codex/auth.json`
+        ]);
+      } catch {
+        ownerCopyFailed = true;
+      }
+
+      // The already-authenticated sign-in path (see login-service.ts / main.ts's
+      // onLoginReady) promotes this same login into the instance's shared Codex login at
+      // /data/cli-auth/.codex/auth.json, the same file real per-user launches read. That
+      // copy — and any temp file its writer leaves on a crash mid-write — must be gone too,
+      // not just the owner-scoped one, or another launch can go on inheriting this run's
+      // credential after the stack is torn down.
+      let sharedCopyFailed = false;
+      try {
+        execDockerCompose(buildComposeArgs, [
+          "exec",
+          "-T",
+          "--user",
+          owner,
+          "jarv1s",
+          "sh",
+          "-c",
+          "rm -f /data/cli-auth/.codex/auth.json /data/cli-auth/.codex/.auth.json.*.tmp"
+        ]);
+      } catch {
+        sharedCopyFailed = true;
+      }
+
+      if (ownerCopyFailed || sharedCopyFailed) {
+        // Fixed message, no credential content: this can surface in CI logs.
+        throw new Error(
+          `[uat real-chat] credential cleanup failed for ${projectName}; a copied Codex ` +
+            "login may remain in the stack's volume"
+        );
+      }
+    }
+  };
 }

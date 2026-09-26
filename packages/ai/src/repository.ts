@@ -97,6 +97,7 @@ export interface AiProviderConfigSafeRow {
   readonly status: AiProviderStatus;
   readonly auth_method: AiAuthMethod;
   readonly execution_mode: AiProviderExecutionMode;
+  readonly acp_agent_id: string | null;
   readonly has_credential: boolean;
   // #870/H1: the single instance-default provider flag (migration 0147).
   readonly is_instance_default: boolean;
@@ -121,9 +122,10 @@ export interface AiConfiguredModelSafeRow {
   readonly provider_config_id: string;
   readonly owner_user_id: string;
   readonly provider_kind: AiProviderKind;
+  readonly provider_acp_agent_id: string | null;
+  readonly provider_auth_method: AiAuthMethod;
   readonly provider_display_name: string;
   readonly provider_status: AiProviderStatus;
-  readonly provider_execution_mode: AiProviderExecutionMode;
   // #874: purpose of the joined provider — lets the resolver keep 'voice' models off assistant
   // routing and vice-versa without a second query.
   readonly provider_purpose: AiProviderPurpose;
@@ -153,6 +155,7 @@ export interface CreateAiProviderInput {
   readonly baseUrl?: string | null;
   readonly status?: Exclude<AiProviderStatus, "revoked">;
   readonly authMethod?: AiAuthMethod;
+  readonly acpAgentId?: string | null;
   readonly executionMode?: AiProviderExecutionMode;
   readonly encryptedCredential: EncryptedAiSecret;
 }
@@ -163,6 +166,7 @@ export interface UpdateAiProviderInput {
   readonly baseUrl?: string | null;
   readonly status?: Exclude<AiProviderStatus, "revoked">;
   readonly authMethod?: AiAuthMethod;
+  readonly acpAgentId?: string | null;
   readonly executionMode?: AiProviderExecutionMode;
   readonly encryptedCredential?: EncryptedAiSecret;
 }
@@ -347,13 +351,15 @@ export class AiRepository {
   /** #367: newest ACTIVE provider of this kind; disabled/error rows are intentionally not reused. */
   async findReusableProviderByKind(
     scopedDb: DataContextDb,
-    providerKind: AiProviderKind
+    providerKind: AiProviderKind,
+    acpAgentId: string
   ): Promise<AiProviderConfigSafeRow | undefined> {
     assertDataContextDb(scopedDb);
 
     return (
       this.safeProviderQuery(scopedDb)
         .where("provider_kind", "=", providerKind)
+        .where("acp_agent_id", "=", acpAgentId)
         .where("status", "=", "active")
         // #874 CRIT-1: the login auto-register seam reuses an existing openai-compatible provider as a
         // CHAT provider — it must never adopt the openai-compatible VOICE endpoint as one.
@@ -370,13 +376,15 @@ export class AiRepository {
   async findLoginTargetProvider(
     scopedDb: DataContextDb,
     providerId: string,
-    providerKind: AiProviderKind
+    providerKind: AiProviderKind,
+    acpAgentId: string
   ): Promise<AiProviderConfigSafeRow | undefined> {
     assertDataContextDb(scopedDb);
 
     return this.safeProviderQuery(scopedDb)
       .where("id", "=", providerId)
       .where("provider_kind", "=", providerKind)
+      .where("acp_agent_id", "=", acpAgentId)
       .where("purpose", "=", "assistant")
       .where("auth_method", "=", "cli")
       .where("status", "in", ["active", "disabled"])
@@ -393,9 +401,10 @@ export class AiRepository {
    *     fresh active config + selectable model) rather than be permanently blocked (B1). This mirrors
    *     `selectChatModelForUser`'s active-provider requirement — only a SELECTABLE model "exists".
    */
-  async hasChatModelForProviderKind(
+  async hasChatModelForProvider(
     scopedDb: DataContextDb,
-    providerKind: AiProviderKind
+    providerKind: AiProviderKind,
+    acpAgentId: string
   ): Promise<boolean> {
     assertDataContextDb(scopedDb);
 
@@ -408,6 +417,7 @@ export class AiRepository {
       )
       .select(sql<boolean>`true`.as("has_it"))
       .where("providers.provider_kind", "=", providerKind)
+      .where("providers.acp_agent_id", "=", acpAgentId)
       .where("providers.status", "=", "active")
       // #874 CRIT-1: only assistant providers count as an existing chat model source for auto-register.
       .where("providers.purpose", "=", "assistant")
@@ -430,6 +440,7 @@ export class AiRepository {
         id: randomUUID(),
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         provider_kind: input.providerKind,
+        acp_agent_id: input.acpAgentId ?? null,
         display_name: input.displayName,
         base_url: input.baseUrl ?? null,
         status: input.status ?? "active",
@@ -479,6 +490,12 @@ export class AiRepository {
     }
     if (input.authMethod !== undefined) {
       updates.auth_method = input.authMethod;
+      if (input.authMethod === "api_key" && input.acpAgentId === undefined) {
+        updates.acp_agent_id = null;
+      }
+    }
+    if (input.acpAgentId !== undefined) {
+      updates.acp_agent_id = input.acpAgentId;
     }
     if (input.executionMode !== undefined) {
       updates.execution_mode = input.executionMode;
@@ -1926,6 +1943,7 @@ export class AiRepository {
         "id",
         "owner_user_id",
         "provider_kind",
+        "acp_agent_id",
         "display_name",
         "base_url",
         "status",
@@ -2058,6 +2076,7 @@ export class AiRepository {
         "id",
         "owner_user_id",
         "provider_kind",
+        "acp_agent_id",
         "display_name",
         "base_url",
         "status",
@@ -2090,9 +2109,10 @@ export class AiRepository {
         "models.provider_config_id as provider_config_id",
         "models.owner_user_id as owner_user_id",
         "providers.provider_kind as provider_kind",
+        "providers.acp_agent_id as provider_acp_agent_id",
+        "providers.auth_method as provider_auth_method",
         "providers.display_name as provider_display_name",
         "providers.status as provider_status",
-        "providers.execution_mode as provider_execution_mode",
         // #874: joined provider purpose (neutral) so assistant/voice callers can filter on it.
         "providers.purpose as provider_purpose",
         "models.provider_model_id as provider_model_id",

@@ -86,6 +86,7 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
 
   it("skips the readiness wait for a bounded-fallback (print/one-shot) engine — launch() never starts an MCP client for it", async () => {
     const engine = new FakeEngine(0);
+    engine.startsToolClientPerTurn = true;
     const waitForToolsListReady = vi.fn().mockReturnValue(
       new Promise(() => {
         // Never resolves — proves the gate is not awaited for this engine shape at all.
@@ -193,6 +194,7 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
     engine: FakeEngine,
     overrides: Partial<ConstructorParameters<typeof ChatSessionManager>[0]> = {}
   ) {
+    engine.startsToolClientPerTurn = true;
     return makeMinimalDeps({
       engineFactory: () => engine,
       pollMs: 0,

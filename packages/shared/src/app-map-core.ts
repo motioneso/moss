@@ -217,8 +217,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
-      "on the login's default. The page also identifies the OpenCode ACP card and its saved model setting, " +
-      "and the normal Codex ACP row hands the instance's shared Codex connection into each user's own isolated runner home, " +
+      "on the login's default. The provider catalog offers explicit Codex and OpenCode CLI choices " +
+      "because they share a protocol family but use separate agent identities; changing an existing " +
+      "OpenAI-compatible provider to CLI auth requires choosing its agent. The Codex ACP row hands " +
+      "the instance's shared Codex connection into each user's own isolated runner home, " +
       "and provides a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header. CLI provider " +
       "cards run the ACP adapter's initialize check automatically and show 'Not logged in' when it is refused; " +
@@ -226,9 +228,16 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "by refusing the stored sign-in does not serve as the ACP login check. Once a provider has refused a " +
       "sign-in - on a model refresh, or on a chat message it would not answer - is recorded as a " +
       "provider rejection, distinct from a missing or malformed Codex runner credential. Chat checks CLI sign-ins when the " +
-      "ACP adapter initializes. The page also includes an OpenCode ACP card with a saved Chat model setting; " +
-      "the saved choice is passed to the ACP chat launch and applied when the agent advertises that option. " +
+      "ACP adapter initializes. Adding an OpenCode CLI provider reveals its ACP card with a saved " +
+      "Chat model setting; without an OpenCode provider, that card, its setting, and the OpenCode " +
+      "note are hidden even when an old setting is saved. The selected choice is passed to the ACP " +
+      "chat launch only when that provider is selected and is applied when the agent advertises that option. " +
       "Codex chat supports the newer models listed after a refresh without requiring a new sign-in or separate installation. " +
+      "Live chat reports that API-key providers are not available yet and does not start an engine; " +
+      "choose a CLI provider for live chat. A migrated legacy CLI provider without a supported " +
+      "ACP agent remains configured but cannot start chat; the response tells the admin to add a " +
+      "supported CLI provider. If the active provider changes while a message is being prepared, " +
+      "the message is left unsent and the user is asked to retry. " +
       "Codex is connected once for the whole instance: an administrator signs in under Settings, " +
       "Assistant & AI, and every user's chat and background work then use that connection while " +
       "running in their own isolated runner home, as their own account. When Codex refreshes the " +
@@ -251,7 +260,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "field below it is described as giving consistent results for every model, including " +
       "local ones. Shared CLI software is usable by separate Moss accounts; runner startup " +
       "automatically repairs the older installation-directory permission defect using the pinned " +
-      "version, so users need no reinstall action. Only administrators can connect Codex.",
+      "version, so users need no reinstall action. Only administrators can connect CLI providers.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
@@ -301,6 +310,25 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     description: "An agent action was not approved, so it was not done."
   },
   {
+    code: "core.ai.api_key_live_chat_unavailable",
+    class: "prerequisite",
+    remediationRef: "core.ai.connect_cli_provider",
+    description:
+      "Live chat cannot start with an API-key provider; it requires a supported CLI provider."
+  },
+  {
+    code: "core.ai.unsupported_legacy_cli_provider",
+    class: "prerequisite",
+    remediationRef: "core.ai.add_supported_cli_provider",
+    description: "This legacy CLI provider has no supported ACP agent for live chat."
+  },
+  {
+    code: "core.ai.chat_provider_changed",
+    class: "transient",
+    remediationRef: "core.ai.retry_chat_message",
+    description: "The active provider changed before the chat message was sent."
+  },
+  {
     code: "core.today.day_plan_review_unavailable",
     class: "prerequisite",
     remediationRef: "core.today.review_when_plan_available",
@@ -320,6 +348,26 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.ask_user",
     description: "Ask the user to approve the action before trying it again.",
     path: "/",
+    scope: "user"
+  },
+  {
+    id: "core.ai.connect_cli_provider",
+    description:
+      "Ask an administrator to choose a supported CLI provider for live chat. API-key chat is not available yet.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
+  },
+  {
+    id: "core.ai.add_supported_cli_provider",
+    description:
+      "Ask an administrator to add an Anthropic, Codex, OpenCode, or Google CLI provider for live chat.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
+  },
+  {
+    id: "core.ai.retry_chat_message",
+    description: "Retry the message after the provider change.",
+    path: "/chat",
     scope: "user"
   },
   {

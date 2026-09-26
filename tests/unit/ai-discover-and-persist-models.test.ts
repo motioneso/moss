@@ -11,6 +11,7 @@ describe("discoverAndPersistModels (#2208)", () => {
     actorUserId: "user-a",
     providerId: "prov-1",
     providerKind: "anthropic" as const,
+    acpAgentId: "claude-acp",
     authMethod: "cli" as const,
     baseUrl: null,
     credential: { cli: true }
@@ -97,7 +98,7 @@ describe("discoverAndPersistModels (#2208)", () => {
     });
     await discoverAndPersistModels(
       scopedDb,
-      { ...input, providerKind: "openai-compatible", authMethod: "api_key" },
+      { ...input, providerKind: "openai-compatible", acpAgentId: null, authMethod: "api_key" },
       { repository: repository as never, modelDiscovery }
     );
     expect(repository.deleteModelsForProviderExceptSentinel).not.toHaveBeenCalled();

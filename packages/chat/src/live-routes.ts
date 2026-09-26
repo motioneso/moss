@@ -54,7 +54,16 @@ import {
   ChatThreadNotFoundError,
   ChatTurnInFlightError
 } from "./live/chat-session-manager.js";
-import { ChatEngineReadError, CliChatUnavailableError } from "./live/errors.js";
+import {
+  API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,
+  ApiKeyLiveChatUnavailableError,
+  CHAT_PROVIDER_CHANGED_MESSAGE,
+  ChatProviderChangedError,
+  ChatEngineReadError,
+  CliChatUnavailableError,
+  UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE,
+  UnsupportedLegacyCliProviderError
+} from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
@@ -719,6 +728,10 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
     return reply.code(500).send({ error: "Live chat is temporarily unavailable." });
   }
 
+  if (error instanceof ChatProviderChangedError) {
+    return reply.code(409).send({ error: CHAT_PROVIDER_CHANGED_MESSAGE });
+  }
+
   if (error instanceof Error) {
     const message = error.message;
     // No active chat-capable model is configured for this user.
@@ -731,6 +744,14 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
         .code(400)
         .send({ error: "The active chat provider is not supported in this build." });
     }
+  }
+
+  if (error instanceof ApiKeyLiveChatUnavailableError) {
+    return reply.code(400).send({ error: API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE });
+  }
+
+  if (error instanceof UnsupportedLegacyCliProviderError) {
+    return reply.code(400).send({ error: UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE });
   }
 
   if (error instanceof CliChatUnavailableError) {

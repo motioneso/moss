@@ -6,9 +6,18 @@ import { DEFAULT_CHAT_MODELS, ModelDiscoveryService, type CliModelLister } from 
 // injected lister) for the vendor's live ids and infers tiers from the id text; anything other
 // than an `ok` answer yields no models plus a `reason` the routes surface.
 describe("CLI model discovery (#2208)", () => {
-  const cliInput = (providerKind: "anthropic" | "openai-compatible" | "google") => ({
+  const defaultAgentIds = {
+    anthropic: "claude-acp",
+    "openai-compatible": "codex-acp",
+    google: "antigravity-acp"
+  } as const;
+  const cliInput = (
+    providerKind: keyof typeof defaultAgentIds,
+    acpAgentId: string = defaultAgentIds[providerKind]
+  ) => ({
     providerKind,
     authMethod: "cli" as const,
+    acpAgentId,
     baseUrl: null,
     credential: { cli: true }
   });
@@ -49,7 +58,7 @@ describe("CLI model discovery (#2208)", () => {
     expect(second.fromCache).toBe(true);
     expect(second.models).toEqual(first.models);
     expect(lister).toHaveBeenCalledTimes(1);
-    expect(lister).toHaveBeenCalledWith("anthropic");
+    expect(lister).toHaveBeenCalledWith("anthropic", "claude-acp");
   });
 
   it("infers Codex service tiers from the published suffixes", async () => {
@@ -73,6 +82,24 @@ describe("CLI model discovery (#2208)", () => {
       "gpt-5.6-luna": "economy",
       "gpt-5.6": "interactive"
     });
+  });
+
+  it("lists OpenCode models through the persisted OpenCode agent identity", async () => {
+    const lister = vi
+      .fn<CliModelLister>()
+      .mockImplementation(async (_providerKind, acpAgentId) => ({
+        status: "ok",
+        models: [{ id: acpAgentId === "opencode" ? "muse-spark-1.3-free" : "gpt-5.6-sol" }]
+      }));
+    const service = new ModelDiscoveryService({ cliModelLister: lister });
+
+    const result = await service.discoverModels(
+      "opencode",
+      cliInput("openai-compatible", "opencode")
+    );
+
+    expect(lister).toHaveBeenCalledWith("openai-compatible", "opencode");
+    expect(result.models.map((model) => model.providerModelId)).toEqual(["muse-spark-1.3-free"]);
   });
 
   it.each([

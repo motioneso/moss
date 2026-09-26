@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { persistProviderToken } from "@moss/cli-runner";
 import { resolveMossEnv } from "@moss/db";
 import { createMigrationOwnerDb } from "./connections.js";
 import { assertTargetIsEphemeral } from "./guard.js";
@@ -10,31 +9,6 @@ import {
   parseUatSeedLevel
 } from "./level-validation.js";
 import { seedLevel } from "./levels.js";
-
-// #1121: same fallback chain packages/cli-runner/src/main.ts uses for the cli-auth mount —
-// seed's compose block doesn't set JARVIS_CLI_HOME_BASE/JARVIS_CLI_HOME explicitly, so this
-// must match jarv1s's default exactly or a persisted token would land somewhere jarv1s never
-// reads.
-const DEFAULT_CLI_HOME_BASE = "/data/cli-auth";
-
-/**
- * #1121 (Coordinator constraint 1, opt-in only): if the `seed` service's opt-in real-chat env
- * file (infra/docker-compose.prod.yml + tests/uat/real-chat-env.ts's writeUatRealChatEnvFile)
- * populated CLAUDE_CODE_OAUTH_TOKEN, persist it into the shared cli-auth volume so jarv1s's chat
- * launch can read it back via readProviderCredentialEnv. Absent env var ⇒ no-op — default/CI
- * seed behavior is unchanged. Never logs the token.
- */
-export async function maybePersistRealChatToken(
-  homeBase = resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE") ??
-    resolveMossEnv(process.env, "JARVIS_CLI_HOME") ??
-    DEFAULT_CLI_HOME_BASE
-): Promise<void> {
-  const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  if (!token) {
-    return;
-  }
-  await persistProviderToken(homeBase, "anthropic", token);
-}
 
 /**
  * #1025: entrypoint for the new `seed` ops-profile compose service (see
@@ -64,10 +38,6 @@ async function main(): Promise<void> {
   } finally {
     await db.destroy();
   }
-
-  // #1121: strictly after the ephemeral-target guard above, never before — opt-in, no-op
-  // unless the seed service's own env_file entry populated the token.
-  await maybePersistRealChatToken();
 
   // #1087 finding 5: fail closed on an unrecognized level/chunk name rather than
   // silently falling through — a typo like "solo_admin" used to cast clean and

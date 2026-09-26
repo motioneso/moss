@@ -4,7 +4,15 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { registerChatRoutes } from "../../packages/chat/src/routes.js";
 import { registerChatLiveRoutes } from "../../packages/chat/src/live-routes.js";
 import { PageContextStore } from "../../packages/chat/src/live/page-context-store.js";
-import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
+import {
+  API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,
+  ApiKeyLiveChatUnavailableError,
+  CHAT_PROVIDER_CHANGED_MESSAGE,
+  ChatProviderChangedError,
+  CliChatUnavailableError,
+  UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE,
+  UnsupportedLegacyCliProviderError
+} from "../../packages/chat/src/live/errors.js";
 import {
   CODEX_SIGN_IN_REQUIRED_MESSAGE,
   knownAuthFailureMessage
@@ -69,6 +77,34 @@ describe("chat auth remediation route boundaries", () => {
 
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+
+  it.each([
+    [new ApiKeyLiveChatUnavailableError(), API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE],
+    [new UnsupportedLegacyCliProviderError(), UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE]
+  ])(
+    "returns fixed remediation for known live-chat configuration failures",
+    async (error, message) => {
+      const app = buildLiveApp(error);
+      apps.push(app);
+      await assertSerializedError(
+        app,
+        { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
+        400,
+        message
+      );
+    }
+  );
+
+  it("asks the user to retry when the active provider changes before a turn is sent", async () => {
+    const app = buildLiveApp(new ChatProviderChangedError());
+    apps.push(app);
+    await assertSerializedError(
+      app,
+      { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
+      409,
+      CHAT_PROVIDER_CHANGED_MESSAGE
+    );
   });
 
   it.each(AUTH_MESSAGES)("live route preserves fixed auth message: %s", async (message) => {

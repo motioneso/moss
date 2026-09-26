@@ -131,6 +131,7 @@ async function selfHealEmptyProviders(
           actorUserId,
           providerId: provider.id,
           providerKind: provider.provider_kind,
+          acpAgentId: provider.acp_agent_id,
           authMethod: provider.auth_method,
           baseUrl: provider.base_url,
           credential:

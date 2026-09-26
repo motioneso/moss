@@ -138,6 +138,7 @@ describe("Google sync → source context → email monitor", () => {
           providerKind: "anthropic",
           displayName: "CLI structured fixture",
           authMethod: "cli",
+          acpAgentId: "claude-acp",
           encryptedCredential: aiCipher.encryptJson({ cli: true })
         });
         const model = await aiRepository.createModel(scopedDb, {

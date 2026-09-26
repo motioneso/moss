@@ -14,6 +14,7 @@ export interface DiscoverAndPersistModelsInput {
   readonly actorUserId: string;
   readonly providerId: string;
   readonly providerKind: AiProviderKind;
+  readonly acpAgentId: string | null;
   readonly authMethod: AiAuthMethod;
   readonly baseUrl: string | null;
   readonly credential: unknown;
@@ -37,6 +38,7 @@ export async function discoverAndPersistModels(
     {
       providerKind: input.providerKind,
       authMethod: input.authMethod,
+      acpAgentId: input.acpAgentId,
       baseUrl: input.baseUrl,
       credential: input.credential
     }

@@ -226,6 +226,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
           actorUserId: defaultCliProvider.owner_user_id,
           providerId: defaultCliProvider.id,
           providerKind: defaultCliProvider.provider_kind,
+          acpAgentId: defaultCliProvider.acp_agent_id,
           authMethod: defaultCliProvider.auth_method,
           baseUrl: defaultCliProvider.base_url,
           credential: { cli: true }
@@ -320,6 +321,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
         providerKind: "anthropic",
         displayName: "Claude (to be removed)",
         authMethod: "cli",
+        acpAgentId: "claude-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       });
       await repository.setInstanceDefaultProvider(db, created.id);
@@ -344,6 +346,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
         providerKind: "anthropic",
         displayName: "Claude (stale default)",
         authMethod: "cli",
+        acpAgentId: "claude-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       });
       await db.db
@@ -395,6 +398,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
         providerKind: "anthropic",
         displayName: "Claude",
         authMethod: "cli",
+        acpAgentId: "claude-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       })
     );
@@ -419,6 +423,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
         displayName: "Claude (disabled)",
         status: "disabled",
         authMethod: "cli",
+        acpAgentId: "claude-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       })
     );
@@ -452,6 +457,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
         displayName: "Claude (disabled)",
         status: "disabled",
         authMethod: "cli",
+        acpAgentId: "claude-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       });
       await repository.createModel(db, {
@@ -495,6 +501,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
         displayName: "Codex",
         status: "disabled",
         authMethod: "cli",
+        acpAgentId: "codex-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       });
       return created.id;

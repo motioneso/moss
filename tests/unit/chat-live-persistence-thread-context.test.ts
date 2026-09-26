@@ -4,6 +4,7 @@ import type { AccessContext, ChatThread, DataContextDb, DataContextRunner } from
 import { DataContextChatPersistence } from "@moss/chat";
 import type { AiRepository } from "@moss/ai";
 import type { ChatRepository } from "../../packages/chat/src/repository.js";
+import { UnsupportedLegacyCliProviderError } from "../../packages/chat/src/live/errors.js";
 
 function dataContext(): DataContextRunner {
   return {
@@ -67,5 +68,26 @@ describe("DataContextChatPersistence.getThreadContext", () => {
     const context = await persistence.getThreadContext("user-1");
 
     expect(context.incognito).toBe(false);
+  });
+});
+
+describe("DataContextChatPersistence.resolveActiveProvider", () => {
+  it("keeps an unsupported legacy CLI provider fail-closed with actionable remediation", async () => {
+    const persistence = new DataContextChatPersistence({
+      dataContext: dataContext(),
+      chatRepository: chatRepository(undefined),
+      aiRepository: {
+        selectChatModelForUser: async () =>
+          ({
+            provider_kind: "ollama",
+            provider_auth_method: "cli",
+            provider_acp_agent_id: null
+          }) as never
+      } as unknown as AiRepository
+    });
+
+    await expect(persistence.resolveActiveProvider("user-1")).rejects.toBeInstanceOf(
+      UnsupportedLegacyCliProviderError
+    );
   });
 });

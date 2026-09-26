@@ -68,6 +68,72 @@ describe("generateStructured", () => {
     expect(capture.input?.service).toBe("module.job-fit");
   });
 
+  it("forwards the selected CLI agent identity without routing API providers through the CLI", async () => {
+    const capture: { input?: GenerateStructuredProviderInput } = {};
+    const provider = {
+      ...fakeProvider,
+      provider_kind: "openai-compatible",
+      acp_agent_id: "opencode"
+    } as unknown as AiProviderWithSealedCredential;
+    const model = {
+      ...fakeModel,
+      provider_kind: "openai-compatible"
+    } as unknown as AiConfiguredModelSafeRow;
+    let cliCalls = 0;
+    const cliDeps: GenerateStructuredDeps = {
+      ...buildDeps(capture),
+      repository: {
+        resolveModelForService: async () => ({ model, reason: "matched-active-model" }),
+        selectProviderWithCredential: async () => provider
+      },
+      createCliStructuredAdapter: () => {
+        cliCalls += 1;
+        return {
+          generateStructured: async (input) => {
+            capture.input = input;
+            return { rawObject: { ok: true }, usage: { inputTokens: 1, outputTokens: 1 } };
+          }
+        };
+      }
+    };
+
+    await generateStructured(
+      scopedDb,
+      { service: "module.job-fit", schema: { type: "object" }, prompt: "score this" },
+      cliDeps
+    );
+
+    expect(capture.input).toMatchObject({ acpAgentId: "opencode" });
+
+    const apiDeps: GenerateStructuredDeps = {
+      ...cliDeps,
+      repository: {
+        resolveModelForService: async () => ({ model, reason: "matched-active-model" }),
+        selectProviderWithCredential: async () =>
+          ({
+            ...provider,
+            auth_method: "api_key",
+            acp_agent_id: null
+          }) as AiProviderWithSealedCredential
+      },
+      cipher: { decryptJson: () => ({ apiKey: "test-key" }) },
+      createAdapter: () => ({
+        generateStructured: async () => ({
+          rawObject: { ok: true },
+          usage: { inputTokens: 1, outputTokens: 1 }
+        })
+      })
+    };
+    const apiResult = await generateStructured(
+      scopedDb,
+      { service: "module.job-fit", schema: { type: "object" }, prompt: "score this" },
+      apiDeps
+    );
+
+    expect(apiResult.ok).toBe(true);
+    expect(cliCalls).toBe(1);
+  });
+
   it("keeps the sources a CLI adapter reports alongside raw text (#2228)", async () => {
     const deps: GenerateStructuredDeps = {
       ...buildDeps({}),
