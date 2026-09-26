@@ -43,7 +43,7 @@ const chatModelOverrideGet = vi.fn(
   })
 );
 
-const personaPreview = vi.fn(async () => ({ reply: "" }));
+const personaPreview = vi.fn(async (_body: unknown) => ({ reply: "" }));
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
   getPersonaSettings: () => personaGet(),
@@ -555,6 +555,101 @@ describe("Persona preview bubble (#1921)", () => {
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("Here is your actual voice, spoken back.");
     expect(text).not.toContain("Press Preview to hear how this sounds.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a previewed reply and shows the hint again when the persona text changes", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "The old voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+    expect(renderedText(renderer.toJSON())).toContain("The old voice, spoken back.");
+
+    const personaInput = renderer.root.findByProps({ "aria-label": "Persona" });
+    await act(async () => {
+      personaInput.props.onChange({ target: { value: "Be even more direct." } });
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("The old voice, spoken back.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a previewed reply and shows the hint again when the assistant name changes", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "The old voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+    expect(renderedText(renderer.toJSON())).toContain("The old voice, spoken back.");
+
+    const nameInput = renderer.root.findByProps({ "aria-label": "Assistant name" });
+    await act(async () => {
+      nameInput.props.onChange({ target: { value: "Alfred" } });
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("The old voice, spoken back.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a previewed reply and shows the hint again when a guided dial changes", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "The old voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const guidedButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Use guided dials"));
+    if (!guidedButton) throw new Error("Use guided dials button not found");
+    await act(async () => {
+      guidedButton.props.onClick();
+    });
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+    expect(renderedText(renderer.toJSON())).toContain("The old voice, spoken back.");
+
+    const crispDial = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Crisp"));
+    if (!crispDial) throw new Error("Tone: Crisp option not found");
+    await act(async () => {
+      crispDial.props.onClick();
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("The old voice, spoken back.");
 
     await act(async () => {
       renderer.unmount();
