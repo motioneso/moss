@@ -228,6 +228,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "provider rejection, distinct from a missing or malformed Codex runner credential. Chat checks CLI sign-ins when the " +
       "ACP adapter initializes. The page also includes an OpenCode ACP card with a saved Chat model setting; " +
       "the saved choice is passed to the ACP chat launch and applied when the agent advertises that option. " +
+      "Codex chat supports the newer models listed after a refresh without requiring a new sign-in or separate installation. " +
       "Codex is connected once for the whole instance: an administrator signs in under Settings, " +
       "Assistant & AI, and every user's chat and background work then use that connection while " +
       "running in their own isolated runner home, as their own account. When Codex refreshes the " +
