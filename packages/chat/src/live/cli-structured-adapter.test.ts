@@ -7,7 +7,7 @@ import { describe, expect, it, afterAll } from "vitest";
 import type { GenerateStructuredProviderInput } from "@moss/ai";
 
 import { CliStructuredAdapter } from "./cli-structured-adapter.js";
-import { CliTranscriptLocationMismatchError } from "./errors.js";
+import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
 import type { ChatEngineFactory } from "./runtime.js";
 
@@ -113,6 +113,87 @@ describe("CliStructuredAdapter provider identity", () => {
     await expect(adapter.generateStructured(input)).resolves.toMatchObject({ rawText: "{}" });
     await adapter.generateStructured({ ...input, acpAgentId: "codex-acp" });
     expect(agentIds).toEqual(["opencode", "codex-acp"]);
+  });
+
+  it("closes a scoped engine when the selected agent, model, or schema changes", async () => {
+    const scope = {
+      actorUserId: "user-1",
+      connectorAccountId: "account-1",
+      lineageId: "lineage-1"
+    };
+    const schemaA = { type: "object", properties: { first: { type: "string" } } };
+    const schemaB = { type: "object", properties: { second: { type: "string" } } };
+    const launchChoices: { model?: string; schema?: Record<string, unknown> }[] = [];
+    const agentIds: (string | null | undefined)[] = [];
+    let killCount = 0;
+    const engineFactory: ChatEngineFactory = (_provider, _sessionKey, opts) => {
+      agentIds.push(opts?.acpAgentId);
+      if (opts?.acpAgentId === "opencode") {
+        throw new CliChatUnavailableError("OpenCode structured generation is unsupported");
+      }
+      const engine = {
+        provider: "openai-compatible",
+        async launch() {
+          return { offset: 0 };
+        },
+        async launchStructured(launchOpts: {
+          readonly model?: string;
+          readonly schema: Record<string, unknown>;
+        }) {
+          launchChoices.push({ model: launchOpts.model, schema: launchOpts.schema });
+          return { offset: 0 };
+        },
+        async submit() {},
+        async submitStructured() {},
+        async interrupt() {},
+        async readNew() {
+          return { records: [], offset: 0, complete: false };
+        },
+        async readStructured(afterOffset: number) {
+          return { text: "{}", offset: afterOffset + 1, complete: true };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {
+          killCount += 1;
+        },
+        async purgeTranscripts() {}
+      } as unknown as CliChatEngine;
+      return engine;
+    };
+    const adapter = new CliStructuredAdapter("openai-compatible", engineFactory);
+    const codexInput = {
+      ...baseInput("module.email-extract"),
+      model: { provider_kind: "openai-compatible" as const, provider_model_id: "gpt-5-codex" },
+      acpAgentId: "codex-acp",
+      scope
+    };
+
+    await adapter.generateStructured({ ...codexInput, schema: schemaA });
+    await adapter.generateStructured({
+      ...codexInput,
+      model: { ...codexInput.model, provider_model_id: "gpt-5-codex-latest" },
+      schema: schemaA
+    });
+    await adapter.generateStructured({ ...codexInput, schema: schemaB });
+    await expect(
+      adapter.generateStructured({
+        ...codexInput,
+        model: { ...codexInput.model, provider_model_id: "opencode-model" },
+        acpAgentId: "opencode",
+        schema: schemaB,
+        closeScope: true
+      })
+    ).rejects.toBeInstanceOf(CliChatUnavailableError);
+
+    expect(launchChoices).toEqual([
+      { model: "gpt-5-codex", schema: schemaA },
+      { model: "gpt-5-codex-latest", schema: schemaA },
+      { model: "gpt-5-codex", schema: schemaB }
+    ]);
+    expect(agentIds).toEqual(["codex-acp", "codex-acp", "codex-acp", "opencode"]);
+    expect(killCount).toBe(3);
   });
 });
 

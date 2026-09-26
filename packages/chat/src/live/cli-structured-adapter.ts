@@ -241,6 +241,16 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       if (activeCliStructuredRuns >= 1) emit({ kind: "busy", exit: "busy" });
       release = await acquireCliStructuredSlot(priority, input.signal);
       session = this.scopedSessions.get(key);
+      const schemaKey = JSON.stringify(input.schema);
+      if (
+        session &&
+        (session.agentId !== input.acpAgentId ||
+          session.modelId !== input.model.provider_model_id ||
+          session.schemaKey !== schemaKey)
+      ) {
+        await this.closeScopedSession(key, session);
+        session = undefined;
+      }
       if (!session) {
         const engine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
           executionMode: "non_interactive",
@@ -256,7 +266,14 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         const personaPath = join(neutralDir, "persona.md");
         try {
           await writeFile(personaPath, "You produce structured JSON only.\n", { mode: 0o600 });
-          const candidate: ScopedStructuredSession = { engine, neutralDir, offset: 0 };
+          const candidate: ScopedStructuredSession = {
+            engine,
+            neutralDir,
+            offset: 0,
+            agentId: input.acpAgentId,
+            modelId: input.model.provider_model_id,
+            schemaKey
+          };
           session = candidate;
           this.scopedSessions.set(key, session);
           const launched = await engine.launchStructured({
@@ -428,6 +445,9 @@ function withSources(
 type ScopedStructuredSession = {
   readonly engine: CliChatEngine & CliStructuredEngine;
   readonly neutralDir: string;
+  readonly agentId: string | null | undefined;
+  readonly modelId: string;
+  readonly schemaKey: string | undefined;
   offset: number;
 };
 
