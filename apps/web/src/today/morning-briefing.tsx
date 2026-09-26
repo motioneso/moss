@@ -36,6 +36,7 @@ import { BriefingProse } from "./evening-mode.js";
 import {
   BriefingFreshnessList,
   BriefingStaleBanner,
+  delayedEmailSource,
   parseBriefingFreshness
 } from "./briefing-freshness.js";
 import { DayPlanSection } from "./day-plan.js";
@@ -74,9 +75,15 @@ export function dayPlanReviewUnavailableMessage(input: {
 export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   const queryClient = useQueryClient();
   const [selectedRunId, setSelectedRunId] = useState(props.initialRunId);
+  const [retryRunId, setRetryRunId] = useState<string | null>(null);
   const detailQuery = useQuery({
     queryKey: queryKeys.briefings.run(props.definitionId, selectedRunId),
-    queryFn: () => getBriefingRun(props.definitionId, selectedRunId)
+    queryFn: () => getBriefingRun(props.definitionId, selectedRunId),
+    refetchInterval: (query) => {
+      if (selectedRunId !== retryRunId) return false;
+      const state = query.state.data?.state;
+      return state === "ready" || state === "failed" ? false : 1000;
+    }
   });
   const retryMutation = useMutation({
     mutationFn: () =>
@@ -90,6 +97,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         queryKeys.briefings.run(props.definitionId, data.runId)
       ])
         void queryClient.invalidateQueries({ queryKey });
+      setRetryRunId(data.runId);
       setSelectedRunId(data.runId);
     }
   });
@@ -183,8 +191,9 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       </Button>
     ) : null;
   const detail = detailQuery.data ?? null;
+  const retryingRun = selectedRunId === retryRunId;
   const failed =
-    detailQuery.isError ||
+    (detailQuery.isError && !retryingRun) ||
     detail?.state === "failed" ||
     (detail?.state === "ready" && (detail.run === null || detail.run.status !== "succeeded"));
 
@@ -244,13 +253,21 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
                   : "Your morning briefing is being prepared."}
               </p>
               {failed ? (
-                <Button
-                  variant="secondary"
-                  disabled={retryMutation.isPending}
-                  onClick={() => retryMutation.mutate()}
-                >
-                  Try again
-                </Button>
+                <>
+                  {retryMutation.isError ? (
+                    <p className="brief-reader__retry-error" role="status">
+                      The retry request couldn’t be confirmed. Your task-block choices are still
+                      here; try again.
+                    </p>
+                  ) : null}
+                  <Button
+                    variant="secondary"
+                    disabled={retryMutation.isPending}
+                    onClick={() => retryMutation.mutate()}
+                  >
+                    Try again
+                  </Button>
+                </>
               ) : null}
             </div>
           )}
@@ -366,7 +383,14 @@ function ReportBody(props: {
   const headline = splitHeadline(run.summaryText);
   const planContext = readPlanContext(run.structuredPayload);
   const freshness = parseBriefingFreshness(run.sourceMetadata);
+  const delayedEmail = delayedEmailSource(freshness);
   const gaps = readGaps(run.sourceMetadata);
+  const dayPlanReadFailed = gaps.some(
+    (gap) => gap.source === "day_plan" && gap.reason === "tool_failed"
+  );
+  const noEveningPlan =
+    !dayPlanReadFailed &&
+    (run.structuredPayload.planContext === null || planContext?.eveningIntent === null);
   const news = readEditorial(run.sourceMetadata, "news", isNewsBriefingEvidence);
   const sports = readEditorial(run.sourceMetadata, "sports", isSportsBriefingEvidence);
 
@@ -382,6 +406,12 @@ function ReportBody(props: {
       </p>
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
       {headline.rest ? <BriefingProse summaryText={headline.rest} /> : null}
+      {noEveningPlan ? (
+        <p className="brief-reader__plan-source">
+          No evening priorities were available for this briefing. Moss used today’s available
+          sources, including tasks and calendar.
+        </p>
+      ) : null}
       {props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable" ? (
         <BriefingCallout
           before={planContext}
@@ -389,7 +419,27 @@ function ReportBody(props: {
           locale={props.locale}
         />
       ) : null}
-      {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
+      {delayedEmail ? (
+        <div className="brief-reader__email-delay" role="note">
+          <p>
+            <strong>
+              Email hasn’t updated since{" "}
+              <time dateTime={delayedEmail.asOf}>
+                {formatDate(delayedEmail.asOf, props.locale, { month: "long", day: "numeric" })} at{" "}
+                {formatTime(delayedEmail.asOf, props.locale)}
+              </time>
+              .
+            </strong>
+          </p>
+          <p>
+            There may be newer replies this briefing hasn’t seen. Calendar and task details remain
+            available.
+          </p>
+        </div>
+      ) : null}
+      {freshness ? (
+        <BriefingStaleBanner freshness={freshness} excludeSources={delayedEmail ? ["email"] : []} />
+      ) : null}
       {run.structuredPayload.actionRows.length > 0 ? (
         <BriefingSections run={run} tasks={props.tasks} />
       ) : null}
