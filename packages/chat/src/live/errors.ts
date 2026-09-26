@@ -135,6 +135,26 @@ export class CliChatUnavailableError extends Error {
   }
 }
 
+export const API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE =
+  "Live chat does not support API-key providers yet. Choose a CLI provider in Admin → Assistant & AI.";
+
+export class ApiKeyLiveChatUnavailableError extends CliChatUnavailableError {
+  constructor() {
+    super(API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE);
+    this.name = "ApiKeyLiveChatUnavailableError";
+  }
+}
+
+export const UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE =
+  "This legacy CLI provider has no supported ACP agent. In Admin → Assistant & AI, add or switch to an Anthropic, OpenAI-compatible (Codex or OpenCode), or Google CLI provider for chat.";
+
+export class UnsupportedLegacyCliProviderError extends CliChatUnavailableError {
+  constructor() {
+    super(UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE);
+    this.name = "UnsupportedLegacyCliProviderError";
+  }
+}
+
 /**
  * #2348 — thrown when the app and the model program genuinely disagree about where the
  * answer file lives: the program has had a fair chance to create its project folder and
@@ -160,6 +180,16 @@ export class ChatTurnInFlightError extends Error {
   constructor() {
     super("A chat turn is already in progress. Wait for it to finish before sending another.");
     this.name = "ChatTurnInFlightError";
+  }
+}
+
+export const CHAT_PROVIDER_CHANGED_MESSAGE =
+  "The active chat provider changed before your message was sent. Please try again.";
+
+export class ChatProviderChangedError extends Error {
+  constructor() {
+    super(CHAT_PROVIDER_CHANGED_MESSAGE);
+    this.name = "ChatProviderChangedError";
   }
 }
 

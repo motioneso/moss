@@ -676,6 +676,7 @@ export interface AiProviderConfigsTable {
   status: AiProviderStatus;
   auth_method: AiAuthMethod;
   execution_mode: "interactive" | "non_interactive";
+  acp_agent_id: string | null;
   // #874 (migration 0149): 'assistant' vs the single 'voice' STT endpoint; DB default backfills.
   purpose: ColumnType<AiProviderPurpose, AiProviderPurpose | undefined, AiProviderPurpose>;
   // #870/H1 (migration 0147): instance-default flag, at most one true (partial unique index).

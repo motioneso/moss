@@ -98,6 +98,60 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     expect(engine.provider).toBe("anthropic");
   });
 
+  it("fails closed for OpenCode structured output instead of dispatching to the Codex runner", () => {
+    const launch = vi.fn();
+    const connection = { launch } as unknown as RpcConnection;
+    const factory = createStructuredChatEngineFactory({
+      socketConfigured: true,
+      getRpcConnection: () => connection,
+      fallback: () => {
+        throw new Error("host fallback must not run on socket path");
+      }
+    });
+
+    expect(() =>
+      factory("openai-compatible", "structured-opencode", {
+        executionMode: "non_interactive",
+        needsStructuredOutput: true,
+        acpAgentId: "opencode"
+      })
+    ).toThrow(CliChatUnavailableError);
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it("forwards structured launch and actor identity to the cli-runner", async () => {
+    const launch = vi.fn(async () => ({ offset: 7 }));
+    const connection = { launch } as unknown as RpcConnection;
+    const factory = createStructuredChatEngineFactory({
+      socketConfigured: true,
+      getRpcConnection: () => connection,
+      fallback: () => {
+        throw new Error("host fallback must not run on socket path");
+      }
+    });
+    const engine = (await factory("anthropic", "structured-anthropic", {
+      executionMode: "non_interactive",
+      needsStructuredOutput: true,
+      userId: "user-1"
+    })) as ChatEngineRpcClient;
+
+    await engine.launchStructured({
+      neutralDir: "/tmp/neutral",
+      personaPath: "/tmp/persona.md",
+      personaText: "structured",
+      schema: { type: "object" }
+    });
+
+    expect(launch).toHaveBeenCalledWith(
+      "structured-anthropic",
+      expect.objectContaining({
+        needsStructuredOutput: true,
+        userId: "user-1",
+        schema: { type: "object" }
+      })
+    );
+  });
+
   it("falls back to the in-process engine when the socket env is absent", async () => {
     const { factory, connection } = selectEngineFactory({ env: {} as NodeJS.ProcessEnv });
     const engine = await factory("anthropic", "user-a");

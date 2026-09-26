@@ -2,6 +2,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
 import { resolveMossEnv } from "@moss/db";
+import { getAcpProviderRowByAgentId } from "@moss/acp";
 
 const execAsync = promisify(exec);
 
@@ -91,6 +92,23 @@ export async function cliAvailable(providerKind: ProviderKind, deps?: WhichDeps)
     if ((await which(binary)) !== null) return true;
   }
   return false;
+}
+
+/** Presence check for a persisted ACP registry-agent identity such as `codex-acp` or `opencode`. */
+export async function cliAvailableForAcpAgent(agentId: string, deps?: WhichDeps): Promise<boolean> {
+  const row = getAcpProviderRowByAgentId(agentId);
+  if (!row) return false;
+  const env = deps?.env ?? process.env;
+  const raw = resolveMossEnv(env, "JARVIS_HOST_CLIS");
+  if (raw !== undefined && raw.trim() !== "") {
+    const declared = raw
+      .split(",")
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean);
+    return declared.includes(row.cliBinary.toLowerCase());
+  }
+  const which = deps?.which ?? defaultWhich;
+  return (await which(row.cliBinary)) !== null;
 }
 
 /**

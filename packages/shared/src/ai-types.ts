@@ -48,10 +48,11 @@ export interface AiProviderConfigDto {
   readonly id: string;
   readonly providerKind: AiProviderKind;
   readonly displayName: string;
+  /** Stable ACP registry agent id for CLI connections; null for API-key connections. */
+  readonly acpAgentId: string | null;
   readonly baseUrl: string | null;
   readonly status: AiProviderStatus;
   readonly authMethod: AiAuthMethod;
-  readonly executionMode: AiProviderExecutionMode;
   readonly hasCredential: boolean;
   readonly cliAvailable: boolean;
   // #870/H1 Slice 1: the single instance-default provider. User-facing services bound to a "mode"
@@ -67,6 +68,8 @@ export interface AiConfiguredModelDto {
   readonly id: string;
   readonly providerConfigId: string | null;
   readonly providerKind: AiProviderKind | null;
+  /** ACP registry agent id of the model's provider, when it is a CLI connection. */
+  readonly providerAcpAgentId: string | null;
   readonly providerDisplayName: string;
   readonly providerStatus: AiProviderStatus;
   readonly providerModelId: string | null;
@@ -292,10 +295,10 @@ export interface ListAiProviderConfigsResponse {
 export interface CreateAiProviderConfigRequest {
   readonly providerKind: AiProviderKind;
   readonly displayName: string;
+  readonly acpAgentId?: string | null;
   readonly baseUrl?: string | null;
   readonly status?: Exclude<AiProviderStatus, "revoked">;
   readonly authMethod?: AiAuthMethod;
-  readonly executionMode?: AiProviderExecutionMode;
   readonly credentialPayload?: Record<string, unknown>;
 }
 
@@ -306,10 +309,10 @@ export interface CreateAiProviderConfigResponse {
 export interface UpdateAiProviderConfigRequest {
   readonly providerKind?: AiProviderKind;
   readonly displayName?: string;
+  readonly acpAgentId?: string | null;
   readonly baseUrl?: string | null;
   readonly status?: Exclude<AiProviderStatus, "revoked">;
   readonly authMethod?: AiAuthMethod;
-  readonly executionMode?: AiProviderExecutionMode;
   readonly credentialPayload?: Record<string, unknown>;
 }
 

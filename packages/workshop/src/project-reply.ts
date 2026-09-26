@@ -104,6 +104,7 @@ async function getReplyText(
         messages,
         schema,
         maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS,
+        acpAgentId: provider.acp_agent_id,
         actorUserId
       });
     return readStructuredReplyText(result);

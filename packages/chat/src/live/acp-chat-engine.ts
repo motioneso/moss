@@ -26,6 +26,8 @@ export const MAX_RESULT_CHARS = 500;
 
 export interface AcpChatEngineOptions {
   readonly tunnel: AcpTunnel;
+  /** Persisted provider configuration identity; OpenCode is never inferred from a model preference. */
+  readonly acpAgentId?: string;
   readonly userId: string;
   readonly projectId: string;
   readonly permissionDecider?: AcpPermissionDecider;
@@ -37,10 +39,18 @@ export interface AcpChatEngineOptions {
 }
 
 /** ACP's provider names and Moss's configured provider names are deliberately different. */
-export function toAcpProviderKind(provider: ProviderKind, acpModel?: string): AcpProviderKind {
-  if (provider === "openai-compatible") return acpModel === undefined ? "openai" : "opencode";
-  if (provider === "anthropic") return "anthropic";
-  return "google";
+export function toAcpProviderKind(provider: ProviderKind, acpAgentId?: string): AcpProviderKind {
+  if (provider === "openai-compatible") {
+    if (acpAgentId === undefined || acpAgentId === "codex-acp") return "openai";
+    if (acpAgentId === "opencode") return "opencode";
+  }
+  if (provider === "anthropic" && (acpAgentId === undefined || acpAgentId === "claude-acp")) {
+    return "anthropic";
+  }
+  if (provider === "google" && (acpAgentId === undefined || acpAgentId === "antigravity-acp")) {
+    return "google";
+  }
+  throw new CliChatUnavailableError("The selected ACP agent is not compatible with this provider.");
 }
 
 export function toChatTurnUsageDto(usage: unknown): ChatTurnUsageDto | undefined {
@@ -368,7 +378,12 @@ export class AcpChatEngine implements CliChatEngine {
       this.wrapPermissionDecider(opts.permissionDecider)
     );
     this.reportLoginRejected =
-      opts.reportLoginRejected ?? (() => recordProviderLoginRejected(this.provider));
+      opts.reportLoginRejected ??
+      (() => {
+        if (toAcpProviderKind(this.provider, opts.acpAgentId) !== "opencode") {
+          recordProviderLoginRejected(this.provider);
+        }
+      });
   }
 
   private wrapPermissionDecider(decider?: AcpPermissionDecider): AcpPermissionDecider | undefined {
@@ -510,7 +525,7 @@ export class AcpChatEngine implements CliChatEngine {
   }
 
   async launch(options: EngineLaunchOpts): Promise<{ offset: number }> {
-    const kind = toAcpProviderKind(this.provider, options.acpModel);
+    const kind = toAcpProviderKind(this.provider, this.opts.acpAgentId);
     try {
       this.handle = await this.client.openSession(
         this.sessionKey,
@@ -527,10 +542,11 @@ export class AcpChatEngine implements CliChatEngine {
       // ACP config options are set after session/new and before any prompt, including the
       // explicit "default" binding. The client records a mismatch without silently changing
       // the configured model list.
-      await this.client.setModelForChat(
-        this.handle,
-        options.acpModel ?? options.model ?? "default"
-      );
+      const model =
+        kind === "opencode"
+          ? (options.acpModel ?? options.model ?? "default")
+          : (options.model ?? "default");
+      await this.client.setModelForChat(this.handle, model);
       (this.opts.log ?? console.info)(
         `[acp-chat] session opened conversation=${this.opts.projectId} provider=${kind}`
       );
@@ -585,7 +601,7 @@ export class AcpChatEngine implements CliChatEngine {
         if (isAuthRequired(error)) {
           this.reportLoginRejected();
           this.promptError = new CliChatUnavailableError(
-            authFailureMessage(toAcpProviderKind(this.provider)),
+            authFailureMessage(toAcpProviderKind(this.provider, this.opts.acpAgentId)),
             { cause: error }
           );
         } else {

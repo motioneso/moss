@@ -113,6 +113,7 @@ export function registerAiProviderValidationRoutes(
             return dependencies.modelDiscovery.discoverModels(cacheKey, {
               providerKind: provider.provider_kind,
               authMethod: provider.auth_method,
+              acpAgentId: provider.acp_agent_id,
               baseUrl: provider.base_url,
               credential: dependencies.secretCipher.decryptJson(provider.encrypted_credential)
             });
@@ -164,6 +165,7 @@ export function registerAiProviderValidationRoutes(
                 actorUserId: accessContext.actorUserId,
                 providerId: provider.id,
                 providerKind: provider.provider_kind,
+                acpAgentId: provider.acp_agent_id,
                 authMethod: provider.auth_method,
                 baseUrl: provider.base_url,
                 credential: dependencies.secretCipher.decryptJson(provider.encrypted_credential)

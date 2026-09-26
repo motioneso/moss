@@ -38,6 +38,7 @@ import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
 import { MODEL_TIERS, TIERS } from "./settings-ai-edit-model-form";
+import { OPENAI_COMPATIBLE_CLI_AGENTS, PROVIDER_CATALOG } from "./settings-ai-provider-catalog";
 import { ProviderModels } from "./settings-ai-provider-models";
 import { TerminalModal } from "./terminal-modal";
 import {
@@ -56,7 +57,6 @@ import {
   type AiModelCapability,
   type AiModelTier,
   type AiProviderConfigDto,
-  type AiProviderExecutionMode,
   type AiProviderKind,
   type AiServiceBinding,
   type AiServiceKey
@@ -76,21 +76,6 @@ const CREDENTIAL_EXAMPLES: Readonly<
   custom: { baseUrl: "https://your-endpoint.example.com", apiKey: "Your API key" },
   "system-one": { baseUrl: "https://api.typesafe.ai", apiKey: "apikey_…" }
 };
-
-const PROVIDER_CATALOG: readonly {
-  readonly label: string;
-  readonly kind: AiProviderKind;
-  readonly authMethod: AiAuthMethod;
-}[] = [
-  { label: "Anthropic", kind: "anthropic", authMethod: "cli" },
-  { label: "OpenAI", kind: "openai-compatible", authMethod: "cli" },
-  { label: "Google", kind: "google", authMethod: "cli" },
-  { label: "Mistral", kind: "openai-compatible", authMethod: "api_key" },
-  { label: "Local (Ollama)", kind: "ollama", authMethod: "api_key" },
-  { label: "OpenAI-compatible", kind: "openai-compatible", authMethod: "api_key" },
-  { label: "System One (TypeSafe)", kind: "system-one", authMethod: "api_key" },
-  { label: "Custom", kind: "custom", authMethod: "api_key" }
-];
 
 // Chat and the strict email-extraction background service share the existing binding control. Voice
 // stays on its dedicated endpoint; other worker capabilities remain automatic.
@@ -125,9 +110,8 @@ function ProviderCard(props: {
   readonly models: readonly AiConfiguredModelDto[];
   readonly editing: boolean;
   readonly onEdit: (id: string | null) => void;
-  readonly onAuth: (id: string, method: AiAuthMethod) => void;
+  readonly onAuth: (id: string, method: AiAuthMethod, acpAgentId?: string) => void;
   readonly onLogin: () => void;
-  readonly onExecutionMode: (id: string, executionMode: AiProviderExecutionMode) => void;
   readonly onCredential: (id: string, input: { baseUrl: string; apiKey: string }) => void;
   readonly onModelOverride: (model: AiConfiguredModelDto, allowed: boolean) => void;
   readonly onModelStatusChange: (
@@ -145,10 +129,13 @@ function ProviderCard(props: {
   const { toast } = useFeedback();
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
+  const [cliAgentId, setCliAgentId] = useState(provider.acpAgentId ?? "");
+  const [requiresCliAgentSelection, setRequiresCliAgentSelection] = useState(false);
   // #1059 — a CLI-auth provider has no API key to credential-test; its Test action opens
   // a live owner-gated terminal onto the CLI instead of calling testMutation.
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const canAutomateLogin = supportsAutomatedProviderLogin(provider);
+  const canAutomateLogin =
+    provider.acpAgentId !== "opencode" && supportsAutomatedProviderLogin(provider);
   const modelChoiceNote =
     provider.providerKind === "google"
       ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
@@ -255,20 +242,51 @@ function ProviderCard(props: {
                 { value: "api_key", label: "API key" }
               ]}
               ariaLabel="Authentication method"
-              onChange={(v) => props.onAuth(provider.id, v)}
+              onChange={(method) => {
+                if (method === "cli" && provider.providerKind === "openai-compatible") {
+                  if (!cliAgentId) {
+                    setRequiresCliAgentSelection(true);
+                    return;
+                  }
+                  props.onAuth(provider.id, method, cliAgentId);
+                  return;
+                }
+                props.onAuth(provider.id, method);
+              }}
             />
           </Field>
-          <Field label="Execution mode">
-            <Segmented<AiProviderExecutionMode>
-              value={provider.executionMode}
-              options={[
-                { value: "interactive", label: "Interactive" },
-                { value: "non_interactive", label: "Non-interactive" }
-              ]}
-              ariaLabel="Execution mode"
-              onChange={(v) => props.onExecutionMode(provider.id, v)}
-            />
-          </Field>
+          {provider.providerKind === "openai-compatible" ? (
+            <Field
+              label="CLI agent"
+              hint={
+                requiresCliAgentSelection
+                  ? "Choose a CLI agent before switching to CLI auth."
+                  : "Codex and OpenCode use separate sign-ins, so choose the agent this provider should launch."
+              }
+            >
+              <Select
+                value={cliAgentId}
+                aria-label={`${provider.displayName} CLI agent`}
+                onChange={(event) => {
+                  const agentId = event.target.value;
+                  setCliAgentId(agentId);
+                  if (provider.authMethod === "cli" || requiresCliAgentSelection) {
+                    setRequiresCliAgentSelection(false);
+                    if (agentId) props.onAuth(provider.id, "cli", agentId);
+                  }
+                }}
+              >
+                <option value="" disabled={provider.authMethod === "cli"}>
+                  Choose a CLI agent
+                </option>
+                {OPENAI_COMPATIBLE_CLI_AGENTS.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
           {provider.authMethod === "cli" ? (
             <div className="provcfg__cli">
               <span className="provcfg__cli-ic">
@@ -579,7 +597,9 @@ export function AiProvidersPane() {
   });
   const providers = (providersQuery.data?.providers ?? []).filter((p) => p.status !== "revoked");
   const models = modelsQuery.data?.models ?? [];
-  const connected = providers.map((p) => p.displayName);
+  const hasOpenCodeProvider = providers.some(
+    (provider) => provider.authMethod === "cli" && provider.acpAgentId === "opencode"
+  );
 
   const invalidate = () =>
     Promise.all([
@@ -601,6 +621,7 @@ export function AiProvidersPane() {
         displayName: input.option.label,
         authMethod: input.option.authMethod,
         ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+        ...(input.option.acpAgentId ? { acpAgentId: input.option.acpAgentId } : {}),
         ...(input.apiKey ? { credentialPayload: { apiKey: input.apiKey } } : {})
       }),
     onSuccess: (_data, input) => {
@@ -736,11 +757,11 @@ export function AiProvidersPane() {
                 </div>
               </div>
             </div>
-            <OpenCodeAcpCard />
+            {hasOpenCodeProvider ? <OpenCodeAcpCard /> : null}
           </>
         ) : (
           <div className="prov-list">
-            <OpenCodeAcpCard />
+            {hasOpenCodeProvider ? <OpenCodeAcpCard /> : null}
             {providers.map((provider) => (
               <ProviderCard
                 key={provider.id}
@@ -748,15 +769,31 @@ export function AiProvidersPane() {
                 models={models.filter((m) => m.providerConfigId === provider.id)}
                 editing={editId === provider.id}
                 onEdit={setEditId}
-                onAuth={(id, method) =>
-                  updateMutation.mutate({ id, patch: { authMethod: method } })
-                }
-                onLogin={() => {
-                  if (supportsAutomatedProviderLogin(provider)) setLoginProvider(provider);
+                onAuth={(id, method, acpAgentId) => {
+                  const selectedAgent = OPENAI_COMPATIBLE_CLI_AGENTS.find(
+                    (agent) => agent.id === acpAgentId
+                  );
+                  updateMutation.mutate({
+                    id,
+                    patch: {
+                      authMethod: method,
+                      ...(method === "cli" && acpAgentId !== undefined
+                        ? {
+                            acpAgentId,
+                            ...(selectedAgent ? { displayName: selectedAgent.label } : {})
+                          }
+                        : {})
+                    }
+                  });
                 }}
-                onExecutionMode={(id, executionMode) =>
-                  updateMutation.mutate({ id, patch: { executionMode } })
-                }
+                onLogin={() => {
+                  if (
+                    provider.acpAgentId !== "opencode" &&
+                    supportsAutomatedProviderLogin(provider)
+                  ) {
+                    setLoginProvider(provider);
+                  }
+                }}
                 onCredential={(id, { baseUrl, apiKey }) =>
                   updateMutation.mutate({
                     id,
@@ -856,7 +893,11 @@ export function AiProvidersPane() {
               <>
                 <div className="provpick__grid">
                   {PROVIDER_CATALOG.map((option) => {
-                    const has = connected.includes(option.label);
+                    const has = providers.some((provider) =>
+                      option.acpAgentId !== undefined
+                        ? provider.authMethod === "cli" && provider.acpAgentId === option.acpAgentId
+                        : provider.displayName === option.label
+                    );
                     return (
                       <button
                         key={option.label}
@@ -921,10 +962,12 @@ export function AiProvidersPane() {
           />
         </Group>
       ) : null}
-      <Note icon={<Terminal size={13} aria-hidden="true" />}>
-        OpenCode uses the ACP chat path. Its agent reports the available model choice when the
-        session initializes, and the saved choice is passed into the next ACP launch.
-      </Note>
+      {hasOpenCodeProvider ? (
+        <Note icon={<Terminal size={13} aria-hidden="true" />}>
+          OpenCode uses the ACP chat path. Its agent reports the available model choice when the
+          session initializes, and the saved choice is passed into the next ACP launch.
+        </Note>
+      ) : null}
       {/* #874: Voice (STT) is its own dedicated admin section, independent of the chat providers. */}
       <VoiceConfigGroup />
       <ChatLockGroup />

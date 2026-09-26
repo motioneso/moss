@@ -6,19 +6,31 @@ import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
-import { isBoundedFallbackEngine } from "./structured-engine-selection.js";
 import { buildEngineText } from "./engine-text.js";
+import {
+  assertLiveCliProvider,
+  assertProviderIdentityForPendingTurn,
+  assertProviderIdentityBeforeReplay,
+  discardChatSession,
+  dropSessionsForProvider,
+  ensureSessionForCurrentProvider,
+  switchChatProviderSession,
+  type ActiveChatProvider,
+  type UserSession
+} from "./chat-session-provider-identity.js";
 import {
   ChatStreamLimitError,
   ChatThreadNotFoundError,
   ChatTurnInFlightError,
   mapChatEngineReadError,
   CliChatDeliveryUnknownError,
-  CliChatUnavailableError
+  CliChatUnavailableError,
+  ApiKeyLiveChatUnavailableError,
+  UnsupportedLegacyCliProviderError
 } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
-import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
+import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import {
   applyRemoteReap,
@@ -27,8 +39,10 @@ import {
   delay,
   drainEngine,
   createPendingActionResultFlusher,
+  clearPrivateDetachTimer,
   injectActionResultRecord,
   type PendingActionResult,
+  schedulePrivateDetachTimer,
   sweepOrphanedPrivateThreads,
   upsertActivityRecord,
   waitForNewToolsListObservation
@@ -64,28 +78,8 @@ export type {
 
 type Subscriber = (record: TranscriptRecord) => void;
 
-interface UserSession {
-  actorUserId: string;
-  surface: ChatSurface;
-  engine: CliChatEngine;
-  provider: ProviderKind;
-  model: string;
-  lastActivity: number;
-  transcriptOffset: number;
-  incognito: boolean;
-  readonly seededContextKeys: Set<string>;
-  /**
-   * #2164 — the token this session's engine was launched with, kept so a bounded-fallback
-   * turn can check MCP tools-list readiness after the fact (see `mcpToken` usage in `runTurn`).
-   * Undefined when no MCP client was configured for this session at all.
-   */
-  readonly mcpToken?: string;
-  readonly startsToolClientPerTurn: boolean;
-}
-
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
 const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
-const PRIVATE_DETACH_GRACE_MS = 30_000;
 
 export class ChatSessionManager {
   private readonly sessions = new Map<string, UserSession>();
@@ -126,31 +120,33 @@ export class ChatSessionManager {
   ): Promise<UserSession> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const existing = this.sessions.get(sessionKey);
-    if (existing) return existing;
-
-    const inFlight = this.launching.get(sessionKey);
-    if (inFlight) return inFlight;
-
-    const forceReplay = opts?.forceReplay ?? this.pendingForcedReplay.delete(sessionKey);
-    const launch = this.launchSession(actorUserId, userName, { forceReplay }, chatSurface);
-    this.launching.set(sessionKey, launch);
-    try {
-      return await launch;
-    } finally {
-      this.launching.delete(sessionKey);
-    }
+    return ensureSessionForCurrentProvider({
+      actorUserId,
+      userName,
+      opts,
+      surface: chatSurface,
+      sessionKey,
+      launching: this.launching,
+      persistence: this.deps.persistence,
+      sessions: this.sessions,
+      pendingForcedReplay: this.pendingForcedReplay,
+      discardSession: (session) =>
+        discardChatSession(sessionKey, session, this.sessions, this.deps.revokeMcpToken),
+      launchSession: (launchOpts, providerIdentity) =>
+        this.launchSession(actorUserId, userName, launchOpts, chatSurface, providerIdentity)
+    });
   }
 
   private async launchSession(
     actorUserId: string,
     userName: string,
     opts: { readonly forceReplay?: boolean } | undefined,
-    surface: ChatSurface
+    surface: ChatSurface,
+    providerIdentity: ActiveChatProvider
   ): Promise<UserSession> {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const { provider, model, executionMode, acpModel } =
-      await this.deps.persistence.resolveActiveProvider(actorUserId);
+    const { provider, model, acpModel, providerConfigId, acpAgentId } = providerIdentity;
+    assertLiveCliProvider(providerIdentity);
     let threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
     if (!threadState && this.deps.persistence.getCurrentThreadState) {
       await this.deps.persistence.openNewConversation(actorUserId, undefined, surface);
@@ -175,13 +171,22 @@ export class ChatSessionManager {
       return next;
     };
     const engine = await this.deps.engineFactory(provider, sessionKey, {
-      executionMode,
+      providerConfigId,
+      acpAgentId,
       ...(acpModel ? { acpModel } : {}),
       ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
       ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
         ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
         : {}),
       nextSequence
+    });
+    await assertProviderIdentityBeforeReplay({
+      actorUserId,
+      sessionKey,
+      providerIdentity,
+      persistence: this.deps.persistence,
+      engine,
+      revokeMcpToken: this.deps.revokeMcpToken
     });
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
@@ -219,8 +224,7 @@ export class ChatSessionManager {
       mcpServerUrl: mcpConfig?.mcpServerUrl
     });
 
-    const startsToolClientPerTurn =
-      engine.startsToolClientPerTurn ?? isBoundedFallbackEngine(provider, executionMode);
+    const startsToolClientPerTurn = engine.startsToolClientPerTurn ?? false;
     if (mcpConfig?.token && !startsToolClientPerTurn) {
       const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
       if (toolsListReady === false) {
@@ -242,6 +246,7 @@ export class ChatSessionManager {
       engine,
       provider,
       model,
+      providerIdentity,
       lastActivity: this.deps.clock.now(),
       transcriptOffset: offset,
       incognito: threadState?.incognito ?? false,
@@ -391,10 +396,17 @@ export class ChatSessionManager {
       try {
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       } catch (err) {
-        if (!(err instanceof CliChatUnavailableError)) throw err;
+        if (
+          !(err instanceof CliChatUnavailableError) ||
+          err instanceof ApiKeyLiveChatUnavailableError ||
+          err instanceof UnsupportedLegacyCliProviderError
+        ) {
+          throw err;
+        }
         this.pendingForcedReplay.add(sessionKey);
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       }
+      const turnProviderIdentity = session.providerIdentity;
 
       const attachments = opts?.attachments ?? [];
       const { text: builtEngineText, pendingItems } = await buildEngineText(
@@ -416,6 +428,8 @@ export class ChatSessionManager {
       const engineText = opts?.moduleControl
         ? `${withAttachments}\n\n${opts.moduleControl}`
         : withAttachments;
+      const currentProvider = await this.deps.persistence.resolveActiveProvider(actorUserId);
+      await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
       this.emit(actorUserId, surface, { kind: "user", text });
       let toolsListBaseline = session.mcpToken
         ? this.deps.getToolsListObservationCount?.(session.mcpToken)
@@ -433,7 +447,15 @@ export class ChatSessionManager {
         if (err instanceof CliChatUnavailableError) {
           // #1157: unavailable = the text verifiably never entered the engine (paste failed
           // pre-entry, or the daemon has no live session). Safe to heal + resubmit ONCE.
+          await assertProviderIdentityForPendingTurn(
+            turnProviderIdentity,
+            this.deps.persistence.resolveActiveProvider(actorUserId)
+          );
           session = await this.healAndRelaunch(actorUserId, userName, session);
+          await assertProviderIdentityForPendingTurn(
+            turnProviderIdentity,
+            session.providerIdentity
+          );
           toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
             ? this.deps.getToolsListObservationCount?.(session.mcpToken)
             : undefined;
@@ -707,7 +729,7 @@ export class ChatSessionManager {
       this.sessions.get(surfaceSessionKey(actorUserId, chatSurface)),
       this.deps,
       this.sessions,
-      (k) => this.clearPrivateDetachTimer(k)
+      (k) => clearPrivateDetachTimer(this.privateDetachTimers, k)
     );
   }
 
@@ -756,38 +778,33 @@ export class ChatSessionManager {
 
   /** Switch provider without resetting the surface's conversation. */
   async switchProvider(actorUserId: string, userName: string, surface?: string): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      await session.engine.kill();
-      this.sessions.delete(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    }
-    await this.ensureSession(actorUserId, userName, { forceReplay: true }, chatSurface);
+    await switchChatProviderSession({
+      actorUserId,
+      userName,
+      surface,
+      sessions: this.sessions,
+      discardSession: (sessionKey, session) =>
+        discardChatSession(sessionKey, session, this.sessions, this.deps.revokeMcpToken),
+      ensureSession: (...args) => this.ensureSession(...args)
+    });
   }
 
   /** #1081 — drop live sessions after a provider binary replacement. */
   async dropSessionsForProvider(provider: ProviderKind): Promise<void> {
-    await this.withMaintenanceLock(async () => {
-      for (const [actorUserId, session] of this.sessions) {
-        if (session.provider !== provider) continue;
-        try {
-          await session.engine.kill();
-        } catch {
-          // best-effort: a hung/failed kill must not strand the session — drop it below regardless.
-        }
-        this.sessions.delete(actorUserId);
-        this.deps.revokeMcpToken?.(actorUserId);
-      }
-    });
+    await this.withMaintenanceLock(() =>
+      dropSessionsForProvider({
+        provider,
+        sessions: this.sessions,
+        revokeMcpToken: this.deps.revokeMcpToken
+      })
+    );
   }
 
   /** Register one surface subscriber and return its unsubscribe handle. */
   subscribe(actorUserId: string, fn: Subscriber, surface?: string): () => void {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    this.clearPrivateDetachTimer(sessionKey);
+    clearPrivateDetachTimer(this.privateDetachTimers, sessionKey);
     let set = this.subscribers.get(sessionKey);
     if (!set) {
       set = new Set();
@@ -806,7 +823,9 @@ export class ChatSessionManager {
       if (current && current.size === 0) {
         this.subscribers.delete(sessionKey);
         if (this.sessions.get(sessionKey)?.incognito) {
-          this.schedulePrivateEnd(actorUserId, chatSurface);
+          schedulePrivateDetachTimer(this.privateDetachTimers, sessionKey, () =>
+            this.endPrivateSession(actorUserId, chatSurface)
+          );
         }
       }
     };
@@ -905,7 +924,7 @@ export class ChatSessionManager {
               session,
               this.deps,
               this.sessions,
-              (k) => this.clearPrivateDetachTimer(k)
+              (k) => clearPrivateDetachTimer(this.privateDetachTimers, k)
             );
           } else {
             try {
@@ -932,7 +951,7 @@ export class ChatSessionManager {
         }
       }
       await sweepOrphanedPrivateThreads(effectiveLive, this.deps, this.sessions, (k) =>
-        this.clearPrivateDetachTimer(k)
+        clearPrivateDetachTimer(this.privateDetachTimers, k)
       );
     });
   }
@@ -976,22 +995,5 @@ export class ChatSessionManager {
 
   private countSubscribers(actorUserId: string): number {
     return countSubscribersFor(this.subscribers, actorUserId);
-  }
-
-  private schedulePrivateEnd(actorUserId: string, surface: ChatSurface): void {
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const timer = setTimeout(() => {
-      this.privateDetachTimers.delete(sessionKey);
-      void this.endPrivateSession(actorUserId, surface).catch(() => {});
-    }, PRIVATE_DETACH_GRACE_MS);
-    timer.unref?.();
-    this.privateDetachTimers.set(sessionKey, timer);
-  }
-
-  private clearPrivateDetachTimer(actorUserId: string): void {
-    const timer = this.privateDetachTimers.get(actorUserId);
-    if (!timer) return;
-    clearTimeout(timer);
-    this.privateDetachTimers.delete(actorUserId);
   }
 }

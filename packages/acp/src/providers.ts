@@ -17,6 +17,8 @@ export interface AcpProviderRow {
   readonly kind: AcpProviderKind;
   /** Registry agent id, e.g. `claude-acp`. */
   readonly agent: string;
+  /** CLI used for presence/login checks outside the runner. */
+  readonly cliBinary: string;
   /** Pinned registry entry the launch command uses. */
   readonly registry: string;
   /** How the agent is launched (registry entry, run without a shell). */
@@ -37,6 +39,7 @@ const ROWS: readonly AcpProviderRow[] = [
   {
     kind: "anthropic",
     agent: "claude-acp",
+    cliBinary: "claude",
     registry: "@agentclientprotocol/claude-agent-acp@0.75.1",
     launch: "npx @agentclientprotocol/claude-agent-acp@0.75.1",
     login: "runner token store, CLAUDE_CODE_OAUTH_TOKEN in env",
@@ -47,6 +50,7 @@ const ROWS: readonly AcpProviderRow[] = [
   {
     kind: "openai",
     agent: "codex-acp",
+    cliBinary: "codex",
     registry: "@agentclientprotocol/codex-acp@1.10.0",
     launch: "npx @agentclientprotocol/codex-acp@1.10.0",
     login: "runner-owned login is copied into this user's isolated agent home before launch",
@@ -57,6 +61,7 @@ const ROWS: readonly AcpProviderRow[] = [
   {
     kind: "google",
     agent: "antigravity-acp",
+    cliBinary: "gemini",
     registry: "antigravity-acp (binary from the registry)",
     launch: "antigravity-acp binary from the registry",
     login:
@@ -70,6 +75,7 @@ const ROWS: readonly AcpProviderRow[] = [
   {
     kind: "opencode",
     agent: "opencode",
+    cliBinary: "opencode",
     registry: "opencode@1.18.29",
     launch: "opencode acp (binary 1.18.29, the version Scout ran 2026-09-07)",
     login:
@@ -86,6 +92,11 @@ export function getAcpProviderRow(kind: AcpProviderKind): AcpProviderRow {
   const row = ROWS.find((candidate) => candidate.kind === kind);
   if (!row) throw new Error(`Unknown ACP provider kind: ${kind}`);
   return row;
+}
+
+/** Look up the current adapter row by its persisted registry-agent identity. */
+export function getAcpProviderRowByAgentId(agentId: string): AcpProviderRow | undefined {
+  return ROWS.find((candidate) => candidate.agent === agentId);
 }
 
 /**

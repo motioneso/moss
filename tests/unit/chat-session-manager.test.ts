@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ChatSessionManager,
-  ChatTurnInFlightError
+  ChatTurnInFlightError,
+  type ChatSessionManagerDeps
 } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { EngineLaunchOpts, TranscriptRecord } from "../../packages/chat/src/live/types.js";
 import {
@@ -46,6 +47,7 @@ export function makeMinimalDeps(
  */
 export class FakeEngine {
   readonly provider = "anthropic" as const;
+  startsToolClientPerTurn = false;
   launchOpts: EngineLaunchOpts | null = null;
   readonly submitted: string[] = [];
   interrupted = false;
@@ -172,24 +174,19 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
     expect(engine.launchOpts?.personaText).toBe("You are Jarvis.");
   });
 
-  it("passes provider execution mode to the engine factory", async () => {
+  it("does not pass provider execution mode to the live chat engine factory", async () => {
     const engine = new FakeEngine(0);
     const deps = depsWith(engine);
     vi.mocked(deps.persistence.resolveActiveProvider).mockResolvedValue({
       provider: "openai-compatible",
-      model: "default",
-      executionMode: "non_interactive"
+      model: "default"
     });
-    const engineFactory = vi.fn(() => engine);
+    const engineFactory = vi.fn<ChatSessionManagerDeps["engineFactory"]>(() => engine);
     const manager = new ChatSessionManager({ ...deps, engineFactory });
 
     await manager.ensureSession("u1", "Ben");
 
-    expect(engineFactory).toHaveBeenCalledWith(
-      "openai-compatible",
-      "u1:drawer",
-      expect.objectContaining({ executionMode: "non_interactive" })
-    );
+    expect(engineFactory.mock.calls[0]?.[2]).not.toHaveProperty("executionMode");
   });
 
   it("creates the first conversation before selecting the chat engine", async () => {
@@ -198,7 +195,7 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
     const openNewConversation = vi.fn(async () => {
       thread = { id: "thread-1", incognito: false };
     });
-    const engineFactory = vi.fn(() => engine);
+    const engineFactory = vi.fn<ChatSessionManagerDeps["engineFactory"]>(() => engine);
     const deps = makeMinimalDeps({
       engineFactory,
       persistence: {
@@ -222,11 +219,11 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
       "anthropic",
       "u1:drawer",
       expect.objectContaining({
-        executionMode: undefined,
         conversationId: "thread-1",
         userId: "u1"
       })
     );
+    expect(engineFactory.mock.calls[0]?.[2]).not.toHaveProperty("executionMode");
   });
 
   it("assembles replayBatch from prior turns and ships it on launch", async () => {

@@ -80,7 +80,7 @@ export interface EngineHostDeps {
   /** Resolve the same isolated home and UID used by ACP chat for an authenticated user. */
   readonly resolveUserRuntime?: (userId: string) => Promise<LoginUserRuntime>;
   /** #2687: runs before a model list; for Codex it picks up any newer refresh a user holds. */
-  readonly beforeModelList?: (provider: RpcProviderKind) => Promise<void>;
+  readonly beforeModelList?: (provider: RpcProviderKind, acpAgentId: string) => Promise<void>;
   /**
    * #2208 `listProviderModels`: the vendor HTTP client the model-list adapters call. Absent ⇒
    * `globalThis.fetch`. Injected by tests so no unit test ever reaches a vendor.

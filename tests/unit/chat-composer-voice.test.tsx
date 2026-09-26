@@ -425,6 +425,7 @@ function availableRoute(): LookupAiCapabilityRouteResponse {
         id: "model-1",
         providerConfigId: "provider-1",
         providerKind: "openai-compatible",
+        providerAcpAgentId: null,
         providerDisplayName: "Voice provider",
         providerStatus: "active",
         providerModelId: "whisper-1",

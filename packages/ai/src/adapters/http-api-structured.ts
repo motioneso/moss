@@ -60,6 +60,8 @@ export type GenerateStructuredProviderInput = {
   readonly maxOutputTokens: number;
   /** #2228: let the model use its own built-in web search tool while producing this result. */
   readonly nativeSearch?: boolean;
+  /** Persisted CLI agent identity; API-key adapters ignore it. */
+  readonly acpAgentId?: string | null;
   readonly signal?: AbortSignal;
   readonly telemetry?: StructuredTelemetry;
   readonly priority?: StructuredRunPriority;

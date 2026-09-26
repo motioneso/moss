@@ -128,6 +128,8 @@ export type ChatEngineFactory = (
     readonly executionMode?: AiProviderExecutionMode;
     readonly conversationId?: string;
     readonly userId?: string;
+    readonly providerConfigId?: string;
+    readonly acpAgentId?: string | null;
     /** Saved OpenCode ACP model choice for the next live session. */
     readonly acpModel?: string;
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
@@ -211,6 +213,9 @@ export function createRealEngineFactory(
   }
 
   return async (provider, sessionKey, engineOpts) => {
+    if (engineOpts?.acpAgentId === "opencode") {
+      throw new CliChatUnavailableError("OpenCode requires an ACP chat session.");
+    }
     const persistentRuntimeEnabled =
       typeof opts.persistentRuntimeEnabled === "function"
         ? await opts.persistentRuntimeEnabled()
@@ -279,8 +284,11 @@ function createRpcEngineFactory(opts: {
     onSessionReaped: opts.onSessionReaped,
     logger: opts.logger
   });
-  const factory: ChatEngineFactory = (provider, sessionKey, engineOpts) =>
-    new ChatEngineRpcClient(
+  const factory: ChatEngineFactory = (provider, sessionKey, engineOpts) => {
+    if (engineOpts?.acpAgentId === "opencode") {
+      throw new CliChatUnavailableError("OpenCode requires an ACP chat session.");
+    }
+    return new ChatEngineRpcClient(
       provider,
       sessionKey,
       connection,
@@ -289,6 +297,7 @@ function createRpcEngineFactory(opts: {
       engineOpts?.needsStructuredOutput,
       engineOpts?.userId
     );
+  };
   return { factory, connection };
 }
 
@@ -386,6 +395,7 @@ export function selectEngineFactory(
           const acpSessionKey = `chat:${engineOpts.userId}:${engineOpts.conversationId}`;
           return new AcpChatEngine(provider, acpSessionKey, {
             tunnel: new RpcAcpTunnel(connection, acpSessionKey),
+            acpAgentId: engineOpts.acpAgentId ?? undefined,
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
@@ -395,6 +405,9 @@ export function selectEngineFactory(
             // holds its own separate cache. Without relaying the rejection across the socket,
             // the settings screen keeps showing a refused sign-in as good.
             reportLoginRejected: () => {
+              // The runner's current login cache is Codex/Claude keyed. Never write an OpenCode
+              // failure into the OpenAI-compatible Codex slot.
+              if (engineOpts.acpAgentId === "opencode") return;
               void connection
                 .recordLoginRejected({ provider }, engineOpts.userId)
                 .catch(() => undefined);

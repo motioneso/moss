@@ -59,7 +59,7 @@ import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService, type LoginUserRuntime } from "./login-service.js";
 import {
   createCodexVersionReader,
-  listProviderModels,
+  listProviderModelsForRunner,
   verifyProviderCredential
 } from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
@@ -735,22 +735,17 @@ export class CliChatEngineHost {
   }
 
   /** #2208: return provider model ids without crossing the login/admission mutex. */
-  async listProviderModels(provider: RpcProviderKind): Promise<RpcListProviderModelsResult> {
+  async listProviderModels(
+    provider: RpcProviderKind,
+    requestedAgentId?: string
+  ): Promise<RpcListProviderModelsResult> {
     this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
-    await this.deps.beforeModelList?.(provider);
-    // #2242: this call uses the same saved credential as the readiness check, so a vendor
-    // rejection here proves the login is dead there too. Record it through the one shared path
-    // instead of dropping the knowledge — otherwise a saved "the login works" answer keeps being
-    // replayed for the rest of its five-minute life and the person is never asked to log in again.
-    const credentialEnv = this.deps.homeBase
-      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
-      : undefined;
-    return listProviderModels(provider, {
+    return listProviderModelsForRunner(provider, requestedAgentId, {
       homeBase: this.deps.homeBase,
       fetch: this.deps.fetch,
       io: this.deps.io,
       codexVersion: this.readCodexVersion,
-      onLoginRejected: () => recordProviderLoginRejected(provider as ProviderKind, credentialEnv)
+      beforeModelList: this.deps.beforeModelList
     });
   }
 

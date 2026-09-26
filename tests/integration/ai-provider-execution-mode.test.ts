@@ -6,7 +6,7 @@ import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { createDatabase, type MossDatabase } from "@moss/db";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
-describe("AI provider execution mode", () => {
+describe("AI provider ACP identity", () => {
   let appDb: Kysely<MossDatabase>;
   let server: ReturnType<typeof createApiServer>;
   let boss: PgBoss;
@@ -28,61 +28,67 @@ describe("AI provider execution mode", () => {
     await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
   });
 
-  // #1238/#1239: one-shot ("-p"/"exec") is the default for every provider; interactive is an
-  // opt-in per-provider fallback (proven by the create-with-non_interactive + patch-to-interactive
-  // cases below). A create that omits executionMode must resolve to non_interactive.
-  it("defaults providers to non_interactive (one-shot) mode", async () => {
+  it("persists the selected ACP agent and omits provider-level execution mode", async () => {
+    const headers = { authorization: `Bearer ${ids.sessionAdmin}` };
+    const createRes = await server.inject({
+      method: "POST",
+      url: "/api/ai/providers",
+      headers,
+      payload: {
+        providerKind: "openai-compatible",
+        displayName: "Codex",
+        authMethod: "cli",
+        acpAgentId: "codex-acp"
+      }
+    });
+
+    expect(createRes.statusCode).toBe(201);
+    const created = createRes.json().provider;
+    expect(created).toMatchObject({
+      providerKind: "openai-compatible",
+      authMethod: "cli",
+      acpAgentId: "codex-acp"
+    });
+    expect(created).not.toHaveProperty("executionMode");
+
+    const listRes = await server.inject({
+      method: "GET",
+      url: "/api/ai/providers",
+      headers
+    });
+    expect(listRes.statusCode).toBe(200);
+    const persisted = listRes
+      .json()
+      .providers.find((provider: { id: string }) => provider.id === created.id);
+    expect(persisted?.acpAgentId).toBe("codex-acp");
+    expect(persisted).not.toHaveProperty("executionMode");
+  });
+
+  it("rejects a CLI provider without a resolvable agent identity", async () => {
     const res = await server.inject({
       method: "POST",
       url: "/api/ai/providers",
       headers: { authorization: `Bearer ${ids.sessionAdmin}` },
       payload: {
-        providerKind: "openai-compatible",
-        displayName: "Codex",
+        providerKind: "custom",
+        displayName: "Missing CLI identity",
         authMethod: "cli"
       }
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(res.json().provider.executionMode).toBe("non_interactive");
+    expect(res.statusCode).toBe(400);
   });
 
-  it("persists provider execution mode updates", async () => {
-    const createRes = await server.inject({
-      method: "POST",
-      url: "/api/ai/providers",
-      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
-      payload: {
-        providerKind: "openai-compatible",
-        displayName: "Codex Noninteractive",
-        authMethod: "cli",
-        executionMode: "non_interactive"
-      }
-    });
-    expect(createRes.statusCode).toBe(201);
-    const providerId = createRes.json().provider.id;
-
-    const patchRes = await server.inject({
-      method: "PATCH",
-      url: `/api/ai/providers/${providerId}`,
-      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
-      payload: { executionMode: "interactive" }
-    });
-
-    expect(patchRes.statusCode).toBe(200);
-    expect(patchRes.json().provider.executionMode).toBe("interactive");
-  });
-
-  it("rejects unknown execution modes", async () => {
+  it("rejects an ACP agent incompatible with the provider kind", async () => {
     const res = await server.inject({
       method: "POST",
       url: "/api/ai/providers",
       headers: { authorization: `Bearer ${ids.sessionAdmin}` },
       payload: {
         providerKind: "openai-compatible",
-        displayName: "Bad Codex",
+        displayName: "Mismatched CLI identity",
         authMethod: "cli",
-        executionMode: "batch"
+        acpAgentId: "claude-acp"
       }
     });
 
