@@ -94,6 +94,7 @@ async function armGoogleSources(page: Page): Promise<string> {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      scopes: [CALENDAR_SCOPE, GMAIL_SCOPE],
       tokenPayload: {
         kind: "google-oauth",
         clientId: "p9-client",
