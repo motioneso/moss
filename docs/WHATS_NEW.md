@@ -29,12 +29,24 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-26
+
+#### Fixed
+
+- **Newer Codex models.** Moss can now show newer models available through your Codex account. [PR #2716](https://github.com/motioneso/moss/pull/2716)
+
 ### 2026-09-25
 
 #### Fixed
 
+- **Clearer Today follow-up count.** Today’s follow-up count now includes visible loose ends, and email catch-up appears as a short informational summary. [PR #2710](https://github.com/motioneso/moss/pull/2710)
+- **Keep the morning briefing open when today's plan is unavailable.** Your morning briefing stays open when today's task plan is unavailable, with a clear message. [PR #2704](https://github.com/motioneso/moss/pull/2704)
 - **Codex works for everyone once an administrator connects it.** When an administrator connects Codex, everyone on the same Moss instance can now chat and run background tasks with it, without signing in themselves. [PR #2694](https://github.com/motioneso/moss/pull/2694)
 - **Background AI tasks sign in reliably for every user.** Background tasks such as email sorting now sign in to Claude correctly for each person on a shared Moss instance. [PR #2693](https://github.com/motioneso/moss/pull/2693)
+
+#### Changed
+
+- **More control over tomorrow.** Moss previews placement edits before you save and uses your day-capacity choice to plan more or fewer task blocks. [PR #2712](https://github.com/motioneso/moss/pull/2712)
 
 ### 2026-09-24
 
