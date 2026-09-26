@@ -25,8 +25,9 @@ export async function registerAiMaintenanceWorkers(
   await boss.schedule(AI_PURGE_AUDIT_LOG_QUEUE, "0 3 * * *", {}, { tz: "UTC" });
 
   const workId = await boss.work(AI_PURGE_AUDIT_LOG_QUEUE, async () => {
-    const olderThan = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    const count = await repository.purgeActionAuditLog(rootDb, olderThan);
+    // #2682: the worker role only has EXECUTE on the no-argument, fixed-retention purge
+    // function -- it cannot call the app-runtime purge function with a caller-supplied cutoff.
+    const count = await repository.purgeExpiredActionAuditLog(rootDb);
     return { purgedRows: count };
   });
 

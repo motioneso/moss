@@ -2263,6 +2263,16 @@ export class AiRepository {
     return Number(result.rows[0]?.count ?? 0);
   }
 
+  // #2682: the nightly worker-run job calls this narrower function instead. It takes no
+  // cutoff argument -- the database computes its own fixed 90-day retention window -- so a
+  // worker connection can never widen it to delete rows it shouldn't.
+  async purgeExpiredActionAuditLog(workerDb: Kysely<MossDatabase>): Promise<number> {
+    const result = await sql<{ count: number }>`
+      SELECT app.purge_expired_moss_action_audit_log() AS count
+    `.execute(workerDb);
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
   async recordError(scopedDb: DataContextDb, input: RecordErrorInput): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db
