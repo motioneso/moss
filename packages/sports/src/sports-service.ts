@@ -926,11 +926,12 @@ export class SportsService {
    * One league's standings, fetched on demand (#842). Never throws; degrades to empty sections.
    * For a tournament whose group stage is complete, also returns the current round's fixtures
    * (a ±window of the scoreboard) so the client can show the bracket instead of a stale group
-   * table (#839 follow-up); `fixtures` is empty for every other case.
+   * table (#839 follow-up); `fixtures` is empty for every other case. `degraded` is true when a
+   * source fetch fell back, so the client can say the standings could not be updated (#2686).
    */
   async getStandings(
     competitionKey: string
-  ): Promise<{ group: StandingsGroup; fixtures: GameSummary[] }> {
+  ): Promise<{ group: StandingsGroup; fixtures: GameSummary[]; degraded: boolean }> {
     const state: DegradeState = { degraded: false };
     const entry = catalogEntry(competitionKey);
     // #2661: a news-only competition has no ESPN standings; answer empty without the call.
@@ -942,7 +943,8 @@ export class SportsService {
           standingsShape: entry.standingsShape,
           sections: []
         },
-        fixtures: []
+        fixtures: [],
+        degraded: false
       };
     }
     const table = await this.cached<StandingsTable>(
@@ -961,7 +963,7 @@ export class SportsService {
       entry?.kind === "tournament" && groupStageComplete(table.sections)
         ? await this.currentRoundFixtures(competitionKey, state)
         : [];
-    return { group, fixtures };
+    return { group, fixtures, degraded: state.degraded };
   }
 
   /** Scoreboard over a ±window around today, flattened and sorted ascending. Never throws. */

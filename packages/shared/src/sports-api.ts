@@ -387,6 +387,8 @@ export interface SportsStandingsResponse {
   // Current-round matches for tournaments whose group stage is complete; empty otherwise
   // (#839 follow-up).
   readonly fixtures: readonly GameSummary[];
+  // A source fetch fell back to cached or empty data (#2686).
+  readonly degraded: boolean;
 }
 
 export interface CreateSportsFollowRequest {

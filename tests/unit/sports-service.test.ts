@@ -716,6 +716,23 @@ describe("SportsService.getOverview", () => {
     expect(overview.hero.mode).toBe("story");
   });
 
+  it("reports degraded standings when the standings fetch fails (#2686)", async () => {
+    const failing = new SportsService(
+      makeDeps({
+        source: makeSource({
+          getStandings: async () => {
+            throw new Error("ESPN down");
+          }
+        })
+      })
+    );
+    const failed = await failing.getStandings("nfl");
+    expect(failed.degraded).toBe(true);
+    expect(failed.group.sections).toEqual([]);
+    const healthy = await new SportsService(makeDeps()).getStandings("nfl");
+    expect(healthy.degraded).toBe(false);
+  });
+
   it("ranks by editorial feed position, caps top stories at six, keeps league news distinct", async () => {
     // 9 stories, all tagged to dal ("6"), in ESPN feed order h0..h8 (h0 = editorial lead). Ranking
     // keys off feed POSITION now, not recency (mrb51pnq) — publishedAt only breaks cross-league ties.
@@ -1772,7 +1789,8 @@ describe("SportsService news-only competitions (#2661)", () => {
         standingsShape: "record",
         sections: []
       },
-      fixtures: []
+      fixtures: [],
+      degraded: false
     });
   });
 });

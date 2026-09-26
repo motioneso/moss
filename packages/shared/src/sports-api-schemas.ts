@@ -671,10 +671,11 @@ export const sportsStandingsResponseSchema = {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["group", "fixtures"],
+      required: ["group", "fixtures", "degraded"],
       properties: {
         group: standingsGroupSchema,
-        fixtures: { type: "array", items: gameSummarySchema }
+        fixtures: { type: "array", items: gameSummarySchema },
+        degraded: { type: "boolean" }
       }
     },
     400: errorResponseSchema,
