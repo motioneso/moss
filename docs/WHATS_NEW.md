@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-26
+
+#### Fixed
+
+- **Newer Codex models.** Moss can now show newer models available through your Codex account. [PR #2716](https://github.com/motioneso/moss/pull/2716)
+
 ### 2026-09-25
 
 #### Fixed
