@@ -135,6 +135,22 @@ describe("projectPlanContext", () => {
   it("keeps a missing evening intent as null", () => {
     expect(projectPlanContext(plan({ eveningIntent: null })).eveningIntent).toBeNull();
   });
+
+  it("treats the repository's untouched empty intent DTO as no evening priorities", () => {
+    expect(
+      projectPlanContext(
+        plan({
+          eveningIntent: {
+            priorityTaskIds: [],
+            capacity: null,
+            notes: null,
+            corrections: [],
+            commitments: []
+          }
+        })
+      ).eveningIntent
+    ).toBeNull();
+  });
 });
 
 describe("resolvePlanContext", () => {
