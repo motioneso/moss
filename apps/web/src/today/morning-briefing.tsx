@@ -75,9 +75,15 @@ export function dayPlanReviewUnavailableMessage(input: {
 export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   const queryClient = useQueryClient();
   const [selectedRunId, setSelectedRunId] = useState(props.initialRunId);
+  const [retryRunId, setRetryRunId] = useState<string | null>(null);
   const detailQuery = useQuery({
     queryKey: queryKeys.briefings.run(props.definitionId, selectedRunId),
-    queryFn: () => getBriefingRun(props.definitionId, selectedRunId)
+    queryFn: () => getBriefingRun(props.definitionId, selectedRunId),
+    refetchInterval: (query) => {
+      if (selectedRunId !== retryRunId) return false;
+      const state = query.state.data?.state;
+      return state === "ready" || state === "failed" ? false : 1000;
+    }
   });
   const retryMutation = useMutation({
     mutationFn: () =>
@@ -91,6 +97,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         queryKeys.briefings.run(props.definitionId, data.runId)
       ])
         void queryClient.invalidateQueries({ queryKey });
+      setRetryRunId(data.runId);
       setSelectedRunId(data.runId);
     }
   });
@@ -184,8 +191,9 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       </Button>
     ) : null;
   const detail = detailQuery.data ?? null;
+  const retryingRun = selectedRunId === retryRunId;
   const failed =
-    detailQuery.isError ||
+    (detailQuery.isError && !retryingRun) ||
     detail?.state === "failed" ||
     (detail?.state === "ready" && (detail.run === null || detail.run.status !== "succeeded"));
 

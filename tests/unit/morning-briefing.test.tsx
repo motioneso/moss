@@ -350,7 +350,7 @@ describe("MorningBriefingReader report", () => {
 });
 
 describe("MorningBriefingReader retry", () => {
-  it("sends one run-now request and re-reads the new run", async () => {
+  it("polls a new run after its initial not-found response until it is ready", async () => {
     const failedDetail: GetBriefingRunResponse = {
       state: "failed",
       run: null,
@@ -358,12 +358,15 @@ describe("MorningBriefingReader retry", () => {
       plan: null
     };
     const ready = readyDetail(fullRun());
+    let retryRunReads = 0;
     const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
       const url = String(input);
       if (url.endsWith("/run") && !url.includes("/runs/")) {
-        return Response.json({ jobId: "job-2", runId: "run-2" });
+        return Response.json({ jobId: "job-2", runId: "run-2" }, { status: 202 });
       }
       if (url.includes("/runs/run-2")) {
+        retryRunReads += 1;
+        if (retryRunReads === 1) return new Response(null, { status: 404 });
         return Response.json({ ...ready, run: { ...ready.run!, id: "run-2" } });
       }
       return Response.json(failedDetail);
@@ -410,6 +413,11 @@ describe("MorningBriefingReader retry", () => {
     expect(retry, "expected the retry button on a failed run").toBeDefined();
     await act(async () => {
       retry!.click();
+    });
+    await flushQueries();
+    expect(document.body.innerHTML).toContain("Your morning briefing is being prepared.");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
     });
     await flushQueries();
     const posts = fetchMock.mock.calls.filter(([input, init]) => {
