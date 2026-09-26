@@ -38,6 +38,10 @@ feature that is not present in the image you are running.
 - **Codex works for everyone once an administrator connects it.** When an administrator connects Codex, everyone on the same Moss instance can now chat and run background tasks with it, without signing in themselves. [PR #2694](https://github.com/motioneso/moss/pull/2694)
 - **Background AI tasks sign in reliably for every user.** Background tasks such as email sorting now sign in to Claude correctly for each person on a shared Moss instance. [PR #2693](https://github.com/motioneso/moss/pull/2693)
 
+#### Changed
+
+- **More control over tomorrow.** Moss previews placement edits before you save and uses your day-capacity choice to plan more or fewer task blocks. [PR #2712](https://github.com/motioneso/moss/pull/2712)
+
 ### 2026-09-24
 
 #### Fixed
