@@ -328,6 +328,36 @@ export function registerAiRoutes(
             });
             if (!updated || !reconnectChanged) return updated;
 
+            const identityActuallyChanged =
+              existing.provider_kind !== updated.provider_kind ||
+              existing.auth_method !== updated.auth_method ||
+              existing.acp_agent_id !== updated.acp_agent_id;
+            if (
+              identityActuallyChanged &&
+              updated.auth_method === "cli" &&
+              updated.acp_agent_id === "opencode"
+            ) {
+              // OpenCode has no model-list endpoint. A Codex discovery failure therefore cannot
+              // reconcile its old rows; remove stale discovered models and keep the account-default
+              // sentinel available after the identity switch.
+              await repository.deleteModelsForProviderExceptSentinel(scopedDb, updated.id);
+              const models = await repository.listModels(scopedDb);
+              const hasDefaultModel = models.some(
+                (model) =>
+                  model.provider_config_id === updated.id && model.provider_model_id === "default"
+              );
+              if (!hasDefaultModel) {
+                await repository.createModel(scopedDb, {
+                  providerConfigId: updated.id,
+                  providerModelId: "default",
+                  displayName: "OpenCode (default model)",
+                  capabilities: ["chat"],
+                  status: "active",
+                  tier: "interactive"
+                });
+              }
+            }
+
             // #982/#869 D2: saving credential/auth/base-url is a connect event. Invalidate before
             // probing so a corrected key cannot reuse the failed credential's cached result.
             modelDiscovery.invalidate(accessContext.actorUserId, updated.id);

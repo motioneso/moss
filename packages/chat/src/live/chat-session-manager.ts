@@ -428,6 +428,10 @@ export class ChatSessionManager {
       const engineText = opts?.moduleControl
         ? `${withAttachments}\n\n${opts.moduleControl}`
         : withAttachments;
+      await assertProviderIdentityForPendingTurn(
+        turnProviderIdentity,
+        this.deps.persistence.resolveActiveProvider(actorUserId)
+      );
       this.emit(actorUserId, surface, { kind: "user", text });
       let toolsListBaseline = session.mcpToken
         ? this.deps.getToolsListObservationCount?.(session.mcpToken)

@@ -220,4 +220,62 @@ describe("ChatSessionManager provider identity", () => {
     expect(oldEngine.launchOpts).toBeNull();
     expect(engineFactory).toHaveBeenCalledTimes(2);
   });
+
+  it("does not emit or submit a prepared turn after the active provider changes", async () => {
+    const oldEngine = new FakeEngine(0);
+    const newEngine = new FakeEngine(0);
+    const codex = {
+      provider: "openai-compatible",
+      model: "gpt-5.6",
+      providerConfigId: "provider-1",
+      authMethod: "cli",
+      acpAgentId: "codex-acp",
+      executionMode: "non_interactive"
+    } as const;
+    const openCode = { ...codex, acpAgentId: "opencode" } as const;
+    let activeProvider: typeof codex | typeof openCode = codex;
+    let retrievalStarted!: () => void;
+    let releaseRetrieval!: (value: string) => void;
+    const retrievalStartedPromise = new Promise<void>((resolve) => {
+      retrievalStarted = resolve;
+    });
+    const deferredRetrieval = new Promise<string>((resolve) => {
+      releaseRetrieval = resolve;
+    });
+    const engineFactory = vi.fn<ChatSessionManagerDeps["engineFactory"]>();
+    engineFactory.mockReturnValueOnce(oldEngine).mockReturnValueOnce(newEngine);
+    const deps = makeMinimalDeps({
+      engineFactory,
+      serverOwnsDrain: true,
+      pollMs: 0,
+      passiveRetrieval: {
+        retrieve: vi.fn(() => {
+          retrievalStarted();
+          return deferredRetrieval;
+        })
+      },
+      persistence: {
+        resolveActiveProvider: vi.fn().mockImplementation(async () => activeProvider),
+        listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+        recordTurn: vi.fn().mockResolvedValue(undefined),
+        openNewConversation: vi.fn().mockResolvedValue(undefined),
+        getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+        touchExistingThread: vi.fn().mockResolvedValue(true)
+      }
+    });
+    const manager = new ChatSessionManager(deps as never);
+    const emitted: { kind?: string; text?: string }[] = [];
+    manager.subscribe("u1", (record) => emitted.push(record));
+    const turn = manager.submitTurn("u1", "Ben", "prepared for Codex");
+
+    await retrievalStartedPromise;
+    activeProvider = openCode;
+    await manager.switchProvider("u1", "Ben");
+    releaseRetrieval("");
+
+    await expect(turn).rejects.toMatchObject({ name: "ChatProviderChangedError" });
+    expect(oldEngine.submitted).toEqual([]);
+    expect(newEngine.submitted).toEqual([]);
+    expect(emitted).not.toContainEqual({ kind: "user", text: "prepared for Codex" });
+  });
 });
