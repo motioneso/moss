@@ -1,8 +1,8 @@
 # Needs You placement proposal
 
-This synthetic comparison presents the current Needs You / Loose ends order beside a compact
-grouping option. The titles, sources, message summary and counts are fictional. No private data,
-live app capture or product code is used.
+This synthetic comparison presents the current Needs You / Loose ends order beside the compact
+grouping option Ben selected on 2026-09-25 (“compact option”). The titles, sources, message summary
+and counts are fictional. No private data, live app capture or product code is used.
 
 The structure and visible copy are reconstructed from `BriefingActionRowsSection` in
 `apps/web/src/today/briefing-action-rows.tsx` and the later Loose ends section in
@@ -14,5 +14,5 @@ Open `proposal.html` directly from the checkout. The crop in `needs-you-placemen
 only the comparison sheet. It is a design proposal, not evidence of live visual parity or runtime
 behavior.
 
-The single open design question is whether Loose ends should move into Needs You, or stay in their
-current later section. Catch-up's approved informational summary treatment is unchanged.
+The selected treatment groups Loose ends inside Needs You and removes its later duplicate section.
+Catch-up's approved informational summary treatment is unchanged.

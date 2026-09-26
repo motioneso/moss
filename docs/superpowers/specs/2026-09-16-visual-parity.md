@@ -1,7 +1,7 @@
 # Visual parity spec: Today and the daily briefings match the approved mockups 1:1
 
-Revision: VP-SPEC-R3 (2026-09-17; R1 corrected the mockup count to 32; R2 added the collapsible desktop sidebar; R3 records the approved session-sized regional acceptance amendment). Feature: #2521. Plan: `../plans/2026-09-16-visual-parity.md` (VP-PLAN-R2). Predecessor: #2453 (closed; behaviour complete).
-Status: approved by Ben on 2026-09-16; the R3 staging amendment was approved on 2026-09-17. Plan required before code.
+Revision: VP-SPEC-R4 (2026-09-25; R1 corrected the mockup count to 32; R2 added the collapsible desktop sidebar; R3 records the approved session-sized regional acceptance amendment; R4 records the approved Needs You placement). Feature: #2521. Plan: `../plans/2026-09-16-visual-parity.md` (VP-PLAN-R2). Predecessor: #2453 (closed; behaviour complete).
+Status: approved by Ben on 2026-09-16; the R3 staging amendment was approved on 2026-09-17, and the R4 Needs You placement on 2026-09-25. Plan required before code.
 
 ## 1. Governing rule
 
@@ -26,7 +26,8 @@ regress, and unfinished sibling regions remain explicit guards rather than mocku
 ## 2. Sources of truth, in precedence order
 
 2.1 The mockup images under `docs/superpowers/specs/assets/2026-09-10-*/` on origin/main
-(32 PNG files, listed in section 4). A visible difference from the image is a defect.
+(32 PNG files, listed in section 4). A visible difference from the image is a defect, except
+for the approved Needs You placement supplement in 2.5.
 2.2 The approved study that produced them, `~/Jarv1s/.superpowers/brainstorm/today-briefings-20260909/`
 (`study.css` 416 lines, `morning-briefing.css` 81, `evening-plan.css` 163, `tokens.css` 11).
 It supplies exact measurements (sizes, gaps, radii, weights, colours) when the image is
@@ -36,6 +37,11 @@ ambiguous. It is a reference for numbers, never copied wholesale into the produc
 2.4 The V0 token mapping table in `workspace/moss-v0-task-record.md` decides which product token
 carries each study colour. Where the table and the mockup disagree in the default light theme,
 the mockup wins and the table is corrected in the plan.
+2.5 For the Needs You section only, Ben selected the compact placement shown in
+`assets/2026-09-25-needs-you-selection/needs-you-placement.png` on 2026-09-25 (“compact option”).
+This source-derived, fictional-content comparison supplements the original 32 mockups, which do
+not show this region. Its right-hand layout governs grouping Loose ends with Needs You. It is a
+design reference, not a live capture or proof of visual parity.
 
 ## 3. How the mockups were captured, and how the real page is captured to match
 
@@ -71,6 +77,10 @@ Today page (`assets/2026-09-10-today-briefings/`, 10 files):
 | morning-1440-news.png, morning-375-news.png                       | Scrolled to News: lead photo and story, secondary stories                                            |
 | morning-1440-sports.png, morning-375-sports.png                   | Scrolled to Sports: four compact scores with followed teams first, photo recap, Tonight              |
 | evening-1440-opening.png, evening-375-opening.png                 | Evening mode: recap, unresolved commitments, tomorrow's shape, Plan tomorrow entry                   |
+
+The approved [Needs You placement supplement](assets/2026-09-25-needs-you-selection/needs-you-placement.png)
+is a regional reference, not one of the 32 full-page images or a live-parity capture. Ben chose
+the compact option: keep Loose ends within Needs You as a labelled subgroup.
 
 Morning briefing reader and review (`assets/2026-09-10-morning-briefing/`, 11 files):
 
@@ -147,10 +157,18 @@ their size, position and surrounding styling may not.
 image 404, rail heading, phone viewport cap, tomorrow events in the evening rail, reader
 footer at 200 percent zoom, V7 and V8 review follow-ups) are fixed inside the slice that
 owns that surface; none is a variance.
-6.7 Nothing else. In particular, these are not variances: an extra section heading, a border or
-shadow the mockup lacks, a different nav width or colour, a control rendered as a legacy pill
-or button, a different font weight, dashboard metric cards, or a dialog frame the mockup
-does not show.
+6.7 Nothing else except the approved placement in 6.8. In particular, these are not variances:
+an extra section heading outside 6.8, a border or shadow the mockup lacks, a different nav width
+or colour, a control rendered as a legacy pill or button, a different font weight, dashboard
+metric cards, or a dialog frame the mockup does not show.
+6.8 Needs You placement (Ben, 2026-09-25): show the count of active suggested action rows plus
+visible Loose ends. Render the action rows first, then the visible Loose ends in a labelled,
+counted subgroup within the same Needs You section. Do not render a second Loose ends section
+after Goals. Preserve the existing `#loose-ends` in-page target on the nested subgroup. Keep
+Catch-up summary-only below the counted rows: its informational message count and compact summary
+remain outside the Needs You count, with no message-level link. Accepted and dismissed action rows
+retain their current state labels and remain excluded from the count. No data, API, authorization,
+task-action, or Catch-up behavior changes.
 
 ## 7. Legacy that goes
 
