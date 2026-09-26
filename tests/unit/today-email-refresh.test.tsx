@@ -191,6 +191,38 @@ describe("TodayEmailRefreshAction", () => {
     ).toBeDefined();
   });
 
+  it("allows a retry when briefing status lookup fails before returning data", async () => {
+    vi.mocked(getBriefingRun).mockRejectedValue(new Error("network"));
+    const mounted = mountAction();
+
+    await act(async () => {
+      mounted.root.findByType("button").props.onClick();
+      await tick();
+    });
+    await settle();
+
+    currentRefreshStatus = "succeeded";
+    await act(async () => {
+      queryClient?.setQueryData(["connectors", "email-refresh", REFRESH_ID], {
+        refreshId: REFRESH_ID,
+        status: "succeeded",
+        createdAt: CAPTURED_AT,
+        startedAt: CAPTURED_AT,
+        completedAt: CAPTURED_AT,
+        accounts: [],
+        errorCode: null
+      } satisfies EmailRefreshStatusResponse);
+      await tick();
+    });
+    await settle();
+
+    expect(getBriefingRun).toHaveBeenCalledWith(DEFINITION_ID, RUN_ID);
+    expect(findStatusText(mounted.root)).toContain(
+      "couldn’t prepare an updated briefing. Your current report and plan choices are still available."
+    );
+    expect(mounted.root.findByType("button").props.disabled).toBe(false);
+  });
+
   it("reuses the request idempotency key after an uncertain POST failure", async () => {
     const requestKeys: string[] = [];
     vi.mocked(requestJson).mockImplementation(async (path, options) => {

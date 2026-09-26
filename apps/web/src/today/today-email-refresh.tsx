@@ -110,7 +110,9 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
     queryFn: () => getBriefingRun(props.definitionId, runId ?? ""),
     enabled: runId !== null,
     refetchInterval: (query) =>
-      query.state.data && query.state.data.state !== "pending" ? false : POLL_INTERVAL_MS
+      query.state.error || (query.state.data && query.state.data.state !== "pending")
+        ? false
+        : POLL_INTERVAL_MS
   });
 
   useEffect(() => {
@@ -134,7 +136,9 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
   const runPending =
     (refreshStatus === "succeeded" || refreshStatus === "partial") &&
     (runMutation.isPending ||
-      (runId !== null && (!runQuery.data || runQuery.data.state === "pending")));
+      (runId !== null &&
+        !runQuery.isError &&
+        (!runQuery.data || runQuery.data.state === "pending")));
   const busy = refreshPending || runPending;
 
   let message: string | null = null;
