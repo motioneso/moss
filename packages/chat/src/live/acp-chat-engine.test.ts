@@ -22,7 +22,13 @@ class PromptErrorTunnel implements AcpTunnel {
   private killed = false;
   private waiting: (() => void) | null = null;
 
-  constructor(private readonly failOnSessionNew = false) {}
+  constructor(
+    private readonly failOnSessionNew = false,
+    private readonly promptError: { code: number; message: string; data?: unknown } = {
+      code: -32000,
+      message: "Authentication required"
+    }
+  ) {}
 
   async spawn() {
     return { cwd: "/tmp/acp", home: "/tmp/home", pid: 1, uid: 1, gid: 1 };
@@ -61,7 +67,7 @@ class PromptErrorTunnel implements AcpTunnel {
       this.emit({
         jsonrpc: "2.0",
         id: message.id,
-        error: { code: -32000, message: "Authentication required" }
+        error: this.promptError
       });
     }
   }
@@ -297,6 +303,34 @@ describe("AcpChatEngine", () => {
       message: expected
     });
     await promptFailure.kill();
+  });
+
+  it("classifies ACP prompt rejection without retaining provider data", async () => {
+    const engine = new AcpChatEngine("anthropic", "chat:u1:prompt-rejected", {
+      tunnel: new PromptErrorTunnel(false, {
+        code: -32003,
+        message: "Provider rejected PRIVATE_PROMPT_CANARY",
+        data: { token: "PRIVATE_TOKEN_CANARY" }
+      }),
+      userId: "u1",
+      projectId: "prompt-rejected"
+    });
+
+    await engine.launch({ neutralDir: "/tmp/acp", personaPath: "/tmp/acp/persona.md" });
+    await engine.submit("private prompt");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const failure = await engine.readNew(0).catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      name: "AcpPromptFailureError",
+      message: "ACP prompt rejected",
+      failureStage: "acp_prompt_rejected",
+      acpCode: -32003
+    });
+    expect(JSON.stringify(failure)).not.toContain("PRIVATE_TOKEN_CANARY");
+    expect(failure).not.toHaveProperty("cause");
+    expect(failure).not.toHaveProperty("data");
+    await engine.kill();
   });
 
   it("declares that its own kill path purges private data, needing no API-side purge call", async () => {

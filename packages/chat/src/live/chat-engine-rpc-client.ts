@@ -30,7 +30,7 @@ import { resolveMossEnv } from "@moss/db";
 import { parsePositiveIntEnv } from "@moss/shared";
 import type { AiProviderExecutionMode } from "@moss/shared";
 
-import { CliChatDeliveryUnknownError, CliChatUnavailableError } from "./errors.js";
+import { CliChatUnavailableError, mapRpcError } from "./errors.js";
 import type { RpcInstallProviderParams, RpcInstallProviderResult } from "./install-contract.js";
 import type {
   RpcBeginLoginParams,
@@ -59,7 +59,6 @@ import {
   type RpcCancelSubmitParams,
   type RpcCancelSubmitResult,
   type RpcErr,
-  type RpcErrorCode,
   type RpcFrame,
   type RpcInterruptResult,
   type RpcIsAliveResult,
@@ -89,6 +88,8 @@ import {
   type ReapReason
 } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
+
+export { mapRpcError };
 
 /** The directory the socket MUST resolve under (§3.1 client-side realpath guard). */
 export const SOCKET_ALLOWED_DIR = "/run/jarv1s";
@@ -196,19 +197,6 @@ interface PendingCall {
 
 /** Internal connection state machine. */
 type ConnState = "idle" | "connecting" | "handshaking" | "ready" | "closed";
-
-/**
- * Maps an RpcErrorCode to the typed JS error the api expects (§4.7). `unavailable` and `not_launched`
- * both become a retryable `CliChatUnavailableError` (→ HTTP 503); the rest become a plain `Error`
- * (→ 500). The message is already redacted server-side (§6.4), so it is safe to surface/log.
- */
-export function mapRpcError(code: RpcErrorCode, message: string): Error {
-  if (code === "delivery_unknown") return new CliChatDeliveryUnknownError(message);
-  if (code === "unavailable" || code === "not_launched") {
-    return new CliChatUnavailableError(message);
-  }
-  return new Error(message);
-}
 
 /**
  * Owns the single long-lived socket to cli-runner. Shared across all per-session `ChatEngineRpcClient`
@@ -732,7 +720,7 @@ export class RpcConnection {
         pending.resolve((frame as RpcOk).result);
       } else {
         const err = (frame as RpcErr).error;
-        pending.reject(mapRpcError(err.code, err.message));
+        pending.reject(mapRpcError(err.code, err.message, err.statusCode));
       }
     }
     // A response for an id we no longer track (already failed on a prior restart) still carries a

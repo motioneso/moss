@@ -86,6 +86,21 @@ export class FakeEngine {
   }
 }
 
+export function rejectingDeps(engine: FakeEngine) {
+  return makeMinimalDeps({
+    engineFactory: () => engine,
+    pollMs: 0,
+    persistence: {
+      resolveActiveProvider: vi.fn().mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
+      listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+      recordTurn: vi.fn().mockResolvedValue(undefined),
+      openNewConversation: vi.fn().mockResolvedValue(undefined),
+      getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+      touchExistingThread: vi.fn().mockResolvedValue(true)
+    }
+  });
+}
+
 describe("ChatSessionManager.injectRecord", () => {
   it("fans out the record to all subscribers of that user", () => {
     const manager = new ChatSessionManager(makeMinimalDeps());
@@ -428,23 +443,6 @@ describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
     override async submit(): Promise<void> {
       throw new CliChatUnavailableError("cli-runner submit timed out after 45000ms");
     }
-  }
-
-  function rejectingDeps(engine: FakeEngine) {
-    return makeMinimalDeps({
-      engineFactory: () => engine,
-      pollMs: 0,
-      persistence: {
-        resolveActiveProvider: vi
-          .fn()
-          .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
-        listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
-        recordTurn: vi.fn().mockResolvedValue(undefined),
-        openNewConversation: vi.fn().mockResolvedValue(undefined),
-        getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
-        touchExistingThread: vi.fn().mockResolvedValue(true)
-      }
-    });
   }
 
   it("clears the per-user lock when the engine call rejects, so the next turn is not a permanent 409", async () => {

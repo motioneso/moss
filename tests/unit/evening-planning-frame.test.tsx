@@ -84,6 +84,7 @@ function tomorrowPlan(): DayPlanDto {
     blocks: [
       block("b-cal", {
         taskId: "t1",
+        title: "Write the launch brief",
         position: 0,
         actualPlacement: {
           startsAt: `${TMO}T14:00:00.000Z`,
@@ -626,6 +627,33 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(panel.querySelector(".evening-plan__review-links")?.textContent).toContain(
       "Preview changes"
     );
+  });
+
+  it("shows an unsaved placement edit under proposed calendar changes immediately", async () => {
+    stubFetch();
+    const mounted = await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    await act(async () => {
+      ([...nav.querySelectorAll("button")][3] as HTMLButtonElement).click();
+    });
+
+    const proposedChanges = () =>
+      [...document.body.querySelectorAll(".evening-plan__notes")].find(
+        (section) => section.querySelector("h4")?.textContent === "Proposed calendar changes"
+      )!;
+    expect(proposedChanges().textContent).toContain("No task-block times change.");
+
+    await act(async () => {
+      mounted.review.setPlacement("b-cal", "move", `${TMO}T15:00:00.000Z`);
+    });
+
+    expect(
+      document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Write the launch brief: placement"]'
+      )?.value
+    ).toBe("move");
+    expect(proposedChanges().textContent).toContain("Move “Write the launch brief” to");
+    expect(proposedChanges().textContent).not.toContain("No task-block times change.");
   });
 
   it("shows the saved view with a morning handoff after a successful save", async () => {

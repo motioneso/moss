@@ -12,6 +12,7 @@ import {
   ChatStreamLimitError,
   ChatThreadNotFoundError,
   ChatTurnInFlightError,
+  mapChatEngineReadError,
   CliChatDeliveryUnknownError,
   CliChatUnavailableError
 } from "./errors.js";
@@ -466,7 +467,7 @@ export class ChatSessionManager {
             break;
           }
           flushPending();
-          throw error instanceof CliChatUnavailableError ? error : new Error("readNew failed");
+          throw mapChatEngineReadError(session.provider, error);
         }
         if (controller.signal.aborted) {
           stopped = true;
@@ -955,11 +956,7 @@ export class ChatSessionManager {
     return () => clearInterval(handle);
   }
 
-  /**
-   * Run `fn` under the shared §5.4 maintenance mutex (a serialized promise chain), so the two
-   * session-map-mutating maintenance paths — reconciliation and idle reaping — are mutually
-   * exclusive. The chain advances regardless of whether `fn` resolves or rejects.
-   */
+  /** Serialize reconciliation and idle reaping under the shared §5.4 maintenance promise chain. */
   private withMaintenanceLock<T>(fn: () => Promise<T>): Promise<T> {
     const run = this.maintenanceMutex.then(fn, fn);
     // Keep the chain alive even if this critical section rejects (swallow only on the chain,
