@@ -11,6 +11,7 @@ import {
   type NotificationsSettings
 } from "./settings-sample-data";
 import {
+  ApiError,
   createBriefingDefinition,
   deletePushSubscription,
   getNotificationDigestPreference,
@@ -45,6 +46,13 @@ import {
   findSourceBehaviorEnabled,
   writeSourceBehaviorCache
 } from "./settings-source-behaviors";
+import {
+  browserPushContainer,
+  currentPushEndpointHash,
+  enablePush,
+  removePushDevice,
+  type PendingRemovalStore
+} from "./push-browser-subscription";
 
 // BACKEND-TODO: persist + apply Notifications sensitivity.
 
@@ -542,11 +550,46 @@ export function NotificationSettings(props: {
   );
 }
 
-// #743 / #2227: web push. There is no server-computed device fingerprint (the plan's
-// endpointHash field was dropped to keep the DTO small — one design call made without asking),
-// so "This device" is decided locally: the id the server hands back on subscribe is cached in
-// localStorage and compared against the device list on every load.
-const PUSH_DEVICE_ID_STORAGE_KEY = "moss.push.deviceId";
+// #743 / #2227 / #2308: web push. "This device" is the record whose endpoint fingerprint
+// matches the subscription this browser holds now.
+const PUSH_PENDING_REMOVALS_STORAGE_KEY = "moss.push.pendingRemovals";
+
+const pendingPushRemovals: PendingRemovalStore = {
+  list() {
+    try {
+      const parsed: unknown = JSON.parse(
+        window.localStorage.getItem(PUSH_PENDING_REMOVALS_STORAGE_KEY) ?? "[]"
+      );
+      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+    } catch {
+      return [];
+    }
+  },
+  add(id) {
+    const ids = new Set(pendingPushRemovals.list()).add(id);
+    window.localStorage.setItem(PUSH_PENDING_REMOVALS_STORAGE_KEY, JSON.stringify([...ids]));
+  },
+  remove(id) {
+    const ids = pendingPushRemovals.list().filter((existing) => existing !== id);
+    if (ids.length === 0) {
+      window.localStorage.removeItem(PUSH_PENDING_REMOVALS_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(PUSH_PENDING_REMOVALS_STORAGE_KEY, JSON.stringify(ids));
+    }
+  }
+};
+
+/** A record that is already gone counts as removed. */
+async function deletePushDeviceRecord(id: string): Promise<void> {
+  try {
+    await deletePushSubscription(id);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return;
+    }
+    throw err;
+  }
+}
 
 function pushIsSupported(): boolean {
   return (
@@ -576,9 +619,6 @@ function PushChannel() {
   const [permission, setPermission] = useState<NotificationPermission | null>(
     supported ? Notification.permission : null
   );
-  const [deviceId, setDeviceId] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : window.localStorage.getItem(PUSH_DEVICE_ID_STORAGE_KEY)
-  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -588,16 +628,32 @@ function PushChannel() {
     enabled: supported && permission !== "denied"
   });
 
+  const thisDeviceQuery = useQuery({
+    queryKey: [...queryKeys.settings.notificationPush, "this-device"],
+    queryFn: () => currentPushEndpointHash(browserPushContainer()),
+    enabled: supported && permission !== "denied"
+  });
+  const thisDeviceHash = thisDeviceQuery.data ?? null;
+
   const removeMutation = useMutation({
-    mutationFn: (device: PushDeviceDto) => deletePushSubscription(device.id),
-    onSuccess: (_result, device) => {
-      if (device.id === deviceId) {
-        window.localStorage.removeItem(PUSH_DEVICE_ID_STORAGE_KEY);
-        setDeviceId(null);
+    mutationFn: (device: PushDeviceDto) =>
+      removePushDevice({
+        device,
+        container: browserPushContainer(),
+        deleteOnServer: deletePushDeviceRecord,
+        pending: pendingPushRemovals
+      }),
+    onMutate: () => setError(null),
+    onSuccess: (outcome) => {
+      if (outcome.browserStillSubscribed) {
+        setError(
+          "Removed, but this browser kept its push registration. Nothing will be sent here; you can clear it in this site's browser settings."
+        );
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush });
     },
-    onError: (err) => setError(readError(err))
+    onError: (err) => setError(readError(err)),
+    onSettled: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush })
   });
 
   const enable = async () => {
@@ -613,26 +669,18 @@ function PushChannel() {
       if (!config) {
         throw new Error("Couldn't load push settings from the server.");
       }
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(config.publicKey)
+      await enablePush({
+        container: browserPushContainer(),
+        applicationServerKey: urlBase64ToUint8Array(config.publicKey),
+        registerOnServer: registerPushSubscription,
+        deleteOnServer: deletePushDeviceRecord,
+        pending: pendingPushRemovals
       });
-      const json = subscription.toJSON();
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-        throw new Error("The browser didn't return a usable subscription.");
-      }
-      const result = await registerPushSubscription({
-        endpoint: json.endpoint,
-        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth }
-      });
-      window.localStorage.setItem(PUSH_DEVICE_ID_STORAGE_KEY, result.device.id);
-      setDeviceId(result.device.id);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush });
     } catch (err) {
       setError(readError(err));
     } finally {
       setBusy(false);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush });
     }
   };
 
@@ -655,6 +703,7 @@ function PushChannel() {
   }
 
   const devices = configQuery.data?.enabledDevices ?? [];
+  const pushActionInFlight = busy || removeMutation.isPending;
 
   return (
     <>
@@ -662,7 +711,12 @@ function PushChannel() {
         name="Push"
         desc="System notifications on this device."
         control={
-          <Button variant="secondary" size="sm" onClick={() => void enable()} disabled={busy}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void enable()}
+            disabled={pushActionInFlight}
+          >
             {busy ? "Enabling..." : "Enable on this device"}
           </Button>
         }
@@ -679,7 +733,7 @@ function PushChannel() {
           }
           control={
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {device.id === deviceId ? (
+              {thisDeviceHash !== null && device.endpointHash === thisDeviceHash ? (
                 <Badge tone="forest" dot>
                   This device
                 </Badge>
@@ -688,7 +742,7 @@ function PushChannel() {
                 variant="quiet"
                 size="sm"
                 onClick={() => removeMutation.mutate(device)}
-                disabled={removeMutation.isPending}
+                disabled={pushActionInFlight}
               >
                 Remove
               </Button>
