@@ -33,6 +33,12 @@ describe("getConnectorSyncAt", () => {
     expect(await getConnectorSyncAt(repo, scopedDb, "email")).toEqual(t2);
   });
 
+  it("recognizes IMAP email.read accounts for email freshness", async () => {
+    const syncedAt = new Date("2026-06-23T08:00:00Z");
+    const repo = fakeRepo([{ scopes: ["email.read"], last_sync_finished_at: syncedAt }]);
+    expect(await getConnectorSyncAt(repo, scopedDb, "email")).toEqual(syncedAt);
+  });
+
   it("returns the max last_sync_finished_at for calendar accounts", async () => {
     const t = new Date("2026-06-22T06:00:00Z");
     const repo = fakeRepo([

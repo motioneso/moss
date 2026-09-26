@@ -519,6 +519,48 @@ export interface ConnectorAccountsTable {
   updated_at: TimestampColumn;
 }
 
+export type ConnectorEmailRefreshStatus = "queued" | "running" | "succeeded" | "partial" | "failed";
+export type ConnectorEmailRefreshErrorCode =
+  | "no-eligible-accounts"
+  | "no-active-connection"
+  | "auth-error"
+  | "email-error"
+  | "email-message-error"
+  | "email-needs-config"
+  | "enqueue-failed";
+
+export interface ConnectorEmailRefreshesTable {
+  id: string;
+  owner_user_id: string;
+  status: ConnectorEmailRefreshStatus;
+  error_code: ConnectorEmailRefreshErrorCode | null;
+  created_at: TimestampColumn;
+  started_at: NullableTimestampColumn;
+  completed_at: NullableTimestampColumn;
+}
+
+export interface ConnectorEmailRefreshKeysTable {
+  owner_user_id: string;
+  idempotency_key: string;
+  refresh_id: string;
+  created_at: TimestampColumn;
+}
+
+export interface ConnectorEmailRefreshAccountsTable {
+  refresh_id: string;
+  owner_user_id: string;
+  account_id: string;
+  provider_type: "google" | "imap";
+  status: ConnectorEmailRefreshStatus;
+  dispatch_status: "pending" | "dispatched";
+  dispatch_attempts: ColumnType<number, number | undefined, number>;
+  email_upserted: ColumnType<number, number | undefined, number>;
+  email_failures: ColumnType<number, number | undefined, number>;
+  error_code: ConnectorEmailRefreshErrorCode | null;
+  started_at: NullableTimestampColumn;
+  completed_at: NullableTimestampColumn;
+}
+
 export interface ConnectorOauthPendingTable {
   id: string;
   owner_user_id: string;
@@ -1646,6 +1688,9 @@ export interface MossDatabase {
   "app.push_signing_key": PushSigningKeyTable;
   "app.connector_definitions": ConnectorDefinitionsTable;
   "app.connector_accounts": ConnectorAccountsTable;
+  "app.connector_email_refreshes": ConnectorEmailRefreshesTable;
+  "app.connector_email_refresh_keys": ConnectorEmailRefreshKeysTable;
+  "app.connector_email_refresh_accounts": ConnectorEmailRefreshAccountsTable;
   "app.connector_oauth_pending": ConnectorOauthPendingTable;
   "app.calendar_events": CalendarEventsTable;
   "app.focus_judgments": FocusJudgmentsTable;

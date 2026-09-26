@@ -4,7 +4,8 @@ import { renderToString } from "react-dom/server";
 import {
   BriefingFreshnessList,
   BriefingStaleBanner,
-  delayedEmailSource
+  delayedEmailSource,
+  parseBriefingFreshness
 } from "../../apps/web/src/today/briefing-freshness.js";
 import type { SourceFreshnessV1 } from "@moss/shared";
 
@@ -19,6 +20,12 @@ const freshness: SourceFreshnessV1 = {
     { source: "vault", freshnessKind: "vault_write", asOf: null }
   ]
 };
+
+describe("parseBriefingFreshness", () => {
+  it("reads the saved sourceTimestamps field from briefing metadata", () => {
+    expect(parseBriefingFreshness({ sourceTimestamps: freshness })).toEqual(freshness);
+  });
+});
 
 describe("BriefingFreshnessList", () => {
   it("renders source labels", () => {

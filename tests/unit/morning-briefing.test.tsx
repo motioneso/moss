@@ -425,6 +425,10 @@ describe("MorningBriefingReader retry", () => {
       return url.endsWith("/run") && !url.includes("/runs/") && init?.method === "POST";
     });
     expect(posts).toHaveLength(1);
+    const newRunRead = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes("/runs/run-2")
+    );
+    expect(String(newRunRead?.[0])).toContain("?jobId=job-2");
     expect(document.body.innerHTML).toContain("Protect the launch window");
     expect(document.body.innerHTML).toContain("Review proposed blocks");
     expect(document.body.innerHTML).toContain("Accept all time blocks");
@@ -491,7 +495,6 @@ describe("MorningBriefingReader retry", () => {
       retry!.click();
     });
     await flushQueries();
-
     expect(
       document.querySelector('.brief-reader__retry-error[role="status"]')?.textContent
     ).toContain("The retry request couldn’t be confirmed");

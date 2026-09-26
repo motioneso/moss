@@ -76,9 +76,10 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   const queryClient = useQueryClient();
   const [selectedRunId, setSelectedRunId] = useState(props.initialRunId);
   const [retryRunId, setRetryRunId] = useState<string | null>(null);
+  const [selectedRunJobId, setSelectedRunJobId] = useState<string | null>(null);
   const detailQuery = useQuery({
     queryKey: queryKeys.briefings.run(props.definitionId, selectedRunId),
-    queryFn: () => getBriefingRun(props.definitionId, selectedRunId),
+    queryFn: () => getBriefingRun(props.definitionId, selectedRunId, selectedRunJobId ?? undefined),
     refetchInterval: (query) => {
       if (selectedRunId !== retryRunId) return false;
       const state = query.state.data?.state;
@@ -98,9 +99,15 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       ])
         void queryClient.invalidateQueries({ queryKey });
       setRetryRunId(data.runId);
+      setSelectedRunJobId(data.jobId);
       setSelectedRunId(data.runId);
     }
   });
+  const selectSavedRun = (runId: string) => {
+    setRetryRunId(null);
+    setSelectedRunJobId(null);
+    setSelectedRunId(runId);
+  };
   const [reviewAttempted, setReviewAttempted] = useState(false);
 
   // The Read tab always reads "Review task blocks"; the automatic Read's
@@ -242,7 +249,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
               locale={props.locale}
               runs={props.runs}
               selectedRunId={selectedRunId}
-              onSelectRun={setSelectedRunId}
+              onSelectRun={selectSavedRun}
               onMoreOnToday={props.onClose}
             />
           ) : (

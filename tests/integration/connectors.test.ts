@@ -15,6 +15,7 @@ import {
   GOOGLE_SYNC_QUEUE_DEFINITIONS,
   GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
   IMAP_SYNC_QUEUE_DEFINITIONS,
+  EMAIL_REFRESH_QUEUE_DEFINITIONS,
   MONITOR_QUEUE_DEFINITIONS,
   connectorsModuleManifest,
   createConnectorSecretCipher,
@@ -185,7 +186,10 @@ describe("Connectors encrypted foundation", () => {
     expect(manifest?.database?.ownedTables).toEqual([
       "app.connector_definitions",
       "app.connector_accounts",
-      "app.connector_oauth_pending"
+      "app.connector_oauth_pending",
+      "app.connector_email_refreshes",
+      "app.connector_email_refresh_keys",
+      "app.connector_email_refresh_accounts"
     ]);
     expect(manifest?.database?.migrations).toEqual([
       "sql/0009_connectors_module.sql",
@@ -199,7 +203,8 @@ describe("Connectors encrypted foundation", () => {
       "sql/0130_connector_imap_enum.sql",
       "sql/0131_connector_imap_definitions.sql",
       "sql/0144_google_sync_sweep_accounts.sql",
-      "sql/0215_connector_sync_previous_run.sql"
+      "sql/0215_connector_sync_previous_run.sql",
+      "sql/0244_email_refresh.sql"
     ]);
     expect(manifest?.settings?.map((surface) => surface.path)).toEqual([
       "/settings?section=connected",
@@ -209,6 +214,7 @@ describe("Connectors encrypted foundation", () => {
       ...GOOGLE_SYNC_QUEUE_DEFINITIONS,
       ...GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
       ...IMAP_SYNC_QUEUE_DEFINITIONS,
+      ...EMAIL_REFRESH_QUEUE_DEFINITIONS,
       ...MONITOR_QUEUE_DEFINITIONS
     ]);
     // Workshop owns project/feed migrations and registers after workflows, so it runs last.
