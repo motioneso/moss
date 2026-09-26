@@ -159,6 +159,8 @@ import {
   GoogleOAuthClient,
   registerConnectorsJobWorkers,
   registerConnectorsRoutes,
+  registerEmailRefreshWorkers,
+  EMAIL_REFRESH_QUEUE_DEFINITIONS,
   registerGoogleSyncSweepWorker,
   registerImapSyncWorker,
   registerSourceMonitorWorkers,
@@ -1730,6 +1732,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       ...GOOGLE_SYNC_QUEUE_DEFINITIONS,
       ...GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
       ...IMAP_SYNC_QUEUE_DEFINITIONS,
+      ...EMAIL_REFRESH_QUEUE_DEFINITIONS,
       ...MONITOR_QUEUE_DEFINITIONS
     ],
     registerRoutes: (server, deps) =>
@@ -1795,13 +1798,29 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         threadJudgementRequester,
         knownSenderAddresses
       });
+      const emailRefreshWorkIds = await registerEmailRefreshWorkers(boss, {
+        dataContext: deps.dataContext,
+        rootDb: deps.rootDb,
+        taskPort: emailTaskPort,
+        actionRowRelevance,
+        createCliStructuredAdapter,
+        logger: deps.logger,
+        threadJudgementRequester,
+        knownSenderAddresses
+      });
       const monitorWorkIds = await registerSourceMonitorWorkers(boss, {
         dataContext: deps.dataContext,
         taskPort: emailTaskPort,
         actionRowRelevance,
         createCliStructuredAdapter
       });
-      return [...googleWorkIds, googleSweepWorkId, ...imapWorkIds, ...monitorWorkIds];
+      return [
+        ...googleWorkIds,
+        googleSweepWorkId,
+        ...imapWorkIds,
+        ...emailRefreshWorkIds,
+        ...monitorWorkIds
+      ];
     }
   },
   {
