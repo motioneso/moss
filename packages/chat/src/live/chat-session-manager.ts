@@ -12,6 +12,8 @@ import {
   ChatStreamLimitError,
   ChatThreadNotFoundError,
   ChatTurnInFlightError,
+  ChatEngineReadError,
+  chatEngineReadFailureDiagnostic,
   CliChatDeliveryUnknownError,
   CliChatUnavailableError
 } from "./errors.js";
@@ -466,7 +468,9 @@ export class ChatSessionManager {
             break;
           }
           flushPending();
-          throw error instanceof CliChatUnavailableError ? error : new Error("readNew failed");
+          throw error instanceof CliChatUnavailableError
+            ? error
+            : new ChatEngineReadError(chatEngineReadFailureDiagnostic(session.provider, error));
         }
         if (controller.signal.aborted) {
           stopped = true;

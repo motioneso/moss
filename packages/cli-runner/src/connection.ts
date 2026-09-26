@@ -657,12 +657,26 @@ function requireSessionKey(req: RpcRequest): string {
   return req.sessionKey;
 }
 
-function toErrFrame(id: number, bootId: string, err: unknown): RpcErr {
+export function toErrFrame(id: number, bootId: string, err: unknown): RpcErr {
   const code = errorCode(err);
   // Redact the message server-side before it crosses the wire (§6.4). Never include a stack.
   const raw = err instanceof Error ? err.message : String(err);
   const message = redactSecrets(raw);
-  return { t: "err", id, bootId, error: { code, message } };
+  const statusCode = safeErrorStatusCode(err);
+  return {
+    t: "err",
+    id,
+    bootId,
+    error: { code, message, ...(statusCode !== undefined ? { statusCode } : {}) }
+  };
+}
+
+function safeErrorStatusCode(err: unknown): number | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const value = Object.getOwnPropertyDescriptor(err, "statusCode")?.value;
+  return typeof value === "number" && Number.isInteger(value) && value >= 400 && value <= 599
+    ? value
+    : undefined;
 }
 
 function errorCode(err: unknown): RpcErrorCode {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   MossAcpClient,
+  normalizeAcpPromptFailure,
   toolNameFromMeta,
   type AcpPermissionDecider,
   type AcpProviderKind,
@@ -588,7 +589,7 @@ export class AcpChatEngine implements CliChatEngine {
             { cause: error }
           );
         } else {
-          this.promptError = error;
+          this.promptError = normalizeAcpPromptFailure(error);
         }
       })
       .finally(() => {
