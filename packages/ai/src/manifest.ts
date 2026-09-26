@@ -89,7 +89,9 @@ export const aiModuleManifest = {
       "sql/0212_ai_configured_models_origin.sql",
       "sql/0214_ai_configured_models_released_at.sql",
       // System One (TypeSafe) — a provider kind whose API answers fixed named questions, not chat.
-      "sql/0241_ai_provider_kind_system_one.sql"
+      "sql/0241_ai_provider_kind_system_one.sql",
+      // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
+      "sql/0245_moss_action_audit_purge_worker_grant.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
