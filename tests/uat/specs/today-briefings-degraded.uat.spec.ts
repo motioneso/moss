@@ -6,7 +6,11 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin
 
 // P9 live proof: persisted connector/plan inputs, a persisted failed run, one
 // narrowly injected retry outage, then recovery through the real retry endpoint.
-export const uatLevel = { level: "multi-user", without: [] } as const;
+export const uatLevel = {
+  level: "multi-user",
+  without: [],
+  withBriefingWriterFixture: true
+} as const;
 
 const TZ = "America/Los_Angeles";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
