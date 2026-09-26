@@ -13,6 +13,7 @@ import { localDay } from "@moss/shared";
 import { Button } from "@moss/ui";
 
 import { buildDayItems } from "./day-plan-view-model.js";
+import { draftBlocksFor } from "./day-plan-review-model.js";
 import { ReviewRow } from "./day-plan-review.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
@@ -76,14 +77,21 @@ export function ReviewSection(props: {
     props.locale,
     props.now
   ]);
-  const changed = useMemo(
-    () => (plan ? plan.blocks.filter((block) => block.pendingChange !== null) : []),
-    [plan]
+  const effectivePendingChanges = new Map(
+    plan
+      ? draftBlocksFor(plan, review.choiceFor).map(
+          (block) => [block.id, block.pendingChange] as const
+        )
+      : []
   );
-  const kept = useMemo(
-    () => (plan ? plan.blocks.filter((block) => block.pendingChange === null) : []),
-    [plan]
-  );
+  const reviewedBlocks = plan
+    ? plan.blocks.map((block) => ({
+        ...block,
+        pendingChange: effectivePendingChanges.get(block.id) ?? null
+      }))
+    : [];
+  const changed = reviewedBlocks.filter((block) => block.pendingChange !== null);
+  const kept = reviewedBlocks.filter((block) => block.pendingChange === null);
   const noChangeRows = useMemo(
     () =>
       props.rows.filter((row) => {
