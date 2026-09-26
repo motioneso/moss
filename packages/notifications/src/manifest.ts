@@ -102,7 +102,15 @@ export const notificationsModuleManifest = {
           id: "notifications.push.manage_devices",
           description:
             "Remove push devices no longer in use, or turn push back on for a device, under " +
-            "Push notifications in Settings.",
+            "Push notifications in Settings. Removing this device also cancels this browser's " +
+            "own push registration; another device keeps its own until cleared there.",
+          path: "/settings?section=modules&module=notifications"
+        },
+        {
+          id: "notifications.push.reload_page",
+          description:
+            "Reload the page so the app's background helper loads, then turn push on again " +
+            "under Push notifications in Settings.",
           path: "/settings?section=modules&module=notifications"
         },
         {
@@ -145,6 +153,22 @@ export const notificationsModuleManifest = {
             "Shown next to a device as 'Turned off after repeated delivery failures': " +
             "delivery failed five times in a row, so the device stopped receiving push. " +
             "Remove it, or turn push back on for that same device to start again."
+        },
+        {
+          code: "push_service_worker_missing",
+          class: "prerequisite",
+          remediationRef: "notifications.push.reload_page",
+          description:
+            "Shown as 'Push isn't ready on this page yet': the app's background helper " +
+            "has not loaded, so push cannot be turned on. Reload the page and try again."
+        },
+        {
+          code: "push_browser_unsubscribe_failed",
+          class: "transient",
+          description:
+            "Shown after removing this device when the browser would not cancel its own " +
+            "push registration. The device is still removed, so nothing is sent here. Clear " +
+            "it in the browser's site settings if wanted."
         }
       ]
     }

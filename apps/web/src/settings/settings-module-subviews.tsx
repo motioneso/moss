@@ -45,6 +45,11 @@ import {
   findSourceBehaviorEnabled,
   writeSourceBehaviorCache
 } from "./settings-source-behaviors";
+import {
+  browserPushContainer,
+  registerBrowserPush,
+  removePushDevice
+} from "./push-browser-subscription";
 
 // BACKEND-TODO: persist + apply Notifications sensitivity.
 
@@ -589,11 +594,23 @@ function PushChannel() {
   });
 
   const removeMutation = useMutation({
-    mutationFn: (device: PushDeviceDto) => deletePushSubscription(device.id),
-    onSuccess: (_result, device) => {
-      if (device.id === deviceId) {
+    mutationFn: (device: PushDeviceDto) =>
+      removePushDevice({
+        deviceId: device.id,
+        currentDeviceId: deviceId,
+        container: browserPushContainer(),
+        deleteOnServer: deletePushSubscription
+      }),
+    onMutate: () => setError(null),
+    onSuccess: (outcome) => {
+      if (outcome.removedThisDevice) {
         window.localStorage.removeItem(PUSH_DEVICE_ID_STORAGE_KEY);
         setDeviceId(null);
+      }
+      if (outcome.browserStillSubscribed) {
+        setError(
+          "Removed, but this browser kept its push registration. Nothing will be sent here; you can clear it in this site's browser settings."
+        );
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush });
     },
@@ -613,18 +630,10 @@ function PushChannel() {
       if (!config) {
         throw new Error("Couldn't load push settings from the server.");
       }
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(config.publicKey)
-      });
-      const json = subscription.toJSON();
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-        throw new Error("The browser didn't return a usable subscription.");
-      }
-      const result = await registerPushSubscription({
-        endpoint: json.endpoint,
-        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth }
+      const result = await registerBrowserPush({
+        container: browserPushContainer(),
+        applicationServerKey: urlBase64ToUint8Array(config.publicKey),
+        registerOnServer: registerPushSubscription
       });
       window.localStorage.setItem(PUSH_DEVICE_ID_STORAGE_KEY, result.device.id);
       setDeviceId(result.device.id);
