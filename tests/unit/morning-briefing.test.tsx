@@ -80,7 +80,7 @@ describe("MorningBriefingReader report", () => {
   it("omits sections the run does not carry", async () => {
     const run: BriefingRunDto = {
       ...fullRun(),
-      summaryText: "Short report.",
+      summaryText: "Short report.\n\nAn older run has a second paragraph without headings.",
       sourceMetadata: {},
       structuredPayload: { version: 1, actionRows: [], catchUp: null }
     };
@@ -89,6 +89,7 @@ describe("MorningBriefingReader report", () => {
     ]);
     const html = await renderReader(client, { tasks: [] });
     expect(html).toContain("Short report.");
+    expect(html).toContain("An older run has a second paragraph without headings.");
     expect(html).not.toContain("Evening intent");
     expect(html).not.toContain("Needs you");
     expect(html).not.toContain("brief-reader-news");
