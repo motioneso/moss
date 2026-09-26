@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Clearer morning briefing recovery.** The morning briefing now explains when email may be behind, what informed the report when no evening plan was available, and when a retry needs attention. [PR #2711](https://github.com/motioneso/moss/pull/2711)
 - **YOLO approvals for Codex tools.** Codex command requests now honor your active YOLO setting while retaining blocked-path checks. [PR #2718](https://github.com/motioneso/moss/pull/2718)
 - **Newer Codex models.** Moss can now show newer models available through your Codex account. [PR #2716](https://github.com/motioneso/moss/pull/2716)
 
