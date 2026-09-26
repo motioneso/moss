@@ -26,7 +26,6 @@ import {
   createPersonaDraft,
   discardPersonaDraft,
   personaDraftIsDirty,
-  personaSample,
   PERSONA_PREVIEW_HINT,
   type DirectnessDial,
   type HumorDial,
@@ -168,7 +167,6 @@ function Persona({ who }: { readonly who: string }) {
     setRev((r) => r + 1);
   };
   const previewReply = previewMutation.data?.reply;
-  const dialSample = useMemo(() => personaSample(p, p.assistantName || "Moss"), [p]);
 
   return (
     <Group
@@ -274,17 +272,6 @@ function Persona({ who }: { readonly who: string }) {
             <div className="ppv__cap">Response preview</div>
             <p className="ppv__say">{previewReply}</p>
           </div>
-        ) : mode === "guided" ? (
-          <>
-            <div className="ppv__bubble ppv__bubble--main">
-              <div className="ppv__cap">Morning briefing</div>
-              <p className="ppv__say">{dialSample.greeting}</p>
-            </div>
-            <div className="ppv__bubble">
-              <div className="ppv__cap">When you fall behind</div>
-              <p className="ppv__say">{dialSample.recovery}</p>
-            </div>
-          </>
         ) : (
           <p className="jds-hint">{PERSONA_PREVIEW_HINT}</p>
         )}

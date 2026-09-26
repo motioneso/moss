@@ -519,7 +519,7 @@ describe("Persona preview bubble (#1921)", () => {
     });
   });
 
-  it("shows the static dial sample in guided-dials mode, not the hint", async () => {
+  it("shows the same press-Preview hint in guided-dials mode, not a made-up sample", async () => {
     const renderer = await renderAssistantPane();
 
     const guidedButton = renderer.root
@@ -531,8 +531,8 @@ describe("Persona preview bubble (#1921)", () => {
     });
 
     const text = renderedText(renderer.toJSON());
-    expect(text).toContain("Morning briefing");
-    expect(text).not.toContain("Press Preview to hear how this sounds.");
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("Morning briefing");
 
     await act(async () => {
       renderer.unmount();
