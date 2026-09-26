@@ -29,6 +29,7 @@ import { randomUUID } from "node:crypto";
 import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 import { launchOffList } from "./tool-table.js";
+import { isCodexCommandPermission } from "./codex-command-permission.js";
 import {
   selectAllowOptionId,
   toolNameFromMeta,
@@ -617,6 +618,13 @@ export class MossAcpClient {
     if (!announced) {
       await this.waitForAnnouncement(params.sessionId, toolCallId);
       announced = this.announcements.get(params.sessionId)?.get(toolCallId);
+    }
+    if (
+      announced?.toolName === null &&
+      this.sessionKinds.get(params.sessionId) === "openai" &&
+      isCodexCommandPermission(params, announced, { cwd, home })
+    ) {
+      announced = { ...announced, toolName: "Bash", kind: "execute" };
     }
     if (!announced || announced.toolName === null) {
       console.warn(

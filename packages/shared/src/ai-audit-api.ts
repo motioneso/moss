@@ -12,7 +12,7 @@ const actionAuditAgentSummarySchema = {
     toolName: { type: "string" },
     cwd: { type: "string" },
     paths: { type: "array", items: { type: "string" } },
-    decision: { type: "string", enum: ["asked", "refused"] },
+    decision: { type: "string", enum: ["asked", "refused", "allowed"] },
     reason: { type: ["string", "null"] }
   }
 } as const;
@@ -144,7 +144,7 @@ export type ActionAuditAgentSummary = {
   readonly toolName: string;
   readonly cwd: string;
   readonly paths: readonly string[];
-  readonly decision: "asked" | "refused";
+  readonly decision: "asked" | "refused" | "allowed";
   readonly reason: string | null;
 };
 
