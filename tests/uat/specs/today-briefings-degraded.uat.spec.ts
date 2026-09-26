@@ -246,10 +246,11 @@ test("P9 degraded briefing source attribution and retry recovery through Today",
   await seedEmailSyncAt(accountId, emailAsOf);
   const taskId = await createTask(page, "P9 live proof task");
   const planId = await createDayPlan(page, SERVER_DAY, timeZone, taskId);
+  const calendarStartsAt = new Date(Date.now() + 60 * 60 * 1000);
   await seedCalendarEvent(accountId, {
     title: "P9 live proof calendar event",
-    startsAt: localIso(SERVER_DAY, "13:00"),
-    endsAt: localIso(SERVER_DAY, "13:30")
+    startsAt: calendarStartsAt.toISOString(),
+    endsAt: new Date(calendarStartsAt.getTime() + 30 * 60 * 1000).toISOString()
   });
 
   const planRead = await json(
