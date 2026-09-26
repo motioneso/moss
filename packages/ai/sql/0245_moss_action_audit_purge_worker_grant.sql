@@ -36,8 +36,3 @@ $$;
 
 REVOKE ALL ON FUNCTION app.purge_expired_moss_action_audit_log() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.purge_expired_moss_action_audit_log() TO jarvis_worker_runtime;
-
--- TEMPORARY, FOR CI PROOF ONLY -- reintroduces the reviewed vulnerability (unrestricted-cutoff
--- function reachable by the worker) so the new negative-check test can be observed failing
--- without the real fix, per docs/DEVELOPMENT_STANDARDS.md. Removed in the very next commit.
-GRANT EXECUTE ON FUNCTION app.purge_moss_action_audit_log(timestamptz) TO jarvis_worker_runtime;
