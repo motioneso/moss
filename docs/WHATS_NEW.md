@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Use newly available Codex models.** Codex chat can use newer models offered after refreshing the model list without requiring a new sign-in or installation. [PR #2721](https://github.com/motioneso/moss/pull/2721)
 - **Old assistant activity history cleared out again.** Old assistant activity history is now cleared out on schedule again, instead of piling up forever. [PR #2724](https://github.com/motioneso/moss/pull/2724)
 - **Clearer morning briefing recovery.** The morning briefing now explains when email may be behind, what informed the report when no evening plan was available, and when a retry needs attention. [PR #2711](https://github.com/motioneso/moss/pull/2711)
 - **YOLO approvals for Codex tools.** Codex command requests now honor your active YOLO setting while retaining blocked-path checks. [PR #2718](https://github.com/motioneso/moss/pull/2718)
