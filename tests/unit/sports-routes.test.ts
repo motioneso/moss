@@ -628,6 +628,7 @@ describe("sports routes", () => {
     expect(body.group.competitionKey).toBe("nfl");
     expect(body.group.competitionLabel).toBe("NFL");
     expect(body.group.sections[0].label).toBe("AFC East");
+    expect(body.degraded).toBe(false);
     await app.close();
   });
 

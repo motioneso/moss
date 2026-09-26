@@ -172,7 +172,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.refresh_trouble_notice",
       description:
-        "When Moss cannot refresh scores, standings or stories, the main Sports page says some sports information could not be updated, instead of looking like a quiet day. The standings view shows no such notice."
+        "When Moss cannot refresh scores, standings or stories, the Sports page says some sports information could not be updated. If a league's standings cannot be refreshed, the standings area says so too."
     },
     {
       id: "sports.remembered_standings",

@@ -370,8 +370,8 @@ export function registerSportsRoutes(
         if (!catalogEntry(competitionKey)) {
           throw new HttpError(400, `Unknown competition: ${competitionKey}`);
         }
-        const { group, fixtures } = await service.getStandings(competitionKey);
-        return { group, fixtures };
+        const { group, fixtures, degraded } = await service.getStandings(competitionKey);
+        return { group, fixtures, degraded };
       } catch (error) {
         return handleRouteError(error, reply);
       }

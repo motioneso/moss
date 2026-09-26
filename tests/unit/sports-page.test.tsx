@@ -199,6 +199,25 @@ describe("SportsPage", () => {
     expect(render(makeOverview())).not.toContain("could not be updated");
   });
 
+  it("warns in the standings rail when the standings refresh degraded (#2686)", () => {
+    const renderRail = (degraded: boolean) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(sportsQueryKeys.overview, makeOverview({ standings: [] }));
+      client.setQueryData(sportsQueryKeys.standings("nfl"), {
+        group: { ...standingsGroup(), sections: [] },
+        fixtures: [],
+        degraded
+      });
+      return renderToString(
+        createElement(QueryClientProvider, { client }, createElement(SportsPage))
+      );
+    };
+    const html = renderRail(true);
+    expect(html).toContain("Standings could not be updated just now");
+    expect(html).not.toContain("Some sports information could not be updated");
+    expect(renderRail(false)).not.toContain("could not be updated");
+  });
+
   it("renders the broadsheet masthead", () => {
     const html = render(makeOverview());
     // Masthead pared to a section-nav + live-event line — the nameplate/brand strip was cut
