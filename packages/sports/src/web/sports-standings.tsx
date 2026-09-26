@@ -115,10 +115,13 @@ function defaultViewKey(
 function unwrapStandings(data: SportsStandingsResponse | StandingsGroup | undefined): {
   group: StandingsGroup | null;
   fixtures: readonly GameSummary[];
+  degraded: boolean;
 } {
-  if (!data) return { group: null, fixtures: [] };
-  if ("group" in data) return { group: data.group, fixtures: data.fixtures ?? [] };
-  return { group: data, fixtures: [] };
+  if (!data) return { group: null, fixtures: [], degraded: false };
+  if ("group" in data) {
+    return { group: data.group, fixtures: data.fixtures ?? [], degraded: data.degraded === true };
+  }
+  return { group: data, fixtures: [], degraded: false };
 }
 
 // #2660: the standings view to open when the viewer has not picked one. Followed competitions come
@@ -271,13 +274,20 @@ export function StandingsRail(props: {
   // The overview payload only carries standings for followed leagues; selecting a league outside
   // that set lazily fetches it via the dedicated standings route (#842). Tournaments always fetch
   // lazily too, because only that route carries the current-round `fixtures` (#839 follow-up).
+  const lazyEnabled = activeKey !== "" && (isTournament || !byKey.has(activeKey));
   const lazy = useQuery({
     queryKey: sportsQueryKeys.standings(activeKey),
     queryFn: () => getStandingsByLeague(activeKey),
-    enabled: activeKey !== "" && (isTournament || !byKey.has(activeKey))
+    enabled: lazyEnabled
   });
 
-  const { group: lazyGroup, fixtures } = unwrapStandings(lazy.data);
+  // A disabled query still returns its cached result. Once the overview carries this league, that
+  // cached table and its failure flag are stale, so only read them while the query is live.
+  const {
+    group: lazyGroup,
+    fixtures,
+    degraded
+  } = unwrapStandings(lazyEnabled ? lazy.data : undefined);
   const group = lazyGroup ?? byKey.get(activeKey) ?? null;
   const knockout = isTournament && fixtures.length > 0;
 
@@ -389,6 +399,13 @@ export function StandingsRail(props: {
         </span>
       </div>
       <div className="sp-standings__body" ref={scrollRef}>
+        {/* The standings fetch fell back to cached or empty data (#2686). Without this a failed
+            refresh reads as an empty or current table. */}
+        {degraded ? (
+          <p className="sp-lede" role="status">
+            Standings could not be updated just now, so they may be missing or out of date.
+          </p>
+        ) : null}
         {!activeKey ? (
           <p className="sp-standings__empty">
             No standings leagues selected.{" "}
