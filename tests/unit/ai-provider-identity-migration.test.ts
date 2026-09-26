@@ -5,13 +5,13 @@ import { describe, expect, it } from "vitest";
 import { aiModuleManifest } from "../../packages/ai/src/manifest.js";
 
 const migration = readFileSync(
-  new URL("../../packages/ai/sql/0244_ai_provider_acp_agent_id.sql", import.meta.url),
+  new URL("../../packages/ai/sql/0246_ai_provider_acp_agent_id.sql", import.meta.url),
   "utf8"
 );
 
 describe("AI provider ACP identity migration", () => {
   it("registers the additive migration", () => {
-    expect(aiModuleManifest.database.migrations).toContain("sql/0244_ai_provider_acp_agent_id.sql");
+    expect(aiModuleManifest.database.migrations).toContain("sql/0246_ai_provider_acp_agent_id.sql");
   });
 
   it("backfills known CLI identities and retains other legacy CLI rows unresolved", () => {

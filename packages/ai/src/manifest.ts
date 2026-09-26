@@ -91,7 +91,7 @@ export const aiModuleManifest = {
       // System One (TypeSafe) — a provider kind whose API answers fixed named questions, not chat.
       "sql/0241_ai_provider_kind_system_one.sql",
       // #2716 — persist an ACP identity for CLI providers while retaining unsupported legacy rows.
-      "sql/0244_ai_provider_acp_agent_id.sql",
+      "sql/0246_ai_provider_acp_agent_id.sql",
       // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
       "sql/0245_moss_action_audit_purge_worker_grant.sql"
     ],

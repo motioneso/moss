@@ -482,8 +482,8 @@ describe("MVP foundation schema catalog", () => {
         },
         // #2716 — persist an ACP identity for CLI providers while retaining unsupported legacy rows.
         {
-          version: "0244",
-          name: "0244_ai_provider_acp_agent_id.sql"
+          version: "0246",
+          name: "0246_ai_provider_acp_agent_id.sql"
         },
         // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
         {
