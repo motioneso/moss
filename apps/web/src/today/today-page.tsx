@@ -45,6 +45,7 @@ import { parseBriefingFreshness } from "./briefing-freshness";
 import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { dayPlanReviewUnavailableMessage, MorningBriefingReader } from "./morning-briefing";
+import { isEmailSourceStale, TodayEmailRefreshAction } from "./today-email-refresh.js";
 import { DayPlanSection } from "./day-plan";
 import { TodayDock, TodayRail } from "./today-rail";
 import { DayPlanReview } from "./day-plan-review";
@@ -520,7 +521,22 @@ export function TodayPage(props: {
         headline={heroContent.headline}
         summary={heroContent.summary}
         preparedAt={heroContent.preparedAt}
-        readerControl={heroContent.readerControl}
+        readerControl={
+          heroContent.readerControl ||
+          (todayMode === "day" &&
+            morningDefinition?.enabled &&
+            isEmailSourceStale(morningFreshness)) ? (
+            <>
+              {heroContent.readerControl}
+              {todayMode === "day" && morningDefinition?.enabled && morningFreshness ? (
+                <TodayEmailRefreshAction
+                  definitionId={morningDefinition.id}
+                  freshness={morningFreshness}
+                />
+              ) : null}
+            </>
+          ) : null
+        }
         weather={
           <TodayWeatherRow
             weather={weatherQuery.data?.data}
