@@ -157,6 +157,9 @@ export function installUatRealChatCodexAuth(
     cleanup: async () => {
       if (removed) return;
       removed = true;
+
+      // The owner-scoped slot copy this run wrote above.
+      let ownerCopyFailed = false;
       try {
         execDockerCompose(buildComposeArgs, [
           "exec",
@@ -169,8 +172,37 @@ export function installUatRealChatCodexAuth(
           `${slot.home}/.codex/auth.json`
         ]);
       } catch {
-        // Best-effort: `docker compose down -v` right after this destroys the whole volume
-        // anyway, so a failed rm here (e.g. the container already exited) is not fatal.
+        ownerCopyFailed = true;
+      }
+
+      // The already-authenticated sign-in path (see login-service.ts / main.ts's
+      // onLoginReady) promotes this same login into the instance's shared Codex login at
+      // /data/cli-auth/.codex/auth.json, the same file real per-user launches read. That
+      // copy — and any temp file its writer leaves on a crash mid-write — must be gone too,
+      // not just the owner-scoped one, or another launch can go on inheriting this run's
+      // credential after the stack is torn down.
+      let sharedCopyFailed = false;
+      try {
+        execDockerCompose(buildComposeArgs, [
+          "exec",
+          "-T",
+          "--user",
+          owner,
+          "jarv1s",
+          "sh",
+          "-c",
+          "rm -f /data/cli-auth/.codex/auth.json /data/cli-auth/.codex/.auth.json.*.tmp"
+        ]);
+      } catch {
+        sharedCopyFailed = true;
+      }
+
+      if (ownerCopyFailed || sharedCopyFailed) {
+        // Fixed message, no credential content: this can surface in CI logs.
+        throw new Error(
+          `[uat real-chat] credential cleanup failed for ${projectName}; a copied Codex ` +
+            "login may remain in the stack's volume"
+        );
       }
     }
   };

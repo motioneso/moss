@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn, execFile: vi.fn() }));
 
-const { buildSeedHookInput, composeSeedHook, captureFailureEvidence } =
+const { buildSeedHookInput, composeSeedHook, captureFailureEvidence, cleanupUatAttempt } =
   await import("./provisioner.js");
 
 describe("#1121 Task 4: chatScript arg-building", () => {
@@ -96,5 +96,41 @@ describe("#2164 r19: captureFailureEvidence transcript capture is not tail-trunc
     const shellScript = (execCall?.[1] as string[]).at(-1) ?? "";
     expect(shellScript).toContain('cat "$f"');
     expect(shellScript).not.toContain("tail -c");
+  });
+});
+
+describe("#2732 P1-1: cleanupUatAttempt still verifies the stack after a failed credential wipe", () => {
+  it("still tears down and checks for leaks when the credential cleanup step throws", async () => {
+    const teardownCompose = vi
+      .fn()
+      .mockRejectedValue(new Error("[uat real-chat] credential cleanup failed for proj"));
+    const assertNoLeaks = vi.fn().mockResolvedValue(undefined);
+    const cleanupEnvFile = vi.fn();
+
+    await expect(
+      cleanupUatAttempt({ teardownCompose, assertNoLeaks, cleanupEnvFile })
+    ).rejects.toThrow(/credential cleanup failed/);
+
+    // A failed credential wipe must not skip the stack-wide leak check or the env file cleanup —
+    // both still ran even though teardownCompose rejected.
+    expect(assertNoLeaks).toHaveBeenCalledTimes(1);
+    expect(cleanupEnvFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces both a failed credential wipe and a leaked volume together, with no credential content", async () => {
+    const teardownCompose = vi
+      .fn()
+      .mockRejectedValue(new Error("[uat real-chat] credential cleanup failed for proj"));
+    const assertNoLeaks = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('UAT teardown leaked resources for proj: volumes=["proj_jarv1s-cli-auth"]')
+      );
+    const cleanupEnvFile = vi.fn();
+
+    await expect(
+      cleanupUatAttempt({ teardownCompose, assertNoLeaks, cleanupEnvFile })
+    ).rejects.toThrow(AggregateError);
+    expect(cleanupEnvFile).toHaveBeenCalledTimes(1);
   });
 });

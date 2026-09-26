@@ -4,6 +4,12 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { LookupAiCapabilityRouteResponse } from "@moss/shared";
 
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import {
+  bringUpRealChatModel,
+  REAL_CHAT_PROVIDER_KIND,
+  requireUatBaseURL,
+  signInUatAdmin
+} from "./real-chat-signin.js";
 
 // #1909 live-path proof. The surface check remains credential-free. The full public-source path
 // uses real publisher fetches plus the operator-provided real JSON-capable model, matching the
@@ -71,62 +77,29 @@ interface RecordedAction {
   readonly status: string;
 }
 
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  return baseURL;
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skipSetup.or(userMenu).first()).toBeVisible();
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
-}
-
 async function openSportsSettings(page: Page): Promise<Locator> {
-  await page.goto(`${requireBaseURL()}/settings?section=modules&module=sports`);
+  await page.goto(`${requireUatBaseURL()}/settings?section=modules&module=sports`);
   const section = page.locator('section[aria-label="Sports news sources"]');
   await expect(section).toBeVisible();
   return section;
 }
 
+// Chat goes through the shared cheapest-model helper (installs, logs in, picks and binds the
+// account's economy-tier chat model). No override endpoint exists for the "json" capability, so
+// that one stays a plain existence-and-provider check once the shared helper has logged in.
 async function bringUpRealModel(page: Page): Promise<void> {
-  const install = await page.request.post("/api/onboarding/provider-install", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
-  expect((await install.json()).installState).toBe("installed");
-
-  const begin = await page.request.post("/api/onboarding/provider-login/begin", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(begin.ok(), `provider-login/begin -> ${begin.status()}`).toBeTruthy();
-  expect((await begin.json()).status).toBe("ready");
+  await bringUpRealChatModel(page, MODEL_DISCOVERY_DEADLINE_MS);
 
   await expect
     .poll(
       async () => {
-        const routes = await Promise.all(
-          ["chat", "json"].map(async (capability) => {
-            const response = await page.request.get(`/api/ai/capability-route/${capability}`);
-            expect(response.ok(), `${capability} capability -> ${response.status()}`).toBeTruthy();
-            return ((await response.json()) as LookupAiCapabilityRouteResponse).route;
-          })
-        );
-        return routes.every(
-          (route) =>
-            route.available &&
-            route.model?.providerKind === "anthropic" &&
-            route.model.status === "active"
+        const response = await page.request.get("/api/ai/capability-route/json");
+        expect(response.ok(), `json capability -> ${response.status()}`).toBeTruthy();
+        const route = ((await response.json()) as LookupAiCapabilityRouteResponse).route;
+        return (
+          route.available &&
+          route.model?.providerKind === REAL_CHAT_PROVIDER_KIND &&
+          route.model.status === "active"
         );
       },
       { timeout: MODEL_DISCOVERY_DEADLINE_MS }
@@ -364,7 +337,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   expect(drift.healthReasonCode).toBe("recipe_drift");
 
   await page.context().clearCookies();
-  await signIn(page);
+  await signInUatAdmin(page);
   await bringUpRealModel(page);
   const follows = await createPremierLeagueFollows(page);
   const section = await openSportsSettings(page);
@@ -516,7 +489,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   expect([RAW_FIXTURE_DOMAIN, "cdn.jsdelivr.net"]).toContain(shared[0]?.publisherDomain);
   expect(shared[0]?.publisherLabel).toBeTruthy();
 
-  await page.goto(`${requireBaseURL()}/sports`);
+  await page.goto(`${requireUatBaseURL()}/sports`);
   await expect(
     page
       .getByText(
@@ -527,7 +500,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   ).toBeVisible({
     timeout: SOURCE_DEADLINE_MS
   });
-  await page.goto(`${requireBaseURL()}/today`);
+  await page.goto(`${requireUatBaseURL()}/today`);
   await expect(
     page
       .getByText(

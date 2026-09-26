@@ -57,7 +57,7 @@ describe("installUatRealChatCodexAuth (#2732)", () => {
     }
   });
 
-  it("removes the copied credential on cleanup, addressed at the allocated slot's home", async () => {
+  it("cleanup removes both the owner-scoped slot copy and the shared instance copy it may have been promoted to (#2732 P1-1)", async () => {
     existsSyncMock.mockReturnValue(true);
     readFileSyncMock.mockReturnValue(SECRET);
     execFileSyncMock
@@ -67,17 +67,25 @@ describe("installUatRealChatCodexAuth (#2732)", () => {
       )
       .mockReturnValueOnce("")
       .mockReturnValueOnce("")
-      .mockReturnValueOnce(""); // rm at cleanup
+      .mockReturnValueOnce("") // rm owner-scoped slot copy
+      .mockReturnValueOnce(""); // rm shared instance copy + any leftover temp file
 
     const result = installUatRealChatCodexAuth("uat-test", "actor-1", buildComposeArgs);
     await result!.cleanup();
 
-    const rmCall = execFileSyncMock.mock.calls.at(-1) as [string, readonly string[]];
-    expect(rmCall[1]).toContain("/data/cli-auth/agents/actor-1/.codex/auth.json");
-    expect(rmCall[1]).toContain("rm");
+    const [ownerRmCall, sharedRmCall] = execFileSyncMock.mock.calls.slice(-2) as [
+      [string, readonly string[]],
+      [string, readonly string[]]
+    ];
+    expect(ownerRmCall[1]).toContain("/data/cli-auth/agents/actor-1/.codex/auth.json");
+    expect(ownerRmCall[1]).toContain("rm");
+    // The shared copy lives outside every user's home, at the instance's own auth path — the
+    // same file main.ts's onLoginReady promotes an already-authenticated sign-in into.
+    expect(sharedRmCall[1].join(" ")).toContain("/data/cli-auth/.codex/auth.json");
+    expect(sharedRmCall[1].join(" ")).toContain("/data/cli-auth/.codex/.auth.json.*.tmp");
   });
 
-  it("cleanup does not throw even when the underlying command fails (the volume is about to be destroyed anyway)", async () => {
+  it("still attempts the shared instance copy's removal when the owner-scoped removal fails, then fails loudly with no credential text", async () => {
     existsSyncMock.mockReturnValue(true);
     readFileSyncMock.mockReturnValue(SECRET);
     execFileSyncMock
@@ -88,11 +96,22 @@ describe("installUatRealChatCodexAuth (#2732)", () => {
       .mockReturnValueOnce("")
       .mockReturnValueOnce("")
       .mockImplementationOnce(() => {
+        // Simulates the owner-scoped copy's own removal failing, e.g. because the container
+        // already exited — a setup-time-shaped failure, not a credential-content one.
         throw new Error("container already exited");
-      });
+      })
+      .mockReturnValueOnce(""); // the shared instance copy's removal still runs and succeeds
 
     const result = installUatRealChatCodexAuth("uat-test", "actor-1", buildComposeArgs);
-    await expect(result!.cleanup()).resolves.toBeUndefined();
+    await expect(result!.cleanup()).rejects.toThrow(/credential cleanup failed for uat-test/);
+
+    const sharedRmCall = execFileSyncMock.mock.calls.at(-1) as [string, readonly string[]];
+    expect(sharedRmCall[1].join(" ")).toContain("/data/cli-auth/.codex/auth.json");
+    expect(
+      execFileSyncMock.mock.calls.every(
+        ([, args]) => !(args as readonly string[]).join(" ").includes(SECRET.toString("utf8"))
+      )
+    ).toBe(true);
   });
 
   it("throws loudly (never a silent skip) when the owner-scoped copy fails", () => {

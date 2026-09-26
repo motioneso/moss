@@ -811,9 +811,16 @@ export async function provisionForUat(
       // #2732: must run before `down -v` below — it needs the still-running `jarv1s` container to
       // remove the copied credential; the container going down destroys it anyway, but doing this
       // first keeps the security property (removed at teardown) true even if `down -v` itself
-      // fails partway through.
+      // fails partway through. A failed credential cleanup is now loud (real-chat-env.ts throws),
+      // so it is caught here and rethrown at the end — `down -v` and the network cleanup below
+      // must still run either way, or a failed credential wipe would also leak the whole stack.
+      let realChatCleanupError: unknown;
       if (realChatAuth !== undefined) {
-        await realChatAuth.cleanup();
+        try {
+          await realChatAuth.cleanup();
+        } catch (error) {
+          realChatCleanupError = error;
+        }
       }
       // Only fixtures this attempt started. The ESPN fixture shares the job-search container.
       if (briefingWriterFixtureBaseUrl !== undefined) {
@@ -836,6 +843,7 @@ export async function provisionForUat(
       for (const networkId of ownedNetworks.split("\n").filter(Boolean)) {
         await runCommand("docker", ["network", "rm", networkId]).catch(() => {});
       }
+      if (realChatCleanupError !== undefined) throw realChatCleanupError;
     };
     const cleanupAttempt = (options: { readonly error?: unknown } = {}) =>
       cleanupUatAttempt({

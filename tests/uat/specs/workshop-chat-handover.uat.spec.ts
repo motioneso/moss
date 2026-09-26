@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
 
 // Workshop Phase A — the real-chat half of the Live-Path Gate.
 //
@@ -20,75 +20,8 @@ export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
-const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
-const POLL_INITIAL_INTERVAL_MS = 500;
-const POLL_MAX_INTERVAL_MS = 4_000;
-
 const PROJECT_TITLE_HINT = "Garden watering reminders";
 const CARD = '[role="region"][aria-label="Action request"]';
-
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL || !process.env.JARVIS_UAT_PROJECT_NAME?.startsWith("uat-")) {
-    throw new Error("Run through the isolated UAT provisioner");
-  }
-  return baseURL;
-}
-
-// solo-admin returns before the onboarding chunk, so login can land on the first-run wizard.
-// Skip it only when shown, keeping this idempotent across the shared, non-reset DB.
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skip = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skip.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
-  if (await skip.isVisible()) {
-    await skip.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
-}
-
-// #1121: the provisioner has already persisted the operator's OAuth token into the cli-auth
-// volume, so begin settles to "ready" rather than handing back an authorization URL. Install
-// must run first — token persistence and binary install are separate steps.
-async function bringUpRealModel(page: Page): Promise<void> {
-  const install = await page.request.post("/api/onboarding/provider-install", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
-  expect((await install.json()).installState).toBe("installed");
-
-  const begin = await page.request.post("/api/onboarding/provider-login/begin", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(begin.ok(), `provider-login/begin -> ${begin.status()}`).toBeTruthy();
-  expect(
-    (await begin.json()).status,
-    "the pre-seeded token should authenticate the anthropic CLI non-interactively"
-  ).toBe("ready");
-
-  // Discovery runs asynchronously after login settles. Bounded exponential backoff, never a
-  // fixed sleep.
-  const deadline = Date.now() + MODEL_DISCOVERY_DEADLINE_MS;
-  let interval = POLL_INITIAL_INTERVAL_MS;
-  let last: unknown = null;
-  while (Date.now() < deadline) {
-    const body = (await (await page.request.get("/api/ai/models")).json()) as {
-      models: readonly { status: string; capabilities: readonly string[] }[];
-    };
-    last = body.models;
-    if (body.models.some((m) => m.status === "active" && m.capabilities.includes("chat"))) return;
-    await page.waitForTimeout(Math.min(interval, Math.max(0, deadline - Date.now())));
-    interval = Math.min(interval * 2, POLL_MAX_INTERVAL_MS);
-  }
-  throw new Error(
-    `no chat-capable active model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(last)}`
-  );
-}
 
 // #1720: the turn POST is handed back still in flight rather than awaited, matching
 // 926-food-real-chat. Nothing here needs to approve a card, but awaiting the turn before
@@ -116,8 +49,8 @@ test("a real model saves a Workshop project from chat and offers a link to open 
   // A cold provider probe, async model discovery and a real model round-trip run serially.
   test.setTimeout(900_000);
 
-  await signIn(page);
-  await bringUpRealModel(page);
+  await signInUatAdmin(page);
+  await bringUpRealChatModel(page);
 
   const before = await page.request.get("/api/workshop/projects");
   expect(before.status()).toBe(200);
