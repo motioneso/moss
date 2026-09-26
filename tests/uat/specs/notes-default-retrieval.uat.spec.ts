@@ -4,7 +4,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin
 
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const POLL_DEADLINE_MS = 60_000;
 const FACT = "kumquat focaccia";
 const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;

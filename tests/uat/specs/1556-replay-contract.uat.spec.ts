@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
 // documents), so this reuses that spec's REAL_CHAT_CONFIGURED gate rather than the fake provider.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
 const POLL_DEADLINE_MS = 60_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
@@ -78,7 +78,7 @@ test("forced relaunch replays prior context and answers a continuity question (#
 }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) — #1556"
+    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #1556"
   );
   // 45 sequential real-model turns plus relaunch and a continuity turn, all serial round-trips.
   test.setTimeout(900_000);

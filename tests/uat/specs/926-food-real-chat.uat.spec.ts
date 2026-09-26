@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { expect, test, type Page, type Response } from "@playwright/test";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../model-tier.js";
 
 // #926 Food Phase 1 — the real-chat half of the Live-Path Gate.
 //
@@ -20,10 +21,10 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 //     and no grant or promotion can ever skip it (policy.ts:36).
 //
 // This spec closes that gap the same way real-chat-onboarding.uat.spec.ts does: it runs only
-// when the operator supplied a real Anthropic token (JARVIS_UAT_REAL_CHAT_TOKEN_FILE), drives
-// a real model through the real chat drawer, approves the action on the real card, and then
-// asserts the persisted record through the module's own page. It stays skipped on every
-// default/CI run so the gate remains credential-free.
+// when the operator's own signed-in Codex CLI login has been copied into the stack (see
+// tests/uat/real-chat-env.ts), drives a real model through the real chat drawer, approves the
+// action on the real card, and then asserts the persisted record through the module's own page.
+// It stays skipped on every default/CI run so the gate remains credential-free.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 // Both tests below drive the same real chat session, as the same seeded admin, against one
@@ -32,7 +33,7 @@ export const uatLevel = { level: "solo-admin", without: [] } as const;
 // the other was mid-turn. Serial is not a slowdown here: the run is dominated by model latency.
 test.describe.configure({ mode: "serial" });
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
 const MEAL_TEXT = "oatmeal with blueberries";
 const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
@@ -76,43 +77,67 @@ async function openInstanceModules(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();
 }
 
-// Same non-interactive login the #1121 spec drives: the provisioner has already persisted the
-// operator's OAuth token into the cli-auth volume, so begin settles to "ready" rather than
-// handing back an authorization URL. Install must run first — token persistence and binary
-// install are separate steps.
+// Same non-interactive login the #1121 spec drives: the provisioner has already copied the
+// operator's own Codex login into the cli-auth volume, so begin settles to "ready" rather than
+// handing back an authorization URL. Install must run first — login and binary install are
+// separate steps. "openai-compatible" is Codex's provider kind (#2732).
 async function bringUpRealModel(page: Page): Promise<void> {
   const install = await page.request.post("/api/onboarding/provider-install", {
-    data: { providerKind: "anthropic" }
+    data: { providerKind: "openai-compatible" }
   });
   expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
   expect((await install.json()).installState).toBe("installed");
 
   const begin = await page.request.post("/api/onboarding/provider-login/begin", {
-    data: { providerKind: "anthropic" }
+    data: { providerKind: "openai-compatible" }
   });
   expect(begin.ok(), `provider-login/begin -> ${begin.status()}`).toBeTruthy();
   expect(
     (await begin.json()).status,
-    "the pre-seeded token should authenticate the anthropic CLI non-interactively"
+    "the host's own Codex login should authenticate the CLI non-interactively"
   ).toBe("ready");
 
   // Discovery runs asynchronously after login settles. Bounded exponential backoff, never a
   // fixed sleep.
   const deadline = Date.now() + MODEL_DISCOVERY_DEADLINE_MS;
   let interval = POLL_INITIAL_INTERVAL_MS;
-  let last: unknown = null;
+  let last: readonly UatDiscoveredModel[] = [];
+  let cheapest: UatDiscoveredModel | undefined;
   while (Date.now() < deadline) {
     const body = (await (await page.request.get("/api/ai/models")).json()) as {
-      models: readonly { status: string; capabilities: readonly string[] }[];
+      models: readonly UatDiscoveredModel[];
     };
     last = body.models;
-    if (body.models.some((m) => m.status === "active" && m.capabilities.includes("chat"))) return;
+    try {
+      cheapest = pickCheapestActiveChatModel(last);
+      break;
+    } catch {
+      // Discovery hasn't landed an eligible model yet; keep polling until the deadline.
+    }
     await page.waitForTimeout(Math.min(interval, Math.max(0, deadline - Date.now())));
     interval = Math.min(interval * 2, POLL_MAX_INTERVAL_MS);
   }
-  throw new Error(
-    `no chat-capable active model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(last)}`
-  );
+  if (cheapest === undefined) {
+    throw new Error(
+      `no active, chat-capable, economy-tier model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ` +
+        JSON.stringify(last)
+    );
+  }
+
+  // #2732: Ben's ruling is that every real-chat UAT turn runs through the account's cheapest
+  // ("economy") model to preserve usage — never hardcode a model name or fall back to a pricier
+  // tier.
+  const enableOverride = await page.request.put("/api/admin/ai/chat-model-override", {
+    data: { enabled: true }
+  });
+  expect(
+    enableOverride.ok(),
+    `admin chat-model-override -> ${enableOverride.status()}`
+  ).toBeTruthy();
+  const selectOverride = await page.request.put("/api/ai/chat-model-override", {
+    data: { modelId: cheapest.id }
+  });
+  expect(selectOverride.ok(), `chat-model-override -> ${selectOverride.status()}`).toBeTruthy();
 }
 
 const CARD = '[role="region"][aria-label="Action request"]';
@@ -227,7 +252,7 @@ test("a real model logs and corrects meals through Food's granted-at-install too
 }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) — #926"
+    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #926"
   );
   // A cold provider probe, async model discovery, and two real model round-trips run serially.
   test.setTimeout(900_000);
@@ -284,7 +309,7 @@ test("a real model logs and corrects meals through Food's granted-at-install too
 test("a real model raises and resolves Food's confirm-gated tools (#926)", async ({ page }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) — #926"
+    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #926"
   );
   test.setTimeout(900_000);
 

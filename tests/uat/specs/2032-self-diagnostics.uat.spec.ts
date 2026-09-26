@@ -7,7 +7,7 @@ export const uatLevel = {
   withoutNewsJsonBinding: true
 } as const;
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
 const REFRESH_DEADLINE_MS = 300_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
@@ -144,7 +144,7 @@ async function readDiagnostics(page: Page): Promise<{
 test("a real Moss conversation diagnoses, refreshes, and rechecks news", async ({ page }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) - #2032"
+    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) - #2032"
   );
   test.setTimeout(600_000);
 

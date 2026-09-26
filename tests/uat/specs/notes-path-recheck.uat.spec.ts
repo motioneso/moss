@@ -22,7 +22,7 @@ export const uatLevel = { level: "admin+data", without: [] } as const;
 //   jobs.ts's collectMarkdownFiles readdir->realpath TOCTOU sliver is explicitly OUT of scope
 //   here (no deterministic live trigger) — proven separately by re-running the integration suite.
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const POLL_DEADLINE_MS = 60_000;
 // The notes-sync worker cold-loads its embedding model on first use in a fresh UAT container
 // (observed: "dtype not specified for model" landing right as a 60s deadline expired) — give the

@@ -17,7 +17,7 @@ export const uatLevel = {
 
 test.describe.configure({ mode: "serial" });
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const BBC_FEED_URL = "https://feeds.bbci.co.uk/sport/football/rss.xml";
 const RAW_FIXTURE_DOMAIN = "raw.githubusercontent.com";
 const DRIFT_FIXTURE_DOMAIN = "raw.githack.com";

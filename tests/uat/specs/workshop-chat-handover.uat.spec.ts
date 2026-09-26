@@ -18,7 +18,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // stays skipped on every default/CI run so the gate remains credential-free.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
 const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
@@ -111,7 +111,7 @@ test("a real model saves a Workshop project from chat and offers a link to open 
 }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset)"
+    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset)"
   );
   // A cold provider probe, async model discovery and a real model round-trip run serially.
   test.setTimeout(900_000);
