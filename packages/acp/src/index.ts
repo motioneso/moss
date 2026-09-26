@@ -1,6 +1,12 @@
-export { AcpSessionOpenError, MossAcpClient } from "./client.js";
+export {
+  AcpPromptFailureError,
+  AcpSessionOpenError,
+  MossAcpClient,
+  normalizeAcpPromptFailure
+} from "./client.js";
 export type {
   AcpClientEvents,
+  AcpPromptFailureStage,
   AcpPermissionDecider,
   AcpPermissionDecision,
   AcpPromptOptions,

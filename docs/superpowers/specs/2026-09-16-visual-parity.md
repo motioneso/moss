@@ -95,6 +95,14 @@ Evening planning (`assets/2026-09-10-evening-planning/`, 11 files):
 | changed-plan-saved.png         | Saved state with status strip                                                          |
 | changed-plan-handoff-phone.png | Phone saved state before the morning handoff                                           |
 
+**Approved capacity variance (#2521, 2026-09-25):** The Step 3 mockups show two cards: A steady
+day (“The main task, with room for follow-through”) and A lighter day (“One work block. Leave the
+rest available”). Ben ruled that the Full day option must remain selectable and guide how much
+Moss blocks on the calendar. Keep the third Full day card even though it is absent from the pictured
+two-card layout. For implementation, Light considers one priority task, Steady considers the main
+task plus one follow-through task, and Full day considers all selected commitments while using open
+time; commitments that do not fit remain without a time block.
+
 4.1 Each file above is one final acceptance item. Every one must have a populated capture and a
 Reviewer verdict, with exactly one named full-image completion owner in 4.3. An intermediate
 task that touches a file retains its full capture and guards but may report only its owned region.

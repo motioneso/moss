@@ -23,6 +23,7 @@ import {
   type ToolCallLocation,
   type Usage
 } from "@agentclientprotocol/sdk";
+import { RequestError } from "@agentclientprotocol/sdk";
 import { randomUUID } from "node:crypto";
 
 import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
@@ -161,6 +162,41 @@ export interface AcpPromptOptions {
    * hanging the caller forever. Defaults to ten minutes.
    */
   readonly timeoutMs?: number;
+}
+
+export type AcpPromptFailureStage =
+  | "acp_prompt_rejected"
+  | "acp_prompt_timeout"
+  | "acp_transport_error";
+
+/** Safe ACP failure classification; deliberately drops provider error data and causes. */
+export class AcpPromptFailureError extends Error {
+  constructor(
+    readonly failureStage: AcpPromptFailureStage,
+    readonly acpCode?: number,
+    timeoutMs?: number
+  ) {
+    super(
+      failureStage === "acp_prompt_rejected"
+        ? "ACP prompt rejected"
+        : failureStage === "acp_prompt_timeout"
+          ? `ACP prompt timed out${timeoutMs === undefined ? "" : ` after ${timeoutMs} ms`}`
+          : "ACP prompt transport failed"
+    );
+    this.name = "AcpPromptFailureError";
+  }
+}
+
+export function normalizeAcpPromptFailure(error: unknown): AcpPromptFailureError {
+  if (error instanceof AcpPromptFailureError) return error;
+  if (error instanceof RequestError) {
+    const code =
+      Number.isInteger(error.code) && error.code >= -32_768 && error.code <= -32_000
+        ? error.code
+        : undefined;
+    return new AcpPromptFailureError("acp_prompt_rejected", code);
+  }
+  return new AcpPromptFailureError("acp_transport_error");
 }
 
 const DEFAULT_PROMPT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -364,7 +400,7 @@ export class MossAcpClient {
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
             void this.cancel(handle).catch(() => undefined);
-            reject(new Error(`ACP prompt timed out after ${timeoutMs} ms`));
+            reject(new AcpPromptFailureError("acp_prompt_timeout", undefined, timeoutMs));
           }, timeoutMs);
         })
       ]);

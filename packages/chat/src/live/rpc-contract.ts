@@ -240,6 +240,8 @@ export interface RpcError {
   readonly code: RpcErrorCode;
   /** Human-readable, ALREADY redacted server-side via redactSecrets (§6.4). Safe to log. */
   readonly message: string;
+  /** Numeric provider status only; the runner omits every other upstream error detail. */
+  readonly statusCode?: number;
 }
 
 // #1059 server-initiated output frame. First non-request/response member of RpcFrame.

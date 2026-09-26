@@ -201,7 +201,7 @@ describe("proposeTomorrowBlocks", () => {
     blocks: DayPlanBlockDto[],
     committed: string[],
     priority: string[],
-    capacity: "light" | "normal",
+    capacity: "light" | "normal" | "full",
     start: string,
     evts = events()
   ) => proposeTomorrowBlocks(blocks, committed, priority, capacity, start, tasks, evts, TMO, TZ);
@@ -267,6 +267,18 @@ describe("proposeTomorrowBlocks", () => {
       (row) => row.taskId
     );
     expect(normal).toEqual(["t1", "t2"]);
+  });
+
+  it("full day uses open time for every selected commitment beyond the steady-day pair", () => {
+    const commitments = ["t1", "t2", "t3"];
+    const normal = propose([], commitments, ["t1"], "normal", "09:00", []);
+    const full = propose([], commitments, ["t1"], "full", "09:00", []);
+    expect(
+      normal.filter((row) => row.pendingChange?.kind === "add").map((row) => row.taskId)
+    ).toEqual(["t1", "t2"]);
+    expect(
+      full.filter((row) => row.pendingChange?.kind === "add").map((row) => row.taskId)
+    ).toEqual(commitments);
   });
 
   it("emits placeable rows only, and zero blocks is valid", () => {
@@ -860,6 +872,16 @@ describe("useEveningPlanning", () => {
     expect(m.current().activeCapacity).toBe("light");
     expect(m.current().activeNotes).toBe("hello");
     expect(m.current().activePriority).toEqual(["t1"]);
+  });
+
+  it("a fresh mount preserves saved full-day capacity", async () => {
+    const plan = tomorrowPlan();
+    plan.eveningIntent = {
+      ...plan.eveningIntent!,
+      capacity: "full"
+    };
+    const m = await mount(plan);
+    expect(m.current().activeCapacity).toBe("full");
   });
 
   it("EveningPlanningDialog passes tomorrowKey to DayPlanSection so tomorrowEvents appear in rail (VP-TOMORROW-R2)", async () => {
