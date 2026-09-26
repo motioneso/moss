@@ -475,6 +475,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0243",
           name: "0243_story_relevance_answer_cache.sql"
+        },
+        // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
+        {
+          version: "0245",
+          name: "0245_moss_action_audit_purge_worker_grant.sql"
         }
       ]);
     } finally {

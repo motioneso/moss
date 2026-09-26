@@ -277,6 +277,114 @@ describe("action audit log", () => {
     expect(rowIds).toContain(recentId);
   });
 
+  it("#2682: nightly purge job (worker role) clears only expired rows, for every owner, and cannot widen its own cutoff", async () => {
+    // The scheduled cleanup (packages/ai/src/jobs.ts) runs entirely as jarvis_worker_runtime,
+    // not jarvis_app_runtime. Reproduces the reported failure by calling the purge function
+    // over a worker-role connection, the same path the nightly job takes -- and proves the
+    // worker can only ever clear its own fixed 90-day window, for every user, never wider.
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const expiredA = randomUUID();
+      const recentA = randomUUID();
+      const recentB = randomUUID();
+
+      const makeRow = (id: string, ownerUserId: string, requestId: string) => ({
+        id,
+        ownerUserId,
+        toolModuleId: "tasks",
+        toolName: "tasks.deleteList",
+        actionFamilyId: null,
+        actionKind: "destructive" as const,
+        approvalMode: "confirmed" as const,
+        outcome: "success" as const,
+        durationMs: null,
+        errorClass: null,
+        requestId,
+        chatSessionId: null,
+        sourceSurface: "chat" as const,
+        inputSummary: null
+      });
+
+      await dataContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "req-purge-worker-a" },
+        async (scopedDb) => {
+          await repo.insertActionAuditLog(scopedDb, makeRow(expiredA, ids.userA, "req-a-1"));
+          await repo.insertActionAuditLog(scopedDb, makeRow(recentA, ids.userA, "req-a-2"));
+        }
+      );
+      await dataContext.withDataContext(
+        { actorUserId: ids.userB, requestId: "req-purge-worker-b" },
+        async (scopedDb) => {
+          await repo.insertActionAuditLog(scopedDb, makeRow(recentB, ids.userB, "req-b-1"));
+        }
+      );
+
+      // Backdate only the one row that should be cleared.
+      const bootstrapClient = new Client({ connectionString: connectionStrings.bootstrap });
+      await bootstrapClient.connect();
+      try {
+        await bootstrapClient.query(
+          `UPDATE app.moss_action_audit_log
+           SET occurred_at = $1
+           WHERE id = $2`,
+          [new Date(Date.now() - 91 * 24 * 60 * 60 * 1000), expiredA]
+        );
+      } finally {
+        await bootstrapClient.end();
+      }
+
+      // Before the #2682 fix this rejects with "permission denied for function
+      // purge_moss_action_audit_log" because jarvis_worker_runtime had no EXECUTE grant at all.
+      const count = await repo.purgeExpiredActionAuditLog(workerDb);
+      expect(count).toBeGreaterThanOrEqual(1);
+
+      const remainingA = await dataContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "req-check-purge-worker-a" },
+        (scopedDb) =>
+          repo.listActionAuditLog(scopedDb, {
+            since: new Date(Date.now() - 92 * 24 * 60 * 60 * 1000),
+            limit: 500
+          })
+      );
+      const remainingB = await dataContext.withDataContext(
+        { actorUserId: ids.userB, requestId: "req-check-purge-worker-b" },
+        (scopedDb) =>
+          repo.listActionAuditLog(scopedDb, {
+            since: new Date(Date.now() - 92 * 24 * 60 * 60 * 1000),
+            limit: 500
+          })
+      );
+
+      expect(remainingA.map((r) => r.id)).not.toContain(expiredA);
+      expect(remainingA.map((r) => r.id)).toContain(recentA);
+      expect(remainingB.map((r) => r.id)).toContain(recentB);
+
+      // The worker must never be able to reach the unrestricted-cutoff function, no matter how
+      // far out the cutoff is. That grant is what would let a worker call wipe every user's
+      // recent history in one shot, not just its own expired rows (cross-vendor review finding).
+      await expect(
+        repo.purgeActionAuditLog(workerDb, new Date("2999-01-01T00:00:00Z"))
+      ).rejects.toThrow();
+
+      // The denied call above must not have gone through anyway -- both still-recent rows are
+      // still there, which is the actual property being protected, not just a permission error.
+      const afterDeniedCallA = await dataContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "req-check-purge-worker-a-2" },
+        (scopedDb) =>
+          repo.listActionAuditLog(scopedDb, {
+            since: new Date(Date.now() - 92 * 24 * 60 * 60 * 1000),
+            limit: 500
+          })
+      );
+      expect(afterDeniedCallA.map((r) => r.id)).toContain(recentA);
+    } finally {
+      await workerDb.destroy();
+    }
+  });
+
   it("runtime role has no UPDATE grant on audit log", async () => {
     // jarvis_app_runtime has only SELECT + INSERT — UPDATE must be denied
     await expect(
