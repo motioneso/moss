@@ -4,7 +4,7 @@ import {
   TODAY_SECTION_LINKS
 } from "./today-labels.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Flag, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -62,7 +62,6 @@ import {
   byStart,
   datelineLabel,
   shortDatelineLabel,
-  driftOf,
   dueTs,
   eveningHeroKicker,
   firstName,
@@ -609,7 +608,7 @@ export function TodayPage(props: {
                 run={actionRowsRun}
                 loading={actionRowsLoading}
                 tasks={tasks}
-                looseEndsCount={looseEnds.length}
+                looseEnds={looseEnds}
                 locale={locale}
                 chatAvailable={hasConnectedProvider(onboardingStatusQuery.data)}
                 onOpenTask={(id) => setDialog({ id })}
@@ -621,41 +620,6 @@ export function TodayPage(props: {
             <div id="goals">
               <GoalsSection />
             </div>
-
-            {looseEnds.length > 0 ? (
-              <section className="jds-brief" id="loose-ends">
-                <div className="jds-brief__head">
-                  <span className="jds-brief__kicker">Loose ends</span>
-                </div>
-                <div className="jds-brief__title">Things I'm keeping an eye on</div>
-                <div className="loose">
-                  {looseEnds.map((task) => {
-                    const drift = driftOf(task, locale.timezone);
-                    return (
-                      <div className="jds-task" key={task.id}>
-                        <span className="jds-task__check">
-                          <Flag size={15} aria-hidden="true" />
-                        </span>
-                        <button
-                          type="button"
-                          className="jds-task__main"
-                          onClick={() => setDialog({ id: task.id })}
-                        >
-                          <div className="jds-task__title">{task.title}</div>
-                          <div className="jds-task__meta">
-                            <span className={`jds-drift jds-drift--${drift}`}>
-                              <span className="jds-drift__dot" />
-                              {drift === "overdue" ? "Overdue" : "At risk"}
-                            </span>
-                            <span className="jds-task__source">{task.source}</span>
-                          </div>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ) : null}
 
             <ProactiveCards />
           </div>

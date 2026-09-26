@@ -67,6 +67,20 @@ describe("BriefingActionRowsSection", () => {
       summaryText: `The garden walk moved to Saturday &amp; volunteers should arrive &quot;early&quot;.\n${"Routine digests arrived too. ".repeat(12)}`,
       asOf: null
     };
+    const looseEnds = [
+      task({
+        id: "loose-overdue",
+        title: "Renew the garden-tool loan",
+        dueAt: new Date(Date.now() - 86_400_000).toISOString(),
+        source: "Garden list"
+      }),
+      task({
+        id: "loose-due-soon",
+        title: "Return the library books",
+        dueAt: new Date().toISOString(),
+        source: "Reading list"
+      })
+    ];
     const html = renderSection({
       run: run({ rows, catchUp }),
       tasks: [
@@ -74,11 +88,15 @@ describe("BriefingActionRowsSection", () => {
         task({ id: "task-accepted", status: "todo" }),
         task({ id: "task-dismissed", status: "archived" })
       ],
-      looseEndsCount: 2
+      looseEnds
     });
 
     expect(html).toContain("3 need you");
     expect(html).not.toContain("4 need you");
+    expect(html).toContain('id="loose-ends"');
+    expect(html).toContain("Renew the garden-tool loan");
+    expect(html).toContain("Return the library books");
+    expect(html.indexOf('id="loose-ends"')).toBeLessThan(html.indexOf("Catch-up"));
     expect(html).toMatch(/4(?:<!-- -->)? informational (?:<!-- -->)?messages/);
     expect(html).toContain("The garden walk moved to Saturday &amp; volunteers");
     expect(html).toContain(" · Routine digests arrived too.");
@@ -90,10 +108,46 @@ describe("BriefingActionRowsSection", () => {
   });
 
   it("shows the loose-end count without claiming there is nothing waiting", () => {
-    const html = renderSection({ run: null, tasks: [], looseEndsCount: 2 });
+    const html = renderSection({
+      run: null,
+      tasks: [],
+      looseEnds: [
+        task({
+          id: "loose-1",
+          title: "Return the library books",
+          dueAt: new Date().toISOString()
+        }),
+        task({
+          id: "loose-2",
+          title: "Renew the garden-tool loan",
+          dueAt: new Date(Date.now() - 86_400_000).toISOString()
+        })
+      ]
+    });
 
     expect(html).toContain("2 need you");
+    expect(html).toContain('id="loose-ends"');
     expect(html).not.toContain("You're caught up");
+  });
+
+  it("keeps known loose ends visible while briefing rows are loading", () => {
+    const html = renderSection({
+      run: null,
+      tasks: [],
+      loading: true,
+      looseEnds: [
+        task({
+          id: "loose-loading",
+          title: "Return the library books",
+          dueAt: new Date().toISOString()
+        })
+      ]
+    });
+
+    expect(html).toContain("Checking what needs you");
+    expect(html).toContain('id="loose-ends"');
+    expect(html).toContain("Return the library books");
+    expect(html).not.toContain("1 need you");
   });
 
   it("omits fallback suggestions without a reply cache id", () => {
@@ -436,7 +490,7 @@ describe("BriefingActionRowsSection", () => {
 function renderSection(input: {
   readonly run: BriefingRunDto | null;
   readonly tasks: readonly TaskDto[];
-  readonly looseEndsCount?: number;
+  readonly looseEnds?: readonly TaskDto[];
   readonly loading?: boolean;
 }): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -461,7 +515,7 @@ function renderSection(input: {
             run: input.run,
             loading: input.loading ?? false,
             tasks: input.tasks,
-            looseEndsCount: input.looseEndsCount ?? 0,
+            looseEnds: input.looseEnds ?? [],
             locale,
             chatAvailable: true,
             onOpenTask: () => undefined
