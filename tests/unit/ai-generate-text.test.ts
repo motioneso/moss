@@ -80,22 +80,30 @@ describe("generateText", () => {
       scopedDb,
       {
         service: "module.briefings",
-        model,
+        model: { ...model, provider_kind: "openai-compatible" },
         messages,
         maxOutputTokens: 512,
         priority: "background"
       },
-      deps(provider({ auth_method: "cli" }), capture)
+      deps(
+        provider({
+          provider_kind: "openai-compatible",
+          auth_method: "cli",
+          acp_agent_id: "opencode"
+        }),
+        capture
+      )
     );
 
     expect(result).toEqual({ ok: true, text: "cli reply" });
     expect(capture.chat).toBeUndefined();
     expect(capture.structured).toMatchObject({
       service: "module.briefings",
-      model: { provider_kind: "anthropic", provider_model_id: "claude-sonnet-5" },
+      model: { provider_kind: "openai-compatible", provider_model_id: "claude-sonnet-5" },
       messages,
       maxOutputTokens: 512,
-      priority: "background"
+      priority: "background",
+      acpAgentId: "opencode"
     });
   });
 

@@ -141,6 +141,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       const activeEngine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
         executionMode: "non_interactive",
         needsStructuredOutput: true,
+        ...(input.acpAgentId !== undefined ? { acpAgentId: input.acpAgentId } : {}),
         ...(input.actorUserId ? { userId: input.actorUserId } : {})
       });
       engine = activeEngine;
@@ -244,6 +245,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         const engine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
           executionMode: "non_interactive",
           needsStructuredOutput: true,
+          ...(input.acpAgentId !== undefined ? { acpAgentId: input.acpAgentId } : {}),
           userId: input.scope!.actorUserId
         });
         if (!isCliStructuredEngine(engine)) {

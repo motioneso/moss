@@ -764,12 +764,25 @@ export function createStructuredChatEngineFactory(options: {
   readonly fallback: ChatEngineFactory;
 }): ChatEngineFactory {
   return (provider, sessionKey, engineOptions) => {
+    if (engineOptions?.needsStructuredOutput && engineOptions.acpAgentId === "opencode") {
+      throw new CliChatUnavailableError(
+        "OpenCode structured generation is not supported by the CLI structured transport."
+      );
+    }
     if (!options.socketConfigured) return options.fallback(provider, sessionKey, engineOptions);
     const connection = options.getRpcConnection();
     if (!connection) {
       throw new CliChatUnavailableError("cli-runner RPC connection is not ready");
     }
-    return new ChatEngineRpcClient(provider, sessionKey, connection, engineOptions?.executionMode);
+    return new ChatEngineRpcClient(
+      provider,
+      sessionKey,
+      connection,
+      engineOptions?.executionMode,
+      undefined,
+      engineOptions?.needsStructuredOutput,
+      engineOptions?.userId
+    );
   };
 }
 

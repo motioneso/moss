@@ -97,6 +97,25 @@ describe("CliStructuredAdapter reports a genuine location mismatch immediately",
   });
 });
 
+describe("CliStructuredAdapter provider identity", () => {
+  it("forwards each selected ACP identity when the provider switches", async () => {
+    const agentIds: (string | null | undefined)[] = [];
+    const engineFactory: ChatEngineFactory = (_provider, _sessionKey, opts) => {
+      agentIds.push(opts?.acpAgentId);
+      return fakeEngine(() => undefined);
+    };
+    const adapter = new CliStructuredAdapter("openai-compatible", engineFactory);
+    const input = Object.assign(baseInput("module.job-fit"), {
+      model: { provider_kind: "openai-compatible" as const, provider_model_id: "gpt-5" },
+      acpAgentId: "opencode"
+    });
+
+    await expect(adapter.generateStructured(input)).resolves.toMatchObject({ rawText: "{}" });
+    await adapter.generateStructured({ ...input, acpAgentId: "codex-acp" });
+    expect(agentIds).toEqual(["opencode", "codex-acp"]);
+  });
+});
+
 describe("CliStructuredAdapter one-shot cwd", () => {
   it("reuses the identical neutralDir across two calls for the same service", async () => {
     const neutralDirs: string[] = [];
