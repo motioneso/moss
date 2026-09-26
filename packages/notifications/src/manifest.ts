@@ -102,8 +102,8 @@ export const notificationsModuleManifest = {
           id: "notifications.push.manage_devices",
           description:
             "Remove push devices no longer in use, or turn push back on for a device, under " +
-            "Push notifications in Settings. Removing this device also cancels this browser's " +
-            "own push registration; another device keeps its own until cleared there.",
+            "Push notifications in Settings. Removing the device you are on also asks this " +
+            "browser to cancel its push registration; other devices keep theirs.",
           path: "/settings?section=modules&module=notifications"
         },
         {
@@ -166,9 +166,17 @@ export const notificationsModuleManifest = {
           code: "push_browser_unsubscribe_failed",
           class: "transient",
           description:
-            "Shown after removing this device when the browser would not cancel its own " +
-            "push registration. The device is still removed, so nothing is sent here. Clear " +
-            "it in the browser's site settings if wanted."
+            "The browser would not cancel its own push registration, after removing this " +
+            "device or after turning push on failed. Nothing is sent to it. Try again, or " +
+            "clear it in this site's browser settings."
+        },
+        {
+          code: "push_pending_removal_incomplete",
+          class: "transient",
+          description:
+            "Shown as 'Couldn't finish removing this device's old registration': an earlier " +
+            "removal cancelled the browser's registration but the old device record could " +
+            "not be deleted, so push stays off until it is. Try again."
         }
       ]
     }

@@ -166,6 +166,13 @@ export const markAllNotificationsReadRouteSchema = {
 
 export interface PushDeviceDto {
   readonly id: string;
+
+  /**
+   * sha256 hex of the push endpoint, the uniqueness key the server already stores. The
+   * settings page hashes its own current endpoint and compares, so "This device" follows the
+   * browser's real subscription. The owner's browser already holds the endpoint itself.
+   */
+  readonly endpointHash: string;
   readonly label: string | null;
   readonly createdAt: string;
   readonly lastUsedAt: string | null;
@@ -195,9 +202,10 @@ export interface DeletePushSubscriptionResponse {
 
 const pushDeviceDtoSchema = {
   type: "object",
-  required: ["id", "label", "createdAt", "lastUsedAt", "disabledAt"],
+  required: ["id", "endpointHash", "label", "createdAt", "lastUsedAt", "disabledAt"],
   properties: {
     id: { type: "string" },
+    endpointHash: { type: "string", pattern: "^[0-9a-f]{64}$" },
     label: nullableStringSchema,
     createdAt: { type: "string" },
     lastUsedAt: nullableStringSchema,

@@ -123,6 +123,16 @@ Push has been a visible `Coming soon` promise since #735. Ben asked to build it 
   loop.
 - Subscription registration fails server-side: toast with the real reason, browser subscription
   is unsubscribed so the client and server do not disagree.
+  - Qualification (#2308): only a subscription created by that enable attempt is unsubscribed.
+    A subscription the browser already held before the attempt is kept, because a failed repeat
+    registration does not show that the server has no working record for it.
+  - If the browser does not confirm the unsubscribe (it returns false or rejects), the message
+    says the browser kept the registration and how to clear it.
+- Removing a device (#2308): "This device" is the record whose `endpointHash` (returned in
+  `PushDeviceDto`) matches the fingerprint of the browser's current subscription. Only that
+  record triggers `unsubscribe()`, before the server delete. If the unsubscribe succeeds but the
+  delete fails, the record id is kept as a pending removal in local storage, and Enable deletes
+  pending records before subscribing, so a new endpoint never sits beside the old record.
 - Delivery: as in 5.2. A disabled row shows in the device list as "Not reachable, remove and
   enable again".
 - Key pair missing at delivery time (should not happen): job fails with a logged reason that
