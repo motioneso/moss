@@ -6,10 +6,11 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin
 
 // P9 live proof: persisted connector/plan inputs, a persisted failed run, one
 // narrowly injected retry outage, then recovery through the real retry endpoint.
-// Keep the task seed out so this run only sees the explicit ordinary task below.
+// Multi-user seeding needs its shared-task baseline; the proof creates its own
+// ordinary task below as the day-plan target.
 export const uatLevel = {
   level: "multi-user",
-  without: ["tasks"],
+  without: [],
   withBriefingWriterFixture: true
 } as const;
 
