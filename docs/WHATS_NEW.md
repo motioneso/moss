@@ -41,6 +41,10 @@ feature that is not present in the image you are running.
 - **YOLO approvals for Codex tools.** Codex command requests now honor your active YOLO setting while retaining blocked-path checks. [PR #2718](https://github.com/motioneso/moss/pull/2718)
 - **Newer Codex models.** Moss can now show newer models available through your Codex account. [PR #2716](https://github.com/motioneso/moss/pull/2716)
 
+#### Added
+
+- **Refresh stale email before the morning briefing.** When email has not synced in over a day, you can refresh it and see a new morning briefing once syncing completes. [PR #2715](https://github.com/motioneso/moss/pull/2715)
+
 ### 2026-09-25
 
 #### Fixed
