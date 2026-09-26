@@ -7,6 +7,7 @@ import {
   createConnectorAccountRequestSchema,
   createConnectorAccountResponseSchema,
   featureGrantsResponseSchema,
+  emailRefreshStatusResponseSchema,
   gmailGetLiveMessageInputSchema,
   gmailGetLiveMessageResponseSchema,
   gmailSearchLiveInputSchema,
@@ -17,6 +18,8 @@ import {
   listConnectorAccountsResponseSchema,
   listConnectorProvidersResponseSchema,
   revokeConnectorAccountResponseSchema,
+  requestEmailRefreshRequestSchema,
+  requestEmailRefreshResponseSchema,
   updateConnectorAccountRequestSchema,
   updateConnectorAccountResponseSchema
 } from "@moss/shared";
@@ -58,13 +61,17 @@ export const connectorsModuleManifest = {
       "sql/0130_connector_imap_enum.sql",
       "sql/0131_connector_imap_definitions.sql",
       "sql/0144_google_sync_sweep_accounts.sql",
-      "sql/0215_connector_sync_previous_run.sql"
+      "sql/0215_connector_sync_previous_run.sql",
+      "sql/0244_email_refresh.sql"
     ],
     migrationDirectories: ["packages/connectors/sql"],
     ownedTables: [
       "app.connector_definitions",
       "app.connector_accounts",
-      "app.connector_oauth_pending"
+      "app.connector_oauth_pending",
+      "app.connector_email_refreshes",
+      "app.connector_email_refresh_keys",
+      "app.connector_email_refresh_accounts"
     ]
   },
   settings: [
@@ -189,6 +196,19 @@ export const connectorsModuleManifest = {
     },
     {
       method: "POST",
+      path: "/api/connectors/email-refresh",
+      requestSchema: requestEmailRefreshRequestSchema,
+      responseSchema: requestEmailRefreshResponseSchema,
+      permissionId: "connectors.manage"
+    },
+    {
+      method: "GET",
+      path: "/api/connectors/email-refresh/:refreshId",
+      responseSchema: emailRefreshStatusResponseSchema,
+      permissionId: "connectors.view"
+    },
+    {
+      method: "POST",
       path: "/api/connectors/imap/connect",
       permissionId: "connectors.manage"
     },
@@ -307,6 +327,36 @@ export const connectorsModuleManifest = {
           description:
             "Connect the account again under Connected accounts in Settings using a fresh app " +
             "password; the connection is tested before it is saved.",
+          path: "/settings?section=connected"
+        }
+      ]
+    },
+    {
+      id: "connectors.email_refresh",
+      description:
+        "Refreshes email from active, email-enabled Google and IMAP accounts and reports durable per-account completion so a briefing can use messages saved by this refresh.",
+      errors: [
+        {
+          code: "connectors.email_refresh.no_eligible_accounts",
+          class: "prerequisite",
+          remediationRef: "connectors.connect_email_account",
+          description: "No active email-enabled account is available for this refresh."
+        },
+        {
+          code: "connectors.email_refresh.failed",
+          class: "transient",
+          description: "Email could not be refreshed for this briefing."
+        }
+      ],
+      remediations: [
+        {
+          id: "connectors.connect_email_account",
+          description: "Connect an email account under Connected accounts in Settings.",
+          path: "/settings?section=connected"
+        },
+        {
+          id: "connectors.retry_email_refresh",
+          description: "Retry the email refresh when the connection is available.",
           path: "/settings?section=connected"
         }
       ]

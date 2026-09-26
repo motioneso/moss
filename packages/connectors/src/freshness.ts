@@ -11,7 +11,7 @@ export function pickLatestSyncAt(
   const matching = accounts.filter((a) => {
     const s = a.scopes;
     return kind === "email"
-      ? s.includes(GMAIL_SCOPE) || s.includes("gmail")
+      ? s.includes(GMAIL_SCOPE) || s.includes("gmail") || s.includes("email.read")
       : s.includes(CALENDAR_SCOPE) || s.includes("calendar");
   });
   const times = matching.map((a) => a.last_sync_finished_at).filter((t): t is Date => t !== null);

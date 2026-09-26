@@ -55,6 +55,7 @@ import { LiveImapProbeClient } from "./imap-probe-client.js";
 import { GoogleOAuthClient } from "./oauth.js";
 import { ConnectorsRepository, type ConnectorAccountSafeRow } from "./repository.js";
 import { GOOGLE_SYNC_QUEUE } from "./sync-jobs.js";
+import { registerEmailRefreshRoutes } from "./email-refresh.js";
 
 export interface ConnectorsRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -92,6 +93,12 @@ export function registerConnectorsRoutes(
       cipher: secretCipher,
       probeClient: new LiveImapProbeClient()
     });
+
+  registerEmailRefreshRoutes(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    dataContext: dependencies.dataContext,
+    boss: dependencies.boss
+  });
 
   server.post(
     "/api/connectors/google/authorize",
