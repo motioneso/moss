@@ -6,9 +6,10 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin
 
 // P9 live proof: persisted connector/plan inputs, a persisted failed run, one
 // narrowly injected retry outage, then recovery through the real retry endpoint.
+// Keep the task seed out so this run only sees the explicit ordinary task below.
 export const uatLevel = {
   level: "multi-user",
-  without: [],
+  without: ["tasks"],
   withBriefingWriterFixture: true
 } as const;
 
@@ -148,9 +149,10 @@ async function createTask(page: Page, title: string): Promise<string> {
   const response = await json(page, "/api/tasks", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, dueAt: null })
+    body: JSON.stringify({ title, status: "todo", dueAt: null })
   });
   expect(response.status).toBe(201);
+  expect(response.body.task.status).toBe("todo");
   return response.body.task.id as string;
 }
 
