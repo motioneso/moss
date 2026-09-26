@@ -79,6 +79,7 @@ describe("AI provider model refresh (#2208)", () => {
         providerKind: "anthropic",
         displayName: "Claude",
         authMethod: "cli",
+        acpAgentId: "claude-acp",
         encryptedCredential: cipher.encryptJson({ cli: true })
       });
       // The #367 sentinel every CLI provider carries.
