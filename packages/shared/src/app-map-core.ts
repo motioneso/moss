@@ -57,7 +57,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "today",
     label: "Today",
     description:
-      "Read the saved day plan as a schedule and preparation list with each block's state in words (committed versus proposed), plus a prominent weather row, a quick-actions dock with slot-placed module widgets, task and event details, email action rows, and goals. Needs You counts active action rows plus visible Loose ends; Catch-up is a compact informational summary outside that count, and View appears only when an action row already has a supported source link. The morning briefing offers a full reader with sources and earlier reports, naming overnight changes to the saved evening plan. A Review task blocks button opens per-block placement and time choices with preview, one confirmation for moves and removals, and per-item outcomes. An Accept all time blocks button in the reader and the review applies every eligible proposed addition in one activation. A Plan tomorrow button opens an evening planning dialog with reflect, commitment, shape and review sections that saves tomorrow's intent and draft blocks in one action. Light considers one priority block, a steady day considers the main task plus one follow-through block, and Full day considers all selected commitments while using open time. Unsaved placement choices immediately appear under Proposed calendar changes before the plan is saved. A Chat with Moss button on the same card opens the evening interview carrying the saved plan, and can save intent and untimed additions for review without ever writing to the calendar. When the calendar or the saved plan cannot be read the schedule says so plainly instead of showing an empty day, and loaded events stay visible while the plan is still arriving.",
+      "Read the saved day plan as a schedule and preparation list with each block's state in words (committed versus proposed), plus a prominent weather row, a quick-actions dock with slot-placed module widgets, task and event details, email action rows, and goals. Needs You counts active action rows plus visible Loose ends; Catch-up is a compact informational summary outside that count, and View appears only when an action row already has a supported source link. The morning briefing offers a full reader with sources and earlier reports, naming overnight changes to the saved evening plan. If a morning run fails, the reader can retry it, shows the new run as pending, and displays its result when ready. When no evening priorities are available, it explains that today's available sources, including tasks and calendar, shaped the report; a delayed email source names its last update and possible unseen replies. A Review task blocks button opens per-block placement and time choices with preview, one confirmation for moves and removals, and per-item outcomes. An Accept all time blocks button in the reader and the review applies every eligible proposed addition in one activation. A Plan tomorrow button opens an evening planning dialog with reflect, commitment, shape and review sections that saves tomorrow's intent and draft blocks in one action. Light considers one priority block, a steady day considers the main task plus one follow-through block, and Full day considers all selected commitments while using open time. Unsaved placement choices immediately appear under Proposed calendar changes before the plan is saved. A Chat with Moss button on the same card opens the evening interview carrying the saved plan, and can save intent and untimed additions for review without ever writing to the calendar. When the calendar or the saved plan cannot be read the schedule says so plainly instead of showing an empty day, and loaded events stay visible while the plan is still arriving.",
     path: "/today",
     scope: "user"
   },
@@ -305,6 +305,12 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     remediationRef: "core.today.review_when_plan_available",
     description:
       "Task block review is unavailable while today's saved plan is missing, loading, or unreadable."
+  },
+  {
+    code: "core.today.briefing_retry_unconfirmed",
+    class: "transient",
+    remediationRef: "core.today.retry_briefing",
+    description: "The briefing reader could not confirm whether a retry request was queued."
   }
 ];
 
@@ -319,6 +325,13 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.today.review_when_plan_available",
     description:
       "Keep reading the briefing; try Review task blocks again after the saved plan loads.",
+    path: "/today",
+    scope: "user"
+  },
+  {
+    id: "core.today.retry_briefing",
+    description:
+      "Try again from the briefing reader. Existing task-block choices remain available.",
     path: "/today",
     scope: "user"
   }

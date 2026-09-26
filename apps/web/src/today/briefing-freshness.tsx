@@ -1,6 +1,7 @@
 import type { SourceFreshnessEntry, SourceFreshnessV1 } from "@moss/shared";
 
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+const EMAIL_DELAY_THRESHOLD_MS = 60 * 60 * 1000;
 
 const SOURCE_LABEL: Record<string, string> = {
   email: "Email",
@@ -57,8 +58,29 @@ export function BriefingFreshnessList({ freshness }: { readonly freshness: Sourc
   );
 }
 
-export function BriefingStaleBanner({ freshness }: { readonly freshness: SourceFreshnessV1 }) {
-  const stale = freshness.sources.filter((e) => isStale(e, freshness.capturedAt));
+export function delayedEmailSource(
+  freshness: SourceFreshnessV1 | null
+): (SourceFreshnessEntry & { readonly asOf: string }) | null {
+  if (!freshness) return null;
+  const email = freshness.sources.find((entry) => entry.source === "email");
+  if (!email || email.freshnessKind === "realtime" || !email.asOf) return null;
+  const capturedAt = Date.parse(freshness.capturedAt);
+  const asOf = Date.parse(email.asOf);
+  if (!Number.isFinite(capturedAt) || !Number.isFinite(asOf)) return null;
+  return capturedAt - asOf > EMAIL_DELAY_THRESHOLD_MS ? { ...email, asOf: email.asOf } : null;
+}
+
+export function BriefingStaleBanner({
+  freshness,
+  excludeSources = []
+}: {
+  readonly freshness: SourceFreshnessV1;
+  readonly excludeSources?: readonly string[];
+}) {
+  const excluded = new Set(excludeSources);
+  const stale = freshness.sources.filter(
+    (entry) => !excluded.has(entry.source) && isStale(entry, freshness.capturedAt)
+  );
   if (stale.length === 0) return null;
   const names = stale.map((e) => SOURCE_LABEL[e.source] ?? e.source).join(", ");
   return <p className="bfresh__stale">Some sources are over a day old: {names}.</p>;

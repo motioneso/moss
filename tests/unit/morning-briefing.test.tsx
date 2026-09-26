@@ -89,6 +89,89 @@ describe("MorningBriefingReader report", () => {
     expect(html).not.toContain("Earlier reports");
   });
 
+  it("explains the source context when no evening priorities are available", async () => {
+    const run = fullRun();
+    const noPlan: BriefingRunDto = {
+      ...run,
+      structuredPayload: {
+        ...run.structuredPayload,
+        planContext: null
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noPlan)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("No evening priorities were available for this briefing.");
+    expect(html).toContain("Moss used today’s available sources, including tasks and calendar.");
+  });
+
+  it("does not attribute missing plans to an absent payload or failed plan read", async () => {
+    const run = fullRun();
+    const payloadWithoutContext = { ...run.structuredPayload };
+    delete payloadWithoutContext.planContext;
+    const legacyRun: BriefingRunDto = { ...run, structuredPayload: payloadWithoutContext };
+    const failedPlanRead: BriefingRunDto = {
+      ...run,
+      sourceMetadata: {
+        ...run.sourceMetadata,
+        gaps: [{ source: "day_plan", reason: "tool_failed" }]
+      },
+      structuredPayload: { ...run.structuredPayload, planContext: null }
+    };
+
+    for (const candidate of [legacyRun, failedPlanRead]) {
+      const client = seedClient([
+        [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(candidate)]
+      ]);
+      const html = await renderReader(client);
+      expect(html).not.toContain("No evening priorities were available for this briefing.");
+    }
+  });
+
+  it("explains when the saved plan has no evening intent", async () => {
+    const run = fullRun();
+    const noEveningIntent: BriefingRunDto = {
+      ...run,
+      structuredPayload: {
+        ...run.structuredPayload,
+        planContext: { ...run.structuredPayload.planContext!, eveningIntent: null }
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(noEveningIntent)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("No evening priorities were available for this briefing.");
+  });
+
+  it("names delayed email separately from the other briefing sources", async () => {
+    const run = fullRun();
+    const delayed: BriefingRunDto = {
+      ...run,
+      sourceMetadata: {
+        ...run.sourceMetadata,
+        sourceTimestamps: {
+          version: 1,
+          capturedAt: NOW,
+          sources: [
+            { source: "email", freshnessKind: "connector_sync", asOf: "2026-09-10T03:00:00.000Z" },
+            { source: "calendar", freshnessKind: "connector_sync", asOf: NOW },
+            { source: "tasks", freshnessKind: "realtime", asOf: NOW }
+          ]
+        }
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(delayed)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("Email hasn’t updated since");
+    expect(html).toContain("newer replies this briefing hasn’t seen");
+    expect(html).toContain("Calendar and task details remain available");
+    expect(html).not.toContain("Some sources are over a day old: Email");
+  });
+
   it("marks unavailable references without their cached content", async () => {
     const run: BriefingRunDto = {
       ...fullRun(),
@@ -267,7 +350,7 @@ describe("MorningBriefingReader report", () => {
 });
 
 describe("MorningBriefingReader retry", () => {
-  it("sends one run-now request and re-reads the new run", async () => {
+  it("polls a new run after its initial not-found response until it is ready", async () => {
     const failedDetail: GetBriefingRunResponse = {
       state: "failed",
       run: null,
@@ -275,12 +358,15 @@ describe("MorningBriefingReader retry", () => {
       plan: null
     };
     const ready = readyDetail(fullRun());
+    let retryRunReads = 0;
     const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
       const url = String(input);
       if (url.endsWith("/run") && !url.includes("/runs/")) {
-        return Response.json({ jobId: "job-2", runId: "run-2" });
+        return Response.json({ jobId: "job-2", runId: "run-2" }, { status: 202 });
       }
       if (url.includes("/runs/run-2")) {
+        retryRunReads += 1;
+        if (retryRunReads === 1) return new Response(null, { status: 404 });
         return Response.json({ ...ready, run: { ...ready.run!, id: "run-2" } });
       }
       return Response.json(failedDetail);
@@ -305,7 +391,83 @@ describe("MorningBriefingReader retry", () => {
             runs: [],
             tasks: [task("task-1", "Book the launch room")],
             locale,
-            dayPlan: undefined,
+            events: [],
+            now: new Date(NOW),
+            dayPlanLoading: false,
+            dayPlanError: false,
+            calendarError: false,
+            dayPlan: acceptPlanResponse(),
+            opener: null,
+            onClose: () => undefined,
+            onOpenTask: () => undefined,
+            onReview: () => undefined,
+            controller: stubReaderController()
+          })
+        )
+      );
+    });
+    await flushQueries();
+    const retry = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent === "Try again"
+    );
+    expect(retry, "expected the retry button on a failed run").toBeDefined();
+    await act(async () => {
+      retry!.click();
+    });
+    await flushQueries();
+    expect(document.body.innerHTML).toContain("Your morning briefing is being prepared.");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+    await flushQueries();
+    const posts = fetchMock.mock.calls.filter(([input, init]) => {
+      const url = String(input);
+      return url.endsWith("/run") && !url.includes("/runs/") && init?.method === "POST";
+    });
+    expect(posts).toHaveLength(1);
+    expect(document.body.innerHTML).toContain("Protect the launch window");
+    expect(document.body.innerHTML).toContain("Review proposed blocks");
+    expect(document.body.innerHTML).toContain("Accept all time blocks");
+  });
+
+  it("shows feedback and preserves task-block choices when a retry request fails", async () => {
+    const failedDetail: GetBriefingRunResponse = {
+      state: "failed",
+      run: null,
+      latest: false,
+      plan: null
+    };
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      const url = String(input);
+      if (url.endsWith("/run") && init?.method === "POST")
+        return Response.json({ message: "temporary failure" }, { status: 503 });
+      return Response.json(failedDetail);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } }
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(MorningBriefingReader, {
+            definitionId: "def-morning",
+            initialRunId: "run-full",
+            runs: [],
+            tasks: [
+              task("t1", "Draft proposal"),
+              task("t2", "Send follow-up"),
+              task("t3", "Book room")
+            ],
+            locale,
+            dayPlan: acceptPlanResponse(),
             events: [],
             now: new Date(NOW),
             dayPlanLoading: false,
@@ -329,12 +491,13 @@ describe("MorningBriefingReader retry", () => {
       retry!.click();
     });
     await flushQueries();
-    const posts = fetchMock.mock.calls.filter(([input, init]) => {
-      const url = String(input);
-      return url.endsWith("/run") && !url.includes("/runs/") && init?.method === "POST";
-    });
-    expect(posts).toHaveLength(1);
-    expect(document.body.innerHTML).toContain("Protect the launch window");
+
+    expect(
+      document.querySelector('.brief-reader__retry-error[role="status"]')?.textContent
+    ).toContain("The retry request couldn’t be confirmed");
+    expect(document.body.innerHTML).toContain("Review proposed blocks");
+    expect(document.body.innerHTML).toContain("Accept all time blocks");
+    expect(retry!.disabled).toBe(false);
   });
 });
 

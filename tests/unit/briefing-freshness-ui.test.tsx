@@ -3,7 +3,8 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import {
   BriefingFreshnessList,
-  BriefingStaleBanner
+  BriefingStaleBanner,
+  delayedEmailSource
 } from "../../apps/web/src/today/briefing-freshness.js";
 import type { SourceFreshnessV1 } from "@moss/shared";
 
@@ -71,5 +72,66 @@ describe("BriefingStaleBanner", () => {
       sources: [{ source: "tasks", freshnessKind: "realtime", asOf: CAPTURED }]
     };
     expect(renderToString(createElement(BriefingStaleBanner, { freshness: rtFreshness }))).toBe("");
+  });
+  it("can leave delayed email to its source-specific notice", () => {
+    const staleEmail: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [
+        { source: "email", freshnessKind: "connector_sync", asOf: "2026-06-26T10:00:00.000Z" }
+      ]
+    };
+    expect(
+      renderToString(
+        createElement(BriefingStaleBanner, { freshness: staleEmail, excludeSources: ["email"] })
+      )
+    ).toBe("");
+  });
+});
+
+describe("delayedEmailSource", () => {
+  it("flags email more than an hour behind the briefing capture", () => {
+    const delayed: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [
+        { source: "email", freshnessKind: "connector_sync", asOf: "2026-06-28T08:59:00.000Z" }
+      ]
+    };
+    expect(delayedEmailSource(delayed)?.asOf).toBe("2026-06-28T08:59:00.000Z");
+  });
+
+  it("does not flag a source within an hour or a realtime source", () => {
+    const recent: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [
+        { source: "email", freshnessKind: "connector_sync", asOf: "2026-06-28T09:00:00.000Z" }
+      ]
+    };
+    expect(delayedEmailSource(recent)).toBeNull();
+    const realtime: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [{ source: "email", freshnessKind: "realtime", asOf: "2026-06-27T10:00:00.000Z" }]
+    };
+    expect(delayedEmailSource(realtime)).toBeNull();
+  });
+
+  it("ignores invalid capture and email timestamps", () => {
+    const invalidCapture: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: "not-a-date",
+      sources: [
+        { source: "email", freshnessKind: "connector_sync", asOf: "2026-06-28T08:00:00.000Z" }
+      ]
+    };
+    const invalidEmailTime: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [{ source: "email", freshnessKind: "connector_sync", asOf: "not-a-date" }]
+    };
+    expect(delayedEmailSource(invalidCapture)).toBeNull();
+    expect(delayedEmailSource(invalidEmailTime)).toBeNull();
   });
 });
