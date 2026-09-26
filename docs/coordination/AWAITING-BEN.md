@@ -75,7 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-
 <!-- Resolved 2026-09-03: false alarm. Home Assistant was never disconnected. It lives in the new
 integrations table (packages/integrations), not the old connector_definitions table the proof lane
 queried. On 2026-09-03 the dev API listed it enabled with 75/75 tools and a live refresh returned 200.
