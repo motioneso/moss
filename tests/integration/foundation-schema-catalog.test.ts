@@ -475,6 +475,10 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0243",
           name: "0243_story_relevance_answer_cache.sql"
+        },
+        {
+          version: "0244",
+          name: "0244_email_refresh.sql"
         }
       ]);
     } finally {
