@@ -15,6 +15,7 @@ import {
   GOOGLE_SYNC_QUEUE_DEFINITIONS,
   GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
   IMAP_SYNC_QUEUE_DEFINITIONS,
+  EMAIL_REFRESH_QUEUE_DEFINITIONS,
   MONITOR_QUEUE_DEFINITIONS,
   connectorsModuleManifest,
   createConnectorSecretCipher,
@@ -213,6 +214,7 @@ describe("Connectors encrypted foundation", () => {
       ...GOOGLE_SYNC_QUEUE_DEFINITIONS,
       ...GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
       ...IMAP_SYNC_QUEUE_DEFINITIONS,
+      ...EMAIL_REFRESH_QUEUE_DEFINITIONS,
       ...MONITOR_QUEUE_DEFINITIONS
     ]);
     // Workshop owns project/feed migrations and registers after workflows, so it runs last.
