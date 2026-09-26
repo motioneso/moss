@@ -54,7 +54,7 @@ import {
   ChatThreadNotFoundError,
   ChatTurnInFlightError
 } from "./live/chat-session-manager.js";
-import { CliChatUnavailableError } from "./live/errors.js";
+import { ChatEngineReadError, CliChatUnavailableError } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
@@ -712,6 +712,11 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
 
   if (error instanceof ChatThreadNotFoundError) {
     return reply.code(404).send({ error: "Chat thread not found." });
+  }
+
+  if (error instanceof ChatEngineReadError) {
+    reply.log?.error?.({ diagnostic: error.diagnostic }, "live chat engine read failed");
+    return reply.code(500).send({ error: "Live chat is temporarily unavailable." });
   }
 
   if (error instanceof Error) {
