@@ -25,6 +25,11 @@ handoff condition for the already approved CTA. It does not add OAuth, calendar 
 client, a new briefing-run API, or new visual states. It preserves the existing scheduled Google
 and IMAP sync behavior.
 
+**Tracked follow-up — email action links:** Provider-aware email deep links remain outside #2709.
+The follow-up must provide defaults for common webmail providers, including Gmail, Yahoo, and
+Proton, and let users paste an email web URL so Moss can infer the link structure. Do not expand
+the refresh/status implementation to include this work.
+
 ## API contract
 
 ### Request

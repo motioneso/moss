@@ -111,6 +111,163 @@ export interface UpdateFeatureGrantsRequest {
   readonly calendar?: boolean;
 }
 
+export type EmailRefreshStatus = "queued" | "running" | "succeeded" | "partial" | "failed";
+export type EmailRefreshErrorCode =
+  | "no-eligible-accounts"
+  | "no-active-connection"
+  | "auth-error"
+  | "email-error"
+  | "email-message-error"
+  | "email-needs-config"
+  | "enqueue-failed";
+
+export interface RequestEmailRefreshRequest {
+  readonly idempotencyKey: string;
+}
+
+export interface RequestEmailRefreshResponse {
+  readonly refreshId: string;
+  readonly enqueued: boolean;
+  readonly deduped: boolean;
+}
+
+export interface EmailRefreshAccountStatusDto {
+  readonly accountId: string;
+  readonly providerType: "google" | "imap";
+  readonly status: EmailRefreshStatus;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly counts: {
+    readonly emailUpserted: number;
+    readonly emailFailures: number;
+  };
+  readonly errorCode: EmailRefreshErrorCode | null;
+}
+
+export interface EmailRefreshStatusResponse {
+  readonly refreshId: string;
+  readonly status: EmailRefreshStatus;
+  readonly createdAt: string;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly accounts: readonly EmailRefreshAccountStatusDto[];
+  readonly errorCode: EmailRefreshErrorCode | null;
+}
+
+const emailRefreshStatusSchema = {
+  type: "string",
+  enum: ["queued", "running", "succeeded", "partial", "failed"]
+} as const;
+
+const emailRefreshErrorCodeSchema = {
+  type: ["string", "null"],
+  enum: [
+    "no-eligible-accounts",
+    "no-active-connection",
+    "auth-error",
+    "email-error",
+    "email-message-error",
+    "email-needs-config",
+    "enqueue-failed",
+    null
+  ]
+} as const;
+
+const emailRefreshAccountStatusSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "accountId",
+    "providerType",
+    "status",
+    "startedAt",
+    "completedAt",
+    "counts",
+    "errorCode"
+  ],
+  properties: {
+    accountId: { type: "string", format: "uuid" },
+    providerType: { type: "string", enum: ["google", "imap"] },
+    status: emailRefreshStatusSchema,
+    startedAt: { type: ["string", "null"], format: "date-time" },
+    completedAt: { type: ["string", "null"], format: "date-time" },
+    counts: {
+      type: "object",
+      additionalProperties: false,
+      required: ["emailUpserted", "emailFailures"],
+      properties: {
+        emailUpserted: { type: "integer", minimum: 0 },
+        emailFailures: { type: "integer", minimum: 0 }
+      }
+    },
+    errorCode: emailRefreshErrorCodeSchema
+  }
+} as const;
+
+export const requestEmailRefreshRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["idempotencyKey"],
+  properties: { idempotencyKey: { type: "string", format: "uuid" } }
+} as const;
+
+export const requestEmailRefreshResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["refreshId", "enqueued", "deduped"],
+  properties: {
+    refreshId: { type: "string", format: "uuid" },
+    enqueued: { type: "boolean" },
+    deduped: { type: "boolean" }
+  }
+} as const;
+
+export const emailRefreshStatusResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "refreshId",
+    "status",
+    "createdAt",
+    "startedAt",
+    "completedAt",
+    "accounts",
+    "errorCode"
+  ],
+  properties: {
+    refreshId: { type: "string", format: "uuid" },
+    status: emailRefreshStatusSchema,
+    createdAt: { type: "string", format: "date-time" },
+    startedAt: { type: ["string", "null"], format: "date-time" },
+    completedAt: { type: ["string", "null"], format: "date-time" },
+    accounts: { type: "array", items: emailRefreshAccountStatusSchema },
+    errorCode: emailRefreshErrorCodeSchema
+  }
+} as const;
+
+export const requestEmailRefreshRouteSchema = {
+  body: requestEmailRefreshRequestSchema,
+  response: {
+    202: requestEmailRefreshResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema
+  }
+} as const;
+
+export const emailRefreshStatusRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["refreshId"],
+    properties: { refreshId: { type: "string", format: "uuid" } }
+  },
+  response: {
+    200: emailRefreshStatusResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
 export interface ListAdminConnectorAccountsResponse {
   readonly accounts: readonly ConnectorAccountDto[];
 }
