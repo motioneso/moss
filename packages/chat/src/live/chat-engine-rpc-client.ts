@@ -30,7 +30,7 @@ import { resolveMossEnv } from "@moss/db";
 import { parsePositiveIntEnv } from "@moss/shared";
 import type { AiProviderExecutionMode } from "@moss/shared";
 
-import { CliChatDeliveryUnknownError, CliChatUnavailableError } from "./errors.js";
+import { CliChatUnavailableError, mapRpcError } from "./errors.js";
 import type { RpcInstallProviderParams, RpcInstallProviderResult } from "./install-contract.js";
 import type {
   RpcBeginLoginParams,
@@ -59,7 +59,6 @@ import {
   type RpcCancelSubmitParams,
   type RpcCancelSubmitResult,
   type RpcErr,
-  type RpcErrorCode,
   type RpcFrame,
   type RpcInterruptResult,
   type RpcIsAliveResult,
@@ -89,6 +88,8 @@ import {
   type ReapReason
 } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
+
+export { mapRpcError };
 
 /** The directory the socket MUST resolve under (§3.1 client-side realpath guard). */
 export const SOCKET_ALLOWED_DIR = "/run/jarv1s";
@@ -196,32 +197,6 @@ interface PendingCall {
 
 /** Internal connection state machine. */
 type ConnState = "idle" | "connecting" | "handshaking" | "ready" | "closed";
-
-/**
- * Maps an RpcErrorCode to the typed JS error the api expects (§4.7). `unavailable` and `not_launched`
- * both become a retryable `CliChatUnavailableError` (→ HTTP 503); the rest become a plain `Error`
- * (→ 500). The message is already redacted server-side (§6.4), so it is safe to surface/log.
- */
-export function mapRpcError(code: RpcErrorCode, message: string, statusCode?: number): Error {
-  if (code === "delivery_unknown") return new CliChatDeliveryUnknownError(message);
-  if (code === "unavailable" || code === "not_launched") {
-    return new CliChatUnavailableError(message);
-  }
-  const error = new Error(message) as Error & {
-    readonly rpcCode: RpcErrorCode;
-    readonly statusCode?: number;
-  };
-  Object.defineProperty(error, "rpcCode", { value: code, enumerable: true });
-  if (
-    typeof statusCode === "number" &&
-    Number.isInteger(statusCode) &&
-    statusCode >= 400 &&
-    statusCode <= 599
-  ) {
-    Object.defineProperty(error, "statusCode", { value: statusCode, enumerable: true });
-  }
-  return error;
-}
 
 /**
  * Owns the single long-lived socket to cli-runner. Shared across all per-session `ChatEngineRpcClient`

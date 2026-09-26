@@ -117,6 +117,11 @@ export class ChatEngineReadError extends Error {
   }
 }
 
+export function mapChatEngineReadError(provider: ProviderKind, error: unknown): Error {
+  if (error instanceof CliChatUnavailableError) return error;
+  return new ChatEngineReadError(chatEngineReadFailureDiagnostic(provider, error));
+}
+
 /**
  * Thrown when a live CLI session cannot be hosted: no terminal multiplexer
  * (tmux/herdr) is available/configured, OR the chosen multiplexer failed to launch
@@ -170,4 +175,25 @@ export class ChatThreadNotFoundError extends Error {
     super("Chat thread not found or does not belong to this user.");
     this.name = "ChatThreadNotFoundError";
   }
+}
+
+export function mapRpcError(code: RpcErrorCode, message: string, statusCode?: number): Error {
+  if (code === "delivery_unknown") return new CliChatDeliveryUnknownError(message);
+  if (code === "unavailable" || code === "not_launched") {
+    return new CliChatUnavailableError(message);
+  }
+  const error = new Error(message) as Error & {
+    readonly rpcCode: RpcErrorCode;
+    readonly statusCode?: number;
+  };
+  Object.defineProperty(error, "rpcCode", { value: code, enumerable: true });
+  if (
+    typeof statusCode === "number" &&
+    Number.isInteger(statusCode) &&
+    statusCode >= 400 &&
+    statusCode <= 599
+  ) {
+    Object.defineProperty(error, "statusCode", { value: statusCode, enumerable: true });
+  }
+  return error;
 }

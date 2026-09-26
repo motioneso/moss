@@ -173,13 +173,14 @@ export type AcpPromptFailureStage =
 export class AcpPromptFailureError extends Error {
   constructor(
     readonly failureStage: AcpPromptFailureStage,
-    readonly acpCode?: number
+    readonly acpCode?: number,
+    timeoutMs?: number
   ) {
     super(
       failureStage === "acp_prompt_rejected"
         ? "ACP prompt rejected"
         : failureStage === "acp_prompt_timeout"
-          ? "ACP prompt timed out"
+          ? `ACP prompt timed out${timeoutMs === undefined ? "" : ` after ${timeoutMs} ms`}`
           : "ACP prompt transport failed"
     );
     this.name = "AcpPromptFailureError";
@@ -399,7 +400,7 @@ export class MossAcpClient {
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
             void this.cancel(handle).catch(() => undefined);
-            reject(new AcpPromptFailureError("acp_prompt_timeout"));
+            reject(new AcpPromptFailureError("acp_prompt_timeout", undefined, timeoutMs));
           }, timeoutMs);
         })
       ]);
