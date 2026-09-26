@@ -45,15 +45,23 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("MorningBriefingReader report", () => {
-  it("renders each carried section with the run's own text", async () => {
-    const run = fullRun();
+  it("renders the saved report sections without repeating Today task actions", async () => {
+    const run = {
+      ...fullRun(),
+      summaryText:
+        "Protect the launch window and reply to Alex about the contract.\n\n" +
+        "This lead explains the day.\n\n## Preparation\n\nA source-backed preparation note."
+    };
     const client = seedClient([
       [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
     ]);
     const html = await renderReader(client);
     expect(html).toContain("Protect the launch window and reply to Alex about the contract.");
-    expect(html).toContain("Book the launch room");
-    expect(html).toContain("Why Book the launch room matters");
+    expect(html).toContain("This lead explains the day.");
+    expect(html).toContain('class="brief-reader__section-heading">Preparation</h4>');
+    expect(html).toContain("A source-backed preparation note.");
+    expect(html).not.toContain("Book the launch room");
+    expect(html).not.toContain("Why Book the launch room matters");
     expect(html).toContain("Launch window holds despite weather");
     expect(html).toContain("Crews cleared the range.");
     expect(html).toContain("Vikings defense shines again");
@@ -188,18 +196,19 @@ describe("MorningBriefingReader report", () => {
     const html = await renderReader(client);
     expect(html).toContain("No longer available");
     expect(html).toContain("chats");
-    expect(html).toContain("Book the launch room");
+    expect(html).not.toContain("Book the launch room");
     expect(html).not.toContain("Ghost row title");
     expect(html).not.toContain("Why Ghost row title matters");
   });
 
-  it("carries no task buttons inside the reader rows", async () => {
+  it("keeps task action rows on Today instead of repeating them in Read", async () => {
     const run = fullRun();
     const client = seedClient([
       [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
     ]);
     const html = await renderReader(client);
-    expect(html).toContain("Book the launch room");
+    expect(html).not.toContain("Book the launch room");
+    expect(html).not.toContain("Why Book the launch room matters");
     expect(html).not.toContain(">Open<");
   });
 
