@@ -43,10 +43,12 @@ const chatModelOverrideGet = vi.fn(
   })
 );
 
+const personaPreview = vi.fn(async () => ({ reply: "" }));
+
 vi.mock("../../apps/web/src/api/client.js", () => ({
   getPersonaSettings: () => personaGet(),
   putPersonaSettings: (body: unknown) => personaPut(body as never),
-  previewPersona: vi.fn(),
+  previewPersona: (body: unknown) => personaPreview(body as never),
   // Response style moved into this pane from the retired Chat settings page (#2222); give it the
   // default so the picker renders without a network call.
   getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
@@ -497,6 +499,62 @@ describe("Chat archive settings section", () => {
     const text = renderedText(renderer.toJSON());
     expect(text).not.toContain("Archiving is paused");
     expect(text).not.toContain("Archiving failed");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Persona preview bubble (#1921)", () => {
+  it("shows a press-Preview hint in write-it-yourself mode, not a made-up sample", async () => {
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("Morning briefing");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows the static dial sample in guided-dials mode, not the hint", async () => {
+    const renderer = await renderAssistantPane();
+
+    const guidedButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Use guided dials"));
+    if (!guidedButton) throw new Error("Use guided dials button not found");
+    await act(async () => {
+      guidedButton.props.onClick();
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Morning briefing");
+    expect(text).not.toContain("Press Preview to hear how this sounds.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("replaces the hint with the real reply once Preview succeeds in write-it-yourself mode", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "Here is your actual voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Here is your actual voice, spoken back.");
+    expect(text).not.toContain("Press Preview to hear how this sounds.");
 
     await act(async () => {
       renderer.unmount();

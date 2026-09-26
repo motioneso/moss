@@ -1,7 +1,8 @@
-/* Deterministic persona voice preview. No model call — turns the four dials
-   into a concrete sample of how the configured assistant would sound, so the
-   abstract controls have a visible effect. Ported verbatim from the design kit (personaSample).
-   The real voice will be system-prompt-driven once persona is persisted (🔌). */
+/* Deterministic persona voice preview for guided-dial mode. No model call — turns the four
+   dials into a concrete sample of how the configured assistant would sound, so the abstract
+   controls have a visible effect. Ported verbatim from the design kit (personaSample).
+   Write-it-yourself mode has no dial values to sample from, so it shows PERSONA_PREVIEW_HINT
+   instead until the user runs a real preview. */
 
 export type ToneDial = "Warm" | "Neutral" | "Crisp";
 export type DirectnessDial = "Gentle" | "Balanced" | "Direct";
@@ -26,6 +27,10 @@ export interface PersonaPreview {
   readonly greeting: string;
   readonly recovery: string;
 }
+
+// Shown in write-it-yourself mode in place of a made-up sample, since there are no dial
+// values to build one from.
+export const PERSONA_PREVIEW_HINT = "Press Preview to hear how this sounds.";
 
 export function personaSample(p: PersonaDials, who: string): PersonaPreview {
   const open: Record<ToneDial, string> = {
