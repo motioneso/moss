@@ -24,6 +24,8 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
 const DEFINITION_ID = "briefing-morning";
 const REFRESH_ID = "5ca70123-f234-4e56-bfab-9bf8c3e28fc3";
 const RUN_ID = "6d24e399-40c0-4e9a-90a9-fc0d434795f7";
+const SECOND_REFRESH_ID = "7f74e4ad-3d65-4c0e-b22c-a0c3963f5c10";
+const SECOND_RUN_ID = "58f45480-b7ab-4ddb-a642-9ae93b4207af";
 const REFRESH_ENDPOINT = "/api/connectors/email-refresh";
 const STATUS_ENDPOINT = `${REFRESH_ENDPOINT}/${REFRESH_ID}`;
 const RUN_ENDPOINT = `/api/briefings/definitions/${DEFINITION_ID}/run`;
@@ -194,8 +196,58 @@ describe("TodayEmailRefreshAction", () => {
     ).toBeDefined();
   });
 
-  it("allows a retry when briefing status lookup fails before returning data", async () => {
-    vi.mocked(getBriefingRun).mockRejectedValue(new Error("network"));
+  it("retries the accepted briefing status without starting another refresh", async () => {
+    const refreshKeys: string[] = [];
+    const briefingKeys: string[] = [];
+    vi.mocked(requestJson).mockImplementation(async (path, options) => {
+      if (path === REFRESH_ENDPOINT && options?.method === "POST") {
+        const body = options.body as { readonly idempotencyKey: string };
+        refreshKeys.push(body.idempotencyKey);
+        return {
+          refreshId: refreshKeys.length === 1 ? REFRESH_ID : SECOND_REFRESH_ID,
+          enqueued: true,
+          deduped: false
+        } as never;
+      }
+      if (path.startsWith(`${REFRESH_ENDPOINT}/`)) {
+        const refreshId = path.slice(`${REFRESH_ENDPOINT}/`.length);
+        return {
+          refreshId,
+          status: currentRefreshStatus,
+          createdAt: CAPTURED_AT,
+          startedAt: currentRefreshStatus === "queued" ? null : CAPTURED_AT,
+          completedAt:
+            currentRefreshStatus === "succeeded" ||
+            currentRefreshStatus === "partial" ||
+            currentRefreshStatus === "failed"
+              ? CAPTURED_AT
+              : null,
+          accounts: [],
+          errorCode: currentRefreshStatus === "failed" ? "email-error" : null
+        } satisfies EmailRefreshStatusResponse as never;
+      }
+      if (path === RUN_ENDPOINT && options?.method === "POST") {
+        const body = options.body as { readonly idempotencyKey: string };
+        briefingKeys.push(body.idempotencyKey);
+        const isSecondRun = briefingKeys.length > 1;
+        return {
+          jobId: isSecondRun ? "briefing-job-2" : "briefing-job",
+          runId: isSecondRun ? SECOND_RUN_ID : RUN_ID
+        } as never;
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    let lookupCount = 0;
+    vi.mocked(getBriefingRun).mockImplementation(async () => {
+      lookupCount += 1;
+      if (lookupCount === 1) throw new Error("network");
+      return {
+        state: "ready",
+        run: { status: "succeeded" },
+        latest: true,
+        plan: null
+      } as never;
+    });
     const mounted = mountAction();
 
     await act(async () => {
@@ -219,11 +271,23 @@ describe("TodayEmailRefreshAction", () => {
     });
     await settle();
 
-    expect(getBriefingRun).toHaveBeenCalledWith(DEFINITION_ID, RUN_ID, "briefing-job");
+    expect(getBriefingRun).toHaveBeenNthCalledWith(1, DEFINITION_ID, RUN_ID, "briefing-job");
     expect(findStatusText(mounted.root)).toContain(
       "couldn’t prepare an updated briefing. Your current report and plan choices are still available."
     );
     expect(mounted.root.findByType("button").props.disabled).toBe(false);
+
+    await act(async () => {
+      mounted.root.findByType("button").props.onClick();
+      await tick();
+    });
+    await settle();
+
+    expect(refreshKeys).toHaveLength(1);
+    expect(briefingKeys).toEqual([REFRESH_ID]);
+    expect(getBriefingRun).toHaveBeenCalledTimes(2);
+    expect(getBriefingRun).toHaveBeenNthCalledWith(2, DEFINITION_ID, RUN_ID, "briefing-job");
+    expect(findStatusText(mounted.root)).toContain("The updated briefing is ready.");
   });
 
   it("reuses the request idempotency key after an uncertain POST failure", async () => {

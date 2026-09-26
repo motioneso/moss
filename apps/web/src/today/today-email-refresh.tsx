@@ -173,6 +173,14 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
       "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available.";
   }
 
+  const handleRefresh = () => {
+    if (runId !== null && runJobId !== null && runQuery.isError) {
+      void runQuery.refetch();
+      return;
+    }
+    refreshMutation.mutate();
+  };
+
   return (
     <>
       <Button
@@ -180,7 +188,7 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
         size="sm"
         disabled={busy}
         aria-busy={busy}
-        onClick={() => refreshMutation.mutate()}
+        onClick={handleRefresh}
       >
         {REFRESH_LABEL}
       </Button>

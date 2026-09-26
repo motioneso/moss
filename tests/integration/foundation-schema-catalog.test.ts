@@ -485,7 +485,6 @@ describe("MVP foundation schema catalog", () => {
           version: "0245",
           name: "0245_moss_action_audit_purge_worker_grant.sql"
         }
-        }
       ]);
     } finally {
       await client.end();
