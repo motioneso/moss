@@ -50,6 +50,7 @@ describe("Codex ACP bundled runtime", () => {
         let buffered = "";
         timeout = setTimeout(() => reject(new Error("ACP initialize timed out")), 5000);
         child.once("error", reject);
+        child.once("exit", () => reject(new Error("ACP exited before initialize completed")));
         child.stdout.on("data", (data: Buffer) => {
           buffered += data.toString();
           let newline: number;
@@ -76,11 +77,17 @@ describe("Codex ACP bundled runtime", () => {
       expect(await initialized).toMatchObject({ result: { protocolVersion: 1 } });
     } finally {
       clearTimeout(timeout);
-      // The adapter closes its Codex child when stdin ends; wait for that cleanup.
-      const closed = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-      child.stdin.end();
-      await closed;
-      rmSync(home, { recursive: true, force: true });
+      try {
+        // A failed spawn has no pid; an early exit has already emitted its event.
+        // A running adapter closes its Codex child when stdin ends.
+        if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+          const closed = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+          child.stdin.end();
+          await closed;
+        }
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
     }
   }, 10000);
 });
