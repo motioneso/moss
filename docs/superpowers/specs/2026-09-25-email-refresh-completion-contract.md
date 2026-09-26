@@ -1,7 +1,7 @@
 # Email refresh completion contract
 
-**Status:** Proposed addendum; coordinator review pending. Do not build this contract until the
-coordinator records approval.
+**Status:** Approved for implementation by the coordinator on September 25, 2026, under Ben's
+explicit offline instruction to continue with grounded recommendations.
 
 **Parent design:** [Morning briefing and plan review](2026-09-10-morning-briefing-flow.md),
 approved and locked September 10, 2026.
@@ -129,10 +129,11 @@ state only on `connector_accounts` or in pg-boss rows.
 
 Persist the parent and child rows before queueing provider work. The child rows are also the durable
 dispatch outbox: a row stays pending until its per-account job is accepted or found already queued
-under its deterministic `refreshId`/account singleton key. A dispatcher retries pending rows after
-process restart; if sending succeeds but recording dispatch completion fails, the same singleton
-key prevents a second live job. After bounded enqueue retries, persist `enqueue-failed` as that
-account's terminal outcome.
+under its deterministic `refreshId`/account singleton key. Because the current `sendJob` helper
+delegates to `boss.send` without a transaction handle, a small dispatcher retries pending child rows
+after process restart. If sending succeeds but recording dispatch completion fails, the same
+singleton key prevents a second live job. Do not add a second outbox table or queue abstraction.
+After bounded enqueue retries, persist `enqueue-failed` as that account's terminal outcome.
 
 The job carries only the actor ID, account ID, manual trigger, and refresh ID in the already allowed
 metadata-only `idempotencyKey` field. Its queue singleton key combines the refresh and account IDs.
@@ -187,13 +188,31 @@ refresh.
 The existing manual-run route deduplicates the briefing job for a repeated idempotency key, but a
 duplicate in-flight request returns `409 RUN_IN_FLIGHT_CODE` without the original `runId`. The
 reader must retain the first accepted `runId` and must not start a second run after that conflict.
-If P9 must recover the run ID after a lost `202` response or a reader reload, that needs a separate
-briefings API contract; this connector addendum does not claim to solve it.
+**Remaining follow-up:** if P9 must recover the run ID after a lost `202` response or a reader
+reload, track a separate briefings API contract that returns or looks up the original run by its
+owner-scoped idempotency key. This addendum does not claim retry/reload recovery.
 
 The connector implementation owns the durable email-refresh contract and connector manifest
 declaration. The P9 reader implementation owns the CTA, pending/partial/failure copy, and Today
 app-map declaration. Both slices are required before the approved CTA is considered wired and
 verified.
+
+## Source evidence and follow-up
+
+- **Google email-only reuse:** `packages/connectors/src/sync-jobs.ts:344-346`
+  chooses the calendar phase first when calendar is enabled. The existing Gmail fetch/extract/
+  persist phase is `runGoogleEmailPhase` in `packages/connectors/src/google-sync-phases.ts:441-668`.
+  Email refresh must select that email phase sequence directly and skip the calendar phase.
+- **IMAP reuse:** `runImapSync` and `registerImapSyncWorker` in
+  `packages/connectors/src/imap-sync-jobs.ts:103-275` are the existing ingestion path used by the
+  recurring worker; the manual trigger can reuse it with refresh correlation metadata.
+- **Briefing duplicate response:** `packages/briefings/src/routes.ts:184-238` creates a fresh
+  `runId`, submits with the client idempotency key as the queue singleton key, and returns
+  `409 RUN_IN_FLIGHT_CODE` without the prior `runId` when that key is already active. This confirms
+  the remaining follow-up above; it is not retry/reload recovery.
+- **Dispatch seam:** `packages/jobs/src/pg-boss.ts:171-178` validates the metadata-only payload and
+  delegates to `boss.send`; it does not accept the owner database transaction. The per-account
+  child row plus the existing singleton key is the smallest crash-recovery seam for refresh jobs.
 
 ## Verification required before release
 
