@@ -1,7 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page, type Response } from "@playwright/test";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import {
+  bringUpRealChatModel,
+  requireUatBaseURL,
+  requireUatProjectName,
+  signInUatAdmin
+} from "./real-chat-signin.js";
 
 // #926 Food Phase 1 — the real-chat half of the Live-Path Gate.
 //
@@ -20,10 +25,10 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 //     and no grant or promotion can ever skip it (policy.ts:36).
 //
 // This spec closes that gap the same way real-chat-onboarding.uat.spec.ts does: it runs only
-// when the operator supplied a real Anthropic token (JARVIS_UAT_REAL_CHAT_TOKEN_FILE), drives
-// a real model through the real chat drawer, approves the action on the real card, and then
-// asserts the persisted record through the module's own page. It stays skipped on every
-// default/CI run so the gate remains credential-free.
+// when the operator's own signed-in Codex CLI login has been copied into the stack (see
+// tests/uat/real-chat-env.ts), drives a real model through the real chat drawer, approves the
+// action on the real card, and then asserts the persisted record through the module's own page.
+// It stays skipped on every default/CI run so the gate remains credential-free.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 // Both tests below drive the same real chat session, as the same seeded admin, against one
@@ -32,41 +37,9 @@ export const uatLevel = { level: "solo-admin", without: [] } as const;
 // the other was mid-turn. Serial is not a slowdown here: the run is dominated by model latency.
 test.describe.configure({ mode: "serial" });
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
 const MEAL_TEXT = "oatmeal with blueberries";
-const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
-const POLL_INITIAL_INTERVAL_MS = 500;
-const POLL_MAX_INTERVAL_MS = 4_000;
-
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  return baseURL;
-}
-
-function requireProjectName(): string {
-  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
-  if (!projectName) throw new Error("JARVIS_UAT_PROJECT_NAME must be set by run-uat.ts");
-  return projectName;
-}
-
-// solo-admin returns before the onboarding chunk, so login can land on the first-run wizard.
-// Skip it only when shown, keeping this idempotent across the shared, non-reset DB.
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skipSetup.or(userMenu).first()).toBeVisible();
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
-}
 
 async function openInstanceModules(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
@@ -74,45 +47,6 @@ async function openInstanceModules(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();
-}
-
-// Same non-interactive login the #1121 spec drives: the provisioner has already persisted the
-// operator's OAuth token into the cli-auth volume, so begin settles to "ready" rather than
-// handing back an authorization URL. Install must run first — token persistence and binary
-// install are separate steps.
-async function bringUpRealModel(page: Page): Promise<void> {
-  const install = await page.request.post("/api/onboarding/provider-install", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
-  expect((await install.json()).installState).toBe("installed");
-
-  const begin = await page.request.post("/api/onboarding/provider-login/begin", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(begin.ok(), `provider-login/begin -> ${begin.status()}`).toBeTruthy();
-  expect(
-    (await begin.json()).status,
-    "the pre-seeded token should authenticate the anthropic CLI non-interactively"
-  ).toBe("ready");
-
-  // Discovery runs asynchronously after login settles. Bounded exponential backoff, never a
-  // fixed sleep.
-  const deadline = Date.now() + MODEL_DISCOVERY_DEADLINE_MS;
-  let interval = POLL_INITIAL_INTERVAL_MS;
-  let last: unknown = null;
-  while (Date.now() < deadline) {
-    const body = (await (await page.request.get("/api/ai/models")).json()) as {
-      models: readonly { status: string; capabilities: readonly string[] }[];
-    };
-    last = body.models;
-    if (body.models.some((m) => m.status === "active" && m.capabilities.includes("chat"))) return;
-    await page.waitForTimeout(Math.min(interval, Math.max(0, deadline - Date.now())));
-    interval = Math.min(interval * 2, POLL_MAX_INTERVAL_MS);
-  }
-  throw new Error(
-    `no chat-capable active model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(last)}`
-  );
 }
 
 const CARD = '[role="region"][aria-label="Action request"]';
@@ -184,8 +118,8 @@ async function sendAutoRun(page: Page, text: string): Promise<void> {
 // Setup shared by both tests below: stage the module, enable it through the real admin screen,
 // and bring a real chat-capable model online.
 async function prepareInstance(page: Page): Promise<void> {
-  const projectName = requireProjectName();
-  const baseURL = requireBaseURL();
+  const projectName = requireUatProjectName();
+  const baseURL = requireUatBaseURL();
 
   await test.step("stage Food into the running instance and restart", async () => {
     execFileSync("pnpm", ["build:external:food"], { stdio: "inherit" });
@@ -202,7 +136,7 @@ async function prepareInstance(page: Page): Promise<void> {
   });
 
   await test.step("enable Food through the real admin screen", async () => {
-    await signIn(page);
+    await signInUatAdmin(page);
     await openInstanceModules(page);
     const enableSwitch = page.getByRole("checkbox", { name: "Enable Food", exact: true });
     await expect(enableSwitch).toHaveCount(1);
@@ -215,7 +149,7 @@ async function prepareInstance(page: Page): Promise<void> {
   });
 
   await test.step("bring a real chat-capable model online", async () => {
-    await bringUpRealModel(page);
+    await bringUpRealChatModel(page);
   });
 }
 
@@ -227,12 +161,12 @@ test("a real model logs and corrects meals through Food's granted-at-install too
 }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) — #926"
+    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #926"
   );
   // A cold provider probe, async model discovery, and two real model round-trips run serially.
   test.setTimeout(900_000);
 
-  const baseURL = requireBaseURL();
+  const baseURL = requireUatBaseURL();
   await prepareInstance(page);
 
   // Behaviour 1 — logging a meal.
@@ -284,11 +218,11 @@ test("a real model logs and corrects meals through Food's granted-at-install too
 test("a real model raises and resolves Food's confirm-gated tools (#926)", async ({ page }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) — #926"
+    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #926"
   );
   test.setTimeout(900_000);
 
-  const baseURL = requireBaseURL();
+  const baseURL = requireUatBaseURL();
   await prepareInstance(page);
 
   // Behaviour 3 (#1750) — there is no consent step any more. Installing Food is consent for

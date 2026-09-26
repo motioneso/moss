@@ -8,8 +8,12 @@ import { resolveMossEnv } from "@moss/db";
 
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
 import { BRIEFING_WRITER_FIXTURE_CONTAINER_PORT } from "./fixtures/briefing-writer-fixture-server.js";
-import { REAL_CHAT_ENV_FILE_RESULT_ENV, writeUatRealChatEnvFile } from "./real-chat-env.js";
-import { UAT_ADMIN_EMAIL } from "./seed/admin.js";
+import {
+  REAL_CHAT_CONFIGURED_ENV,
+  installUatRealChatCodexAuth,
+  type UatRealChatCodexAuth
+} from "./real-chat-env.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
 import {
   UAT_SUBNET_CANDIDATES,
@@ -549,9 +553,7 @@ export async function cleanupUatAttempt(input: {
   readonly teardownCompose: () => Promise<void>;
   readonly assertNoLeaks: () => Promise<void>;
   readonly cleanupEnvFile: () => void;
-  readonly cleanupRunScopedState: () => void;
   readonly error?: unknown;
-  readonly preserveRunScopedState?: boolean;
 }): Promise<void> {
   const errors: unknown[] = Object.hasOwn(input, "error") ? [input.error] : [];
   try {
@@ -567,14 +569,6 @@ export async function cleanupUatAttempt(input: {
       input.cleanupEnvFile();
     } catch (error) {
       errors.push(error);
-    } finally {
-      if (!input.preserveRunScopedState || errors.length > 0) {
-        try {
-          input.cleanupRunScopedState();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
     }
   }
   if (errors.length === 1) throw errors[0];
@@ -658,9 +652,9 @@ async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
 export interface UatProvisionOptions {
   readonly excludeChunks?: readonly string[];
   readonly withoutNewsJsonBinding?: boolean;
-  // #1306 Task 22: opt-in, absent by default — mirrors REAL_CHAT_TOKEN_TRIGGER_ENV's "no-op
-  // unless asked" shape. Job Search enables both the fixture origin and its scoring provider;
-  // ESPN enables only the shared origin for deterministic ESPN responses.
+  // #1306 Task 22: opt-in, absent by default, same shape as the Codex credential copy's own
+  // "no-op unless the host has a login" trigger. Job Search enables both the fixture origin and
+  // its scoring provider; ESPN enables only the shared origin for deterministic ESPN responses.
   readonly withJobSearchFixture?: boolean;
   readonly withEspnFixture?: boolean;
   // [task:p8-briefing-writer-unreachable]: opt-in, absent by default. Enables the writer
@@ -743,7 +737,7 @@ export async function provisionForUat(
   opts?: UatProvisionOptions,
   dependencies: {
     readonly listLiveSubnets?: typeof listLiveDockerSubnets;
-    readonly writeRealChatEnvFile?: typeof writeUatRealChatEnvFile;
+    readonly installRealChatCodexAuth?: typeof installUatRealChatCodexAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const overallStart = Date.now();
@@ -757,57 +751,22 @@ export async function provisionForUat(
   let remainingSubnetCandidates = [...UAT_SUBNET_CANDIDATES];
   let imageBuilt = false; // build once; a port-bind retry shouldn't rebuild the image
 
-  // #1121: opt-in, before the loop so JARVIS_UAT_REAL_CHAT_ENV_FILE is exported once (and inherited
-  // by the Playwright child run-uat.ts spawns) before any composeSeedHook interpolates the seed
-  // service's second env_file entry. A no-op (returns undefined) unless the operator set
-  // JARVIS_UAT_REAL_CHAT_TOKEN_FILE, so default/CI runs are unchanged; a configured-but-malformed
-  // token file throws here and aborts the run loudly rather than silently degrading to a
-  // credential-free run. Held for the whole function: the success path hands cleanup to the returned
-  // teardown; terminal failures clean up below.
-  const previousRealChatEnvFile = process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
-  const realChatEnvFile = await (dependencies.writeRealChatEnvFile ?? writeUatRealChatEnvFile)();
-
-  let runStateCleaned = false;
-  const cleanupRunScopedState = () => {
-    if (runStateCleaned) return;
-    try {
-      realChatEnvFile?.cleanup();
-    } finally {
-      if (previousRealChatEnvFile === undefined) {
-        delete process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
-      } else {
-        process.env[REAL_CHAT_ENV_FILE_RESULT_ENV] = previousRealChatEnvFile;
-      }
-      runStateCleaned = true;
-    }
-  };
-  const cleanupRunScopedStateAfterError = (error: unknown): never => {
-    try {
-      cleanupRunScopedState();
-    } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], "UAT setup and cleanup failed", {
-        cause: cleanupError
-      });
-    }
-    throw error;
-  };
+  // #2732: unlike the retired stored-token path this replaces, there is nothing to set up before
+  // the loop — the Codex credential copy needs a running `jarv1s` container (docker exec), so it
+  // happens per-attempt, right after that container comes up, not before the first attempt.
+  delete process.env[REAL_CHAT_CONFIGURED_ENV];
 
   while (remainingCandidates.length > 0) {
     const { projectName } = generateUatRunId();
-    let webPort: number;
-    let liveSubnets: Awaited<ReturnType<typeof listLiveDockerSubnets>>;
-    let subnet: ReturnType<typeof selectUatSubnet>;
-    try {
-      webPort = await findAvailablePort(remainingCandidates);
-      liveSubnets = await (dependencies.listLiveSubnets ?? listLiveDockerSubnets)();
-      subnet = selectUatSubnet({
-        requested: process.env.UAT_DOCKER_SUBNET,
-        live: liveSubnets,
-        candidates: remainingSubnetCandidates
-      });
-    } catch (error) {
-      return cleanupRunScopedStateAfterError(error);
-    }
+    const webPort: number = await findAvailablePort(remainingCandidates);
+    const liveSubnets: Awaited<ReturnType<typeof listLiveDockerSubnets>> = await (
+      dependencies.listLiveSubnets ?? listLiveDockerSubnets
+    )();
+    const subnet: ReturnType<typeof selectUatSubnet> = selectUatSubnet({
+      requested: process.env.UAT_DOCKER_SUBNET,
+      live: liveSubnets,
+      candidates: remainingSubnetCandidates
+    });
     if (subnet.source === "auto") {
       for (const network of findSkippedUatNetworks(liveSubnets, remainingSubnetCandidates)) {
         console.warn(
@@ -815,12 +774,11 @@ export async function provisionForUat(
         );
       }
     }
-    // #1306 Task 22: opt-in (see UatProvisionOptions.withJobSearchFixture). Unlike
-    // realChatEnvFile above this is per-attempt, not once before the loop: the fixture is a
-    // container on THIS attempt's Compose network, so a port-bind retry gets a fresh one under
-    // the new project name. The URL is knowable now — it is just the container's name — which is
-    // what lets it be written into the env file the stack starts with, several steps before the
-    // container itself exists.
+    // #1306 Task 22: opt-in (see UatProvisionOptions.withJobSearchFixture), per-attempt like the
+    // Codex credential copy below: the fixture is a container on THIS attempt's Compose network,
+    // so a port-bind retry gets a fresh one under the new project name. The URL is knowable now —
+    // it is just the container's name — which is what lets it be written into the env file the
+    // stack starts with, several steps before the container itself exists.
     const jobSearchFixtureBaseUrl =
       opts?.withJobSearchFixture || opts?.withEspnFixture
         ? jobSearchFixtureBaseUrlFor(projectName)
@@ -829,28 +787,41 @@ export async function provisionForUat(
     const briefingWriterFixtureBaseUrl = opts?.withBriefingWriterFixture
       ? briefingWriterFixtureBaseUrlFor(projectName)
       : undefined;
-    let envFile!: UatEnvFile;
-    try {
-      envFile = writeUatEnvFile({
-        webPort,
-        subnet: subnet.subnet,
-        jobSearchFixtureBaseUrl,
-        chatScript: opts?.chatScript
-      });
-      process.env.JARVIS_ENV_FILE = envFile.path;
-      process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
-      // #1024/#1000: must be exported for every retry iteration, not just the first — a TOCTOU
-      // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
-      // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
-      Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
-    } catch (error) {
-      return cleanupRunScopedStateAfterError(error);
-    }
+    const envFile: UatEnvFile = writeUatEnvFile({
+      webPort,
+      subnet: subnet.subnet,
+      jobSearchFixtureBaseUrl,
+      chatScript: opts?.chatScript
+    });
+    process.env.JARVIS_ENV_FILE = envFile.path;
+    process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
+    // #1024/#1000: must be exported for every retry iteration, not just the first — a TOCTOU
+    // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
+    // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
+    Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
+
+    // #2732: set once `jarv1s` is up and the Codex credential copy (if any) has run — read by
+    // teardownCompose below, so declared before it.
+    let realChatAuth: UatRealChatCodexAuth | undefined;
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
     // follows would then fail on an otherwise clean run.
     const teardownCompose = async () => {
+      // #2732: must run before `down -v` below — it needs the still-running `jarv1s` container to
+      // remove the copied credential; the container going down destroys it anyway, but doing this
+      // first keeps the security property (removed at teardown) true even if `down -v` itself
+      // fails partway through. A failed credential cleanup is now loud (real-chat-env.ts throws),
+      // so it is caught here and rethrown at the end — `down -v` and the network cleanup below
+      // must still run either way, or a failed credential wipe would also leak the whole stack.
+      let realChatCleanupError: unknown;
+      if (realChatAuth !== undefined) {
+        try {
+          await realChatAuth.cleanup();
+        } catch (error) {
+          realChatCleanupError = error;
+        }
+      }
       // Only fixtures this attempt started. The ESPN fixture shares the job-search container.
       if (briefingWriterFixtureBaseUrl !== undefined) {
         await removeBriefingWriterFixtureContainer(projectName);
@@ -872,15 +843,13 @@ export async function provisionForUat(
       for (const networkId of ownedNetworks.split("\n").filter(Boolean)) {
         await runCommand("docker", ["network", "rm", networkId]).catch(() => {});
       }
+      if (realChatCleanupError !== undefined) throw realChatCleanupError;
     };
-    const cleanupAttempt = (
-      options: { readonly error?: unknown; readonly preserveRunScopedState?: boolean } = {}
-    ) =>
+    const cleanupAttempt = (options: { readonly error?: unknown } = {}) =>
       cleanupUatAttempt({
         teardownCompose,
         assertNoLeaks: () => assertNoLeakedResources(projectName),
         cleanupEnvFile: envFile.cleanup,
-        cleanupRunScopedState,
         ...options
       });
 
@@ -906,6 +875,18 @@ export async function provisionForUat(
         // double-run teardown on the success path.
         console.log(`[uat] ${step.description}`);
         await runCommand(step.command, step.args);
+      }
+      // #2732: after the plan loop, because it needs the now-running `jarv1s` container for its
+      // docker exec calls. A no-op unless the operator's own machine has a signed-in Codex CLI
+      // (see real-chat-env.ts); real chat stays opt-in without a separate on/off flag.
+      realChatAuth = (dependencies.installRealChatCodexAuth ?? installUatRealChatCodexAuth)(
+        projectName,
+        UAT_ADMIN_ID,
+        (extra) => buildUatComposeArgs(projectName, extra)
+      );
+      if (realChatAuth !== undefined) {
+        process.env[REAL_CHAT_CONFIGURED_ENV] = "1";
+        console.log(`[uat] host Codex login copied into ${projectName}; real chat is available`);
       }
       // #1306: after the plan loop, because the Compose network it attaches to does not exist
       // until the first `up`; before the seed hook, so the fixture origin is already answering by
@@ -945,7 +926,7 @@ export async function provisionForUat(
       };
     } catch (error) {
       if (error instanceof PortBindConflictError) {
-        await cleanupAttempt({ preserveRunScopedState: true });
+        await cleanupAttempt();
         // #1024/#1000: Coordinator condition 1 — findAvailablePort (Task 2) only proved this port
         // free at probe time; docker just told us another process won the bind race. Retry with
         // the next untried candidate instead of flaking the whole gate. The fixture container (if
@@ -957,7 +938,7 @@ export async function provisionForUat(
         continue;
       }
       if (error instanceof SubnetOverlapConflictError && subnet.source === "auto") {
-        await cleanupAttempt({ preserveRunScopedState: true });
+        await cleanupAttempt();
         console.warn(
           `[uat] subnet ${subnet.subnet} lost the allocation race; retrying with next candidate (#1108)`
         );
@@ -971,12 +952,10 @@ export async function provisionForUat(
       throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }
   }
-  return cleanupRunScopedStateAfterError(
-    new Error(
-      `exhausted all ${UAT_PORT_RANGE_SIZE} reserved UAT ports (${UAT_PORT_RANGE_START}-${
-        UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE - 1
-      }) without a successful bind`
-    )
+  throw new Error(
+    `exhausted all ${UAT_PORT_RANGE_SIZE} reserved UAT ports (${UAT_PORT_RANGE_START}-${
+      UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE - 1
+    }) without a successful bind`
   );
 }
 

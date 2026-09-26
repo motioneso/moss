@@ -17,8 +17,8 @@
 //     subject under test, so a fake/canned provider cannot stand in for it (it can't reliably
 //     decide which of six `job-search.*` tools to call over a multi-turn interview). These two
 //     stay gated on REAL_CHAT_CONFIGURED, exactly like real-chat-onboarding.uat.spec.ts's #1121
-//     gate: skipped on every default/CI run, exercised only when an operator supplies a real
-//     token via JARVIS_UAT_REAL_CHAT_ENV_FILE.
+//     gate: skipped on every default/CI run, exercised only when the operator's own signed-in
+//     Codex CLI login has been copied into the stack (see tests/uat/real-chat-env.ts, #2732).
 //   - Phases 5-12 are ABOUT the board, sort, portal banner, inspector, drawer scoping, and nav
 //     badge — NONE of them are about onboarding. Gating those on a real model too would mean this
 //     spec's only board/sort/banner/inspector coverage never runs on CI, which is what the
@@ -49,10 +49,10 @@ export const uatLevel = {
   withJobSearchFixture: true
 } as const;
 
-// #1121: the provisioner exports this only after decrypting + validating an operator-provided
-// real-chat token env file (writeUatRealChatEnvFile). Absent on every default/CI run, so the whole
-// real-conversation portion of this spec skips rather than failing — see header.
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+// #1121/#2732: the provisioner sets this only after copying the operator's own signed-in Codex
+// CLI login into the stack (tests/uat/real-chat-env.ts). Absent on every default/CI run, so the
+// whole real-conversation portion of this spec skips rather than failing — see header.
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
 // Mirrors real-chat-onboarding.uat.spec.ts's bounded exponential backoff: never a fixed sleep,
 // always a hard deadline. Used both for the bootstrap-profile wait (which self-polls internally,
@@ -463,11 +463,11 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     test.info().annotations.push({
       type: "skip",
       description:
-        "Phases 3-4 (real onboarding conversation) need JARVIS_UAT_REAL_CHAT_ENV_FILE, unset for " +
+        "Phases 3-4 (real onboarding conversation) need JARVIS_UAT_REAL_CHAT_CONFIGURED, unset for " +
         "this run. Phases 1-2 and 5-12 still ran, against a direct-seeded profile per N45."
     });
     console.log(
-      "job-search UAT: JARVIS_UAT_REAL_CHAT_ENV_FILE unset — Phases 3-4 (real onboarding " +
+      "job-search UAT: JARVIS_UAT_REAL_CHAT_CONFIGURED unset — Phases 3-4 (real onboarding " +
         "conversation) skipped. Set that env var to exercise them. Phases 5-12 below still run."
     );
   }

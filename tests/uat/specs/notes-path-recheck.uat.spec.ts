@@ -1,9 +1,16 @@
 import { execFileSync } from "node:child_process";
 
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { buildUatComposeArgs } from "../provisioner.js";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_ID } from "../seed/admin.js";
+import {
+  bringUpRealChatProvider,
+  discoverCheapestChatModel,
+  readUatJson,
+  requireUatProjectName,
+  signInUatAdmin
+} from "./real-chat-signin.js";
 
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
@@ -22,7 +29,7 @@ export const uatLevel = { level: "admin+data", without: [] } as const;
 //   jobs.ts's collectMarkdownFiles readdir->realpath TOCTOU sliver is explicitly OUT of scope
 //   here (no deterministic live trigger) — proven separately by re-running the integration suite.
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const POLL_DEADLINE_MS = 60_000;
 // The notes-sync worker cold-loads its embedding model on first use in a fresh UAT container
 // (observed: "dtype not specified for model" landing right as a 60s deadline expired) — give the
@@ -30,85 +37,25 @@ const POLL_DEADLINE_MS = 60_000;
 const SYNC_POLL_DEADLINE_MS = 180_000;
 const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
 
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  return baseURL;
-}
-
-function requireProjectName(): string {
-  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
-  if (!projectName) throw new Error("JARVIS_UAT_PROJECT_NAME must be set by run-uat.ts");
-  return projectName;
-}
-
-async function readJson(response: APIResponse): Promise<unknown> {
-  expect(response.ok(), `${response.url()} -> ${response.status()}`).toBeTruthy();
-  return response.json();
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skipSetup.or(userMenu).first()).toBeVisible();
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
-}
-
+// This spec binds the chat capability directly (PUT /api/ai/services/chat/binding) rather than
+// going through the account's chat-model-override, so it composes the shared provider bring-up
+// and cheapest-model discovery instead of using bringUpRealChatModel wholesale.
 async function ensureRealChat(page: Page): Promise<void> {
-  const install = (await readJson(
-    await page.request.post("/api/onboarding/provider-install", {
-      data: { providerKind: "anthropic" }
-    })
-  )) as { installState?: string };
-  expect(install.installState).toBe("installed");
+  await bringUpRealChatProvider(page);
+  const cheapest = await discoverCheapestChatModel(page, POLL_DEADLINE_MS);
 
-  const login = (await readJson(
-    await page.request.post("/api/onboarding/provider-login/begin", {
-      data: { providerKind: "anthropic" }
-    })
-  )) as { status?: string };
-  expect(login.status).toBe("ready");
-
-  let chatModelId: string | undefined;
-  await expect
-    .poll(
-      async () => {
-        const body = (await readJson(await page.request.get("/api/ai/models"))) as {
-          models: readonly {
-            id: string;
-            capabilities: readonly string[];
-            status: string;
-          }[];
-        };
-        chatModelId = body.models.find(
-          (model) => model.status === "active" && model.capabilities.includes("chat")
-        )?.id;
-        return Boolean(chatModelId);
-      },
-      { timeout: POLL_DEADLINE_MS, message: "no active chat-capable model became available" }
-    )
-    .toBe(true);
-
-  await readJson(
+  await readUatJson(
     await page.request.put("/api/ai/services/chat/binding", {
-      data: { binding: { kind: "model", modelId: chatModelId } }
+      data: { binding: { kind: "model", modelId: cheapest.id } }
     })
   );
 
   await expect
     .poll(
       async () => {
-        const body = (await readJson(await page.request.get("/api/ai/capability-route/chat"))) as {
-          route: { available: boolean };
-        };
+        const body = (await readUatJson(
+          await page.request.get("/api/ai/capability-route/chat")
+        )) as { route: { available: boolean } };
         return body.route.available;
       },
       { timeout: POLL_DEADLINE_MS, message: "configured chat route did not become available" }
@@ -149,11 +96,11 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   // wait up to 180s, leaving too little headroom for the rest of the flow at the old ceiling.
   test.setTimeout(420_000);
 
-  const projectName = requireProjectName();
+  const projectName = requireUatProjectName();
   const stamp = Date.now();
 
-  await signIn(page);
-  await readJson(await page.request.put("/api/me/notes-source", { data: { path: NOTES_ROOT } }));
+  await signInUatAdmin(page);
+  await readUatJson(await page.request.put("/api/me/notes-source", { data: { path: NOTES_ROOT } }));
   await ensureRealChat(page);
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
@@ -178,7 +125,7 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     await expect
       .poll(
         async () => {
-          const body = (await readJson(await page.request.get("/api/me/notes-last-sync"))) as {
+          const body = (await readUatJson(await page.request.get("/api/me/notes-last-sync"))) as {
             lastSync: { at: string | null; ingested: number; errors: number } | null;
           };
           lastSyncBody = body;

@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Response as PlaywrightResponse } from "@playwright/test";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel, requireUatBaseURL, signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = {
   level: "admin+data",
@@ -7,98 +7,9 @@ export const uatLevel = {
   withoutNewsJsonBinding: true
 } as const;
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
-const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const REFRESH_DEADLINE_MS = 300_000;
-const POLL_INITIAL_INTERVAL_MS = 500;
-const POLL_MAX_INTERVAL_MS = 4_000;
 const ACTION_CARD = '[role="region"][aria-label="Action request"]';
-
-function baseUrl(): string {
-  const value = process.env.JARVIS_UAT_BASE_URL;
-  if (!value) throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  return value;
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.goto(baseUrl());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skipSetup.or(userMenu).first()).toBeVisible();
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
-}
-
-async function bringUpRealModel(page: Page): Promise<void> {
-  const install = await page.request.post("/api/onboarding/provider-install", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
-  expect((await install.json()).installState).toBe("installed");
-
-  const begin = await page.request.post("/api/onboarding/provider-login/begin", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(begin.ok(), `provider-login/begin -> ${begin.status()}`).toBeTruthy();
-  expect((await begin.json()).status).toBe("ready");
-
-  const deadline = Date.now() + MODEL_DISCOVERY_DEADLINE_MS;
-  let interval = POLL_INITIAL_INTERVAL_MS;
-  let lastModels: readonly {
-    providerConfigId?: string;
-    providerKind?: string;
-    status: string;
-    capabilities: readonly string[];
-  }[] = [];
-  while (Date.now() < deadline) {
-    const response = await page.request.get("/api/ai/models");
-    expect(response.ok(), `models -> ${response.status()}`).toBeTruthy();
-    const body = (await response.json()) as {
-      models?: readonly {
-        providerConfigId?: string;
-        providerKind?: string;
-        status: string;
-        capabilities: readonly string[];
-      }[];
-    };
-    lastModels = body.models ?? [];
-    if (
-      lastModels.some(
-        (model) =>
-          model.providerKind === "anthropic" &&
-          model.status === "active" &&
-          model.capabilities.includes("chat") &&
-          model.providerConfigId
-      )
-    ) {
-      break;
-    }
-    await page.waitForTimeout(Math.min(interval, Math.max(0, deadline - Date.now())));
-    interval = Math.min(interval * 2, POLL_MAX_INTERVAL_MS);
-  }
-  const anthropic = lastModels.find(
-    (model) =>
-      model.providerKind === "anthropic" &&
-      model.status === "active" &&
-      model.capabilities.includes("chat") &&
-      model.providerConfigId
-  );
-  if (!anthropic?.providerConfigId) {
-    throw new Error(
-      `no active Anthropic chat model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(lastModels)}`
-    );
-  }
-  const selected = await page.request.put(
-    `/api/ai/providers/${anthropic.providerConfigId}/default`
-  );
-  expect(selected.ok(), `select Anthropic provider -> ${selected.status()}`).toBeTruthy();
-}
 
 async function sendMessage(page: Page, text: string): Promise<Promise<PlaywrightResponse>> {
   const composer = page.getByRole("textbox", { name: /^Message/ });
@@ -144,12 +55,12 @@ async function readDiagnostics(page: Page): Promise<{
 test("a real Moss conversation diagnoses, refreshes, and rechecks news", async ({ page }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) - #2032"
+    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) - #2032"
   );
   test.setTimeout(600_000);
 
-  await signIn(page);
-  await bringUpRealModel(page);
+  await signInUatAdmin(page);
+  await bringUpRealChatModel(page);
 
   const firstTurn = await sendMessage(
     page,
@@ -202,8 +113,8 @@ test("a real Moss conversation diagnoses, refreshes, and rechecks news", async (
 });
 
 test("the live server advertises both self-diagnostics tools", async ({ page }) => {
-  await signIn(page);
-  const response = await page.request.get(`${baseUrl()}/api/ai/assistant-tools`);
+  await signInUatAdmin(page);
+  const response = await page.request.get(`${requireUatBaseURL()}/api/ai/assistant-tools`);
   expect(response.ok()).toBeTruthy();
   const body = (await response.json()) as { tools?: Array<{ name?: string; risk?: string }> };
   expect(body.tools ?? []).toEqual(

@@ -33,44 +33,36 @@ import {
 const TEST_SUBNET = "10.249.0.0/24";
 
 const originalRequestedSubnet = process.env.UAT_DOCKER_SUBNET;
-const originalRealChatEnvFile = process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
 const originalTmpDir = process.env.TMPDIR;
 
 afterEach(() => {
   if (originalRequestedSubnet === undefined) delete process.env.UAT_DOCKER_SUBNET;
   else process.env.UAT_DOCKER_SUBNET = originalRequestedSubnet;
-  if (originalRealChatEnvFile === undefined) delete process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
-  else process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = originalRealChatEnvFile;
   if (originalTmpDir === undefined) delete process.env.TMPDIR;
   else process.env.TMPDIR = originalTmpDir;
 });
 
-describe("provisionForUat setup cleanup", () => {
-  it("restores run-scoped state when the requested production subnet is refused", async () => {
-    const cleanup = vi.fn();
+describe("provisionForUat setup failures (#2732)", () => {
+  // #2732: the Codex credential copy needs a running `jarv1s` container (it works by `docker
+  // exec`), so it cannot run until after the compose plan's "up jarv1s" step. These failures all
+  // happen earlier, before any container exists — the copy must never be attempted.
+  it("never attempts the Codex credential copy when the requested production subnet is refused", async () => {
+    const installRealChatCodexAuth = vi.fn();
     process.env.UAT_DOCKER_SUBNET = "10.252.0.0/24";
-    process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
 
     await expect(
       provisionForUat(
         "bare",
         { chatScript: "phase1-smoke" },
-        {
-          listLiveSubnets: async () => [],
-          writeRealChatEnvFile: async () => {
-            process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "/tmp/decrypted-real-chat.env";
-            return { path: "/tmp/decrypted-real-chat.env", cleanup };
-          }
-        }
+        { listLiveSubnets: async () => [], installRealChatCodexAuth }
       )
     ).rejects.toThrow(/10\.252\.0\.0\/24.*production/i);
 
-    expect(cleanup).toHaveBeenCalledOnce();
-    expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
+    expect(installRealChatCodexAuth).not.toHaveBeenCalled();
   });
 
-  it("restores run-scoped state when live subnet discovery fails", async () => {
-    const cleanup = vi.fn();
+  it("never attempts the Codex credential copy when live subnet discovery fails", async () => {
+    const installRealChatCodexAuth = vi.fn();
 
     await expect(
       provisionForUat(
@@ -80,75 +72,34 @@ describe("provisionForUat setup cleanup", () => {
           listLiveSubnets: async () => {
             throw new Error("malformed Docker inspect state");
           },
-          writeRealChatEnvFile: async () => ({
-            path: "/tmp/decrypted-real-chat.env",
-            cleanup
-          })
+          installRealChatCodexAuth
         }
       )
     ).rejects.toThrow(/malformed Docker inspect state/i);
 
-    expect(cleanup).toHaveBeenCalledOnce();
+    expect(installRealChatCodexAuth).not.toHaveBeenCalled();
   });
 
-  it("preserves both setup and credential-cleanup failures", async () => {
-    const setupError = new Error("malformed Docker inspect state");
-    const cleanupError = new Error("credential cleanup failed");
-    process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
-
-    const failure = await provisionForUat(
-      "bare",
-      { chatScript: "phase1-smoke" },
-      {
-        listLiveSubnets: async () => {
-          throw setupError;
-        },
-        writeRealChatEnvFile: async () => {
-          process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "/tmp/decrypted-real-chat.env";
-          return {
-            path: "/tmp/decrypted-real-chat.env",
-            cleanup: () => {
-              throw cleanupError;
-            }
-          };
-        }
-      }
-    ).catch((error: unknown) => error);
-
-    expect(failure).toBeInstanceOf(AggregateError);
-    expect((failure as AggregateError).errors).toEqual([setupError, cleanupError]);
-    expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
-  });
-
-  it("restores run-scoped state when the UAT env file cannot be created", async () => {
-    const cleanup = vi.fn();
+  it("never attempts the Codex credential copy when the UAT env file cannot be created", async () => {
+    const installRealChatCodexAuth = vi.fn();
     process.env.TMPDIR = "/definitely-missing-uat-temp-root";
-    process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
 
     await expect(
       provisionForUat(
         "bare",
         { chatScript: "phase1-smoke" },
-        {
-          listLiveSubnets: async () => [],
-          writeRealChatEnvFile: async () => {
-            process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "/tmp/decrypted-real-chat.env";
-            return { path: "/tmp/decrypted-real-chat.env", cleanup };
-          }
-        }
+        { listLiveSubnets: async () => [], installRealChatCodexAuth }
       )
     ).rejects.toThrow();
 
-    expect(cleanup).toHaveBeenCalledOnce();
-    expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
+    expect(installRealChatCodexAuth).not.toHaveBeenCalled();
   });
 });
 
 describe("cleanupUatAttempt", () => {
-  it("deletes both env files without hiding a leak-assertion failure", async () => {
+  it("deletes the env file without hiding a leak-assertion failure", async () => {
     const leakError = new Error("owned UAT network remains");
     const cleanupEnvFile = vi.fn();
-    const cleanupRunScopedState = vi.fn();
 
     await expect(
       cleanupUatAttempt({
@@ -156,13 +107,11 @@ describe("cleanupUatAttempt", () => {
         assertNoLeaks: async () => {
           throw leakError;
         },
-        cleanupEnvFile,
-        cleanupRunScopedState
+        cleanupEnvFile
       })
     ).rejects.toBe(leakError);
 
     expect(cleanupEnvFile).toHaveBeenCalledOnce();
-    expect(cleanupRunScopedState).toHaveBeenCalledOnce();
   });
 });
 
