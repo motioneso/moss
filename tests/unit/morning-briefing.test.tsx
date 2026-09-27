@@ -45,6 +45,26 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("MorningBriefingReader report", () => {
+  it("renders model markdown as formatting instead of raw marks", async () => {
+    const run = {
+      ...fullRun(),
+      summaryText:
+        "**Morning Briefing**\nCalendar and email are quiet. No commitments on the slate.\n\n" +
+        "**Tasks**\nHome tidying wrapped up *nicely*.\n\nOne task waiting:\n- Contact Progyny\n\n" +
+        "**Sports**\nSan Diego FC tied 3-3 with Austin."
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).not.toContain("**");
+    expect(html).toContain('class="brief-reader__headline">Morning Briefing</h3>');
+    expect(html).toContain('class="brief-reader__section-heading">Tasks</h4>');
+    expect(html).toContain('class="brief-reader__section-heading">Sports</h4>');
+    expect(html).toContain("<em>nicely</em>");
+    expect(html).toMatch(/<li>Contact Progyny<\/li>/);
+  });
+
   it("renders the saved report sections without repeating Today task actions", async () => {
     const run = {
       ...fullRun(),

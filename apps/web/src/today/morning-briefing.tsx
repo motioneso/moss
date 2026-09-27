@@ -27,6 +27,7 @@ import {
   readGaps
 } from "./briefing-report-shell.js";
 import { calloutCopy, findChangedBlocks } from "./briefing-callout.js";
+import { BriefingMarkdown } from "./briefing-markdown.js";
 import { splitHeadline } from "./today-hero.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import { acceptAllSelectionFor, hasOtherPendingEdits } from "./day-plan-review-model.js";
@@ -408,7 +409,7 @@ function ReportBody(props: {
         Prepared at {formatTime(run.createdAt, props.locale)}
       </p>
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
-      {headline.rest ? <MorningReportProse text={headline.rest} /> : null}
+      {headline.rest ? <BriefingMarkdown text={headline.rest} /> : null}
       {noEveningPlan ? (
         <p className="brief-reader__plan-source">
           No evening priorities were available for this briefing. Moss used today’s available
@@ -543,28 +544,6 @@ function BriefingCallout(props: {
       ) : (
         <p className="brief-reader__plan-changed">The plan has changed since this report.</p>
       )}
-    </div>
-  );
-}
-
-/** New reports use section headings; older saved prose remains readable. */
-function MorningReportProse(props: { readonly text: string }) {
-  const blocks = props.text.trim().split(/(?=^#{1,3} )/m);
-  return (
-    <div className="brief-reader__sections">
-      {blocks.map((block, index) => {
-        const heading = block.match(/^#{1,3}\s+([^\n]+)\r?\n([\s\S]+)$/);
-        return heading ? (
-          <section className="brief-reader__section" key={index}>
-            <h4 className="brief-reader__section-heading">{heading[1]}</h4>
-            <p className="brief-reader__section-prose">{heading[2]?.trim()}</p>
-          </section>
-        ) : (
-          <p className="jds-brief__body" key={index}>
-            {block}
-          </p>
-        );
-      })}
     </div>
   );
 }
