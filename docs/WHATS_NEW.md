@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Chat shows action results after a slow start.** Chat now shows what it did, and asks for approvals, even when chat finished setting up after the page opened. [PR #2740](https://github.com/motioneso/moss/pull/2740)
 
+#### Changed
+
+- **A clearer full morning briefing.** The full morning briefing explains the day in more detail while Today stays focused on actions. [PR #2726](https://github.com/motioneso/moss/pull/2726)
+
 ### 2026-09-26
 
 #### Fixed
