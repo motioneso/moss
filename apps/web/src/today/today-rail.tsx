@@ -167,7 +167,9 @@ export function TodayRail(props: TodayRailProps) {
             <button
               type="button"
               className="cmd-next__link"
-              onClick={() => props.onNavigate(`/calendar?event=${encodeURIComponent(nextEvent.id)}`)}
+              onClick={() =>
+                props.onNavigate(`/calendar?event=${encodeURIComponent(nextEvent.id)}`)
+              }
             >
               See meeting ↗
             </button>

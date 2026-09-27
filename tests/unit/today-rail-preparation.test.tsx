@@ -7,7 +7,11 @@ import { describe, expect, it } from "vitest";
 
 import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
 
-import { TodayRail, preparationBlockMinutes, type RailNextEvent } from "../../apps/web/src/today/today-rail.js";
+import {
+  TodayRail,
+  preparationBlockMinutes,
+  type RailNextEvent
+} from "../../apps/web/src/today/today-rail.js";
 
 const locale: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -55,16 +59,12 @@ describe("preparationBlockMinutes", () => {
   });
 
   it("returns null when the touching Moss block is not titled as preparation", () => {
-    expect(
-      preparationBlockMinutes(nextEvent, [calendarEvent({ title: "Focus time" })])
-    ).toBeNull();
+    expect(preparationBlockMinutes(nextEvent, [calendarEvent({ title: "Focus time" })])).toBeNull();
   });
 
   it("returns null when the preparation-titled Moss block does not touch the meeting's start", () => {
     expect(
-      preparationBlockMinutes(nextEvent, [
-        calendarEvent({ endsAt: "2026-09-28T16:45:00.000Z" })
-      ])
+      preparationBlockMinutes(nextEvent, [calendarEvent({ endsAt: "2026-09-28T16:45:00.000Z" })])
     ).toBeNull();
   });
 });
@@ -143,7 +143,8 @@ describe("TodayRail preparation line", () => {
       );
     });
     const button = renderer!.root.findAll(
-      (node: ReactTestInstance) => node.type === "button" && node.props.className === "cmd-next__link"
+      (node: ReactTestInstance) =>
+        node.type === "button" && node.props.className === "cmd-next__link"
     )[0]!;
     act(() => {
       button.props.onClick();
