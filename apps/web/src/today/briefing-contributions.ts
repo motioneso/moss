@@ -6,7 +6,8 @@ import { isNewsBriefingEvidence, isSportsBriefingEvidence, readPlanContext } fro
 // real emails read (saved as emailMessageCount) — never signal notes about
 // them. Every other row counts the lines its section gave the synthesis
 // prompt for THIS report (saved as sectionLines). Runs saved before these
-// fields fall back to the closest saved figure with neutral nouns. A source
+// fields fall back to the closest saved figure with neutral nouns, except
+// calendar, which shows no line without its real-meetings count. A source
 // the section flags empty or failed shows no line either way, so the row
 // always agrees with the gap note; a truncated source still names what the
 // report got.
