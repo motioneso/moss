@@ -74,6 +74,12 @@
   height: 8px;
   border: 1px solid var(--accent-fg);
 }
+.jds-brief--timeline .tl-legend__gap {
+  display: inline-block;
+  width: 8px;
+  height: 0;
+  border-top: 1px solid var(--text-muted);
+}
 
 /* --- Rows: time column, rule with marker, block --- */
 .jds-brief--timeline .tl-slot {
@@ -126,6 +132,24 @@
 }
 .jds-brief--timeline .tl-slot--committed .tl-body {
   background: var(--forest-soft-2);
+}
+/* Break/open-time row: a schedule shape, not a placed block. No marker, no
+   accent, no card tint. */
+.jds-brief--timeline .tl-slot--gap .tl-time {
+  color: var(--text-muted);
+}
+.jds-brief--timeline .tl-slot--gap .tl-body {
+  border-left: none;
+  color: var(--text-muted);
+}
+.jds-brief--timeline .tl-slot--gap .tl-body::before {
+  display: none;
+}
+.jds-brief--timeline .tl-closing {
+  padding: 12px 0 0 73px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 .jds-brief--timeline .jds-task__main {
   display: block;
