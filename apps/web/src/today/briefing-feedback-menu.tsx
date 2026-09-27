@@ -5,11 +5,11 @@ import { useState } from "react";
 import type { UsefulnessFeedbackDto, UsefulnessFeedbackKind } from "@moss/shared";
 import { Menu } from "@moss/ui";
 
-import { queryKeys } from "../api/query-keys";
+import { queryKeys } from "../api/query-keys.js";
 import {
   createUsefulnessFeedback,
   undoUsefulnessFeedback
-} from "../api/usefulness-feedback-client";
+} from "../api/usefulness-feedback-client.js";
 
 type BriefingRunFeedbackKind = Extract<
   UsefulnessFeedbackKind,

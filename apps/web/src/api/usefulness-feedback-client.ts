@@ -3,7 +3,7 @@ import type {
   CreateUsefulnessFeedbackResponse
 } from "@moss/shared";
 
-import { requestJson } from "./client";
+import { requestJson } from "./client.js";
 
 export async function createUsefulnessFeedback(
   input: CreateUsefulnessFeedbackRequest

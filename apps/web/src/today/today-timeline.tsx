@@ -1,6 +1,7 @@
 import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
 
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
+import type { ScheduleClosingLine, ScheduleGapRow } from "./day-plan-gaps.js";
 import type { DayItem } from "./day-plan-view-model.js";
 
 export function durationText(minutes: number | null): string {
@@ -116,7 +117,10 @@ export function TimelineRow(props: {
   );
 }
 
-export function TimelineLegend(props: { readonly proposed?: boolean }) {
+export function TimelineLegend(props: {
+  readonly proposed?: boolean;
+  readonly showOpenTime?: boolean;
+}) {
   return (
     <div className="tl-legend">
       <span>
@@ -127,8 +131,41 @@ export function TimelineLegend(props: { readonly proposed?: boolean }) {
         <i className="tl-legend__open" aria-hidden="true" />
         Calendar commitment
       </span>
+      {props.showOpenTime === true ? (
+        <span>
+          <i className="tl-legend__gap" aria-hidden="true" />
+          Open time
+        </span>
+      ) : null}
     </div>
   );
+}
+
+/** Break/open-time row between two schedule blocks. Same time-column shape as
+    TimelineRow, but no card background or accent border, per the mockup. */
+export function ScheduleGapRowView(props: {
+  readonly row: ScheduleGapRow;
+  readonly locale: LocaleSettingsDto;
+}) {
+  const { row } = props;
+  return (
+    <div className="tl-slot tl-slot--gap" key={row.key}>
+      <div className="day-ev__t tl-time">
+        {timeLabel(row.startsAt, props.locale)}
+        <span className="ap"> {ampm(row.startsAt, props.locale)}</span>
+        <small>
+          {timeLabel(row.endsAt, props.locale)}
+          <span className="ap"> {ampm(row.endsAt, props.locale)}</span>
+        </small>
+      </div>
+      <div className="tl-body">{row.label}</div>
+    </div>
+  );
+}
+
+/** Closing line after the day's last commitment. */
+export function ScheduleClosingLineView(props: { readonly line: ScheduleClosingLine }) {
+  return <p className="tl-closing">{props.line.text}</p>;
 }
 
 /** End time for the timeline's small line: events carry endsAt, task blocks
