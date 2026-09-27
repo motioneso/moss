@@ -366,7 +366,7 @@ export function boundToolCallEvents(events: readonly unknown[]): {
     if (typeof event !== "object" || event === null) return [];
     const record = event as Record<string, unknown>;
     return typeof record.kind === "string" && TOOL_RELATED_KINDS.has(record.kind)
-      ? [{ ...record, kind: record.kind }]
+      ? [{ kind: record.kind, toolName: record.toolName, outcome: record.outcome }]
       : [];
   });
   const kept = toolRelated.slice(0, MAX_TOOL_CALL_EVENTS);
