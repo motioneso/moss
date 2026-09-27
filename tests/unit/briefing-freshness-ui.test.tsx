@@ -7,7 +7,13 @@ import {
   delayedEmailSource,
   parseBriefingFreshness
 } from "../../apps/web/src/today/briefing-freshness.js";
-import type { SourceFreshnessV1 } from "@moss/shared";
+import type { LocaleSettingsDto, SourceFreshnessV1 } from "@moss/shared";
+
+const locale: LocaleSettingsDto = {
+  timezone: "America/Los_Angeles",
+  region: "en-US",
+  dateFormat: "12"
+};
 
 const CAPTURED = "2026-06-28T10:00:00.000Z";
 
@@ -45,6 +51,41 @@ describe("BriefingFreshnessList", () => {
   it("renders relative age for timestamped sources", () => {
     const html = renderToString(createElement(BriefingFreshnessList, { freshness }));
     expect(html).toMatch(/\d+(h|m|d) ago/);
+  });
+});
+
+describe("BriefingFreshnessList contribution rows", () => {
+  const timed: SourceFreshnessV1 = {
+    version: 1,
+    capturedAt: "2026-09-10T16:00:00.000Z",
+    sources: [
+      {
+        source: "calendar",
+        freshnessKind: "connector_sync",
+        asOf: "2026-09-10T13:40:00.000Z"
+      },
+      { source: "tasks", freshnessKind: "realtime", asOf: "2026-09-10T16:00:00.000Z" },
+      { source: "vault", freshnessKind: "vault_write", asOf: null }
+    ]
+  };
+  const counts = { calendarEventCount: 4, taskCount: 5, vaultCount: 0 };
+
+  it("names each source with its local time and what it contributed", () => {
+    const html = renderToString(
+      createElement(BriefingFreshnessList, { freshness: timed, locale, sourceMetadata: counts })
+    );
+    expect(html).toContain("Calendar");
+    expect(html).toContain("6:40 AM");
+    expect(html).toContain("4 events on today&#x27;s schedule");
+    expect(html).toContain("5 open tasks");
+  });
+
+  it("shows no contribution line for a source with nothing recorded", () => {
+    const html = renderToString(
+      createElement(BriefingFreshnessList, { freshness: timed, locale, sourceMetadata: counts })
+    );
+    expect(html).toContain("Notes");
+    expect(html).not.toContain("saved notes");
   });
 });
 

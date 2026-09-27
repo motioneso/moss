@@ -88,7 +88,7 @@ describe("MorningBriefingReader report", () => {
     expect(html).toContain("DAL");
     expect(html).toContain("MIN");
     expect(html).toContain("final.");
-    expect(html).toContain("Sources");
+    expect(html).toContain("What informed this briefing?");
     // Q4: the evening-intent/plan-context lists are dropped from the Read tab.
     expect(html).not.toContain("Evening intent");
     expect(html).not.toContain("Write the launch brief · committed");
@@ -114,8 +114,40 @@ describe("MorningBriefingReader report", () => {
     expect(html).not.toContain("Needs you");
     expect(html).not.toContain("brief-reader-news");
     expect(html).not.toContain("brief-reader-sports");
-    expect(html).not.toContain("Sources");
+    expect(html).not.toContain("What informed this briefing?");
     expect(html).not.toContain("Earlier reports");
+  });
+
+  it("names each source time and contribution in the sources block", async () => {
+    const run = {
+      ...fullRun(),
+      sourceMetadata: {
+        sourceTimestamps: {
+          version: 1,
+          capturedAt: NOW,
+          sources: [
+            {
+              source: "calendar",
+              freshnessKind: "connector_sync",
+              asOf: "2026-09-10T13:40:00.000Z"
+            },
+            { source: "tasks", freshnessKind: "realtime", asOf: NOW }
+          ]
+        },
+        gaps: [],
+        calendarEventCount: 4,
+        taskCount: 5
+      }
+    };
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
+    ]);
+    const html = await renderReader(client);
+    expect(html).toContain("What informed this briefing?");
+    expect(html).toContain("Calendar");
+    expect(html).toContain("6:40 AM");
+    expect(html).toContain("4 events on today");
+    expect(html).toContain("5 open tasks");
   });
 
   it("explains the source context when no evening priorities are available", async () => {

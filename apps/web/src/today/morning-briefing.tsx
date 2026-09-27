@@ -473,8 +473,14 @@ function ReportBody(props: {
       ) : null}
       {freshness || gaps.length > 0 ? (
         <details className="brief-reader__sources">
-          <summary>Sources</summary>
-          {freshness ? <BriefingFreshnessList freshness={freshness} /> : null}
+          <summary>What informed this briefing?</summary>
+          {freshness ? (
+            <BriefingFreshnessList
+              freshness={freshness}
+              locale={props.locale}
+              sourceMetadata={run.sourceMetadata}
+            />
+          ) : null}
           {gaps.map((gap) => (
             <p key={gap.source} className="brief-reader__gap">
               {gap.source}: No longer available ({gap.reason}).
