@@ -68,7 +68,12 @@ describe("BriefingFreshnessList contribution rows", () => {
       { source: "vault", freshnessKind: "vault_write", asOf: null }
     ]
   };
-  const counts = { calendarEventCount: 4, taskCount: 5, vaultCount: 0 };
+  const counts = {
+    sectionLines: { calendar: 4, tasks: 5 },
+    calendarEventCount: 9,
+    taskCount: 9,
+    vaultCount: 0
+  };
 
   it("names each source with its local time and what it contributed", () => {
     const html = renderToString(
@@ -77,7 +82,7 @@ describe("BriefingFreshnessList contribution rows", () => {
     expect(html).toContain("Calendar");
     expect(html).toContain("6:40 AM");
     expect(html).toContain("4 events on today&#x27;s schedule");
-    expect(html).toContain("5 open tasks");
+    expect(html).toContain("5 tasks");
   });
 
   it("shows no contribution line for a source with nothing recorded", () => {

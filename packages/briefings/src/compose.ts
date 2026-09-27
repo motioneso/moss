@@ -503,6 +503,11 @@ export async function composeBriefing(
     }
   }
 
+  // Lines each section actually gave the synthesis prompt (#2745). The reader
+  // names these per source, so a row measures what fed this report, never the
+  // raw holdings behind a section.
+  const sectionLineCounts: Record<string, number> = {};
+  for (const section of sections) sectionLineCounts[section.key] = section.lines.length;
   const editorial = captureEditorialEvidence(sports, news, deps);
   const moduleCapturedAt: Record<string, string | null> = {};
   for (const section of [sports, news] as const) {
@@ -558,6 +563,7 @@ export async function composeBriefing(
       commitmentCount: commitments.count,
       taskCount: prioritizedTasks.count,
       goalsCount: goals.count,
+      sectionLines: sectionLineCounts,
       calendarCount: calendar.count,
       calendarEventCount: rawCalendar.rawItems?.length ?? 0,
       calendarSignals: prioritizedCalendarSignals,

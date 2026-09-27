@@ -135,8 +135,9 @@ describe("MorningBriefingReader report", () => {
           ]
         },
         gaps: [],
-        calendarEventCount: 4,
-        taskCount: 5
+        sectionLines: { calendar: 4, tasks: 5 },
+        calendarEventCount: 9,
+        taskCount: 9
       }
     };
     const client = seedClient([
@@ -147,7 +148,7 @@ describe("MorningBriefingReader report", () => {
     expect(html).toContain("Calendar");
     expect(html).toContain("6:40 AM");
     expect(html).toContain("4 events on today");
-    expect(html).toContain("5 open tasks");
+    expect(html).toContain("5 tasks");
   });
 
   it("explains the source context when no evening priorities are available", async () => {

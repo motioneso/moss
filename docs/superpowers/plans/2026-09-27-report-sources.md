@@ -5,24 +5,30 @@ Gap: gap-check item 9 — the mockup's "What informed this briefing?" lists each
 with its time and what it contributed ("Calendar, 6:40am: meetings, lunch, travel,
 and pickup."); live's "Sources" shows freshness and status only.
 
-## Decision
+## Decision (amended after PR 2756 review, 2026-09-27)
 
-Derive every contribution line on the reader from counts already saved on the run,
-plus one additive backend count for goals. No migration, no DTO change, no job-payload
-change, no prompt change. Tier stays routine.
+Each row measures the lines its section gave the synthesis prompt for THIS
+report (saved as `sectionLines`), never the raw holdings behind a section.
+Two additive backend fields: `goalsCount` and `sectionLines`. No migration, no
+DTO change, no job-payload change, no prompt change. Tier stays routine.
 
 Why not model-written lines: the synthesis prompt is explicitly forbidden from
 inventing source facts, and a contribution sentence from the model would be
-unverifiable prose. Counts saved at compose time are the record of what fed the
-report. Topic nouns from the mockup example ("meetings, lunch, travel, and pickup")
-cannot be reproduced honestly from counts, so lines name quantities and kinds
-("4 events fed the schedule"), never topics. A source with no recorded items shows
-no contribution line.
+unverifiable prose. Topic nouns from the mockup example ("meetings, lunch,
+travel, and pickup") cannot be reproduced honestly from the saved record, so
+lines name quantities and kinds ("3 events on today's schedule"), never
+topics. A source with no recorded items shows no contribution line.
 
-Why one backend line: every freshness row except goals already has a saved count to
-derive from. The goals section is composed (packages/briefings/src/compose.ts:412)
-but its count is never saved, so a selected goals source would show a time with no
-contribution. Saving `goalsCount` fixes that with one additive field.
+Why lines-given, not gathered counts: the first version counted everything
+the source holds. Review showed task counts included done and archived items
+behind an "open" label, the calendar count spanned 48 hours, truncated
+sections reported items the writer never saw, and stored news evidence
+contradicted an empty gap note. Counting the prompt lines fixes all four:
+tasks and commitments drop the "open" claim, calendar counts the signals that
+reached the report, truncated rows name the capped lines, and any source the
+section flags empty or failed shows no line so the row agrees with the gap
+note. Runs saved before `sectionLines` fall back to the closest saved figure
+(signals over raw holdings, neutral nouns) and are documented as best-effort.
 
 Rejected alternative: a per-source `contributions` block written at compose time
 with pre-rendered sentences. Steelman: it would let old and new runs share wording
@@ -60,22 +66,22 @@ stays truthful for old runs (missing field means no line, which is honest).
 
 ## Changes
 
-1. `packages/briefings/src/compose.ts` — save `goalsCount: goals.count`
+1. `packages/briefings/src/compose.ts` and `fallback.ts` — save
+   `goalsCount` and `sectionLines` (per-section prompt-line counts)
    alongside the existing counts. Additive only; old runs read as absent.
 2. New `apps/web/src/today/briefing-contributions.ts` — pure function
    `contributionFor(source, sourceMetadata): string | null`.
    Exported signature only; no component code in this plan.
    Mapping (null means render no line):
-   - `calendar`: calendarEventCount, else calendarSignals length.
-   - `email`: emailSignals length, else emailMessageCount scanned.
-   - `tasks`, `commitments`, `chats`, `vault`: taskCount, commitmentCount,
-     chatTurnCount, vaultCount.
-   - `goals`: goalsCount (absent on old runs, so null there).
-   - `news`: editorial news stories length. `sports`: editorial sports
-     games plus stories lengths.
-   - `day_plan`: planContext present with evening intent or blocks;
-     line names the saved evening blocks count, else null.
-   - Gap-listed, zero-count, absent, or unknown sources: null.
+   - Current runs read `sectionLines`: calendar signals given ("3 events on
+     today's schedule"), email signals ("2 actionable messages"), tasks,
+     commitments, vault, chats, goals, news facts, sports facts, day_plan
+     gated on saved evening blocks.
+   - Older runs without `sectionLines`: calendar/email prefer saved signals
+     over raw holdings; tasks/commitments use gathered counts with neutral
+     nouns (no "open" claim); news/sports use stored evidence.
+   - Any gap except truncation (empty, failed) suppresses the line; truncated
+     rows name the lines the report got.
 3. `apps/web/src/today/briefing-freshness.tsx` — each row names the source,
    its absolute local time from `asOf` (mockup style "Calendar, 6:40am";
    "unknown" when asOf is null; realtime rows show the capture time), keeps
@@ -104,8 +110,9 @@ applies.
 - `tests/unit/briefing-freshness-ui.test.tsx`: contribution line per source
   from counts; no line for zero/absent/gap sources; absolute time shown;
   "unknown" with null asOf; old runs without goalsCount show no goals line.
-- `tests/unit/morning-briefing.test.tsx`: reader Sources block shows time
-  and contribution rows end to end; heading stays "Sources".
+- `tests/unit/morning-briefing.test.tsx`: reader sources block shows time
+  and contribution rows end to end under the "What informed this briefing?"
+  heading.
 - Backend: extend the compose unit coverage asserting `goalsCount` is saved
   (sibling: tests/unit/briefings-compose.test.ts).
 - Each test must fail against the current tree (no lines rendered today) and
