@@ -426,6 +426,26 @@ export function selectEngineFactory(
   };
 }
 
+/** One-shot structured requests that use a configured ACP agent, including Persona Preview. */
+export function createAcpOneShotEngineFactory(
+  getConnection: () => RpcConnection | undefined
+): ChatEngineFactory {
+  return (provider, sessionKey, options) => {
+    if (!options?.userId || !options.acpAgentId) {
+      throw new CliChatUnavailableError("ACP structured launch requires a user and agent identity");
+    }
+    const connection = getConnection();
+    if (!connection) throw new CliChatUnavailableError("cli-runner RPC connection is not ready");
+    const acpSessionKey = `structured:${options.userId}:${sessionKey}`;
+    return new AcpChatEngine(provider, acpSessionKey, {
+      tunnel: new RpcAcpTunnel(connection, acpSessionKey),
+      acpAgentId: options.acpAgentId,
+      userId: options.userId,
+      projectId: sessionKey
+    });
+  };
+}
+
 /** A factory that refuses to launch: used when the host has no multiplexer installed. */
 export function unavailableEngineFactory(reason: string): ChatEngineFactory {
   return () => {

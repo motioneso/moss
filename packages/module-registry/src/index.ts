@@ -125,6 +125,7 @@ import {
   ChatRepository,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
+  createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   registerChatRoutes,
   type ChatEngineFactory,
@@ -3440,6 +3441,14 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
+    personaPreview:
+      dependencies.personaPreview ??
+      createDefaultPersonaPreview(dependencies.dataContext, {
+        createCliStructuredAdapter: createCliStructuredAdapterFactory(
+          createAcpOneShotEngineFactory(getRpcConnection)
+        ),
+        logger: server.log
+      }),
     // #342 (§3.5 boot-time fork): chat always receives an `engineSelection`, so the chat runtime
     // selects ACP itself (including the runner's default socket path when the env var is absent).
     // The {method,id,sessionKey,bytes}-only debug logger (§6.4) is intentionally omitted (no
