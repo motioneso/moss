@@ -48,8 +48,11 @@ stays truthful for old runs (missing field means no line, which is honest).
   packages/shared/src/briefing-editorial-evidence.ts:77.
 - Saved plan context (evening intent, blocks with counts):
   packages/shared/src/briefing-action-rows.ts:93.
-- Tests pin the "Sources" heading: tests/unit/morning-briefing.test.tsx:91.
-  The heading stays; only rows change.
+- Tests pinned the "Sources" heading: tests/unit/morning-briefing.test.tsx:91.
+  Coordinator approval (2026-09-27) retitles the disclosure to the mockup heading
+  "What informed this briefing?" — nothing on main rules against it (the parity
+  runner asserts no heading text; the settings "Sources" group is unrelated).
+  Tests updated to the new heading in the same change.
 - Visual-parity plan covers reader source provenance but not contribution lines:
   docs/superpowers/plans/2026-09-16-visual-parity.md:433 (morning amendment,
   read by section). No plan amendment needed: this adds no stored shape the plan
@@ -84,7 +87,10 @@ stays truthful for old runs (missing field means no line, which is honest).
    sources disclosure truthfully describes time plus contribution lines.
 5. PR Release note: Category Changed; title "Morning report names what each
    source added"; one plain sentence describing per-source time and
-   contribution lines.
+   contribution lines. PR body states rows name quantities (for example
+   "4 events fed the schedule") rather than the mockup's topic words, and why:
+   topics cannot be derived from the saved record without inventing them, so
+   the visual reviewer must not count the wording difference as a gap.
 
 ## Determinism boundary
 
