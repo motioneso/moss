@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import type { TestInfo } from "@playwright/test";
+import { describe, expect, it, vi } from "vitest";
 
 import {
+  attachNotesFailureEvidence,
   boundToolCallEvents,
   captureActionAuditEvidence,
   captureNoteFileEvidence,
@@ -15,6 +17,12 @@ const OWNER_USER_ID = "00000000-0000-4000-8000-000000000001";
 const TURN_START = "2026-09-26T00:00:00.000Z";
 const TURN_END = "2026-09-26T00:05:00.000Z";
 const PRIVATE_MARKER = "SECRET_TOKEN_ab12cd34_do_not_leak";
+const NOTE_MARKER = "uat/notes-default-retrieval-1790000000000.md";
+
+/** The SQL text is always the last docker argument. */
+function lastArg(args: readonly string[]): string {
+  return args[args.length - 1] ?? "";
+}
 
 describe("parseNoteFileCheckOutput (#2737)", () => {
   it("reads a byte size as an existing file", () => {
@@ -36,11 +44,38 @@ describe("parseNoteFileCheckOutput (#2737)", () => {
 describe("summarizeAuditEntries (#2737)", () => {
   it("keeps only tool name, outcome and timestamp", () => {
     const entries = summarizeAuditEntries([
-      { toolName: "notes.create", outcome: "success", occurredAt: TURN_START }
+      {
+        tool_name: "notes.create",
+        outcome: "success",
+        occurred_at: TURN_START,
+        request_id: PRIVATE_MARKER
+      }
     ]);
     expect(entries).toEqual([
       { toolName: "notes.create", outcome: "success", occurredAt: TURN_START }
     ]);
+  });
+
+  it("labels a nested, unknown or unbounded value malformed, never copying its text", () => {
+    const entries = summarizeAuditEntries([
+      {
+        tool_name: { leaked: PRIVATE_MARKER },
+        outcome: { leaked: PRIVATE_MARKER },
+        occurred_at: { leaked: PRIVATE_MARKER }
+      },
+      {
+        tool_name: `notes ${PRIVATE_MARKER}`,
+        outcome: PRIVATE_MARKER,
+        occurred_at: PRIVATE_MARKER
+      },
+      PRIVATE_MARKER
+    ]);
+    expect(entries).toEqual([
+      { toolName: "malformed", outcome: "malformed", occurredAt: "malformed" },
+      { toolName: "malformed", outcome: "malformed", occurredAt: "malformed" },
+      { toolName: null, outcome: null, occurredAt: "malformed" }
+    ]);
+    expect(JSON.stringify(entries)).not.toContain(PRIVATE_MARKER);
   });
 });
 
@@ -209,6 +244,7 @@ describe("container reads never leak a raw error, stderr, or command output (#27
 
     expect(evidence).toEqual({
       source: "sql:app.moss_action_audit_log",
+      scope: "account_time_window",
       entries: [],
       error: null
     });
@@ -230,7 +266,7 @@ describe("container reads never leak a raw error, stderr, or command output (#27
     expect(evidence.error).toBe("unexpected_docker_output");
   });
 
-  it("captureToolCallEvidence reports turn_message_not_saved when nothing landed in the window", () => {
+  it("captureToolCallEvidence reports note_request_not_saved when no request carries the note path", () => {
     const fakeExec: ExecFileImpl = (() => "\n") as unknown as ExecFileImpl;
 
     const evidence = captureToolCallEvidence(
@@ -238,25 +274,22 @@ describe("container reads never leak a raw error, stderr, or command output (#27
       "proj",
       OWNER_USER_ID,
       "drawer",
-      TURN_START,
-      TURN_END
+      NOTE_MARKER,
+      TURN_START
     );
 
     expect(evidence).toEqual({
       source: "sql:app.chat_messages",
       events: [],
       omittedCount: 0,
-      error: "turn_message_not_saved"
+      error: "note_request_not_saved"
     });
   });
 
-  it("captureToolCallEvidence merges activity across rows in the window and bounds it", () => {
+  it("captureToolCallEvidence reports note_request_ambiguous rather than picking one of two matches", () => {
     const rows = [
-      { created_at: TURN_START, activity: [{ kind: "tool", toolName: "notes.create" }] },
-      {
-        created_at: TURN_END,
-        activity: [{ kind: "result", toolName: "notes.create", outcome: "executed" }]
-      }
+      { has_reply: true, activity: [{ kind: "tool", toolName: "notes.create" }] },
+      { has_reply: true, activity: [] }
     ];
     const fakeExec: ExecFileImpl = (() => JSON.stringify(rows)) as unknown as ExecFileImpl;
 
@@ -265,8 +298,52 @@ describe("container reads never leak a raw error, stderr, or command output (#27
       "proj",
       OWNER_USER_ID,
       "drawer",
-      TURN_START,
-      TURN_END
+      NOTE_MARKER,
+      TURN_START
+    );
+
+    expect(evidence.error).toBe("note_request_ambiguous");
+    expect(evidence.events).toEqual([]);
+  });
+
+  it("captureToolCallEvidence reports turn_message_not_saved when the request has no reply beside it", () => {
+    const fakeExec: ExecFileImpl = (() =>
+      JSON.stringify([{ has_reply: false, activity: [] }])) as unknown as ExecFileImpl;
+
+    const evidence = captureToolCallEvidence(
+      fakeExec,
+      "proj",
+      OWNER_USER_ID,
+      "drawer",
+      NOTE_MARKER,
+      TURN_START
+    );
+
+    expect(evidence.error).toBe("turn_message_not_saved");
+  });
+
+  it("captureToolCallEvidence finds the request by its note path and the reply by the shared save time, not by a time window", () => {
+    const seen: string[] = [];
+    const fakeExec: ExecFileImpl = ((_cmd: string, args: readonly string[]) => {
+      seen.push(lastArg(args));
+      return JSON.stringify([
+        {
+          has_reply: true,
+          activity: [
+            { kind: "tool", toolName: "notes.create" },
+            { kind: "result", toolName: "notes.create", outcome: "executed" }
+          ]
+        }
+      ]);
+    }) as unknown as ExecFileImpl;
+
+    const evidence = captureToolCallEvidence(
+      fakeExec,
+      "proj",
+      OWNER_USER_ID,
+      "drawer",
+      NOTE_MARKER,
+      TURN_START
     );
 
     expect(evidence.error).toBeNull();
@@ -274,7 +351,10 @@ describe("container reads never leak a raw error, stderr, or command output (#27
       { kind: "tool", toolName: "notes.create", status: null },
       { kind: "result", toolName: "notes.create", status: "executed" }
     ]);
-    expect(evidence.omittedCount).toBe(0);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain(`strpos(u.body, '${NOTE_MARKER}') > 0`);
+    expect(seen[0]).toContain("a.created_at = u.created_at");
+    expect(seen[0]).not.toContain("u.created_at <");
   });
 
   it("captureToolCallEvidence turns a thrown exec error into a fixed code, never the error's own text", () => {
@@ -287,28 +367,103 @@ describe("container reads never leak a raw error, stderr, or command output (#27
       "proj",
       OWNER_USER_ID,
       "drawer",
-      TURN_START,
-      TURN_END
+      NOTE_MARKER,
+      TURN_START
     );
 
     expect(evidence.error).toBe("docker_exec_failed");
     expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
   });
 
-  it("captureToolCallEvidence rejects an unsafe chat surface before it ever reaches a query", () => {
-    const neverCalledExec: ExecFileImpl = (() => {
-      throw new Error("must not be called");
+  it.each([
+    ["an unsafe chat surface", "drawer'; DROP TABLE app.chat_messages;--", NOTE_MARKER, TURN_START],
+    ["a note marker with a quote", "drawer", "uat/x'); DROP TABLE app.users;--.md", TURN_START],
+    ["an empty note marker", "drawer", "", TURN_START],
+    ["a loosely parsed timestamp", "drawer", NOTE_MARKER, "Tue Mar 1 2016 ' or 1=1"]
+  ])(
+    "captureToolCallEvidence rejects %s before it ever reaches a query",
+    (_label, surface, marker, start) => {
+      const neverCalledExec: ExecFileImpl = (() => {
+        throw new Error("must not be called");
+      }) as unknown as ExecFileImpl;
+
+      const evidence = captureToolCallEvidence(
+        neverCalledExec,
+        "proj",
+        OWNER_USER_ID,
+        surface,
+        marker,
+        start
+      );
+
+      expect(evidence.error).toBe("unexpected_docker_output");
+    }
+  );
+});
+
+describe("attachNotesFailureEvidence keeps malformed stored values out of both outputs (#2737)", () => {
+  it("labels nested private values malformed in the attachment and the console", async () => {
+    const nested = { leaked: PRIVATE_MARKER };
+    const fakeExec: ExecFileImpl = ((_cmd: string, args: readonly string[]) => {
+      if (args.includes("sh")) return "123\n";
+      const sql = lastArg(args);
+      if (sql.includes("moss_action_audit_log")) {
+        return JSON.stringify([{ tool_name: nested, outcome: nested, occurred_at: nested }]);
+      }
+      return JSON.stringify([
+        {
+          has_reply: true,
+          activity: [
+            { kind: "tool", toolName: nested, outcome: nested, text: PRIVATE_MARKER },
+            { kind: nested, toolName: "notes.create" }
+          ]
+        }
+      ]);
     }) as unknown as ExecFileImpl;
 
-    const evidence = captureToolCallEvidence(
-      neverCalledExec,
-      "proj",
-      OWNER_USER_ID,
-      "drawer'; DROP TABLE app.chat_messages;--",
-      TURN_START,
-      TURN_END
-    );
+    const attached: string[] = [];
+    const fakeTestInfo = {
+      attach: async (_name: string, options: { body: string | Buffer }) => {
+        attached.push(String(options.body));
+      }
+    } as unknown as TestInfo;
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    let printed: string;
 
-    expect(evidence.error).toBe("unexpected_docker_output");
+    try {
+      await attachNotesFailureEvidence(
+        fakeTestInfo,
+        {
+          projectName: "proj",
+          ownerUserId: OWNER_USER_ID,
+          fullNotePath: `/data/vaults/${OWNER_USER_ID}/${NOTE_MARKER}`,
+          chatSurface: "drawer",
+          noteRequestMarker: NOTE_MARKER,
+          turnStartIso: TURN_START,
+          retrievalTurnStartIso: TURN_END
+        },
+        fakeExec
+      );
+      printed = consoleSpy.mock.calls.map((call) => call.map(String).join(" ")).join("\n");
+    } finally {
+      consoleSpy.mockRestore();
+    }
+
+    expect(printed).toContain("[uat #2737]");
+    expect(attached).toHaveLength(1);
+    for (const output of [attached[0]!, printed]) {
+      expect(output).not.toContain(PRIVATE_MARKER);
+      expect(output).toContain("malformed");
+    }
+    const evidence = JSON.parse(attached[0]!) as {
+      actionAudit: { entries: unknown[] };
+      toolCalls: { events: unknown[] };
+    };
+    expect(evidence.actionAudit.entries).toEqual([
+      { toolName: "malformed", outcome: "malformed", occurredAt: "malformed" }
+    ]);
+    expect(evidence.toolCalls.events).toEqual([
+      { kind: "tool", toolName: "malformed", status: "malformed" }
+    ]);
   });
 });

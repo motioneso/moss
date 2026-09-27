@@ -53,7 +53,11 @@ test.afterEach(async (_, testInfo) => {
   )?.description;
   if (!projectName || !turnAnnotation) return;
   try {
-    const turn = JSON.parse(turnAnnotation) as { fullNotePath: string; turnStartIso: string };
+    const turn = JSON.parse(turnAnnotation) as {
+      fullNotePath: string;
+      noteRequestMarker: string;
+      turnStartIso: string;
+    };
     const retrievalAnnotation = testInfo.annotations.find(
       (annotation) => annotation.type === RETRIEVAL_TURN_ANNOTATION_TYPE
     )?.description;
@@ -65,6 +69,7 @@ test.afterEach(async (_, testInfo) => {
       ownerUserId: UAT_ADMIN_ID,
       fullNotePath: turn.fullNotePath,
       chatSurface: CHAT_SURFACE,
+      noteRequestMarker: turn.noteRequestMarker,
       turnStartIso: turn.turnStartIso,
       retrievalTurnStartIso
     });
@@ -93,13 +98,14 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   );
   await composer.press("Enter");
 
-  // #2737: record the note-writing turn's own start time right now, synchronously — nothing
-  // awaited here — so a failure's evidence can later be scoped to exactly this turn's time
-  // window instead of guessing from "the newest thread" or "the last saved message".
+  // #2737: record the turn's start time and its unique note path right now, synchronously —
+  // nothing awaited here. Failure evidence finds this exact request by that path, never by
+  // "the newest thread" or "the last saved message".
   test.info().annotations.push({
     type: TURN_ANNOTATION_TYPE,
     description: JSON.stringify({
       fullNotePath: `${NOTES_ROOT}/${path}`,
+      noteRequestMarker: path,
       turnStartIso: new Date(syncNotBefore).toISOString()
     })
   });

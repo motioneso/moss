@@ -13,22 +13,17 @@
 // there, which is why the note-file check has always worked this way and why the other two
 // checks now read the stack's own Postgres container instead of calling its HTTP API:
 //   1. Does the note file exist in the stack, and what size is it (never its contents)?
-//   2. The gateway's own action-audit table (app.moss_action_audit_log) for the turn — the
-//      authoritative "did a real tool run" signal per the #2737 diagnosis.
-//   3. The chat activity recorded on the assistant message(s) saved in the note-writing turn's
-//      own time window, bounded to tool-call/result kind, tool name and status — the weaker
-//      "what did the agent say it called" signal.
-//
-// The turn's time window is [turnStartIso, retrievalTurnStartIso) — both are plain
-// `Date.now()` values the spec records synchronously, before it sends each chat message, never
-// awaited and never on the assertion path. Scoping to that window (rather than "the newest
-// thread" or "the last saved message") is what keeps this evidence tied to the turn that matters:
-// a chat reply is only saved once it completes, so an in-flight or stalled turn can otherwise
-// leave an older message looking like the answer.
+//   2. The gateway's own action-audit table (app.moss_action_audit_log) — the authoritative
+//      "did a real tool run" signal per the #2737 diagnosis. Audit rows carry no turn or note
+//      link, so this is every row for the account in the turn's time window, labelled as such.
+//   3. The tool activity recorded on the one reply to the note-writing request, found by the
+//      request's unique note path and the shared save time chat gives a request and its reply —
+//      the weaker "what did the agent say it called" signal.
 //
 // Every step is independently best-effort: a failure is recorded as a fixed reason code, never
-// as the raw error object or any command output, so a private value a command's stderr or a
-// database row happened to contain can never ride along into the attachment or the console.
+// as the raw error object or any command output. Every database value is validated before it is
+// kept, and anything in an unexpected shape becomes the fixed label "malformed", so a private
+// value can never ride along into the attachment or the console.
 import { execFileSync } from "node:child_process";
 
 import type { TestInfo } from "@playwright/test";
@@ -39,16 +34,19 @@ const MAX_TOOL_CALL_EVENTS = 20;
 const CONTAINER_EXEC_TIMEOUT_MS = 10_000;
 const MISSING_MARKER = "NOTES_2737_MISSING";
 const AUDIT_ROW_LIMIT = 200;
-const CHAT_MESSAGE_ROW_LIMIT = 50;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CHAT_SURFACE_PATTERN = /^[a-z][a-z0-9-]{1,31}$/;
+const ISO_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 
 /** Fixed, non-identifying reasons a capture step can fail with — never a raw error's own text. */
 export type CaptureErrorCode =
   | "docker_exec_failed"
   | "docker_exec_timed_out"
   | "unexpected_docker_output"
+  | "note_request_not_saved"
+  | "note_request_ambiguous"
   | "turn_message_not_saved";
 
 /** `code` alone, or `code:status` when the failure carried a real exit status. */
@@ -227,7 +225,7 @@ function isSafeUuid(value: string): boolean {
   return UUID_PATTERN.test(value);
 }
 function isSafeTimestamp(value: string): boolean {
-  return !Number.isNaN(Date.parse(value));
+  return ISO_TIMESTAMP_PATTERN.test(value) && !Number.isNaN(Date.parse(value));
 }
 function isSafeChatSurface(value: string): boolean {
   return CHAT_SURFACE_PATTERN.test(value);
@@ -237,34 +235,81 @@ function isSafeChatSurface(value: string): boolean {
 // 2. Action-audit log (the gateway's own record of a real tool run)
 // ---------------------------------------------------------------------------------------------
 
+/** A value stored in the wrong shape, reported by this fixed label instead of its own text. */
+const MALFORMED = "malformed";
+
+/** A bounded, plain-identifier tool name. */
+const TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,100}$/;
+
+/** Every outcome app.moss_action_audit_log's check constraint allows (migration 0211). */
+const KNOWN_AUDIT_OUTCOMES = new Set([
+  "success",
+  "failed",
+  "denied",
+  "cancelled",
+  "invalid",
+  "conflict",
+  "suppressed",
+  "refused"
+]);
+
+/** Every outcome ChatActivityEventDto and TranscriptRecord allow. */
+const KNOWN_ACTIVITY_OUTCOMES = new Set(["executed", "denied", "error", "allowed"]);
+
+/** Every kind that represents a tool call, its update, or a gateway-audited outcome. */
+const TOOL_RELATED_KINDS = new Set(["tool", "result", "action_request", "action_result"]);
+
+function sanitizeToolName(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  return typeof raw === "string" && TOOL_NAME_PATTERN.test(raw) ? raw : MALFORMED;
+}
+
+function sanitizeFromSet(raw: unknown, allowed: ReadonlySet<string>): string | null {
+  if (raw === null || raw === undefined) return null;
+  return typeof raw === "string" && allowed.has(raw) ? raw : MALFORMED;
+}
+
+function sanitizeTimestamp(raw: unknown): string {
+  return typeof raw === "string" && isSafeTimestamp(raw) ? raw : MALFORMED;
+}
+
 export interface BoundAuditEntry {
-  readonly toolName: string;
-  readonly outcome: string;
+  readonly toolName: string | null;
+  readonly outcome: string | null;
   readonly occurredAt: string;
 }
 
 export interface ActionAuditEvidence {
   readonly source: "sql:app.moss_action_audit_log";
+  /**
+   * Audit rows carry no link to a chat turn or a note path, so these are every row for the
+   * account in the turn's time window. A row from another turn can appear here.
+   */
+  readonly scope: "account_time_window";
   readonly entries: readonly BoundAuditEntry[];
   readonly error: string | null;
 }
 
-/** Pure: keeps only tool name, outcome and timestamp — never requestId, chatSessionId or input. */
-export function summarizeAuditEntries(
-  entries: readonly { toolName: string; outcome: string; occurredAt: string }[]
-): readonly BoundAuditEntry[] {
-  return entries.map((entry) => ({
-    toolName: entry.toolName,
-    outcome: entry.outcome,
-    occurredAt: entry.occurredAt
-  }));
+/**
+ * Pure: keeps only a validated tool name, a recognized outcome and a timestamp. A value of any
+ * other shape becomes the fixed label "malformed", so a private value stored in the wrong place
+ * never reaches the attachment or the console.
+ */
+export function summarizeAuditEntries(rows: readonly unknown[]): readonly BoundAuditEntry[] {
+  return rows.map((row) => {
+    const record = (typeof row === "object" && row !== null ? row : {}) as Record<string, unknown>;
+    return {
+      toolName: sanitizeToolName(record.tool_name),
+      outcome: sanitizeFromSet(record.outcome, KNOWN_AUDIT_OUTCOMES),
+      occurredAt: sanitizeTimestamp(record.occurred_at)
+    };
+  });
 }
 
 /**
- * Reads the account's own action-audit rows for the turn's time window straight out of the
- * stack's Postgres container — this is the same table the #2737 diagnosis names as the one
- * authoritative "a tool actually ran" signal. Selects only tool_name, outcome and occurred_at;
- * never request_id, chat_session_id or the input summary column.
+ * Reads the account's action-audit rows for the turn's time window from the stack's Postgres
+ * container. This table is the one authoritative record that a tool actually ran. Selects only
+ * tool_name, outcome and occurred_at, never request_id, chat_session_id or input_summary.
  */
 export function captureActionAuditEvidence(
   execImpl: ExecFileImpl,
@@ -273,9 +318,9 @@ export function captureActionAuditEvidence(
   turnStartIso: string,
   turnEndIso: string
 ): ActionAuditEvidence {
-  const source = "sql:app.moss_action_audit_log" as const;
+  const base = { source: "sql:app.moss_action_audit_log", scope: "account_time_window" } as const;
   if (!isSafeUuid(ownerUserId) || !isSafeTimestamp(turnStartIso) || !isSafeTimestamp(turnEndIso)) {
-    return { source, entries: [], error: formatCaptureError("unexpected_docker_output") };
+    return { ...base, entries: [], error: formatCaptureError("unexpected_docker_output") };
   }
   const sql =
     "SELECT jsonb_agg(t.* ORDER BY occurred_at) FROM (" +
@@ -284,31 +329,12 @@ export function captureActionAuditEvidence(
     `AND occurred_at >= '${turnStartIso}' AND occurred_at < '${turnEndIso}' ` +
     `ORDER BY occurred_at LIMIT ${AUDIT_ROW_LIMIT}) t`;
   const result = runPsqlJsonQuery(execImpl, projectName, sql);
-  if (!result.ok) return { source, entries: [], error: result.code };
-  try {
-    const rows = result.rows as readonly {
-      tool_name: string;
-      outcome: string;
-      occurred_at: string;
-    }[];
-    return {
-      source,
-      entries: summarizeAuditEntries(
-        rows.map((row) => ({
-          toolName: row.tool_name,
-          outcome: row.outcome,
-          occurredAt: row.occurred_at
-        }))
-      ),
-      error: null
-    };
-  } catch {
-    return { source, entries: [], error: formatCaptureError("unexpected_docker_output") };
-  }
+  if (!result.ok) return { ...base, entries: [], error: result.code };
+  return { ...base, entries: summarizeAuditEntries(result.rows), error: null };
 }
 
 // ---------------------------------------------------------------------------------------------
-// 3. Bounded chat activity for the assistant message(s) saved in the turn's own time window
+// 3. Bounded chat activity on the reply to the note-writing request itself
 // ---------------------------------------------------------------------------------------------
 
 export interface BoundToolCallEvent {
@@ -325,103 +351,104 @@ export interface ToolCallEvidence {
   readonly error: string | null;
 }
 
-interface RawActivityEventForEvidence {
-  readonly kind: string;
-  readonly toolName?: string;
-  readonly outcome?: string;
-}
-
-/** Only these kinds represent an actual tool call, update, or gateway-audited outcome. */
-const TOOL_RELATED_KINDS = new Set(["tool", "result", "action_request", "action_result"]);
-
 /**
  * Pure: keeps only tool-related events (never a "thought"/"reply"/etc, which could otherwise
  * fill the whole cap and hide the one tool event that matters), THEN caps at
  * MAX_TOOL_CALL_EVENTS, and reports how many were dropped by the cap. Each kept event carries
- * only kind, tool name and status — never text, toolCallId or arguments.
+ * only kind, a validated tool name and a recognized status. Anything stored in another shape
+ * becomes the fixed label "malformed".
  */
-export function boundToolCallEvents(events: readonly RawActivityEventForEvidence[]): {
+export function boundToolCallEvents(events: readonly unknown[]): {
   readonly events: readonly BoundToolCallEvent[];
   readonly omittedCount: number;
 } {
-  const toolRelated = events.filter((event) => TOOL_RELATED_KINDS.has(event.kind));
+  const toolRelated = events.flatMap((event) => {
+    if (typeof event !== "object" || event === null) return [];
+    const record = event as Record<string, unknown>;
+    return typeof record.kind === "string" && TOOL_RELATED_KINDS.has(record.kind)
+      ? [{ ...record, kind: record.kind }]
+      : [];
+  });
   const kept = toolRelated.slice(0, MAX_TOOL_CALL_EVENTS);
   return {
     events: kept.map((event) => ({
       kind: event.kind,
-      toolName: event.toolName ?? null,
-      status: event.outcome ?? null
+      toolName: sanitizeToolName(event.toolName),
+      status: sanitizeFromSet(event.outcome, KNOWN_ACTIVITY_OUTCOMES)
     })),
     omittedCount: toolRelated.length - kept.length
   };
 }
 
+/** The spec's own unique note path, e.g. `uat/notes-default-retrieval-1790000000000.md`. */
+const NOTE_REQUEST_MARKER_PATTERN = /^[A-Za-z0-9/_.-]{1,200}$/;
+
+// Per-field string guard, so a nested object under kind/toolName/outcome leaves the database as
+// SQL NULL rather than as its own contents.
+const ACTIVITY_PROJECTION =
+  "COALESCE((SELECT jsonb_agg(jsonb_build_object(" +
+  "'kind', CASE WHEN jsonb_typeof(e->'kind') = 'string' THEN e->>'kind' END, " +
+  "'toolName', CASE WHEN jsonb_typeof(e->'toolName') = 'string' THEN e->>'toolName' END, " +
+  "'outcome', CASE WHEN jsonb_typeof(e->'outcome') = 'string' THEN e->>'outcome' END)) " +
+  "FROM jsonb_array_elements(CASE WHEN jsonb_typeof(a.tool_metadata->'activity') = 'array' " +
+  "THEN a.tool_metadata->'activity' ELSE '[]'::jsonb END) e), '[]'::jsonb)";
+
 /**
- * Reads the assistant message(s) saved, for this account's drawer-surface threads, at or after
- * the note-writing turn's start and before the retrieval turn's start (or now, if the retrieval
- * turn never started). A chat reply is saved only once it completes, so scoping by time — rather
- * than "the newest thread" or "the last saved message" — is what keeps this tied to the one turn
- * that matters: a timeout or a later, unrelated turn can otherwise leave an older message looking
- * like the answer. If nothing was saved in that window, reports the fixed reason
- * `turn_message_not_saved` instead of falling back to an older message.
+ * Reads the tool activity recorded on the one reply to the note-writing request.
+ *
+ * Chat saves a turn's request and reply together, once the turn completes, with one shared
+ * created_at (ChatRepository.recordCompletedTurn). So the request is the user message whose body
+ * contains the spec's unique note path, and its reply is the assistant message in the same
+ * thread with the same created_at. A reply from any other turn can never match, however its
+ * save time falls.
+ *
+ * Reports a fixed reason instead of guessing: `note_request_not_saved` when no such request was
+ * saved (the turn never completed), `note_request_ambiguous` when more than one request or reply
+ * matches, and `turn_message_not_saved` when the request has no reply beside it.
  */
 export function captureToolCallEvidence(
   execImpl: ExecFileImpl,
   projectName: string,
   ownerUserId: string,
   chatSurface: string,
-  turnStartIso: string,
-  turnEndIso: string
+  noteRequestMarker: string,
+  turnStartIso: string
 ): ToolCallEvidence {
   const source = "sql:app.chat_messages" as const;
+  const fail = (error: string): ToolCallEvidence => ({
+    source,
+    events: [],
+    omittedCount: 0,
+    error
+  });
   if (
     !isSafeUuid(ownerUserId) ||
     !isSafeChatSurface(chatSurface) ||
-    !isSafeTimestamp(turnStartIso) ||
-    !isSafeTimestamp(turnEndIso)
+    !NOTE_REQUEST_MARKER_PATTERN.test(noteRequestMarker) ||
+    !isSafeTimestamp(turnStartIso)
   ) {
-    return {
-      source,
-      events: [],
-      omittedCount: 0,
-      error: formatCaptureError("unexpected_docker_output")
-    };
+    return fail(formatCaptureError("unexpected_docker_output"));
   }
   const sql =
-    "SELECT jsonb_agg(t.* ORDER BY created_at) FROM (" +
-    "SELECT m.created_at, m.tool_metadata->'activity' AS activity FROM app.chat_messages m " +
-    "JOIN app.chat_threads th ON th.id = m.thread_id " +
+    "SELECT jsonb_agg(t.*) FROM (" +
+    `SELECT a.id IS NOT NULL AS has_reply, ${ACTIVITY_PROJECTION} AS activity ` +
+    "FROM app.chat_messages u " +
+    "JOIN app.chat_threads th ON th.id = u.thread_id " +
+    "LEFT JOIN app.chat_messages a ON a.thread_id = u.thread_id " +
+    "AND a.role = 'assistant' AND a.created_at = u.created_at " +
     `WHERE th.owner_user_id = '${ownerUserId}' AND th.surface = '${chatSurface}' ` +
-    "AND m.role = 'assistant' " +
-    `AND m.created_at >= '${turnStartIso}' AND m.created_at < '${turnEndIso}' ` +
-    `ORDER BY m.created_at LIMIT ${CHAT_MESSAGE_ROW_LIMIT}) t`;
+    `AND u.role = 'user' AND u.created_at >= '${turnStartIso}' ` +
+    `AND strpos(u.body, '${noteRequestMarker}') > 0 ` +
+    "LIMIT 2) t";
   const result = runPsqlJsonQuery(execImpl, projectName, sql);
-  if (!result.ok) return { source, events: [], omittedCount: 0, error: result.code };
+  if (!result.ok) return fail(result.code);
+  if (result.rows.length === 0) return fail(formatCaptureError("note_request_not_saved"));
+  if (result.rows.length > 1) return fail(formatCaptureError("note_request_ambiguous"));
 
-  if (result.rows.length === 0) {
-    return {
-      source,
-      events: [],
-      omittedCount: 0,
-      error: formatCaptureError("turn_message_not_saved")
-    };
-  }
-
-  try {
-    const rows = result.rows as readonly { created_at: string; activity: unknown }[];
-    const combinedActivity = rows.flatMap((row) =>
-      Array.isArray(row.activity) ? (row.activity as RawActivityEventForEvidence[]) : []
-    );
-    const bounded = boundToolCallEvents(combinedActivity);
-    return { source, events: bounded.events, omittedCount: bounded.omittedCount, error: null };
-  } catch {
-    return {
-      source,
-      events: [],
-      omittedCount: 0,
-      error: formatCaptureError("unexpected_docker_output")
-    };
-  }
+  const row = result.rows[0] as { has_reply?: unknown; activity?: unknown } | null;
+  if (row?.has_reply !== true) return fail(formatCaptureError("turn_message_not_saved"));
+  const bounded = boundToolCallEvents(Array.isArray(row.activity) ? row.activity : []);
+  return { source, events: bounded.events, omittedCount: bounded.omittedCount, error: null };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -433,6 +460,8 @@ export interface NotesFailureEvidenceParams {
   readonly ownerUserId: string;
   readonly fullNotePath: string;
   readonly chatSurface: string;
+  /** The note path as written in the request, unique per run, used to find the request. */
+  readonly noteRequestMarker: string;
   readonly turnStartIso: string;
   /** ISO time the retrieval turn was sent, or null if the test failed before reaching it. */
   readonly retrievalTurnStartIso: string | null;
@@ -440,40 +469,37 @@ export interface NotesFailureEvidenceParams {
 
 /**
  * Runs all three captures best-effort and attaches the combined result to the failed test, plus
- * a short bounded summary to the console. Never throws — a capture failure is recorded as a
- * fixed reason code on its own section, so it can never mask the spec's real (already-decided)
- * failure, and it never carries a raw error, stderr, or database row that could quote private
- * data. Entirely synchronous: every read here is a direct `docker compose exec`, so this never
- * touches the browser, a cookie, or the network.
+ * the same bounded JSON to the console. Never throws, and never carries a raw error, stderr, or
+ * database value that failed validation. Every read is a direct `docker compose exec`, so this
+ * never touches the browser, a cookie, or the network. Tests pass a fake `execImpl`.
  */
 export async function attachNotesFailureEvidence(
   testInfo: TestInfo,
-  params: NotesFailureEvidenceParams
+  params: NotesFailureEvidenceParams,
+  execImpl: ExecFileImpl = execFileSync
 ): Promise<void> {
   const turnEndIso = params.retrievalTurnStartIso ?? new Date().toISOString();
 
-  const noteFile = captureNoteFileEvidence(execFileSync, params.projectName, params.fullNotePath);
+  const noteFile = captureNoteFileEvidence(execImpl, params.projectName, params.fullNotePath);
   const actionAudit = captureActionAuditEvidence(
-    execFileSync,
+    execImpl,
     params.projectName,
     params.ownerUserId,
     params.turnStartIso,
     turnEndIso
   );
   const toolCalls = captureToolCallEvidence(
-    execFileSync,
+    execImpl,
     params.projectName,
     params.ownerUserId,
     params.chatSurface,
-    params.turnStartIso,
-    turnEndIso
+    params.noteRequestMarker,
+    params.turnStartIso
   );
 
   const evidence = { noteFile, actionAudit, toolCalls };
   const json = JSON.stringify(evidence, null, 2);
 
-  // Bounded and safe to print: fixed reason codes, counts and outcomes only — never content,
-  // arguments, or a raw error's own text.
   console.error(`[uat #2737] notes-default-retrieval failure evidence:\n${json}`);
 
   try {
