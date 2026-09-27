@@ -1,12 +1,15 @@
 import { isNewsBriefingEvidence, isSportsBriefingEvidence, readPlanContext } from "@moss/shared";
 
 // One honest line per source for the morning report's "What informed this
-// briefing?" block. What each number measures: lines the section gave the
-// synthesis prompt for THIS report (saved as sectionLines), never the raw
-// holdings behind a section. Runs saved before sectionLines fall back to the
-// closest saved figure with neutral nouns. A source the section flags empty
-// or failed shows no line either way, so the row always agrees with the gap
-// note; a truncated source still names the lines the report got.
+// briefing?" block. What each number measures: calendar counts the real
+// meetings read for today (saved as calendarTodayCount), email counts the
+// real emails read (saved as emailMessageCount) — never signal notes about
+// them. Every other row counts the lines its section gave the synthesis
+// prompt for THIS report (saved as sectionLines). Runs saved before these
+// fields fall back to the closest saved figure with neutral nouns. A source
+// the section flags empty or failed shows no line either way, so the row
+// always agrees with the gap note; a truncated source still names what the
+// report got.
 export function contributionFor(
   source: string,
   sourceMetadata: Record<string, unknown>
@@ -16,6 +19,14 @@ export function contributionFor(
     const lines = sectionLineCount(sourceMetadata, source);
     if (lines !== undefined && lines === 0) return null;
     return dayPlanBlocks(sourceMetadata);
+  }
+  if (source === "calendar") {
+    // Real meetings read for today, never signal notes (Ben ruling #2745).
+    return countLine(countOf(sourceMetadata, "calendarTodayCount"), "event", "on today's schedule");
+  }
+  if (source === "email") {
+    // Real emails read, never signal notes (Ben ruling #2745).
+    return countLine(countOf(sourceMetadata, "emailMessageCount"), "email", "read");
   }
   const lines = sectionLineCount(sourceMetadata, source);
   if (lines !== undefined) {
@@ -27,10 +38,6 @@ export function contributionFor(
 
 function lineFor(source: string, lines: number): string | null {
   switch (source) {
-    case "calendar":
-      return countLine(lines, "event", "on today's schedule");
-    case "email":
-      return countLine(lines, "actionable message");
     case "tasks":
       return countLine(lines, "task");
     case "commitments":
@@ -54,14 +61,6 @@ function lineFor(source: string, lines: number): string | null {
 // the raw 48-hour calendar event count or the unfiltered email message count.
 function legacyLineFor(source: string, sourceMetadata: Record<string, unknown>): string | null {
   switch (source) {
-    case "calendar":
-      return countLine(
-        arrayLength(sourceMetadata, "calendarSignals"),
-        "event",
-        "on today's schedule"
-      );
-    case "email":
-      return countLine(arrayLength(sourceMetadata, "emailSignals"), "actionable message");
     case "tasks":
       return countLine(countOf(sourceMetadata, "taskCount"), "task");
     case "commitments":
@@ -150,11 +149,6 @@ function hasBlockingGap(sourceMetadata: Record<string, unknown>, source: string)
 function countOf(sourceMetadata: Record<string, unknown>, key: string): number {
   const value = sourceMetadata[key];
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
-}
-
-function arrayLength(sourceMetadata: Record<string, unknown>, key: string): number {
-  const value = sourceMetadata[key];
-  return Array.isArray(value) ? value.length : 0;
 }
 
 function plural(count: number, singular: string, pluralForm?: string): string {

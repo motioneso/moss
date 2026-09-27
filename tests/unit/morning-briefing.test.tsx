@@ -135,7 +135,8 @@ describe("MorningBriefingReader report", () => {
           ]
         },
         gaps: [],
-        sectionLines: { calendar: 4, tasks: 5 },
+        sectionLines: { calendar: 9, tasks: 5 },
+        calendarTodayCount: 4,
         calendarEventCount: 9,
         taskCount: 9
       }

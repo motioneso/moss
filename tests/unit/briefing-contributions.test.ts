@@ -107,8 +107,32 @@ const current = {
 };
 
 describe("contributionFor on current runs", () => {
-  it("names the calendar lines given, not the raw event holdings", () => {
-    expect(contributionFor("calendar", current)).toBe("3 events on today's schedule");
+  it("counts real meetings read, not notes about them", () => {
+    const threeMeetingsFiveNotes = {
+      ...current,
+      calendarTodayCount: 3,
+      sectionLines: { ...current.sectionLines, calendar: 5 },
+      calendarEventCount: 9,
+      calendarSignals: [{}, {}, {}, {}, {}]
+    };
+    expect(contributionFor("calendar", threeMeetingsFiveNotes)).toBe(
+      "3 events on today's schedule"
+    );
+  });
+
+  it("counts real emails read, not notes about them", () => {
+    const sevenEmailsTwoNotes = {
+      ...current,
+      emailMessageCount: 7,
+      sectionLines: { ...current.sectionLines, email: 2 },
+      emailSignals: [{}, {}]
+    };
+    expect(contributionFor("email", sevenEmailsTwoNotes)).toBe("7 emails read");
+  });
+
+  it("shows no calendar line when the real-meetings count was never saved", () => {
+    const { calendarTodayCount: _dropped, ...without } = current as Record<string, unknown>;
+    expect(contributionFor("calendar", without)).toBeNull();
   });
 
   it("names neutral task and commitment lines without claiming open", () => {
@@ -118,7 +142,7 @@ describe("contributionFor on current runs", () => {
   });
 
   it("names email, chat, note and goal lines given", () => {
-    expect(contributionFor("email", current)).toBe("2 actionable messages");
+    expect(contributionFor("email", current)).toBe("7 emails read");
     expect(contributionFor("chats", current)).toBe("6 turns from today's chats");
     expect(contributionFor("vault", current)).toBe("3 saved notes");
     expect(contributionFor("goals", current)).toBe("2 tracked goals");
@@ -157,14 +181,14 @@ describe("contributionFor on current runs", () => {
 describe("contributionFor on older runs without sectionLines", () => {
   const { sectionLines: _dropped, ...legacy } = current;
 
-  it("prefers calendar signals over the raw event holdings", () => {
-    expect(contributionFor("calendar", legacy)).toBe("3 events on today's schedule");
+  it("shows no calendar line without the real-meetings count, never signals", () => {
+    expect(contributionFor("calendar", legacy)).toBeNull();
     expect(contributionFor("calendar", { gaps: [] })).toBeNull();
   });
 
   it("names neutral gathered counts without claiming open", () => {
     expect(contributionFor("tasks", legacy)).toBe("13 tasks");
-    expect(contributionFor("email", legacy)).toBe("2 actionable messages");
+    expect(contributionFor("email", legacy)).toBe("7 emails read");
   });
 
   it("shows no line for an empty source even with evidence stored", () => {

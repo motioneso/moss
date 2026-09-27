@@ -11,5 +11,6 @@ describe("composeBriefing — section line counts", () => {
     expect(sectionLines.tasks).toBeGreaterThan(0);
     expect(sectionLines.calendar).toBeGreaterThan(0);
     expect(sectionLines.email).toBeGreaterThan(0);
+    expect(result.sourceMetadata.calendarTodayCount).toBe(1);
   });
 });

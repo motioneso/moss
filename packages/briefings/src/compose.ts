@@ -11,6 +11,7 @@ import {
   recordSourceAuthGap,
   buildExternalModulesSection,
   ctxFor,
+  withinLocalDay,
   type ComposeDeps,
   type ComposeRunInput,
   type ComposeResult,
@@ -388,6 +389,12 @@ export async function composeBriefing(
     count: prioritizedCalendarSignals.length,
     rawItems: rawCalendar.rawItems
   };
+  // Real meetings read for today (#2745): the raw pull spans 48 hours, so the
+  // row counts only the raw events landing on the report's local day, never
+  // the signal notes derived from them.
+  const calendarTodayCount = (rawCalendar.rawItems ?? []).filter((item) =>
+    withinLocalDay(item.startsAt, now, timeZone)
+  ).length;
   const email: Section = {
     key: rawEmail.key,
     label: rawEmail.label,
@@ -564,6 +571,7 @@ export async function composeBriefing(
       taskCount: prioritizedTasks.count,
       goalsCount: goals.count,
       sectionLines: sectionLineCounts,
+      calendarTodayCount,
       calendarCount: calendar.count,
       calendarEventCount: rawCalendar.rawItems?.length ?? 0,
       calendarSignals: prioritizedCalendarSignals,

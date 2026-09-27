@@ -30,6 +30,13 @@ section flags empty or failed shows no line so the row agrees with the gap
 note. Runs saved before `sectionLines` fall back to the closest saved figure
 (signals over raw holdings, neutral nouns) and are documented as best-effort.
 
+Ben ruling (2026-09-27, on PR 2756): calendar and email rows count the REAL
+items, never notes about them. Calendar counts today's raw meetings read
+(saved as `calendarTodayCount`, local-day bounded so the 48-hour pull cannot
+leak tomorrow in); email counts raw messages read (saved as
+`emailMessageCount`). 3 meetings producing 5 notes shows 3. Every other row
+stays as reviewed.
+
 Rejected alternative: a per-source `contributions` block written at compose time
 with pre-rendered sentences. Steelman: it would let old and new runs share wording
 and could carry topics. Rejected because it duplicates data already stored, needs a
@@ -68,15 +75,18 @@ stays truthful for old runs (missing field means no line, which is honest).
 
 1. `packages/briefings/src/compose.ts` and `fallback.ts` — save
    `goalsCount` and `sectionLines` (per-section prompt-line counts)
-   alongside the existing counts. Additive only; old runs read as absent.
+   alongside the existing counts. Compose also saves `calendarTodayCount`
+   (raw events landing on the report's local day). Additive only; old runs
+   read as absent.
 2. New `apps/web/src/today/briefing-contributions.ts` — pure function
    `contributionFor(source, sourceMetadata): string | null`.
    Exported signature only; no component code in this plan.
    Mapping (null means render no line):
-   - Current runs read `sectionLines`: calendar signals given ("3 events on
-     today's schedule"), email signals ("2 actionable messages"), tasks,
-     commitments, vault, chats, goals, news facts, sports facts, day_plan
-     gated on saved evening blocks.
+   - Calendar reads `calendarTodayCount` (today's raw meetings, "3 events on
+     today's schedule"); email reads `emailMessageCount` ("7 emails read").
+   - Other current runs read `sectionLines`: tasks, commitments, vault,
+     chats, goals, news facts, sports facts, day_plan gated on saved
+     evening blocks.
    - Older runs without `sectionLines`: calendar/email prefer saved signals
      over raw holdings; tasks/commitments use gathered counts with neutral
      nouns (no "open" claim); news/sports use stored evidence.
