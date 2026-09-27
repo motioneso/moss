@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { CalendarEventDto, GetDayPlanResponse, LocaleSettingsDto } from "@moss/shared";
@@ -7,7 +8,15 @@ import { Button } from "@moss/ui";
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import { buildDayItems } from "./day-plan-view-model.js";
-import { durationText, SnapshotRow, TimelineLegend, TimelineRow } from "./today-timeline.js";
+import { buildScheduleGaps } from "./day-plan-gaps.js";
+import {
+  durationText,
+  ScheduleClosingLineView,
+  ScheduleGapRowView,
+  SnapshotRow,
+  TimelineLegend,
+  TimelineRow
+} from "./today-timeline.js";
 import type { DayItem } from "./day-plan-view-model.js";
 
 export interface DayPlanSectionProps {
@@ -270,6 +279,7 @@ export function DayPlanSection(props: DayPlanSectionProps) {
   ) : null;
   if (editorial) {
     const today = props.todayLayout === true;
+    const scheduleGaps = today ? buildScheduleGaps(items, props.locale) : null;
     const proposed = items.some((item) => item.state === "proposed" || item.state === "pending");
     const blockCount = taskBlocks.length;
     const status =
@@ -309,19 +319,32 @@ export function DayPlanSection(props: DayPlanSectionProps) {
           )
         ) : (
           <>
-            {today ? <TimelineLegend proposed={proposed} /> : null}
+            {today ? (
+              <TimelineLegend
+                proposed={proposed}
+                showOpenTime={scheduleGaps !== null && scheduleGaps.rows.length > 0}
+              />
+            ) : null}
             <div className="day-list">
-              {items.map((item) => (
-                <DayItemRow
-                  key={item.key}
-                  item={item}
-                  locale={props.locale}
-                  onOpenTask={props.onOpenTask}
-                  editorial
-                  snapshot={snapshot}
-                />
-              ))}
+              {items.map((item) => {
+                const gapRow = scheduleGaps?.rows.find((row) => row.afterItemKey === item.key);
+                return (
+                  <Fragment key={item.key}>
+                    <DayItemRow
+                      item={item}
+                      locale={props.locale}
+                      onOpenTask={props.onOpenTask}
+                      editorial
+                      snapshot={snapshot}
+                    />
+                    {gapRow !== undefined ? (
+                      <ScheduleGapRowView row={gapRow} locale={props.locale} />
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </div>
+            {scheduleGaps?.closing ? <ScheduleClosingLineView line={scheduleGaps.closing} /> : null}
             {today || snapshot ? null : <TimelineLegend />}
           </>
         )}

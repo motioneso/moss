@@ -10,8 +10,8 @@ import { Check } from "lucide-react";
 
 import { Card } from "@moss/ui";
 
-import { useAssistantName } from "../api/use-assistant-name";
-import { targetTimeFor } from "../briefings/briefing-settings-model";
+import { useAssistantName } from "../api/use-assistant-name.js";
+import { targetTimeFor } from "../briefings/briefing-settings-model.js";
 import {
   DEFAULT_LOCALE,
   formatDate,
@@ -19,9 +19,9 @@ import {
   isValidTimeZone,
   zonedClockParts,
   zonedClockMinutes
-} from "../locale/locale-format";
-import { BriefingFeedbackMenu } from "./briefing-feedback-menu";
-import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshness";
+} from "../locale/locale-format.js";
+import { BriefingFeedbackMenu } from "./briefing-feedback-menu.js";
+import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshness.js";
 import {
   EVENING_OPEN_LOOPS_EMPTY,
   EVENING_OPEN_LOOPS_HEADING,
@@ -31,7 +31,7 @@ import {
   eventCaptureText,
   joinClauses,
   PLAN_TOMORROW_LABEL
-} from "./today-labels";
+} from "./today-labels.js";
 
 export type TodayMode = "day" | "evening";
 

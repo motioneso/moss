@@ -5,8 +5,8 @@ import {
   type TaskDto
 } from "@moss/shared";
 
-import { formatDate, formatTime } from "../locale/locale-format";
-import type { TodayMode } from "./evening-mode";
+import { formatDate, formatTime } from "../locale/locale-format.js";
+import type { TodayMode } from "./evening-mode.js";
 
 /** Pure label/headline helpers for the Today masthead and brief lists — no React. */
 
