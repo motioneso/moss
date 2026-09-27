@@ -529,11 +529,9 @@ export function registerChatLiveRoutes(
           undefined,
           surfaceResult.surface
         );
-      } catch (error) {
-        reply.log?.warn?.(
-          { errorName: error instanceof Error ? error.name : typeof error },
-          "chat stream session pre-start failed"
-        );
+      } catch {
+        // Fixed text only. An error's name, message and cause can carry private detail.
+        reply.log?.warn?.("chat stream session pre-start failed");
       }
     }
 

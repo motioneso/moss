@@ -6,8 +6,13 @@ import { PageContextStore } from "./live/page-context-store.js";
 
 const ACTOR = "00000000-0000-4000-8000-0000000000a1";
 
+const PRIVATE_MARKER = "PRIVATE_2737_MARKER";
+
 async function openStream(ensureSession: () => Promise<unknown>) {
-  const app = Fastify({ logger: false });
+  const logLines: string[] = [];
+  const app = Fastify({
+    logger: { level: "trace", stream: { write: (line: string) => logLines.push(line) } }
+  });
   const subscribedSurfaces: (string | undefined)[] = [];
   const statusCodes: number[] = [];
 
@@ -46,7 +51,7 @@ async function openStream(ensureSession: () => Promise<unknown>) {
   } finally {
     await app.close();
   }
-  return { subscribedSurfaces, statusCodes };
+  return { subscribedSurfaces, statusCodes, logLines };
 }
 
 describe("GET /api/chat/stream session pre-start", () => {
@@ -69,5 +74,20 @@ describe("GET /api/chat/stream session pre-start", () => {
 
     expect(result.subscribedSurfaces).toEqual(["drawer"]);
     expect(result.statusCodes).toEqual([200]);
+  });
+
+  it("logs a pre-start failure without any of the error's own text", async () => {
+    const error = new Error(`message ${PRIVATE_MARKER}`, {
+      cause: new Error(`cause ${PRIVATE_MARKER}`)
+    });
+    error.name = `Name${PRIVATE_MARKER}`;
+
+    const result = await openStream(async () => {
+      throw error;
+    });
+
+    const log = result.logLines.join("\n");
+    expect(log).toContain("chat stream session pre-start failed");
+    expect(log).not.toContain(PRIVATE_MARKER);
   });
 });

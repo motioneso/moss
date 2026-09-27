@@ -18,6 +18,7 @@ import {
   parseRecord,
   mergeWorkflowApprovalRecords,
   shouldEndPrivateChatOnStreamDisconnect,
+  streamRetryDelayMs,
   useChatStream
 } from "../../apps/web/src/chat/use-chat-stream.js";
 
@@ -365,6 +366,60 @@ describe("useChatStream", () => {
         vi.advanceTimersByTime(60_000);
       });
       expect(FakeEventSource.instances).toHaveLength(1);
+    });
+
+    it("resets the delay once a reopened stream connects", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.stubGlobal("EventSource", FakeEventSource);
+      await mountDrawer();
+
+      await act(async () => refuse(FakeEventSource.instances[0]!));
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      await act(async () => FakeEventSource.instances[1]!.onopen?.());
+      await act(async () => refuse(FakeEventSource.instances[1]!));
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(FakeEventSource.instances).toHaveLength(3);
+    });
+
+    it("caps the delay at 30 seconds", () => {
+      expect([0, 1, 2, 4, 5, 10, 40].map(streamRetryDelayMs)).toEqual([
+        1_000, 2_000, 4_000, 16_000, 30_000, 30_000, 30_000
+      ]);
+    });
+
+    it("does not end a new private chat after the stream recovers", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.stubGlobal("EventSource", FakeEventSource);
+      vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+      let errorCount = -1;
+      function ErrorCountProbe() {
+        errorCount = useChatStream("drawer" as ChatSurface).streamErrorCount;
+        return null;
+      }
+      await act(async () => {
+        create(createElement(ErrorCountProbe));
+        await Promise.resolve();
+      });
+
+      await act(async () => refuse(FakeEventSource.instances[0]!));
+      expect(errorCount).toBe(1);
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      await act(async () => FakeEventSource.instances[1]!.onopen?.());
+
+      expect(errorCount).toBe(0);
+      expect(
+        shouldEndPrivateChatOnStreamDisconnect({
+          privateMode: true,
+          privateEnded: false,
+          streamErrorCount: errorCount
+        })
+      ).toBe(false);
     });
 
     it("stops reopening once unmounted", async () => {

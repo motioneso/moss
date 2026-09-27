@@ -1,3 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { TestInfo } from "@playwright/test";
 import { describe, expect, it, vi } from "vitest";
 
@@ -168,6 +173,63 @@ describe("container reads never leak a raw error, stderr, or command output (#27
     );
 
     expect(evidence).toMatchObject({ exists: null, error: "note_file_unreadable" });
+  });
+
+  // Runs the real file-check shell command against a fake stat, so the command's own handling
+  // of missing and unreadable files is under test, not just the marker parsing.
+  describe("the file-check command", () => {
+    function runWithFakeStat(stdout: string, stderr: string, exitCode: number) {
+      const dir = mkdtempSync(join(tmpdir(), "notes-2737-stat-"));
+      try {
+        const fakeStat = join(dir, "stat");
+        writeFileSync(
+          fakeStat,
+          `#!/bin/sh\nprintf '%s' '${stdout}'\nprintf '%s\\n' '${stderr}' >&2\nexit ${exitCode}\n`
+        );
+        chmodSync(fakeStat, 0o755);
+        const exec = ((_file: string, args: readonly string[]) => {
+          if (args.includes("%u:%g")) return "1000:1001\n";
+          const shellArgs = args.slice(args.indexOf("sh"));
+          return execFileSync(shellArgs[0]!, shellArgs.slice(1), {
+            encoding: "utf8",
+            env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` }
+          });
+        }) as unknown as ExecFileImpl;
+        return captureNoteFileEvidence(exec, "proj", "/data/vaults/x/n.md");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it("reports the size of a readable note", () => {
+      expect(runWithFakeStat("42\n", "", 0)).toMatchObject({
+        exists: true,
+        sizeBytes: 42,
+        error: null
+      });
+    });
+
+    it("reports a missing note as absent", () => {
+      const evidence = runWithFakeStat(
+        "",
+        `stat: cannot statx '/data/vaults/x/n.md': No such file or directory ${PRIVATE_MARKER}`,
+        1
+      );
+
+      expect(evidence).toMatchObject({ exists: false, sizeBytes: null, error: null });
+      expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
+    });
+
+    it("reports a permission failure as unknown, never as absent", () => {
+      const evidence = runWithFakeStat(
+        "",
+        `stat: cannot statx '/data/vaults/x/n.md': Permission denied ${PRIVATE_MARKER}`,
+        1
+      );
+
+      expect(evidence).toMatchObject({ exists: null, error: "note_file_unreadable" });
+      expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
+    });
   });
 
   it("captureNoteFileEvidence refuses a malformed vault owner", () => {

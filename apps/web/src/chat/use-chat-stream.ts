@@ -96,8 +96,11 @@ export function useChatStream(
     const open = () => {
       const stream = new EventSource(chatStreamUrl(surface), { withCredentials: true });
       source = stream;
+      // A connected stream clears earlier failures, so a recovered stream never ends a new
+      // private chat. A private chat already ended stays ended in the drawer.
       stream.onopen = () => {
         retries = 0;
+        setStreamErrorCount(0);
       };
       stream.onmessage = (event) => {
         // #1135 — reset error count on successful message so transient errors don't lock private chat
