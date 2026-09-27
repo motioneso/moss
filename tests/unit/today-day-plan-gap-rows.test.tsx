@@ -133,4 +133,47 @@ describe("DayPlanSection schedule gaps (Today layout)", () => {
     expect(html).not.toContain("A break before the next block");
     expect(html.match(/tl-legend__/g)?.length).toBe(2);
   });
+
+  it("places a gap after the block just before it, not after a block that merely contains it (case 16)", () => {
+    // A 9:00-12:00 PDT contains B 10:00-10:30 PDT; C starts at 13:00 PDT. The gap between
+    // the end of the containing block and C must render after B, the block right before it
+    // in the list, not after A. taskId is null on each block so its own title renders
+    // instead of the shared task's title.
+    function untitledBlock(
+      id: string,
+      startsAt: string,
+      durationMinutes: number,
+      position: number
+    ): DayPlanBlockDto {
+      return {
+        id,
+        kind: "focus",
+        taskId: null,
+        title: `Block ${id}`,
+        position,
+        actualPlacement: { startsAt, durationMinutes, calendarEventRef: null },
+        pendingChange: null
+      };
+    }
+    const html = render(
+      plan([
+        untitledBlock("A", "2026-06-30T16:00:00.000Z", 180, 0),
+        untitledBlock("B", "2026-06-30T17:00:00.000Z", 30, 1),
+        untitledBlock("C", "2026-06-30T20:00:00.000Z", 30, 2)
+      ]),
+      true
+    );
+
+    // "Open time" also appears once in the legend above the list, so the gap row itself
+    // is located by its wrapper class instead of by that shared text.
+    const posA = html.indexOf("Block A");
+    const posB = html.indexOf("Block B");
+    const posOpen = html.indexOf("tl-slot--gap");
+    const posC = html.indexOf("Block C");
+
+    expect(posA).toBeGreaterThan(-1);
+    expect(posB).toBeGreaterThan(posA);
+    expect(posOpen).toBeGreaterThan(posB);
+    expect(posC).toBeGreaterThan(posOpen);
+  });
 });

@@ -35,14 +35,14 @@ export interface ScheduleGaps {
   readonly closing: ScheduleClosingLine | null;
 }
 
-interface TimedItem {
+interface SortedItem {
   readonly key: string;
   readonly startMs: number;
-  /** null means this item's end is unknown - it acts as a barrier in the gap chain. */
-  readonly endMs: number | null;
+  /** null means this item has no endsAt and no positive durationMinutes. */
+  readonly knownEndMs: number | null;
 }
 
-function resolveEnd(item: DayItem): number | null {
+function resolveKnownEnd(item: DayItem): number | null {
   if (item.startsAt === null) return null;
   if (item.endsAt !== null) return Date.parse(item.endsAt);
   if (item.durationMinutes !== null && item.durationMinutes > 0) {
@@ -55,68 +55,74 @@ function compactTime(iso: string, locale: LocaleSettingsDto): string {
   return `${timeLabel(iso, locale)}${ampm(iso, locale)}`;
 }
 
-/** Derives gap/break rows and the closing line from every item with a real start, tracking the
-    furthest occupied end seen so far rather than just the previous neighbor - a long event that
-    contains shorter ones must not read as a break between the short ones. An item with a start
-    but no computable end (no endsAt and no positive durationMinutes) acts as a barrier: nothing
-    is ever bridged across it, and the closing line only reports a time once the furthest occupied
-    end is known again from a later item that does have a computable end. */
+/** An item with no computable end takes the first later start among the other items as its
+    end, so it still merges into the running occupied span instead of acting as a barrier. If
+    no later start exists, its end stays open (Infinity), which only matters for the closing
+    line - a later, earlier-ending item can still merge past it. */
+function resolveEndTimes(sorted: readonly SortedItem[]): readonly number[] {
+  return sorted.map((item, index) => {
+    if (item.knownEndMs !== null) return item.knownEndMs;
+    for (let j = index + 1; j < sorted.length; j++) {
+      const later = sorted[j]!;
+      if (later.startMs > item.startMs) return later.startMs;
+    }
+    return Infinity;
+  });
+}
+
+/** Derives gap/break rows and the closing line from every item with a real start, sorted by
+    start. `blockEnd` tracks the furthest end seen so far across the whole list, not just the
+    previous neighbor, so a long event that contains shorter ones never reads as a break between
+    the short ones. Each gap is placed after the item immediately before it in the sorted list,
+    even when that item isn't the one that set the current `blockEnd`. */
 export function buildScheduleGaps(
   items: readonly DayItem[],
   locale: LocaleSettingsDto
 ): ScheduleGaps {
-  const timed: TimedItem[] = [];
+  const withStart: SortedItem[] = [];
   for (const item of items) {
     if (item.startsAt === null) continue;
-    timed.push({ key: item.key, startMs: Date.parse(item.startsAt), endMs: resolveEnd(item) });
+    withStart.push({
+      key: item.key,
+      startMs: Date.parse(item.startsAt),
+      knownEndMs: resolveKnownEnd(item)
+    });
   }
-  timed.sort((a, b) => a.startMs - b.startMs);
+  const sorted = [...withStart].sort((a, b) => a.startMs - b.startMs);
+  if (sorted.length === 0) {
+    return { rows: [], closing: null };
+  }
 
+  const endMs = resolveEndTimes(sorted);
   const rows: ScheduleGapRow[] = [];
-  // occupiedUntil/occupiedUntilKey is null both before the first known end is seen and
-  // whenever a barrier item (unknown end) was last processed - both cases mean "we cannot
-  // vouch for anything before the next known-end item", so no gap is emitted for that span.
-  let occupiedUntil: number | null = null;
-  let occupiedUntilKey: string | null = null;
+  let blockEnd = endMs[0]!;
 
-  for (const current of timed) {
-    if (occupiedUntil !== null && occupiedUntilKey !== null) {
-      const gapMinutes = (current.startMs - occupiedUntil) / 60000;
-      if (gapMinutes >= SCHEDULE_GAP_MIN_MINUTES) {
-        const kind: ScheduleGapKind = gapMinutes <= SCHEDULE_BREAK_MAX_MINUTES ? "break" : "open";
-        rows.push({
-          key: `gap:${occupiedUntilKey}`,
-          kind,
-          afterItemKey: occupiedUntilKey,
-          startsAt: new Date(occupiedUntil).toISOString(),
-          endsAt: new Date(current.startMs).toISOString(),
-          label: kind === "break" ? BREAK_LABEL : OPEN_LABEL
-        });
-      }
+  for (let i = 1; i < sorted.length; i++) {
+    const current = sorted[i]!;
+    const gapMinutes = (current.startMs - blockEnd) / 60000;
+    if (gapMinutes >= SCHEDULE_GAP_MIN_MINUTES) {
+      const kind: ScheduleGapKind = gapMinutes <= SCHEDULE_BREAK_MAX_MINUTES ? "break" : "open";
+      const afterItem = sorted[i - 1]!;
+      rows.push({
+        key: `gap:${afterItem.key}`,
+        kind,
+        afterItemKey: afterItem.key,
+        startsAt: new Date(blockEnd).toISOString(),
+        endsAt: new Date(current.startMs).toISOString(),
+        label: kind === "break" ? BREAK_LABEL : OPEN_LABEL
+      });
     }
-
-    if (current.endMs === null) {
-      // Unknown end: never bridge across it, and stop vouching for time until a later
-      // item with a known end resets the baseline.
-      occupiedUntil = null;
-      occupiedUntilKey = null;
-      continue;
-    }
-
-    if (occupiedUntil === null || current.endMs > occupiedUntil) {
-      occupiedUntil = current.endMs;
-      occupiedUntilKey = current.key;
-    }
+    blockEnd = Math.max(blockEnd, endMs[i]!);
   }
 
-  const closing: ScheduleClosingLine | null =
-    occupiedUntil === null || occupiedUntilKey === null
-      ? null
-      : {
-          key: `closing:${occupiedUntilKey}`,
-          afterItemKey: occupiedUntilKey,
-          text: `The evening is open. No more commitments after ${compactTime(new Date(occupiedUntil).toISOString(), locale)}.`
-        };
+  const lastItem = sorted[sorted.length - 1]!;
+  const closing: ScheduleClosingLine | null = Number.isFinite(blockEnd)
+    ? {
+        key: `closing:${lastItem.key}`,
+        afterItemKey: lastItem.key,
+        text: `The evening is open. No more commitments after ${compactTime(new Date(blockEnd).toISOString(), locale)}.`
+      }
+    : null;
 
   return { rows, closing };
 }
