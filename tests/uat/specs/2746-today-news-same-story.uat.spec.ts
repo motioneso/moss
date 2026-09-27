@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // #2746: durable live-instance proof that Today's news desk merges the same story across
@@ -21,7 +22,7 @@ const SHARED_STORY_TITLE = "UAT rig achieves deterministic Tuesday";
 
 const NEWS_TITLE = ".nw-twlead__title, .nw-twlist__title";
 
-async function newsDeskTitles(page: import("@playwright/test").Page): Promise<string[]> {
+async function newsDeskTitles(page: Page): Promise<string[]> {
   await page.goto("/");
   await expect(page.locator(NEWS_TITLE).first()).toBeVisible({ timeout: 30_000 });
   return page.locator(NEWS_TITLE).allTextContents();
