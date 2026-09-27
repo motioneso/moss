@@ -505,3 +505,37 @@ then reconciles all original issue items and every screen against the merged pla
 An unresolved degraded-state design or other required item must be completed or
 explicitly dispositioned before closing the issue. Current-head proof, visual
 acceptance and a truthful tracker are the finish condition.
+
+### Amendment — #2744 proposal-materials data verdict (2026-09-27)
+
+Seams check for the "Open the proposal materials" link and its in-report view
+(gap 8 on #2521). Every candidate source was checked on current main; none
+links materials to a meeting today:
+
+- Calendar events carry title, summary, body excerpt and location only, and no
+  attachments are fetched or stored (`packages/shared/src/calendar-api.ts:3-20`).
+  The morning signal text uses those four fields alone
+  (`packages/briefings/src/signals.ts:88`).
+- Notes have no event linking; the vault reaches synthesis as text lines only
+  (`apps/web/src/today/briefing-contributions.ts:48-49`).
+- Email surfaces no attachments, and its View links are Gmail URLs, already
+  ruled out as materials evidence by this plan's reader scope boundary.
+- The saved run stores prose plus news/sports editorial evidence only
+  (`apps/web/src/today/briefing-report-shell.tsx:229-247`); the writer must not
+  claim attached material unless a source block states it, and none does
+  (`packages/briefings/src/compose.ts:680`).
+- Day-plan prep blocks are time blocks with no material links
+  (`packages/shared/src/day-plan-api.ts:23`).
+
+Verdict: there is nothing to build yet. Per Ben's hard rule and #2744's
+done-when, the report shows no link and no view, and nothing is invented.
+
+Deferred design, for the day a real source lands: the link sits in the
+report's preparation section and opens the outline-plus-pricing view inside
+the reader, with the reader's existing close control as the way back. Each
+listed item names its backing source; an empty source lists nothing. Proof is
+a seeded meeting with materials (link, view, way back) beside one without
+(neither), at desktop and phone widths.
+
+Kill gate: if no material source ships elsewhere first, #2744 closes with this
+verdict and no product change. Owner: coordinator.
