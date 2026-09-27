@@ -58,6 +58,14 @@ function isChatRecordKind(value: string): value is ChatRecordKind {
   }
 }
 
+const STREAM_RETRY_BASE_MS = 1_000;
+const STREAM_RETRY_MAX_MS = 30_000;
+
+/** Delay before reopening a refused stream: 1s, 2s, 4s, ... capped at 30s. */
+export function streamRetryDelayMs(retries: number): number {
+  return Math.min(STREAM_RETRY_MAX_MS, STREAM_RETRY_BASE_MS * 2 ** retries);
+}
+
 /**
  * Opens an EventSource against /api/chat/stream and accumulates the live transcript
  * records the backend emits (one JSON record per `data:` event). EventSource handles
@@ -80,32 +88,58 @@ export function useChatStream(
   useEffect(() => {
     setRecords([]);
     if (!enabled) return;
-    const source = new EventSource(chatStreamUrl(surface), { withCredentials: true });
+    let source: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retries = 0;
+    let disposed = false;
 
-    source.onmessage = (event) => {
-      // #1135 — reset error count on successful message so transient errors don't lock private chat
-      setStreamErrorCount(0);
-      const record = parseRecord(event.data);
-      if (record) {
-        setRecords((current) => {
-          if (record.kind === "reply" && record.messageId) {
-            // Replace the last streaming reply (no messageId) with the stored version (has messageId + sourceFreshness)
-            const lastUnstored = [...current]
-              .reverse()
-              .findIndex((r) => r.kind === "reply" && !r.messageId);
-            if (lastUnstored !== -1) {
-              const realIdx = current.length - 1 - lastUnstored;
-              return current.map((r, i) => (i === realIdx ? record : r));
+    const open = () => {
+      const stream = new EventSource(chatStreamUrl(surface), { withCredentials: true });
+      source = stream;
+      // A connected stream clears earlier failures, so a recovered stream never ends a new
+      // private chat. A private chat already ended stays ended in the drawer.
+      stream.onopen = () => {
+        retries = 0;
+        setStreamErrorCount(0);
+      };
+      stream.onmessage = (event) => {
+        // #1135 — reset error count on successful message so transient errors don't lock private chat
+        setStreamErrorCount(0);
+        const record = parseRecord(event.data);
+        if (record) {
+          setRecords((current) => {
+            if (record.kind === "reply" && record.messageId) {
+              // Replace the last streaming reply (no messageId) with the stored version (has messageId + sourceFreshness)
+              const lastUnstored = [...current]
+                .reverse()
+                .findIndex((r) => r.kind === "reply" && !r.messageId);
+              if (lastUnstored !== -1) {
+                const realIdx = current.length - 1 - lastUnstored;
+                return current.map((r, i) => (i === realIdx ? record : r));
+              }
             }
-          }
-          return upsertTranscriptRecord(current, record);
-        });
-      }
+            return upsertTranscriptRecord(current, record);
+          });
+        }
+      };
+
+      stream.onerror = () => {
+        setStreamErrorCount((count) => count + 1);
+        // EventSource retries a dropped connection itself, but an HTTP error response closes it
+        // for good. Reopen it, or later action results never reach the drawer (#2737).
+        if (disposed || stream.readyState !== EventSource.CLOSED) return;
+        stream.close();
+        retryTimer = setTimeout(open, streamRetryDelayMs(retries));
+        retries += 1;
+      };
     };
+    open();
 
-    source.onerror = () => setStreamErrorCount((count) => count + 1);
-
-    return () => source.close();
+    return () => {
+      disposed = true;
+      clearTimeout(retryTimer);
+      source?.close();
+    };
   }, [enabled, surface]);
 
   useEffect(() => {

@@ -506,6 +506,10 @@ export function registerChatLiveRoutes(
 
     // Open the protocol session when the conversation drawer opens. The first user prompt then
     // pays no session-start cost, and the session key can include the current conversation id.
+    //
+    // The pre-start is best-effort. EventSource never reconnects after an HTTP error, so refusing
+    // the stream here would hide every later action result and approval request until a page
+    // reload (#2737). The next turn starts the session itself and reports any failure.
     const ensureSession = (
       runtime.manager as unknown as {
         ensureSession?: (
@@ -525,8 +529,9 @@ export function registerChatLiveRoutes(
           undefined,
           surfaceResult.surface
         );
-      } catch (error) {
-        return handleLiveRouteError(error, reply);
+      } catch {
+        // Fixed text only. An error's name, message and cause can carry private detail.
+        reply.log?.warn?.("chat stream session pre-start failed");
       }
     }
 

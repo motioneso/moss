@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { attachNotesFailureEvidence } from "./notes-failure-evidence.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import {
   bringUpRealChatProvider,
@@ -14,6 +15,9 @@ const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED
 const POLL_DEADLINE_MS = 60_000;
 const FACT = "kumquat focaccia";
 const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
+const TURN_ANNOTATION_TYPE = "2737-notes-turn";
+const RETRIEVAL_TURN_ANNOTATION_TYPE = "2737-retrieval-turn";
+const CHAT_SURFACE = "drawer";
 
 // This spec binds the chat capability directly (PUT /api/ai/services/chat/binding) rather than
 // going through the account's chat-model-override, so it composes the shared provider bring-up
@@ -41,6 +45,42 @@ async function ensureRealChat(page: Page): Promise<void> {
     .toBe(true);
 }
 
+// eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
+test.afterEach(async ({}, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
+  const turnAnnotation = testInfo.annotations.find(
+    (annotation) => annotation.type === TURN_ANNOTATION_TYPE
+  )?.description;
+  if (!projectName || !turnAnnotation) return;
+  try {
+    const turn = JSON.parse(turnAnnotation) as {
+      fullNotePath: string;
+      noteRequestMarker: string;
+      turnStartIso: string;
+    };
+    const retrievalAnnotation = testInfo.annotations.find(
+      (annotation) => annotation.type === RETRIEVAL_TURN_ANNOTATION_TYPE
+    )?.description;
+    const retrievalTurnStartIso = retrievalAnnotation
+      ? (JSON.parse(retrievalAnnotation) as { retrievalTurnStartIso: string }).retrievalTurnStartIso
+      : null;
+    await attachNotesFailureEvidence(testInfo, {
+      projectName,
+      ownerUserId: UAT_ADMIN_ID,
+      fullNotePath: turn.fullNotePath,
+      chatSurface: CHAT_SURFACE,
+      noteRequestMarker: turn.noteRequestMarker,
+      turnStartIso: turn.turnStartIso,
+      retrievalTurnStartIso
+    });
+  } catch {
+    // #2737: best-effort only — never mask the spec's own (already-decided) failure, and never
+    // print a raw error, which could otherwise quote a database row or command output.
+    console.error("[uat #2737] failure-evidence capture itself failed: evidence_capture_failed");
+  }
+});
+
 test("a later chat answers from notes without narrating retrieval (#1556)", async ({ page }) => {
   test.skip(!REAL_CHAT_CONFIGURED, "needs a real chat-capable provider — #1121");
   test.setTimeout(240_000);
@@ -58,6 +98,18 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
       "Do not ask a follow-up question."
   );
   await composer.press("Enter");
+
+  // #2737: record the turn's start time and its unique note path right now, synchronously —
+  // nothing awaited here. Failure evidence finds this exact request by that path, never by
+  // "the newest thread" or "the last saved message".
+  test.info().annotations.push({
+    type: TURN_ANNOTATION_TYPE,
+    description: JSON.stringify({
+      fullNotePath: `${NOTES_ROOT}/${path}`,
+      noteRequestMarker: path,
+      turnStartIso: new Date(syncNotBefore).toISOString()
+    })
+  });
 
   await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
     timeout: 60_000
@@ -87,6 +139,13 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   );
   await page.getByRole("button", { name: "New chat" }).click();
   await cleared;
+
+  // #2737: same bookkeeping as the note-writing turn — records where the note turn's own time
+  // window ends, synchronously, nothing awaited.
+  test.info().annotations.push({
+    type: RETRIEVAL_TURN_ANNOTATION_TYPE,
+    description: JSON.stringify({ retrievalTurnStartIso: new Date().toISOString() })
+  });
   await composer.fill("What snack did we choose for the launch?");
   await composer.press("Enter");
 
