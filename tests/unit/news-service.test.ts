@@ -398,6 +398,109 @@ describe("NewsService.getOverview (#897)", () => {
     expect(overview.topStories).toHaveLength(2);
   });
 
+  it("merges the same story when outlets use the same headline text but different URLs", async () => {
+    // Wire copy, so the URL differs per outlet (each publishes its own page) but the headline
+    // text, once case/whitespace-normalized, is identical.
+    const service = new NewsService(
+      makeDeps({
+        getFeed: async (sourceKey) =>
+          sourceKey === "bbc"
+            ? [item({ id: "bbc-copy", url: "https://bbc.example.com/a", title: "Storm nears coast" })]
+            : sourceKey === "guardian"
+              ? [
+                  item({
+                    id: "guardian-copy",
+                    url: "https://guardian.example.com/b",
+                    title: "STORM   nears coast"
+                  })
+                ]
+              : []
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.topStories).toHaveLength(1);
+  });
+
+  it("merges the same story when outlets use the same URL with different tracking parameters", async () => {
+    const service = new NewsService(
+      makeDeps({
+        getFeed: async (sourceKey) =>
+          sourceKey === "bbc"
+            ? [
+                item({
+                  id: "bbc-copy",
+                  url: "https://example.com/story?utm_source=bbc&id=1",
+                  title: "Bridge reopens after repairs"
+                })
+              ]
+            : sourceKey === "guardian"
+              ? [
+                  item({
+                    id: "guardian-copy",
+                    url: "https://example.com/story?id=1&utm_source=guardian",
+                    title: "Bridge reopens after repairs, differently worded"
+                  })
+                ]
+              : []
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.topStories).toHaveLength(1);
+  });
+
+  it("keeps the highest-ranked outlet's copy when merging duplicates", async () => {
+    // BBC's copy has an image (+2 weight) and is the guardian's third item (feedPosition 2, so no
+    // lead bonus); guardian's copy is its own lead (feedPosition 0, +2) but has no image. Equal
+    // weight, so publishedAt breaks the tie: BBC's copy is newer and must be the one that wins.
+    const service = new NewsService(
+      makeDeps({
+        getFeed: async (sourceKey) =>
+          sourceKey === "bbc"
+            ? [
+                item({
+                  id: "bbc-copy",
+                  url: "https://example.com/shared",
+                  title: "Bridge reopens after repairs",
+                  imageUrl: "https://example.com/img.jpg",
+                  publishedAt: "2026-07-08T13:00:00.000Z"
+                })
+              ]
+            : sourceKey === "guardian"
+              ? [
+                  item({
+                    id: "guardian-copy",
+                    url: "https://example.com/shared",
+                    title: "Bridge reopens after repairs",
+                    publishedAt: "2026-07-08T09:00:00.000Z"
+                  })
+                ]
+              : []
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.topStories).toHaveLength(1);
+    expect(overview.topStories[0]?.sourceKey).toBe("bbc");
+  });
+
+  it("fills all top-story slots from a duplicate-heavy pool", async () => {
+    // Every outlet publishes the same one story plus its own unique one. Dedup must collapse the
+    // shared story to a single top-story slot while still surfacing every outlet's unique story.
+    const shared = { url: "https://example.com/shared", title: "Shared wire story" };
+    const service = new NewsService(
+      makeDeps({
+        getFeed: async (sourceKey) => [
+          item({ id: `${sourceKey}-shared`, ...shared }),
+          item({ id: `${sourceKey}-unique`, title: `${sourceKey} exclusive story` })
+        ]
+      })
+    );
+    const overview = await service.getOverview(userA);
+    // bbc, guardian, ap, npr: 1 shared + 4 unique = 5 distinct top stories, all within the cap.
+    expect(overview.topStories).toHaveLength(5);
+    const sharedCount = overview.topStories.filter((h) => h.title === shared.title).length;
+    expect(sharedCount).toBe(1);
+  });
+
   it("enriches headlines with source identity and the human topic label", async () => {
     const service = new NewsService(
       makeDeps({
