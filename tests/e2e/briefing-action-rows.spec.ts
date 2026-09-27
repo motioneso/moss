@@ -77,6 +77,7 @@ async function reloadToday(page: Page): Promise<void> {
 test("morning and evening prose and action rows render accept dismiss view reply and stay suppressed", async ({
   page
 }) => {
+  test.setTimeout(60_000);
   await page.clock.setFixedTime(new Date(NOW));
 
   const morningRows = [
@@ -92,6 +93,10 @@ test("morning and evening prose and action rows render accept dismiss view reply
       sourceRef: "subject:evening-handoff"
     })
   ];
+  const looseEnd = createMockTask("task-loose-end", "Return the books to Meadow Branch", {
+    dueAt: "2026-07-30T17:00:00.000Z",
+    source: "Home library"
+  });
 
   const morningDefinition = createMockBriefingDefinition("briefing-morning", "Morning", {
     briefingType: "morning",
@@ -122,7 +127,8 @@ test("morning and evening prose and action rows render accept dismiss view reply
     notifications: [],
     tasks: [
       ...morningRows.map((row) => createMockTask(row.taskId, row.title, { status: "suggested" })),
-      ...eveningRows.map((row) => createMockTask(row.taskId, row.title, { status: "suggested" }))
+      ...eveningRows.map((row) => createMockTask(row.taskId, row.title, { status: "suggested" })),
+      looseEnd
     ],
     briefingDefinitions: [morningDefinition, eveningDefinition],
     briefingRuns: {
@@ -252,7 +258,14 @@ test("morning and evening prose and action rows render accept dismiss view reply
   await expect(page.getByText(EVENING_SUMMARY, { exact: true })).toHaveCount(0);
 
   const needsYou = page.locator("section.jds-brief").filter({ hasText: "Needs you" });
-  await expect(needsYou.getByText("3 need you", { exact: true })).toBeVisible();
+  await expect(needsYou.getByText("4 need you", { exact: true })).toBeVisible();
+  const looseEndGroup = needsYou.locator("#loose-ends");
+  await expect(looseEndGroup.getByText("Loose ends", { exact: true })).toBeVisible();
+  await expect(looseEndGroup.getByText("1", { exact: true })).toBeVisible();
+  await expect(
+    looseEndGroup.getByRole("button", { name: /Return the books to Meadow Branch/ })
+  ).toBeVisible();
+  await expect(page.locator("section.jds-brief#loose-ends")).toHaveCount(0);
   for (const row of morningRows) {
     await expect(
       needsYou.locator(".loose-row").filter({ hasText: row.title }).locator(".loose-row__title")
@@ -361,6 +374,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
   state.briefingRuns![morningDefinition.id] = [
     run("morning-run-empty", morningDefinition.id, "morning", "", [])
   ];
+  state.tasks = state.tasks.filter((task) => task.id !== looseEnd.id);
   await reloadToday(page);
   await expect(page.getByText("Briefing not ready yet")).toBeVisible();
   await expect(page.getByText("You're caught up — nothing is waiting on you.")).toBeVisible();
@@ -378,6 +392,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
   await reloadToday(page);
   await expect(page.getByText("Some sources are over a day old: Calendar.")).toBeVisible();
 
+  state.tasks = [...state.tasks, looseEnd];
   state.briefingDefinitions = [
     morningDefinition,
     { ...eveningDefinition, scheduleMetadata: { targetTime: "00:00", timezone: "UTC" } }
@@ -397,7 +412,12 @@ test("morning and evening prose and action rows render accept dismiss view reply
   await expect(eveningProse).toBeVisible();
   await expect(page.getByText(compactSummary, { exact: true })).toHaveCount(0);
   const eveningNeedsYou = page.locator("section.jds-brief").filter({ hasText: "Needs you" });
-  await expect(eveningNeedsYou.getByText("3 need you", { exact: true })).toBeVisible();
+  await expect(eveningNeedsYou.getByText("4 need you", { exact: true })).toBeVisible();
+  await expect(
+    eveningNeedsYou
+      .locator("#loose-ends")
+      .getByRole("button", { name: /Return the books to Meadow Branch/ })
+  ).toBeVisible();
   for (const row of eveningRows) {
     await expect(
       eveningNeedsYou

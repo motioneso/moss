@@ -16,12 +16,18 @@ import { formatDate } from "../locale/locale-format";
 import { useChatControls } from "../shell/chat-controls-context";
 
 import { BriefingStaleBanner } from "./briefing-freshness";
+import { driftOf } from "./today-labels.js";
+
+const DRIFT_CLASS: Record<NonNullable<ReturnType<typeof driftOf>>, string> = {
+  atrisk: "jds-drift jds-drift--atrisk",
+  overdue: "jds-drift jds-drift--overdue"
+};
 
 export interface BriefingActionRowsSectionProps {
   readonly run: BriefingRunDto | null;
   readonly loading: boolean;
   readonly tasks: readonly TaskDto[];
-  readonly looseEndsCount: number;
+  readonly looseEnds: readonly TaskDto[];
   readonly locale: LocaleSettingsDto;
   readonly chatAvailable: boolean;
   readonly onOpenTask: (taskId: string) => void;
@@ -134,6 +140,44 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
     : rowsFromSuggestedTasks(props.tasks);
   const suggested = displayed.filter((entry) => entry.liveStatus === "suggested");
   const catchUp = props.run?.structuredPayload.catchUp ?? null;
+  const looseEndsSection =
+    props.looseEnds.length > 0 ? (
+      <section className="briefing-loose-ends" id="loose-ends" aria-labelledby="loose-ends-heading">
+        <div className="briefing-loose-ends__head">
+          <span className="jds-brief__kicker" id="loose-ends-heading">
+            Loose ends
+          </span>
+          <span className="jds-caption">{props.looseEnds.length}</span>
+        </div>
+        <div className="loose">
+          {props.looseEnds.map((task) => {
+            const drift = driftOf(task, props.locale.timezone);
+            const driftClass = DRIFT_CLASS[drift ?? "atrisk"];
+            return (
+              <div className="jds-task" key={task.id}>
+                <span className="jds-task__check">
+                  <Flag size={15} aria-hidden="true" />
+                </span>
+                <button
+                  type="button"
+                  className="jds-task__main"
+                  onClick={() => props.onOpenTask(task.id)}
+                >
+                  <div className="jds-task__title">{task.title}</div>
+                  <div className="jds-task__meta">
+                    <span className={driftClass}>
+                      <span className="jds-drift__dot" />
+                      {drift === "overdue" ? "Overdue" : "At risk"}
+                    </span>
+                    <span className="jds-task__source">{task.source}</span>
+                  </div>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    ) : null;
 
   if (props.loading) {
     return (
@@ -144,13 +188,14 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
         <p className="cmd-empty" role="status">
           Checking what needs you…
         </p>
+        {looseEndsSection}
       </section>
     );
   }
 
-  if (!props.run && displayed.length === 0 && props.looseEndsCount === 0) return null;
+  if (!props.run && displayed.length === 0 && props.looseEnds.length === 0) return null;
 
-  const needsYouCount = suggested.length + props.looseEndsCount;
+  const needsYouCount = suggested.length + props.looseEnds.length;
   const countLabel = `${needsYouCount} ${needsYouCount === 1 ? "needs" : "need"} you`;
   const freshness = buildFreshness(displayed, props.run?.createdAt ?? null);
 
@@ -161,7 +206,7 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
       </div>
       <div className="jds-brief__title">{countLabel}</div>
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
-      {displayed.length === 0 && props.looseEndsCount === 0 ? (
+      {displayed.length === 0 && props.looseEnds.length === 0 ? (
         <p className="cmd-empty">You&apos;re caught up — nothing is waiting on you.</p>
       ) : displayed.length > 0 ? (
         <div className="loose">
@@ -179,6 +224,7 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
           ))}
         </div>
       ) : null}
+      {looseEndsSection}
       {catchUp && catchUp.itemCount > 0 ? (
         <div className="briefing-catchup">
           <div className="jds-brief__head">
