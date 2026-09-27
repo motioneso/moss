@@ -500,6 +500,13 @@ export const newsModuleManifest = {
         "with no working picture gets a drawing in its topic colors."
     },
     {
+      id: "news.same_story_merge",
+      description:
+        "The same story from different outlets shows once in Today's lead and side stories, " +
+        "not once per outlet. The kept version follows the page's existing story ranking. " +
+        "Each outlet's own list still shows everything it published."
+    },
+    {
       id: "news.add_source",
       description:
         "Find a publisher by URL or name, or a subreddit with an r/name input, and add it to " +

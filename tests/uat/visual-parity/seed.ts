@@ -626,8 +626,13 @@ export async function prepareSelectedEntry(
     closeDialogs: () => closeDialogs(page).then(() => undefined),
     expectTodayRoute: () => expect(page).toHaveURL(/\/today/),
     driveState: async () => {
-      if (entry.state === "reader-partial-review")
+      if (entry.state === "reader-partial-review") {
         await mirrorBlock(page, localDay(), await localeTz(page), 0);
+        // See the matching comment in visual-parity.uat.spec.ts: reload so the
+        // edited plan is the first thing the page sees, instead of showing the
+        // "changed since it was read" notice the mockup does not have.
+        await page.reload();
+      }
       if (entry.state.startsWith("reader-automatic"))
         await mirrorBlock(page, localDay(), await localeTz(page), 1);
       await driveState(page, entry.state, entry.viewport);

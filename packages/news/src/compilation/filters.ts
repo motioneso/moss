@@ -14,7 +14,7 @@ function domainAllowed(domain: string, approved: ReadonlySet<string>): boolean {
   );
 }
 
-function safeCanonicalUrl(raw: string): string | null {
+export function safeCanonicalUrl(raw: string): string | null {
   try {
     const url = new URL(raw);
     if (url.protocol !== "https:") return null;
@@ -35,7 +35,7 @@ function groupKey(candidate: NewsCandidate): string {
     : `source:${candidate.canonicalDomain}`;
 }
 
-function normalizedHeadline(value: string): string {
+export function normalizedHeadline(value: string): string {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase("en-US")

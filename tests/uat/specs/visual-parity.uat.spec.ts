@@ -78,7 +78,8 @@ export const uatLevel = {
   withJobSearchFixture: true,
   withSportsPublicSourceFixtures: true,
   chatScript: "phase1-smoke",
-  withEspnFixture: true
+  withEspnFixture: true,
+  withBriefingWriterFixture: true
 } as const;
 const OUT =
   process.env.MOSS_PARITY_OUT ??
@@ -465,8 +466,16 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       CASE_SELECTION.mode === "default" &&
       (entry.state !== lastState || entry.viewport.w !== lastWidth)
     ) {
-      if (entry.state === "reader-partial-review")
+      if (entry.state === "reader-partial-review") {
         await mirrorBlock(page, localDay(), await localeTz(page), 0);
+        // mirrorBlock edits the plan straight in the database, so the browser is
+        // still holding the dialog open on the plan as it was before the edit.
+        // Reopening the dialog without a reload shows "the saved plan changed
+        // since it was read" because the page treats it as a live edit. A reload
+        // makes the edited plan the first thing the page ever sees, matching the
+        // mockup, which shows the reader with no such notice.
+        await page.reload();
+      }
       if (entry.state.startsWith("reader-automatic"))
         await mirrorBlock(page, localDay(), await localeTz(page), 1);
       if (entry.state === "evening-step-2" && lastState === "evening-step-1") {
@@ -476,10 +485,18 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
           .getByLabel("Tomorrow")
           .click();
       }
-      if (entry.state === "evening-saved") {
+      if (entry.state === "evening-saved" && lastState !== "evening-saved") {
         const dialog = page.getByRole("dialog");
         await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
         await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
+      } else if (entry.state === "evening-saved" && lastState === "evening-saved") {
+        // Revisiting "evening-saved" at a new width (the phone morning-handoff
+        // capture): the plan is already saved, so the save button is gone. Move
+        // to the handoff sub-view instead of re-saving.
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Preview the morning handoff" })
+          .click();
       }
       await driveState(page, entry.state, entry.viewport);
       lastState = entry.state;
