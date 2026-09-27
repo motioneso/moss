@@ -43,10 +43,12 @@ const chatModelOverrideGet = vi.fn(
   })
 );
 
+const personaPreview = vi.fn(async (_body: unknown) => ({ reply: "" }));
+
 vi.mock("../../apps/web/src/api/client.js", () => ({
   getPersonaSettings: () => personaGet(),
   putPersonaSettings: (body: unknown) => personaPut(body as never),
-  previewPersona: vi.fn(),
+  previewPersona: (body: unknown) => personaPreview(body as never),
   // Response style moved into this pane from the retired Chat settings page (#2222); give it the
   // default so the picker renders without a network call.
   getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
@@ -497,6 +499,157 @@ describe("Chat archive settings section", () => {
     const text = renderedText(renderer.toJSON());
     expect(text).not.toContain("Archiving is paused");
     expect(text).not.toContain("Archiving failed");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Persona preview bubble (#1921)", () => {
+  it("shows a press-Preview hint in write-it-yourself mode, not a made-up sample", async () => {
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("Morning briefing");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows the same press-Preview hint in guided-dials mode, not a made-up sample", async () => {
+    const renderer = await renderAssistantPane();
+
+    const guidedButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Use guided dials"));
+    if (!guidedButton) throw new Error("Use guided dials button not found");
+    await act(async () => {
+      guidedButton.props.onClick();
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("Morning briefing");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("replaces the hint with the real reply once Preview succeeds in write-it-yourself mode", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "Here is your actual voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Here is your actual voice, spoken back.");
+    expect(text).not.toContain("Press Preview to hear how this sounds.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a previewed reply and shows the hint again when the persona text changes", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "The old voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+    expect(renderedText(renderer.toJSON())).toContain("The old voice, spoken back.");
+
+    const personaInput = renderer.root.findByProps({ "aria-label": "Persona" });
+    await act(async () => {
+      personaInput.props.onChange({ target: { value: "Be even more direct." } });
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("The old voice, spoken back.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a previewed reply and shows the hint again when the assistant name changes", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "The old voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+    expect(renderedText(renderer.toJSON())).toContain("The old voice, spoken back.");
+
+    const nameInput = renderer.root.findByProps({ "aria-label": "Assistant name" });
+    await act(async () => {
+      nameInput.props.onChange({ target: { value: "Alfred" } });
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("The old voice, spoken back.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a previewed reply and shows the hint again when a guided dial changes", async () => {
+    personaPreview.mockResolvedValueOnce({ reply: "The old voice, spoken back." });
+    const renderer = await renderAssistantPane();
+
+    const guidedButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Use guided dials"));
+    if (!guidedButton) throw new Error("Use guided dials button not found");
+    await act(async () => {
+      guidedButton.props.onClick();
+    });
+
+    const previewButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Preview response"));
+    if (!previewButton) throw new Error("Preview response button not found");
+    await act(async () => {
+      previewButton.props.onClick();
+    });
+    await flush();
+    expect(renderedText(renderer.toJSON())).toContain("The old voice, spoken back.");
+
+    const crispDial = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Crisp"));
+    if (!crispDial) throw new Error("Tone: Crisp option not found");
+    await act(async () => {
+      crispDial.props.onClick();
+    });
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Press Preview to hear how this sounds.");
+    expect(text).not.toContain("The old voice, spoken back.");
 
     await act(async () => {
       renderer.unmount();
