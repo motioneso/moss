@@ -247,6 +247,11 @@ export interface FollowedTeamCard {
   readonly crestUrl: string | null;
   readonly status: "live" | "today" | "news";
   readonly primary: string; // "MIN 21 – 14 DAL", "W 4–2 vs NYR", or a headline title
+  // For status "live": the game's current quarter/period/inning and clock ("Q3 4:12", "Top
+  // 7th"), taken from the game's statusDetail (#2753 — so the live footer matches the height of
+  // the Next-game footer it replaces). Absent or empty means no source text; the client shows no
+  // line rather than inventing one. Optional: older cached cards predate it.
+  readonly liveStatusText?: string | null;
   // For status "today": whether today's game has finished. The ticker keeps a final score in
   // the primary slot but drops the pre-game matchup line — the Next footer already carries the
   // fixture (live feedback mrawrk0e). Optional: older payloads predate it.

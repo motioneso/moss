@@ -320,6 +320,9 @@ const followedTeamCardSchema = {
       ]
     },
     todayGameState: { type: "string", enum: ["pre", "final"] },
+    // #2753: optional, declared so fast-json-stringify doesn't drop it — the same trap
+    // resultMatch and formDetail hit above.
+    liveStatusText: { type: ["string", "null"] },
     lastMatchAt: { type: ["string", "null"] },
     rationale: { type: "string" }
   }
