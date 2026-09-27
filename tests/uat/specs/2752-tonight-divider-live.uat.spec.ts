@@ -172,9 +172,7 @@ test("tonight divider holds on real games at wide, mid, and phone widths (#2752)
   const rowTop = rows[0]!.top;
   const rowTwoFirst = rows.findIndex((row) => row.top > rowTop + 1);
   expect(rowTwoFirst, "Tonight list never wrapped to a second row").toBeGreaterThan(0);
-  expect(
-    Math.abs(contentLeft(rows[rowTwoFirst]!) - contentLeft(rows[0]!))
-  ).toBeLessThanOrEqual(1);
+  expect(Math.abs(contentLeft(rows[rowTwoFirst]!) - contentLeft(rows[0]!))).toBeLessThanOrEqual(1);
   expect(rows[rowTwoFirst]!.borderLeftWidth).toBe("0px");
   expect(rows[rowTwoFirst]!.paddingLeft).toBe("0px");
   expect(rows[1]!.borderLeftWidth).not.toBe("0px");
