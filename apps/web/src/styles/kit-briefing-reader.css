@@ -520,11 +520,15 @@
   font-size: 15px;
   font-weight: 700;
 }
-.brief-reader__section-prose {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--text-muted);
+.brief-reader__sections .jds-brief__body + .jds-brief__body {
+  margin-top: 12px;
+}
+.brief-reader__list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
 }
 /* News and Sports: forest rule, eyebrow, headline, photo, prose, text link. */
 .brief-reader__editorial {
@@ -806,7 +810,8 @@ button.brief-snapshot__main:focus-visible {
     line-height: 1.15;
     letter-spacing: -0.6px;
   }
-  .brief-reader:has([data-briefing-surface]) .jds-brief__body {
+  .brief-reader:has([data-briefing-surface]) .jds-brief__body,
+  .brief-reader__list {
     font-size: 14px;
   }
   .brief-reader__callout {
@@ -816,8 +821,7 @@ button.brief-snapshot__main:focus-visible {
   .brief-reader__callout-headline {
     font-size: 19px;
   }
-  .brief-reader__callout .brief-reader__plan-changed,
-  .brief-reader__section-prose {
+  .brief-reader__callout .brief-reader__plan-changed {
     font-size: 12px;
   }
   .brief-reader__editorial-headline {

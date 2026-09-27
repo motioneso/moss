@@ -4,6 +4,7 @@ import type { BriefingRunDto, LocaleSettingsDto, SourceFreshnessV1 } from "@moss
 
 import { BriefingProse, type TodayMode } from "./evening-mode.js";
 import { BriefingStaleBanner } from "./briefing-freshness.js";
+import { plainBriefingText } from "./briefing-markdown.js";
 import {
   BRIEFING_NOT_READY_LABEL,
   EVENING_READ_FULL_LABEL,
@@ -17,6 +18,11 @@ import {
     generated summaries carry no sentence punctuation, so a first line without
     a terminator falls back to the line break. */
 export function splitHeadline(text: string): { readonly headline: string; readonly rest: string } {
+  const split = splitFirstSentence(text);
+  return { headline: plainBriefingText(split.headline), rest: split.rest };
+}
+
+function splitFirstSentence(text: string): { readonly headline: string; readonly rest: string } {
   const match = text.match(/^(.*?[.!?])(\s+|$)([\s\S]*)$/);
   if (match) return { headline: (match[1] ?? "").trim(), rest: (match[3] ?? "").trim() };
   const line = text.match(/^(.*?)(\r?\n|$)([\s\S]*)$/);
@@ -128,7 +134,9 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     <>
       {input.morningFreshness ? <BriefingStaleBanner freshness={input.morningFreshness} /> : null}
       {morningReadable && input.morningSplit && input.morningSplit.rest ? (
-        <BriefingProse summaryText={morningReportLead(input.morningSplit.rest)} />
+        <BriefingProse
+          summaryText={plainBriefingText(morningReportLead(input.morningSplit.rest))}
+        />
       ) : (
         <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />
       )}
