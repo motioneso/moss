@@ -42,6 +42,10 @@ feature that is not present in the image you are running.
 - **Needs You includes at-risk tasks.** Today now groups overdue and at-risk tasks under Needs You and includes them in the count. [PR #2719](https://github.com/motioneso/moss/pull/2719)
 - **A clearer full morning briefing.** The full morning briefing explains the day in more detail while Today stays focused on actions. [PR #2726](https://github.com/motioneso/moss/pull/2726)
 
+#### Added
+
+- **Open time and breaks in the day's schedule.** The Today page's schedule now shows the gaps between your task blocks and appointments — a short break, or open time — and tells you when the day's commitments are done. [PR #2751](https://github.com/motioneso/moss/pull/2751)
+
 ### 2026-09-26
 
 #### Fixed
