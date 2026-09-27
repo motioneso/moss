@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **News no longer repeats one story across outlets.** The news area on the Today screen no longer shows the exact same story more than once when several outlets carry it. [PR #2750](https://github.com/motioneso/moss/pull/2750)
 - **The full morning briefing is properly formatted.** Headings, emphasis and lists in the morning briefing now display as formatting instead of stray symbols. [PR #2741](https://github.com/motioneso/moss/pull/2741)
 - **Chat shows action results after a slow start.** Chat now shows what it did, and asks for approvals, even when chat finished setting up after the page opened. [PR #2740](https://github.com/motioneso/moss/pull/2740)
 
