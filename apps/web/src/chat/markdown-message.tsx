@@ -14,7 +14,7 @@ import { SourceChips, stripDisplayMarkers } from "./answer-provenance";
  * the bare-URL autolinks that `remark-gfm` generates, where the source text never went
  * through markdown link syntax. Defense in depth against indirect prompt injection (#360).
  */
-function safeUrl(url: string): string {
+export function safeUrl(url: string): string {
   return /^(https?:|mailto:)/i.test(url) ? url : "";
 }
 
