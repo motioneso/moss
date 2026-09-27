@@ -18,10 +18,40 @@ export interface RailAgendaRow {
 }
 
 export interface RailNextEvent {
+  readonly id: string;
   readonly title: string;
   readonly startsAt: string;
   readonly endsAt: string;
   readonly location?: string | null;
+}
+
+const PREPARATION_TITLE = /\bprepar(e|ation)?\b/i;
+
+/** A real, adjacent, self-declared preparation block's length in minutes, or
+    null when nothing backs one. A Moss block touching the meeting's start is
+    not itself evidence of preparation - only its own title says what it is
+    for. */
+export function preparationBlockMinutes(
+  nextEvent: RailNextEvent,
+  precedingEvents: readonly CalendarEventDto[]
+): number | null {
+  const block = precedingEvents.find(
+    (event) =>
+      event.isMossBlock &&
+      event.endsAt === nextEvent.startsAt &&
+      PREPARATION_TITLE.test(event.title)
+  );
+  if (!block) return null;
+  return Math.max(0, Math.round((Date.parse(block.endsAt) - Date.parse(block.startsAt)) / 60000));
+}
+
+/** "You have a 30-minute preparation block before this meeting." */
+function preparationNote(minutes: number): string {
+  const length =
+    minutes % 60 === 0 && minutes > 0
+      ? `${minutes / 60}-${minutes === 60 ? "hour" : "hours"}`
+      : `${minutes}-minute`;
+  return `You have a ${length} preparation block before this meeting.`;
 }
 
 export interface TodayRailProps {
@@ -29,6 +59,7 @@ export interface TodayRailProps {
   readonly now: Date;
   readonly locale: LocaleSettingsDto;
   readonly nextEvent: RailNextEvent | null;
+  readonly precedingEvents: readonly CalendarEventDto[];
   readonly nextStarted: boolean;
   readonly hasStatSignal: boolean;
   readonly prioritiesCount: number;
@@ -127,12 +158,18 @@ export function TodayRail(props: TodayRailProps) {
             </div>
             <div className="cmd-next__what">{nextEvent.title}</div>
             <p className="cmd-next__note">{meetingNote(nextEvent)}</p>
+            {(() => {
+              const minutes = preparationBlockMinutes(nextEvent, props.precedingEvents);
+              return minutes === null ? null : (
+                <p className="cmd-next__note">{preparationNote(minutes)}</p>
+              );
+            })()}
             <button
               type="button"
               className="cmd-next__link"
-              onClick={() => props.onNavigate("/calendar")}
+              onClick={() => props.onNavigate(`/calendar?event=${encodeURIComponent(nextEvent.id)}`)}
             >
-              Open in calendar ↗
+              See meeting ↗
             </button>
           </div>
         ) : null}

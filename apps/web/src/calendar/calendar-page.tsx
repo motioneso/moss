@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Inbox, LoaderCircle } from "lucide-react";
 import { Button, IconButton, LegendSwatch, Segmented } from "@moss/ui";
@@ -57,6 +58,14 @@ export function CalendarPage() {
   );
 
   const eventsByDay = useMemo(() => groupEventsByDay(allViewEvents), [allViewEvents]);
+
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const requestedId = searchParams.get("event");
+    if (!requestedId) return;
+    const requested = allViewEvents.find((e) => e.id === requestedId);
+    if (requested) setPeek(requested);
+  }, [searchParams, allViewEvents]);
 
   const weekDays = useMemo(
     () => (view === "week" ? buildWeekDays(cursor, workWeek) : []),

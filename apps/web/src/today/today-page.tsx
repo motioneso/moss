@@ -410,6 +410,7 @@ export function TodayPage(props: {
       nextEvent={
         nextEvent
           ? {
+              id: nextEvent.id,
               title: nextEvent.title,
               startsAt: nextEvent.startsAt,
               endsAt: nextEvent.endsAt,
@@ -417,6 +418,7 @@ export function TodayPage(props: {
             }
           : null
       }
+      precedingEvents={todayEvents}
       nextStarted={nextStarted}
       hasStatSignal={hasStatSignal}
       prioritiesCount={priorities.length}
