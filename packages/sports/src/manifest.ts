@@ -178,6 +178,11 @@ export const sportsModuleManifest = {
       id: "sports.remembered_standings",
       description:
         "The standings picker opens the competition and division you last looked at, on any device, until you pick another. A finished tournament you last opened still opens."
+    },
+    {
+      id: "sports.live_status_line",
+      description:
+        "A followed team's card shows the quarter, period, or inning and clock under a live score, on Today and Sports. This also makes the live card the same height as a card showing the team's next game."
     }
   ],
   navigation: [

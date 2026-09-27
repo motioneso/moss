@@ -91,6 +91,21 @@ describe("SportsTicker", () => {
     expect(head.match(/sp-formpip sp-formpip--/g)).toHaveLength(5);
   });
 
+  // #2753: quarter/period/inning + clock under the live score, styled like the Next-game
+  // footer's secondary line so both footers are the same height.
+  it("shows the live status text under the score when present", () => {
+    const html = render([card({ liveStatusText: "Q3 4:12" })]);
+    expect(html).toContain("sp-tk__next--live");
+    expect(html).toContain("MIN 21 – 14 DAL");
+    expect(html).toContain('<span class="sp-tk__nextwhen">Q3 4:12</span>');
+  });
+
+  it("shows no status line when the source sends none", () => {
+    const html = render([card({ liveStatusText: undefined })]);
+    expect(html).toContain("sp-tk__next--live");
+    expect(html).not.toContain("sp-tk__nextwhen");
+  });
+
   it("shows the No-recent-news placeholder on a storyless live card (#963)", () => {
     const html = render([card({ stories: [] })]);
     expect(html).toContain("No recent news");

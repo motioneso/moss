@@ -1543,9 +1543,13 @@ export class SportsService {
     let status: FollowedTeamCard["status"];
     let primary: string;
     let todayGameState: FollowedTeamCard["todayGameState"];
+    let liveStatusText: FollowedTeamCard["liveStatusText"];
     if (todayGame && todayGame.game.state === "live") {
       status = "live";
       primary = scoreLine(todayGame.game);
+      // #2753: quarter/period/inning + clock under the score. No source text → no line, never
+      // an invented one.
+      liveStatusText = todayGame.game.statusDetail.trim() || undefined;
     } else if (todayGame) {
       status = "today";
       todayGameState = todayGame.game.state === "final" ? "final" : "pre";
@@ -1578,6 +1582,7 @@ export class SportsService {
       crestUrl,
       status,
       primary,
+      liveStatusText,
       todayGameState,
       stories: toTeamStories(storyPool, refFor),
       form: computeFormAcross(resolvedGames),
