@@ -45,7 +45,8 @@ async function ensureRealChat(page: Page): Promise<void> {
     .toBe(true);
 }
 
-test.afterEach(async (_, testInfo) => {
+// eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
+test.afterEach(async ({}, testInfo) => {
   if (testInfo.status === testInfo.expectedStatus) return;
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
   const turnAnnotation = testInfo.annotations.find(
