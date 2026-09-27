@@ -22,7 +22,7 @@ own data.
   loop). Across sources, nothing merges. This is called out in the code as a deliberate V1
   scope cut, and is pinned down by an existing test:
   `tests/unit/news-service.test.ts:374` — `"does NOT dedupe across sources (differing
-  coverage of one event is a feature)"` — which feeds the same id/url to 4 sources and
+coverage of one event is a feature)"` — which feeds the same id/url to 4 sources and
   asserts 4 stories come back. Issue #2746 reverses that decision.
 
 The parity fixture (`tests/uat/fixtures/espn-fixture-routes.ts:239-281`) serves the exact
@@ -110,6 +110,7 @@ outside the News module.
 
    `topStories` becomes `mergeSameStoryAcrossSources(ranked).slice(0, TOP_STORIES_CAP)`.
    `sourceGroups` keeps using the unmerged `groups` data, unchanged.
+
 3. **Update the app map.** Add a `features` entry to `packages/news/src/manifest.ts`
    (alongside `news.story_pictures`), e.g. `news.same_story_merge`: "The same story from
    different outlets is shown once, not once per outlet. Which outlet's version is kept
@@ -131,6 +132,7 @@ outside the News module.
 ```bash
 pnpm --filter @moss/news test -- news-service.test.ts > /tmp/2746-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, with the two new/changed cases visible as passing in the log.
 
 Full gate via the `verify-gate` skill before the PR, plus the parity runner
