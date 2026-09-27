@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   boundToolCallEvents,
+  captureActionAuditEvidence,
+  captureToolCallEvidence,
   parseNoteFileCheckOutput,
-  summarizeAuditEntries
+  summarizeAuditEntries,
+  type FetchImpl
 } from "./notes-failure-evidence.js";
 
 describe("parseNoteFileCheckOutput (#2737)", () => {
@@ -19,9 +22,7 @@ describe("parseNoteFileCheckOutput (#2737)", () => {
   });
 
   it("throws on unexpected output rather than guessing", () => {
-    expect(() => parseNoteFileCheckOutput("permission denied\n")).toThrow(
-      /unexpected note-file-check output/
-    );
+    expect(() => parseNoteFileCheckOutput("permission denied\n")).toThrow();
   });
 });
 
@@ -42,22 +43,32 @@ describe("summarizeAuditEntries (#2737)", () => {
 
 describe("boundToolCallEvents (#2737)", () => {
   it("keeps only kind, tool name and status", () => {
-    const events = boundToolCallEvents([
+    const bounded = boundToolCallEvents([
       { kind: "tool", toolName: "notes.create", outcome: undefined },
       { kind: "action_result", toolName: "notes.create", outcome: "executed" }
     ]);
-    expect(events).toEqual([
+    expect(bounded.events).toEqual([
       { kind: "tool", toolName: "notes.create", status: null },
       { kind: "action_result", toolName: "notes.create", status: "executed" }
     ]);
+    expect(bounded.omittedCount).toBe(0);
   });
 
-  it("caps the list at 20 entries", () => {
+  it("drops non-tool kinds before capping, so a run of thoughts cannot push the one real tool event past the cap", () => {
+    const filler = Array.from({ length: 25 }, () => ({ kind: "thought" }));
+    const bounded = boundToolCallEvents([...filler, { kind: "tool", toolName: "notes.create" }]);
+    expect(bounded.events).toEqual([{ kind: "tool", toolName: "notes.create", status: null }]);
+    expect(bounded.omittedCount).toBe(0);
+  });
+
+  it("caps the list at 20 entries and reports how many were dropped", () => {
     const events = Array.from({ length: 30 }, (_, index) => ({
       kind: "tool",
       toolName: `tool-${index}`
     }));
-    expect(boundToolCallEvents(events)).toHaveLength(20);
+    const bounded = boundToolCallEvents(events);
+    expect(bounded.events).toHaveLength(20);
+    expect(bounded.omittedCount).toBe(10);
   });
 
   it("never carries text, toolCallId or raw arguments", () => {
@@ -69,7 +80,68 @@ describe("boundToolCallEvents (#2737)", () => {
       toolCallId: "abc-123",
       rawInput: { content: "x" }
     };
-    const events = boundToolCallEvents([rawRecord]);
-    expect(Object.keys(events[0]!)).toEqual(["kind", "toolName", "status"]);
+    const bounded = boundToolCallEvents([rawRecord]);
+    expect(Object.keys(bounded.events[0]!)).toEqual(["kind", "toolName", "status"]);
+  });
+});
+
+describe("captures never leak a raw error's own text (#2737)", () => {
+  const PRIVATE_MARKER = "SECRET_TOKEN_ab12cd34_do_not_leak";
+
+  it("captureActionAuditEvidence turns a thrown error into a fixed code, never the error's own text", async () => {
+    const throwingFetch: FetchImpl = (() => {
+      throw new Error(`connection reset, response body was: ${PRIVATE_MARKER}`);
+    }) as unknown as FetchImpl;
+
+    const evidence = await captureActionAuditEvidence(
+      throwingFetch,
+      "http://example.test",
+      "better-auth.session_token=abc",
+      "2026-09-26T00:00:00.000Z"
+    );
+
+    expect(evidence.error).toBe("http_request_failed");
+    expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
+  });
+
+  it("captureActionAuditEvidence turns an unparsable body into a fixed code, never the body text", async () => {
+    const badJsonFetch: FetchImpl = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new Error(`Unexpected token in ${PRIVATE_MARKER}`);
+        }
+      }) as unknown as Response) as FetchImpl;
+
+    const evidence = await captureActionAuditEvidence(
+      badJsonFetch,
+      "http://example.test",
+      "better-auth.session_token=abc",
+      "2026-09-26T00:00:00.000Z"
+    );
+
+    expect(evidence.error).toBe("response_parse_failed");
+    expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
+  });
+
+  it("captureToolCallEvidence turns an HTTP error status into a fixed code plus status, never the response body", async () => {
+    const errorFetch: FetchImpl = (async () =>
+      ({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: PRIVATE_MARKER })
+      }) as unknown as Response) as FetchImpl;
+
+    const evidence = await captureToolCallEvidence(
+      errorFetch,
+      "http://example.test",
+      "better-auth.session_token=abc",
+      "thread-1",
+      "drawer"
+    );
+
+    expect(evidence.error).toBe("http_error:500");
+    expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
   });
 });

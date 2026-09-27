@@ -1,11 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { attachNotesFailureEvidence } from "./notes-failure-evidence.js";
+import {
+  attachNotesFailureEvidence,
+  captureCurrentThreadId,
+  readSessionCookieHeader
+} from "./notes-failure-evidence.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
   readUatJson,
+  requireUatBaseURL,
   signInUatAdmin
 } from "./real-chat-signin.js";
 
@@ -47,17 +52,23 @@ async function ensureRealChat(page: Page): Promise<void> {
 test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === testInfo.expectedStatus) return;
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
+  const baseUrl = process.env.JARVIS_UAT_BASE_URL;
   const turnAnnotation = testInfo.annotations.find(
     (annotation) => annotation.type === TURN_ANNOTATION_TYPE
   )?.description;
-  if (!projectName || !turnAnnotation) return;
+  if (!projectName || !baseUrl || !turnAnnotation) return;
   try {
-    const turn = JSON.parse(turnAnnotation) as { fullNotePath: string; turnStartIso: string };
-    await attachNotesFailureEvidence(testInfo, page.request, {
+    const turn = JSON.parse(turnAnnotation) as {
+      fullNotePath: string;
+      turnStartIso: string;
+      threadId: string | null;
+    };
+    await attachNotesFailureEvidence(testInfo, page, baseUrl, {
       projectName,
       fullNotePath: turn.fullNotePath,
       turnStartIso: turn.turnStartIso,
-      chatSurface: CHAT_SURFACE
+      chatSurface: CHAT_SURFACE,
+      threadId: turn.threadId
     });
   } catch (error) {
     // #2737: best-effort only — never mask the spec's own (already-decided) failure.
@@ -77,18 +88,33 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   const composer = page.getByRole("textbox", { name: "Message Moss" });
   const path = `uat/notes-default-retrieval-${Date.now()}.md`;
   const syncNotBefore = Date.now();
-  test.info().annotations.push({
-    type: TURN_ANNOTATION_TYPE,
-    description: JSON.stringify({
-      fullNotePath: `${NOTES_ROOT}/${path}`,
-      turnStartIso: new Date(syncNotBefore).toISOString()
-    })
-  });
   await composer.fill(
     `Use notes.create to create ${path} containing exactly: Launch snack decision: ${FACT}. ` +
       "Do not ask a follow-up question."
   );
   await composer.press("Enter");
+
+  // #2737: record which thread this turn landed in right now, before anything about the turn's
+  // outcome is known — the spec opens a second, unrelated thread later for the retrieval turn,
+  // and picking "the newest thread" at failure time would silently read that later turn instead.
+  const baseUrlForTurnCapture = requireUatBaseURL();
+  const cookieHeaderForTurnCapture = await readSessionCookieHeader(page);
+  const threadId = cookieHeaderForTurnCapture
+    ? await captureCurrentThreadId(
+        fetch,
+        baseUrlForTurnCapture,
+        cookieHeaderForTurnCapture,
+        CHAT_SURFACE
+      )
+    : null;
+  test.info().annotations.push({
+    type: TURN_ANNOTATION_TYPE,
+    description: JSON.stringify({
+      fullNotePath: `${NOTES_ROOT}/${path}`,
+      turnStartIso: new Date(syncNotBefore).toISOString(),
+      threadId
+    })
+  });
 
   await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
     timeout: 60_000

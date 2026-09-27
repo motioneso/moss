@@ -9,19 +9,107 @@
 //   1. Does the note file exist in the stack, and what size is it (never its contents)?
 //   2. The gateway's own action-audit log (GET /api/ai/action-audit) for the turn — the
 //      authoritative "did a real tool run" signal per the #2737 diagnosis.
-//   3. The chat thread's own activity events for the turn, bounded to kind, tool name and
-//      status — the weaker "what did the agent say it called" signal.
-// Every step is independently best-effort: a failure here is recorded as a reason string and
-// never allowed to replace or mask the spec's real failure.
+//   3. The one chat thread the note-writing turn used, bounded to tool-call/tool-update kind,
+//      tool name and status — the weaker "what did the agent say it called" signal.
+//
+// Every step is independently best-effort: a failure is recorded as a fixed reason code, never
+// as the raw error object, so a private value the server or the network layer put in an error
+// (a response body, a stack frame) can never ride along into the attachment or the console.
+//
+// The action-audit and chat-messages reads use Node's own `fetch` with a session cookie read
+// out of the browser context, never Playwright's `page.request`. Playwright's own request
+// client is recorded into the test trace verbatim — headers, cookie and full response body —
+// so routing these particular reads through it would put note content and the session cookie
+// into the trace file the failing test already keeps. `fetch` has no such recorder.
 import { execFileSync } from "node:child_process";
 
-import type { APIRequestContext, TestInfo } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 
 import { buildUatComposeArgs } from "../provisioner.js";
 
 const MAX_TOOL_CALL_EVENTS = 20;
 const DOCKER_EXEC_TIMEOUT_MS = 15_000;
 const MISSING_MARKER = "NOTES_2737_MISSING";
+
+// Better Auth's session cookie — kept in sync with packages/module-sdk/src/rate-limit-key.ts's
+// own copy. The `__Secure-` form is issued only over TLS; the UAT stack is plain HTTP, but both
+// names are checked so this never silently returns "no cookie" if that ever changes.
+const SESSION_COOKIE_NAMES = [
+  "better-auth.session_token",
+  "__Secure-better-auth.session_token"
+] as const;
+
+/** Fixed, non-identifying reasons a capture step can fail with — never a raw error's own text. */
+export type CaptureErrorCode =
+  | "no_session_cookie"
+  | "docker_exec_failed"
+  | "unexpected_docker_output"
+  | "http_request_failed"
+  | "http_error"
+  | "response_parse_failed"
+  | "no_thread_captured"
+  | "no_assistant_message"
+  | "unexpected_error";
+
+/** `code` alone, or `code:status` when the failure carried a real HTTP status. */
+export function formatCaptureError(code: CaptureErrorCode, status?: number): string {
+  return status === undefined ? code : `${code}:${status}`;
+}
+
+class UnexpectedDockerOutputError extends Error {}
+
+// ---------------------------------------------------------------------------------------------
+// Session cookie (read from the browser, never logged)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Reads the signed-in session cookie straight out of Playwright's browser context — in memory
+ * only, never printed or attached anywhere. Returns null (never throws) when no session cookie
+ * is present, so callers can record a fixed "no_session_cookie" reason instead.
+ */
+export async function readSessionCookieHeader(page: Page): Promise<string | null> {
+  const cookies = await page.context().cookies();
+  const sessionCookie = cookies.find((cookie) =>
+    (SESSION_COOKIE_NAMES as readonly string[]).includes(cookie.name)
+  );
+  return sessionCookie ? `${sessionCookie.name}=${sessionCookie.value}` : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Shared fetch helper — never surfaces a raw error or response body
+// ---------------------------------------------------------------------------------------------
+
+export type FetchImpl = typeof fetch;
+
+type FetchJsonResult =
+  | { readonly ok: true; readonly body: unknown }
+  | { readonly ok: false; readonly code: CaptureErrorCode; readonly status?: number };
+
+/**
+ * GETs `url` with the session cookie and parses the JSON body. Every failure path returns a
+ * fixed code instead of the underlying error or response text — a JSON-parse failure can quote
+ * the response body verbatim, so that text must never reach the caller.
+ */
+async function fetchJson(
+  fetchImpl: FetchImpl,
+  url: string,
+  cookieHeader: string
+): Promise<FetchJsonResult> {
+  let response: Response;
+  try {
+    response = await fetchImpl(url, { headers: { cookie: cookieHeader } });
+  } catch {
+    return { ok: false, code: "http_request_failed" };
+  }
+  if (!response.ok) {
+    return { ok: false, code: "http_error", status: response.status };
+  }
+  try {
+    return { ok: true, body: await response.json() };
+  } catch {
+    return { ok: false, code: "response_parse_failed" };
+  }
+}
 
 // ---------------------------------------------------------------------------------------------
 // 1. Note file existence + size
@@ -49,7 +137,7 @@ export function parseNoteFileCheckOutput(stdout: string): {
   }
   const size = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(size) || size < 0) {
-    throw new Error(`unexpected note-file-check output: ${JSON.stringify(trimmed)}`);
+    throw new UnexpectedDockerOutputError();
   }
   return { exists: true, sizeBytes: size };
 }
@@ -83,7 +171,11 @@ export function captureNoteFileEvidence(
     const parsed = parseNoteFileCheckOutput(stdout);
     return { path: fullNotePath, exists: parsed.exists, sizeBytes: parsed.sizeBytes, error: null };
   } catch (error) {
-    return { path: fullNotePath, exists: null, sizeBytes: null, error: String(error) };
+    const code =
+      error instanceof UnexpectedDockerOutputError
+        ? "unexpected_docker_output"
+        : "docker_exec_failed";
+    return { path: fullNotePath, exists: null, sizeBytes: null, error: formatCaptureError(code) };
   }
 }
 
@@ -118,38 +210,36 @@ export function summarizeAuditEntries(
  * Reads the account's own action-audit log for rows since the turn started. This is a real
  * user-facing API (GET /api/ai/action-audit, packages/ai/src/routes.ts) — the same audit trail
  * the #2737 diagnosis names as the one authoritative "a tool actually ran" signal, so this never
- * needs a direct database read.
+ * needs a direct database read. Called with plain `fetch`, never `page.request` — see the file
+ * header on why.
  */
 export async function captureActionAuditEvidence(
-  request: APIRequestContext,
+  fetchImpl: FetchImpl,
+  baseUrl: string,
+  cookieHeader: string,
   sinceIso: string
 ): Promise<ActionAuditEvidence> {
-  try {
-    const response = await request.get(
-      `/api/ai/action-audit?since=${encodeURIComponent(sinceIso)}&limit=100`
-    );
-    if (!response.ok()) {
-      return {
-        source: "api:/api/ai/action-audit",
-        entries: [],
-        error: `GET /api/ai/action-audit -> ${response.status()}`
-      };
-    }
-    const body = (await response.json()) as {
-      entries: readonly { toolName: string; outcome: string; occurredAt: string }[];
-    };
-    return {
-      source: "api:/api/ai/action-audit",
-      entries: summarizeAuditEntries(body.entries),
-      error: null
-    };
-  } catch (error) {
-    return { source: "api:/api/ai/action-audit", entries: [], error: String(error) };
+  const source = "api:/api/ai/action-audit" as const;
+  const url = `${baseUrl}/api/ai/action-audit?since=${encodeURIComponent(sinceIso)}&limit=100`;
+  const result = await fetchJson(fetchImpl, url, cookieHeader);
+  if (!result.ok) {
+    return { source, entries: [], error: formatCaptureError(result.code, result.status) };
   }
+  const body = result.body as { entries?: unknown };
+  if (!Array.isArray(body.entries)) {
+    return { source, entries: [], error: formatCaptureError("response_parse_failed") };
+  }
+  return {
+    source,
+    entries: summarizeAuditEntries(
+      body.entries as readonly { toolName: string; outcome: string; occurredAt: string }[]
+    ),
+    error: null
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
-// 3. Bounded ACP tool-call / tool-call-update metadata for the turn
+// 3. Bounded ACP tool-call / tool-call-update metadata for the note-writing turn's own thread
 // ---------------------------------------------------------------------------------------------
 
 export interface BoundToolCallEvent {
@@ -161,6 +251,8 @@ export interface BoundToolCallEvent {
 export interface ToolCallEvidence {
   readonly source: "api:/api/chat/threads/:id/messages";
   readonly events: readonly BoundToolCallEvent[];
+  /** How many tool-related events existed beyond the MAX_TOOL_CALL_EVENTS cap — 0 when none. */
+  readonly omittedCount: number;
   readonly error: string | null;
 }
 
@@ -170,77 +262,124 @@ interface RawActivityEventForEvidence {
   readonly outcome?: string;
 }
 
+/** Only these kinds represent an actual tool call, update, or gateway-audited outcome. */
+const TOOL_RELATED_KINDS = new Set(["tool", "result", "action_request", "action_result"]);
+
 /**
- * Pure: caps the event list at MAX_TOOL_CALL_EVENTS and keeps only kind, tool name and status
- * (the "outcome" field the wire DTO carries for a gateway-audited record; absent for a raw ACP
- * tool_call/tool_call_update, which is itself the signal worth recording — no status ever means
- * no gateway execution was tied to that event). Never text, never toolCallId, never arguments.
+ * Pure: keeps only tool-related events (never a "thought"/"reply"/etc, which could otherwise
+ * fill the whole cap and hide the one tool event that matters), THEN caps at
+ * MAX_TOOL_CALL_EVENTS, and reports how many were dropped by the cap. Each kept event carries
+ * only kind, tool name and status — never text, toolCallId or arguments.
  */
-export function boundToolCallEvents(
-  events: readonly RawActivityEventForEvidence[]
-): readonly BoundToolCallEvent[] {
-  return events.slice(0, MAX_TOOL_CALL_EVENTS).map((event) => ({
-    kind: event.kind,
-    toolName: event.toolName ?? null,
-    status: event.outcome ?? null
-  }));
+export function boundToolCallEvents(events: readonly RawActivityEventForEvidence[]): {
+  readonly events: readonly BoundToolCallEvent[];
+  readonly omittedCount: number;
+} {
+  const toolRelated = events.filter((event) => TOOL_RELATED_KINDS.has(event.kind));
+  const kept = toolRelated.slice(0, MAX_TOOL_CALL_EVENTS);
+  return {
+    events: kept.map((event) => ({
+      kind: event.kind,
+      toolName: event.toolName ?? null,
+      status: event.outcome ?? null
+    })),
+    omittedCount: toolRelated.length - kept.length
+  };
 }
 
 /**
  * Reads the same chat-thread-messages API the page itself calls to draw the transcript
- * (apps/web/src/chat/use-chat-stream.ts), and bounds/redacts its per-message `activity` array —
- * the wire form of the records acp-chat-engine.ts's tool_call/tool_call_update handling produces
- * (packages/chat/src/live/acp-chat-engine.ts:425-497). Picks the most recently active thread for
- * `surface`, then its most recent message's activity.
+ * (apps/web/src/chat/use-chat-stream.ts), for the ONE thread the note-writing turn used —
+ * `threadId` must be captured when that turn starts (see captureCurrentThreadId below), never
+ * "whichever thread is newest right now": the spec opens a fresh thread later for the retrieval
+ * turn, and picking the newest thread at evidence time would silently read that later turn's
+ * events instead of the one that matters. Bounds/redacts the last assistant message's activity
+ * array via boundToolCallEvents.
  */
 export async function captureToolCallEvidence(
-  request: APIRequestContext,
+  fetchImpl: FetchImpl,
+  baseUrl: string,
+  cookieHeader: string,
+  threadId: string | null,
   surface: string
 ): Promise<ToolCallEvidence> {
   const source = "api:/api/chat/threads/:id/messages" as const;
-  try {
-    const threadsResponse = await request.get(
-      `/api/chat/threads?surface=${encodeURIComponent(surface)}`
-    );
-    if (!threadsResponse.ok()) {
-      return { source, events: [], error: `GET /api/chat/threads -> ${threadsResponse.status()}` };
-    }
-    const threadsBody = (await threadsResponse.json()) as {
-      threads: readonly { id: string; lastActiveAt: string }[];
-    };
-    if (threadsBody.threads.length === 0) {
-      return { source, events: [], error: "no chat threads found" };
-    }
-    const mostRecent = [...threadsBody.threads].sort((a, b) =>
-      b.lastActiveAt.localeCompare(a.lastActiveAt)
-    )[0]!;
-
-    const messagesResponse = await request.get(
-      `/api/chat/threads/${encodeURIComponent(mostRecent.id)}/messages?surface=${encodeURIComponent(surface)}`
-    );
-    if (!messagesResponse.ok()) {
-      return {
-        source,
-        events: [],
-        error: `GET /api/chat/threads/:id/messages -> ${messagesResponse.status()}`
-      };
-    }
-    const messagesBody = (await messagesResponse.json()) as {
-      messages: readonly {
-        role: string;
-        activity: readonly RawActivityEventForEvidence[];
-      }[];
-    };
-    const lastAssistantMessage = [...messagesBody.messages]
-      .reverse()
-      .find((message) => message.role === "assistant");
-    if (!lastAssistantMessage) {
-      return { source, events: [], error: "no assistant message found in the most recent thread" };
-    }
-    return { source, events: boundToolCallEvents(lastAssistantMessage.activity), error: null };
-  } catch (error) {
-    return { source, events: [], error: String(error) };
+  if (!threadId) {
+    return { source, events: [], omittedCount: 0, error: formatCaptureError("no_thread_captured") };
   }
+  const url = `${baseUrl}/api/chat/threads/${encodeURIComponent(threadId)}/messages?surface=${encodeURIComponent(surface)}`;
+  const result = await fetchJson(fetchImpl, url, cookieHeader);
+  if (!result.ok) {
+    return {
+      source,
+      events: [],
+      omittedCount: 0,
+      error: formatCaptureError(result.code, result.status)
+    };
+  }
+  const body = result.body as {
+    messages?: readonly { role: string; activity: readonly RawActivityEventForEvidence[] }[];
+  };
+  if (!Array.isArray(body.messages)) {
+    return {
+      source,
+      events: [],
+      omittedCount: 0,
+      error: formatCaptureError("response_parse_failed")
+    };
+  }
+  const lastAssistantMessage = [...body.messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+  if (!lastAssistantMessage) {
+    return {
+      source,
+      events: [],
+      omittedCount: 0,
+      error: formatCaptureError("no_assistant_message")
+    };
+  }
+  const bounded = boundToolCallEvents(lastAssistantMessage.activity);
+  return { source, events: bounded.events, omittedCount: bounded.omittedCount, error: null };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Thread capture at turn start
+// ---------------------------------------------------------------------------------------------
+
+const THREAD_CAPTURE_ATTEMPTS = 5;
+const THREAD_CAPTURE_RETRY_MS = 300;
+
+/**
+ * Called once, right after the note-writing turn is sent (before anything about the turn's
+ * outcome is known), so the thread it landed in is recorded regardless of what happens later in
+ * the test — including a "New chat" click that starts a second, unrelated thread. Retries a
+ * few times over about a second, bounded, since the thread may not exist yet the instant the
+ * turn's POST is fired. Best-effort: returns null rather than throwing.
+ */
+export async function captureCurrentThreadId(
+  fetchImpl: FetchImpl,
+  baseUrl: string,
+  cookieHeader: string,
+  surface: string
+): Promise<string | null> {
+  for (let attempt = 0; attempt < THREAD_CAPTURE_ATTEMPTS; attempt++) {
+    const url = `${baseUrl}/api/chat/threads?surface=${encodeURIComponent(surface)}`;
+    const result = await fetchJson(fetchImpl, url, cookieHeader);
+    if (result.ok) {
+      const body = result.body as { threads?: readonly { id: string; lastActiveAt: string }[] };
+      if (Array.isArray(body.threads) && body.threads.length > 0) {
+        const mostRecent = [...body.threads].sort((a, b) =>
+          b.lastActiveAt.localeCompare(a.lastActiveAt)
+        )[0]!;
+        return mostRecent.id;
+      }
+    }
+    if (attempt < THREAD_CAPTURE_ATTEMPTS - 1) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, THREAD_CAPTURE_RETRY_MS));
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -252,22 +391,43 @@ export interface NotesFailureEvidenceParams {
   readonly fullNotePath: string;
   readonly turnStartIso: string;
   readonly chatSurface: string;
+  /** Captured by captureCurrentThreadId when the note-writing turn was sent; null if that failed. */
+  readonly threadId: string | null;
 }
 
 /**
  * Runs all three captures best-effort and attaches the combined result to the failed test, plus
  * a short bounded summary to the console. Never throws — a capture failure is recorded as a
- * reason string on its own section, so it can never mask the spec's real (already-decided)
- * failure.
+ * fixed reason code on its own section, so it can never mask the spec's real (already-decided)
+ * failure, and it never carries a raw error or response body that could quote private data.
  */
 export async function attachNotesFailureEvidence(
   testInfo: TestInfo,
-  request: APIRequestContext,
+  page: Page,
+  baseUrl: string,
   params: NotesFailureEvidenceParams
 ): Promise<void> {
   const noteFile = captureNoteFileEvidence(params.projectName, params.fullNotePath);
-  const actionAudit = await captureActionAuditEvidence(request, params.turnStartIso);
-  const toolCalls = await captureToolCallEvidence(request, params.chatSurface);
+
+  const cookieHeader = await readSessionCookieHeader(page);
+  const noCookieError = formatCaptureError("no_session_cookie");
+  const actionAudit: ActionAuditEvidence = cookieHeader
+    ? await captureActionAuditEvidence(fetch, baseUrl, cookieHeader, params.turnStartIso)
+    : { source: "api:/api/ai/action-audit", entries: [], error: noCookieError };
+  const toolCalls: ToolCallEvidence = cookieHeader
+    ? await captureToolCallEvidence(
+        fetch,
+        baseUrl,
+        cookieHeader,
+        params.threadId,
+        params.chatSurface
+      )
+    : {
+        source: "api:/api/chat/threads/:id/messages",
+        events: [],
+        omittedCount: 0,
+        error: noCookieError
+      };
 
   const evidence = { noteFile, actionAudit, toolCalls };
   const json = JSON.stringify(evidence, null, 2);
@@ -276,6 +436,7 @@ export async function attachNotesFailureEvidence(
     body: json,
     contentType: "application/json"
   });
-  // Bounded and safe to print: sizes/counts/outcomes only, never content or arguments.
+  // Bounded and safe to print: fixed reason codes, counts and outcomes only — never content,
+  // arguments, cookies or a raw error's own text.
   console.error(`[uat #2737] notes-default-retrieval failure evidence:\n${json}`);
 }
