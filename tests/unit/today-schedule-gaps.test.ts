@@ -153,10 +153,10 @@ describe("buildScheduleGaps", () => {
     expect(atFloorResult.rows).toHaveLength(1);
   });
 
-  it("excludes an item with no computable end from the gap chain instead of inventing one", () => {
-    // a ends 18:30. b has a start but no duration/end - cannot be bridged from or to.
-    // c starts 20:00. The only real gap knowledge is a->b's start (not used) and
-    // nothing about b's own end, so no gap row should reference b at all.
+  it("treats an item with no computable end as a barrier instead of bridging across it", () => {
+    // a ends 18:30. b has a start but no duration/end, so nothing after it can be
+    // vouched for until c resets the baseline. The only real gap is a -> b's start
+    // (18:30-18:45); the 18:30-20:00 span must never appear as a single fabricated gap.
     const items = [
       item({ key: "a", startsAt: "2026-06-30T18:00:00.000Z", durationMinutes: 30 }),
       item({ key: "b", startsAt: "2026-06-30T18:45:00.000Z", durationMinutes: null }),
@@ -164,9 +164,57 @@ describe("buildScheduleGaps", () => {
     ];
     const result = buildScheduleGaps(items, locale);
     expect(result.rows.every((row) => row.afterItemKey !== "b")).toBe(true);
-    expect(result.rows.some((row) => row.afterItemKey === "b")).toBe(false);
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        afterItemKey: "a",
+        startsAt: "2026-06-30T18:30:00.000Z",
+        endsAt: "2026-06-30T18:45:00.000Z"
+      })
+    ]);
+    expect(
+      result.rows.some(
+        (row) => row.startsAt === "2026-06-30T18:30:00.000Z" && row.endsAt === "2026-06-30T20:00:00.000Z"
+      )
+    ).toBe(false);
     // Closing line follows the last item with a computable end: c.
     expect(result.closing?.afterItemKey).toBe("c");
+  });
+
+  it("reports no closing line when the last item has no computable end", () => {
+    const items = [
+      item({ key: "a", startsAt: "2026-06-30T18:00:00.000Z", durationMinutes: 30 }),
+      item({ key: "b", startsAt: "2026-06-30T18:45:00.000Z", durationMinutes: null })
+    ];
+    const result = buildScheduleGaps(items, locale);
+    expect(result.closing).toBeNull();
+  });
+
+  it("tracks the furthest occupied end across a nested overlap instead of the neighbor's end", () => {
+    // a runs 09:00-12:00 local and contains both b and c entirely. Comparing only against
+    // the previous neighbor would fabricate a break between b's end and c's start.
+    const items = [
+      item({ key: "a", startsAt: "2026-06-30T16:00:00.000Z", durationMinutes: 180 }), // 09:00-12:00 PDT
+      item({ key: "b", startsAt: "2026-06-30T17:00:00.000Z", durationMinutes: 30 }), // 10:00-10:30 PDT
+      item({ key: "c", startsAt: "2026-06-30T18:00:00.000Z", durationMinutes: 30 }) // 11:00-11:30 PDT
+    ];
+    const result = buildScheduleGaps(items, locale);
+    expect(result.rows).toEqual([]);
+    expect(result.closing).toMatchObject({ afterItemKey: "a" });
+    expect(result.closing?.text).toContain("12:00");
+  });
+
+  it("tracks the furthest occupied end across a chained overlap", () => {
+    // a: 09:00-10:00 PDT, b: 09:30-11:00 PDT (extends past a), c: 10:30-10:45 PDT (nested
+    // inside b). The furthest end after all three is b's 11:00, not a neighbor's end.
+    const items = [
+      item({ key: "a", startsAt: "2026-06-30T16:00:00.000Z", durationMinutes: 60 }),
+      item({ key: "b", startsAt: "2026-06-30T16:30:00.000Z", durationMinutes: 90 }), // ends 11:00 PDT
+      item({ key: "c", startsAt: "2026-06-30T17:30:00.000Z", durationMinutes: 15 })
+    ];
+    const result = buildScheduleGaps(items, locale);
+    expect(result.rows).toEqual([]);
+    expect(result.closing).toMatchObject({ afterItemKey: "b" });
+    expect(result.closing?.text).toContain("11:00");
   });
 
   it("ignores unscheduled items regardless of position", () => {
