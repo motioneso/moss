@@ -134,6 +134,52 @@ describe("formatCaptureError (#2737)", () => {
 });
 
 describe("container reads never leak a raw error, stderr, or command output (#2737)", () => {
+  // The app container drops root's permission override, so a check run as root cannot see
+  // inside a vault and wrongly reports the note as absent.
+  function vaultExec(fileCheckOutput: string, calls: (readonly string[])[] = []): ExecFileImpl {
+    return ((_file: string, args: readonly string[]) => {
+      calls.push(args);
+      return args.includes("%u:%g") ? "1000:1001\n" : fileCheckOutput;
+    }) as unknown as ExecFileImpl;
+  }
+
+  it("captureNoteFileEvidence checks the note as the vault's owner", () => {
+    const calls: (readonly string[])[] = [];
+
+    const evidence = captureNoteFileEvidence(
+      vaultExec("42\n", calls),
+      "proj",
+      "/data/vaults/x/n.md"
+    );
+
+    expect(evidence).toMatchObject({ exists: true, sizeBytes: 42, error: null });
+    const fileCheck = calls.find((args) => args.includes("/data/vaults/x/n.md"))!;
+    expect(fileCheck.slice(fileCheck.indexOf("--user"), fileCheck.indexOf("--user") + 2)).toEqual([
+      "--user",
+      "1000:1001"
+    ]);
+  });
+
+  it("captureNoteFileEvidence reports an unreadable note as unknown, never as absent", () => {
+    const evidence = captureNoteFileEvidence(
+      vaultExec("NOTES_2737_UNREADABLE\n"),
+      "proj",
+      "/data/vaults/x/n.md"
+    );
+
+    expect(evidence).toMatchObject({ exists: null, error: "note_file_unreadable" });
+  });
+
+  it("captureNoteFileEvidence refuses a malformed vault owner", () => {
+    const exec = ((_file: string, args: readonly string[]) =>
+      args.includes("%u:%g") ? `root; ${PRIVATE_MARKER}` : "42\n") as unknown as ExecFileImpl;
+
+    const evidence = captureNoteFileEvidence(exec, "proj", "/data/vaults/x/n.md");
+
+    expect(evidence).toMatchObject({ exists: null, error: "unexpected_docker_output" });
+    expect(JSON.stringify(evidence)).not.toContain(PRIVATE_MARKER);
+  });
+
   it("captureNoteFileEvidence turns a thrown exec error into a fixed code, never the error's own text", () => {
     const throwingExec: ExecFileImpl = (() => {
       throw new Error(`stat: cannot read, saw ${PRIVATE_MARKER}`);

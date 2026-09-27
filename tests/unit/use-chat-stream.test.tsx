@@ -268,4 +268,116 @@ describe("useChatStream", () => {
     expect(listPendingActionRequests).toHaveBeenCalled();
     expect(JSON.stringify(renderer!.toJSON())).toContain("Approve this note?");
   });
+
+  // #2737: EventSource retries a dropped connection itself, but an HTTP error response closes it
+  // for good. The hook must reopen it, or later action results never reach the drawer.
+  describe("reopening a refused stream", () => {
+    class FakeEventSource {
+      static readonly CLOSED = 2;
+      static instances: FakeEventSource[] = [];
+      readyState = 0;
+      closed = false;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor() {
+        FakeEventSource.instances.push(this);
+      }
+      close() {
+        this.closed = true;
+        this.readyState = FakeEventSource.CLOSED;
+      }
+    }
+
+    function refuse(source: FakeEventSource) {
+      source.readyState = FakeEventSource.CLOSED;
+      source.onerror?.();
+    }
+
+    async function mountDrawer(): Promise<ReactTestRenderer> {
+      vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+      let renderer: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(createElement(StreamProbe, { surface: "drawer" as ChatSurface }));
+        await Promise.resolve();
+      });
+      return renderer!;
+    }
+
+    afterEach(() => {
+      FakeEventSource.instances = [];
+      vi.useRealTimers();
+    });
+
+    it("reopens a closed stream after a delay and shows its records", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.stubGlobal("EventSource", FakeEventSource);
+      const renderer = await mountDrawer();
+
+      await act(async () => refuse(FakeEventSource.instances[0]!));
+      expect(FakeEventSource.instances).toHaveLength(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(FakeEventSource.instances).toHaveLength(2);
+
+      await act(async () => {
+        FakeEventSource.instances[1]!.onmessage?.({
+          data: JSON.stringify({
+            kind: "action_result",
+            text: "Executed: notes.create",
+            toolName: "notes.create",
+            outcome: "executed"
+          })
+        });
+      });
+      expect(JSON.stringify(renderer.toJSON())).toContain("Executed: notes.create");
+    });
+
+    it("backs off between repeated refusals", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.stubGlobal("EventSource", FakeEventSource);
+      await mountDrawer();
+
+      await act(async () => refuse(FakeEventSource.instances[0]!));
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      await act(async () => refuse(FakeEventSource.instances[1]!));
+      await act(async () => {
+        vi.advanceTimersByTime(1_999);
+      });
+      expect(FakeEventSource.instances).toHaveLength(2);
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(FakeEventSource.instances).toHaveLength(3);
+    });
+
+    it("leaves a still-retrying stream to the browser", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.stubGlobal("EventSource", FakeEventSource);
+      await mountDrawer();
+
+      await act(async () => FakeEventSource.instances[0]!.onerror?.());
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(FakeEventSource.instances).toHaveLength(1);
+    });
+
+    it("stops reopening once unmounted", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.stubGlobal("EventSource", FakeEventSource);
+      const renderer = await mountDrawer();
+
+      await act(async () => refuse(FakeEventSource.instances[0]!));
+      await act(async () => renderer.unmount());
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(FakeEventSource.instances).toHaveLength(1);
+    });
+  });
 });
