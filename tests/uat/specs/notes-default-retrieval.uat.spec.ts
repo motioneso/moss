@@ -1,16 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  attachNotesFailureEvidence,
-  captureCurrentThreadId,
-  readSessionCookieHeader
-} from "./notes-failure-evidence.js";
+import { attachNotesFailureEvidence } from "./notes-failure-evidence.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
   readUatJson,
-  requireUatBaseURL,
   signInUatAdmin
 } from "./real-chat-signin.js";
 
@@ -21,6 +16,7 @@ const POLL_DEADLINE_MS = 60_000;
 const FACT = "kumquat focaccia";
 const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
 const TURN_ANNOTATION_TYPE = "2737-notes-turn";
+const RETRIEVAL_TURN_ANNOTATION_TYPE = "2737-retrieval-turn";
 const CHAT_SURFACE = "drawer";
 
 // This spec binds the chat capability directly (PUT /api/ai/services/chat/binding) rather than
@@ -49,30 +45,33 @@ async function ensureRealChat(page: Page): Promise<void> {
     .toBe(true);
 }
 
-test.afterEach(async ({ page }, testInfo) => {
+test.afterEach(async (_, testInfo) => {
   if (testInfo.status === testInfo.expectedStatus) return;
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
-  const baseUrl = process.env.JARVIS_UAT_BASE_URL;
   const turnAnnotation = testInfo.annotations.find(
     (annotation) => annotation.type === TURN_ANNOTATION_TYPE
   )?.description;
-  if (!projectName || !baseUrl || !turnAnnotation) return;
+  if (!projectName || !turnAnnotation) return;
   try {
-    const turn = JSON.parse(turnAnnotation) as {
-      fullNotePath: string;
-      turnStartIso: string;
-      threadId: string | null;
-    };
-    await attachNotesFailureEvidence(testInfo, page, baseUrl, {
+    const turn = JSON.parse(turnAnnotation) as { fullNotePath: string; turnStartIso: string };
+    const retrievalAnnotation = testInfo.annotations.find(
+      (annotation) => annotation.type === RETRIEVAL_TURN_ANNOTATION_TYPE
+    )?.description;
+    const retrievalTurnStartIso = retrievalAnnotation
+      ? (JSON.parse(retrievalAnnotation) as { retrievalTurnStartIso: string }).retrievalTurnStartIso
+      : null;
+    await attachNotesFailureEvidence(testInfo, {
       projectName,
+      ownerUserId: UAT_ADMIN_ID,
       fullNotePath: turn.fullNotePath,
-      turnStartIso: turn.turnStartIso,
       chatSurface: CHAT_SURFACE,
-      threadId: turn.threadId
+      turnStartIso: turn.turnStartIso,
+      retrievalTurnStartIso
     });
-  } catch (error) {
-    // #2737: best-effort only — never mask the spec's own (already-decided) failure.
-    console.error(`[uat #2737] failure-evidence capture itself failed: ${String(error)}`);
+  } catch {
+    // #2737: best-effort only — never mask the spec's own (already-decided) failure, and never
+    // print a raw error, which could otherwise quote a database row or command output.
+    console.error("[uat #2737] failure-evidence capture itself failed: evidence_capture_failed");
   }
 });
 
@@ -94,25 +93,14 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   );
   await composer.press("Enter");
 
-  // #2737: record which thread this turn landed in right now, before anything about the turn's
-  // outcome is known — the spec opens a second, unrelated thread later for the retrieval turn,
-  // and picking "the newest thread" at failure time would silently read that later turn instead.
-  const baseUrlForTurnCapture = requireUatBaseURL();
-  const cookieHeaderForTurnCapture = await readSessionCookieHeader(page);
-  const threadId = cookieHeaderForTurnCapture
-    ? await captureCurrentThreadId(
-        fetch,
-        baseUrlForTurnCapture,
-        cookieHeaderForTurnCapture,
-        CHAT_SURFACE
-      )
-    : null;
+  // #2737: record the note-writing turn's own start time right now, synchronously — nothing
+  // awaited here — so a failure's evidence can later be scoped to exactly this turn's time
+  // window instead of guessing from "the newest thread" or "the last saved message".
   test.info().annotations.push({
     type: TURN_ANNOTATION_TYPE,
     description: JSON.stringify({
       fullNotePath: `${NOTES_ROOT}/${path}`,
-      turnStartIso: new Date(syncNotBefore).toISOString(),
-      threadId
+      turnStartIso: new Date(syncNotBefore).toISOString()
     })
   });
 
@@ -144,6 +132,13 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   );
   await page.getByRole("button", { name: "New chat" }).click();
   await cleared;
+
+  // #2737: same bookkeeping as the note-writing turn — records where the note turn's own time
+  // window ends, synchronously, nothing awaited.
+  test.info().annotations.push({
+    type: RETRIEVAL_TURN_ANNOTATION_TYPE,
+    description: JSON.stringify({ retrievalTurnStartIso: new Date().toISOString() })
+  });
   await composer.fill("What snack did we choose for the launch?");
   await composer.press("Enter");
 

@@ -5,109 +5,94 @@
 // arguments, never credentials. A plain module, not a spec, so importing it never registers
 // stray Playwright tests (the same reason real-chat-signin.ts is a module, not a spec).
 //
-// Three sources, all read-only:
+// Three sources, all read straight from the stack's own containers through `docker compose exec`
+// — never a browser cookie, never an HTTP call. A Playwright trace records every call made
+// through the page or through `page.request`, including headers and full response bodies, so a
+// credential or note content read that way would ride along into the trace the failing test
+// already keeps. A `child_process` call made directly from the test runner is never recorded
+// there, which is why the note-file check has always worked this way and why the other two
+// checks now read the stack's own Postgres container instead of calling its HTTP API:
 //   1. Does the note file exist in the stack, and what size is it (never its contents)?
-//   2. The gateway's own action-audit log (GET /api/ai/action-audit) for the turn — the
+//   2. The gateway's own action-audit table (app.moss_action_audit_log) for the turn — the
 //      authoritative "did a real tool run" signal per the #2737 diagnosis.
-//   3. The one chat thread the note-writing turn used, bounded to tool-call/tool-update kind,
-//      tool name and status — the weaker "what did the agent say it called" signal.
+//   3. The chat activity recorded on the assistant message(s) saved in the note-writing turn's
+//      own time window, bounded to tool-call/result kind, tool name and status — the weaker
+//      "what did the agent say it called" signal.
+//
+// The turn's time window is [turnStartIso, retrievalTurnStartIso) — both are plain
+// `Date.now()` values the spec records synchronously, before it sends each chat message, never
+// awaited and never on the assertion path. Scoping to that window (rather than "the newest
+// thread" or "the last saved message") is what keeps this evidence tied to the turn that matters:
+// a chat reply is only saved once it completes, so an in-flight or stalled turn can otherwise
+// leave an older message looking like the answer.
 //
 // Every step is independently best-effort: a failure is recorded as a fixed reason code, never
-// as the raw error object, so a private value the server or the network layer put in an error
-// (a response body, a stack frame) can never ride along into the attachment or the console.
-//
-// The action-audit and chat-messages reads use Node's own `fetch` with a session cookie read
-// out of the browser context, never Playwright's `page.request`. Playwright's own request
-// client is recorded into the test trace verbatim — headers, cookie and full response body —
-// so routing these particular reads through it would put note content and the session cookie
-// into the trace file the failing test already keeps. `fetch` has no such recorder.
+// as the raw error object or any command output, so a private value a command's stderr or a
+// database row happened to contain can never ride along into the attachment or the console.
 import { execFileSync } from "node:child_process";
 
-import type { Page, TestInfo } from "@playwright/test";
+import type { TestInfo } from "@playwright/test";
 
 import { buildUatComposeArgs } from "../provisioner.js";
 
 const MAX_TOOL_CALL_EVENTS = 20;
-const DOCKER_EXEC_TIMEOUT_MS = 15_000;
+const CONTAINER_EXEC_TIMEOUT_MS = 10_000;
 const MISSING_MARKER = "NOTES_2737_MISSING";
+const AUDIT_ROW_LIMIT = 200;
+const CHAT_MESSAGE_ROW_LIMIT = 50;
 
-// Better Auth's session cookie — kept in sync with packages/module-sdk/src/rate-limit-key.ts's
-// own copy. The `__Secure-` form is issued only over TLS; the UAT stack is plain HTTP, but both
-// names are checked so this never silently returns "no cookie" if that ever changes.
-const SESSION_COOKIE_NAMES = [
-  "better-auth.session_token",
-  "__Secure-better-auth.session_token"
-] as const;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CHAT_SURFACE_PATTERN = /^[a-z][a-z0-9-]{1,31}$/;
 
 /** Fixed, non-identifying reasons a capture step can fail with — never a raw error's own text. */
 export type CaptureErrorCode =
-  | "no_session_cookie"
   | "docker_exec_failed"
+  | "docker_exec_timed_out"
   | "unexpected_docker_output"
-  | "http_request_failed"
-  | "http_error"
-  | "response_parse_failed"
-  | "no_thread_captured"
-  | "no_assistant_message"
-  | "unexpected_error";
+  | "turn_message_not_saved";
 
-/** `code` alone, or `code:status` when the failure carried a real HTTP status. */
+/** `code` alone, or `code:status` when the failure carried a real exit status. */
 export function formatCaptureError(code: CaptureErrorCode, status?: number): string {
   return status === undefined ? code : `${code}:${status}`;
 }
 
 class UnexpectedDockerOutputError extends Error {}
 
-// ---------------------------------------------------------------------------------------------
-// Session cookie (read from the browser, never logged)
-// ---------------------------------------------------------------------------------------------
-
-/**
- * Reads the signed-in session cookie straight out of Playwright's browser context — in memory
- * only, never printed or attached anywhere. Returns null (never throws) when no session cookie
- * is present, so callers can record a fixed "no_session_cookie" reason instead.
- */
-export async function readSessionCookieHeader(page: Page): Promise<string | null> {
-  const cookies = await page.context().cookies();
-  const sessionCookie = cookies.find((cookie) =>
-    (SESSION_COOKIE_NAMES as readonly string[]).includes(cookie.name)
-  );
-  return sessionCookie ? `${sessionCookie.name}=${sessionCookie.value}` : null;
-}
+/** Matches Node's `child_process.execFileSync` — a real docker call in production, a fake in tests. */
+export type ExecFileImpl = typeof execFileSync;
 
 // ---------------------------------------------------------------------------------------------
-// Shared fetch helper — never surfaces a raw error or response body
+// Shared container-exec helper — never surfaces a raw error, stderr, or command output
 // ---------------------------------------------------------------------------------------------
 
-export type FetchImpl = typeof fetch;
-
-type FetchJsonResult =
-  | { readonly ok: true; readonly body: unknown }
+type ContainerCommandResult =
+  | { readonly ok: true; readonly stdout: string }
   | { readonly ok: false; readonly code: CaptureErrorCode; readonly status?: number };
 
 /**
- * GETs `url` with the session cookie and parses the JSON body. Every failure path returns a
- * fixed code instead of the underlying error or response text — a JSON-parse failure can quote
- * the response body verbatim, so that text must never reach the caller.
+ * Runs one `docker ...` command with a short timeout and returns its stdout, or a fixed failure
+ * code. Never throws, and never lets the error object's own message (which can quote a
+ * container's stderr) reach the caller — only a numeric exit status, when there is one.
  */
-async function fetchJson(
-  fetchImpl: FetchImpl,
-  url: string,
-  cookieHeader: string
-): Promise<FetchJsonResult> {
-  let response: Response;
+function runContainerCommand(
+  execImpl: ExecFileImpl,
+  args: readonly string[]
+): ContainerCommandResult {
   try {
-    response = await fetchImpl(url, { headers: { cookie: cookieHeader } });
-  } catch {
-    return { ok: false, code: "http_request_failed" };
-  }
-  if (!response.ok) {
-    return { ok: false, code: "http_error", status: response.status };
-  }
-  try {
-    return { ok: true, body: await response.json() };
-  } catch {
-    return { ok: false, code: "response_parse_failed" };
+    const stdout = execImpl("docker", args, {
+      encoding: "utf8",
+      timeout: CONTAINER_EXEC_TIMEOUT_MS,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    return { ok: true, stdout };
+  } catch (error) {
+    const record = error as { killed?: boolean; status?: number | null };
+    if (record?.killed === true) {
+      return { ok: false, code: "docker_exec_timed_out" };
+    }
+    return typeof record?.status === "number"
+      ? { ok: false, code: "docker_exec_failed", status: record.status }
+      : { ok: false, code: "docker_exec_failed" };
   }
 }
 
@@ -149,34 +134,103 @@ export function parseNoteFileCheckOutput(stdout: string): {
  * buildUatComposeArgs so it can never drift onto the wrong stack.
  */
 export function captureNoteFileEvidence(
+  execImpl: ExecFileImpl,
   projectName: string,
   fullNotePath: string
 ): NoteFileEvidence {
   const script = `if [ -f "$1" ]; then stat -c %s "$1"; else echo ${MISSING_MARKER}; fi`;
-  try {
-    const stdout = execFileSync(
-      "docker",
-      buildUatComposeArgs(projectName, [
-        "exec",
-        "-T",
-        "jarv1s",
-        "sh",
-        "-c",
-        script,
-        "sh",
-        fullNotePath
-      ]),
-      { encoding: "utf8", timeout: DOCKER_EXEC_TIMEOUT_MS, stdio: ["ignore", "pipe", "pipe"] }
-    );
-    const parsed = parseNoteFileCheckOutput(stdout);
-    return { path: fullNotePath, exists: parsed.exists, sizeBytes: parsed.sizeBytes, error: null };
-  } catch (error) {
-    const code =
-      error instanceof UnexpectedDockerOutputError
-        ? "unexpected_docker_output"
-        : "docker_exec_failed";
-    return { path: fullNotePath, exists: null, sizeBytes: null, error: formatCaptureError(code) };
+  const result = runContainerCommand(
+    execImpl,
+    buildUatComposeArgs(projectName, [
+      "exec",
+      "-T",
+      "jarv1s",
+      "sh",
+      "-c",
+      script,
+      "sh",
+      fullNotePath
+    ])
+  );
+  if (!result.ok) {
+    return {
+      path: fullNotePath,
+      exists: null,
+      sizeBytes: null,
+      error: formatCaptureError(result.code, result.status)
+    };
   }
+  try {
+    const parsed = parseNoteFileCheckOutput(result.stdout);
+    return { path: fullNotePath, exists: parsed.exists, sizeBytes: parsed.sizeBytes, error: null };
+  } catch {
+    return {
+      path: fullNotePath,
+      exists: null,
+      sizeBytes: null,
+      error: formatCaptureError("unexpected_docker_output")
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Shared read-only psql-as-JSON helper
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Runs one read-only query as the container's bootstrap superuser (the same role/database pair
+ * job-search-board-sql.ts's execUatSql uses — there is no `jarv1s` ROLE, only `postgres`), and
+ * parses its single-line `jsonb_agg(...)` result. Returns `[]` for "no rows" (`jsonb_agg` of zero
+ * rows is SQL NULL, which `-t -A` prints as an empty line) instead of throwing.
+ */
+function runPsqlJsonQuery(
+  execImpl: ExecFileImpl,
+  projectName: string,
+  sql: string
+):
+  | { readonly ok: true; readonly rows: readonly unknown[] }
+  | { readonly ok: false; readonly code: string } {
+  const result = runContainerCommand(
+    execImpl,
+    buildUatComposeArgs(projectName, [
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "jarv1s",
+      "-t",
+      "-A",
+      "-c",
+      sql
+    ])
+  );
+  if (!result.ok) {
+    return { ok: false, code: formatCaptureError(result.code, result.status) };
+  }
+  try {
+    const trimmed = result.stdout.trim();
+    if (trimmed.length === 0) return { ok: true, rows: [] };
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed === null) return { ok: true, rows: [] };
+    if (!Array.isArray(parsed)) throw new UnexpectedDockerOutputError();
+    return { ok: true, rows: parsed };
+  } catch {
+    return { ok: false, code: formatCaptureError("unexpected_docker_output") };
+  }
+}
+
+/** Rejects anything that is not a well-formed UUID or ISO timestamp before it reaches SQL text. */
+function isSafeUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}
+function isSafeTimestamp(value: string): boolean {
+  return !Number.isNaN(Date.parse(value));
+}
+function isSafeChatSurface(value: string): boolean {
+  return CHAT_SURFACE_PATTERN.test(value);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -190,7 +244,7 @@ export interface BoundAuditEntry {
 }
 
 export interface ActionAuditEvidence {
-  readonly source: "api:/api/ai/action-audit";
+  readonly source: "sql:app.moss_action_audit_log";
   readonly entries: readonly BoundAuditEntry[];
   readonly error: string | null;
 }
@@ -207,39 +261,54 @@ export function summarizeAuditEntries(
 }
 
 /**
- * Reads the account's own action-audit log for rows since the turn started. This is a real
- * user-facing API (GET /api/ai/action-audit, packages/ai/src/routes.ts) — the same audit trail
- * the #2737 diagnosis names as the one authoritative "a tool actually ran" signal, so this never
- * needs a direct database read. Called with plain `fetch`, never `page.request` — see the file
- * header on why.
+ * Reads the account's own action-audit rows for the turn's time window straight out of the
+ * stack's Postgres container — this is the same table the #2737 diagnosis names as the one
+ * authoritative "a tool actually ran" signal. Selects only tool_name, outcome and occurred_at;
+ * never request_id, chat_session_id or the input summary column.
  */
-export async function captureActionAuditEvidence(
-  fetchImpl: FetchImpl,
-  baseUrl: string,
-  cookieHeader: string,
-  sinceIso: string
-): Promise<ActionAuditEvidence> {
-  const source = "api:/api/ai/action-audit" as const;
-  const url = `${baseUrl}/api/ai/action-audit?since=${encodeURIComponent(sinceIso)}&limit=100`;
-  const result = await fetchJson(fetchImpl, url, cookieHeader);
-  if (!result.ok) {
-    return { source, entries: [], error: formatCaptureError(result.code, result.status) };
+export function captureActionAuditEvidence(
+  execImpl: ExecFileImpl,
+  projectName: string,
+  ownerUserId: string,
+  turnStartIso: string,
+  turnEndIso: string
+): ActionAuditEvidence {
+  const source = "sql:app.moss_action_audit_log" as const;
+  if (!isSafeUuid(ownerUserId) || !isSafeTimestamp(turnStartIso) || !isSafeTimestamp(turnEndIso)) {
+    return { source, entries: [], error: formatCaptureError("unexpected_docker_output") };
   }
-  const body = result.body as { entries?: unknown };
-  if (!Array.isArray(body.entries)) {
-    return { source, entries: [], error: formatCaptureError("response_parse_failed") };
+  const sql =
+    "SELECT jsonb_agg(t.* ORDER BY occurred_at) FROM (" +
+    "SELECT tool_name, outcome, occurred_at FROM app.moss_action_audit_log " +
+    `WHERE owner_user_id = '${ownerUserId}' ` +
+    `AND occurred_at >= '${turnStartIso}' AND occurred_at < '${turnEndIso}' ` +
+    `ORDER BY occurred_at LIMIT ${AUDIT_ROW_LIMIT}) t`;
+  const result = runPsqlJsonQuery(execImpl, projectName, sql);
+  if (!result.ok) return { source, entries: [], error: result.code };
+  try {
+    const rows = result.rows as readonly {
+      tool_name: string;
+      outcome: string;
+      occurred_at: string;
+    }[];
+    return {
+      source,
+      entries: summarizeAuditEntries(
+        rows.map((row) => ({
+          toolName: row.tool_name,
+          outcome: row.outcome,
+          occurredAt: row.occurred_at
+        }))
+      ),
+      error: null
+    };
+  } catch {
+    return { source, entries: [], error: formatCaptureError("unexpected_docker_output") };
   }
-  return {
-    source,
-    entries: summarizeAuditEntries(
-      body.entries as readonly { toolName: string; outcome: string; occurredAt: string }[]
-    ),
-    error: null
-  };
 }
 
 // ---------------------------------------------------------------------------------------------
-// 3. Bounded ACP tool-call / tool-call-update metadata for the note-writing turn's own thread
+// 3. Bounded chat activity for the assistant message(s) saved in the turn's own time window
 // ---------------------------------------------------------------------------------------------
 
 export interface BoundToolCallEvent {
@@ -249,7 +318,7 @@ export interface BoundToolCallEvent {
 }
 
 export interface ToolCallEvidence {
-  readonly source: "api:/api/chat/threads/:id/messages";
+  readonly source: "sql:app.chat_messages";
   readonly events: readonly BoundToolCallEvent[];
   /** How many tool-related events existed beyond the MAX_TOOL_CALL_EVENTS cap — 0 when none. */
   readonly omittedCount: number;
@@ -288,98 +357,71 @@ export function boundToolCallEvents(events: readonly RawActivityEventForEvidence
 }
 
 /**
- * Reads the same chat-thread-messages API the page itself calls to draw the transcript
- * (apps/web/src/chat/use-chat-stream.ts), for the ONE thread the note-writing turn used —
- * `threadId` must be captured when that turn starts (see captureCurrentThreadId below), never
- * "whichever thread is newest right now": the spec opens a fresh thread later for the retrieval
- * turn, and picking the newest thread at evidence time would silently read that later turn's
- * events instead of the one that matters. Bounds/redacts the last assistant message's activity
- * array via boundToolCallEvents.
+ * Reads the assistant message(s) saved, for this account's drawer-surface threads, at or after
+ * the note-writing turn's start and before the retrieval turn's start (or now, if the retrieval
+ * turn never started). A chat reply is saved only once it completes, so scoping by time — rather
+ * than "the newest thread" or "the last saved message" — is what keeps this tied to the one turn
+ * that matters: a timeout or a later, unrelated turn can otherwise leave an older message looking
+ * like the answer. If nothing was saved in that window, reports the fixed reason
+ * `turn_message_not_saved` instead of falling back to an older message.
  */
-export async function captureToolCallEvidence(
-  fetchImpl: FetchImpl,
-  baseUrl: string,
-  cookieHeader: string,
-  threadId: string | null,
-  surface: string
-): Promise<ToolCallEvidence> {
-  const source = "api:/api/chat/threads/:id/messages" as const;
-  if (!threadId) {
-    return { source, events: [], omittedCount: 0, error: formatCaptureError("no_thread_captured") };
-  }
-  const url = `${baseUrl}/api/chat/threads/${encodeURIComponent(threadId)}/messages?surface=${encodeURIComponent(surface)}`;
-  const result = await fetchJson(fetchImpl, url, cookieHeader);
-  if (!result.ok) {
+export function captureToolCallEvidence(
+  execImpl: ExecFileImpl,
+  projectName: string,
+  ownerUserId: string,
+  chatSurface: string,
+  turnStartIso: string,
+  turnEndIso: string
+): ToolCallEvidence {
+  const source = "sql:app.chat_messages" as const;
+  if (
+    !isSafeUuid(ownerUserId) ||
+    !isSafeChatSurface(chatSurface) ||
+    !isSafeTimestamp(turnStartIso) ||
+    !isSafeTimestamp(turnEndIso)
+  ) {
     return {
       source,
       events: [],
       omittedCount: 0,
-      error: formatCaptureError(result.code, result.status)
+      error: formatCaptureError("unexpected_docker_output")
     };
   }
-  const body = result.body as {
-    messages?: readonly { role: string; activity: readonly RawActivityEventForEvidence[] }[];
-  };
-  if (!Array.isArray(body.messages)) {
+  const sql =
+    "SELECT jsonb_agg(t.* ORDER BY created_at) FROM (" +
+    "SELECT m.created_at, m.tool_metadata->'activity' AS activity FROM app.chat_messages m " +
+    "JOIN app.chat_threads th ON th.id = m.thread_id " +
+    `WHERE th.owner_user_id = '${ownerUserId}' AND th.surface = '${chatSurface}' ` +
+    "AND m.role = 'assistant' " +
+    `AND m.created_at >= '${turnStartIso}' AND m.created_at < '${turnEndIso}' ` +
+    `ORDER BY m.created_at LIMIT ${CHAT_MESSAGE_ROW_LIMIT}) t`;
+  const result = runPsqlJsonQuery(execImpl, projectName, sql);
+  if (!result.ok) return { source, events: [], omittedCount: 0, error: result.code };
+
+  if (result.rows.length === 0) {
     return {
       source,
       events: [],
       omittedCount: 0,
-      error: formatCaptureError("response_parse_failed")
+      error: formatCaptureError("turn_message_not_saved")
     };
   }
-  const lastAssistantMessage = [...body.messages]
-    .reverse()
-    .find((message) => message.role === "assistant");
-  if (!lastAssistantMessage) {
+
+  try {
+    const rows = result.rows as readonly { created_at: string; activity: unknown }[];
+    const combinedActivity = rows.flatMap((row) =>
+      Array.isArray(row.activity) ? (row.activity as RawActivityEventForEvidence[]) : []
+    );
+    const bounded = boundToolCallEvents(combinedActivity);
+    return { source, events: bounded.events, omittedCount: bounded.omittedCount, error: null };
+  } catch {
     return {
       source,
       events: [],
       omittedCount: 0,
-      error: formatCaptureError("no_assistant_message")
+      error: formatCaptureError("unexpected_docker_output")
     };
   }
-  const bounded = boundToolCallEvents(lastAssistantMessage.activity);
-  return { source, events: bounded.events, omittedCount: bounded.omittedCount, error: null };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Thread capture at turn start
-// ---------------------------------------------------------------------------------------------
-
-const THREAD_CAPTURE_ATTEMPTS = 5;
-const THREAD_CAPTURE_RETRY_MS = 300;
-
-/**
- * Called once, right after the note-writing turn is sent (before anything about the turn's
- * outcome is known), so the thread it landed in is recorded regardless of what happens later in
- * the test — including a "New chat" click that starts a second, unrelated thread. Retries a
- * few times over about a second, bounded, since the thread may not exist yet the instant the
- * turn's POST is fired. Best-effort: returns null rather than throwing.
- */
-export async function captureCurrentThreadId(
-  fetchImpl: FetchImpl,
-  baseUrl: string,
-  cookieHeader: string,
-  surface: string
-): Promise<string | null> {
-  for (let attempt = 0; attempt < THREAD_CAPTURE_ATTEMPTS; attempt++) {
-    const url = `${baseUrl}/api/chat/threads?surface=${encodeURIComponent(surface)}`;
-    const result = await fetchJson(fetchImpl, url, cookieHeader);
-    if (result.ok) {
-      const body = result.body as { threads?: readonly { id: string; lastActiveAt: string }[] };
-      if (Array.isArray(body.threads) && body.threads.length > 0) {
-        const mostRecent = [...body.threads].sort((a, b) =>
-          b.lastActiveAt.localeCompare(a.lastActiveAt)
-        )[0]!;
-        return mostRecent.id;
-      }
-    }
-    if (attempt < THREAD_CAPTURE_ATTEMPTS - 1) {
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, THREAD_CAPTURE_RETRY_MS));
-    }
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -388,55 +430,58 @@ export async function captureCurrentThreadId(
 
 export interface NotesFailureEvidenceParams {
   readonly projectName: string;
+  readonly ownerUserId: string;
   readonly fullNotePath: string;
-  readonly turnStartIso: string;
   readonly chatSurface: string;
-  /** Captured by captureCurrentThreadId when the note-writing turn was sent; null if that failed. */
-  readonly threadId: string | null;
+  readonly turnStartIso: string;
+  /** ISO time the retrieval turn was sent, or null if the test failed before reaching it. */
+  readonly retrievalTurnStartIso: string | null;
 }
 
 /**
  * Runs all three captures best-effort and attaches the combined result to the failed test, plus
  * a short bounded summary to the console. Never throws — a capture failure is recorded as a
  * fixed reason code on its own section, so it can never mask the spec's real (already-decided)
- * failure, and it never carries a raw error or response body that could quote private data.
+ * failure, and it never carries a raw error, stderr, or database row that could quote private
+ * data. Entirely synchronous: every read here is a direct `docker compose exec`, so this never
+ * touches the browser, a cookie, or the network.
  */
 export async function attachNotesFailureEvidence(
   testInfo: TestInfo,
-  page: Page,
-  baseUrl: string,
   params: NotesFailureEvidenceParams
 ): Promise<void> {
-  const noteFile = captureNoteFileEvidence(params.projectName, params.fullNotePath);
+  const turnEndIso = params.retrievalTurnStartIso ?? new Date().toISOString();
 
-  const cookieHeader = await readSessionCookieHeader(page);
-  const noCookieError = formatCaptureError("no_session_cookie");
-  const actionAudit: ActionAuditEvidence = cookieHeader
-    ? await captureActionAuditEvidence(fetch, baseUrl, cookieHeader, params.turnStartIso)
-    : { source: "api:/api/ai/action-audit", entries: [], error: noCookieError };
-  const toolCalls: ToolCallEvidence = cookieHeader
-    ? await captureToolCallEvidence(
-        fetch,
-        baseUrl,
-        cookieHeader,
-        params.threadId,
-        params.chatSurface
-      )
-    : {
-        source: "api:/api/chat/threads/:id/messages",
-        events: [],
-        omittedCount: 0,
-        error: noCookieError
-      };
+  const noteFile = captureNoteFileEvidence(execFileSync, params.projectName, params.fullNotePath);
+  const actionAudit = captureActionAuditEvidence(
+    execFileSync,
+    params.projectName,
+    params.ownerUserId,
+    params.turnStartIso,
+    turnEndIso
+  );
+  const toolCalls = captureToolCallEvidence(
+    execFileSync,
+    params.projectName,
+    params.ownerUserId,
+    params.chatSurface,
+    params.turnStartIso,
+    turnEndIso
+  );
 
   const evidence = { noteFile, actionAudit, toolCalls };
   const json = JSON.stringify(evidence, null, 2);
 
-  await testInfo.attach("2737-notes-failure-evidence.json", {
-    body: json,
-    contentType: "application/json"
-  });
   // Bounded and safe to print: fixed reason codes, counts and outcomes only — never content,
-  // arguments, cookies or a raw error's own text.
+  // arguments, or a raw error's own text.
   console.error(`[uat #2737] notes-default-retrieval failure evidence:\n${json}`);
+
+  try {
+    await testInfo.attach("2737-notes-failure-evidence.json", {
+      body: json,
+      contentType: "application/json"
+    });
+  } catch {
+    // Already logged above — the attachment itself is best-effort.
+  }
 }
