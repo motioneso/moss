@@ -28,14 +28,15 @@ const locale: LocaleSettingsDto = {
 };
 
 describe("Today morning briefing prose", () => {
-  it("renders full morning prose before Start here with authored loading empty and stale states", () => {
+  it("previews the morning lead before Start here while keeping the full report in Read", () => {
     const morning = briefingDefinition({
       id: "morning-1",
       title: "Morning briefing",
       briefingType: "morning"
     });
     const evening = briefingDefinition({ id: "evening-1", targetTime: "19:00" });
-    const summaryText = "The day opens with a clear priority.\n\nKeep the afternoon flexible.";
+    const summaryText =
+      "The day opens with a clear priority.\n\nKeep the afternoon flexible.\n\n## Preparation\nThe source-backed details belong in Read.";
     const html = renderToday({
       now: new Date("2026-06-30T01:30:00.000Z"),
       definitions: [morning, evening],
@@ -66,6 +67,7 @@ describe("Today morning briefing prose", () => {
     expect(html).toContain("today-hero");
     expect(html).toContain("The day opens with a clear priority.");
     expect(html).toContain("Keep the afternoon flexible.");
+    expect(html).not.toContain("The source-backed details belong in Read.");
     expect(html).toContain("Prepared at");
     expect(html).toContain("Read the full morning briefing");
     expect(html.indexOf("The day opens with a clear priority.")).toBeLessThan(

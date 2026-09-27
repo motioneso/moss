@@ -20,7 +20,6 @@ import { Button } from "@moss/ui";
 import { getBriefingRun, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { formatDate, formatTime } from "../locale/locale-format.js";
-import { joinActionRowsToTasks, type DisplayedActionRow } from "./briefing-action-rows.js";
 import {
   EditorialBlock,
   BriefingReportShell,
@@ -32,7 +31,6 @@ import { splitHeadline } from "./today-hero.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import { acceptAllSelectionFor, hasOtherPendingEdits } from "./day-plan-review-model.js";
 import * as acceptLabels from "./today-labels.js";
-import { BriefingProse } from "./evening-mode.js";
 import {
   BriefingFreshnessList,
   BriefingStaleBanner,
@@ -245,7 +243,6 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
             <ReportBody
               detail={detail}
               run={detail.run}
-              tasks={props.tasks}
               locale={props.locale}
               runs={props.runs}
               selectedRunId={selectedRunId}
@@ -379,7 +376,6 @@ function tonightParagraph(
 function ReportBody(props: {
   readonly detail: GetBriefingRunResponse;
   readonly run: BriefingRunDto;
-  readonly tasks: readonly TaskDto[];
   readonly locale: LocaleSettingsDto;
   readonly runs: readonly BriefingRunDto[];
   readonly selectedRunId: string;
@@ -412,7 +408,7 @@ function ReportBody(props: {
         Prepared at {formatTime(run.createdAt, props.locale)}
       </p>
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
-      {headline.rest ? <BriefingProse summaryText={headline.rest} /> : null}
+      {headline.rest ? <MorningReportProse text={headline.rest} /> : null}
       {noEveningPlan ? (
         <p className="brief-reader__plan-source">
           No evening priorities were available for this briefing. Moss used today’s available
@@ -446,9 +442,6 @@ function ReportBody(props: {
       ) : null}
       {freshness ? (
         <BriefingStaleBanner freshness={freshness} excludeSources={delayedEmail ? ["email"] : []} />
-      ) : null}
-      {run.structuredPayload.actionRows.length > 0 ? (
-        <BriefingSections run={run} tasks={props.tasks} />
       ) : null}
       {news ? (
         <EditorialBlock
@@ -554,45 +547,24 @@ function BriefingCallout(props: {
   );
 }
 
-/** Q3: each action row renders as a report section (heading, explanation as
-    prose, a "View ↗" link for a view action), replacing the old flat list. */
-function BriefingSections(props: {
-  readonly run: BriefingRunDto;
-  readonly tasks: readonly TaskDto[];
-}) {
-  const displayed = joinActionRowsToTasks(props.run.structuredPayload.actionRows, props.tasks);
-  const shown = new Set(displayed.map((entry) => entry.row.taskId));
-  const dropped = props.run.structuredPayload.actionRows.filter((row) => !shown.has(row.taskId));
+/** New reports use section headings; older saved prose remains readable. */
+function MorningReportProse(props: { readonly text: string }) {
+  const blocks = props.text.trim().split(/(?=^#{1,3} )/m);
   return (
     <div className="brief-reader__sections">
-      {displayed.map((entry) => (
-        <BriefingSection key={entry.row.taskId} entry={entry} />
-      ))}
-      {dropped.map((row) => (
-        <p key={row.taskId} className="brief-reader__gap">
-          No longer available
-        </p>
-      ))}
+      {blocks.map((block, index) => {
+        const heading = block.match(/^#{1,3}\s+([^\n]+)\r?\n([\s\S]+)$/);
+        return heading ? (
+          <section className="brief-reader__section" key={index}>
+            <h4 className="brief-reader__section-heading">{heading[1]}</h4>
+            <p className="brief-reader__section-prose">{heading[2]?.trim()}</p>
+          </section>
+        ) : (
+          <p className="jds-brief__body" key={index}>
+            {block}
+          </p>
+        );
+      })}
     </div>
-  );
-}
-
-function BriefingSection(props: { readonly entry: DisplayedActionRow }) {
-  const row = props.entry.row;
-  return (
-    <section className="brief-reader__section">
-      <h4 className="brief-reader__section-heading">{row.title}</h4>
-      <p className="brief-reader__section-prose">{row.explanation}</p>
-      {row.primaryAction?.kind === "view" ? (
-        <a
-          className="brief-reader__section-link"
-          href={row.primaryAction.href}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View ↗
-        </a>
-      ) : null}
-    </section>
   );
 }
