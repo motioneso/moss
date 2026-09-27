@@ -13,7 +13,10 @@ const SOURCE_LABEL: Record<string, string> = {
   tasks: "Tasks",
   commitments: "Commitments",
   chats: "Chats",
-  goals: "Goals"
+  goals: "Goals",
+  news: "News",
+  sports: "Sports",
+  day_plan: "Day plan"
 };
 
 function formatAge(entry: SourceFreshnessEntry, capturedAt: string): string {

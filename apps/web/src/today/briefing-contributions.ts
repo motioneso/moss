@@ -8,7 +8,7 @@ export function contributionFor(
   source: string,
   sourceMetadata: Record<string, unknown>
 ): string | null {
-  if (isGapListed(sourceMetadata, source)) return null;
+  if (isFailedSource(sourceMetadata, source)) return null;
   switch (source) {
     case "calendar":
       return (
@@ -62,7 +62,11 @@ export function contributionFor(
   }
 }
 
-function isGapListed(sourceMetadata: Record<string, unknown>, source: string): boolean {
+// A failed read leaves suspect counts behind, so the row shows no contribution
+// line (the gap note stays). Other gap reasons describe usable data: "empty"
+// always pairs with a zero count, and "truncated" means every item was read and
+// only the prompt lines were capped, so the count still names the contribution.
+function isFailedSource(sourceMetadata: Record<string, unknown>, source: string): boolean {
   const gaps = sourceMetadata.gaps;
   if (!Array.isArray(gaps)) return false;
   return gaps.some(
@@ -70,7 +74,8 @@ function isGapListed(sourceMetadata: Record<string, unknown>, source: string): b
       gap !== null &&
       typeof gap === "object" &&
       !Array.isArray(gap) &&
-      (gap as Record<string, unknown>).source === source
+      (gap as Record<string, unknown>).source === source &&
+      (gap as Record<string, unknown>).reason === "tool_failed"
   );
 }
 

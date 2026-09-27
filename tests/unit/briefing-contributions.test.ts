@@ -139,8 +139,13 @@ describe("contributionFor", () => {
     expect(contributionFor("vault", { ...metadata, vaultCount: 0 })).toBeNull();
   });
 
-  it("shows no line for a gap-listed source even when stale counts exist", () => {
-    const gapped = { ...metadata, gaps: [{ source: "calendar", reason: "empty" }] };
+  it("still names the count when lines were truncated for the prompt", () => {
+    const gapped = { ...metadata, gaps: [{ source: "calendar", reason: "truncated" }] };
+    expect(contributionFor("calendar", gapped)).toBe("4 events on today's schedule");
+  });
+
+  it("shows no line for a failed source even when stale counts exist", () => {
+    const gapped = { ...metadata, gaps: [{ source: "calendar", reason: "tool_failed" }] };
     expect(contributionFor("calendar", gapped)).toBeNull();
   });
 });
