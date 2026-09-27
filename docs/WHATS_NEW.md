@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Assistant response preview works with connected agents.** Preview response now shows a real answer when your assistant uses a connected command-line agent. [PR #2739](https://github.com/motioneso/moss/pull/2739)
 - **AI chats use selected provider.** Chats now use the AI assistant selected by an administrator. [PR #2727](https://github.com/motioneso/moss/pull/2727)
 - **Removing this device fully turns off its push notifications.** Removing the device you are using from notification settings now also asks that browser to cancel its push registration, and turning notifications back on afterwards no longer leaves a duplicate device behind. [PR #2723](https://github.com/motioneso/moss/pull/2723)
 - **Standings say when they could not be updated.** When the latest standings cannot be fetched, the standings area now says so instead of looking empty or out of date without explanation. [PR #2722](https://github.com/motioneso/moss/pull/2722)
