@@ -25,23 +25,21 @@ interface OverviewGame {
   readonly away: { readonly teamKey: string; readonly shortName: string };
 }
 
-async function readOverview(page: Page): Promise<{
-  readonly groups: readonly {
-    readonly competitionKey: string;
-    readonly games: readonly OverviewGame[];
-  }[];
-}> {
+interface OverviewGroup {
+  readonly competitionKey: string;
+  readonly games: readonly OverviewGame[];
+}
+
+interface SportsOverview {
+  readonly scoreboard: readonly OverviewGroup[];
+}
+
+async function readOverview(page: Page): Promise<SportsOverview> {
   const response = await page.request.get("/api/sports/overview", {
     timeout: API_TIMEOUT_MS
   });
   expect(response.ok(), `overview -> ${response.status()}`).toBeTruthy();
-  return (await response.json()) as {
-    readonly groups?: unknown;
-    readonly scoreboard: readonly {
-      readonly competitionKey: string;
-      readonly games: readonly OverviewGame[];
-    }[];
-  };
+  return (await response.json()) as SportsOverview;
 }
 
 async function overviewDiagnostic(page: Page): Promise<string> {
