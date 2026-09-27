@@ -557,6 +557,7 @@ export async function composeBriefing(
     sourceMetadata: {
       commitmentCount: commitments.count,
       taskCount: prioritizedTasks.count,
+      goalsCount: goals.count,
       calendarCount: calendar.count,
       calendarEventCount: rawCalendar.rawItems?.length ?? 0,
       calendarSignals: prioritizedCalendarSignals,
