@@ -33,6 +33,9 @@ import { buildUatComposeArgs } from "../provisioner.js";
 const MAX_TOOL_CALL_EVENTS = 20;
 const CONTAINER_EXEC_TIMEOUT_MS = 10_000;
 const MISSING_MARKER = "NOTES_2737_MISSING";
+const UNREADABLE_MARKER = "NOTES_2737_UNREADABLE";
+const VAULT_ROOT = "/data/vaults";
+const OWNER_PATTERN = /^\d+:\d+$/;
 const AUDIT_ROW_LIMIT = 200;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,6 +48,7 @@ export type CaptureErrorCode =
   | "docker_exec_failed"
   | "docker_exec_timed_out"
   | "unexpected_docker_output"
+  | "note_file_unreadable"
   | "note_request_not_saved"
   | "note_request_ambiguous"
   | "turn_message_not_saved";
@@ -55,6 +59,7 @@ export function formatCaptureError(code: CaptureErrorCode, status?: number): str
 }
 
 class UnexpectedDockerOutputError extends Error {}
+class NoteFileUnreadableError extends Error {}
 
 /** Matches Node's `child_process.execFileSync` — a real docker call in production, a fake in tests. */
 export type ExecFileImpl = typeof execFileSync;
@@ -108,7 +113,7 @@ export interface NoteFileEvidence {
 /**
  * Pure: turns the container command's raw stdout into exists/size. Exported so the parsing
  * itself can be unit-tested without a live stack. `stdout` is either a byte count (file exists)
- * or the fixed MISSING_MARKER string (file absent) — never file content.
+ * or a fixed marker for an absent or unreadable file — never file content.
  */
 export function parseNoteFileCheckOutput(stdout: string): {
   readonly exists: boolean;
@@ -117,6 +122,9 @@ export function parseNoteFileCheckOutput(stdout: string): {
   const trimmed = stdout.trim();
   if (trimmed === MISSING_MARKER) {
     return { exists: false, sizeBytes: null };
+  }
+  if (trimmed === UNREADABLE_MARKER) {
+    throw new NoteFileUnreadableError();
   }
   const size = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(size) || size < 0) {
@@ -130,18 +138,40 @@ export function parseNoteFileCheckOutput(stdout: string): {
  * large it is — never reads or logs its contents. Uses the same `docker compose exec -T`
  * pattern as real-chat-env.ts and notes-path-recheck.uat.spec.ts, project-scoped via
  * buildUatComposeArgs so it can never drift onto the wrong stack.
+ *
+ * The container drops root's permission override, so root cannot see inside a vault. The check
+ * runs as the vault's owner, and any failure other than "no such file" reports as unreadable.
  */
 export function captureNoteFileEvidence(
   execImpl: ExecFileImpl,
   projectName: string,
   fullNotePath: string
 ): NoteFileEvidence {
-  const script = `if [ -f "$1" ]; then stat -c %s "$1"; else echo ${MISSING_MARKER}; fi`;
+  const unknown = (error: string): NoteFileEvidence => ({
+    path: fullNotePath,
+    exists: null,
+    sizeBytes: null,
+    error
+  });
+  const ownerResult = runContainerCommand(
+    execImpl,
+    buildUatComposeArgs(projectName, ["exec", "-T", "jarv1s", "stat", "-c", "%u:%g", VAULT_ROOT])
+  );
+  if (!ownerResult.ok) return unknown(formatCaptureError(ownerResult.code, ownerResult.status));
+  const owner = ownerResult.stdout.trim();
+  if (!OWNER_PATTERN.test(owner)) return unknown(formatCaptureError("unexpected_docker_output"));
+
+  const script =
+    `out=$(stat -c %s -- "$1" 2>&1) && { echo "$out"; exit 0; }; ` +
+    `case "$out" in *"No such file or directory"*) echo ${MISSING_MARKER};; ` +
+    `*) echo ${UNREADABLE_MARKER};; esac`;
   const result = runContainerCommand(
     execImpl,
     buildUatComposeArgs(projectName, [
       "exec",
       "-T",
+      "--user",
+      owner,
       "jarv1s",
       "sh",
       "-c",
@@ -150,24 +180,18 @@ export function captureNoteFileEvidence(
       fullNotePath
     ])
   );
-  if (!result.ok) {
-    return {
-      path: fullNotePath,
-      exists: null,
-      sizeBytes: null,
-      error: formatCaptureError(result.code, result.status)
-    };
-  }
+  if (!result.ok) return unknown(formatCaptureError(result.code, result.status));
   try {
     const parsed = parseNoteFileCheckOutput(result.stdout);
     return { path: fullNotePath, exists: parsed.exists, sizeBytes: parsed.sizeBytes, error: null };
-  } catch {
-    return {
-      path: fullNotePath,
-      exists: null,
-      sizeBytes: null,
-      error: formatCaptureError("unexpected_docker_output")
-    };
+  } catch (error) {
+    return unknown(
+      formatCaptureError(
+        error instanceof NoteFileUnreadableError
+          ? "note_file_unreadable"
+          : "unexpected_docker_output"
+      )
+    );
   }
 }
 
