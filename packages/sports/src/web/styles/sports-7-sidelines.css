@@ -217,7 +217,10 @@
   padding: 3px 24px;
 }
 
-.jds-brief--sports .sp-tonight__row:first-child {
+/* The Tonight list is three columns above 1080px (see kit-today-desks.css), so
+   the first game of every wrapped row — not just the very first game — lines up
+   with the section edge with no divider. */
+.jds-brief--sports .sp-tonight__row:nth-child(3n + 1) {
   border-left: 0;
   padding-left: 0;
 }
@@ -253,6 +256,12 @@
 
 @media (max-width: 1080px) {
   .jds-brief--sports .desk-stories {
+    border-left: 0;
+    padding-left: 0;
+  }
+  /* Single column at and below the Today rail breakpoint (see kit-today-desks.css):
+     no game sits beside another, so no game draws the between-games divider. */
+  .jds-brief--sports .sp-tonight__row {
     border-left: 0;
     padding-left: 0;
   }
