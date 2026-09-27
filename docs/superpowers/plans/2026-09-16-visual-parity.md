@@ -480,26 +480,36 @@ Amended scope for #2743, real sources only:
 1. **Preparation line.** Shown only when a real calendar entry with
    `isMossBlock: true` ends at the exact moment the meeting starts, same as
    `meetingNote()` (`today-rail.tsx:79-90`) already derives meeting length from
-   real `startsAt`/`endsAt`. State its duration the same way. No such block:
-   no preparation line, no placeholder text.
+   real `startsAt`/`endsAt` — **and** that block's own `title` reads as
+   preparation on a case-insensitive match against `prep`, `prepare`, or
+   `preparation`. A touching Moss block ending at the right time is not by
+   itself evidence of preparation; it could be a focus block for something
+   else, and only the block's own title tells us what it is for. Either
+   condition failing (no touching block, or a touching block whose title
+   doesn't say preparation): no preparation line, no placeholder text. When
+   shown, state the block's real duration.
 2. **Decisions line: not built.** No decision entity exists to back it. Adding
    one is a new feature needing its own spec, out of scope for #2743. The card
    never claims a decision count.
 3. **Link.** `RailNextEvent` gains an `id: string` field (present on the
    source `CalendarEventDto`, currently dropped when building the rail prop).
    The button navigates to `/calendar?event=<id>` instead of the bare
-   `/calendar`. `calendar-page.tsx` reads that query parameter once its own
-   event list has loaded and, on a match, calls `setPeek` for that event —
-   the same action a click already performs. An id that resolves to nothing
-   (deleted/moved event) opens the calendar page with no peek, same as
-   visiting `/calendar` directly today. No new route or screen.
+   `/calendar`, labeled "See meeting" (not "See meeting & decisions" — there
+   are no decisions to see). `calendar-page.tsx` reads that query parameter
+   once its own event list has loaded and, on a match, calls `setPeek` for
+   that event — the same action a click already performs. An id that resolves
+   to nothing (deleted/moved event) opens the calendar page with no peek,
+   same as visiting `/calendar` directly today. No new route or screen.
 
-Test cases: preparation-block derivation with (a) a matching preceding block,
-(b) no preceding block, (c) a Moss block present but not touching the meeting's
-start — each asserted on the rendered card text/absence, not on internal state.
-A browser test seeds one meeting with a real preparation block and one without,
-checks the card in both cases, then follows the link and confirms the calendar
-page opens with that meeting's `CalendarPeek` visible.
+Test cases: preparation-block derivation with (a) a matching preceding block
+titled as preparation, (b) no preceding block, (c) a Moss block touching the
+meeting's start but not titled as preparation, (d) a Moss block titled as
+preparation but not touching the meeting's start — (b), (c) and (d) all show
+no line. Each case asserted on the rendered card text/absence, not on internal
+state. A browser test seeds one meeting with a real, correctly-titled
+preparation block and one without, checks the card in both cases, then follows
+the link and confirms the calendar page opens with that meeting's
+`CalendarPeek` visible.
 
 ### 4. Complete the degraded-briefing decision and slice
 
