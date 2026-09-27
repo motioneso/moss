@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Needs You placement · selected Moss design</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-today-feeds.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--text);
+        background: var(--bg);
+        font-family: var(--font-sans);
+      }
+      .proposal {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 48px 64px 56px;
+      }
+      .proposal__intro {
+        margin-bottom: 28px;
+      }
+      .proposal__eyebrow,
+      .variant__label,
+      .context__label {
+        color: var(--text-subtle);
+        font-size: var(--text-2xs);
+        font-weight: var(--weight-semibold);
+        letter-spacing: var(--tracking-caps);
+        text-transform: uppercase;
+      }
+      .proposal__eyebrow {
+        margin: 0 0 8px;
+      }
+      h1 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-3xl);
+        font-weight: var(--weight-semibold);
+        letter-spacing: var(--tracking-snug);
+        line-height: var(--leading-tight);
+      }
+      .proposal__dek {
+        max-width: 72ch;
+        margin: 10px 0 0;
+        color: var(--text-muted);
+        font-size: var(--text-md);
+        line-height: var(--leading-normal);
+      }
+      .comparison {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 40px;
+        border-top: var(--border-w) solid var(--border-strong);
+      }
+      .variant {
+        min-width: 0;
+        padding-top: 18px;
+      }
+      .variant + .variant {
+        border-left: var(--border-w) solid var(--border);
+        padding-left: 40px;
+      }
+      .variant__label {
+        margin: 0 0 3px;
+      }
+      .variant__note {
+        margin: 0 0 5px;
+        color: var(--text-muted);
+        font-size: var(--text-xs);
+      }
+      .sample {
+        max-width: 620px;
+      }
+      .jds-brief__head {
+        margin-bottom: var(--space-2);
+      }
+      .jds-brief__title {
+        font-variant-numeric: tabular-nums;
+      }
+      .loose-row__title,
+      .loose-row__meta,
+      .jds-task__title {
+        font-family: var(--font-sans);
+      }
+      .loose-row__title {
+        font-size: var(--text-sm);
+        font-weight: var(--weight-semibold);
+      }
+      .loose-row__meta {
+        color: var(--text-subtle);
+        font-size: var(--text-xs);
+        line-height: var(--leading-normal);
+      }
+      .loose-row__ic {
+        color: var(--accent-fg);
+        padding-top: 2px;
+      }
+      .loose-row__main,
+      .jds-task__main {
+        color: inherit;
+        background: transparent;
+        border: 0;
+        font: inherit;
+      }
+      .loose-row__act {
+        gap: 4px;
+      }
+      .loose-row__act .jds-btn {
+        height: 28px;
+        padding: 0 8px;
+        font-size: var(--text-2xs);
+      }
+      .action-row {
+        padding-right: 0;
+        padding-left: 0;
+      }
+      .loose__subhead {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-2);
+        margin: 14px 0 0;
+        padding-top: 12px;
+        border-top: var(--border-w) solid var(--border-subtle);
+      }
+      .loose__subhead .jds-brief__kicker {
+        color: var(--text-muted);
+      }
+      .catchup-copy {
+        margin: 0;
+      }
+      .context {
+        margin-top: 26px;
+        padding-top: 12px;
+        border-top: var(--border-w) solid var(--border-subtle);
+      }
+      .context__label {
+        margin: 0 0 5px;
+      }
+      .context__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-lg);
+        font-weight: var(--weight-semibold);
+      }
+      .context__copy {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: var(--text-xs);
+      }
+      .proposal__source-note {
+        margin: 22px 0 0;
+        color: var(--text-subtle);
+        font-size: var(--text-xs);
+      }
+      @media (max-width: 1000px) {
+        .proposal {
+          padding: 32px 28px 40px;
+        }
+        .comparison {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 20px;
+        }
+        .variant + .variant {
+          border-top: var(--border-w) solid var(--border);
+          border-left: 0;
+          padding: 20px 0 0;
+        }
+      }
+      @media (max-width: 620px) {
+        .proposal {
+          padding: 24px 16px 32px;
+        }
+        h1 {
+          font-size: var(--text-2xl);
+        }
+        .loose-row__act {
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .action-row {
+          flex-wrap: wrap;
+        }
+        .action-row .loose-row__act {
+          width: 100%;
+          padding-left: 25px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="proposal" id="comparison-sheet">
+      <header class="proposal__intro">
+        <p class="proposal__eyebrow">Today · selected placement</p>
+        <h1>Loose ends, together with action rows</h1>
+        <p class="proposal__dek">
+          Ben selected the compact option: group Loose ends inside Needs you. The comparison keeps
+          the same count and approved Catch-up summary in both variants. Content is fictional and
+          the layout is reconstructed from current source; this is not a live capture.
+        </p>
+      </header>
+
+      <div class="comparison">
+        <article class="variant" aria-labelledby="current-label">
+          <h2 class="variant__label" id="current-label">Current layout</h2>
+          <p class="variant__note">One action here; Loose ends appear after Goals.</p>
+          <div class="sample">
+            <section class="jds-brief" aria-label="Needs you, current layout">
+              <div class="jds-brief__head">
+                <span class="jds-brief__kicker">Needs you</span>
+              </div>
+              <div class="jds-brief__title">3 need you</div>
+              <div class="loose">
+                <div class="loose-row action-row">
+                  <span class="loose-row__ic" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M10 8H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-5"
+                      />
+                      <path d="M15 3h6v6" />
+                      <path d="m21 3-9 9" />
+                    </svg>
+                  </span>
+                  <div class="loose-row__main">
+                    <div class="loose-row__title">Confirm a pickup window with Cedar Parcel</div>
+                    <div class="loose-row__meta">
+                      They asked which afternoon works for collection.
+                    </div>
+                    <div class="loose-row__meta">Cedar Parcel · Due Sep 26 · Updated 6m ago</div>
+                  </div>
+                  <div class="loose-row__act" aria-label="Suggested task controls">
+                    <button type="button" class="jds-btn jds-btn--sm jds-btn--secondary">
+                      Reply
+                    </button>
+                    <button type="button" class="jds-btn jds-btn--sm jds-btn--secondary">
+                      Accept
+                    </button>
+                    <button type="button" class="jds-btn jds-btn--sm jds-btn--quiet">
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="briefing-catchup">
+                <div class="jds-brief__head">
+                  <span class="jds-brief__kicker">Catch-up</span>
+                  <span class="jds-caption">12 informational messages</span>
+                </div>
+                <p class="cmd-leadin catchup-copy">
+                  A delivery estimate changed. The other notes are routine schedule updates.
+                </p>
+              </div>
+            </section>
+
+            <section class="context" aria-label="Content between Needs you and Loose ends">
+              <p class="context__label">Later in Today</p>
+              <h3 class="context__title">Goals</h3>
+              <p class="context__copy">The existing Goals section appears before Loose ends.</p>
+            </section>
+
+            <section class="jds-brief" aria-label="Loose ends, current layout">
+              <div class="jds-brief__head">
+                <span class="jds-brief__kicker">Loose ends</span>
+              </div>
+              <div class="jds-brief__title">Things I’m keeping an eye on</div>
+              <div class="loose">
+                <div class="jds-task">
+                  <span class="jds-task__check" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 22V4" />
+                      <path d="M4 4c5-4 11 4 16 0v12c-5 4-11-4-16 0" /></svg
+                  ></span>
+                  <div class="jds-task__main">
+                    <div class="jds-task__title">Replace the hallway bulb</div>
+                    <div class="jds-task__meta">
+                      <span class="jds-drift jds-drift--overdue"
+                        ><span class="jds-drift__dot"></span>Overdue</span
+                      ><span class="jds-task__source">Home list</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="jds-task">
+                  <span class="jds-task__check" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 22V4" />
+                      <path d="M4 4c5-4 11 4 16 0v12c-5 4-11-4-16 0" /></svg
+                  ></span>
+                  <div class="jds-task__main">
+                    <div class="jds-task__title">Return the library books</div>
+                    <div class="jds-task__meta">
+                      <span class="jds-drift jds-drift--atrisk"
+                        ><span class="jds-drift__dot"></span>At risk</span
+                      ><span class="jds-task__source">Reading list</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="variant" aria-labelledby="compact-label">
+          <h2 class="variant__label" id="compact-label">Compact option · selected</h2>
+          <p class="variant__note">Action rows and Loose ends are grouped in Needs you.</p>
+          <div class="sample">
+            <section class="jds-brief" aria-label="Needs you, compact option">
+              <div class="jds-brief__head">
+                <span class="jds-brief__kicker">Needs you</span>
+              </div>
+              <div class="jds-brief__title">3 need you</div>
+              <div class="loose">
+                <div class="loose-row action-row">
+                  <span class="loose-row__ic" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M10 8H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-5"
+                      />
+                      <path d="M15 3h6v6" />
+                      <path d="m21 3-9 9" />
+                    </svg>
+                  </span>
+                  <div class="loose-row__main">
+                    <div class="loose-row__title">Confirm a pickup window with Cedar Parcel</div>
+                    <div class="loose-row__meta">
+                      They asked which afternoon works for collection.
+                    </div>
+                    <div class="loose-row__meta">Cedar Parcel · Due Sep 26 · Updated 6m ago</div>
+                  </div>
+                  <div class="loose-row__act" aria-label="Suggested task controls">
+                    <button type="button" class="jds-btn jds-btn--sm jds-btn--secondary">
+                      Reply
+                    </button>
+                    <button type="button" class="jds-btn jds-btn--sm jds-btn--secondary">
+                      Accept
+                    </button>
+                    <button type="button" class="jds-btn jds-btn--sm jds-btn--quiet">
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="loose__subhead">
+                <span class="jds-brief__kicker">Loose ends</span>
+                <span class="jds-caption">2</span>
+              </div>
+              <div class="loose">
+                <div class="jds-task">
+                  <span class="jds-task__check" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 22V4" />
+                      <path d="M4 4c5-4 11 4 16 0v12c-5 4-11-4-16 0" /></svg
+                  ></span>
+                  <div class="jds-task__main">
+                    <div class="jds-task__title">Replace the hallway bulb</div>
+                    <div class="jds-task__meta">
+                      <span class="jds-drift jds-drift--overdue"
+                        ><span class="jds-drift__dot"></span>Overdue</span
+                      ><span class="jds-task__source">Home list</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="jds-task">
+                  <span class="jds-task__check" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 22V4" />
+                      <path d="M4 4c5-4 11 4 16 0v12c-5 4-11-4-16 0" /></svg
+                  ></span>
+                  <div class="jds-task__main">
+                    <div class="jds-task__title">Return the library books</div>
+                    <div class="jds-task__meta">
+                      <span class="jds-drift jds-drift--atrisk"
+                        ><span class="jds-drift__dot"></span>At risk</span
+                      ><span class="jds-task__source">Reading list</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="briefing-catchup">
+                <div class="jds-brief__head">
+                  <span class="jds-brief__kicker">Catch-up</span>
+                  <span class="jds-caption">12 informational messages</span>
+                </div>
+                <p class="cmd-leadin catchup-copy">
+                  A delivery estimate changed. The other notes are routine schedule updates.
+                </p>
+              </div>
+            </section>
+
+            <section class="context" aria-label="Content after Needs you">
+              <p class="context__label">Later in Today</p>
+              <h3 class="context__title">Goals</h3>
+              <p class="context__copy">Loose ends no longer have a separate later section.</p>
+            </section>
+          </div>
+        </article>
+      </div>
+      <p class="proposal__source-note">
+        Source-derived structure and Moss tokens · Example content is fictional · no product code or
+        live data
+      </p>
+    </main>
+  </body>
+</html>
