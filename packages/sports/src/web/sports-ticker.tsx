@@ -468,6 +468,11 @@ export function TickerTeam(props: {
             Live now
           </span>
           <strong className="sp-tk__nextmain">{card.primary}</strong>
+          {/* Quarter/period/inning + clock (#2753). Matches the Next-game footer's secondary
+              line style so both footers are the same height. No source text → no line. */}
+          {card.liveStatusText ? (
+            <span className="sp-tk__nextwhen">{card.liveStatusText}</span>
+          ) : null}
         </div>
       ) : card.nextMatch ? (
         <NextGameLine next={card.nextMatch} />

@@ -451,6 +451,27 @@ describe("SportsService.getOverview", () => {
     expect(overview.standings[0]?.sections[0]?.label).toBe("National Football Conference");
   });
 
+  // #2753: the quarter/period/inning + clock under a live score, so the live footer matches the
+  // Next-game footer's height.
+  it("carries the live game's status detail as liveStatusText", async () => {
+    const service = new SportsService(makeDeps());
+    const overview = await service.getOverview(userA);
+    const card = overview.followed.find((c) => c.teamKey === "dal");
+    expect(card?.liveStatusText).toBe("Q3 4:12");
+  });
+
+  it("leaves liveStatusText unset when the source sends no status text", async () => {
+    const service = new SportsService(
+      makeDeps({
+        source: makeSource({ getScoreboard: async () => [{ ...dalLiveGame, statusDetail: "" }] })
+      })
+    );
+    const overview = await service.getOverview(userA);
+    const card = overview.followed.find((c) => c.teamKey === "dal");
+    expect(card?.status).toBe("live");
+    expect(card?.liveStatusText).toBeUndefined();
+  });
+
   // ESPN's MLB/NHL division labels ("National League West", "Pacific Division") crowd the
   // narrow ticker sub-row; the card line compresses them while the standings rail keeps the
   // full label (live feedback mraxrdxr).
