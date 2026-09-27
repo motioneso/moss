@@ -26,6 +26,7 @@ import {
   createPersonaDraft,
   discardPersonaDraft,
   personaDraftIsDirty,
+  PERSONA_PREVIEW_HINT,
   type DirectnessDial,
   type HumorDial,
   type PersonaDials,
@@ -148,14 +149,16 @@ function Persona({ who }: { readonly who: string }) {
     }
   });
 
+  // Tracks exactly the persona a successful preview answered for, so an edit afterwards (text,
+  // name, or a guided dial, which itself rewrites personaText) can tell its reply is stale and
+  // fall back to the hint instead of showing an old voice under the current heading.
+  const previewedPersonaRef = useRef<{ assistantName: string; personaText: string } | null>(null);
   const previewMutation = useMutation({
-    mutationFn: () =>
-      previewPersona({
-        persona: {
-          assistantName: p.assistantName,
-          personaText: p.personaText
-        }
-      }),
+    mutationFn: (persona: { assistantName: string; personaText: string }) =>
+      previewPersona({ persona }),
+    onSuccess: (_data, persona) => {
+      previewedPersonaRef.current = persona;
+    },
     onError: (error) => {
       toast(error instanceof Error ? error.message : "Could not preview persona");
     }
@@ -165,7 +168,13 @@ function Persona({ who }: { readonly who: string }) {
     setP(discardPersonaDraft(saved, p));
     setRev((r) => r + 1);
   };
-  const previewReply = previewMutation.data?.reply;
+  const previewedPersona = previewedPersonaRef.current;
+  const previewReply =
+    previewedPersona &&
+    previewedPersona.assistantName === p.assistantName &&
+    previewedPersona.personaText === p.personaText
+      ? previewMutation.data?.reply
+      : undefined;
 
   return (
     <Group
@@ -261,18 +270,20 @@ function Persona({ who }: { readonly who: string }) {
         }
       />
 
-      {previewReply ? (
-        <div className="ppv">
-          <div className="ppv__hd">
-            <GitCommitHorizontal size={13} aria-hidden="true" />
-            How {p.assistantName || "Moss"} would sound
-          </div>
+      <div className="ppv">
+        <div className="ppv__hd">
+          <GitCommitHorizontal size={13} aria-hidden="true" />
+          How {p.assistantName || "Moss"} would sound
+        </div>
+        {previewReply ? (
           <div className="ppv__bubble ppv__bubble--main">
             <div className="ppv__cap">Response preview</div>
             <p className="ppv__say">{previewReply}</p>
           </div>
-        </div>
-      ) : null}
+        ) : (
+          <p className="jds-hint">{PERSONA_PREVIEW_HINT}</p>
+        )}
+      </div>
 
       <div className={`psona-save${dirty ? " is-dirty" : ""}`}>
         <span className="psona-save__state">
@@ -292,7 +303,12 @@ function Persona({ who }: { readonly who: string }) {
           <Button
             variant="quiet"
             size="sm"
-            onClick={() => previewMutation.mutate()}
+            onClick={() =>
+              previewMutation.mutate({
+                assistantName: p.assistantName,
+                personaText: p.personaText
+              })
+            }
             disabled={previewMutation.isPending || personaQuery.isLoading}
           >
             {previewMutation.isPending ? "Previewing" : "Preview response"}

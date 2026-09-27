@@ -1,7 +1,6 @@
-/* Deterministic persona voice preview. No model call — turns the four dials
-   into a concrete sample of how the configured assistant would sound, so the
-   abstract controls have a visible effect. Ported verbatim from the design kit (personaSample).
-   The real voice will be system-prompt-driven once persona is persisted (🔌). */
+/* Persona draft state shared by the guided-dial and write-it-yourself editors. Neither mode
+   shows a made-up sample reply: both show PERSONA_PREVIEW_HINT until the user runs a real
+   preview against their actual persona text. */
 
 export type ToneDial = "Warm" | "Neutral" | "Crisp";
 export type DirectnessDial = "Gentle" | "Balanced" | "Direct";
@@ -22,37 +21,9 @@ export interface PersonaSnapshot {
 
 export interface PersonaDraft extends PersonaSnapshot, PersonaDials {}
 
-export interface PersonaPreview {
-  readonly greeting: string;
-  readonly recovery: string;
-}
-
-export function personaSample(p: PersonaDials, who: string): PersonaPreview {
-  const open: Record<ToneDial, string> = {
-    Warm: `Morning, ${who}.`,
-    Neutral: "Good morning.",
-    Crisp: "Morning."
-  };
-  const body: Record<DirectnessDial, string> = {
-    Gentle: "Whenever you're ready — here's the shape of your day.",
-    Balanced: "Here's the shape of your day.",
-    Direct: "Three things actually matter today."
-  };
-  const aside: Record<HumorDial, string> = {
-    None: "",
-    Dry: " Two meetings — one of which could've been an email.",
-    Playful: " It's a full one, but nothing we can't handle."
-  };
-  const recovery: Record<RecoveryDial, string> = {
-    Encouraging: "And yesterday's two open items? No drama — want them on today?",
-    "Matter-of-fact": "Two items from yesterday are still open. Move them to today?",
-    Firm: "Two items slipped yesterday. Let's clear those first."
-  };
-  return {
-    greeting: `${open[p.tone]} ${body[p.directness]}${aside[p.humor]}`,
-    recovery: recovery[p.recovery]
-  };
-}
+// Shown in place of a made-up sample, in both persona-editing modes, since there is no
+// reliable stand-in for what the model would actually say.
+export const PERSONA_PREVIEW_HINT = "Press Preview to hear how this sounds.";
 
 export function personaSeedText(p: PersonaDials): string {
   const tone: Record<ToneDial, string> = {
