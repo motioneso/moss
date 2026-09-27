@@ -405,7 +405,13 @@ describe("NewsService.getOverview (#897)", () => {
       makeDeps({
         getFeed: async (sourceKey) =>
           sourceKey === "bbc"
-            ? [item({ id: "bbc-copy", url: "https://bbc.example.com/a", title: "Storm nears coast" })]
+            ? [
+                item({
+                  id: "bbc-copy",
+                  url: "https://bbc.example.com/a",
+                  title: "Storm nears coast"
+                })
+              ]
             : sourceKey === "guardian"
               ? [
                   item({
