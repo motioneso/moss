@@ -53,7 +53,10 @@ test("#2753: Sports page shows the live status line, same footer height as the n
   await expect(liveFooter).toContainText("Q3 4:12");
   await expectFootersMatchHeight(page, ".sp-ticker");
 
-  await page.locator(".sp-ticker").first().screenshot({ path: "tests/screenshots/2753-sports-desktop.png" });
+  await page
+    .locator(".sp-ticker")
+    .first()
+    .screenshot({ path: "tests/screenshots/2753-sports-desktop.png" });
 });
 
 test("#2753: Sports page keeps the live status line at phone width", async ({ page }) => {
@@ -64,7 +67,10 @@ test("#2753: Sports page keeps the live status line at phone width", async ({ pa
   const liveFooter = page.locator(".sp-ticker .sp-tk__next--live").first();
   await expect(liveFooter).toContainText("Q3 4:12");
 
-  await page.locator(".sp-ticker").first().screenshot({ path: "tests/screenshots/2753-sports-phone.png" });
+  await page
+    .locator(".sp-ticker")
+    .first()
+    .screenshot({ path: "tests/screenshots/2753-sports-phone.png" });
 });
 
 test("#2753: Today sports desk shows the live status line, same footer height as the next-game card", async ({
