@@ -167,6 +167,13 @@ export function cannedToolData(toolName: string): Record<string, unknown> {
         ],
         gaps: []
       };
+    case "goals.list":
+      return {
+        goals: [
+          { title: "Ship the launch", status: "active" },
+          { title: "Sleep eight hours", status: "active" }
+        ]
+      };
     case "chat.listTodaysTurns":
       return {
         turns: [{ role: "user", excerpt: "what's up", threadTitle: "T", createdAt: TODAY_ISO }]
@@ -254,6 +261,7 @@ export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
     "calendar.listVisibleEvents",
     "email.listVisibleMessages",
     "chat.listTodaysTurns",
+    "goals.list",
     "sports.followedFactsToday",
     "news.topHeadlinesToday"
   ];

@@ -11,6 +11,7 @@ import {
   recordSourceAuthGap,
   buildExternalModulesSection,
   ctxFor,
+  withinLocalDay,
   type ComposeDeps,
   type ComposeRunInput,
   type ComposeResult,
@@ -388,6 +389,12 @@ export async function composeBriefing(
     count: prioritizedCalendarSignals.length,
     rawItems: rawCalendar.rawItems
   };
+  // Real meetings read for today (#2745): the raw pull spans 48 hours, so the
+  // row counts only the raw events landing on the report's local day, never
+  // the signal notes derived from them.
+  const calendarTodayCount = (rawCalendar.rawItems ?? []).filter((item) =>
+    withinLocalDay(item.startsAt, now, timeZone)
+  ).length;
   const email: Section = {
     key: rawEmail.key,
     label: rawEmail.label,
@@ -503,6 +510,11 @@ export async function composeBriefing(
     }
   }
 
+  // Lines each section actually gave the synthesis prompt (#2745). The reader
+  // names these per source, so a row measures what fed this report, never the
+  // raw holdings behind a section.
+  const sectionLineCounts: Record<string, number> = {};
+  for (const section of sections) sectionLineCounts[section.key] = section.lines.length;
   const editorial = captureEditorialEvidence(sports, news, deps);
   const moduleCapturedAt: Record<string, string | null> = {};
   for (const section of [sports, news] as const) {
@@ -557,6 +569,9 @@ export async function composeBriefing(
     sourceMetadata: {
       commitmentCount: commitments.count,
       taskCount: prioritizedTasks.count,
+      goalsCount: goals.count,
+      sectionLines: sectionLineCounts,
+      calendarTodayCount,
       calendarCount: calendar.count,
       calendarEventCount: rawCalendar.rawItems?.length ?? 0,
       calendarSignals: prioritizedCalendarSignals,

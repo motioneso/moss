@@ -635,11 +635,6 @@
 .well__nudge-x:hover {
   background: var(--amber-soft-2);
 }
-.bfresh__label {
-  font-family: var(--font-sans);
-  font-size: 10px;
-  color: var(--text-faint);
-}
 .bfresh__item {
   font-size: 12px;
   color: var(--text-muted);

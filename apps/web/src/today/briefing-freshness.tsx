@@ -1,4 +1,7 @@
-import type { SourceFreshnessEntry, SourceFreshnessV1 } from "@moss/shared";
+import type { LocaleSettingsDto, SourceFreshnessEntry, SourceFreshnessV1 } from "@moss/shared";
+
+import { formatTime } from "../locale/locale-format.js";
+import { contributionFor } from "./briefing-contributions.js";
 
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 const EMAIL_DELAY_THRESHOLD_MS = 60 * 60 * 1000;
@@ -10,7 +13,10 @@ const SOURCE_LABEL: Record<string, string> = {
   tasks: "Tasks",
   commitments: "Commitments",
   chats: "Chats",
-  goals: "Goals"
+  goals: "Goals",
+  news: "News",
+  sports: "Sports",
+  day_plan: "Day plan"
 };
 
 function formatAge(entry: SourceFreshnessEntry, capturedAt: string): string {
@@ -28,16 +34,39 @@ function isStale(entry: SourceFreshnessEntry, capturedAt: string): boolean {
   return new Date(capturedAt).getTime() - new Date(entry.asOf).getTime() > STALE_THRESHOLD_MS;
 }
 
-export function BriefingFreshnessList({ freshness }: { readonly freshness: SourceFreshnessV1 }) {
+function formatSourceTime(asOf: string | null, locale: LocaleSettingsDto): string | null {
+  if (!asOf || Number.isNaN(Date.parse(asOf))) return null;
+  try {
+    return formatTime(asOf, locale);
+  } catch {
+    return null;
+  }
+}
+
+export function BriefingFreshnessList({
+  freshness,
+  locale,
+  sourceMetadata
+}: {
+  readonly freshness: SourceFreshnessV1;
+  readonly locale?: LocaleSettingsDto;
+  readonly sourceMetadata?: Record<string, unknown>;
+}) {
   return (
     <div className="bfresh">
-      <span className="bfresh__label">Sources</span>
       <ul className="bfresh__list">
         {freshness.sources.map((entry) => {
           const age = formatAge(entry, freshness.capturedAt);
+          const time = locale !== undefined ? formatSourceTime(entry.asOf, locale) : null;
+          const contribution =
+            sourceMetadata !== undefined ? contributionFor(entry.source, sourceMetadata) : null;
           return (
             <li key={entry.source} className="bfresh__item">
-              <span className="bfresh__source">{SOURCE_LABEL[entry.source] ?? entry.source}</span>
+              <span className="bfresh__source">
+                {SOURCE_LABEL[entry.source] ?? entry.source}
+                {time ? `, ${time}` : null}
+                {contribution ? `: ${contribution}.` : null}
+              </span>
               <span
                 className={`bfresh__age${
                   entry.freshnessKind === "realtime"

@@ -32,12 +32,15 @@ export function fallback(
         `${s.label}: ${s.count} item${s.count === 1 ? "" : "s"}${s.lines.length > 0 ? `\n${s.lines.map((l) => `- ${l}`).join("\n")}` : ""}`
     )
     .join("\n\n");
+  const sectionLineCounts: Record<string, number> = {};
+  for (const section of sections) sectionLineCounts[section.key] = section.lines.length;
   return {
     status: "succeeded",
     summaryText: text || "Briefing did not produce visible source items.",
     sourceMetadata: {
       commitmentCount: commitments.count,
       taskCount: tasks.count,
+      sectionLines: sectionLineCounts,
       calendarCount: calendar.count,
       calendarSignals: [],
       emailCount: email.count,
