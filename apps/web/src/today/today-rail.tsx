@@ -25,7 +25,7 @@ export interface RailNextEvent {
   readonly location?: string | null;
 }
 
-const PREPARATION_TITLE = /\bprepar(e|ation)?\b/i;
+const PREPARATION_TITLE = /\bprep(are|aration)?\b/i;
 
 /** A real, adjacent, self-declared preparation block's length in minutes, or
     null when nothing backs one. A Moss block touching the meeting's start is
