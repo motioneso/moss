@@ -40,6 +40,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Morning report names what each source added.** The full morning briefing lists each source with its time and what it contributed to the report. [PR #2756](https://github.com/motioneso/moss/pull/2756)
 - **Live game cards show the quarter, period, or inning.** A followed team's card that shows a live score now also shows where the game is (like "Q3 4:12"), and the card is the same height as when it shows the team's next game. [PR #2755](https://github.com/motioneso/moss/pull/2755)
 - **Needs You includes at-risk tasks.** Today now groups overdue and at-risk tasks under Needs You and includes them in the count. [PR #2719](https://github.com/motioneso/moss/pull/2719)
 - **A clearer full morning briefing.** The full morning briefing explains the day in more detail while Today stays focused on actions. [PR #2726](https://github.com/motioneso/moss/pull/2726)
