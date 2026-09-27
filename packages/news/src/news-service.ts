@@ -21,6 +21,7 @@ import {
 import type { NewsSnapshotRecord } from "./personalization-repository.js";
 import type { NewsStoryFeedbackPort, NewsStoryTargetRow } from "./story-feedback-port.js";
 import { rankStories, type RankInput } from "./ranking.js";
+import { normalizedHeadline, safeCanonicalUrl } from "./compilation/filters.js";
 import { NEWS_EVIDENCE_STORIES_MAX } from "@moss/shared";
 import { newsFactsFor, projectNewsBriefingEvidence } from "./briefing-evidence.js";
 import { NEWS_CATALOG, NEWS_TOPICS, topicOption, type NewsSourceEntry } from "./source/catalog.js";
@@ -68,6 +69,26 @@ export interface NewsServiceDependencies {
 
 const TOP_STORIES_CAP = 6; // spec: cross-source ranked selection
 const GROUP_HEADLINES_CAP = 12; // per-source rail depth; keeps the payload bounded
+
+/**
+ * Collapses different outlets' copies of the same story in the ranked top-stories list.
+ * Same rule as the compiled path (`applyDeterministicFilters`): exact canonical URL, then
+ * exact normalized headline. First occurrence (highest-ranked) wins. `sourceGroups` is not
+ * passed through here, so each outlet's own list keeps every story it published.
+ */
+function mergeSameStoryAcrossSources(headlines: readonly NewsHeadline[]): NewsHeadline[] {
+  const seenUrls = new Set<string>();
+  const seenHeadlines = new Set<string>();
+  return headlines.filter((headline) => {
+    const url = safeCanonicalUrl(headline.url) ?? headline.url;
+    const normalized = normalizedHeadline(headline.title);
+    if (seenUrls.has(url) || seenHeadlines.has(normalized)) return false;
+    seenUrls.add(url);
+    seenHeadlines.add(normalized);
+    return true;
+  });
+}
+
 const NEWS_ARTICLE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 export const NEWS_SNAPSHOT_FRESH_MS = 30 * 60 * 1_000;
 /** #2018: matches the snapshot article cap - we never register more than we could have shown. */
@@ -312,8 +333,9 @@ export class NewsService {
             items: await this.feedFor(plan, state)
           }))
         );
-        // Dedupe by URL hash WITHIN the source (a story often sits in `top` + a topic feed;
-        // no cross-source dedupe in V1 — differing coverage of one event is a feature here).
+        // Dedupe by URL hash WITHIN the source (a story often sits in `top` + a topic feed).
+        // Cross-source merging happens later, on the combined top-stories list only — each
+        // outlet's own group below keeps every story it published (mergeSameStoryAcrossSources).
         const seen = new Set<string>();
         const faviconUrl = faviconProxyUrl(urlHostname(source.homepageUrl));
         const inputs: RankInput<NewsHeadline>[] = [];
@@ -352,7 +374,7 @@ export class NewsService {
       .filter((group) => group.headlines.length > 0);
 
     return {
-      topStories: rankStories(allInputs).slice(0, TOP_STORIES_CAP),
+      topStories: mergeSameStoryAcrossSources(rankStories(allInputs)).slice(0, TOP_STORIES_CAP),
       sourceGroups,
       activeTopics: topics,
       enabledSources: sources.map((s) => ({ sourceKey: s.sourceKey, label: s.label })),
