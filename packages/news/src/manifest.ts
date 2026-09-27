@@ -502,10 +502,9 @@ export const newsModuleManifest = {
     {
       id: "news.same_story_merge",
       description:
-        "The same story from different outlets is shown once, not once per outlet, in Today's " +
-        "lead and side stories and the News page's story list. Which outlet's version is kept " +
-        "follows the same order the page already ranks stories in. Each outlet's own list still " +
-        "shows every story it published."
+        "The same story from different outlets shows once in Today's lead and side stories, " +
+        "not once per outlet. The kept version follows the page's existing story ranking. " +
+        "Each outlet's own list still shows everything it published."
     },
     {
       id: "news.add_source",
