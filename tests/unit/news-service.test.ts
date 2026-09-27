@@ -371,13 +371,31 @@ describe("NewsService.getOverview (#897)", () => {
     expect(overview.sourceGroups[0]?.headlines[0]?.topicKey).toBe("technology");
   });
 
-  it("does NOT dedupe across sources (differing coverage of one event is a feature)", async () => {
+  it("merges the same story across sources in topStories, but keeps each source's own group", async () => {
+    // bbc, guardian, ap, npr all carry the exact same wire story (same URL). Today should show
+    // it once; the per-outlet view (sourceGroups) still lists it once under each outlet.
     const service = new NewsService(
       makeDeps({ getFeed: async () => [item({ id: "same-id", url: "https://example.com/x" })] })
     );
     const overview = await service.getOverview(userA);
-    // bbc, guardian, ap, npr each contribute their copy.
-    expect(overview.topStories).toHaveLength(4);
+    expect(overview.topStories).toHaveLength(1);
+    expect(overview.sourceGroups).toHaveLength(4);
+    for (const group of overview.sourceGroups) expect(group.headlines).toHaveLength(1);
+  });
+
+  it("does not merge two different stories that merely share a couple of headline words", async () => {
+    const service = new NewsService(
+      makeDeps({
+        getFeed: async (sourceKey) =>
+          sourceKey === "bbc"
+            ? [item({ id: "bus-story", title: "City council approves night-bus trial" })]
+            : sourceKey === "guardian"
+              ? [item({ id: "parking-story", title: "City council raises parking fines" })]
+              : []
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.topStories).toHaveLength(2);
   });
 
   it("enriches headlines with source identity and the human topic label", async () => {
