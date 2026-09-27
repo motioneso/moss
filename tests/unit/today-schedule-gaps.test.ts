@@ -39,9 +39,7 @@ describe("buildScheduleGaps", () => {
   });
 
   it("returns only a closing line for a single timed item", () => {
-    const items = [
-      item({ key: "a", startsAt: "2026-06-30T15:00:00.000Z", durationMinutes: 30 })
-    ];
+    const items = [item({ key: "a", startsAt: "2026-06-30T15:00:00.000Z", durationMinutes: 30 })];
     const result = buildScheduleGaps(items, locale);
     expect(result.rows).toEqual([]);
     expect(result.closing).not.toBeNull();

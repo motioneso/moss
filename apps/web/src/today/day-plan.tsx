@@ -337,7 +337,9 @@ export function DayPlanSection(props: DayPlanSectionProps) {
                       editorial
                       snapshot={snapshot}
                     />
-                    {gapRow !== undefined ? <ScheduleGapRowView row={gapRow} locale={props.locale} /> : null}
+                    {gapRow !== undefined ? (
+                      <ScheduleGapRowView row={gapRow} locale={props.locale} />
+                    ) : null}
                   </Fragment>
                 );
               })}

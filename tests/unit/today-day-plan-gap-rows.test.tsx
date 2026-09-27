@@ -2,7 +2,12 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DayPlanBlockDto, DayPlanDto, GetDayPlanResponse, LocaleSettingsDto } from "@moss/shared";
+import type {
+  DayPlanBlockDto,
+  DayPlanDto,
+  GetDayPlanResponse,
+  LocaleSettingsDto
+} from "@moss/shared";
 
 import { DayPlanSection } from "../../apps/web/src/today/day-plan.js";
 
@@ -23,7 +28,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function placed(id: string, startsAt: string, durationMinutes: number, position: number): DayPlanBlockDto {
+function placed(
+  id: string,
+  startsAt: string,
+  durationMinutes: number,
+  position: number
+): DayPlanBlockDto {
   return {
     id,
     kind: "focus",

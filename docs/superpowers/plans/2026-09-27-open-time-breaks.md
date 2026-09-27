@@ -8,6 +8,7 @@ counterpart), cropped to the schedule region.
 ## What the mockup shows (grounding, not paraphrase)
 
 Cropped region of `morning-1440-opening.png` (schedule column, left ~55%):
+
 - Legend row: `Moss-planned task` (filled square), `Calendar commitment` (open square), `Open time`
   (dash) — three entries. Live has two (`today-timeline.tsx:119-132`).
 - Between two task blocks 15 minutes apart (10:00-10:15): a plain row, time range on the left,
@@ -147,6 +148,7 @@ no accent on these rows). Reuses `timeLabel`/`ampm` for the time column exactly 
 ### `apps/web/src/today/day-plan.tsx` changes
 
 In the `editorial` branch, when `today === true` and `items.length > 0`:
+
 - Compute `const scheduleGaps = buildScheduleGaps(items, props.locale);` once.
 - When mapping `items` to `DayItemRow`, after each row check `scheduleGaps.rows` for a row whose
   `afterItemKey` matches the current item's `key` and render a `ScheduleGapRowView` immediately
