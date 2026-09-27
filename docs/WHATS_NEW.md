@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Persona preview hint for free-text personas.** The Assistant settings preview now invites you to press Preview to hear how your assistant actually sounds, instead of showing a made-up sample or an old one after you make changes. [PR #2725](https://github.com/motioneso/moss/pull/2725)
 - **Assistant response preview works with connected agents.** Preview response now shows a real answer when your assistant uses a connected command-line agent. [PR #2739](https://github.com/motioneso/moss/pull/2739)
 - **AI chats use selected provider.** Chats now use the AI assistant selected by an administrator. [PR #2727](https://github.com/motioneso/moss/pull/2727)
 - **Removing this device fully turns off its push notifications.** Removing the device you are using from notification settings now also asks that browser to cancel its push registration, and turning notifications back on afterwards no longer leaves a duplicate device behind. [PR #2723](https://github.com/motioneso/moss/pull/2723)
