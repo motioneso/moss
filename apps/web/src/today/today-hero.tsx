@@ -26,6 +26,16 @@ export function splitHeadline(text: string): { readonly headline: string; readon
   return { headline: text.trim(), rest: "" };
 }
 
+/** Today previews the saved report's lead; Read keeps the complete report. */
+export function morningReportLead(text: string): string {
+  return (
+    text
+      .trim()
+      .split(/\n\s*\n|\n(?=#{1,3}\s)/)[0]
+      ?.trim() ?? ""
+  );
+}
+
 export interface TodayHeroProps {
   readonly mode: TodayMode;
   readonly eyebrow: string;
@@ -118,7 +128,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     <>
       {input.morningFreshness ? <BriefingStaleBanner freshness={input.morningFreshness} /> : null}
       {morningReadable && input.morningSplit && input.morningSplit.rest ? (
-        <BriefingProse summaryText={input.morningSplit.rest} />
+        <BriefingProse summaryText={morningReportLead(input.morningSplit.rest)} />
       ) : (
         <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />
       )}

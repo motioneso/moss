@@ -514,7 +514,7 @@
   color: var(--text-muted);
 }
 
-/* Report sections from action rows. */
+/* Source-grounded report sections. */
 .brief-reader__section-heading {
   margin: 24px 0 8px;
   font-size: 15px;
@@ -526,16 +526,6 @@
   line-height: 1.7;
   color: var(--text-muted);
 }
-.brief-reader__section-link {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-fg);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
 /* News and Sports: forest rule, eyebrow, headline, photo, prose, text link. */
 .brief-reader__editorial {
   margin: 30px 0 0;

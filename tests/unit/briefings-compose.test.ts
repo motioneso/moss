@@ -38,6 +38,9 @@ describe("composeBriefing — gathering", () => {
     const prompt = (capturedMessages[0] as readonly { content: string }[])[0]!.content;
     // The trusted preamble is always emitted and wraps the synthesis instructions.
     expect(prompt).toContain("<trusted_instructions>");
+    expect(prompt).toContain("## Preparation");
+    expect(prompt).toContain("Omit unsupported sections");
+    expect(prompt).toContain("Do not claim a previous calendar event time or attached material");
     // order: commitments < tasks < calendar < email < vault < chats — each channel is a
     // delimited <external_source> block, emitted in the fixed section order.
     expect(prompt.indexOf('<external_source type="commitments">')).toBeLessThan(
