@@ -333,8 +333,9 @@ export class NewsService {
             items: await this.feedFor(plan, state)
           }))
         );
-        // Dedupe by URL hash WITHIN the source (a story often sits in `top` + a topic feed;
-        // no cross-source dedupe in V1 — differing coverage of one event is a feature here).
+        // Dedupe by URL hash WITHIN the source (a story often sits in `top` + a topic feed).
+        // Cross-source merging happens later, on the combined top-stories list only — each
+        // outlet's own group below keeps every story it published (mergeSameStoryAcrossSources).
         const seen = new Set<string>();
         const faviconUrl = faviconProxyUrl(urlHostname(source.homepageUrl));
         const inputs: RankInput<NewsHeadline>[] = [];
