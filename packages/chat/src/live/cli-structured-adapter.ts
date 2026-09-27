@@ -391,6 +391,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     input: GenerateStructuredProviderInput
   ): Promise<{ readonly rawText: string; readonly sources: StructuredSource[] }> {
     let firstReadable = false;
+    let lastReply: string | undefined;
     // #2228: sources the CLI's own web search reported, gathered across every read of this turn.
     const sources: StructuredSource[] = [];
     let offset = (
@@ -409,13 +410,14 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       offset = next.offset;
       sources.push(...collectRecordSources(next.records));
       const reply = [...next.records].reverse().find((record) => record.kind === "reply")?.text;
+      if (reply !== undefined) lastReply = reply;
       if (reply !== undefined && !firstReadable) {
         firstReadable = true;
         input.telemetry?.emit({ kind: "first-readable", priority: input.priority ?? "foreground" });
       }
       if (next.complete) {
-        if (reply !== undefined) {
-          return { rawText: reply, sources: dedupeStructuredSources(sources) };
+        if (lastReply !== undefined) {
+          return { rawText: lastReply, sources: dedupeStructuredSources(sources) };
         }
         throw new CliChatUnavailableError("CLI structured generation completed without a reply");
       }

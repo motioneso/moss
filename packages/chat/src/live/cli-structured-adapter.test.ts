@@ -7,9 +7,11 @@ import { describe, expect, it, afterAll } from "vitest";
 import type { GenerateStructuredProviderInput } from "@moss/ai";
 
 import { CliStructuredAdapter } from "./cli-structured-adapter.js";
+import { AcpChatEngine } from "./acp-chat-engine.js";
 import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
-import type { ChatEngineFactory } from "./runtime.js";
+import { createAcpOneShotEngineFactory, type ChatEngineFactory } from "./runtime.js";
+import type { RpcConnection } from "./chat-engine-rpc-client.js";
 
 const ROOT = join(tmpdir(), "jarv1s-structured");
 
@@ -53,6 +55,49 @@ function fakeEngine(onLaunch: (opts: EngineLaunchOpts) => void): CliChatEngine {
 function factoryCapturing(neutralDirs: string[]): ChatEngineFactory {
   return () => fakeEngine((opts) => neutralDirs.push(opts.neutralDir));
 }
+
+it("uses ACP only when both the selected agent and runner connection exist", () => {
+  const disconnected = createAcpOneShotEngineFactory(() => undefined);
+  expect(() => disconnected("openai-compatible", "preview-1", { userId: "u1" })).toThrow(
+    "requires a user and agent identity"
+  );
+  expect(() =>
+    disconnected("openai-compatible", "preview-1", {
+      userId: "u1",
+      acpAgentId: "codex-acp"
+    })
+  ).toThrow("cli-runner RPC connection is not ready");
+
+  const connected = createAcpOneShotEngineFactory(() => ({}) as RpcConnection);
+  expect(
+    connected("openai-compatible", "preview-1", {
+      userId: "u1",
+      acpAgentId: "codex-acp"
+    })
+  ).toBeInstanceOf(AcpChatEngine);
+});
+
+it("keeps a reply delivered before ACP's separate completion read", async () => {
+  let reads = 0;
+  const engine = fakeEngine(() => undefined);
+  engine.readNew = async () => {
+    reads += 1;
+    return reads === 1
+      ? {
+          records: [{ kind: "reply" as const, text: '{"text":"Preview works"}' }],
+          offset: 0,
+          complete: false
+        }
+      : { records: [], offset: 0, complete: true };
+  };
+  const adapter = new CliStructuredAdapter("anthropic", () => engine, 1000, 1);
+
+  await expect(
+    adapter.generateStructured(baseInput("module.persona-preview"))
+  ).resolves.toMatchObject({
+    rawText: '{"text":"Preview works"}'
+  });
+});
 
 /** A CliChatEngine that reports, on its very first readNew(), that the app and the model
  * program have genuinely disagreed about the answer file's folder — the real engine

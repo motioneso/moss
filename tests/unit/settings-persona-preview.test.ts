@@ -82,6 +82,7 @@ describe("createDefaultPersonaPreview", () => {
     vi.spyOn(AiRepository.prototype, "selectProviderWithCredential").mockResolvedValue({
       auth_method: "cli",
       provider_kind: "anthropic",
+      acp_agent_id: "claude-acp",
       provider_model_id: "model-1"
     } as never);
     const generateStructured = vi.fn().mockResolvedValue({ rawObject: { text: "CLI reply" } });
@@ -96,6 +97,7 @@ describe("createDefaultPersonaPreview", () => {
     expect(generateStructured).toHaveBeenCalledWith(
       expect.objectContaining({
         model: { provider_kind: model.provider_kind, provider_model_id: model.provider_model_id },
+        acpAgentId: "claude-acp",
         messages: expect.any(Array)
       })
     );
@@ -115,12 +117,27 @@ describe("createDefaultPersonaPreview", () => {
     vi.spyOn(AiRepository.prototype, "selectChatModelForUser").mockResolvedValue(model as never);
     vi.spyOn(AiRepository.prototype, "selectProviderWithCredential").mockResolvedValue({
       auth_method: "cli",
-      provider_kind: "anthropic"
+      provider_kind: "anthropic",
+      acp_agent_id: "claude-acp"
     } as never);
 
     const preview = createDefaultPersonaPreview(dataContext());
 
     await expect(preview(input)).rejects.toThrow("CLI preview transport is unavailable");
+  });
+
+  it("refuses a CLI provider without an ACP identity before choosing a transport", async () => {
+    vi.spyOn(AiRepository.prototype, "selectChatModelForUser").mockResolvedValue(model as never);
+    vi.spyOn(AiRepository.prototype, "selectProviderWithCredential").mockResolvedValue({
+      auth_method: "cli",
+      provider_kind: "openai-compatible",
+      acp_agent_id: null
+    } as never);
+    const createCliStructuredAdapter = vi.fn();
+    const preview = createDefaultPersonaPreview(dataContext(), { createCliStructuredAdapter });
+
+    await expect(preview(input)).rejects.toThrow("no ACP agent");
+    expect(createCliStructuredAdapter).not.toHaveBeenCalled();
   });
 
   it("keeps API success and provider failures on the safe HTTP path", async () => {

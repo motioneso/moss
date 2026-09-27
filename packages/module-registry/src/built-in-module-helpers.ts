@@ -67,6 +67,7 @@ export function createDefaultPersonaPreview(
   dataContext: DataContextRunner,
   deps: {
     readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
+    readonly logger?: { warn(fields: Record<string, unknown>, message: string): void };
   } = {}
 ): (input: PersonaPreviewInput) => Promise<string> {
   const aiRepository = new AiRepository();
@@ -111,6 +112,12 @@ export function createDefaultPersonaPreview(
         };
 
         if (provider.auth_method === "cli") {
+          if (!provider.acp_agent_id) {
+            throw new HttpError(
+              503,
+              "The selected CLI provider has no ACP agent; add a supported provider in Admin > Assistant & AI"
+            );
+          }
           const createAdapter = deps.createCliStructuredAdapter;
           if (!createAdapter) {
             throw new HttpError(
@@ -131,6 +138,13 @@ export function createDefaultPersonaPreview(
             );
           } catch (error) {
             if (error instanceof HttpError) throw error;
+            deps.logger?.warn(
+              {
+                errorName: error instanceof Error ? error.name : typeof error,
+                acpAgentId: provider.acp_agent_id
+              },
+              "persona preview ACP generation failed"
+            );
             throw new HttpError(
               503,
               "CLI preview failed; check the selected CLI login and transport"
