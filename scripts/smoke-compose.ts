@@ -116,6 +116,11 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
               args: [...composeArgs, "run", "--rm", "sports-renderer-smoke"],
               description:
                 "Complete a FotMob-shaped document and XHR through both exact-image UDS sockets"
+            },
+            {
+              command: "docker" as const,
+              args: [...composeArgs, "run", "--rm", "sports-launcher-smoke"],
+              description: "Confirm the launcher's api process keeps the shared sports socket group"
             }
           ]
         : []),
