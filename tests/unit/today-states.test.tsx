@@ -268,6 +268,56 @@ function morningDefinition(): BriefingDefinitionDto {
   };
 }
 
+describe("TodayPage first meeting pick", () => {
+  it("picks the meeting, not a Moss preparation block that starts right before it", () => {
+    const client = seedPage({});
+    const meetingStart = clocked(1);
+    const meetingEnd = clocked(1, 30);
+    const events: CalendarEventDto[] = [
+      {
+        id: "prep-1",
+        connectorAccountId: "account-1",
+        ownerUserId: "user-1",
+        title: "Prep for roadmap review",
+        startsAt: clocked(0.5),
+        endsAt: meetingStart,
+        location: null,
+        summary: null,
+        bodyExcerpt: null,
+        externalId: "ext-prep-1",
+        isMossBlock: true,
+        allDay: false,
+        attendeeCount: 0,
+        status: null,
+        createdAt: clocked(-24),
+        updatedAt: clocked(-24)
+      },
+      {
+        id: "meeting-1",
+        connectorAccountId: "account-1",
+        ownerUserId: "user-1",
+        title: "Roadmap review",
+        startsAt: meetingStart,
+        endsAt: meetingEnd,
+        location: "Room A",
+        summary: null,
+        bodyExcerpt: null,
+        externalId: "ext-meeting-1",
+        isMossBlock: false,
+        allDay: false,
+        attendeeCount: 0,
+        status: null,
+        createdAt: clocked(-24),
+        updatedAt: clocked(-24)
+      }
+    ];
+    client.setQueryData(queryKeys.calendar.list, { events });
+    const html = renderPage(client);
+    expect(html).toContain('<div class="cmd-next__what">Roadmap review</div>');
+    expect(html).toContain("You have a 30-minute preparation block before this meeting.");
+  });
+});
+
 describe("TodayPage quiet day", () => {
   it("hides stat tiles, keeps the factual empty line and the dock hosts", () => {
     const html = renderPage(seedPage({}));

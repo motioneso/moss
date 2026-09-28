@@ -452,6 +452,65 @@ a separately proven material reference in the saved run; a text-only report must
 not fabricate one. Verify both a newly written sectional report and an older
 single-paragraph run before claiming the reader distinct from Today.
 
+#### First-meeting card preparation amendment for `screen-morning-today` (#2743)
+
+The gap check on #2521 found the first-meeting card's mockup text ("You have a
+45-minute preparation block this morning. Two decisions to bring into the room.",
+linking to "See meeting & decisions") has no real data behind two of its three
+parts. Confirmed against the current tree, not the mockup's intent:
+
+- `CalendarEventDto` (`packages/shared/src/calendar-api.ts:3-19`) has no
+  attendee list, notes, tasks, or decisions field — only `attendeeCount`.
+  There is no decision entity or table anywhere in the repository, and nothing
+  links one to a meeting.
+- There is no meeting-linked "preparation block" type. `isMossBlock` on
+  `CalendarEventDto` marks any Moss-created calendar entry, with no sub-kind
+  tying one to a specific later meeting.
+- There is no meeting-detail route. The only detail view is `CalendarPeek`
+  (`apps/web/src/calendar/calendar-peek.tsx`), opened from local `useState`
+  in `apps/web/src/calendar/calendar-page.tsx:34,178-184` when an event is
+  clicked on the calendar grid — not reachable by URL today.
+- The current card is `TodayRail` (`apps/web/src/today/today-rail.tsx:118-138`),
+  fed by `RailNextEvent` (same file, lines 20-25) built in
+  `apps/web/src/today/today-page.tsx:410-417` from `upcoming[0]`. Its "Open in
+  calendar" button calls `onNavigate("/calendar")` with no event id.
+
+Amended scope for #2743, real sources only:
+
+1. **Preparation line.** Shown only when a real calendar entry with
+   `isMossBlock: true` ends at the exact moment the meeting starts, same as
+   `meetingNote()` (`today-rail.tsx:79-90`) already derives meeting length from
+   real `startsAt`/`endsAt` — **and** that block's own `title` reads as
+   preparation on a case-insensitive match against `prep`, `prepare`, or
+   `preparation`. A touching Moss block ending at the right time is not by
+   itself evidence of preparation; it could be a focus block for something
+   else, and only the block's own title tells us what it is for. Either
+   condition failing (no touching block, or a touching block whose title
+   doesn't say preparation): no preparation line, no placeholder text. When
+   shown, state the block's real duration.
+2. **Decisions line: not built.** No decision entity exists to back it. Adding
+   one is a new feature needing its own spec, out of scope for #2743. The card
+   never claims a decision count.
+3. **Link.** `RailNextEvent` gains an `id: string` field (present on the
+   source `CalendarEventDto`, currently dropped when building the rail prop).
+   The button navigates to `/calendar?event=<id>` instead of the bare
+   `/calendar`, labeled "See meeting" (not "See meeting & decisions" — there
+   are no decisions to see). `calendar-page.tsx` reads that query parameter
+   once its own event list has loaded and, on a match, calls `setPeek` for
+   that event — the same action a click already performs. An id that resolves
+   to nothing (deleted/moved event) opens the calendar page with no peek,
+   same as visiting `/calendar` directly today. No new route or screen.
+
+Test cases: preparation-block derivation with (a) a matching preceding block
+titled as preparation, (b) no preceding block, (c) a Moss block touching the
+meeting's start but not titled as preparation, (d) a Moss block titled as
+preparation but not touching the meeting's start — (b), (c) and (d) all show
+no line. Each case asserted on the rendered card text/absence, not on internal
+state. A browser test seeds one meeting with a real, correctly-titled
+preparation block and one without, checks the card in both cases, then follows
+the link and confirms the calendar page opens with that meeting's
+`CalendarPeek` visible.
+
 ### 4. Complete the degraded-briefing decision and slice
 
 Give `p9-degraded-briefing-presentation` a bounded design handoff while the other
