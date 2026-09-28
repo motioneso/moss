@@ -2,7 +2,10 @@ import { brotliCompressSync, gzipSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { createHostPinnedFetch } from "../../packages/host-fetch/src/index.js";
+import {
+  createCachingResolver,
+  createHostPinnedFetch
+} from "../../packages/host-fetch/src/index.js";
 
 describe("host-pinned fetch transport", () => {
   it("connects to the validated public address while forcing hostname SNI and Host", async () => {
@@ -326,5 +329,84 @@ describe("host-pinned fetch transport", () => {
       code: "blocked_address"
     });
     expect(resolveCalls).toBe(2);
+  });
+});
+
+describe("host-pinned fetch DNS lookups", () => {
+  function okRequest() {
+    return async () => ({
+      status: 200,
+      headers: {},
+      body: (async function* () {
+        yield Buffer.from("{}");
+      })()
+    });
+  }
+
+  it("shares one lookup across concurrent fetches to the same host", async () => {
+    let lookups = 0;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      lookup: async () => {
+        lookups += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return [{ address: "93.184.216.34", family: 4 }];
+      },
+      request: okRequest()
+    });
+
+    const responses = await Promise.all(
+      Array.from({ length: 25 }, (_, i) => fetchFn(`https://api.example.com/d/${i}`))
+    );
+
+    expect(responses.every((response) => response.status === 200)).toBe(true);
+    expect(lookups).toBe(1);
+  });
+
+  it("does not cache a failed lookup and still blocks private answers", async () => {
+    let lookups = 0;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      lookup: async () => {
+        lookups += 1;
+        if (lookups === 1) throw new Error("ESERVFAIL");
+        return [{ address: "10.0.0.1", family: 4 }];
+      },
+      request: okRequest()
+    });
+
+    await expect(fetchFn("https://api.example.com/a")).rejects.toThrow("ESERVFAIL");
+    await expect(fetchFn("https://api.example.com/a")).rejects.toMatchObject({
+      code: "blocked_address"
+    });
+    await expect(fetchFn("https://api.example.com/a")).rejects.toMatchObject({
+      code: "blocked_address"
+    });
+    expect(lookups).toBe(2);
+  });
+});
+
+describe("createCachingResolver", () => {
+  it("expires entries at the TTL, keeps hosts separate and isolates callers from mutation", async () => {
+    let clock = 0;
+    const calls: string[] = [];
+    const resolve = createCachingResolver(
+      async (host) => {
+        calls.push(host);
+        return [{ address: host === "a.example.com" ? "1.1.1.1" : "2.2.2.2", family: 4 as const }];
+      },
+      1000,
+      () => clock
+    );
+
+    const first = await resolve("a.example.com");
+    expect(() => {
+      (first as unknown as { address: string }[])[0]!.address = "10.0.0.1";
+    }).toThrow();
+    expect((await resolve("b.example.com"))[0]?.address).toBe("2.2.2.2");
+    expect((await resolve("a.example.com"))[0]?.address).toBe("1.1.1.1");
+    expect(calls).toEqual(["a.example.com", "b.example.com"]);
+
+    clock = 1000;
+    await resolve("a.example.com");
+    expect(calls).toEqual(["a.example.com", "b.example.com", "a.example.com"]);
   });
 });
