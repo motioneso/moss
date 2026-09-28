@@ -340,7 +340,10 @@ export function TodayPage(props: {
   const needsYou = new Set([...priorities, ...atRisk].map((t) => t.id)).size;
   const upcomingLeft = upcoming.filter((e) => new Date(e.startsAt).getTime() >= now.getTime());
   const headline = buildHeadline(todayMode, needsYou, upcomingLeft.length, doneToday);
-  const nextEvent = upcoming[0];
+  // A Moss-created block (e.g. a preparation block) is itself a calendar
+  // event, so it can sit first in `upcoming` right before the meeting it
+  // precedes. The card is about the meeting, so skip Moss blocks here.
+  const nextEvent = upcoming.find((e) => !e.isMossBlock);
   const nextStarted = nextEvent ? new Date(nextEvent.startsAt).getTime() <= now.getTime() : false;
 
   const morningLoading =
