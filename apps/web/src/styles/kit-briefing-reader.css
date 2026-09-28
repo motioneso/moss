@@ -526,6 +526,7 @@
 
 /* Report prose: a full-ink lead paragraph, then smaller muted body copy. */
 .brief-reader:has([data-briefing-surface]) .brief-reader__sections > .jds-brief__body,
+.brief-reader:has([data-briefing-surface]) .brief-reader__list .jds-brief__body,
 .brief-reader__list {
   font-size: 13px;
   line-height: 1.7;
@@ -825,6 +826,7 @@ button.brief-snapshot__main:focus-visible {
     font-size: 14px;
   }
   .brief-reader:has([data-briefing-surface]) .brief-reader__sections > .jds-brief__body,
+  .brief-reader:has([data-briefing-surface]) .brief-reader__list .jds-brief__body,
   .brief-reader__list {
     font-size: 12px;
   }

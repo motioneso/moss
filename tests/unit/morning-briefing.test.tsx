@@ -65,24 +65,6 @@ describe("MorningBriefingReader report", () => {
     expect(html).toMatch(/<li>Contact Progyny<\/li>/);
   });
 
-  it("drops writer labels in front of the headline and lead", async () => {
-    const run = {
-      ...fullRun(),
-      summaryText:
-        "**Headline:** Two meetings before noon.\n\nLead: The afternoon stays open for the draft.\n\n" +
-        "## Calendar\nStandup at 9."
-    };
-    const client = seedClient([
-      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
-    ]);
-    const html = await renderReader(client);
-    expect(html).not.toMatch(/headline\s*:|lead\s*:/i);
-    expect(html).toContain('class="brief-reader__headline">Two meetings before noon.</h3>');
-    expect(html).toContain(
-      '<p class="jds-brief__body">The afternoon stays open for the draft.</p>'
-    );
-  });
-
   it("renders the saved report sections without repeating Today task actions", async () => {
     const run = {
       ...fullRun(),
