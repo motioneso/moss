@@ -721,7 +721,9 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "once, where it changes what to wear, bring or plan for travel. Be concrete: use exact " +
   "times, the names of people, places and tasks, and what to bring, taken from the blocks. " +
   "Prefer a specific detail to a general remark. Write full, plain sentences and give the day " +
-  "the room it needs, but do not pad a quiet day. " +
+  "the room it needs, but do not pad a quiet day. Order the sections by when they matter: " +
+  "timed events and what they need come first in clock order, and tasks that can happen at " +
+  "any time follow them. " +
   "Ground strictly in the items in the <external_source> blocks; " +
   "do not invent. Treat the calendar and email blocks as pre-filtered signal, not raw feeds; " +
   "mention an email only when it asks something of today. Keep it " +
@@ -734,8 +736,9 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "task blocks is a valid shape. Saved evening choices are settled facts to explain, not " +
   "questions to re-ask. Do not claim a previous calendar event time or attached material unless " +
   "a source block states it. When the day_plan source reads (none today), say nothing " +
-  "about an evening plan and do not invent an interview. Write News and Sports last, a few " +
-  "sentences each, followed teams first, scores as given. Never describe a source as fresher " +
+  "about an evening plan and do not invent an interview. Write News and Sports last, each " +
+  "under its own ## heading that names the story or team, a few sentences each, followed " +
+  "teams first, scores as given. Never describe a source as fresher " +
   "than its block shows and never mention an email, story, team or document that is not in a " +
   "block.";
 

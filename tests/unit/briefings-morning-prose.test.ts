@@ -169,6 +169,7 @@ describe("morning briefing prose inputs (#2766)", () => {
     expect(captured.prompt).toContain("Walk through the day in time order");
     expect(captured.prompt).toContain("what needs preparing, bringing or deciding");
     expect(captured.prompt).toContain("Be concrete");
+    expect(captured.prompt).toContain("timed events and what they need come first in clock order");
     expect(captured.prompt).not.toContain("Do not restate every event");
     expect(captured.prompt).not.toContain("short lead");
     expect(captured.prompt).not.toMatch(/## Priority, ## Changes/);
