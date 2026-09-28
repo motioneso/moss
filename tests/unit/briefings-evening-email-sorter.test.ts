@@ -305,4 +305,22 @@ describe("evening briefing email section over the real sorter (#2770)", () => {
     const gaps = result.sourceMetadata.gaps as Gap[];
     expect(gaps).toContainEqual({ source: "email_today", reason: "filtered_out" });
   });
+
+  it("records a truncated gap when more mail awaits a closer look than the section shows", async () => {
+    const many: ParsedEmail[] = Array.from({ length: 7 }, (_, i) => ({
+      ...CONTRACT_MAIL,
+      externalId: `gm-ask-${i}`,
+      threadId: `th-ask-${i}`,
+      subject: `Quick question number ${i}`,
+      receivedAt: `2026-06-13T0${i + 1}:00:00.000Z`
+    }));
+    const runChat = fakeSorterModel({
+      "Quick question": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
+    });
+    const { prompt, result } = await composeEveningWith(liveEmailDeps(many, runChat));
+
+    expect(emailBlock(prompt)).toContain("Quick question");
+    const gaps = result.sourceMetadata.gaps as Gap[];
+    expect(gaps).toContainEqual({ source: "email_today", reason: "truncated" });
+  });
 });
