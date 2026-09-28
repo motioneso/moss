@@ -2,7 +2,10 @@ import { brotliCompressSync, gzipSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { createHostPinnedFetch } from "../../packages/host-fetch/src/index.js";
+import {
+  createCachingResolver,
+  createHostPinnedFetch
+} from "../../packages/host-fetch/src/index.js";
 
 describe("host-pinned fetch transport", () => {
   it("connects to the validated public address while forcing hostname SNI and Host", async () => {
@@ -378,5 +381,32 @@ describe("host-pinned fetch DNS lookups", () => {
       code: "blocked_address"
     });
     expect(lookups).toBe(2);
+  });
+});
+
+describe("createCachingResolver", () => {
+  it("expires entries at the TTL, keeps hosts separate and isolates callers from mutation", async () => {
+    let clock = 0;
+    const calls: string[] = [];
+    const resolve = createCachingResolver(
+      async (host) => {
+        calls.push(host);
+        return [{ address: host === "a.example.com" ? "1.1.1.1" : "2.2.2.2", family: 4 as const }];
+      },
+      1000,
+      () => clock
+    );
+
+    const first = await resolve("a.example.com");
+    expect(() => {
+      (first as unknown as { address: string }[])[0]!.address = "10.0.0.1";
+    }).toThrow();
+    expect((await resolve("b.example.com"))[0]?.address).toBe("2.2.2.2");
+    expect((await resolve("a.example.com"))[0]?.address).toBe("1.1.1.1");
+    expect(calls).toEqual(["a.example.com", "b.example.com"]);
+
+    clock = 1000;
+    await resolve("a.example.com");
+    expect(calls).toEqual(["a.example.com", "b.example.com", "a.example.com"]);
   });
 });

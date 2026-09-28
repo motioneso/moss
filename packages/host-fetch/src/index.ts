@@ -421,8 +421,11 @@ export function createCachingResolver(
     const pending = inFlight.get(hostname);
     if (pending) return pending;
     const query = lookupFn(hostname)
-      .then((answers) => {
-        cached.set(hostname, { answers, expiresAt: now() + ttlMs });
+      .then((raw) => {
+        const answers = Object.freeze(raw.map((answer) => Object.freeze({ ...answer })));
+        const at = now();
+        for (const [host, entry] of cached) if (entry.expiresAt <= at) cached.delete(host);
+        cached.set(hostname, { answers, expiresAt: at + ttlMs });
         return answers;
       })
       .finally(() => inFlight.delete(hostname));
