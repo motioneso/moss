@@ -112,7 +112,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
       headline: input.eveningSplit ? input.eveningSplit.headline : fallbackHeadline,
       summary:
         rest !== "" ? (
-          <BriefingProse summaryText={rest} />
+          <BriefingProse summaryText={plainBriefingText(rest).replace(/\s+/g, " ")} />
         ) : (
           <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />
         ),

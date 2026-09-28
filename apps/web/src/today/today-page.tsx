@@ -40,6 +40,7 @@ import {
   scheduleTodayModeRefresh,
   selectActionRowsRun
 } from "./evening-mode";
+import { splitEveningReport } from "./evening-report";
 import { buildTodayHeroContent, splitHeadline, TodayHero } from "./today-hero";
 import { parseBriefingFreshness } from "./briefing-freshness";
 import { ProactiveCards } from "./proactive-cards";
@@ -357,10 +358,10 @@ export function TodayPage(props: {
   const morningFreshness = latestMorningRun
     ? parseBriefingFreshness(latestMorningRun.sourceMetadata)
     : null;
-  const eveningSplit =
-    latestEveningRun && latestEveningRun.summaryText.trim()
-      ? splitHeadline(latestEveningRun.summaryText)
-      : null;
+  // Each evening slot gets its own part of the report: the hero takes the
+  // opening verdict, the recap and open-loops sections take their own sections.
+  const eveningReport = latestEveningRun ? splitEveningReport(latestEveningRun.summaryText) : null;
+  const eveningSplit = eveningReport?.verdict ? splitHeadline(eveningReport.verdict) : null;
   const openMorningReader = (anchor: HTMLElement) => {
     const runId = latestMorningRun?.id;
     if (!morningDefinition || !runId) return;
@@ -578,7 +579,7 @@ export function TodayPage(props: {
                     }
                   }}
                   completedToday={completedToday}
-                  recapProse={eveningSplit?.rest ?? ""}
+                  recapProse={eveningReport?.recap ?? ""}
                   recapDateLabel={formatDate(now.toISOString(), locale, {
                     weekday: "long",
                     month: "long",
@@ -587,9 +588,7 @@ export function TodayPage(props: {
                   onOpenTask={(id) => setDialog({ id })}
                 />
                 <EveningSupportSections
-                  openLoopsDek={
-                    eveningSplit && eveningSplit.rest.trim() !== "" ? eveningSplit.rest : null
-                  }
+                  openLoopsDek={eveningReport?.openLoops || null}
                   carryingForward={looseEnds}
                   onOpenTask={(id) => setDialog({ id })}
                 />

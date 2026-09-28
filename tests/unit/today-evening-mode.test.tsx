@@ -260,7 +260,7 @@ describe("TodayPage evening mode", () => {
     expect(body).toContain("Merge the hotfix");
   });
 
-  it("feeds the open loops from the evening run remainder", () => {
+  it("shows each part of the evening report once, in its own slot", () => {
     const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
     const html = renderToday({
       now: new Date("2026-06-30T02:30:00.000Z"),
@@ -268,7 +268,13 @@ describe("TodayPage evening mode", () => {
       runs: [
         briefingRun({
           createdAt: "2026-06-30T02:15:00.000Z",
-          summaryText: "Wrapped the launch notes. One decision is still open."
+          summaryText: [
+            "Wrapped the launch notes. **Tomorrow** has room.",
+            "## What got done\nThe launch prep paid off.\n\n- Ship release note",
+            "## What slipped\nThe dentist call moved again.",
+            "## Carrying forward\nOne decision is still open.\n- Reply to Alex",
+            "## Tomorrow\nOne morning appointment."
+          ].join("\n\n")
         })
       ],
       tasks: [
@@ -280,11 +286,26 @@ describe("TodayPage evening mode", () => {
       ],
       events: []
     });
-    const body = html.slice(html.indexOf('<div class="cmd-wrap">'));
+    const wrapAt = html.indexOf('<div class="cmd-wrap">');
+    const hero = html.slice(0, wrapAt);
+    const body = html.slice(wrapAt);
+    const count = (text: string) => html.split(text).length - 1;
 
+    expect(hero).toContain("Tomorrow has room.");
+    expect(body).toContain("The launch prep paid off.");
     expect(body).toContain("Close the open loops");
     expect(body).toContain("One decision is still open.");
     expect(body).toContain("Reply to Alex");
+    for (const text of [
+      "Tomorrow has room.",
+      "The launch prep paid off.",
+      "One decision is still open."
+    ]) {
+      expect(count(text)).toBe(1);
+    }
+    expect(html).not.toContain("The dentist call moved again.");
+    expect(html).not.toContain("##");
+    expect(html).not.toContain("**");
   });
 
   it("falls back to the carrying-forward copy without run text", () => {
