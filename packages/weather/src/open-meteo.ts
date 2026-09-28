@@ -93,6 +93,17 @@ export async function fetchOpenMeteoForecast(
       low: Math.round(data.daily.temperature_2m_min[dayIndex]!)
     };
   });
+  const todayCode = data.daily.weather_code[0];
+  const todayHigh = data.daily.temperature_2m_max[0];
+  const todayLow = data.daily.temperature_2m_min[0];
+  const today =
+    todayCode !== undefined && todayHigh !== undefined && todayLow !== undefined
+      ? {
+          condition: resolveWmoCode(todayCode).condition,
+          high: Math.round(todayHigh),
+          low: Math.round(todayLow)
+        }
+      : undefined;
   return {
     temp: Math.round(data.current.temperature_2m),
     feelsLike: Math.round(data.current.apparent_temperature),
@@ -105,6 +116,7 @@ export async function fetchOpenMeteoForecast(
     windSpeed: Math.round(data.current.wind_speed_10m),
     lat,
     lon,
-    forecast
+    forecast,
+    ...(today ? { today } : {})
   };
 }
