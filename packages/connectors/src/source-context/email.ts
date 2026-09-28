@@ -98,6 +98,7 @@ interface TriageFields {
   readonly inferredSubject: string | null;
   readonly dueDate: string | null;
   readonly suggestedTasks: readonly EmailSuggestedTaskCandidate[];
+  readonly awaitingJudgement: boolean;
 }
 
 function triageFromSignals(summary: string | null, signals: EmailSignals): TriageFields {
@@ -109,7 +110,8 @@ function triageFromSignals(summary: string | null, signals: EmailSignals): Triag
     reason: signals.actionability?.reason ?? null,
     inferredSubject: signals.actionability?.inferredSubject ?? null,
     dueDate: signals.actionability?.dueDate ?? null,
-    suggestedTasks: suggestedTasksFromSignals(signals)
+    suggestedTasks: suggestedTasksFromSignals(signals),
+    awaitingJudgement: signals.pendingJudgement === true
   };
 }
 
@@ -121,7 +123,8 @@ const UNTRIAGED: TriageFields = {
   reason: null,
   inferredSubject: null,
   dueDate: null,
-  suggestedTasks: []
+  suggestedTasks: [],
+  awaitingJudgement: false
 };
 
 function cachedSignals(row: EmailMessage): EmailSignals {
@@ -299,11 +302,14 @@ async function readAccountLive(
     const cachedActionDetailsComplete =
       Boolean(cachedActionability?.inferredSubject?.trim()) &&
       (cachedActionability?.suggestedTasks?.length ?? 0) > 0;
+    // A stored closer-look hand-off is a settled first-pass decision, like a stored verdict.
+    const cachedDecision =
+      Boolean(cachedActionability) || cachedSignalSet?.pendingJudgement === true;
     let triage: TriageFields;
     if (
       cachedRow &&
       cachedSignalSet &&
-      cachedActionability &&
+      cachedDecision &&
       (!cachedNeedsActionDetails || cachedActionDetailsComplete)
     ) {
       // The live read has the whole message in hand, so the full rule can be applied here as

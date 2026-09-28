@@ -6,7 +6,6 @@ import {
   readCalendarSignalSettings,
   readEmailSignalSettings,
   synthesizeWithConfiguredModel,
-  isActionableTriage,
   sourceContextMetaFor,
   recordSourceAuthGap,
   buildExternalModulesSection,
@@ -46,6 +45,13 @@ import {
 import { fallback } from "./fallback.js";
 import { briefingSignalFeedbackItemId } from "./feedback-targets.js";
 import { buildEmailCatchUp, filterEmailItems, gatherActionRows } from "./action-rows.js";
+import {
+  buildMorningEmailLines,
+  gatherCommitmentSuggestions,
+  gatherMorningTasks,
+  isBriefingEmailItem,
+  openTaskLines
+} from "./morning-inputs.js";
 
 // ── Caps (one conservative economy budget) ─────────────────────────────────────
 const VAULT_CHUNK_CAP = 6;
@@ -119,26 +125,7 @@ export async function composeBriefing(
     timeZone
   );
 
-  const tasks = await gatherToolSection(
-    scopedDb,
-    definition,
-    input,
-    deps,
-    {
-      key: "tasks",
-      label: "TASKS",
-      // The visible-tasks read tool is `tasks.list` (returns repository.listVisible as
-      // `items`); there is no `tasks.listVisible` tool (verified against tasks/manifest.ts).
-      toolName: "tasks.list",
-      arrayKey: "items",
-      include: (task) => task.status !== "suggested",
-      format: (t) =>
-        [sanitizeExternal(t.title), sanitizeExternal(t.status)].filter(Boolean).join(" · ")
-    },
-    gaps,
-    now,
-    timeZone
-  );
+  const tasks = await gatherMorningTasks([scopedDb, definition, input, deps], gaps, now, timeZone);
 
   const includeCalendar = await sourceIncludedInBriefings(scopedDb, deps, "calendar.briefings");
   const rawCalendar = includeCalendar
@@ -174,10 +161,10 @@ export async function composeBriefing(
           toolName: "email.listVisibleMessages",
           arrayKey: "messages",
           metaKeys: ["accounts", "gaps"],
-          // Actionable triage only (#729 §7): noise/fyi/unknown never become prompt lines,
+          // Kept mail only (#729 §7, #2763): noise/fyi/unknown never become prompt lines,
           // and the allow-list is sender · subject · actionability · summary-or-snippet.
           format: (m) =>
-            isActionableTriage(m)
+            isBriefingEmailItem(m)
               ? [
                   sanitizeExternal(m.sender),
                   sanitizeExternal(m.subject),
@@ -291,8 +278,8 @@ export async function composeBriefing(
   const proseEmailItems = filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs);
   const emailSignals = includeEmail
     ? deriveEmailSignals({
-        // Same triage filter as the prompt lines: noise/fyi/unknown never seed signals.
-        items: proseEmailItems.filter(isActionableTriage),
+        // Same filter as the prompt lines: noise/fyi/unknown never seed signals.
+        items: proseEmailItems.filter(isBriefingEmailItem),
         now,
         context,
         settings: emailSettings
@@ -300,7 +287,8 @@ export async function composeBriefing(
     : [];
   const priorityCandidates = [
     ...tasksToCandidates(
-      tasks.lines.map((title, index) => {
+      // Completed lines follow the open ones and never compete for priority.
+      openTaskLines(tasks.lines).map((title, index) => {
         const raw = tasks.rawItems?.[index] as
           | {
               readonly dueAt?: string;
@@ -370,8 +358,21 @@ export async function composeBriefing(
   if (includeCalendar && (rawCalendar.rawItems?.length ?? 0) > 0 && calendarSignals.length === 0) {
     gaps.push({ source: "calendar", reason: "empty" });
   }
-  if (includeEmail && (rawEmail.rawItems?.length ?? 0) > 0 && emailSignals.length === 0) {
-    gaps.push({ source: "email", reason: "empty" });
+  const commitmentSuggestions = includeEmail
+    ? await gatherCommitmentSuggestions([scopedDb, definition, input, deps], gaps, now, timeZone)
+    : [];
+  const emailLines = buildMorningEmailLines({
+    signals: prioritizedEmailSignals,
+    items: proseEmailItems,
+    suggestionLines: commitmentSuggestions
+  });
+  if (includeEmail && (rawEmail.rawItems?.length ?? 0) > 0 && emailLines.lines.length === 0) {
+    gaps.push({ source: "email", reason: "filtered_out" });
+  } else if (
+    emailLines.truncated &&
+    !gaps.some((gap) => gap.source === "email" && gap.reason === "truncated")
+  ) {
+    gaps.push({ source: "email", reason: "truncated" });
   }
 
   prioritizedCalendarSignals = await attachCalendarFollowThrough(
@@ -398,8 +399,8 @@ export async function composeBriefing(
   const email: Section = {
     key: rawEmail.key,
     label: rawEmail.label,
-    lines: prioritizedEmailSignals.map((signal) => sanitizeExternal(signal.summary)),
-    count: prioritizedEmailSignals.length,
+    lines: emailLines.lines,
+    count: emailLines.lines.length,
     rawItems: rawEmail.rawItems
   };
   const catchUp = includeEmail
@@ -578,6 +579,7 @@ export async function composeBriefing(
       emailCount: email.count,
       emailMessageCount: rawEmail.rawItems?.length ?? 0,
       emailSignals: prioritizedEmailSignals,
+      emailKept: emailLines.breakdown,
       vaultCount: vault.count,
       chatTurnCount: chats.count,
       notes: vaultNotes,

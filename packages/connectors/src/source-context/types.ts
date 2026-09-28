@@ -76,6 +76,8 @@ export interface EmailContextItem {
   readonly inferredSubject?: string | null;
   readonly dueDate: string | null;
   readonly suggestedTasks: readonly EmailSuggestedTaskCandidate[];
+  /** The sorter handed this message to the Commitments closer look; no verdict yet. */
+  readonly awaitingJudgement?: boolean;
   readonly source: SourceMode;
   readonly degradedReason: DegradedReason | null;
   /** Cached row id when one exists — reply flows address via the cached message. */

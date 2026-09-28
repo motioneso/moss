@@ -332,6 +332,17 @@ export class BriefingsRepository {
       }
     }
 
+    let previousMorningRunAt: Date | null = null;
+    if (definition.briefing_type === "morning") {
+      try {
+        previousMorningRunAt = await withToolSavepoint(scopedDb, () =>
+          this.findPreviousSucceededMorningRunAt(scopedDb, now)
+        );
+      } catch {
+        previousMorningRunAt = null; // the task window falls back to 24 hours
+      }
+    }
+
     const composed = await composeBriefing(
       scopedDb,
       definition,
@@ -340,6 +351,7 @@ export class BriefingsRepository {
         runId,
         jobId: input.jobId,
         sameDayMorningMeta,
+        previousMorningRunAt,
         now
       },
       input.composeDeps
@@ -493,6 +505,27 @@ export class BriefingsRepository {
       const created = run.created_at instanceof Date ? run.created_at : new Date(run.created_at);
       return localPeriodString(definition, created) === currentPeriod;
     });
+  }
+
+  /** When the owner's latest succeeded morning run before `now` was written. */
+  private async findPreviousSucceededMorningRunAt(
+    scopedDb: DataContextDb,
+    now: Date
+  ): Promise<Date | null> {
+    const previous = await scopedDb.db
+      .selectFrom("app.briefing_runs")
+      .select("created_at")
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("briefing_type", "=", "morning")
+      .where("status", "=", "succeeded")
+      .where("created_at", "<", now)
+      .orderBy("created_at", "desc")
+      .limit(1)
+      .executeTakeFirst();
+    if (!previous) return null;
+    return previous.created_at instanceof Date
+      ? previous.created_at
+      : new Date(previous.created_at);
   }
 
   private async findSameLocalDayMorningRun(
