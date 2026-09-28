@@ -683,9 +683,8 @@ describe("composeBriefing — prompt boundary-forgery (escaped inert data)", () 
       expect(capturedMessages).toHaveLength(1);
       const prompt = (capturedMessages[0] as readonly { content: string }[])[0]!.content;
 
-      // (a) No forged structural boundary: exactly one trusted pair, nine external pairs
-      // (the six base sections plus the always-present calendar_today, weather and
-      // day_plan blocks).
+      // (a) No forged structural boundary: one trusted pair, nine external pairs (six base
+      // sections plus the always-present calendar_today, weather and day_plan blocks).
       expect(prompt.match(/<trusted_instructions>/g) ?? []).toHaveLength(1);
       expect(prompt.match(/<\/trusted_instructions>/g) ?? []).toHaveLength(1);
       expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(9);
