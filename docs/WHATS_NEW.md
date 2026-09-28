@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Cleaner morning briefing text.** The morning briefing no longer shows stray "Headline:" and "Lead:" labels, and the full briefing now opens with a clear lead paragraph followed by lighter, easier-to-scan sections. [PR #2769](https://github.com/motioneso/moss/pull/2769)
 - **Evening briefing mentions your email again.** The evening briefing now covers email that arrived today, including mail that may need you, suggested commitments and worth-knowing updates, instead of always saying there was no email. [PR #2772](https://github.com/motioneso/moss/pull/2772)
 - **Morning briefing shows the right email and tasks.** The morning briefing now mentions email that may need you, suggested commitments and worth-knowing updates, and lists only tasks you finished since the last briefing instead of every task you ever completed. [PR #2768](https://github.com/motioneso/moss/pull/2768)
 - **Evening briefing no longer repeats itself on Today.** The evening view on Today now shows each part of your evening briefing once, in the section it belongs to, instead of repeating the whole briefing three times. [PR #2762](https://github.com/motioneso/moss/pull/2762)
