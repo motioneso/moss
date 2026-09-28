@@ -47,6 +47,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **First-meeting card shows real preparation time.** Today's first-meeting card now tells you about a real preparation block before the meeting, when one exists, and links straight to that meeting instead of just the calendar. [PR #2758](https://github.com/motioneso/moss/pull/2758)
 - **Open time and breaks in the day's schedule.** The Today page's schedule now shows the gaps between your task blocks and appointments — a short break, or open time — and tells you when the day's commitments are done. [PR #2751](https://github.com/motioneso/moss/pull/2751)
 
 ### 2026-09-26
