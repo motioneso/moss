@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { chmodSync, chownSync, mkdirSync } from "node:fs";
 
-import { buildSetprivRaiseCommand } from "@moss/cli-runner";
+import { buildSetprivDropCommand, buildSetprivRaiseCommand } from "@moss/cli-runner";
 import { resolveMossEnv } from "@moss/db";
 
 // The three privileges the launcher itself needs to hand a folder to its
@@ -240,7 +240,35 @@ async function runOneShot(
   });
 }
 
-function spawnResident(spec: ProcessSpec, uid: number, gid: number): ChildProcess {
+/**
+ * Supplementary groups the launcher holds, minus root's group 0. Node's
+ * spawn({ uid, gid }) clears these on the account switch, so a process that
+ * needs a shared folder group (the sports socket folder) has to be handed
+ * them explicitly.
+ */
+export function launcherSharedGroups(
+  groups: readonly number[] = process.getgroups?.() ?? []
+): number[] {
+  return [...new Set(groups.filter((group) => group !== 0))];
+}
+
+export interface ResidentLaunch {
+  readonly command: string;
+  readonly args: string[];
+  readonly options: { uid?: number; gid?: number };
+}
+
+/**
+ * How each resident process is started. Only the api keeps the shared
+ * groups: it hosts the sports browser broker socket in the shared folder.
+ * The worker and cli-runner never touch that folder, so they get none.
+ */
+export function buildResidentLaunch(
+  spec: ProcessSpec,
+  uid: number,
+  gid: number,
+  launcherGroups: readonly number[]
+): ResidentLaunch {
   const [cmd, ...args] = spec.command;
   if (spec.role === "cli-runner") {
     // Node's uid/gid spawn options clear every capability on the way to a
@@ -251,16 +279,21 @@ function spawnResident(spec: ProcessSpec, uid: number, gid: number): ChildProces
     // already be root for the raise to work, which it is: start-jarv1s.ts
     // runs before any account switch.
     const raised = buildSetprivRaiseCommand(cmd!, args, { uid, gid }, LAUNCHER_CAPABILITIES);
-    return spawn(raised.command, raised.args, {
-      env: spec.env,
-      stdio: "inherit"
-    });
+    return { command: raised.command, args: raised.args, options: {} };
   }
-  return spawn(cmd!, args, {
+  if (spec.role === "api" && launcherGroups.length > 0) {
+    const kept = buildSetprivDropCommand(cmd!, args, { uid, gid, groups: launcherGroups });
+    return { command: kept.command, args: kept.args, options: {} };
+  }
+  return { command: cmd!, args, options: { gid, uid } };
+}
+
+function spawnResident(spec: ProcessSpec, uid: number, gid: number): ChildProcess {
+  const launch = buildResidentLaunch(spec, uid, gid, launcherSharedGroups());
+  return spawn(launch.command, launch.args, {
     env: spec.env,
-    gid,
     stdio: "inherit",
-    uid
+    ...launch.options
   });
 }
 

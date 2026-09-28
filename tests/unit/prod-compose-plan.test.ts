@@ -36,6 +36,9 @@ describe("createComposeSmokePlan — prod variant", () => {
       plan.commands.some((c) => c.args.includes("run") && c.args.includes("sports-renderer-smoke"))
     ).toBe(true);
     expect(
+      plan.commands.some((c) => c.args.includes("run") && c.args.includes("sports-launcher-smoke"))
+    ).toBe(true);
+    expect(
       plan.commands.some(
         (c) => c.args.includes("test") && c.args.includes("/run/moss-sports-browser/renderer.sock")
       )

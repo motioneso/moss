@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSanitizedCliEnv } from "../../packages/cli-runner/src/sanitized-env.js";
+import { buildSetprivDropCommand } from "../../packages/cli-runner/src/setpriv.js";
 import {
   buildChildEnv,
+  buildResidentLaunch,
+  launcherSharedGroups,
   buildStartupPlan,
   resolveMcpServerUrl,
   runtimeUidGid,
@@ -256,5 +259,49 @@ describe("resolveMcpServerUrl", () => {
     expect(
       resolveMcpServerUrl({ JARVIS_MCP_SERVER_URL: "not-a-valid-url" } as NodeJS.ProcessEnv, "4100")
     ).toBe("not-a-valid-url");
+  });
+});
+
+describe("resident launch keeps the shared socket group for the api only", () => {
+  const spec = (role: ChildRole) => ({ role, command: ["node", "x.js"], env: {} });
+
+  it("drops root's group 0 and keeps the rest", () => {
+    expect(launcherSharedGroups([0, 1001, 1001])).toEqual([1001]);
+    expect(launcherSharedGroups([0])).toEqual([]);
+  });
+
+  it("starts the api through setpriv carrying group 1001, with no capabilities", () => {
+    const launch = buildResidentLaunch(spec("api"), 1000, 1000, [1001]);
+    expect(launch.command).toBe("setpriv");
+    expect(launch.args).toContain("--groups=1001");
+    expect(launch.args).not.toContain("--clear-groups");
+    expect(launch.args).toContain("--inh-caps=-all");
+    expect(launch.args).toContain("--ambient-caps=-all");
+    expect(launch.options).toEqual({});
+  });
+
+  it("gives the worker no supplementary groups (plain account switch)", () => {
+    const launch = buildResidentLaunch(spec("worker"), 1000, 1000, [1001]);
+    expect(launch).toEqual({
+      command: "node",
+      args: ["x.js"],
+      options: { gid: 1000, uid: 1000 }
+    });
+  });
+
+  it("does not hand the shared group to the cli-runner", () => {
+    const launch = buildResidentLaunch(spec("cli-runner"), 1000, 1000, [1001]);
+    expect(launch.args.join(" ")).not.toContain("--groups");
+  });
+
+  it("falls back to the plain switch when the launcher holds no shared group", () => {
+    expect(buildResidentLaunch(spec("api"), 1000, 1000, []).options).toEqual({
+      gid: 1000,
+      uid: 1000
+    });
+  });
+
+  it("clears groups by default in the drop command", () => {
+    expect(buildSetprivDropCommand("a", [], { uid: 1, gid: 1 }).args).toContain("--clear-groups");
   });
 });

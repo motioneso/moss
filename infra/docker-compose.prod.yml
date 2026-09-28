@@ -301,6 +301,25 @@ services:
         condition: service_healthy
     profiles: ["ops"]
 
+  # Runs the launcher's real api command line as root (like the launcher) and
+  # checks the switched process still holds the shared socket group.
+  sports-launcher-smoke:
+    image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node_modules/.bin/tsx", "scripts/smoke-launcher-groups.ts"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    user: "0:0"
+    group_add: ["1001"]
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    profiles: ["ops"]
+
   setup:
     image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
     build:
