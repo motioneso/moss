@@ -54,18 +54,22 @@ export function buildSetprivRaiseCommand(
  * groups lookup by account name fails and refuses the whole launch (Astra
  * finding, task 5b round 3, 2026-09-08). Clearing supplementary groups needs
  * no such lookup.
+ *
+ * `identity.groups` names supplementary group ids to keep by number (no lookup
+ * either). Omitted or empty means every supplementary group is cleared.
  */
 export function buildSetprivDropCommand(
   command: string,
   args: readonly string[],
-  identity: { uid: number; gid: number }
+  identity: { uid: number; gid: number; groups?: readonly number[] }
 ): SetprivCommand {
+  const groups = identity.groups ?? [];
   return {
     command: "setpriv",
     args: [
       `--reuid=${identity.uid}`,
       `--regid=${identity.gid}`,
-      "--clear-groups",
+      groups.length > 0 ? `--groups=${groups.join(",")}` : "--clear-groups",
       "--inh-caps=-all",
       "--ambient-caps=-all",
       "--",
