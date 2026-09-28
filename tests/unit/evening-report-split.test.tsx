@@ -71,4 +71,20 @@ describe("splitEveningReport", () => {
       openLoops: ""
     });
   });
+
+  it("keeps a section name that sits alone inside a paragraph as prose", () => {
+    const parts = splitEveningReport(
+      "A long day. The planning session moved to\nTomorrow\nafter lunch.\n\nWhat got done\nThe draft went out."
+    );
+    expect(parts.verdict).toBe("A long day. The planning session moved to\nTomorrow\nafter lunch.");
+    expect(parts.recap).toBe("The draft went out.");
+  });
+
+  it("reads a bold heading with the colon after the bold marks", () => {
+    const parts = splitEveningReport(
+      "A good day.\n\n**What got done**:\nThe review landed.\n\n__Carrying forward__:\nTwo small things."
+    );
+    expect(parts.recap).toBe("The review landed.");
+    expect(parts.openLoops).toBe("Two small things.");
+  });
 });

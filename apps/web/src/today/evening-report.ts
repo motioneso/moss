@@ -18,17 +18,16 @@ const KNOWN_HEADERS = new Map(
 );
 
 /** Section name for a header line, or null for a body line. A markdown
-    heading of any name ends the previous section; a bare or bold line counts
-    only when it names one of the evening sections. */
-function headerName(line: string): string | null {
+    heading of any name ends the previous section. A bold line counts when it
+    names an evening section. A bare line counts only when it names one and
+    starts a paragraph, so a lone "Tomorrow" inside prose stays prose. */
+function headerName(line: string, startsParagraph: boolean): string | null {
   const trimmed = line.trim();
   const markdown = /^#{1,6}\s+(.*)$/.exec(trimmed);
-  const bare = (markdown?.[1] ?? trimmed)
-    .replace(/^(\*\*|__)(.*)\1$/, "$2")
-    .replace(/:$/, "")
-    .trim();
+  const bold = /^(\*\*|__)(.+?):?\1:?$/.exec(trimmed);
+  const bare = (markdown?.[1] ?? bold?.[2] ?? trimmed).replace(/:$/, "").trim();
   const known = KNOWN_HEADERS.get(bare.toLowerCase());
-  if (known) return known;
+  if (known && (markdown || bold || startsParagraph)) return known;
   return markdown ? bare : null;
 }
 
@@ -49,8 +48,10 @@ export function splitEveningReport(text: string): EveningReportParts {
   const verdict: string[] = [];
   const sections = new Map<string, string[]>();
   let current: string[] = verdict;
+  let previous = "";
   for (const line of text.split(/\r?\n/)) {
-    const name = headerName(line);
+    const name = headerName(line, previous.trim() === "");
+    previous = line;
     if (name === null) {
       current.push(line);
       continue;

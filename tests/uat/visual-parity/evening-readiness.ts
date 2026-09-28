@@ -31,6 +31,26 @@ async function eveningVerdict(text: string): Promise<string> {
   return (await canonicalSplitEveningReport)(text).verdict;
 }
 
+const MARKDOWN_MODULE = [
+  "..",
+  "..",
+  "..",
+  "apps",
+  "web",
+  "src",
+  "today",
+  "briefing-markdown.js"
+].join("/");
+type PlainBriefingText = (text: string) => string;
+let canonicalPlainText: Promise<PlainBriefingText> | undefined;
+
+async function plainText(text: string): Promise<string> {
+  canonicalPlainText ??= import(MARKDOWN_MODULE).then(
+    (module) => (module as { readonly plainBriefingText: PlainBriefingText }).plainBriefingText
+  );
+  return (await canonicalPlainText)(text);
+}
+
 /** Validate the rendered contract used by TodayHero: h1 owns the verdict's first sentence
  * and the hero body owns only the rest of the verdict (or the full text when there is no split). */
 export async function assertEveningRenderedContract(
@@ -38,7 +58,7 @@ export async function assertEveningRenderedContract(
   rendered: EveningRenderedContract
 ): Promise<{ readonly headline: string; readonly body: string }> {
   const split = await splitHeadline(await eveningVerdict(summaryText));
-  const expectedBody = split.rest || split.headline;
+  const expectedBody = split.rest ? await plainText(split.rest) : split.headline;
   if (compact(rendered.heading) !== compact(split.headline))
     throw new Error(`parity evening: heading does not match split headline: ${rendered.heading}`);
   if (compact(rendered.body) !== compact(expectedBody))

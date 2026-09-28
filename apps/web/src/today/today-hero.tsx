@@ -96,10 +96,11 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
   );
   if (isEvening) {
     // Without a run, or when the assessment is hidden, the summary is the
-    // evening lede, as on the base. With a recap the h1 carries the first
-    // sentence and the dek the remainder; the recap section itself moved to
-    // the body, so the hero keeps headline, dek, links and prepared line only.
-    if (!input.assessmentShown || (!input.eveningLoading && !input.eveningSplit)) {
+    // evening lede, as on the base. With a run the h1 carries the verdict's
+    // first sentence and the dek the remainder; a run without a verdict keeps
+    // the fallback headline but still shows its links and prepared line.
+    const eveningReadable = Boolean(input.eveningRun?.summaryText.trim());
+    if (!input.assessmentShown || (!input.eveningLoading && !eveningReadable)) {
       return {
         headline: input.eveningSplit ? input.eveningSplit.headline : fallbackHeadline,
         summary: <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />,
