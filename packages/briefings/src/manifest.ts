@@ -196,7 +196,8 @@ export const briefingsModuleManifest = {
       id: "briefings.source_gaps",
       description:
         "A succeeded run that missed a source stays readable and lists each missing " +
-        "source with its reason, so the gap is visible instead of silent.",
+        "source with its reason, so the gap is visible instead of silent. Mail that was " +
+        "fetched but all judged not worth mentioning is recorded as filtered out, not empty.",
       remediations: [
         {
           id: "briefings.source_gaps.review",
@@ -204,6 +205,13 @@ export const briefingsModuleManifest = {
           path: "/today"
         }
       ]
+    },
+    {
+      id: "briefings.morning_inputs",
+      description:
+        "Morning briefings read open tasks and tasks finished since the last one, never " +
+        "archived tasks. Email covers mail still awaiting a closer look, pending commitment " +
+        "suggestions and a short worth-knowing roundup."
     },
     {
       id: "briefings.ai_writing",

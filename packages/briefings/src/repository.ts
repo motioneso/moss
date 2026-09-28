@@ -332,6 +332,17 @@ export class BriefingsRepository {
       }
     }
 
+    let previousMorningRunAt: Date | null = null;
+    if (definition.briefing_type === "morning") {
+      try {
+        previousMorningRunAt = await withToolSavepoint(scopedDb, () =>
+          this.findPreviousSucceededMorningRunAt(scopedDb, now)
+        );
+      } catch {
+        previousMorningRunAt = null; // the task window falls back to 24 hours
+      }
+    }
+
     const composed = await composeBriefing(
       scopedDb,
       definition,
@@ -340,6 +351,7 @@ export class BriefingsRepository {
         runId,
         jobId: input.jobId,
         sameDayMorningMeta,
+        previousMorningRunAt,
         now
       },
       input.composeDeps
@@ -493,6 +505,35 @@ export class BriefingsRepository {
       const created = run.created_at instanceof Date ? run.created_at : new Date(run.created_at);
       return localPeriodString(definition, created) === currentPeriod;
     });
+  }
+
+  /**
+   * When the owner's latest succeeded morning run before `now` read its tasks. Runs written
+   * before that time was recorded fall back to when the run was saved.
+   */
+  private async findPreviousSucceededMorningRunAt(
+    scopedDb: DataContextDb,
+    now: Date
+  ): Promise<Date | null> {
+    const previous = await scopedDb.db
+      .selectFrom("app.briefing_runs")
+      .select([
+        "created_at",
+        sql<string | null>`source_metadata->>'tasksReadAt'`.as("tasks_read_at")
+      ])
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("briefing_type", "=", "morning")
+      .where("status", "=", "succeeded")
+      .where("created_at", "<", now)
+      .orderBy("created_at", "desc")
+      .limit(1)
+      .executeTakeFirst();
+    if (!previous) return null;
+    const readAt = previous.tasks_read_at ? new Date(previous.tasks_read_at) : null;
+    if (readAt && Number.isFinite(readAt.getTime())) return readAt;
+    return previous.created_at instanceof Date
+      ? previous.created_at
+      : new Date(previous.created_at);
   }
 
   private async findSameLocalDayMorningRun(

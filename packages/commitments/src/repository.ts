@@ -160,6 +160,23 @@ export class CommitmentsRepository {
     return row ? { lastJudgedExternalId: row.last_judged_external_id, outcome: row.outcome } : null;
   }
 
+  /** When each named email thread was last judged. Threads never judged are absent. */
+  async listThreadJudgedAt(
+    scopedDb: unknown,
+    ownerUserId: string,
+    threadRefs: readonly string[]
+  ): Promise<{ threadRef: string; judgedAt: Date }[]> {
+    assertDataContextDb(scopedDb);
+    if (threadRefs.length === 0) return [];
+    const rows = await scopedDb.db
+      .selectFrom("app.commitment_email_thread_judgements")
+      .select(["thread_ref", "judged_at"])
+      .where("owner_user_id", "=", ownerUserId)
+      .where("thread_ref", "in", [...threadRefs])
+      .execute();
+    return rows.map((row) => ({ threadRef: row.thread_ref, judgedAt: new Date(row.judged_at) }));
+  }
+
   /** Email-thread candidates still waiting on the person: open, not yet resolved, soonest due first. */
   async listOpenEmailCandidates(
     scopedDb: unknown,

@@ -153,6 +153,11 @@ export interface ComposeRunInput {
    * absent/null emits no morning_plan block and no gap.
    */
   readonly sameDayMorningMeta?: Record<string, unknown> | null;
+  /**
+   * Morning runs only: when the owner's previous succeeded morning run was written, resolved
+   * by the repository. Absent or null means the task window falls back to 24 hours.
+   */
+  readonly previousMorningRunAt?: Date | null;
 }
 
 export interface BriefingGap {
@@ -161,11 +166,13 @@ export interface BriefingGap {
   // connector-sync slice lands cache state, so an empty source is just `empty`.
   // `source_auth` (#729): a live-first source-context read reported an auth/grant/revocation
   // gap — the user must reconnect or re-grant; the data was NOT silently served from cache.
+  // `filtered_out`: the source returned items but the briefing kept none of them.
   readonly reason:
     | "tool_failed"
     | "structured_payload_failed"
     | "truncated"
     | "empty"
+    | "filtered_out"
     | "unwired"
     | "source_auth"
     | "module_disabled";
@@ -381,6 +388,8 @@ export async function gatherToolSection(
     readonly key: string;
     readonly label: string;
     readonly toolName: string;
+    /** Selected tool that gates this read; defaults to `toolName`. */
+    readonly selectedVia?: string;
     /** Explicit key in the tool's `data` that holds the row array (verified per manifest). */
     readonly arrayKey: string;
     readonly toolInput?: Record<string, unknown>;
@@ -406,7 +415,7 @@ export async function gatherToolSection(
   now: Date,
   timeZone: string
 ): Promise<Section> {
-  if (!definition.selected_tool_names.includes(args.toolName)) {
+  if (!definition.selected_tool_names.includes(args.selectedVia ?? args.toolName)) {
     return { key: args.key, label: args.label, lines: [], count: 0, rawItems: [] };
   }
 

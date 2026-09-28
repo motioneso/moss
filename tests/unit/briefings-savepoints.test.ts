@@ -94,8 +94,8 @@ describe("composeBriefing savepoints", () => {
     const trace = traceSavepoints(executedSql);
     expect(trace.maxDepth).toBe(1);
     expect(trace.unreleased).toEqual([]);
-    // tasks.list twice (suggested rows, then the tasks section), the plan read, and one
-    // freshness read each for calendar, email and vault.
-    expect(trace.rolledBack).toHaveLength(6);
+    // tasks.list three times (suggested rows, open tasks, recently completed tasks), the
+    // plan read, and one freshness read each for calendar, email and vault.
+    expect(trace.rolledBack).toHaveLength(7);
   });
 });

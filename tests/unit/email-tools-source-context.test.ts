@@ -80,6 +80,7 @@ describe("emailListVisibleMessagesExecute (source context)", () => {
       reason: "Direct question.",
       dueDate: null,
       suggestedTasks: [{ title: "Reply to Alice", dueDate: null }],
+      awaitingJudgement: false,
       source: "live",
       degradedReason: null
     });

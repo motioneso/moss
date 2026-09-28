@@ -21,6 +21,25 @@ export const commitmentListExecute: ToolExecute = async (scopedDb, input, ctx) =
   return { data: { items } } satisfies ToolResult;
 };
 
+export const THREAD_JUDGEMENT_LOOKUP_CAP = 50;
+
+/** Which email threads the closer look has already judged, and when. Ids and times only. */
+export const commitmentThreadJudgementsExecute: ToolExecute = async (scopedDb, input, ctx) => {
+  assertDataContextDb(scopedDb);
+  const raw = (input as { threadRefs?: unknown }).threadRefs;
+  const threadRefs = Array.isArray(raw)
+    ? raw
+        .filter((ref): ref is string => typeof ref === "string")
+        .slice(0, THREAD_JUDGEMENT_LOOKUP_CAP)
+    : [];
+  const judged = await repo.listThreadJudgedAt(scopedDb, ctx.actorUserId, threadRefs);
+  const threads = judged.map((j) => ({
+    threadRef: j.threadRef,
+    judgedAt: j.judgedAt.toISOString()
+  }));
+  return { data: { threads } } satisfies ToolResult;
+};
+
 export const commitmentGetExecute: ToolExecute = async (scopedDb, input, ctx) => {
   assertDataContextDb(scopedDb);
   const { candidateId } = input as { candidateId: string };
