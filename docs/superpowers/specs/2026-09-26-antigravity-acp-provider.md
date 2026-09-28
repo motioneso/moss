@@ -1,6 +1,6 @@
 # Design: Google Antigravity ACP provider (#2731)
 
-**Status:** Approved by Ben 2026-09-28 (section 6 records his answers). Credential storage remains a build gate (section 2).
+**Status:** Approved by Ben 2026-09-28 (section 6 records his answers). Credential storage and the paste-back delivery probe remain build gates (section 2).
 
 **Goal:** Replace the unsupported personal-account Gemini CLI path with Google's official Antigravity ACP agent, through Moss's existing Google ACP provider row. Keep the direct Google API path available and separate.
 
@@ -25,7 +25,14 @@ Sign-in uses ACP v1:
 1. `initialize` negotiates protocol v1 and returns the agent's auth methods.
 2. Moss accepts this adapter only when `oauth-personal` is advertised, then calls `authenticate` with that method id. Do not silently switch to `oauth-business`, `gemini-api-key`, or `agent-platform`.
 3. The pinned server emits its Google OAuth URL on stderr while `authenticate` is pending. The ACP login operation captures the URL only for the admin running the sign-in and presents it as a link in the AI provider settings. Raw stderr and the URL must not enter logs, audit metadata, prompts, job payloads, or any other user's response.
-4. AGY starts its own listener on a random loopback port and handles the OAuth callback. For a headless remote server, Settings shows the callback port and the proven direct SSH local-port-forward instruction before the admin opens the sign-in link; the documented command shape is `ssh -N -L <port>:127.0.0.1:<port> <ssh-host-alias>`. Moss reports the operation's pending/success/timeout state. It never asks the user to paste a callback URL or one-time code into Moss.
+4. AGY starts its own listener on a random loopback port and handles the OAuth callback. Sign-in works the way Claude's does today: the admin opens the link, signs in with Google, and pastes something back into Moss. After sign-in, Google redirects the admin's browser to AGY's loopback address, which fails to load on the admin's own machine. The admin copies the full address from the browser's address bar and pastes it into the AI provider settings. Moss, running on the server, delivers that request to AGY's loopback listener itself. Settings tells the admin in plain words that the page will fail to load and that this is expected.
+   - Moss reads the expected callback host, port and path from the `redirect_uri` in the OAuth URL it captured for this operation.
+   - Moss accepts a pasted address only when it is `http`, its host is `127.0.0.1` or `localhost`, and its port and path match that `redirect_uri`. Anything else is rejected without being sent anywhere.
+   - Only the admin who started the operation can submit, and only while the operation is pending. One accepted submission ends the paste step.
+   - Moss sends one GET to `127.0.0.1:<port>` from inside the runner identity and never follows a redirect.
+   - The pasted address carries a one-time sign-in code. It is a secret in transit. It must not enter logs, audit metadata, prompts, job payloads, stored rows, or any response.
+   - Moss reports the operation's pending/success/timeout state from AGY's `authenticate` result, not from the listener's HTTP reply.
+   - **Build gate:** paste-back is unproven. Before building it, a probe against the pinned v1.2.1 server must show that AGY accepts the callback when Moss delivers it on the server, and that the sign-in then completes. If the probe fails, keep the flow closed and bring the SSH local-port-forward alternative (`ssh -N -L <port>:127.0.0.1:<port> <ssh-host-alias>`) back to Ben as a fallback. Do not ship both.
 5. If authentication expires or `session/new` reports `auth_required`, show the existing provider re-sign-in remediation to admins and start a fresh ACP authentication operation. Members see that Google is unavailable and that an admin must sign in again.
 
 The observed agent waits about five minutes for the callback. Show a clear timeout state with a retry action. The probe confirms AGY's token file is mode `0600` and survives a fresh agent process using the same home; it does **not** establish encryption at rest. Before enabling the row, the implementation must show how AGY's persisted credential satisfies the repository's AI-secret storage rule and stays out of non-admin members' reach. File permissions alone are not proof of encryption.
@@ -48,15 +55,15 @@ Only the Google ACP row changes. Keep the `openai` row on Codex and the existing
 
 ## 5. User-facing states and recovery
 
-| Condition                                            | Settings/chat message                                | Recovery                                                                                 |
-| ---------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Pinned agent missing or artifact digest differs      | Google Antigravity is unavailable                    | Repair the pinned installation; never run an unverified binary                           |
-| `oauth-personal` is absent                           | Google sign-in is unavailable for this agent version | Keep the provider disabled and review the pinned adapter                                 |
-| OAuth callback has not arrived before AGY times out  | Google sign-in expired                               | Check the SSH local forward, then retry from Settings; never paste the callback URL/code |
-| `session/new` requires authentication                | Google is not connected                              | Admin signs in to Google again from the AI provider settings                             |
-| No advertised `model` option or saved id is absent   | No available Google ACP model                        | Refresh models and select one returned by AGY                                            |
-| Chat profile cannot disable native shell/write tools | Google Antigravity is not available for chat         | Keep `chatReady` false until a supported deny mechanism is verified                      |
-| A Moss tool action is denied or not approved         | Explain that the action was not performed            | Follow the existing approval/policy guidance; do not retry automatically                 |
+| Condition                                            | Settings/chat message                                | Recovery                                                                                      |
+| ---------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Pinned agent missing or artifact digest differs      | Google Antigravity is unavailable                    | Repair the pinned installation; never run an unverified binary                                |
+| `oauth-personal` is absent                           | Google sign-in is unavailable for this agent version | Keep the provider disabled and review the pinned adapter                                      |
+| OAuth callback has not arrived before AGY times out  | Google sign-in expired                               | Retry from Settings and paste the new address; an address from an earlier attempt is rejected |
+| `session/new` requires authentication                | Google is not connected                              | Admin signs in to Google again from the AI provider settings                                  |
+| No advertised `model` option or saved id is absent   | No available Google ACP model                        | Refresh models and select one returned by AGY                                                 |
+| Chat profile cannot disable native shell/write tools | Google Antigravity is not available for chat         | Keep `chatReady` false until a supported deny mechanism is verified                           |
+| A Moss tool action is denied or not approved         | Explain that the action was not performed            | Follow the existing approval/policy guidance; do not retry automatically                      |
 
 The build PR updates `packages/shared/src/app-map-core.ts` for the Google sign-in requirement, the admin-only sign-in, the removal of the Gemini CLI controls, the new unavailable/expired states, and their remediation.
 
@@ -65,13 +72,16 @@ The build PR updates `packages/shared/src/app-map-core.ts` for the Google sign-i
 1. **Who completes Google sign-in?** The admin, when adding the Google provider, the same way every other provider works. Members inherit it. Neither per-member sign-in nor an admin-picks-an-account flow is built.
 2. **What happens to Gemini CLI controls?** Remove them from the settings surface. Removing the controls does not delete existing installations, credentials, or settings.
 
-No removal, migration, or reclassification of existing Gemini data is authorized. The direct Google API provider remains separate. The callback behavior is grounded in the probe: direct SSH forwarding to AGY's loopback listener, with no pasted callback URL/code. A different callback transport needs its own evidence and must preserve the same no-paste rule.
+No removal, migration, or reclassification of existing Gemini data is authorized. The direct Google API provider remains separate.
+
+3. **How does the admin finish sign-in on a headless server?** The admin copies the failed redirect address and pastes it into Moss, the same copy-and-paste step Claude uses. No SSH tunnel. Ben's ruling in the 2731 thread: "If we can have it generate the link and the user copies it and pastes back in that would be great."
 
 ## 7. Live proof required on the implementation PR
 
 The official scratch probe is not Moss live-path proof. Before the provider is offered or the implementation PR merges, record these checks on the live dev instance:
 
-- As the admin, from the AI provider settings, complete `oauth-personal` sign-in on the real Google account using the in-product link and SSH local forward; AGY must receive its own loopback callback without a pasted URL/code.
+- As the admin, from the AI provider settings, complete `oauth-personal` sign-in on the real Google account using the in-product link and a pasted redirect address, from a browser on a different machine than the server, with no SSH tunnel.
+- Paste a wrong-host, wrong-port, and already-used address; each must be rejected without any request reaching AGY. Confirm the pasted address does not appear in logs, audit, or API responses.
 - Discover models from `session/new`, set an advertised model through `session/set_config_option`, and complete a real Moss chat turn.
 - Restart Moss and start a fresh AGY process; verify sign-in and model discovery still work.
 - Sign in as a non-admin member: prove the member can chat through the inherited Google provider, cannot start or see the Google sign-in, and that no Google token or OAuth URL appears in API responses beyond the admin's transient sign-in link, logs, audit, prompts, or job payloads.
