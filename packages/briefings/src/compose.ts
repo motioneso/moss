@@ -50,7 +50,8 @@ import {
   gatherCommitmentSuggestions,
   gatherMorningTasks,
   isBriefingEmailItem,
-  openTaskLines
+  openTaskLines,
+  settleJudgedEmail
 } from "./morning-inputs.js";
 
 // ── Caps (one conservative economy budget) ─────────────────────────────────────
@@ -275,7 +276,14 @@ export async function composeBriefing(
         settings: calendarSettings
       })
     : [];
-  const proseEmailItems = filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs);
+  const proseEmailItems = includeEmail
+    ? await settleJudgedEmail(
+        [scopedDb, definition, input, deps],
+        filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs),
+        now,
+        timeZone
+      )
+    : filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs);
   const emailSignals = includeEmail
     ? deriveEmailSignals({
         // Same filter as the prompt lines: noise/fyi/unknown never seed signals.
@@ -580,6 +588,9 @@ export async function composeBriefing(
       emailMessageCount: rawEmail.rawItems?.length ?? 0,
       emailSignals: prioritizedEmailSignals,
       emailKept: emailLines.breakdown,
+      // The next morning run reads completed tasks from here, so work finished while this
+      // run was writing is not skipped.
+      tasksReadAt: now.toISOString(),
       vaultCount: vault.count,
       chatTurnCount: chats.count,
       notes: vaultNotes,

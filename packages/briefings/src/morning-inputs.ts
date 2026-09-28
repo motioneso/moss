@@ -18,6 +18,7 @@ const COMPLETED_TASK_CAP = 5;
 const AWAITING_EMAIL_CAP = 5;
 const COMMITMENT_SUGGESTION_CAP = 3;
 const WORTH_KNOWING_CAP = 2;
+const THREAD_JUDGEMENT_LOOKUP_CAP = 50;
 
 export const COMPLETED_SINCE_LAST_BRIEFING = "[completed since last briefing]";
 
@@ -50,6 +51,9 @@ export async function gatherMorningTasks(
   now: Date,
   timeZone: string
 ): Promise<Section> {
+  if (!ctx[1].selected_tool_names.includes("tasks.list")) {
+    return { key: "tasks", label: "TASKS", lines: [], count: 0, rawItems: [] };
+  }
   const since = ctx[2].previousMorningRunAt ?? new Date(now.getTime() - DAY_MS);
   const base = { key: "tasks", label: "TASKS", toolName: "tasks.list", arrayKey: "items" };
   const openGaps: BriefingGap[] = [];
@@ -113,6 +117,67 @@ export function openTaskLines(lines: readonly string[]): string[] {
  */
 export function isBriefingEmailItem(item: Record<string, unknown>): boolean {
   return isActionableTriage(item) || item.awaitingJudgement === true;
+}
+
+/** The closer look queues a thread by its thread id, or by the message id when it has none. */
+function threadRefOf(item: Record<string, unknown>): string | null {
+  const ref = typeof item.threadId === "string" && item.threadId ? item.threadId : item.id;
+  return typeof ref === "string" && ref ? ref : null;
+}
+
+/**
+ * Clears the awaiting flag on mail the Commitments closer look has already judged. The
+ * sorter's flag is never cleared after the judgement, so a thread judged at or after the
+ * message arrived is settled: its outcome shows up as a suggestion or not at all. When the
+ * judgement read is missing or fails, the mail keeps its flag.
+ */
+export async function settleJudgedEmail(
+  ctx: GatherContext,
+  items: readonly Record<string, unknown>[],
+  now: Date,
+  timeZone: string
+): Promise<Record<string, unknown>[]> {
+  const threadRefs = [
+    ...new Set(
+      items
+        .filter((item) => item.awaitingJudgement === true)
+        .map(threadRefOf)
+        .filter((ref): ref is string => ref !== null)
+    )
+  ].slice(0, THREAD_JUDGEMENT_LOOKUP_CAP);
+  if (
+    threadRefs.length === 0 ||
+    !findExecute(ctx[3].moduleManifests, "commitments.threadJudgements")
+  ) {
+    return [...items];
+  }
+  const section = await gatherToolSection(
+    ...ctx,
+    {
+      key: "email_judgements",
+      label: "EMAIL JUDGEMENTS",
+      toolName: "commitments.threadJudgements",
+      selectedVia: "email.listVisibleMessages",
+      toolInput: { threadRefs },
+      arrayKey: "threads",
+      format: (t) => (typeof t.threadRef === "string" ? t.threadRef : "")
+    },
+    [],
+    now,
+    timeZone
+  );
+  const judgedAt = new Map<string, number>();
+  for (const row of section.rawItems ?? []) {
+    const at = typeof row.judgedAt === "string" ? Date.parse(row.judgedAt) : NaN;
+    if (typeof row.threadRef === "string" && Number.isFinite(at)) judgedAt.set(row.threadRef, at);
+  }
+  return items.map((item) => {
+    const ref = item.awaitingJudgement === true ? threadRefOf(item) : null;
+    const at = ref === null ? undefined : judgedAt.get(ref);
+    const received = typeof item.receivedAt === "string" ? Date.parse(item.receivedAt) : NaN;
+    const settled = at !== undefined && (!Number.isFinite(received) || at >= received);
+    return settled ? { ...item, awaitingJudgement: false } : item;
+  });
 }
 
 /**

@@ -210,7 +210,7 @@ export const briefingsModuleManifest = {
       id: "briefings.morning_inputs",
       description:
         "Morning briefings read open tasks and tasks finished since the last one, never " +
-        "archived tasks. Email covers mail flagged for a closer look, pending commitment " +
+        "archived tasks. Email covers mail still awaiting a closer look, pending commitment " +
         "suggestions and a short worth-knowing roundup."
     },
     {

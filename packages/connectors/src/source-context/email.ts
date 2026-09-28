@@ -350,10 +350,10 @@ async function readAccountLive(
       recipients: message.recipients,
       subject: message.subject,
       receivedAt: message.receivedAt,
-      threadId: threadIdFromMetadata(cachedRow),
+      threadId: message.threadId ?? threadIdFromMetadata(cachedRow),
       sourceHref: buildEmailActionLink({
         providerId: meta.providerId,
-        threadId: threadIdFromMetadata(cachedRow)
+        threadId: message.threadId ?? threadIdFromMetadata(cachedRow)
       }),
       snippet: message.snippet,
       ...triage,

@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   commitmentListExecute,
+  commitmentThreadJudgementsExecute,
   commitmentGetExecute,
   commitmentAcceptExecute,
   commitmentRejectExecute,
@@ -95,6 +96,21 @@ export const commitmentsModuleManifest: MossModuleManifest = {
         }
       },
       execute: commitmentListExecute
+    },
+    {
+      name: "commitments.threadJudgements",
+      description:
+        "Check which email threads the commitments closer look has already judged, and when.",
+      permissionId: "commitments.view",
+      risk: "read",
+      inputSchema: {
+        type: "object",
+        required: ["threadRefs"],
+        properties: {
+          threadRefs: { type: "array", items: { type: "string" }, maxItems: 50 }
+        }
+      },
+      execute: commitmentThreadJudgementsExecute
     },
     {
       name: "commitments.get",

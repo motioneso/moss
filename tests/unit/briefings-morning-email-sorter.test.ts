@@ -131,6 +131,35 @@ function liveEmailDeps(
   };
 }
 
+/** A stand-in Commitments module exposing only the public tools a test supplies. */
+function commitmentsManifest(tools: {
+  list?: ToolExecute;
+  threadJudgements?: ToolExecute;
+}): ComposeDeps["moduleManifests"][number] {
+  const tool = (name: string, execute: ToolExecute) => ({
+    name,
+    description: name,
+    permissionId: "commitments.view",
+    risk: "read" as const,
+    inputSchema: { type: "object" as const, properties: {} },
+    execute
+  });
+  return {
+    id: "commitments",
+    name: "Commitments",
+    version: "0.0.0",
+    publisher: "test",
+    lifecycle: "optional",
+    compatibility: { jarv1s: ">=0.0.0" },
+    assistantTools: [
+      ...(tools.list ? [tool("commitments.list", tools.list)] : []),
+      ...(tools.threadJudgements
+        ? [tool("commitments.threadJudgements", tools.threadJudgements)]
+        : [])
+    ]
+  };
+}
+
 /** Real email read tool over the real live source-context read. */
 function withRealEmailPath(deps: ComposeDeps, emailDeps: EmailSourceContextDeps): ComposeDeps {
   return {
@@ -225,6 +254,45 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
     expect(emailBlock(prompt)).toContain("Contract redlines for Thursday");
   });
 
+  it.each([
+    ["judged after it arrived", "2026-06-13T08:00:00.000Z", false],
+    ["judged before it arrived", "2026-06-13T07:00:00.000Z", true]
+  ])("settles closer-look mail by the thread judgement (%s)", async (_label, judgedAt, kept) => {
+    const runChat = fakeSorterModel({
+      "Contract redlines": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
+    });
+    const seen: string[] = [];
+    const lookups: Record<string, unknown>[] = [];
+    const base = withRealEmailPath(
+      makeFakeDeps({
+        generateChat: async (input: GenerateChatInput) => {
+          seen.push(input.messages.map((m) => m.content).join("\n"));
+          return { text: "synth narrative" };
+        }
+      }),
+      liveEmailDeps([CONTRACT_MAIL], runChat)
+    );
+    const threadJudgements: ToolExecute = async (_db, input) => {
+      lookups.push(input);
+      return { data: { threads: [{ threadRef: "th-contract", judgedAt }] } };
+    };
+    const deps: ComposeDeps = {
+      ...base,
+      moduleManifests: [...base.moduleManifests, commitmentsManifest({ threadJudgements })]
+    };
+    await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["email.listVisibleMessages"] }),
+      runInput,
+      deps
+    );
+
+    expect(lookups).toEqual([{ threadRefs: ["th-contract"] }]);
+    const block = emailBlock(seen.join("\n"));
+    if (kept) expect(block).toContain("Contract redlines for Thursday");
+    else expect(block).not.toContain("Contract redlines for Thursday");
+  });
+
   it("adds a short worth-knowing line from fyi mail", async () => {
     const runChat = fakeSorterModel({
       "This week in gardening": {
@@ -281,27 +349,7 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
     });
     const deps: ComposeDeps = {
       ...base,
-      moduleManifests: [
-        ...base.moduleManifests,
-        {
-          id: "commitments",
-          name: "Commitments",
-          version: "0.0.0",
-          publisher: "test",
-          lifecycle: "optional",
-          compatibility: { jarv1s: ">=0.0.0" },
-          assistantTools: [
-            {
-              name: "commitments.list",
-              description: "pending suggestions",
-              permissionId: "commitments.view",
-              risk: "read",
-              inputSchema: { type: "object", properties: {} },
-              execute: listPending
-            }
-          ]
-        }
-      ]
+      moduleManifests: [...base.moduleManifests, commitmentsManifest({ list: listPending })]
     };
     await composeBriefing(
       fakeScopedDb,

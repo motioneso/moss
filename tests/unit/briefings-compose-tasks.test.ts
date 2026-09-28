@@ -68,7 +68,7 @@ describe("composeBriefing: morning tasks since the last briefing (#2764)", () =>
   it("sends open tasks and only tasks completed since the previous morning run", async () => {
     const inputs: Record<string, unknown>[] = [];
     const seen: string[] = [];
-    await composeBriefing(
+    const result = await composeBriefing(
       fakeScopedDb,
       definition({ selected_tool_names: ["tasks.list"] }),
       { ...runInput, previousMorningRunAt: PREVIOUS_RUN_AT },
@@ -85,6 +85,21 @@ describe("composeBriefing: morning tasks since the last briefing (#2764)", () =>
       status: "done",
       completedAfter: PREVIOUS_RUN_AT.toISOString()
     });
+    // The next run's cutoff is when this run read its tasks, not when it was saved.
+    expect(result.sourceMetadata.tasksReadAt).toBe(FIXED_NOW.toISOString());
+  });
+
+  it("records no task gap when tasks are not part of the briefing", async () => {
+    const inputs: Record<string, unknown>[] = [];
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["commitments.listVisible"] }),
+      runInput,
+      tasksDeps(inputs, [])
+    );
+    const gaps = result.sourceMetadata.gaps as { source: string }[];
+    expect(gaps.filter((gap) => gap.source === "tasks")).toEqual([]);
+    expect(inputs.filter((input) => input.status === "done")).toEqual([]);
   });
 
   it("falls back to the last 24 hours when there is no previous morning run", async () => {
