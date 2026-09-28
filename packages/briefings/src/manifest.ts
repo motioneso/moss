@@ -216,10 +216,9 @@ export const briefingsModuleManifest = {
     {
       id: "briefings.evening_email",
       description:
-        "Evening briefings read the mail that arrived today the same way the morning one " +
-        "does: mail still awaiting a closer look, pending commitment suggestions and a short " +
-        "worth-knowing roundup. Mail that arrived but was all left out is recorded as " +
-        "filtered out, not empty."
+        "Evening briefings read today's mail like the morning one: mail awaiting a closer " +
+        "look, pending commitment suggestions and a short worth-knowing roundup. Mail all " +
+        "left out is recorded as filtered out."
     },
     {
       id: "briefings.ai_writing",
