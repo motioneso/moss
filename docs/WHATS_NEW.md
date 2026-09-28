@@ -38,6 +38,10 @@ feature that is not present in the image you are running.
 - **Morning briefing shows the right email and tasks.** The morning briefing now mentions email that may need you, suggested commitments and worth-knowing updates, and lists only tasks you finished since the last briefing instead of every task you ever completed. [PR #2768](https://github.com/motioneso/moss/pull/2768)
 - **Evening briefing no longer repeats itself on Today.** The evening view on Today now shows each part of your evening briefing once, in the section it belongs to, instead of repeating the whole briefing three times. [PR #2762](https://github.com/motioneso/moss/pull/2762)
 
+#### Changed
+
+- **Fuller morning briefing.** Your morning briefing now walks through the day's events in order with their times and places, includes today's forecast, and says plainly what to prepare. [PR #2773](https://github.com/motioneso/moss/pull/2773)
+
 ### 2026-09-27
 
 #### Fixed
