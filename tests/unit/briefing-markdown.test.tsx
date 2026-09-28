@@ -26,6 +26,16 @@ describe("briefing plain text", () => {
     );
   });
 
+  it("keeps the sentence split for an older report whose short opening goes straight to a heading", () => {
+    for (const heading of ["## Tasks", "**Tasks**"]) {
+      const split = splitHeadline(
+        `A busy day. Finish the proposal before lunch.\n\n${heading}\nMore.`
+      );
+      expect(split.headline).toBe("A busy day.");
+      expect(morningReportLead(split.rest)).toBe("Finish the proposal before lunch.");
+    }
+  });
+
   it("strips inline marks without touching ordinary punctuation", () => {
     expect(plainBriefingText("Reply to **Alex** about the *contract* and `v2`.")).toBe(
       "Reply to Alex about the contract and v2."

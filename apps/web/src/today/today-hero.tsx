@@ -25,11 +25,19 @@ export function splitHeadline(text: string): { readonly headline: string; readon
 function splitFirstSentence(text: string): { readonly headline: string; readonly rest: string } {
   // The morning writer puts the whole headline on its own short first line, which may hold
   // two sentences ("A clear morning. A full afternoon.") or an abbreviation. A long first
-  // line is a lead paragraph from an older report, so it keeps the sentence split.
+  // line is a lead paragraph from an older report, and so is a short first paragraph followed
+  // straight by a heading, because the new layout always puts a lead before the first heading.
   const ownLine = text.trim().match(/^([^\n]+)\r?\n\s*\n([\s\S]*)$/);
   const firstLine = ownLine?.[1]?.trim() ?? "";
-  if (ownLine && firstLine.length <= 140 && !/^#{1,6}\s/.test(firstLine)) {
-    return { headline: firstLine, rest: (ownLine[2] ?? "").trim() };
+  const rest = (ownLine?.[2] ?? "").trim();
+  if (
+    ownLine &&
+    firstLine.length <= 140 &&
+    !/^#{1,6}\s/.test(firstLine) &&
+    rest !== "" &&
+    !/^(#{1,6}\s|\*\*[^*\n]+\*\*\s*(\n|$))/.test(rest)
+  ) {
+    return { headline: firstLine, rest };
   }
   const match = text.match(/^(.*?[.!?])(\s+|$)([\s\S]*)$/);
   if (match) return { headline: (match[1] ?? "").trim(), rest: (match[3] ?? "").trim() };

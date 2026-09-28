@@ -5,6 +5,11 @@ import type { ToolExecute } from "@moss/module-sdk";
 import type { WeatherTodayDto } from "@moss/shared";
 
 import { composeBriefing, type ComposeDeps } from "../../packages/briefings/src/compose.js";
+import {
+  calendarTodaySection,
+  gatherWeatherSection
+} from "../../packages/briefings/src/morning-day.js";
+import type { BriefingGap } from "../../packages/briefings/src/compose-shared.js";
 import { definition, fakeScopedDb, makeFakeDeps, runInput } from "./briefings-compose.harness.js";
 
 // FIXED_NOW is 2026-06-13T12:00Z and the harness definition runs in UTC.
@@ -109,6 +114,48 @@ describe("morning briefing prose inputs (#2766)", () => {
     // Events reached the prompt, so the calendar is not reported as empty.
     const gaps = (result.sourceMetadata as { gaps: { source: string; reason: string }[] }).gaps;
     expect(gaps).not.toContainEqual({ source: "calendar", reason: "empty" });
+  });
+
+  it("keeps all-day events on their calendar date west of UTC, including multi-day ones", () => {
+    // 2026-06-13 09:00 in Los Angeles. All-day events are stored as UTC midnights.
+    const now = new Date("2026-06-13T16:00:00.000Z");
+    const allDay = (id: string, start: string, end: string) => ({
+      id,
+      title: id,
+      startsAt: `${start}T00:00:00.000Z`,
+      endsAt: `${end}T00:00:00.000Z`,
+      allDay: true,
+      location: null
+    });
+    const section = calendarTodaySection(
+      [
+        allDay("Today holiday", "2026-06-13", "2026-06-14"),
+        allDay("Tomorrow holiday", "2026-06-14", "2026-06-15"),
+        allDay("Conference", "2026-06-12", "2026-06-15"),
+        allDay("Ended trip", "2026-06-10", "2026-06-13")
+      ],
+      now,
+      "America/Los_Angeles"
+    );
+    expect(section.lines).toEqual(["All day · Conference", "All day · Today holiday"]);
+  });
+
+  it("records a gap and carries on when the weather read never answers", async () => {
+    const gaps: BriefingGap[] = [];
+    const deps = morningDeps(
+      { prompt: "", budget: undefined },
+      { weatherToday: () => new Promise(() => undefined) }
+    );
+    const section = await gatherWeatherSection(
+      definition({ selected_tool_names: [] }),
+      runInput,
+      deps,
+      "UTC",
+      gaps,
+      20
+    );
+    expect(section.lines).toEqual([]);
+    expect(gaps).toContainEqual({ source: "weather", reason: "tool_failed" });
   });
 
   it("gives the writer today's forecast with conditions, high and low", async () => {
