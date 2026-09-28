@@ -29,12 +29,67 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-28
+
+#### Fixed
+
+- **Cleaner morning briefing text.** The morning briefing no longer shows stray "Headline:" and "Lead:" labels, and the full briefing now opens with a clear lead paragraph followed by lighter, easier-to-scan sections. [PR #2769](https://github.com/motioneso/moss/pull/2769)
+- **Evening briefing mentions your email again.** The evening briefing now covers email that arrived today, including mail that may need you, suggested commitments and worth-knowing updates, instead of always saying there was no email. [PR #2772](https://github.com/motioneso/moss/pull/2772)
+- **Morning briefing shows the right email and tasks.** The morning briefing now mentions email that may need you, suggested commitments and worth-knowing updates, and lists only tasks you finished since the last briefing instead of every task you ever completed. [PR #2768](https://github.com/motioneso/moss/pull/2768)
+- **Evening briefing no longer repeats itself on Today.** The evening view on Today now shows each part of your evening briefing once, in the section it belongs to, instead of repeating the whole briefing three times. [PR #2762](https://github.com/motioneso/moss/pull/2762)
+
+### 2026-09-27
+
+#### Fixed
+
+- **Wrapped Tonight rows align with the section edge.** The first game on each row of the Sports Tonight list now lines up with the rest instead of sitting indented behind a stray divider line. [PR #2754](https://github.com/motioneso/moss/pull/2754)
+- **News no longer repeats one story across outlets.** The news area on the Today screen no longer shows the exact same story more than once when several outlets carry it. [PR #2750](https://github.com/motioneso/moss/pull/2750)
+- **The full morning briefing is properly formatted.** Headings, emphasis and lists in the morning briefing now display as formatting instead of stray symbols. [PR #2741](https://github.com/motioneso/moss/pull/2741)
+- **Chat shows action results after a slow start.** Chat now shows what it did, and asks for approvals, even when chat finished setting up after the page opened. [PR #2740](https://github.com/motioneso/moss/pull/2740)
+
+#### Changed
+
+- **Morning report names what each source added.** The full morning briefing lists each source with its time and what it contributed to the report. [PR #2756](https://github.com/motioneso/moss/pull/2756)
+- **Live game cards show the quarter, period, or inning.** A followed team's card that shows a live score now also shows where the game is (like "Q3 4:12"), and the card is the same height as when it shows the team's next game. [PR #2755](https://github.com/motioneso/moss/pull/2755)
+- **Needs You includes at-risk tasks.** Today now groups overdue and at-risk tasks under Needs You and includes them in the count. [PR #2719](https://github.com/motioneso/moss/pull/2719)
+- **A clearer full morning briefing.** The full morning briefing explains the day in more detail while Today stays focused on actions. [PR #2726](https://github.com/motioneso/moss/pull/2726)
+
+#### Added
+
+- **First-meeting card shows real preparation time.** Today's first-meeting card now tells you about a real preparation block before the meeting, when one exists, and links straight to that meeting instead of just the calendar. [PR #2758](https://github.com/motioneso/moss/pull/2758)
+- **Open time and breaks in the day's schedule.** The Today page's schedule now shows the gaps between your task blocks and appointments — a short break, or open time — and tells you when the day's commitments are done. [PR #2751](https://github.com/motioneso/moss/pull/2751)
+
+### 2026-09-26
+
+#### Fixed
+
+- **Persona preview hint for free-text personas.** The Assistant settings preview now invites you to press Preview to hear how your assistant actually sounds, instead of showing a made-up sample or an old one after you make changes. [PR #2725](https://github.com/motioneso/moss/pull/2725)
+- **Assistant response preview works with connected agents.** Preview response now shows a real answer when your assistant uses a connected command-line agent. [PR #2739](https://github.com/motioneso/moss/pull/2739)
+- **AI chats use selected provider.** Chats now use the AI assistant selected by an administrator. [PR #2727](https://github.com/motioneso/moss/pull/2727)
+- **Removing this device fully turns off its push notifications.** Removing the device you are using from notification settings now also asks that browser to cancel its push registration, and turning notifications back on afterwards no longer leaves a duplicate device behind. [PR #2723](https://github.com/motioneso/moss/pull/2723)
+- **Standings say when they could not be updated.** When the latest standings cannot be fetched, the standings area now says so instead of looking empty or out of date without explanation. [PR #2722](https://github.com/motioneso/moss/pull/2722)
+- **Use newly available Codex models.** Codex chat can use newer models offered after refreshing the model list without requiring a new sign-in or installation. [PR #2721](https://github.com/motioneso/moss/pull/2721)
+- **Old assistant activity history cleared out again.** Old assistant activity history is now cleared out on schedule again, instead of piling up forever. [PR #2724](https://github.com/motioneso/moss/pull/2724)
+- **Clearer morning briefing recovery.** The morning briefing now explains when email may be behind, what informed the report when no evening plan was available, and when a retry needs attention. [PR #2711](https://github.com/motioneso/moss/pull/2711)
+- **YOLO approvals for Codex tools.** Codex command requests now honor your active YOLO setting while retaining blocked-path checks. [PR #2718](https://github.com/motioneso/moss/pull/2718)
+- **Newer Codex models.** Moss can now show newer models available through your Codex account. [PR #2716](https://github.com/motioneso/moss/pull/2716)
+
+#### Added
+
+- **Refresh stale email before the morning briefing.** When email has not synced in over a day, you can refresh it and see a new morning briefing once syncing completes. [PR #2715](https://github.com/motioneso/moss/pull/2715)
+
 ### 2026-09-25
 
 #### Fixed
 
+- **Clearer Today follow-up count.** Today’s follow-up count now includes visible loose ends, and email catch-up appears as a short informational summary. [PR #2710](https://github.com/motioneso/moss/pull/2710)
+- **Keep the morning briefing open when today's plan is unavailable.** Your morning briefing stays open when today's task plan is unavailable, with a clear message. [PR #2704](https://github.com/motioneso/moss/pull/2704)
 - **Codex works for everyone once an administrator connects it.** When an administrator connects Codex, everyone on the same Moss instance can now chat and run background tasks with it, without signing in themselves. [PR #2694](https://github.com/motioneso/moss/pull/2694)
 - **Background AI tasks sign in reliably for every user.** Background tasks such as email sorting now sign in to Claude correctly for each person on a shared Moss instance. [PR #2693](https://github.com/motioneso/moss/pull/2693)
+
+#### Changed
+
+- **More control over tomorrow.** Moss previews placement edits before you save and uses your day-capacity choice to plan more or fewer task blocks. [PR #2712](https://github.com/motioneso/moss/pull/2712)
 
 ### 2026-09-24
 
