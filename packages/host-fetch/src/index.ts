@@ -56,6 +56,10 @@ export interface HostPinnedFetchOptions {
     hostname: string
   ) => Promise<readonly { readonly address: string; readonly family: 4 | 6 }[]>;
   readonly request?: (request: PinnedRequest, signal: AbortSignal) => Promise<PinnedResponse>;
+  /** Replaces the OS lookup behind the default resolver. Answers are cached and shared. */
+  readonly lookup?: (
+    hostname: string
+  ) => Promise<readonly { readonly address: string; readonly family: 4 | 6 }[]>;
   readonly timeoutMs?: number;
   readonly maxRequestBytes?: number;
   readonly maxResponseBytes?: number;
@@ -163,7 +167,9 @@ export function createHostPinnedFetch(
     return createInjectedFetch(allowedHosts, options, legacyTimeoutMs ?? 15_000);
   }
   const allowed = new Set(allowedHosts);
-  const resolve = options.resolve ?? defaultResolve;
+  const resolve =
+    options.resolve ??
+    (options.lookup ? createCachingResolver(options.lookup) : sharedCachingResolver);
   const request = options.request ?? defaultRequest;
 
   return (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -392,11 +398,46 @@ function isBlocked(address: string, family: 4 | 6): boolean {
   return BLOCKED.check(address, family === 4 ? "ipv4" : "ipv6");
 }
 
-async function defaultResolve(hostname: string) {
-  return lookup(hostname, { all: true, verbatim: true }) as Promise<
-    { address: string; family: 4 | 6 }[]
-  >;
+type ResolvedAnswers = readonly { readonly address: string; readonly family: 4 | 6 }[];
+
+// A page load fans out into dozens of outbound fetches, and each one used to run its own DNS
+// lookup. Behind a slow resolver (Docker's embedded DNS answers ~100 ms each, one at a time) 100
+// concurrent lookups take ~10 s, so every fetch hit its own timeout before it could connect
+// (prod sports outage, 2026-09-28). Concurrent lookups for one host now share a single query and
+// a successful answer is reused for DNS_CACHE_TTL_MS. Failures are never cached. Blocked-address
+// checks still run on every fetch, cached or not.
+const DNS_CACHE_TTL_MS = 30_000;
+
+export function createCachingResolver(
+  lookupFn: (hostname: string) => Promise<ResolvedAnswers>,
+  ttlMs: number = DNS_CACHE_TTL_MS,
+  now: () => number = Date.now
+): (hostname: string) => Promise<ResolvedAnswers> {
+  const cached = new Map<string, { answers: ResolvedAnswers; expiresAt: number }>();
+  const inFlight = new Map<string, Promise<ResolvedAnswers>>();
+  return (hostname) => {
+    const hit = cached.get(hostname);
+    if (hit && hit.expiresAt > now()) return Promise.resolve(hit.answers);
+    const pending = inFlight.get(hostname);
+    if (pending) return pending;
+    const query = lookupFn(hostname)
+      .then((raw) => {
+        const answers = Object.freeze(raw.map((answer) => Object.freeze({ ...answer })));
+        const at = now();
+        for (const [host, entry] of cached) if (entry.expiresAt <= at) cached.delete(host);
+        cached.set(hostname, { answers, expiresAt: at + ttlMs });
+        return answers;
+      })
+      .finally(() => inFlight.delete(hostname));
+    inFlight.set(hostname, query);
+    return query;
+  };
 }
+
+const sharedCachingResolver = createCachingResolver(
+  (hostname) =>
+    lookup(hostname, { all: true, verbatim: true }) as Promise<{ address: string; family: 4 | 6 }[]>
+);
 
 function defaultRequest(input: PinnedRequest, signal: AbortSignal): Promise<PinnedResponse> {
   return new Promise((resolve, reject) => {
