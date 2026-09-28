@@ -23,6 +23,7 @@ import {
   selectActionRowsRun
 } from "../../apps/web/src/today/evening-mode.js";
 import { TodayPage } from "../../apps/web/src/today/today-page.js";
+import { EVENING_OPEN_LOOPS_EMPTY } from "../../apps/web/src/today/today-labels.js";
 
 const locale: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -306,6 +307,28 @@ describe("TodayPage evening mode", () => {
     expect(html).not.toContain("The dentist call moved again.");
     expect(html).not.toContain("##");
     expect(html).not.toContain("**");
+  });
+
+  it("lets the report's own empty-day lines replace the built-in empty lines", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          createdAt: "2026-06-30T02:15:00.000Z",
+          summaryText:
+            "A quiet day. Nothing moved.\n\nWhat got done\nNothing formally completed today.\n\nCarrying forward\nNo open items rolling forward."
+        })
+      ],
+      tasks: [],
+      events: []
+    });
+
+    expect(html).toContain("Nothing formally completed today.");
+    expect(html).toContain("No open items rolling forward.");
+    expect(html).not.toContain("No completed tasks logged today.");
+    expect(html).not.toContain(EVENING_OPEN_LOOPS_EMPTY);
   });
 
   it("falls back to the carrying-forward copy without run text", () => {

@@ -229,7 +229,11 @@ function EveningRecapSection(props: {
       ) : (
         <>
           {prose !== "" ? <p className="ev-recap__intro">{prose}</p> : null}
-          <EveningRecapRows tasks={props.completedToday} onOpenTask={props.onOpenTask} />
+          <EveningRecapRows
+            tasks={props.completedToday}
+            hideEmpty={prose !== ""}
+            onOpenTask={props.onOpenTask}
+          />
         </>
       )}
     </section>
@@ -238,12 +242,15 @@ function EveningRecapSection(props: {
 
 /** Completed-today rows: checkmark, bold title and the task's own description
     as a one-line sub-line. A task without one keeps an empty sub-line of the
-    same height so the row geometry holds. */
+    same height so the row geometry holds. The empty line is hidden when the
+    report's own recap prose already says the day. */
 function EveningRecapRows(props: {
   readonly tasks: readonly TaskDto[];
+  readonly hideEmpty: boolean;
   readonly onOpenTask?: (taskId: string) => void;
 }) {
   if (props.tasks.length === 0) {
+    if (props.hideEmpty) return null;
     return <p className="cmd-empty">No completed tasks logged today.</p>;
   }
   return (
@@ -299,9 +306,9 @@ export function EveningSupportSections(props: {
             </button>
           ))}
         </div>
-      ) : (
+      ) : props.openLoopsDek === null ? (
         <p className="ev-loops__dek">{EVENING_OPEN_LOOPS_EMPTY}</p>
-      )}
+      ) : null}
     </section>
   );
 }
