@@ -243,12 +243,13 @@ export function buildMorningEmailLines(args: {
 }): MorningEmailLines {
   const signalLines = args.signals.map((s) => sanitizeExternal(s.summary)).filter(Boolean);
   const named = new Set(args.signals.flatMap((s) => s.messageIds));
-  const awaitingLines = args.items
+  const allAwaiting = args.items
     .filter((item) => item.awaitingJudgement === true && !named.has(String(item.id)))
     .map((item) =>
       [sanitizeExternal(item.sender), sanitizeExternal(item.subject)].filter(Boolean).join(" · ")
     )
-    .filter(Boolean)
+    .filter(Boolean);
+  const awaitingLines = allAwaiting
     .slice(0, AWAITING_EMAIL_CAP)
     .map((line) => `[may need you] ${line}`);
   const worthKnowingLines = args.items
@@ -265,7 +266,8 @@ export function buildMorningEmailLines(args: {
   ]);
   return {
     lines,
-    truncated,
+    // Mail past the awaiting cap is dropped too, so it counts as truncation.
+    truncated: truncated || allAwaiting.length > AWAITING_EMAIL_CAP,
     breakdown: {
       signals: signalLines.length,
       awaitingJudgement: awaitingLines.length,

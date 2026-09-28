@@ -12,7 +12,6 @@ import {
   buildExternalModulesSection,
   ctxFor,
   gatherToolSection,
-  isActionableTriage,
   readEmailSignalSettings,
   recordSourceAuthGap,
   sourceContextMetaFor,
@@ -36,6 +35,12 @@ import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveEmailSignals } from "./signals.js";
 import { renderExternalBlock, sanitizeExternal, TRUST_BOUNDARY } from "./trust-boundary.js";
 import { buildEmailCatchUp, filterEmailItems, gatherActionRows } from "./action-rows.js";
+import {
+  buildMorningEmailLines,
+  gatherCommitmentSuggestions,
+  isBriefingEmailItem,
+  settleJudgedEmail
+} from "./morning-inputs.js";
 
 // ── Evening trusted literals (#316: PURE LITERALS — no external value ever) ────
 // The six section headers are embedded VERBATIM from EVENING_SECTION_HEADERS
@@ -299,10 +304,10 @@ export async function composeEveningBriefing(
           metaKeys: ["accounts", "gaps"],
           // Authoritative user-tz "arrived today" bound.
           localDayField: "receivedAt",
-          // Actionable triage only (#729 §7): noise/fyi/unknown never become prompt lines,
+          // Kept mail only (#729 §7, #2770): noise/fyi/unknown never become prompt lines,
           // and the allow-list is sender · subject · actionability · summary-or-snippet.
           format: (m) =>
-            isActionableTriage(m)
+            isBriefingEmailItem(m)
               ? [
                   sanitizeExternal(m.sender),
                   sanitizeExternal(m.subject),
@@ -329,26 +334,48 @@ export async function composeEveningBriefing(
   ].some((account) => account.source === "cache");
   const emailSettings = await readEmailSignalSettings(scopedDb, deps);
   const context = contextTokens(tasksReconciliation.lines, commitments.lines);
+  const proseEmailItems = includeEmail
+    ? await settleJudgedEmail(
+        [scopedDb, definition, input, deps],
+        filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs),
+        now,
+        timeZone
+      )
+    : [];
   const emailSignals = includeEmail
     ? deriveEmailSignals({
-        // Same triage filter as the prompt lines: noise/fyi/unknown never seed signals.
-        items: filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs).filter(
-          isActionableTriage
-        ),
+        // Same filter as the prompt lines: noise/fyi/unknown never seed signals.
+        items: proseEmailItems.filter(isBriefingEmailItem),
         now,
         context,
         settings: emailSettings
       })
     : [];
   const emailSelected = definition.selected_tool_names.includes("email.listVisibleMessages");
-  if (includeEmail && emailSelected && emailSignals.length === 0) {
-    gaps.push({ source: "email_today", reason: "empty" });
+  const commitmentSuggestions =
+    includeEmail && emailSelected
+      ? await gatherCommitmentSuggestions([scopedDb, definition, input, deps], gaps, now, timeZone)
+      : [];
+  const emailLines = buildMorningEmailLines({
+    signals: emailSignals.slice(0, SECTION_ITEM_CAP),
+    items: proseEmailItems,
+    suggestionLines: commitmentSuggestions
+  });
+  if (includeEmail && emailSelected && emailLines.lines.length === 0) {
+    // Mail arrived but none of it was kept is a different gap from no mail at all.
+    const fetched = (rawEmail.rawItems?.length ?? 0) > 0;
+    gaps.push({ source: "email_today", reason: fetched ? "filtered_out" : "empty" });
+  } else if (
+    emailLines.truncated &&
+    !gaps.some((gap) => gap.source === "email_today" && gap.reason === "truncated")
+  ) {
+    gaps.push({ source: "email_today", reason: "truncated" });
   }
   const emailToday: Section = {
     key: "email_today",
     label: "EMAIL ARRIVED TODAY",
-    lines: emailSignals.slice(0, SECTION_ITEM_CAP).map((s) => sanitizeExternal(s.summary)),
-    count: emailSignals.length,
+    lines: emailLines.lines,
+    count: emailLines.lines.length,
     rawItems: rawEmail.rawItems
   };
   const catchUp = includeEmail
@@ -477,6 +504,7 @@ export async function composeEveningBriefing(
     tomorrowEventCount: tomorrowItems.length,
     emailSignalCount: emailSignals.length,
     emailSignals,
+    emailKept: emailLines.breakdown,
     goalCount: goals.count,
     sportsCount: sports.count,
     chatTurnCount: chats.count,
