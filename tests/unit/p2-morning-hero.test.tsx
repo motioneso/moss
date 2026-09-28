@@ -50,7 +50,63 @@ const baseInput = {
   onOpenReader: () => {}
 };
 
+describe("splitHeadline writer labels", () => {
+  it.each([
+    ["Headline: A clear morning.\n\nLead: Room for lunch.", "A clear morning.", "Room for lunch."],
+    [
+      "**Headline:** A clear morning.\n\n**Lead:** Room for lunch.",
+      "A clear morning.",
+      "Room for lunch."
+    ],
+    [
+      "**HEADLINE**: A clear morning. lead: Room for lunch.",
+      "A clear morning.",
+      "lead: Room for lunch."
+    ],
+    [
+      "headline:\nA clear morning.\n\n__Lead__\nRoom for lunch.",
+      "A clear morning.",
+      "Room for lunch."
+    ]
+  ])("strips the label from %j", (text, headline, rest) => {
+    expect(splitHeadline(text)).toEqual({ headline, rest });
+  });
+
+  it("keeps a sentence that only mentions a lead", () => {
+    expect(splitHeadline("Lead with the budget. Then the hires.")).toEqual({
+      headline: "Lead with the budget.",
+      rest: "Then the hires."
+    });
+  });
+});
+
 describe("buildTodayHeroContent — morning (day) mode", () => {
+  it("never shows writer labels in the hero headline or summary", () => {
+    const run = morningRun({
+      summaryText: "**Headline:** A clear morning.\n\nLead: Room for lunch before the review."
+    });
+    const content = buildTodayHeroContent({
+      ...baseInput,
+      morningRun: run,
+      morningSplit: splitHeadline(run.summaryText),
+      morningFreshness: null
+    });
+    const markup = renderToStaticMarkup(
+      <TodayHero
+        mode="day"
+        eyebrow="Good morning"
+        headline={content.headline}
+        summary={content.summary}
+        preparedAt={content.preparedAt}
+        readerControl={content.readerControl}
+        weather={<div>weather</div>}
+      />
+    );
+    expect(markup).toContain("A clear morning.");
+    expect(markup).toContain("Room for lunch before the review.");
+    expect(markup).not.toMatch(/headline\s*:|lead\s*:/i);
+  });
+
   it("populated: headline is the split first sentence, body is the rest, prepared time is real, reader control is present", () => {
     const run = morningRun();
     const split = splitHeadline(run.summaryText);

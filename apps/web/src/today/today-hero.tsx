@@ -18,8 +18,19 @@ import {
     generated summaries carry no sentence punctuation, so a first line without
     a terminator falls back to the line break. */
 export function splitHeadline(text: string): { readonly headline: string; readonly rest: string } {
-  const split = splitFirstSentence(text);
+  const split = splitFirstSentence(stripWriterLabels(text).trim());
   return { headline: plainBriefingText(split.headline), rest: split.rest };
+}
+
+const LABEL_LINE =
+  /^[ \t]*(?:#{1,6}[ \t]+)?(?:\*\*|__)?(?:headline|lead)(?:\*\*|__)?[ \t]*:?[ \t]*(?:\*\*|__)?[ \t]*(?:\r?\n|$)/gim;
+const LABEL_PREFIX =
+  /^([ \t]*)(?:\*\*|__)?(?:headline|lead)[ \t]*(?:(?:\*\*|__)[ \t]*:|:[ \t]*(?:\*\*|__)?)[ \t]*/gim;
+
+/** Writers sometimes label the headline and lead ("Headline:", "**Lead:**").
+    Drop a label that opens a line, or a line holding only the label. */
+export function stripWriterLabels(text: string): string {
+  return text.replace(LABEL_LINE, "").replace(LABEL_PREFIX, "$1");
 }
 
 function splitFirstSentence(text: string): { readonly headline: string; readonly rest: string } {

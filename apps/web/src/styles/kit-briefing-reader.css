@@ -523,12 +523,23 @@
 .brief-reader__sections .jds-brief__body + .jds-brief__body {
   margin-top: 12px;
 }
+
+/* Report prose: a full-ink lead paragraph, then smaller muted body copy. */
+.brief-reader:has([data-briefing-surface]) .brief-reader__sections > .jds-brief__body,
 .brief-reader__list {
-  margin: 8px 0 0;
-  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+.brief-reader:has([data-briefing-surface]) .brief-reader__sections > .jds-brief__body:first-child {
+  margin-bottom: 16px;
   font-size: 16px;
   line-height: 1.6;
   color: var(--text);
+}
+.brief-reader__list {
+  margin: 8px 0 0;
+  padding-left: 20px;
 }
 /* News and Sports: forest rule, eyebrow, headline, photo, prose, text link. */
 .brief-reader__editorial {
@@ -810,8 +821,16 @@ button.brief-snapshot__main:focus-visible {
     line-height: 1.15;
     letter-spacing: -0.6px;
   }
-  .brief-reader:has([data-briefing-surface]) .jds-brief__body,
+  .brief-reader:has([data-briefing-surface]) .jds-brief__body {
+    font-size: 14px;
+  }
+  .brief-reader:has([data-briefing-surface]) .brief-reader__sections > .jds-brief__body,
   .brief-reader__list {
+    font-size: 12px;
+  }
+  .brief-reader:has([data-briefing-surface])
+    .brief-reader__sections
+    > .jds-brief__body:first-child {
     font-size: 14px;
   }
   .brief-reader__callout {
