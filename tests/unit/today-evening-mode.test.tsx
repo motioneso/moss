@@ -23,6 +23,7 @@ import {
   selectActionRowsRun
 } from "../../apps/web/src/today/evening-mode.js";
 import { TodayPage } from "../../apps/web/src/today/today-page.js";
+import { EVENING_OPEN_LOOPS_EMPTY } from "../../apps/web/src/today/today-labels.js";
 
 const locale: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -260,7 +261,7 @@ describe("TodayPage evening mode", () => {
     expect(body).toContain("Merge the hotfix");
   });
 
-  it("feeds the open loops from the evening run remainder", () => {
+  it("shows each part of the evening report once, in its own slot", () => {
     const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
     const html = renderToday({
       now: new Date("2026-06-30T02:30:00.000Z"),
@@ -268,7 +269,13 @@ describe("TodayPage evening mode", () => {
       runs: [
         briefingRun({
           createdAt: "2026-06-30T02:15:00.000Z",
-          summaryText: "Wrapped the launch notes. One decision is still open."
+          summaryText: [
+            "Wrapped the launch notes. **Tomorrow** has room.",
+            "## What got done\nThe launch prep paid off.\n\n- Ship release note",
+            "## What slipped\nThe dentist call moved again.",
+            "## Carrying forward\nOne decision is still open.\n- Reply to Alex",
+            "## Tomorrow\nOne morning appointment."
+          ].join("\n\n")
         })
       ],
       tasks: [
@@ -280,11 +287,75 @@ describe("TodayPage evening mode", () => {
       ],
       events: []
     });
-    const body = html.slice(html.indexOf('<div class="cmd-wrap">'));
+    const wrapAt = html.indexOf('<div class="cmd-wrap">');
+    const hero = html.slice(0, wrapAt);
+    const recapAt = html.indexOf('id="evening-recap"');
+    const loopsAt = html.indexOf('id="evening-open-loops"');
+    const recap = html.slice(recapAt, loopsAt);
+    const loops = html.slice(loopsAt);
+    const count = (text: string) => html.split(text).length - 1;
 
-    expect(body).toContain("Close the open loops");
-    expect(body).toContain("One decision is still open.");
-    expect(body).toContain("Reply to Alex");
+    expect(recapAt).toBeGreaterThan(wrapAt);
+    expect(loopsAt).toBeGreaterThan(recapAt);
+    expect(hero).toContain("Tomorrow has room.");
+    expect(recap).toContain("The launch prep paid off.");
+    expect(loops).toContain("Close the open loops");
+    expect(loops).toContain("One decision is still open.");
+    expect(loops).toContain("Reply to Alex");
+    for (const text of [
+      "Tomorrow has room.",
+      "The launch prep paid off.",
+      "One decision is still open."
+    ]) {
+      expect(count(text)).toBe(1);
+    }
+    expect(html).not.toContain("The dentist call moved again.");
+    expect(html).not.toContain("##");
+    expect(html).not.toContain("**");
+  });
+
+  it("keeps the hero's links and prepared line for a report without a verdict", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          createdAt: "2026-06-30T02:15:00.000Z",
+          summaryText: "What got done\nThe launch prep paid off."
+        })
+      ],
+      tasks: [],
+      events: []
+    });
+    const hero = html.slice(0, html.indexOf('<div class="cmd-wrap">'));
+
+    expect(hero).toContain("Read the full evening briefing");
+    expect(hero).toContain("Prepared at");
+    expect(hero).not.toContain("What got done");
+    expect(html).toContain("The launch prep paid off.");
+  });
+
+  it("lets the report's own empty-day lines replace the built-in empty lines", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          createdAt: "2026-06-30T02:15:00.000Z",
+          summaryText:
+            "A quiet day. Nothing moved.\n\nWhat got done\nNothing formally completed today.\n\nCarrying forward\nNo open items rolling forward."
+        })
+      ],
+      tasks: [],
+      events: []
+    });
+
+    expect(html).toContain("Nothing formally completed today.");
+    expect(html).toContain("No open items rolling forward.");
+    expect(html).not.toContain("No completed tasks logged today.");
+    expect(html).not.toContain(EVENING_OPEN_LOOPS_EMPTY);
   });
 
   it("falls back to the carrying-forward copy without run text", () => {

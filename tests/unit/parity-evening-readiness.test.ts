@@ -29,4 +29,13 @@ describe("visual parity evening readiness", () => {
       body: "A single evening sentence"
     });
   });
+
+  it("compares the hero body with the verdict, not the report's sections", async () => {
+    await expect(
+      assertEveningRenderedContract(
+        "Done today. Tomorrow has **room**.\n\n## What got done\nThe proposal went out.",
+        { heading: "Done today.", body: "Tomorrow has room." }
+      )
+    ).resolves.toEqual({ headline: "Done today.", body: "Tomorrow has room." });
+  });
 });
