@@ -1338,6 +1338,7 @@ function buildNewsStoryFeedbackPort(
 }
 
 import { buildCalendarFollowThroughPort } from "./calendar-follow-through-port.js";
+import { buildBriefingWeatherPort } from "./briefing-weather-port.js";
 
 export {
   buildCalendarFollowThroughPort,
@@ -2263,6 +2264,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             createCliStructuredAdapter: createCliStructuredAdapterFactory()
           }),
           calendarFollowThrough: buildCalendarFollowThroughPort(),
+          // The morning report reads today's forecast through the weather module's public
+          // service. A background run has no request address, so location falls back from the
+          // saved preference to the time-zone city.
+          ...(briefingsLogger
+            ? {
+                weatherToday: buildBriefingWeatherPort(
+                  dependencies.dataContext,
+                  createModuleLogger(briefingsLogger, "weather"),
+                  dependencies.fetchFn
+                )
+              }
+            : {}),
           // #1282: injected by apps/worker (external discovery + runtime live only there —
           // J2). NOT read off `moduleManifests` above, which getBuiltInModuleManifests()
           // populates and which therefore matches zero external modules forever (J1).

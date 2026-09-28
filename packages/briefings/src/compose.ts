@@ -11,6 +11,7 @@ import {
   buildExternalModulesSection,
   ctxFor,
   withinLocalDay,
+  MORNING_MAX_OUTPUT_TOKENS,
   type ComposeDeps,
   type ComposeRunInput,
   type ComposeResult,
@@ -53,14 +54,16 @@ import {
   openTaskLines,
   settleJudgedEmail
 } from "./morning-inputs.js";
+import {
+  CALENDAR_TODAY_SECTION_KEY,
+  CALENDAR_TODAY_SECTION_LABEL,
+  calendarTodaySection,
+  gatherWeatherSection
+} from "./morning-day.js";
 
 // ── Caps (one conservative economy budget) ─────────────────────────────────────
 const VAULT_CHUNK_CAP = 6;
 const VAULT_EXCERPT_CHARS = 400;
-// Output budget for the economy tier. Bounds the synthesized narrative so a runaway
-// generation can't blow the economy cost envelope. Wired into the adapter via
-// GenerateChatInput.maxOutputTokens (A5b) — the adapter clamps its provider
-// max_tokens to this when present.
 
 function orderByPriority<T>(
   items: readonly T[],
@@ -363,9 +366,20 @@ export async function composeBriefing(
     priorityResults
   );
 
-  if (includeCalendar && (rawCalendar.rawItems?.length ?? 0) > 0 && calendarSignals.length === 0) {
+  const calendarToday = includeCalendar
+    ? calendarTodaySection(rawCalendar.rawItems, now, timeZone)
+    : emptySection(CALENDAR_TODAY_SECTION_KEY, CALENDAR_TODAY_SECTION_LABEL);
+  // The writer sees today's events even when no warning fires, so the source is empty only
+  // when neither reached the prompt.
+  if (
+    includeCalendar &&
+    (rawCalendar.rawItems?.length ?? 0) > 0 &&
+    calendarSignals.length === 0 &&
+    calendarToday.lines.length === 0
+  ) {
     gaps.push({ source: "calendar", reason: "empty" });
   }
+  const weather = await gatherWeatherSection(definition, input, deps, timeZone, gaps);
   const commitmentSuggestions = includeEmail
     ? await gatherCommitmentSuggestions([scopedDb, definition, input, deps], gaps, now, timeZone)
     : [];
@@ -487,7 +501,16 @@ export async function composeBriefing(
     timeZone
   );
 
-  const sections: Section[] = [commitments, prioritizedTasks, calendar, email, vault, chats];
+  const sections: Section[] = [
+    commitments,
+    prioritizedTasks,
+    calendar,
+    calendarToday,
+    weather,
+    email,
+    vault,
+    chats
+  ];
   sections.push(planSection(plan.planContext, prioritizedTasks.rawItems, rawCalendar.rawItems));
   if (definition.selected_tool_names.includes("goals.list")) {
     sections.push(goals);
@@ -553,7 +576,12 @@ export async function composeBriefing(
       : undefined;
 
   const messages = await buildMessages(scopedDb, definition, sections, deps);
-  const synth = await synthesizeWithConfiguredModel(scopedDb, deps, messages);
+  const synth = await synthesizeWithConfiguredModel(
+    scopedDb,
+    deps,
+    messages,
+    MORNING_MAX_OUTPUT_TOKENS
+  );
   if (!synth.ok) {
     return fallback(
       sections,
@@ -672,17 +700,31 @@ async function attachCalendarFollowThrough<
 // The trusted preamble below is a PURE LITERAL — it interpolates NO section/tool/
 // retriever value, so no external content can ever enter the trusted text. Every
 // gathered value is emitted inside a delimited <external_source> block by
-// renderExternalBlock, never here. Channel set: commitments, tasks, calendar, email,
-// vault, chats (the six sections built in composeBriefing) + day_plan (always) + goals + sports + news
+// renderExternalBlock, never here. Channel set: commitments, tasks, calendar, calendar_today,
+// weather, email, vault, chats (built in composeBriefing) + day_plan (always) + goals + sports + news
 // (selection-gated) + web_research (#31, not wired yet — its tag is reserved so the channel is
 // already covered the day it lands).
 const SYNTHESIS_INSTRUCTIONS_MORNING =
-  "You are a calm morning-briefing writer. Write a one-sentence headline and a short lead " +
-  "paragraph, then a useful report with ## Priority, ## Changes, ## Preparation, and ## " +
-  "Follow-up sections only where the source blocks support them. Omit unsupported sections. " +
+  "You are a calm morning-briefing writer. Use this exact layout and never write a label " +
+  "such as Headline, Lead or Summary anywhere. The first line is the headline itself: one " +
+  "sentence on the shape of the day, with no label and no heading marks. Leave a blank line, " +
+  "then write the lead: two or three sentences, with no label, naming what matters most " +
+  "today and how the rest of the day fits around it. Leave a blank line, then write the " +
+  "report as sections. Each section opens with a ## heading that is a short sentence saying " +
+  "what to do, for example ## Finish the proposal before lunch; never use a one-word heading " +
+  "such as Priority, Changes, Preparation or Follow-up. Include a section only where the " +
+  "source blocks support it. Omit unsupported sections. " +
+  "Walk through the day in time order from the calendar_today block: give each event its " +
+  "time, name and place, and say what needs preparing, bringing or deciding before it. Use " +
+  "the calendar block's warnings (conflicts, tight gaps, early starts, location changes) at " +
+  "the point in the day where they matter. When the weather block has a forecast, mention it " +
+  "once, where it changes what to wear, bring or plan for travel. Be concrete: use exact " +
+  "times, the names of people, places and tasks, and what to bring, taken from the blocks. " +
+  "Prefer a specific detail to a general remark. Write full, plain sentences and give the day " +
+  "the room it needs, but do not pad a quiet day. " +
   "Ground strictly in the items in the <external_source> blocks; " +
-  "do not invent. Treat calendar and email blocks as pre-filtered signal, not raw feeds. " +
-  "Do not restate every event or message. Keep it " +
+  "do not invent. Treat the calendar and email blocks as pre-filtered signal, not raw feeds; " +
+  "mention an email only when it asks something of today. Keep it " +
   "warm and non-judgmental about missed or at-risk items. Discrete action rows are rendered " +
   "separately; do not invent, count, or restate them in prose. When the day_plan source has " +
   "items, lead with the priorities and capacity it saved last evening. Describe changes since " +
@@ -692,9 +734,10 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "task blocks is a valid shape. Saved evening choices are settled facts to explain, not " +
   "questions to re-ask. Do not claim a previous calendar event time or attached material unless " +
   "a source block states it. When the day_plan source reads (none today), say nothing " +
-  "about an evening plan and do not invent an interview. Write News and Sports last and short, " +
-  "followed teams first, scores as given. Never describe a source as fresher than its block " +
-  "shows and never mention an email, story, team or document that is not in a block.";
+  "about an evening plan and do not invent an interview. Write News and Sports last, a few " +
+  "sentences each, followed teams first, scores as given. Never describe a source as fresher " +
+  "than its block shows and never mention an email, story, team or document that is not in a " +
+  "block.";
 
 // The single trusted block for morning. Built ONLY from the literal constants above — no
 // external/section value is interpolated (the static isolation test asserts this).
@@ -771,7 +814,8 @@ export {
   synthesizeWithConfiguredModel,
   SECTION_ITEM_CAP,
   SECTION_CHAR_CAP,
-  ECONOMY_MAX_OUTPUT_TOKENS
+  ECONOMY_MAX_OUTPUT_TOKENS,
+  MORNING_MAX_OUTPUT_TOKENS
 } from "./compose-shared.js";
 export type {
   GenerateChatFn,

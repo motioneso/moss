@@ -11,6 +11,13 @@ export interface WeatherForecastDayDto {
   readonly low: number;
 }
 
+/** Today's whole-day outlook, from the same forecast call as the current reading. */
+export interface WeatherTodayOutlookDto {
+  readonly condition: string;
+  readonly high: number;
+  readonly low: number;
+}
+
 export interface WeatherTodayDto {
   readonly temp: number;
   readonly feelsLike: number;
@@ -24,6 +31,7 @@ export interface WeatherTodayDto {
   readonly lat: number;
   readonly lon: number;
   readonly forecast: readonly WeatherForecastDayDto[];
+  readonly today?: WeatherTodayOutlookDto;
 }
 
 export interface GetWeatherTodayResponse {
@@ -93,7 +101,17 @@ const weatherTodaySchema = {
     windSpeed: { type: "number" },
     lat: { type: "number" },
     lon: { type: "number" },
-    forecast: { type: "array", items: weatherForecastDaySchema }
+    forecast: { type: "array", items: weatherForecastDaySchema },
+    today: {
+      type: "object",
+      additionalProperties: false,
+      required: ["condition", "high", "low"],
+      properties: {
+        condition: { type: "string" },
+        high: { type: "number" },
+        low: { type: "number" }
+      }
+    }
   }
 } as const;
 
