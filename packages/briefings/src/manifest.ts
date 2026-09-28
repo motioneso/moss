@@ -214,6 +214,14 @@ export const briefingsModuleManifest = {
         "suggestions and a short worth-knowing roundup."
     },
     {
+      id: "briefings.evening_email",
+      description:
+        "Evening briefings read the mail that arrived today the same way the morning one " +
+        "does: mail still awaiting a closer look, pending commitment suggestions and a short " +
+        "worth-knowing roundup. Mail that arrived but was all left out is recorded as " +
+        "filtered out, not empty."
+    },
+    {
       id: "briefings.ai_writing",
       description:
         "Briefings are written by the summarization model chosen in the admin AI settings, " +
