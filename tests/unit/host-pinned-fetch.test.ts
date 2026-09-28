@@ -328,3 +328,55 @@ describe("host-pinned fetch transport", () => {
     expect(resolveCalls).toBe(2);
   });
 });
+
+describe("host-pinned fetch DNS lookups", () => {
+  function okRequest() {
+    return async () => ({
+      status: 200,
+      headers: {},
+      body: (async function* () {
+        yield Buffer.from("{}");
+      })()
+    });
+  }
+
+  it("shares one lookup across concurrent fetches to the same host", async () => {
+    let lookups = 0;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      lookup: async () => {
+        lookups += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return [{ address: "93.184.216.34", family: 4 }];
+      },
+      request: okRequest()
+    });
+
+    const responses = await Promise.all(
+      Array.from({ length: 25 }, (_, i) => fetchFn(`https://api.example.com/d/${i}`))
+    );
+
+    expect(responses.every((response) => response.status === 200)).toBe(true);
+    expect(lookups).toBe(1);
+  });
+
+  it("does not cache a failed lookup and still blocks private answers", async () => {
+    let lookups = 0;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      lookup: async () => {
+        lookups += 1;
+        if (lookups === 1) throw new Error("ESERVFAIL");
+        return [{ address: "10.0.0.1", family: 4 }];
+      },
+      request: okRequest()
+    });
+
+    await expect(fetchFn("https://api.example.com/a")).rejects.toThrow("ESERVFAIL");
+    await expect(fetchFn("https://api.example.com/a")).rejects.toMatchObject({
+      code: "blocked_address"
+    });
+    await expect(fetchFn("https://api.example.com/a")).rejects.toMatchObject({
+      code: "blocked_address"
+    });
+    expect(lookups).toBe(2);
+  });
+});
