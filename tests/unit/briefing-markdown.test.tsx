@@ -13,6 +13,29 @@ describe("briefing plain text", () => {
     expect(splitHeadline("## A calm day.\n\nLead.").headline).toBe("A calm day.");
   });
 
+  it("keeps a two-sentence headline whole when it sits on its own first line (#2766)", () => {
+    const text =
+      "A clear morning. A full afternoon.\n\nThe proposal matters most. Start it early.\n\n" +
+      "## Bring the notes to the 1:00 PM review\nDetails.";
+    const split = splitHeadline(text);
+    expect(split.headline).toBe("A clear morning. A full afternoon.");
+    expect(morningReportLead(split.rest)).toBe("The proposal matters most. Start it early.");
+
+    expect(splitHeadline("Dentist at 8:30 a.m. then a quiet day\n\nLead.").headline).toBe(
+      "Dentist at 8:30 a.m. then a quiet day"
+    );
+  });
+
+  it("keeps the sentence split for an older report whose short opening goes straight to a heading", () => {
+    for (const heading of ["## Tasks", "**Tasks**"]) {
+      const split = splitHeadline(
+        `A busy day. Finish the proposal before lunch.\n\n${heading}\nMore.`
+      );
+      expect(split.headline).toBe("A busy day.");
+      expect(morningReportLead(split.rest)).toBe("Finish the proposal before lunch.");
+    }
+  });
+
   it("strips inline marks without touching ordinary punctuation", () => {
     expect(plainBriefingText("Reply to **Alex** about the *contract* and `v2`.")).toBe(
       "Reply to Alex about the contract and v2."

@@ -63,7 +63,8 @@ describe("fetchOpenMeteoForecast", () => {
         { date: "2026-08-26", icon: "cloud-rain", high: 19, low: 12 },
         { date: "2026-08-27", icon: "cloud", high: 21, low: 11 },
         { date: "2026-08-28", icon: "cloud-snow", high: 15, low: 8 }
-      ]
+      ],
+      today: { condition: "Clear sky", high: 24, low: 14 }
     });
   });
 });

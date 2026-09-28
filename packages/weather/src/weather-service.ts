@@ -45,9 +45,13 @@ export class WeatherService {
     this.fetchFn = deps.fetchFn ?? fetch;
   }
 
+  /**
+   * A null request address skips IP geolocation, so a background caller falls back from the
+   * stored location straight to the time-zone city.
+   */
   async getWeatherForUser(
     accessContext: AccessContext,
-    requestIp: string,
+    requestIp: string | null,
     timeZone: string
   ): Promise<WeatherTodayDto | null> {
     const userId = accessContext.actorUserId;
@@ -90,7 +94,7 @@ export class WeatherService {
 
   private async resolveLocation(
     accessContext: AccessContext,
-    requestIp: string,
+    requestIp: string | null,
     timeZone: string
   ): Promise<ResolvedLocation | null> {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
@@ -108,10 +112,13 @@ export class WeatherService {
     }
 
     // Fall back to IP geo (cached by IP, not by user)
-    let geo = this.geoCache.get(requestIp);
-    if (geo === undefined) {
-      geo = await geocodeIp(requestIp, this.fetchFn);
-      this.geoCache.set(requestIp, geo, GEO_CACHE_TTL_MS);
+    let geo: WeatherLocationDto | null | undefined = null;
+    if (requestIp !== null) {
+      geo = this.geoCache.get(requestIp);
+      if (geo === undefined) {
+        geo = await geocodeIp(requestIp, this.fetchFn);
+        this.geoCache.set(requestIp, geo, GEO_CACHE_TTL_MS);
+      }
     }
     if (geo) {
       this.logger.info({ step: "ip-geo" }, "weather location resolved");

@@ -19,7 +19,8 @@ import {
   parseCalendarAutomationMode,
   normalizePersonaSettings,
   renderPersonaText,
-  type DayPlanDto
+  type DayPlanDto,
+  type WeatherTodayDto
 } from "@moss/shared";
 import type { BriefingContribution, ExternalBriefingInvoker } from "./external-contributions.js";
 import { withToolSavepoint } from "./savepoint.js";
@@ -30,6 +31,9 @@ export type GenerateChatFn = (input: GenerateChatInput) => Promise<{ readonly te
 export const SECTION_ITEM_CAP = 8;
 export const SECTION_CHAR_CAP = 1200;
 export const ECONOMY_MAX_OUTPUT_TOKENS = 1024;
+
+// The morning report walks the whole day with concrete details, so it gets a larger budget.
+export const MORNING_MAX_OUTPUT_TOKENS = 2000;
 export interface ComposeDeps {
   readonly moduleManifests: readonly MossModuleManifest[];
   readonly aiRepository: AiRepository;
@@ -85,6 +89,14 @@ export interface ComposeDeps {
       input: { readonly localDay: string; readonly timeZone: string }
     ): Promise<DayPlanDto | undefined>;
   };
+  /**
+   * Injected by the composition root; today's forecast through the weather module's public
+   * service. Structural, so briefings never imports weather. Null means no location resolved.
+   */
+  readonly weatherToday?: (
+    ctx: { readonly actorUserId: string; readonly requestId: string },
+    timeZone: string
+  ) => Promise<WeatherTodayDto | null>;
   readonly calendarFollowThrough?: {
     executeAutoActions(args: {
       readonly scopedDb: DataContextDb;
@@ -617,7 +629,8 @@ const BRIEFINGS_SERVICE_KEY = "module.briefings" as const;
 export async function synthesizeWithConfiguredModel(
   scopedDb: DataContextDb,
   deps: ComposeDeps,
-  messages: ChatTurn[]
+  messages: ChatTurn[],
+  maxOutputTokens: number = ECONOMY_MAX_OUTPUT_TOKENS
 ): Promise<
   | { ok: true; text: string; model: { id: string; display_name: string; tier: string } }
   | { ok: false; reason: SynthesisFailureReason }
@@ -638,7 +651,7 @@ export async function synthesizeWithConfiguredModel(
         service: BRIEFINGS_SERVICE_KEY,
         model,
         messages,
-        maxOutputTokens: ECONOMY_MAX_OUTPUT_TOKENS,
+        maxOutputTokens,
         signal: AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS),
         priority: "background"
       },

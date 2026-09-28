@@ -31,14 +31,14 @@ describe("composeBriefing — gathering", () => {
     const result = await composeBriefing(fakeScopedDb, definition(), runInput, deps);
     expect(result.summaryText).toBe("synth narrative");
     expect(result.status).toBe("succeeded");
-    // economy envelope: compose passes a bounded output budget (F9).
-    expect(capturedBudget).toBe(1024);
+    // Morning passes its own bounded output budget (F9, #2766).
+    expect(capturedBudget).toBe(2000);
     // Use the raw user-turn content (not JSON.stringify) so the quoted type attribute is
     // matched exactly when asserting the delimited block order.
     const prompt = (capturedMessages[0] as readonly { content: string }[])[0]!.content;
     // The trusted preamble is always emitted and wraps the synthesis instructions.
     expect(prompt).toContain("<trusted_instructions>");
-    expect(prompt).toContain("## Preparation");
+    expect(prompt).toContain("a short sentence saying what to do");
     expect(prompt).toContain("Omit unsupported sections");
     expect(prompt).toContain("Do not claim a previous calendar event time or attached material");
     // order: commitments < tasks < calendar < email < vault < chats — each channel is a
@@ -683,12 +683,12 @@ describe("composeBriefing — prompt boundary-forgery (escaped inert data)", () 
       expect(capturedMessages).toHaveLength(1);
       const prompt = (capturedMessages[0] as readonly { content: string }[])[0]!.content;
 
-      // (a) No forged structural boundary: exactly one trusted pair, seven external pairs
-      // (the six base sections plus the always-present day_plan block).
+      // (a) No forged structural boundary: one trusted pair, nine external pairs (six base
+      // sections plus the always-present calendar_today, weather and day_plan blocks).
       expect(prompt.match(/<trusted_instructions>/g) ?? []).toHaveLength(1);
       expect(prompt.match(/<\/trusted_instructions>/g) ?? []).toHaveLength(1);
-      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
-      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(7);
+      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(9);
+      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(9);
 
       // (b) The canary never reaches the trusted preamble.
       const trustedMatch = prompt.match(/<trusted_instructions>([\s\S]*?)<\/trusted_instructions>/);
