@@ -178,12 +178,16 @@ function installFetch() {
 
 const liveRoots: ReturnType<typeof createRoot>[] = [];
 
-function Harness(props: { plan: DayPlanDto; seen: (controller: DayPlanReviewController) => void }) {
+function Harness(props: {
+  plan: DayPlanDto;
+  morningDefinitionId?: string | null;
+  seen: (controller: DayPlanReviewController) => void;
+}) {
   const controller = useDayPlanReview({
     plan: props.plan,
     localDay: DAY,
     timeZone: TZ,
-    morningDefinitionId: null
+    morningDefinitionId: props.morningDefinitionId ?? null
   });
   useEffect(() => {
     props.seen(controller);
@@ -191,9 +195,13 @@ function Harness(props: { plan: DayPlanDto; seen: (controller: DayPlanReviewCont
   return null;
 }
 
-async function mountHook(plan: DayPlanDto): Promise<{ current: () => DayPlanReviewController }> {
+async function mountHook(
+  plan: DayPlanDto,
+  options: { morningDefinitionId?: string; client?: QueryClient } = {}
+): Promise<{ current: () => DayPlanReviewController }> {
   let latest: DayPlanReviewController | null = null;
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client =
+    options.client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -205,6 +213,7 @@ async function mountHook(plan: DayPlanDto): Promise<{ current: () => DayPlanRevi
         { client },
         createElement(Harness, {
           plan,
+          morningDefinitionId: options.morningDefinitionId,
           seen: (c) => {
             latest = c;
           }
@@ -270,6 +279,20 @@ describe("useDayPlanReview saveChanges", () => {
     expect(order("/preview")).toBeLessThan(order("/apply"));
     expect(calls.some((call) => call.url.endsWith("/confirm"))).toBe(false);
     expect(current().outcomes["b2"]?.outcome).toBe("applied");
+  });
+
+  it("refreshes the morning briefing run detail after a save", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const { current } = await mountHook(plan(), { morningDefinitionId: "def-1", client });
+    await act(async () => {
+      current().setPlacement("b2", "move", "2026-09-10T22:00:00.000Z");
+    });
+    await act(async () => {
+      expect(await current().saveChanges()).toBe(true);
+    });
+    const keys = invalidate.mock.calls.map((call) => call[0]?.queryKey);
+    expect(keys).toContainEqual(["briefings", "run", "def-1"]);
   });
 
   it("leaves conflicted rows unapplied with their choices kept", async () => {

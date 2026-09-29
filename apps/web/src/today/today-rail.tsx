@@ -1,21 +1,12 @@
-import { CalendarDays, CheckCircle2, Clock, Target } from "lucide-react";
-
 import type { BriefingRunDto, LocaleSettingsDto } from "@moss/shared";
-import { AgendaRow, Card, StatTile } from "@moss/ui";
-
 import type { CalendarEventDto, TaskDto } from "@moss/shared";
 
 import { EveningReviewSection, EveningTomorrowSection, type TodayMode } from "./evening-mode.js";
 import { TodayQuickActions } from "./today-quick-actions.js";
 import type { ColorMode } from "../theme/color-mode.js";
 import { ampm, timeLabel } from "./today-labels.js";
-
-export interface RailAgendaRow {
-  readonly id: string;
-  readonly time: string;
-  readonly title: string;
-  readonly location: string | null;
-}
+import type { ChangedBriefingBlock } from "./briefing-callout.js";
+import { SinceLastNight } from "./since-last-night.js";
 
 export interface RailNextEvent {
   readonly id: string;
@@ -61,12 +52,7 @@ export interface TodayRailProps {
   readonly nextEvent: RailNextEvent | null;
   readonly precedingEvents: readonly CalendarEventDto[];
   readonly nextStarted: boolean;
-  readonly hasStatSignal: boolean;
-  readonly prioritiesCount: number;
-  readonly atRiskCount: number;
-  readonly eventsCount: number;
-  readonly doneToday: number;
-  readonly agenda: readonly RailAgendaRow[];
+  readonly changedSinceLastNight: readonly ChangedBriefingBlock[];
   readonly onNavigate: (path: string) => void;
   readonly showEveningReview: boolean;
   readonly showEveningPrep: boolean;
@@ -120,8 +106,8 @@ function meetingNote(event: RailNextEvent): string {
   return event.location ? `${length} · ${event.location}` : length;
 }
 
-/** Today right rail. Day: the next meeting, then glance, agenda and the
-    evening review. Evening: tomorrow and the planning actions. Quick actions
+/** Today right rail. Day: the next meeting, what moved since last night and
+    the evening review. Evening: tomorrow and the planning actions. Quick actions
     live in TodayDock in both modes. Props only, no fetching. */
 export function TodayRail(props: TodayRailProps) {
   const { nextEvent } = props;
@@ -176,58 +162,7 @@ export function TodayRail(props: TodayRailProps) {
           </div>
         ) : null}
 
-        {props.hasStatSignal ? (
-          <div className="cmd-glance">
-            <div className="cmd-glance__title">At a glance</div>
-            <div className="cmd-glance__grid">
-              <StatTile
-                label="Priorities"
-                value={props.prioritiesCount}
-                icon={<Target size={12} aria-hidden="true" />}
-                onClick={() => props.onNavigate("/tasks?focus=priorities")}
-              />
-              <StatTile
-                label="At risk"
-                value={props.atRiskCount}
-                warn={props.atRiskCount > 0}
-                icon={<Clock size={12} aria-hidden="true" />}
-                onClick={() => props.onNavigate("/tasks?focus=atrisk")}
-              />
-              <StatTile
-                label="Events"
-                value={props.eventsCount}
-                icon={<CalendarDays size={12} aria-hidden="true" />}
-                onClick={() => props.onNavigate("/calendar")}
-              />
-              <StatTile
-                label="Done today"
-                value={props.doneToday}
-                icon={<CheckCircle2 size={12} aria-hidden="true" />}
-                onClick={() => props.onNavigate("/tasks?focus=donetoday")}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        <Card title="Today's agenda" meta={`${props.agenda.length} left`} padding="sm">
-          {props.agenda.length > 0 ? (
-            <div>
-              {props.agenda.map((event, index) => (
-                <AgendaRow
-                  key={event.id}
-                  time={event.time}
-                  title={event.title}
-                  location={event.location}
-                  status={index === 0 ? "now" : "default"}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="agenda-clear" role="status">
-              Nothing left on the calendar today. <b>Enjoy the evening.</b>
-            </div>
-          )}
-        </Card>
+        <SinceLastNight changed={props.changedSinceLastNight} locale={props.locale} />
 
         {props.showEveningReview ? (
           <EveningReviewSection

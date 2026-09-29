@@ -123,3 +123,5 @@ blocking	apps/web/src/chat/**	tests/uat/specs/workshop-chat-handover.uat.spec.ts
 # #2742: open-time/break rows and the closing line between Today's schedule blocks.
 blocking	apps/web/src/today/day-plan-gaps.ts	tests/uat/specs/2742-today-open-time-gaps.uat.spec.ts
 blocking	apps/web/src/today/today-timeline.tsx	tests/uat/specs/2742-today-open-time-gaps.uat.spec.ts
+blocking	apps/web/src/today/since-last-night.tsx	tests/uat/specs/2783-today-morning-side-column.uat.spec.ts
+blocking	apps/web/src/today/today-rail.tsx	tests/uat/specs/2783-today-morning-side-column.uat.spec.ts
