@@ -32,4 +32,12 @@ describe("preparedAtLabel", () => {
   it("matches in the reader for a 24-hour setting too (same label everywhere)", () => {
     expect(preparedAtLabel("2026-09-28T08:00:00Z", locale("24"))).toBe("Prepared at 8:00 am");
   });
+
+  it("does not append an English am/pm to a non-English afternoon time", () => {
+    for (const region of ["es-ES", "ja-JP"]) {
+      const label = preparedAtLabel("2026-09-28T16:03:00Z", { ...locale("12"), region });
+      expect(label).toMatch(/^Prepared at /);
+      expect(label).not.toMatch(/\bam$/);
+    }
+  });
 });

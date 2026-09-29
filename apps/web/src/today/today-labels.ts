@@ -148,9 +148,12 @@ export function ampm(iso: string, locale: LocaleSettingsDto): string {
   return /pm$/i.test(formatTime(iso, locale, { hour: "numeric", hour12: true })) ? "pm" : "am";
 }
 
-/** "Prepared at 8:00 am" — the 12-hour clock with am/pm, shared by the hero and the reader. */
+/** "Prepared at 8:00 am" for English regions. Other regions keep their own localized
+    12-hour text (day period included), since am/pm is an English convention. */
 export function preparedAtLabel(iso: string, locale: LocaleSettingsDto): string {
-  return `Prepared at ${timeLabel(iso, locale)} ${ampm(iso, locale)}`;
+  const english = /^en(-|$)/i.test(locale.region);
+  if (english) return `Prepared at ${timeLabel(iso, locale)} ${ampm(iso, locale)}`;
+  return `Prepared at ${formatTime(iso, locale, { hour: "numeric", minute: "2-digit", hour12: true })}`;
 }
 
 export function durationLabel(event: CalendarEventDto): string {
