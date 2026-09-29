@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Morning Today shows where your next errand is.** The morning Today page now adds a short note naming a later event today that has a place, with its time, and shows nothing when no event has one. [PR #2801](https://github.com/motioneso/moss/pull/2801)
 - **News note on Today.** The news section on your Today page now has a short "Your news, in context" note under the smaller stories. [PR #2798](https://github.com/motioneso/moss/pull/2798)
 
 #### Changed
