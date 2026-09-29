@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Notes on finished items and tomorrow's plan.** Your evening recap now shows a short note under each finished task, and the plan for tomorrow points out real free time and tucks away task blocks already on your calendar. [PR #2802](https://github.com/motioneso/moss/pull/2802)
 - **Morning Today shows where your next errand is.** The morning Today page now adds a short note naming a later event today that has a place, with its time, and shows nothing when no event has one. [PR #2801](https://github.com/motioneso/moss/pull/2801)
 - **News note on Today.** The news section on your Today page now has a short "Your news, in context" note under the smaller stories. [PR #2798](https://github.com/motioneso/moss/pull/2798)
 
