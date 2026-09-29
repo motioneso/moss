@@ -86,8 +86,12 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
       queryKeys.calendar.list,
       queryKeys.tasks.list
     ];
-    if (input.morningDefinitionId !== null)
+    if (input.morningDefinitionId !== null) {
       keys.push(queryKeys.briefings.runs(input.morningDefinitionId));
+      // Prefix match: refreshes every run detail, which holds the plan the
+      // Since last night section compares against.
+      keys.push(["briefings", "run", input.morningDefinitionId]);
+    }
     for (const key of keys) void queryClient.invalidateQueries({ queryKey: key });
   }, [input.localDay, input.timeZone, input.morningDefinitionId, queryClient]);
 

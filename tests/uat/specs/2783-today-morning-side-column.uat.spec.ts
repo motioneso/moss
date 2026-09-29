@@ -161,5 +161,7 @@ test("morning side column shows Since last night only after a block moves", asyn
   await page.goto("/today");
   await expect(sideColumn).toContainText("Since last night");
   await expect(sideColumn).toContainText("11:30");
+  // The move is an unaccepted draft, so it must read as proposed, not as set.
+  await expect(sideColumn).toContainText("proposed");
   await sideColumn.screenshot({ path: "test-results/2783-side-column-moved.png" });
 });
