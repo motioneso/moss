@@ -311,6 +311,7 @@ export class EmailRepository {
    * historyId (read from external_metadata), and whether the row holds a finished verdict (see
    * hasFinishedVerdict). The handler skips the LLM pass only for an unchanged revision with a
    * finished verdict, so partial actionable triage and failed replies are retried.
+   * awaitingJudgement marks a hand-off to the thread judgement, which the sync asks for again.
    * RLS-scoped to the actor via the worker SELECT grant (0068); returns only this account's rows.
    */
   async listSyncMarkers(
@@ -321,6 +322,7 @@ export class EmailRepository {
       externalId: string;
       historyId: string | null;
       hasFinishedVerdict: boolean;
+      awaitingJudgement: boolean;
     }>
   > {
     assertDataContextDb(scopedDb);
@@ -332,7 +334,9 @@ export class EmailRepository {
     return rows.map((r) => ({
       externalId: r.external_id,
       historyId: (r.external_metadata as { historyId?: string | null } | null)?.historyId ?? null,
-      hasFinishedVerdict: hasFinishedVerdict(r.summary, r.signals)
+      hasFinishedVerdict: hasFinishedVerdict(r.summary, r.signals),
+      awaitingJudgement:
+        (r.signals as { pendingJudgement?: unknown } | null)?.pendingJudgement === true
     }));
   }
 

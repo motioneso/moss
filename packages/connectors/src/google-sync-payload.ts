@@ -19,6 +19,8 @@ const DEFERRED_REASONS = new Set<string>([
   "structured-output"
 ]);
 
+const SYNC_TRIGGERS = new Set<string>(["schedule", "manual", "assistant", "on-connect"]);
+
 export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuationPayload): void {
   if (payload.kind !== "google-sync-continuation") throw new Error("invalid continuation kind");
   if (
@@ -75,6 +77,9 @@ export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuat
   }
   if (payload.recentOnly !== undefined && typeof payload.recentOnly !== "boolean") {
     throw new Error("invalid continuation recent-only flag");
+  }
+  if (payload.trigger !== undefined && !SYNC_TRIGGERS.has(payload.trigger)) {
+    throw new Error("invalid continuation trigger");
   }
   if (
     payload.errors.length > GOOGLE_SYNC_ERROR_LABELS.size ||

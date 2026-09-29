@@ -105,6 +105,8 @@ export interface GoogleSyncContinuationPayload extends ActorScopedJobPayload {
   readonly errors: readonly string[];
   /** Set on a lineage that stops after the last day of mail and never walks the backlog. */
   readonly recentOnly?: boolean;
+  /** What started the lineage, restamped with its outcome. Absent on older queued jobs. */
+  readonly trigger?: ConnectorSyncTrigger;
 }
 
 export type GoogleSyncContinuationState = Omit<
@@ -291,14 +293,19 @@ export async function runGoogleSyncChunk(
     };
   }
 
+  // Chunks for one account take turns, so a root admitted during a running lineage cannot
+  // deadlock with it.
+  await connectorsRepo.lockAccountSync(scopedDb, account.id);
+
   const startedAt = continuation?.startedAt ?? now().toISOString();
   const recentOnly = continuation?.recentOnly ?? deps.recentOnly ?? false;
+  const trigger = continuation ? continuation.trigger : (deps.trigger ?? "manual");
 
   // Stamp the start of the run on the account row (health metadata only — never status).
   if (!continuation) {
     await connectorsRepo.markSyncStarted(scopedDb, account.id, {
       startedAt: new Date(startedAt),
-      trigger: deps.trigger ?? "manual"
+      trigger: trigger ?? "manual"
     });
   }
 
@@ -316,6 +323,7 @@ export async function runGoogleSyncChunk(
     try {
       await connectorsRepo.markSyncFinished(scopedDb, account.id, {
         startedAt: new Date(startedAt),
+        ...(trigger ? { trigger } : {}),
         finishedAt: now(),
         status: "failed",
         error: "auth-error",
@@ -416,7 +424,8 @@ export async function runGoogleSyncChunk(
       deferredKeys: [...deferredKeys],
       deferredReason,
       errors,
-      ...(recentOnly ? { recentOnly: true } : {})
+      ...(recentOnly ? { recentOnly: true } : {}),
+      ...(trigger ? { trigger } : {})
     }
   });
 
@@ -465,6 +474,7 @@ export async function runGoogleSyncChunk(
     // describes one run.
     await connectorsRepo.markSyncFinished(scopedDb, account.id, {
       startedAt: new Date(startedAt),
+      ...(trigger ? { trigger } : {}),
       finishedAt: now(),
       status,
       error: errors[0] ?? null,

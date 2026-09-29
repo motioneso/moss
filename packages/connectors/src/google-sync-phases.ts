@@ -284,6 +284,8 @@ export interface SavedEmailMarker {
   readonly historyId: string | null;
   /** A summary with complete triage, a junk verdict, or a hand-off to the thread judgement. */
   readonly hasFinishedVerdict: boolean;
+  /** Handed to the thread judgement, which may not have run yet. */
+  readonly awaitingJudgement?: boolean;
 }
 
 export interface SortFetchedEmailsInput {
@@ -303,13 +305,19 @@ export interface SortFetchedEmailsInput {
  * alone as "unchanged" and keep showing up in Today. Everything else keeps the old behaviour —
  * an unchanged message is not written at all, and a changed or new one is saved once with an
  * empty analysis and queued for the model in the order it was fetched.
+ *
+ * An unchanged hand-off returns its thread in rejudgeThreadRefs, once per thread, so the sync
+ * asks for the judgement again. The judgement skips a thread it already judged, so a repeat
+ * request is cheap, and a hand-off whose first request was lost still gets judged.
  */
 export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<{
   readonly pending: ParsedEmail[];
   readonly unchangedKeys: string[];
   readonly otpKeys: string[];
+  readonly rejudgeThreadRefs: string[];
 }> {
   const pending: ParsedEmail[] = [];
+  const rejudgeThreadRefs = new Set<string>();
   const unchangedKeys: string[] = [];
   const otpKeys: string[] = [];
   const fail = (error: unknown): void => {
@@ -336,6 +344,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
     }
     if (unchanged) {
       unchangedKeys.push(parsed.externalId);
+      if (prior?.awaitingJudgement) rejudgeThreadRefs.add(parsed.threadId ?? parsed.externalId);
       continue;
     }
     try {
@@ -351,7 +360,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
       right.receivedAt.localeCompare(left.receivedAt) ||
       left.externalId.localeCompare(right.externalId)
   );
-  return { pending, unchangedKeys, otpKeys };
+  return { pending, unchangedKeys, otpKeys, rejudgeThreadRefs: [...rejudgeThreadRefs] };
 }
 
 export interface EmailBatchExtractOptionsInput {
@@ -403,10 +412,9 @@ export interface PersistExtractedBatchInput {
 }
 
 /**
- * Save each gated result. A maybe_owed message first gets its thread judgement request (spec
- * 2026-09-04-email-chief-of-staff §3.2), and is saved only once that request is queued. The
- * queue collapses repeats per thread; only ids cross. Returns the ids that saved, for action
- * projection.
+ * Save each gated result, then (spec 2026-09-04-email-chief-of-staff §3.2) ask for a thread
+ * judgement on every maybe_owed message. The queue collapses repeats per thread; only ids cross.
+ * Returns the ids that saved, for action projection.
  */
 export async function persistExtractedBatch(input: PersistExtractedBatchInput): Promise<string[]> {
   const projectedKeys: string[] = [];
@@ -417,16 +425,14 @@ export async function persistExtractedBatch(input: PersistExtractedBatchInput): 
       if (extracted.escalated && input.progress.escalations !== undefined) {
         input.progress.escalations += 1;
       }
-      // Ask for the judgement before saving the verdict. A saved hand-off counts as finished and
-      // is never re-sent, so a failed request must leave the message open for the next sync.
+      await input.persistEmail(parsed, extracted);
+      projectedKeys.push(parsed.externalId);
       if (extracted.gate === "maybe_owed" && input.threadJudgementRequester && input.actorUserId) {
         await input.threadJudgementRequester.requestThreadJudgement(
           input.actorUserId,
           parsed.threadId ?? parsed.externalId
         );
       }
-      await input.persistEmail(parsed, extracted);
-      projectedKeys.push(parsed.externalId);
     } catch (error) {
       input.progress.emailFailures += 1;
       if (!input.progress.errors.includes("email-message-error")) {
@@ -436,6 +442,25 @@ export async function persistExtractedBatch(input: PersistExtractedBatchInput): 
     }
   }
   return projectedKeys;
+}
+
+/** Asks again for each unchanged hand-off's thread judgement. A failed request is only logged. */
+async function requestRejudgements(
+  context: PhaseContext,
+  threadRefs: readonly string[]
+): Promise<void> {
+  const { threadJudgementRequester, actorUserId } = context.deps;
+  if (!threadJudgementRequester || !actorUserId) return;
+  for (const threadRef of threadRefs) {
+    try {
+      await threadJudgementRequester.requestThreadJudgement(actorUserId, threadRef);
+    } catch (error) {
+      context.logger.warn(
+        { stage: "email-judgement-request", ...googleFailureFields(error) },
+        "google-sync thread judgement request failed"
+      );
+    }
+  }
 }
 
 export async function runGoogleEmailPhase(
@@ -546,7 +571,7 @@ export async function runGoogleEmailPhase(
         }
       }
     }
-    const { pending, unchangedKeys, otpKeys } = await sortFetchedEmails({
+    const { pending, unchangedKeys, otpKeys, rejudgeThreadRefs } = await sortFetchedEmails({
       parsedMessages,
       seen,
       persistEmail,
@@ -629,6 +654,7 @@ export async function runGoogleEmailPhase(
     }
     await projectKeys(unchangedKeys);
     await projectKeys(otpKeys);
+    await requestRejudgements(context, rejudgeThreadRefs);
   } catch (error) {
     if (error instanceof EmailExtractRetryableError) {
       if (!extractionScope) throw error;

@@ -122,6 +122,33 @@ describe("sortFetchedEmails", () => {
     expect(result.pending.map((message) => message.externalId)).toEqual(["failed"]);
   });
 
+  it("asks again for the judgement on each unchanged hand-off thread, once per thread (#2804)", async () => {
+    const result = await sortFetchedEmails({
+      parsedMessages: [
+        fixture({ externalId: "owed-a", threadId: "t-owed" }),
+        fixture({ externalId: "owed-b", threadId: "t-owed" }),
+        fixture({ externalId: "owed-solo", threadId: undefined }),
+        fixture({ externalId: "junk" })
+      ],
+      seen: new Map<string, SavedEmailMarker>([
+        ["owed-a", { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: true }],
+        ["owed-b", { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: true }],
+        [
+          "owed-solo",
+          { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: true }
+        ],
+        ["junk", { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: false }]
+      ]),
+      persistEmail: vi.fn<PersistEmail>(async () => {}),
+      progress: newProgress(),
+      onFailure: () => {}
+    });
+
+    expect(result.unchangedKeys).toEqual(["owed-a", "owed-b", "owed-solo", "junk"]);
+    expect(result.pending).toEqual([]);
+    expect(result.rejudgeThreadRefs).toEqual(["t-owed", "owed-solo"]);
+  });
+
   it("records one error label when saving fails", async () => {
     const persistEmail = vi.fn<PersistEmail>(async () => {
       throw new Error("save failed");
