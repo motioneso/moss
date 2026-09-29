@@ -60,7 +60,7 @@ function lineFor(source: string, lines: number): string | null {
     case "calendar_today":
       return countLine(lines, "event", "in today's timeline");
     case "calendar_tomorrow":
-      return countLine(lines, "event", "tomorrow");
+      return countLine(lines, "event", "tonight or tomorrow");
     case "tasks_reconciliation":
       return countLine(lines, "task", "reviewed");
     case "morning_plan":
@@ -81,7 +81,11 @@ function legacyLineFor(source: string, sourceMetadata: Record<string, unknown>):
     case "commitments":
       return countLine(countOf(sourceMetadata, "commitmentCount"), "commitment");
     case "calendar_tomorrow":
-      return countLine(countOf(sourceMetadata, "tomorrowEventCount"), "event", "tomorrow");
+      return countLine(
+        countOf(sourceMetadata, "tomorrowEventCount"),
+        "event",
+        "tonight or tomorrow"
+      );
     case "chats":
       return countLine(countOf(sourceMetadata, "chatTurnCount"), "turn", "from today's chats");
     case "vault":

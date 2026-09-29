@@ -169,10 +169,18 @@ describe("contributionFor on current runs", () => {
       sectionLines: { calendar_tomorrow: 2, tasks_reconciliation: 5, morning_plan: 1 },
       emailMessageCount: 4
     };
-    expect(contributionFor("calendar_tomorrow", md)).toBe("2 events tomorrow");
+    expect(contributionFor("calendar_tomorrow", md)).toBe("2 events tonight or tomorrow");
     expect(contributionFor("tasks_reconciliation", md)).toBe("5 tasks reviewed");
     expect(contributionFor("morning_plan", md)).toBe("1 item from this morning's plan");
     expect(contributionFor("email_today", md)).toBe("4 emails read");
+  });
+
+  it("does not call events later tonight tomorrow's", () => {
+    // The source keeps one event later tonight and one tomorrow (evening-lenses).
+    const md = { ...current, sectionLines: { calendar_tomorrow: 2 } };
+    expect(contributionFor("calendar_tomorrow", md)).toBe("2 events tonight or tomorrow");
+    const legacy = { ...current, sectionLines: undefined, tomorrowEventCount: 1 };
+    expect(contributionFor("calendar_tomorrow", legacy)).toBe("1 event tonight or tomorrow");
   });
 
   it("shows no line for empty, failed or unsaved evening sources", () => {

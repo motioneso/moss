@@ -11,7 +11,7 @@ const SOURCE_LABEL: Record<string, string> = {
   calendar: "Calendar",
   calendar_today: "Today's schedule",
   weather: "Weather",
-  calendar_tomorrow: "Tomorrow's schedule",
+  calendar_tomorrow: "Tonight and tomorrow",
   email_today: "Today's email",
   morning_plan: "This morning's plan",
   tasks_reconciliation: "Task review",

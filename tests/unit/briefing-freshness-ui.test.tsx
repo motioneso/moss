@@ -239,12 +239,12 @@ describe("evening source names", () => {
         }
       })
     );
-    for (const name of ["Task review", "Tomorrow&#x27;s schedule", "Today&#x27;s email"]) {
+    for (const name of ["Task review", "Tonight and tomorrow", "Today&#x27;s email"]) {
       expect(html).toContain(name);
     }
     expect(html).toContain("This morning&#x27;s plan");
     expect(html).toContain("3 tasks reviewed.");
-    expect(html).toContain("1 event tomorrow.");
+    expect(html).toContain("1 event tonight or tomorrow.");
     expect(html).toContain("5 emails read.");
     expect(html).toContain("2 items from this morning&#x27;s plan.");
     for (const raw of sources) expect(html).not.toContain(raw);
@@ -252,6 +252,7 @@ describe("evening source names", () => {
 
   it("uses plain names for gap notes", () => {
     expect(sourceLabel("calendar_today")).toBe("Today's schedule");
+    expect(sourceLabel("calendar_tomorrow")).toBe("Tonight and tomorrow");
     expect(sourceLabel("tasks_reconciliation")).toBe("Task review");
     expect(sourceLabel("commitments")).toBe("Commitments");
   });
