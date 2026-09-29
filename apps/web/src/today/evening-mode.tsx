@@ -346,33 +346,35 @@ export function EveningSupportSections(props: {
                     {moved[task.id]}
                   </span>
                 ) : null}
-                <div className="ev-loop__actions" hidden={moved[task.id] !== undefined}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => decide(task, { kind: "tomorrow" }, "Moved to tomorrow.")}
-                  >
-                    Tomorrow
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    aria-expanded={pickingId === task.id}
-                    onClick={() => {
-                      setPickedDate("");
-                      setPickingId(pickingId === task.id ? null : task.id);
-                    }}
-                  >
-                    Choose a day
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => decide(task, { kind: "drop" }, "Let go.")}
-                  >
-                    Let it go
-                  </button>
-                </div>
+                {moved[task.id] === undefined ? (
+                  <div className="ev-loop__actions">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => decide(task, { kind: "tomorrow" }, "Moved to tomorrow.")}
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-expanded={pickingId === task.id}
+                      onClick={() => {
+                        setPickedDate("");
+                        setPickingId(pickingId === task.id ? null : task.id);
+                      }}
+                    >
+                      Choose a day
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => decide(task, { kind: "drop" }, "Let go.")}
+                    >
+                      Let it go
+                    </button>
+                  </div>
+                ) : null}
                 {pickingId === task.id ? (
                   <div className="ev-loop__picker">
                     <input
