@@ -609,7 +609,7 @@ export function TodayPage(props: {
                     loopMutation.isPending ? (loopMutation.variables?.taskId ?? null) : null
                   }
                   onOpenTask={(id) => setDialog({ id })}
-                  onDecide={(taskId, decision) => loopMutation.mutate({ taskId, decision })}
+                  onDecide={(taskId, decision) => loopMutation.mutateAsync({ taskId, decision })}
                 />
               </>
             ) : null}

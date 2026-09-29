@@ -860,7 +860,7 @@
 .ev-loop__picker button {
   padding: 6px 12px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: none;
   color: inherit;
   font: inherit;
@@ -991,6 +991,12 @@ button.ev-tomorrow__item {
   .ev-recap__intro {
     font-size: 15px;
   }
+}
+.ev-loop__error {
+  display: block;
+  color: var(--danger-fg);
+  font-size: 12px;
+  font-weight: 600;
 }
 .ev-loop__moved {
   display: block;

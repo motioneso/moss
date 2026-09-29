@@ -312,14 +312,20 @@ export function EveningSupportSections(props: {
   readonly locale: LocaleSettingsDto;
   readonly busyTaskId: string | null;
   readonly onOpenTask: (taskId: string) => void;
-  readonly onDecide: (taskId: string, decision: EveningLoopDecision) => void;
+  readonly onDecide: (taskId: string, decision: EveningLoopDecision) => Promise<unknown>;
 }) {
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [pickedDate, setPickedDate] = useState("");
   const [moved, setMoved] = useState<Record<string, string>>({});
-  const decide = (task: TaskDto, decision: EveningLoopDecision, note: string) => {
-    setMoved((prev) => ({ ...prev, [task.id]: note }));
-    props.onDecide(task.id, decision);
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
+  const decide = async (task: TaskDto, decision: EveningLoopDecision, note: string) => {
+    setFailed((prev) => ({ ...prev, [task.id]: false }));
+    try {
+      await props.onDecide(task.id, decision);
+      setMoved((prev) => ({ ...prev, [task.id]: note }));
+    } catch {
+      setFailed((prev) => ({ ...prev, [task.id]: true }));
+    }
   };
   return (
     <section className="ev-study ev-loops" id="evening-open-loops">
@@ -346,12 +352,17 @@ export function EveningSupportSections(props: {
                     {moved[task.id]}
                   </span>
                 ) : null}
+                {failed[task.id] ? (
+                  <span className="ev-loop__error" role="status">
+                    Could not save that. Try again.
+                  </span>
+                ) : null}
                 {moved[task.id] === undefined ? (
                   <div className="ev-loop__actions">
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => decide(task, { kind: "tomorrow" }, "Moved to tomorrow.")}
+                      onClick={() => void decide(task, { kind: "tomorrow" }, "Moved to tomorrow.")}
                     >
                       Tomorrow
                     </button>
@@ -369,7 +380,7 @@ export function EveningSupportSections(props: {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => decide(task, { kind: "drop" }, "Let go.")}
+                      onClick={() => void decide(task, { kind: "drop" }, "Let go.")}
                     >
                       Let it go
                     </button>
@@ -387,7 +398,7 @@ export function EveningSupportSections(props: {
                       type="button"
                       disabled={busy || pickedDate === ""}
                       onClick={() => {
-                        decide(
+                        void decide(
                           task,
                           { kind: "date", date: pickedDate },
                           `Moved to ${formatDate(`${pickedDate}T12:00:00Z`, props.locale, { month: "short", day: "numeric", timeZone: "UTC" })}.`
