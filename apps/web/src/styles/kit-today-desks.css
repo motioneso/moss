@@ -71,6 +71,24 @@
 .jds-brief--news .desk-listcol {
   min-width: 0;
 }
+.jds-brief--news .nw-twnote {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.jds-brief--news .nw-twnote__eyebrow {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.jds-brief--news .nw-twnote__text {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
 .jds-brief--news .nw-twlead__title {
   font-family: var(--font-display);
   font-size: 23px;
