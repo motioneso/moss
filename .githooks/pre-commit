@@ -28,13 +28,16 @@ if [ "${#whole[@]}" -gt 0 ]; then
 fi
 
 # Check the staged content, not the working copy, since that is what gets committed.
+# Compare files byte for byte so trailing newlines count.
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
 unformatted=()
 for file in "${partial[@]}"; do
   info="$("$prettier" --file-info "$file")"
   [ "$(jq -r '.ignored == false and .inferredParser != null' <<<"$info")" = "true" ] || continue
-  staged_blob="$(git show ":$file")"
-  formatted="$("$prettier" --stdin-filepath "$file" <<<"$staged_blob")"
-  [ "$formatted" = "$staged_blob" ] || unformatted+=("$file")
+  git show ":$file" >"$scratch/staged"
+  "$prettier" --stdin-filepath "$file" <"$scratch/staged" >"$scratch/formatted"
+  cmp -s "$scratch/staged" "$scratch/formatted" || unformatted+=("$file")
 done
 
 if [ "${#unformatted[@]}" -gt 0 ]; then
