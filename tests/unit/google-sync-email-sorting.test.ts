@@ -69,7 +69,7 @@ describe("sortFetchedEmails", () => {
     const result = await sortFetchedEmails({
       parsedMessages: [signInCode],
       seen: new Map<string, SavedEmailMarker>([
-        ["otp-1", { historyId: "history-1", hasSummary: true, hasCompleteTriage: true }]
+        ["otp-1", { historyId: "history-1", hasFinishedVerdict: true }]
       ]),
       persistEmail,
       progress,
@@ -92,7 +92,7 @@ describe("sortFetchedEmails", () => {
     const result = await sortFetchedEmails({
       parsedMessages: [unchanged, older, newer],
       seen: new Map<string, SavedEmailMarker>([
-        ["a", { historyId: "history-1", hasSummary: true, hasCompleteTriage: true }]
+        ["a", { historyId: "history-1", hasFinishedVerdict: true }]
       ]),
       persistEmail,
       progress,
@@ -103,6 +103,23 @@ describe("sortFetchedEmails", () => {
     expect(result.pending.map((message) => message.externalId)).toEqual(["c", "b"]);
     expect(persistEmail).toHaveBeenCalledTimes(2);
     expect(progress.emailUpserted).toBe(2);
+  });
+
+  it("leaves an unchanged message with a finished verdict alone and retries the rest (#2804)", async () => {
+    const persistEmail = vi.fn<PersistEmail>(async () => {});
+    const result = await sortFetchedEmails({
+      parsedMessages: [fixture({ externalId: "junk" }), fixture({ externalId: "failed" })],
+      seen: new Map<string, SavedEmailMarker>([
+        ["junk", { historyId: "history-1", hasFinishedVerdict: true }],
+        ["failed", { historyId: "history-1", hasFinishedVerdict: false }]
+      ]),
+      persistEmail,
+      progress: newProgress(),
+      onFailure: () => {}
+    });
+
+    expect(result.unchangedKeys).toEqual(["junk"]);
+    expect(result.pending.map((message) => message.externalId)).toEqual(["failed"]);
   });
 
   it("records one error label when saving fails", async () => {

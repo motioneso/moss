@@ -73,6 +73,9 @@ export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuat
   ) {
     throw new Error("invalid continuation deferred reason");
   }
+  if (payload.recentOnly !== undefined && typeof payload.recentOnly !== "boolean") {
+    throw new Error("invalid continuation recent-only flag");
+  }
   if (
     payload.errors.length > GOOGLE_SYNC_ERROR_LABELS.size ||
     payload.errors.some((error) => !GOOGLE_SYNC_ERROR_LABELS.has(error))

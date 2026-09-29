@@ -282,8 +282,8 @@ export async function runGoogleCalendarPhase(context: PhaseContext): Promise<str
 /** What the sync already knows about a saved message, from the email store's sync markers. */
 export interface SavedEmailMarker {
   readonly historyId: string | null;
-  readonly hasSummary: boolean;
-  readonly hasCompleteTriage: boolean;
+  /** A summary with complete triage, a junk verdict, or a hand-off to the thread judgement. */
+  readonly hasFinishedVerdict: boolean;
 }
 
 export interface SortFetchedEmailsInput {
@@ -322,10 +322,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   for (const parsed of input.parsedMessages) {
     const prior = input.seen.get(parsed.externalId);
     const unchanged = Boolean(
-      parsed.historyId &&
-      prior?.historyId === parsed.historyId &&
-      prior.hasSummary &&
-      prior.hasCompleteTriage
+      parsed.historyId && prior?.historyId === parsed.historyId && prior.hasFinishedVerdict
     );
     if (looksLikeOneTimeCodeEmail(parsed)) {
       try {
@@ -406,9 +403,10 @@ export interface PersistExtractedBatchInput {
 }
 
 /**
- * Save each gated result, then (spec 2026-09-04-email-chief-of-staff §3.2) ask for a thread
- * judgement on every maybe_owed message. The queue collapses repeats per thread; only ids cross.
- * Returns the ids that saved, for action projection.
+ * Save each gated result. A maybe_owed message first gets its thread judgement request (spec
+ * 2026-09-04-email-chief-of-staff §3.2), and is saved only once that request is queued. The
+ * queue collapses repeats per thread; only ids cross. Returns the ids that saved, for action
+ * projection.
  */
 export async function persistExtractedBatch(input: PersistExtractedBatchInput): Promise<string[]> {
   const projectedKeys: string[] = [];
@@ -419,14 +417,16 @@ export async function persistExtractedBatch(input: PersistExtractedBatchInput): 
       if (extracted.escalated && input.progress.escalations !== undefined) {
         input.progress.escalations += 1;
       }
-      await input.persistEmail(parsed, extracted);
-      projectedKeys.push(parsed.externalId);
+      // Ask for the judgement before saving the verdict. A saved hand-off counts as finished and
+      // is never re-sent, so a failed request must leave the message open for the next sync.
       if (extracted.gate === "maybe_owed" && input.threadJudgementRequester && input.actorUserId) {
         await input.threadJudgementRequester.requestThreadJudgement(
           input.actorUserId,
           parsed.threadId ?? parsed.externalId
         );
       }
+      await input.persistEmail(parsed, extracted);
+      projectedKeys.push(parsed.externalId);
     } catch (error) {
       input.progress.emailFailures += 1;
       if (!input.progress.errors.includes("email-message-error")) {

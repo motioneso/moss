@@ -70,13 +70,14 @@ describe("google sync asks for a thread judgement", () => {
     });
     expect(requestThreadJudgement).toHaveBeenCalledWith("u1", "solo");
   });
-  it("a failed request counts as a message failure but the save stays", async () => {
+  it("a failed request counts as a message failure and leaves the message open (#2804)", async () => {
     const progress = { emailFailures: 0, errors: [] as string[] };
     const onFailure = vi.fn();
-    await persistExtractedBatch({
+    const persistEmail = vi.fn(async () => {});
+    const keys = await persistExtractedBatch({
       batch: [fixture({})],
       batchResults: [owed],
-      persistEmail: async () => {},
+      persistEmail,
       progress,
       onFailure,
       actorUserId: "u1",
@@ -88,6 +89,10 @@ describe("google sync asks for a thread judgement", () => {
     });
     expect(progress.emailFailures).toBe(1);
     expect(onFailure).toHaveBeenCalledTimes(1);
+    // A saved hand-off counts as finished and is never re-sent, so an unqueued judgement must
+    // not be saved: the next sync sends the message to the model and asks again.
+    expect(persistEmail).not.toHaveBeenCalled();
+    expect(keys).toEqual([]);
   });
   it("passes known sender addresses into the batch options", () => {
     const options = buildEmailBatchExtractOptions({

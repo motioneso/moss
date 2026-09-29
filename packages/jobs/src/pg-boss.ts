@@ -141,6 +141,8 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "emailFailures",
   "escalations",
   "errors",
+  // A boolean that stops a Google sync lineage before the backlog walk.
+  "recentOnly",
   "buildId",
   "step",
   "workflowRunId",

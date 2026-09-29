@@ -307,6 +307,8 @@ export class ConnectorsRepository {
     scopedDb: DataContextDb,
     accountId: string,
     input: {
+      /** Restamps the run's start, for a run whose start another run overwrote meanwhile. */
+      startedAt?: Date;
       finishedAt: Date;
       status: ConnectorSyncStatus;
       error: string | null;
@@ -317,6 +319,7 @@ export class ConnectorsRepository {
     await scopedDb.db
       .updateTable("app.connector_accounts")
       .set({
+        ...(input.startedAt ? { last_sync_started_at: input.startedAt } : {}),
         last_sync_finished_at: input.finishedAt,
         last_sync_status: input.status,
         last_sync_error: input.error,

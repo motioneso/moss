@@ -32,6 +32,26 @@ function hasCompleteTriage(signals: unknown): boolean {
   );
 }
 
+/**
+ * Whether a stored message already carries a finished first-pass verdict, so a sync can leave an
+ * unchanged revision alone. Three shapes count: a summary with complete triage, the gate's junk
+ * verdict (no summary, bare noise category), and a message handed to the thread judgement.
+ * A reply that failed or never arrived stores none of these and stays open for a retry.
+ */
+export function hasFinishedVerdict(summary: string | null, signals: unknown): boolean {
+  if (summary !== null && hasCompleteTriage(signals)) return true;
+  if (!signals || typeof signals !== "object" || Array.isArray(signals)) return false;
+  const fields = signals as Record<string, unknown>;
+  if (fields.pendingJudgement === true) return true;
+  const actionability = fields.actionability as Record<string, unknown> | undefined;
+  return (
+    typeof actionability === "object" &&
+    actionability !== null &&
+    !Array.isArray(actionability) &&
+    actionability.category === "noise"
+  );
+}
+
 export interface CreateCachedEmailMessageInput {
   readonly id?: string;
   readonly connectorAccountId: string;
@@ -266,8 +286,8 @@ export class EmailRepository {
   /**
    * Wipe the stored analysis (summary + signals) from the actor's recently received messages so
    * the next sync sends them back through the model instead of skipping them as unchanged. The
-   * skip check in the sync phase requires a stored summary AND complete triage, so emptying both
-   * is exactly what re-opens them. Nothing else about the message is touched.
+   * skip check in the sync phase requires a finished verdict, and an empty summary with empty
+   * signals is never one, so emptying both is exactly what re-opens them. Nothing else about the message is touched.
    *
    * The owner predicate is load-bearing, not belt-and-braces: the UPDATE policy in
    * sql/0068_email_worker_grants_and_google_insert.sql also admits rows shared to the actor with
@@ -288,9 +308,9 @@ export class EmailRepository {
 
   /**
    * Lightweight per-account sync markers for skip-unchanged: external_id, the stored Gmail
-   * historyId (read from external_metadata), whether a non-null summary exists, and whether
-   * actionable triage has the subject/task fields required for projection. The handler skips the
-   * LLM pass only when all three are complete, so partial actionable triage is retried unchanged.
+   * historyId (read from external_metadata), and whether the row holds a finished verdict (see
+   * hasFinishedVerdict). The handler skips the LLM pass only for an unchanged revision with a
+   * finished verdict, so partial actionable triage and failed replies are retried.
    * RLS-scoped to the actor via the worker SELECT grant (0068); returns only this account's rows.
    */
   async listSyncMarkers(
@@ -300,8 +320,7 @@ export class EmailRepository {
     Array<{
       externalId: string;
       historyId: string | null;
-      hasSummary: boolean;
-      hasCompleteTriage: boolean;
+      hasFinishedVerdict: boolean;
     }>
   > {
     assertDataContextDb(scopedDb);
@@ -313,8 +332,7 @@ export class EmailRepository {
     return rows.map((r) => ({
       externalId: r.external_id,
       historyId: (r.external_metadata as { historyId?: string | null } | null)?.historyId ?? null,
-      hasSummary: r.summary !== null,
-      hasCompleteTriage: hasCompleteTriage(r.signals)
+      hasFinishedVerdict: hasFinishedVerdict(r.summary, r.signals)
     }));
   }
 
