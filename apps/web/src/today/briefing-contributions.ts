@@ -29,6 +29,10 @@ export function contributionFor(
     // Real emails read, never signal notes (Ben ruling #2745).
     return countLine(countOf(sourceMetadata, "emailMessageCount"), "email", "read");
   }
+  if (source === "email_today") {
+    // Real emails read, never signal notes (same rule as the morning email row).
+    return countLine(countOf(sourceMetadata, "emailMessageCount"), "email", "read");
+  }
   const lines = sectionLineCount(sourceMetadata, source);
   if (lines !== undefined) {
     if (lines === 0) return null;
@@ -55,6 +59,12 @@ function lineFor(source: string, lines: number): string | null {
       return countLine(lines, "sports update");
     case "calendar_today":
       return countLine(lines, "event", "in today's timeline");
+    case "calendar_tomorrow":
+      return countLine(lines, "event", "tomorrow");
+    case "tasks_reconciliation":
+      return countLine(lines, "task", "reviewed");
+    case "morning_plan":
+      return countLine(lines, "item", "from this morning's plan");
     case "weather":
       return "today's forecast";
     default:
@@ -70,6 +80,8 @@ function legacyLineFor(source: string, sourceMetadata: Record<string, unknown>):
       return countLine(countOf(sourceMetadata, "taskCount"), "task");
     case "commitments":
       return countLine(countOf(sourceMetadata, "commitmentCount"), "commitment");
+    case "calendar_tomorrow":
+      return countLine(countOf(sourceMetadata, "tomorrowEventCount"), "event", "tomorrow");
     case "chats":
       return countLine(countOf(sourceMetadata, "chatTurnCount"), "turn", "from today's chats");
     case "vault":

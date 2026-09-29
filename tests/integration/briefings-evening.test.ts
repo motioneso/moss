@@ -213,6 +213,12 @@ describe("evening briefing compose (spec 2026-07-02, #695)", () => {
     expect(typeof meta.taskSlippedCount).toBe("number");
     expect(typeof meta.taskCarryCount).toBe("number");
     expect(typeof meta.tomorrowEventCount).toBe("number");
+    expect(typeof meta.emailMessageCount).toBe("number");
+    expect(meta.sectionLines).toMatchObject({
+      tasks_reconciliation: expect.any(Number),
+      calendar_tomorrow: expect.any(Number),
+      email_today: expect.any(Number)
+    });
     expect(meta.morningRunReferenced).toBe(false);
   });
 

@@ -496,7 +496,14 @@ export async function composeEveningBriefing(
       )
     : undefined;
 
+  // Lines each section gave the synthesis prompt, so the sources block can say what each
+  // source contributed (same shape the morning run saves).
+  const sectionLineCounts: Record<string, number> = {};
+  for (const section of sections) sectionLineCounts[section.key] = section.lines.length;
+
   const baseMetadata: Record<string, unknown> = {
+    sectionLines: sectionLineCounts,
+    emailMessageCount: rawEmail.rawItems?.length ?? 0,
     taskCompletedCount: lenses.completedToday.length,
     taskSlippedCount: lenses.slipped.length,
     taskCarryCount: lenses.carryingForward.length,

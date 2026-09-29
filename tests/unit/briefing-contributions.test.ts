@@ -163,6 +163,36 @@ describe("contributionFor on current runs", () => {
     expect(contributionFor("weather", md)).toBe("today's forecast");
   });
 
+  it("names the evening sources' contributions", () => {
+    const md = {
+      ...current,
+      sectionLines: { calendar_tomorrow: 2, tasks_reconciliation: 5, morning_plan: 1 },
+      emailMessageCount: 4
+    };
+    expect(contributionFor("calendar_tomorrow", md)).toBe("2 events tomorrow");
+    expect(contributionFor("tasks_reconciliation", md)).toBe("5 tasks reviewed");
+    expect(contributionFor("morning_plan", md)).toBe("1 item from this morning's plan");
+    expect(contributionFor("email_today", md)).toBe("4 emails read");
+  });
+
+  it("shows no line for empty, failed or unsaved evening sources", () => {
+    const md = {
+      ...current,
+      sectionLines: { calendar_tomorrow: 0, tasks_reconciliation: 0, morning_plan: 0 },
+      emailMessageCount: 0
+    };
+    for (const source of ["calendar_tomorrow", "tasks_reconciliation", "morning_plan"]) {
+      expect(contributionFor(source, md)).toBeNull();
+    }
+    expect(contributionFor("email_today", md)).toBeNull();
+    const gapped = {
+      ...current,
+      emailMessageCount: 3,
+      gaps: [{ source: "email_today", reason: "filtered_out" }]
+    };
+    expect(contributionFor("email_today", gapped)).toBeNull();
+  });
+
   it("shows no line for empty or failed timeline and weather sources", () => {
     const empty = { ...current, sectionLines: { calendar_today: 0, weather: 0 } };
     expect(contributionFor("calendar_today", empty)).toBeNull();
