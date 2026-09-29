@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-29
+
+#### Fixed
+
+- **Cleaner Today header.** The Today header no longer has a faint line pattern behind it, and "Prepared at" now shows am or pm. [PR #2795](https://github.com/motioneso/moss/pull/2795)
+
 ### 2026-09-28
 
 #### Fixed
