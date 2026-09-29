@@ -284,11 +284,9 @@ export const connectorsModuleManifest = {
     {
       id: "connectors.google_sync",
       description:
-        "A connected Google account keeps its calendar events and email in Moss without you " +
-        "asking: a background sync brings in what is new so it can show up on Today and in " +
-        "briefings. New mail is checked on every scheduled run, even while an older catch-up " +
-        "is still working, and a message Moss has already sorted is not sent to the assistant " +
-        "again.",
+        "A connected Google account keeps its calendar and email in Moss: a background sync " +
+        "brings in new mail on every run, even during a longer catch-up, for Today and " +
+        "briefings. Mail Moss already sorted is not re-read.",
       errors: [
         {
           code: "connectors.google.auth_failed",
