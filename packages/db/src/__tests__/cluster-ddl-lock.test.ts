@@ -1,6 +1,8 @@
 // #1632 dual-session cluster-DDL lock. Every test runs against FakePgCluster, which models
 // advisory locks as per-(database, key) exactly like PostgreSQL's locktag — the property that
 // makes cross-database mutual exclusion observable in a unit test at all.
+import { EventEmitter } from "node:events";
+
 import { describe, expect, test, vi } from "vitest";
 
 import type * as ClusterDdlLockModule from "../cluster-ddl-lock.js";
@@ -14,6 +16,7 @@ import {
   DEFAULT_CLUSTER_LOCK_KEY,
   getClusterLockDatabaseUrl,
   withClusterDdlLock,
+  type ClusterDdlLockClient,
   type ClusterDdlLockDiagnosticEvent,
   type WithClusterDdlLockOptions
 } from "../cluster-ddl-lock.js";
@@ -744,5 +747,44 @@ describe("getClusterLockDatabaseUrl", () => {
       MOSS_CLUSTER_LOCK_DATABASE: "moss_name"
     });
     expect(url).toBe("postgres://u:p@h:5432/moss_name");
+  });
+});
+
+// Unlike FakePgCluster, a real EventEmitter throws an 'error' event that has no listener, which
+// is how node-postgres takes the process down when the server drops a connection.
+class EmitterClient extends EventEmitter implements ClusterDdlLockClient {
+  constructor(private readonly hooks: { connect?: () => void; end?: () => void } = {}) {
+    super();
+  }
+
+  async connect(): Promise<void> {
+    this.hooks.connect?.();
+  }
+
+  async query<T = Record<string, unknown>>(text: string): Promise<{ rows: T[] }> {
+    return { rows: (text.includes("pg_backend_pid") ? [{ pid: 4242 }] : []) as T[] };
+  }
+
+  async end(): Promise<void> {
+    this.hooks.end?.();
+  }
+}
+
+describe("server-side disconnects", () => {
+  test("an 'error' event outside the protected window never escapes as uncaught", async () => {
+    const terminated = () => new Error("terminating connection due to administrator command");
+    const lock = new EmitterClient();
+    const ddl: EmitterClient = new EmitterClient({
+      connect: () => lock.emit("error", terminated()),
+      end: () => ddl.emit("error", terminated())
+    });
+
+    await expect(
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "done", {
+        env: {} as NodeJS.ProcessEnv,
+        createLockClient: () => lock,
+        createDdlClient: () => ddl
+      })
+    ).resolves.toBe("done");
   });
 });
