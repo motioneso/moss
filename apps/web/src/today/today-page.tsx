@@ -8,8 +8,9 @@ import { Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
-import { localDay, type MeResponse, type TaskDto } from "@moss/shared";
+import { localDay, readPlanContext, type MeResponse, type TaskDto } from "@moss/shared";
 import {
+  getBriefingRun,
   getDayPlan,
   getOnboardingStatus,
   listCalendarEvents,
@@ -68,11 +69,11 @@ import {
   firstName,
   isToday,
   greeting,
-  morningHeroKicker,
-  timeLabel
+  morningHeroKicker
 } from "./today-labels";
 import { isAtRisk, isDoFirst, isDoneToday } from "../tasks/focus";
 import { BriefTaskRow } from "./brief-task-row";
+import { findChangedBlocks } from "./briefing-callout";
 import { OvernightSection } from "./overnight-section";
 import { NewsDesk } from "./news-desk";
 import "../styles/wellness-1.css";
@@ -207,6 +208,16 @@ export function TodayPage(props: {
     morningTimeZone,
     now
   );
+  // Same query key as the reader, so opening the reader reuses this fetch.
+  const morningDetailQuery = useQuery({
+    queryKey: queryKeys.briefings.run(morningDefinition?.id ?? "", latestMorningRun?.id ?? ""),
+    queryFn: () => getBriefingRun(morningDefinition!.id, latestMorningRun!.id),
+    enabled: morningDefinition !== undefined && latestMorningRun !== undefined
+  });
+  const changedSinceLastNight = findChangedBlocks(
+    latestMorningRun ? readPlanContext(latestMorningRun.structuredPayload) : null,
+    morningDetailQuery.data?.plan?.current ?? null
+  );
   useEffect(
     () =>
       scheduleTodayModeRefresh(eveningDefinition, locale, () => {
@@ -331,10 +342,6 @@ export function TodayPage(props: {
     todayMode === "evening"
       ? buildEveningLede(doneToday, atRisk.length, tomorrowEvents.length)
       : buildLede(priorities.length, atRisk.length, todayEvents.length);
-  // A row of four zeros is noise, not signal — the hero lede already says the day
-  // is clear. Show the stat shortcuts only once at least one tile carries a count.
-  const hasStatSignal =
-    priorities.length > 0 || atRisk.length > 0 || todayEvents.length > 0 || doneToday > 0;
   // Priorities and at-risk overlap (a Do First task can also be due today), so the
   // masthead count dedupes by id: it reads as "N need you", not a double-counted sum.
   const needsYou = new Set([...priorities, ...atRisk].map((t) => t.id)).size;
@@ -423,17 +430,7 @@ export function TodayPage(props: {
       }
       precedingEvents={todayEvents}
       nextStarted={nextStarted}
-      hasStatSignal={hasStatSignal}
-      prioritiesCount={priorities.length}
-      atRiskCount={atRisk.length}
-      eventsCount={todayEvents.length}
-      doneToday={doneToday}
-      agenda={upcoming.map((event) => ({
-        id: event.id,
-        time: timeLabel(event.startsAt, locale),
-        title: event.title,
-        location: event.location
-      }))}
+      changedSinceLastNight={changedSinceLastNight}
       onNavigate={(path) => navigate(path)}
       showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
       showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}

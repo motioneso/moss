@@ -598,3 +598,45 @@ a seeded meeting with materials (link, view, way back) beside one without
 
 Kill gate: if no material source ships elsewhere first, #2744 closes with this
 verdict and no product change. Owner: coordinator.
+
+#### Morning side column amendment for `screen-morning-today` (#2783)
+
+The gap check on #2521 (gap 13) found the morning Today side column differs from
+the approved mockup's supporting column (`preparation()` in
+`.superpowers/brainstorm/today-briefings-20260909/study.js`). Mockup sections, in
+order: next/first meeting, "Ready when you are: Your preparation" (document
+list), "Since last night", and a practical-context note. Live
+(`apps/web/src/today/today-rail.tsx`, day mode) shows the first-meeting card,
+"At a glance" (four stat tiles), "Today's agenda" and the compact evening review.
+
+Decisions, real sources only:
+
+1. **Since last night: built.** Source is the plan-change comparison the reader
+   callout already uses: `findChangedBlocks` / `calloutCopy`
+   (`apps/web/src/today/briefing-callout.ts:37-95`) over the latest morning
+   run's saved plan context and `detail.plan.current` from the run detail
+   (`getBriefingRun`, same query key the reader uses, `morning-briefing.tsx:80`).
+   Shown only when at least one block moved; the section names the block and its
+   old and new time. No moved blocks, no section, no placeholder. The unused
+   `OvernightSection` fed by the always-empty `feed.overnight`
+   (`feed-source.ts:47`) is left alone.
+2. **Your preparation: not built.** #2744 verified that no source links
+   materials to a meeting (see the proposal-materials amendment above). The
+   section renders nothing until a source lands.
+3. **Practical-context note: not built.** No data source exists (no travel or
+   errand entity). Tracked separately as gap 3.
+4. **Extras removed from the morning column: "At a glance" and "Today's agenda".**
+   Both repeat what the page already shows in its main column (the day plan
+   lists every event and task block with times; the counts come from the same
+   task and event queries). The mockup deliberately has neither. Their data
+   stays reachable through the day plan, Tasks and Calendar pages.
+5. **Evening review compact card: kept, not removed.** It is a real feature
+   (latest evening run, feedback control) with no other home on the morning
+   page, so removing it would lose function the mockup never ruled on. It
+   moves below the mockup sections and stays hidden when the evening briefing
+   is disabled, as today. Flag for the coordinator: if the mockup should win
+   outright, that is a one-line follow-up.
+
+Files: `today-rail.tsx`, `today-page.tsx`, a new `since-last-night.tsx`,
+`kit-today*.css` for layout only, `tests/unit/today-*` plus a browser check,
+and the app map entry for the Today screen.
