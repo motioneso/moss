@@ -103,7 +103,8 @@
     "spike:db:down": "docker compose -f spikes/auth-rls-safety/docker-compose.yml down -v",
     "test:spike": "vitest run spikes",
     "test:spike:auth": "vitest run spikes/auth-rls-safety/test/auth-rls-safety.test.ts",
-    "test:spike:pgboss": "vitest run spikes/pg-boss-rls/test/pg-boss-rls.test.ts"
+    "test:spike:pgboss": "vitest run spikes/pg-boss-rls/test/pg-boss-rls.test.ts",
+    "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
