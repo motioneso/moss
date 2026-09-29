@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Moss stays up when its database restarts.** Moss no longer shuts down briefly when its database restarts. [PR #2803](https://github.com/motioneso/moss/pull/2803)
 - **Email sync no longer re-checks sorted mail.** Moss no longer re-reads email it has already sorted every time it syncs, and new mail now arrives on schedule even while an older catch-up is still running. [PR #2806](https://github.com/motioneso/moss/pull/2806)
 - **Clearer sources in the morning report.** The list of what informed your report now shows plain names for each source, with what each contributed. [PR #2791](https://github.com/motioneso/moss/pull/2791)
 - **Cleaner Today header.** The Today header no longer has a faint line pattern behind it, and "Prepared at" now shows am or pm. [PR #2795](https://github.com/motioneso/moss/pull/2795)
