@@ -62,7 +62,6 @@ import {
   buildHeadline,
   buildLede,
   byStart,
-  datelineLabel,
   shortDatelineLabel,
   dueTs,
   eveningHeroKicker,
@@ -597,24 +596,24 @@ export function TodayPage(props: {
 
             {todayMode === "evening" ? startHereSection : null}
 
-            <DayPlanSection
-              dayPlan={dayPlanQuery.data}
-              events={events}
-              locale={locale}
-              now={now}
-              loading={dayPlanQuery.isPending}
-              error={dayPlanQuery.isError}
-              calendarError={eventsQuery.isError}
-              editorial
-              todayLayout={todayMode === "day"}
-              dateline={
-                todayMode === "day" ? shortDatelineLabel(now, locale) : datelineLabel(now, locale)
-              }
-              onOpenTask={(id) => setDialog({ id })}
-              onReview={(anchor) => {
-                openDayPlanReview(anchor, false);
-              }}
-            />
+            {todayMode === "day" ? (
+              <DayPlanSection
+                dayPlan={dayPlanQuery.data}
+                events={events}
+                locale={locale}
+                now={now}
+                loading={dayPlanQuery.isPending}
+                error={dayPlanQuery.isError}
+                calendarError={eventsQuery.isError}
+                editorial
+                todayLayout
+                dateline={shortDatelineLabel(now, locale)}
+                onOpenTask={(id) => setDialog({ id })}
+                onReview={(anchor) => {
+                  openDayPlanReview(anchor, false);
+                }}
+              />
+            ) : null}
             {reviewUnavailableMessage && !reader ? (
               <p className="cmd-empty" role="status">
                 {reviewUnavailableMessage}
