@@ -7,6 +7,7 @@ import type { ColorMode } from "../theme/color-mode.js";
 import { ampm, timeLabel } from "./today-labels.js";
 import type { ChangedBriefingBlock } from "./briefing-callout.js";
 import { SinceLastNight } from "./since-last-night.js";
+import { PracticalNote } from "./practical-note.js";
 
 export interface RailNextEvent {
   readonly id: string;
@@ -106,8 +107,8 @@ function meetingNote(event: RailNextEvent): string {
   return event.location ? `${length} · ${event.location}` : length;
 }
 
-/** Today right rail. Day: the next meeting, what moved since last night and
-    the evening review. Evening: tomorrow and the planning actions. Quick actions
+/** Today right rail. Day: the next meeting, what moved since last night, a practical
+    note and the evening review. Evening: tomorrow and the planning actions. Quick actions
     live in TodayDock in both modes. Props only, no fetching. */
 export function TodayRail(props: TodayRailProps) {
   const { nextEvent } = props;
@@ -163,6 +164,13 @@ export function TodayRail(props: TodayRailProps) {
         ) : null}
 
         <SinceLastNight changed={props.changedSinceLastNight} locale={props.locale} />
+
+        <PracticalNote
+          events={props.precedingEvents}
+          now={props.now}
+          excludeEventId={nextEvent?.id ?? null}
+          locale={props.locale}
+        />
 
         {props.showEveningReview ? (
           <EveningReviewSection
