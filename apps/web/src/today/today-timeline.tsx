@@ -70,6 +70,7 @@ export function TimelineRow(props: {
       </div>
     );
   }
+  const stateText = item.firstProposal ? "Proposed" : item.label;
   return (
     <div
       className={`jds-task tl-slot tl-slot--${item.state}`}
@@ -92,7 +93,11 @@ export function TimelineRow(props: {
               {item.kindLabel !== null ? (
                 <span className="jds-task__source">{item.kindLabel}</span>
               ) : null}
-              <span className="jds-task__state">{item.label}</span>
+              {item.reason !== null ? (
+                <span className="jds-task__source">{item.reason}</span>
+              ) : null}
+              <span className="jds-task__state">{stateText}</span>
+              {item.tag !== null ? <span className="jds-task__source">{item.tag}</span> : null}
             </div>
           </button>
         ) : (
@@ -105,7 +110,11 @@ export function TimelineRow(props: {
               {item.kindLabel !== null ? (
                 <span className="jds-task__source">{item.kindLabel}</span>
               ) : null}
-              <span className="jds-task__state">{item.label}</span>
+              {item.reason !== null ? (
+                <span className="jds-task__source">{item.reason}</span>
+              ) : null}
+              <span className="jds-task__state">{stateText}</span>
+              {item.tag !== null ? <span className="jds-task__source">{item.tag}</span> : null}
               {item.unavailable ? (
                 <span className="jds-task__source">Task no longer visible</span>
               ) : null}

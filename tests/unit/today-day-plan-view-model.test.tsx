@@ -213,6 +213,7 @@ describe("buildDayItems state rules", () => {
     });
     expect(items[0]?.state).toBe("pending");
     expect(items[0]?.label).toBe("Change pending");
+    expect(items[0]?.firstProposal).toBe(true);
   });
 
   it("keeps the default Change pending label when proposedCaption is not set", () => {
@@ -557,5 +558,46 @@ describe("buildDayItems joins and ordering", () => {
       });
       expect(todayItems.map((i) => i.eventId)).toEqual(["today-edge"]);
     });
+  });
+});
+
+describe("buildDayItems tag and reason", () => {
+  const placed = (startsAt: string, kind: DayPlanBlockDto["kind"] = "focus") =>
+    block({
+      id: "b1",
+      kind,
+      taskId: "t1",
+      position: 0,
+      actualPlacement: { startsAt, durationMinutes: 30, calendarEventRef: null }
+    });
+
+  it("tags a committed task block Flexible and gives no reason without an event", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([placed("2026-06-30T17:00:00.000Z")]),
+      tasks: [summary({ id: "t1" })]
+    });
+    expect(items[0]?.tag).toBe("Flexible");
+    expect(items[0]?.reason).toBeNull();
+  });
+
+  it("gives a prep block that ends when an event starts a reason naming the event", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([placed("2026-06-30T20:00:00.000Z", "prep")]),
+      tasks: [summary({ id: "t1" })],
+      events: [event({ id: "e1", title: "Project review", startsAt: "2026-06-30T20:30:00.000Z" })]
+    });
+    expect(items.find((i) => i.taskId === "t1")?.reason).toBe("For Project review at 1:30pm");
+  });
+
+  it("gives no reason when the next event is not right after the prep block", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([placed("2026-06-30T20:00:00.000Z", "prep")]),
+      tasks: [summary({ id: "t1" })],
+      events: [event({ id: "e1", startsAt: "2026-06-30T22:00:00.000Z" })]
+    });
+    expect(items.find((i) => i.taskId === "t1")?.reason).toBeNull();
   });
 });

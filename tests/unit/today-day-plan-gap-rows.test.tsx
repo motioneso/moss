@@ -177,3 +177,26 @@ describe("DayPlanSection schedule gaps (Today layout)", () => {
     expect(posC).toBeGreaterThan(posOpen);
   });
 });
+
+describe("DayPlanSection task block detail (Today layout)", () => {
+  it("shows the Flexible tag on a committed block and Proposed on a first proposal", () => {
+    const proposed: DayPlanBlockDto = {
+      id: "b2",
+      kind: "focus",
+      taskId: "t1",
+      title: "Block b2",
+      position: 1,
+      actualPlacement: null,
+      pendingChange: { kind: "add", startsAt: "2026-06-30T19:00:00.000Z", durationMinutes: 30 }
+    };
+    const html = render(plan([placed("b1", "2026-06-30T17:00:00.000Z", 30, 0), proposed]), true);
+    expect(html).toContain("Flexible");
+    expect(html).toContain(">Proposed<");
+    expect(html).not.toContain("Change pending");
+  });
+
+  it("shows no reason line when no event backs one", () => {
+    const html = render(plan([placed("b1", "2026-06-30T17:00:00.000Z", 30, 0)]), true);
+    expect(html).not.toContain("For ");
+  });
+});

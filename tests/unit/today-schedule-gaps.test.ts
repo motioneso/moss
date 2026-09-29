@@ -31,6 +31,9 @@ function item(overrides: Partial<DayItem> & { readonly key: string }): DayItem {
     unavailable: false,
     eventId: null,
     location: null,
+    firstProposal: false,
+    tag: null,
+    reason: null,
     ...overrides
   };
 }
