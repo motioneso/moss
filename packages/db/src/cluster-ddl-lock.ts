@@ -223,6 +223,10 @@ export async function withClusterDdlLock<T>(
     const emitDiagnostic = safeDiagnosticEmitter(options.onDiagnostic);
 
     const lockClient = createLockClient(getClusterLockDatabaseUrl(bootstrapConnectionString, env));
+
+    // An unhandled 'error' event kills the process. This listener covers the client's whole
+    // life; the scoped listeners in runProtected carry the liveness semantics.
+    lockClient.on("error", ignoreClientError);
     let lockAcquired = false;
     let lockPid: number;
     try {
@@ -245,6 +249,7 @@ export async function withClusterDdlLock<T>(
     emitDiagnostic({ type: "acquired", ownerPid: lockPid });
 
     const ddlClient = createDdlClient(bootstrapConnectionString);
+    ddlClient.on("error", ignoreClientError);
     try {
       await ddlClient.connect();
     } catch (cause) {
@@ -458,6 +463,8 @@ async function runProtected<T>(
   }
   return settled.value;
 }
+
+function ignoreClientError(): void {}
 
 async function releaseLock(
   lockClient: ClusterDdlLockClient,
