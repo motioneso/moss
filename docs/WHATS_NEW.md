@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Clearer sources in the morning report.** The list of what informed your report now shows plain names for each source, with what each contributed. [PR #2791](https://github.com/motioneso/moss/pull/2791)
 - **Cleaner Today header.** The Today header no longer has a faint line pattern behind it, and "Prepared at" now shows am or pm. [PR #2795](https://github.com/motioneso/moss/pull/2795)
 
 #### Added
