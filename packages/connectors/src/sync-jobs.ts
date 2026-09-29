@@ -299,7 +299,10 @@ export async function runGoogleSyncChunk(
 
   const startedAt = continuation?.startedAt ?? now().toISOString();
   const recentOnly = continuation?.recentOnly ?? deps.recentOnly ?? false;
-  const trigger = continuation ? continuation.trigger : (deps.trigger ?? "manual");
+  // An email refresh names its trigger on the deps; an old queued job carries none.
+  const trigger = continuation
+    ? (continuation.trigger ?? deps.trigger)
+    : (deps.trigger ?? "manual");
 
   // Stamp the start of the run on the account row (health metadata only — never status).
   if (!continuation) {
@@ -539,8 +542,8 @@ export async function handleGoogleSyncJob(
   ) => Promise<GoogleSyncChunkOutcome>,
   hasInFlightLineage?: (actorUserId: string) => Promise<boolean>
 ): Promise<GoogleSyncResult> {
-  // A root never waits on a running lineage: it still fetches the calendar and the last day of
-  // mail, and leaves the backlog walk to the lineage already in flight.
+  // A root admitted during a running lineage still fetches the calendar and the last day of
+  // mail once the running chunk ends, and leaves the backlog walk to that lineage.
   const recentOnly =
     job.data.kind === "google-sync" &&
     ((await hasInFlightLineage?.(job.data.actorUserId)) ?? false);

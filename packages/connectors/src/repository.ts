@@ -254,6 +254,8 @@ export class ConnectorsRepository {
     input: { startedAt: Date; trigger: ConnectorSyncTrigger }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    // Take the sync turn before touching the row, in the same order as a sync chunk.
+    await this.lockAccountSync(scopedDb, accountId);
     const priorRow = await scopedDb.db
       .selectFrom("app.connector_accounts")
       .select([
@@ -334,12 +336,12 @@ export class ConnectorsRepository {
   }
 
   /**
-   * Serializes Google sync chunks for one account until the caller's transaction ends. Each
-   * chunk runs in one transaction, and two overlapping chunks can deadlock on row locks.
+   * Serializes sync work for one account until the caller's transaction ends. Each sync chunk
+   * runs in one transaction, and two overlapping chunks can deadlock on row locks.
    */
   async lockAccountSync(scopedDb: DataContextDb, accountId: string): Promise<void> {
     assertDataContextDb(scopedDb);
-    await sql`select pg_advisory_xact_lock(hashtextextended(${"connectors:google-sync:" + accountId}, 0))`.execute(
+    await sql`select pg_advisory_xact_lock(hashtextextended(${"connectors:account-sync:" + accountId}, 0))`.execute(
       scopedDb.db
     );
   }

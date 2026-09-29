@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EmailExtractNeedsConfigurationError } from "@moss/connectors";
+import { ConnectorsRepository, EmailExtractNeedsConfigurationError } from "@moss/connectors";
 import {
   EmailRepository,
   handles,
@@ -175,7 +175,10 @@ describe("runGoogleSync repeat and overlapping runs (#2804)", () => {
 
   // #2804: two lineages can overlap, so a finishing lineage must not pair its outcome with the
   // start time or trigger another run stamped meanwhile.
-  it("a finishing lineage restamps its own start time and trigger", async () => {
+  const finishOlderLineage = async (options: {
+    readonly carried?: "manual";
+    readonly chunkTrigger?: "manual";
+  }) => {
     const accountId = await seedGoogleAccount(handles.dataContext, [
       "https://www.googleapis.com/auth/gmail.modify"
     ]);
@@ -198,21 +201,25 @@ describe("runGoogleSync repeat and overlapping runs (#2804)", () => {
     await handles.workerDataContext.withDataContext(ctx, (db) => runGoogleSync(db, deps));
     // The older lineage's last chunk then finishes.
     await handles.workerDataContext.withDataContext(ctx, (db) =>
-      runGoogleSyncChunk(db, deps, {
-        idempotencyKey: "older-lineage",
-        connectorAccountId: accountId,
-        phase: "email",
-        chunkIndex: 7,
-        startedAt: "2026-09-29T08:00:00.000Z",
-        calendarSeenSince: "2026-09-29T08:00:00.000Z",
-        calendarUpserted: 0,
-        calendarReconciled: 0,
-        emailUpserted: 40,
-        emailFailures: 0,
-        escalations: 0,
-        errors: [],
-        trigger: "manual"
-      })
+      runGoogleSyncChunk(
+        db,
+        { ...deps, trigger: options.chunkTrigger },
+        {
+          idempotencyKey: "older-lineage",
+          connectorAccountId: accountId,
+          phase: "email",
+          chunkIndex: 7,
+          startedAt: "2026-09-29T08:00:00.000Z",
+          calendarSeenSince: "2026-09-29T08:00:00.000Z",
+          calendarUpserted: 0,
+          calendarReconciled: 0,
+          emailUpserted: 40,
+          emailFailures: 0,
+          escalations: 0,
+          errors: [],
+          ...(options.carried ? { trigger: options.carried } : {})
+        }
+      )
     );
     const row = await handles.dataContext.withDataContext(ctx, (db) =>
       db.db
@@ -229,7 +236,16 @@ describe("runGoogleSync repeat and overlapping runs (#2804)", () => {
     expect(row.last_sync_started_at?.toISOString()).toBe("2026-09-29T08:00:00.000Z");
     expect(row.last_sync_finished_at?.toISOString()).toBe("2026-09-29T12:00:00.000Z");
     expect(row.last_sync_counts).toMatchObject({ emailUpserted: 40 });
-    expect(row.last_sync_trigger).toBe("manual");
+    return row.last_sync_trigger;
+  };
+
+  it("a finishing lineage restamps its own start time and trigger", async () => {
+    expect(await finishOlderLineage({ carried: "manual" })).toBe("manual");
+  });
+
+  // An email refresh drives chunks itself and names its trigger on the deps, not the state.
+  it("a refresh lineage restamps the trigger it names on its chunks", async () => {
+    expect(await finishOlderLineage({ chunkTrigger: "manual" })).toBe("manual");
   });
 
   // #2804: a root may now run while a lineage is in flight. Each chunk holds one transaction, so
@@ -321,5 +337,83 @@ describe("runGoogleSync repeat and overlapping runs (#2804)", () => {
     release();
     await Promise.all([backlogChunk, recentRoot]);
     expect(events).toEqual(["backlog:model", "backlog:released", "root:email"]);
+  });
+
+  // #2804: an email refresh stamps the run start itself before its chunk runs. That write must
+  // also wait its turn, or it can hold the account row while a running chunk waits on it.
+  it("stamping a run start waits for the running chunk on the same account", async () => {
+    const accountId = await seedGoogleAccount(handles.dataContext, [
+      "https://www.googleapis.com/auth/gmail.modify"
+    ]);
+    const ctx = { actorUserId: ids.userA, requestId: "pgboss:start-turns" };
+    const events: string[] = [];
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let enteredModel!: () => void;
+    const modelEntered = new Promise<void>((resolve) => (enteredModel = resolve));
+    const message = {
+      id: "start-turns-1",
+      historyId: "H-start-turns",
+      payload: {
+        mimeType: "text/plain",
+        headers: [
+          { name: "Subject", value: "Status" },
+          { name: "From", value: "a@b.example" }
+        ],
+        body: { data: Buffer.from("A short status update for the week.").toString("base64") }
+      }
+    };
+    const backlogChunk = handles.workerDataContext.withDataContext(ctx, (db) =>
+      runGoogleSyncChunk(
+        db,
+        {
+          getFreshAccessToken: async () => "tok",
+          getActiveAccount: async () => ({ id: accountId, scopes: ["gmail"] }),
+          now: () => new Date("2026-09-29T12:00:00.000Z"),
+          googleClient: {
+            listCalendarEvents: async () => [],
+            listMessageIds: async () => [{ id: message.id }],
+            getMessage: async () => message
+          },
+          emailExtractDeps: {
+            runChat: async () => {
+              events.push("backlog:model");
+              enteredModel();
+              await released;
+              return {
+                text: JSON.stringify({ gate: "nothing", category: "noise", confidence: 0.9 })
+              };
+            }
+          }
+        },
+        {
+          idempotencyKey: "start-turns-lineage",
+          connectorAccountId: accountId,
+          phase: "email",
+          chunkIndex: 3,
+          startedAt: "2026-09-29T08:00:00.000Z",
+          calendarSeenSince: "2026-09-29T08:00:00.000Z",
+          calendarUpserted: 0,
+          calendarReconciled: 0,
+          emailUpserted: 0,
+          emailFailures: 0,
+          escalations: 0,
+          errors: []
+        }
+      )
+    );
+    await modelEntered;
+    const refreshStart = handles.workerDataContext.withDataContext(ctx, async (db) => {
+      await new ConnectorsRepository().markSyncStarted(db, accountId, {
+        startedAt: new Date("2026-09-29T12:00:00.000Z"),
+        trigger: "manual"
+      });
+      events.push("refresh:started");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    events.push("backlog:released");
+    release();
+    await Promise.all([backlogChunk, refreshStart]);
+    expect(events).toEqual(["backlog:model", "backlog:released", "refresh:started"]);
   });
 });
