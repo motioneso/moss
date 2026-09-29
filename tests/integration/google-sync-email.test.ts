@@ -889,7 +889,7 @@ describe("runGoogleSync email orchestration", () => {
           const staleMarker = (await emailRepository.listSyncMarkers(db, accountId)).find(
             (marker) => marker.externalId === base.externalId
           );
-          expect(staleMarker?.hasCompleteTriage).toBe(false);
+          expect(staleMarker?.hasFinishedVerdict).toBe(false);
           releaseFallbackRead();
           await validCommitted;
           return emailRepository.upsertCachedMessage(db, {

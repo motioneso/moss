@@ -254,6 +254,8 @@ export class ConnectorsRepository {
     input: { startedAt: Date; trigger: ConnectorSyncTrigger }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    // Take the sync turn before touching the row, in the same order as a sync chunk.
+    await this.lockAccountSync(scopedDb, accountId);
     const priorRow = await scopedDb.db
       .selectFrom("app.connector_accounts")
       .select([
@@ -307,6 +309,10 @@ export class ConnectorsRepository {
     scopedDb: DataContextDb,
     accountId: string,
     input: {
+      /** Restamps the run's start, for a run whose start another run overwrote meanwhile. */
+      startedAt?: Date;
+      /** Restamps the run's trigger alongside its start. */
+      trigger?: ConnectorSyncTrigger;
       finishedAt: Date;
       status: ConnectorSyncStatus;
       error: string | null;
@@ -317,6 +323,8 @@ export class ConnectorsRepository {
     await scopedDb.db
       .updateTable("app.connector_accounts")
       .set({
+        ...(input.startedAt ? { last_sync_started_at: input.startedAt } : {}),
+        ...(input.trigger ? { last_sync_trigger: input.trigger } : {}),
         last_sync_finished_at: input.finishedAt,
         last_sync_status: input.status,
         last_sync_error: input.error,
@@ -325,6 +333,17 @@ export class ConnectorsRepository {
       })
       .where("id", "=", accountId)
       .execute();
+  }
+
+  /**
+   * Serializes sync work for one account until the caller's transaction ends. Each sync chunk
+   * runs in one transaction, and two overlapping chunks can deadlock on row locks.
+   */
+  async lockAccountSync(scopedDb: DataContextDb, accountId: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await sql`select pg_advisory_xact_lock(hashtextextended(${"connectors:account-sync:" + accountId}, 0))`.execute(
+      scopedDb.db
+    );
   }
 
   async upsertGooglePending(
