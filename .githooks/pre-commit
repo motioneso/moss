@@ -27,7 +27,18 @@ if [ "${#whole[@]}" -gt 0 ]; then
   git add -f -- "${whole[@]}"
 fi
 
-if [ "${#partial[@]}" -gt 0 ] && ! "$prettier" --check --ignore-unknown --log-level warn -- "${partial[@]}"; then
-  echo "pre-commit: the files above are partly staged and need formatting; run prettier --write on them, re-stage, and commit again" >&2
+# Check the staged content, not the working copy, since that is what gets committed.
+unformatted=()
+for file in "${partial[@]}"; do
+  info="$("$prettier" --file-info "$file")"
+  [ "$(jq -r '.ignored == false and .inferredParser != null' <<<"$info")" = "true" ] || continue
+  staged_blob="$(git show ":$file")"
+  formatted="$("$prettier" --stdin-filepath "$file" <<<"$staged_blob")"
+  [ "$formatted" = "$staged_blob" ] || unformatted+=("$file")
+done
+
+if [ "${#unformatted[@]}" -gt 0 ]; then
+  printf 'pre-commit: partly staged file needs formatting: %s\n' "${unformatted[@]}" >&2
+  echo "pre-commit: run prettier --write on it, re-stage, and commit again" >&2
   exit 1
 fi
