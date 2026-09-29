@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Evening Today no longer repeats the day's schedule.** The evening version of the Today page no longer shows a second copy of your schedule after the open loops. [PR #2794](https://github.com/motioneso/moss/pull/2794)
 - **Sports on Today no longer comes up empty when the page loads.** Sports scores and headlines on the Today page now load reliably even when many things on the page are fetching at once. [PR #2780](https://github.com/motioneso/moss/pull/2780)
 - **Sports live browser helper works in the packaged install.** Sports can use its live browser helper again to find game sources in the packaged install. [PR #2778](https://github.com/motioneso/moss/pull/2778)
 - **Cleaner morning briefing text.** The morning briefing no longer shows stray "Headline:" and "Lead:" labels, and the full briefing now opens with a clear lead paragraph followed by lighter, easier-to-scan sections. [PR #2769](https://github.com/motioneso/moss/pull/2769)
