@@ -39,6 +39,10 @@ feature that is not present in the image you are running.
 
 - **News note on Today.** The news section on your Today page now has a short "Your news, in context" note under the smaller stories. [PR #2798](https://github.com/motioneso/moss/pull/2798)
 
+#### Changed
+
+- **Morning side column shows what moved overnight.** The morning Today page now tells you when a block in your plan moved since your morning report was prepared, and no longer repeats your counts and agenda beside the schedule. [PR #2797](https://github.com/motioneso/moss/pull/2797)
+
 ### 2026-09-28
 
 #### Fixed
