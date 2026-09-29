@@ -195,6 +195,15 @@ test("evening finished items and planning side column carry grounded notes", asy
     externalId: `jfb${"a".repeat(32)}`,
     mossBlock: true
   });
+  // A real calendar call between the two planned blocks leaves a real gap between them.
+  await seedCalendarEvent({
+    accountId: account!.id,
+    title: "#2789 team call",
+    startsAt: localIso(TOMORROW, "14:00"),
+    endsAt: localIso(TOMORROW, "14:30"),
+    externalId: "2789-team-call",
+    mossBlock: false
+  });
   const settings = await json(page, "/api/calendar/briefing-settings", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -256,19 +265,49 @@ test("evening finished items and planning side column carry grounded notes", asy
     .getByLabel(/A steady day/)
     .click();
   await dialog.getByLabel("The one thing that matters").selectOption(ids[0]!);
+  // Start at 1 pm: the dentist ends 9:45 am (195 free minutes), blocks run 1:00-2:00 pm and
+  // 2:30-3:30 pm around the 2:00-2:30 pm call (30 minutes between them).
+  await dialog.locator("#evening-start").fill("13:00");
   const drafts = rail.locator(".evening-plan__snapshot-entry--draft");
-  await expect(drafts.first()).toBeVisible();
-  // Whatever notes show must match the real times shown in the column.
-  const text = await rail.innerText();
-  await testInfo.attach("side-column-with-blocks", { body: text });
-  console.log(`[2789 side column with blocks]\n${text}`);
-  await expect(fold.locator("summary")).toHaveText("Existing calendar task blocks");
+  await expect(drafts).toHaveCount(2);
+  await expect(drafts.nth(0)).toContainText("1:00");
+  await expect(drafts.nth(1)).toContainText("2:30");
 
+  const ROOM = "Room to get home and have lunch.";
+  const BETWEEN = "30 minutes between task blocks.";
   for (const [name, width, height] of [
     ["1440", 1440, 900],
     ["375", 375, 800]
   ] as const) {
     await page.setViewportSize({ width, height });
+    // Desktop shows the side column; the phone shows the same plan in a disclosure.
+    let column = rail;
+    if (width < 700) {
+      column = dialog.locator("details.evening-plan__mobile-plan");
+      await column.locator(":scope > summary").click();
+    }
+    const gapNotes = column.locator(".evening-plan__snapshot-gap");
+    await expect(gapNotes.filter({ hasText: ROOM })).toHaveCount(1);
+    await expect(gapNotes.filter({ hasText: BETWEEN })).toHaveCount(1);
+    // The room note sits right above the first task block, the between note below the last.
+    const order = await column
+      .locator(".evening-plan__snapshot")
+      .evaluate((root) =>
+        [
+          ...root.querySelectorAll(".evening-plan__snapshot-gap, .evening-plan__snapshot-entry")
+        ].map((node) => (node.textContent ?? "").trim().slice(0, 40))
+      );
+    const roomAt = order.findIndex((line) => line.startsWith("Room to get home"));
+    const firstDraftAt = order.findIndex((line) => line.startsWith("1:00"));
+    expect(roomAt).toBe(firstDraftAt - 1);
+    expect(order.findIndex((line) => line.startsWith("30 minutes between"))).toBeGreaterThan(
+      order.findIndex((line) => line.startsWith("2:30"))
+    );
+    await testInfo.attach(`side-column-${name}`, { body: order.join("\n") });
+    console.log(`[2789 side column ${name}]\n${order.join("\n")}`);
+    await expect(column.locator("details.evening-plan__existing-blocks summary")).toHaveText(
+      "Existing calendar task blocks"
+    );
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
     );
