@@ -140,6 +140,8 @@ describe("Today morning briefing prose", () => {
     expect(html).toContain("Tomorrow brings customer calls.");
     expect(html).toContain("Prepared at");
     expect(html.indexOf("The team shipped the launch.")).toBeLessThan(html.indexOf("Start here"));
+    expect(html).not.toContain("Your day, laid out");
+    expect(html).not.toContain('id="schedule"');
   });
 
   it("reads not ready when the run has no summary", () => {

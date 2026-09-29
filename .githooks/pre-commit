@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Formats staged files with Prettier so a commit never fails the CI format check.
+# Files that also have unstaged edits are only checked, so a partial stage is never widened.
+set -euo pipefail
+
+prettier="node_modules/.bin/prettier"
+if [ ! -x "$prettier" ]; then
+  echo "pre-commit: prettier is not installed, skipping formatting" >&2
+  exit 0
+fi
+
+mapfile -d '' staged < <(git diff --cached --name-only --diff-filter=ACMR -z)
+[ "${#staged[@]}" -gt 0 ] || exit 0
+
+mapfile -d '' unstaged < <(git diff --name-only -z)
+declare -A has_unstaged=()
+for file in "${unstaged[@]}"; do has_unstaged["$file"]=1; done
+
+whole=()
+partial=()
+for file in "${staged[@]}"; do
+  if [ -n "${has_unstaged[$file]:-}" ]; then partial+=("$file"); else whole+=("$file"); fi
+done
+
+if [ "${#whole[@]}" -gt 0 ]; then
+  "$prettier" --write --ignore-unknown --log-level warn -- "${whole[@]}"
+  git add -f -- "${whole[@]}"
+fi
+
+# Check the staged content, not the working copy, since that is what gets committed.
+# Compare files byte for byte so trailing newlines count.
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+unformatted=()
+for file in "${partial[@]}"; do
+  info="$("$prettier" --file-info "$file")"
+  [ "$(jq -r '.ignored == false and .inferredParser != null' <<<"$info")" = "true" ] || continue
+  git show ":$file" >"$scratch/staged"
+  "$prettier" --stdin-filepath "$file" <"$scratch/staged" >"$scratch/formatted"
+  cmp -s "$scratch/staged" "$scratch/formatted" || unformatted+=("$file")
+done
+
+if [ "${#unformatted[@]}" -gt 0 ]; then
+  printf 'pre-commit: partly staged file needs formatting: %s\n' "${unformatted[@]}" >&2
+  echo "pre-commit: run prettier --write on it, re-stage, and commit again" >&2
+  exit 1
+fi
