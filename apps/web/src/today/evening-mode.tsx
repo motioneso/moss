@@ -7,6 +7,7 @@ import {
   type TaskDto
 } from "@moss/shared";
 import { Check } from "lucide-react";
+import { useState } from "react";
 
 import { Card } from "@moss/ui";
 
@@ -282,29 +283,109 @@ export function BriefingProse({ summaryText }: { readonly summaryText: string })
   return <div className="jds-brief__body">{summaryText}</div>;
 }
 
+export type EveningLoopDecision =
+  | { readonly kind: "tomorrow" }
+  | { readonly kind: "date"; readonly date: string }
+  | { readonly kind: "drop" };
+
+/** Reason line for an open loop, read only from the task's own due date. */
+export function eveningLoopReason(
+  task: TaskDto,
+  locale: LocaleSettingsDto
+): { readonly topic: string; readonly reason: string } | null {
+  if (task.dueAt === null) return null;
+  const today = localDay(new Date(), locale.timezone);
+  const dueKey = localDay(task.dueAt, locale.timezone);
+  const dueLabel = formatDate(task.dueAt, locale, { month: "short", day: "numeric" });
+  if (dueKey < today) {
+    return { topic: "Needs a new time", reason: `Was due ${dueLabel} and is still open.` };
+  }
+  if (dueKey === today) {
+    return { topic: "Needs a new time", reason: "Due today and still open." };
+  }
+  return { topic: "Coming up", reason: `Due ${dueLabel}.` };
+}
+
 export function EveningSupportSections(props: {
   readonly openLoopsDek: string | null;
   readonly carryingForward: readonly TaskDto[];
+  readonly locale: LocaleSettingsDto;
+  readonly busyTaskId: string | null;
   readonly onOpenTask: (taskId: string) => void;
+  readonly onDecide: (taskId: string, decision: EveningLoopDecision) => void;
 }) {
+  const [pickingId, setPickingId] = useState<string | null>(null);
+  const [pickedDate, setPickedDate] = useState("");
   return (
     <section className="ev-study ev-loops" id="evening-open-loops">
       <h2 className="ev-loops__title">{EVENING_OPEN_LOOPS_HEADING}</h2>
       {props.openLoopsDek !== null ? <p className="ev-loops__dek">{props.openLoopsDek}</p> : null}
       {props.carryingForward.length > 0 ? (
         <div className="ev-loops__list">
-          {props.carryingForward.slice(0, 3).map((task) => (
-            <button
-              type="button"
-              className="ev-loop"
-              key={task.id}
-              onClick={() => props.onOpenTask(task.id)}
-            >
-              <span className="ev-loop__topic">{task.source}</span>
-              <span className="ev-loop__title">{task.title}</span>
-              {task.description ? <span className="ev-loop__sub">{task.description}</span> : null}
-            </button>
-          ))}
+          {props.carryingForward.slice(0, 3).map((task) => {
+            const why = eveningLoopReason(task, props.locale);
+            const busy = props.busyTaskId === task.id;
+            return (
+              <div className="ev-loop" key={task.id}>
+                {why ? <span className="ev-loop__topic">{why.topic}</span> : null}
+                <button
+                  type="button"
+                  className="ev-loop__open"
+                  onClick={() => props.onOpenTask(task.id)}
+                >
+                  <span className="ev-loop__title">{task.title}</span>
+                </button>
+                {why ? <span className="ev-loop__sub">{why.reason}</span> : null}
+                <div className="ev-loop__actions">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => props.onDecide(task.id, { kind: "tomorrow" })}
+                  >
+                    Tomorrow
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-expanded={pickingId === task.id}
+                    onClick={() => {
+                      setPickedDate("");
+                      setPickingId(pickingId === task.id ? null : task.id);
+                    }}
+                  >
+                    Choose a day
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => props.onDecide(task.id, { kind: "drop" })}
+                  >
+                    Let it go
+                  </button>
+                </div>
+                {pickingId === task.id ? (
+                  <div className="ev-loop__picker">
+                    <input
+                      type="date"
+                      aria-label={`New day for ${task.title}`}
+                      value={pickedDate}
+                      onChange={(event) => setPickedDate(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || pickedDate === ""}
+                      onClick={() => {
+                        props.onDecide(task.id, { kind: "date", date: pickedDate });
+                        setPickingId(null);
+                      }}
+                    >
+                      Save day
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : props.openLoopsDek === null ? (
         <p className="ev-loops__dek">{EVENING_OPEN_LOOPS_EMPTY}</p>

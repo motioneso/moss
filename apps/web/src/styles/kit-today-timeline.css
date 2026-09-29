@@ -837,13 +837,44 @@
   display: block;
   width: 100%;
   padding: 17px 0;
-  border: 0;
   border-top: 1px solid var(--line);
+}
+.ev-loop__open {
+  display: block;
+  padding: 0;
+  border: 0;
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.ev-loop__actions,
+.ev-loop__picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ev-loop__actions button,
+.ev-loop__picker button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ev-loop__actions button:disabled,
+.ev-loop__picker button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ev-loop__picker {
+  align-items: center;
+  margin-top: 10px;
 }
 .ev-loop__topic {
   display: block;
