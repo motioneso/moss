@@ -61,7 +61,7 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
       morningFreshness: null
     });
 
-    expect(content.preparedAt).toBe("Prepared at 8:00");
+    expect(content.preparedAt).toBe("Prepared at 8:00 am");
     expect(content.readerControl).not.toBeNull();
 
     const markup = renderToStaticMarkup(

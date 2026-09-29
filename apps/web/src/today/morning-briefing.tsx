@@ -406,7 +406,7 @@ function ReportBody(props: {
         </p>
       ) : null}
       <p className="brief-reader__prepared">
-        Prepared at {formatTime(run.createdAt, props.locale)}
+        {acceptLabels.preparedAtLabel(run.createdAt, props.locale)}
       </p>
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
       {headline.rest ? <BriefingMarkdown text={headline.rest} /> : null}

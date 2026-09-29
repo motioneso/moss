@@ -148,6 +148,11 @@ export function ampm(iso: string, locale: LocaleSettingsDto): string {
   return /pm$/i.test(formatTime(iso, locale, { hour: "numeric", hour12: true })) ? "pm" : "am";
 }
 
+/** "Prepared at 8:00 am" — the 12-hour clock with am/pm, shared by the hero and the reader. */
+export function preparedAtLabel(iso: string, locale: LocaleSettingsDto): string {
+  return `Prepared at ${timeLabel(iso, locale)} ${ampm(iso, locale)}`;
+}
+
 export function durationLabel(event: CalendarEventDto): string {
   const mins = Math.round(
     (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000

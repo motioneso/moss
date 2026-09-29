@@ -11,7 +11,7 @@ import {
   EVENING_SOURCES_LABEL,
   MORNING_READ_FULL_LABEL,
   MORNING_SOURCES_LABEL,
-  timeLabel
+  preparedAtLabel
 } from "./today-labels.js";
 
 /** Split briefing prose into a headline (first sentence) and the rest. Some
@@ -145,7 +145,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
           <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />
         ),
       preparedAt: input.eveningRun
-        ? `Prepared at ${timeLabel(input.eveningRun.createdAt, input.locale)}`
+        ? preparedAtLabel(input.eveningRun.createdAt, input.locale)
         : null,
       readerControl: input.eveningRun ? <EveningHeroLinks /> : null
     };
@@ -175,7 +175,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     !input.assessmentShown || input.morningLoading
       ? null
       : morningReadable
-        ? `Prepared at ${timeLabel(morningReadable.createdAt, input.locale)}`
+        ? preparedAtLabel(morningReadable.createdAt, input.locale)
         : BRIEFING_NOT_READY_LABEL;
   return {
     headline: input.morningSplit ? input.morningSplit.headline : fallbackHeadline,
