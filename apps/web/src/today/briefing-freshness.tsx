@@ -9,6 +9,12 @@ const EMAIL_DELAY_THRESHOLD_MS = 60 * 60 * 1000;
 const SOURCE_LABEL: Record<string, string> = {
   email: "Email",
   calendar: "Calendar",
+  calendar_today: "Today's schedule",
+  weather: "Weather",
+  calendar_tomorrow: "Tonight and tomorrow",
+  email_today: "Today's email",
+  morning_plan: "This morning's plan",
+  tasks_reconciliation: "Task review",
   vault: "Notes",
   tasks: "Tasks",
   commitments: "Commitments",
@@ -18,6 +24,10 @@ const SOURCE_LABEL: Record<string, string> = {
   sports: "Sports",
   day_plan: "Day plan"
 };
+
+export function sourceLabel(source: string): string {
+  return SOURCE_LABEL[source] ?? source;
+}
 
 function formatAge(entry: SourceFreshnessEntry, capturedAt: string): string {
   if (entry.freshnessKind === "realtime") return "live";
@@ -63,7 +73,7 @@ export function BriefingFreshnessList({
           return (
             <li key={entry.source} className="bfresh__item">
               <span className="bfresh__source">
-                {SOURCE_LABEL[entry.source] ?? entry.source}
+                {sourceLabel(entry.source)}
                 {time ? `, ${time}` : null}
                 {contribution ? `: ${contribution}.` : null}
               </span>
@@ -111,7 +121,7 @@ export function BriefingStaleBanner({
     (entry) => !excluded.has(entry.source) && isStale(entry, freshness.capturedAt)
   );
   if (stale.length === 0) return null;
-  const names = stale.map((e) => SOURCE_LABEL[e.source] ?? e.source).join(", ");
+  const names = stale.map((e) => sourceLabel(e.source)).join(", ");
   return <p className="bfresh__stale">Some sources are over a day old: {names}.</p>;
 }
 

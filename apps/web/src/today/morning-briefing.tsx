@@ -36,7 +36,8 @@ import {
   BriefingFreshnessList,
   BriefingStaleBanner,
   delayedEmailSource,
-  parseBriefingFreshness
+  parseBriefingFreshness,
+  sourceLabel
 } from "./briefing-freshness.js";
 import { DayPlanSection } from "./day-plan.js";
 
@@ -483,7 +484,7 @@ function ReportBody(props: {
           ) : null}
           {gaps.map((gap) => (
             <p key={gap.source} className="brief-reader__gap">
-              {gap.source}: No longer available ({gap.reason}).
+              {sourceLabel(gap.source)}: No longer available ({gap.reason}).
             </p>
           ))}
         </details>
