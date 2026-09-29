@@ -833,8 +833,8 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeVisible();
   await expect(page.getByText(/^Overnight low/).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
-  await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
-  await expect(page.getByText("Team standup").first()).toBeVisible();
+  // The evening page carries no second schedule; the events show in the planning dialog.
+  await expect(page.getByText("Your day, laid out")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const dialog = page.getByRole("dialog");
