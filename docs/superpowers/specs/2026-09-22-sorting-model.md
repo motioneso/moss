@@ -170,8 +170,8 @@ Model for each job
    run; a run with no sorting model keeps that prompt unchanged. The focus feature keeps its own
    approved behaviour and interface.
 3. **More jobs.**
-   - Email category and sign-in code split into a new job key with its own setup gate defined in
-     that slice.
+   - Email category and sign-in code split into a new job key with its own setup gate. Design
+     agreed with Ben 2026-09-29 (#2805); section 11 records it.
    - Commitments and task search opt in. Their today's path is preserved by construction.
    - News source and topic safety checks, after rewording away from "the active provider's policy".
    - The disclosure line is extended for each new data type.
@@ -261,3 +261,98 @@ binding. With no sorting model the matcher runs today's main-model path and noth
 - Integration: one user cannot read another user's remembered answers, cannot write a row claiming
   another user's id, and cannot delete another user's rule's answers; a write sweeps the owner's
   lapsed rows; editing, replacing or taking back a rule drops its answers.
+
+## 11. Slice 3: email sorting on the sorting model (#2805)
+
+Status: design agreed with Ben 2026-09-29. Step 1 (shadow comparison) built in the PR for #2805.
+Email sorting does not switch until Ben has reviewed a sample of disagreements.
+
+### Questions
+
+The sorting model answers five atomic yes/no questions per email, in one request. On System One
+each is a `noul` question, whose answer is one probability of yes with no separate confidence.
+Any other sorting-capable provider answers yes or no with a confidence through the structured
+path, read as a probability of yes (`confidence` for yes, `1 - confidence` for no).
+
+| Id                | Question                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `personal_sender` | Did a real person write this to you personally, rather than an automated or bulk sender? |
+| `asks_reply`      | Does it ask you a question or expect a reply?                                            |
+| `asks_action`     | Does it ask you to do something (pay, sign, book, fill in a form)?                       |
+| `near_deadline`   | Does it mention a date or deadline in the next week?                                     |
+| `marketing`       | Is it marketing, a newsletter or a promotion?                                            |
+
+The model never picks the category. The state carries the subject, sender, received date, today's
+date and the body, cut so the whole request stays under System One's 12,000-byte cap.
+
+### Code-side facts
+
+Not asked of the model:
+
+- **Sign-in code.** The existing code check (`signInCodeDecision`). `hands-over-a-code` decides.
+  `unclear`, which today makes the general model answer `deliversSignInCode`, sends the email to
+  the general model; no question is asked.
+- **The user sent the last message in the thread.** The newest cached message in the email's
+  thread came from one of the user's own addresses (the same address set the thread judgement
+  uses).
+
+### Mapping
+
+First match wins:
+
+1. Sign-in code -> skipped as a sign-in code, as today.
+2. `marketing` yes and `personal_sender` no -> `noise`.
+3. `asks_reply` yes -> `needs_reply`.
+4. `asks_action` yes -> `needs_action`.
+5. The user sent the last message -> `waiting_on_someone`.
+6. `near_deadline` yes -> `time_sensitive_info`.
+7. Otherwise -> `fyi`.
+
+### Unsure band
+
+`unknown` is not produced. An answer from 0.35 to 0.65 inclusive is unsure; below is no, above is
+yes. Each step reads its answers three ways (yes, no, unsure). A step that is clearly true decides,
+clearly false moves on, and one that depends on an unsure answer sends the email to the general
+model as today. An unsure answer that no reached step depends on is ignored: an unsure `marketing`
+answer does not matter when `personal_sender` is clearly yes, and nothing after the deciding step
+is read.
+
+### Job key and gate
+
+The job key is `module.connectors.email-sort`. It goes through the slice 1 gate unchanged: no
+sorting model bound, an admin pin, or an exact `module.connectors.email-sort` binding all mean the
+general model sorts as today. It accepts a System One model.
+
+### Rollout
+
+1. **Shadow comparison (built).** `pnpm email:compare-sorting <userId>` re-sorts one user's
+   already-sorted mail through the path above and prints, side by side with the stored verdict,
+   the agreement rate where the sorting model decided, the unsure count by step, how mail held for
+   a closer look would have been sorted, a stored-versus-sorting table, and each disagreement with
+   its five probabilities. `--out` writes the same as JSON (ids, verdicts and probabilities, no
+   content). Nothing is written to the database and nothing the user sees changes; sync is
+   untouched.
+2. **Switch.** After Ben reviews a sample of disagreements, sync asks the sorting model first and
+   uses the general model for unsure and failed emails and for the summary of mail that is not
+   noise. That step needs its own PR, settings disclosure line and app-map entry.
+
+### Data boundary (shadow)
+
+- The comparison runs inside the named user's own data context, so row level security limits it
+  to that user's mail. It is an operator command, not a product surface.
+- The sorting model receives what the cache holds: subject, sender, dates and the stored excerpt
+  (at most 500 characters), not the full body a live sync reads. Agreement from a comparison run
+  is therefore a lower bound on agreement with full bodies.
+- No content goes into logs, job payloads or the `--out` file. `--show-subjects` prints the
+  subjects of disagreements to the operator's terminal only.
+
+### Tests
+
+- Mapping order: each step beats the ones after it.
+- Unsure band: both edges, each step deferring on its own unsure answer, unsure answers that do
+  not matter, a missing answer read as unsure.
+- The request stays under 12,000 bytes with a long multi-byte body.
+- System One noul answers read as-is; a missing, out-of-range or wrong-type answer fails; a
+  structured yes/no answer converts to a probability of yes; nothing is called with no sorting
+  model bound.
+- Comparison summary: agreement, unsure, pending and failed are counted separately.

@@ -77,6 +77,100 @@ export async function generateChoices(
   input: GenerateChoicesInput,
   deps: GenerateChoicesDeps
 ): Promise<GenerateChoicesResult> {
+  const questions = Object.fromEntries(
+    Object.entries(input.questions).map(([name, question]) => [
+      name,
+      {
+        type: "choice",
+        instructions: question.instructions,
+        criteria: question.criteria
+      }
+    ])
+  );
+  const posted = await postSystemOne(scopedDb, input, questions, deps, "ai.generateChoices");
+  if (!posted.ok) return posted;
+
+  const answers = validateAnswers(input.questions, posted.payload);
+  if (!answers) {
+    deps.logger?.warn(
+      { service: input.service, code: "invalid_response" },
+      "ai.generateChoices invalid response"
+    );
+    return { ok: false, error: "invalid_response" };
+  }
+  return { ok: true, answers, usage: posted.usage };
+}
+
+/** A System One yes/no ("noul") question. A high `noul` value means yes. */
+export type NoulQuestionInput = {
+  readonly instructions: string;
+  readonly criteria?: { readonly true: string; readonly false: string };
+};
+
+export type GenerateNoulInput = Omit<GenerateChoicesInput, "questions"> & {
+  readonly questions: Readonly<Record<string, NoulQuestionInput>>;
+};
+
+type GenerateChoicesFailure = Extract<GenerateChoicesResult, { ok: false }>["error"];
+
+export type GenerateNoulResult =
+  | {
+      readonly ok: true;
+      /** Per question id, the probability from 0 to 1 that the answer is yes. */
+      readonly probabilities: Readonly<Record<string, number>>;
+      readonly usage: { readonly inputTokens: number; readonly outputTokens: number };
+    }
+  | { readonly ok: false; readonly error: GenerateChoicesFailure };
+
+/**
+ * #2805: ask System One yes/no questions. A noul answer carries one probability and no separate
+ * confidence field, so the probability is returned as-is.
+ */
+export async function generateNoul(
+  scopedDb: DataContextDb,
+  input: GenerateNoulInput,
+  deps: GenerateChoicesDeps
+): Promise<GenerateNoulResult> {
+  const questions = Object.fromEntries(
+    Object.entries(input.questions).map(([name, question]) => [
+      name,
+      {
+        type: "noul",
+        instructions: question.instructions,
+        ...(question.criteria ? { criteria: question.criteria } : {})
+      }
+    ])
+  );
+  const posted = await postSystemOne(scopedDb, input, questions, deps, "ai.generateNoul");
+  if (!posted.ok) return posted;
+
+  const probabilities = validateNoulAnswers(input.questions, posted.payload);
+  if (!probabilities) {
+    deps.logger?.warn(
+      { service: input.service, code: "invalid_response" },
+      "ai.generateNoul invalid response"
+    );
+    return { ok: false, error: "invalid_response" };
+  }
+  return { ok: true, probabilities, usage: posted.usage };
+}
+
+type SystemOnePost =
+  | {
+      readonly ok: true;
+      readonly payload: Record<string, unknown>;
+      readonly usage: { readonly inputTokens: number; readonly outputTokens: number };
+    }
+  | { readonly ok: false; readonly error: GenerateChoicesFailure };
+
+/** Resolves the model and credential, posts one request to System One and reads the JSON body. */
+async function postSystemOne(
+  scopedDb: DataContextDb,
+  input: Omit<GenerateChoicesInput, "questions">,
+  questions: Record<string, unknown>,
+  deps: GenerateChoicesDeps,
+  logPrefix: string
+): Promise<SystemOnePost> {
   const model =
     input.explicitModel ??
     (
@@ -110,27 +204,17 @@ export async function generateChoices(
     // Never log the ciphertext, credential material, or raw AES-GCM errors.
     deps.logger?.warn(
       { service: input.service, code: "credential_decrypt_failed" },
-      "ai.generateChoices credential could not be decrypted"
+      `${logPrefix} credential could not be decrypted`
     );
     return { ok: false, error: "needs_config" };
   }
 
-  const questions = Object.fromEntries(
-    Object.entries(input.questions).map(([name, question]) => [
-      name,
-      {
-        type: "choice",
-        instructions: question.instructions,
-        criteria: question.criteria
-      }
-    ])
-  );
   const body = { model: model.provider_model_id, state: input.state, questions };
   const serializedBody = JSON.stringify(body);
   if (Buffer.byteLength(serializedBody, "utf8") > GENERATE_CHOICES_MAX_REQUEST_BYTES) {
     deps.logger?.warn(
       { service: input.service, code: "request_too_large" },
-      "ai.generateChoices request rejected"
+      `${logPrefix} request rejected`
     );
     return { ok: false, error: "provider_error" };
   }
@@ -156,14 +240,14 @@ export async function generateChoices(
   } catch (error) {
     if (input.signal?.aborted) return { ok: false, error: "aborted" };
     const code = isTimeoutLike(error) ? "timeout" : "network_error";
-    deps.logger?.warn({ service: input.service, code }, "ai.generateChoices provider error");
+    deps.logger?.warn({ service: input.service, code }, `${logPrefix} provider error`);
     return { ok: false, error: "provider_error" };
   }
 
   if (!response.ok) {
     deps.logger?.warn(
       { service: input.service, code: `http_${response.status}` },
-      "ai.generateChoices provider error"
+      `${logPrefix} provider error`
     );
     return { ok: false, error: "provider_error" };
   }
@@ -176,16 +260,15 @@ export async function generateChoices(
     if (input.signal?.aborted) return { ok: false, error: "aborted" };
     deps.logger?.warn(
       { service: input.service, code: "invalid_response_body" },
-      "ai.generateChoices invalid response"
+      `${logPrefix} invalid response`
     );
     return { ok: false, error: "invalid_response" };
   }
 
-  const answers = validateAnswers(input.questions, payload);
-  if (!answers || !isRecord(payload)) {
+  if (!isRecord(payload)) {
     deps.logger?.warn(
       { service: input.service, code: "invalid_response" },
-      "ai.generateChoices invalid response"
+      `${logPrefix} invalid response`
     );
     return { ok: false, error: "invalid_response" };
   }
@@ -193,12 +276,32 @@ export async function generateChoices(
   const usage = isRecord(payload.usage) ? payload.usage : {};
   return {
     ok: true,
-    answers,
+    payload,
     usage: {
       inputTokens: readTokenCount(usage["input_tokens"]),
       outputTokens: readTokenCount(usage["output_tokens"])
     }
   };
+}
+
+/** Every asked id answered as a noul with a probability inside 0 to 1; anything else fails. */
+function validateNoulAnswers(
+  questions: Readonly<Record<string, NoulQuestionInput>>,
+  payload: Record<string, unknown>
+): Record<string, number> | null {
+  const rawAnswers = payload["answers"];
+  if (!isRecord(rawAnswers)) return null;
+
+  const probabilities: Record<string, number> = {};
+  for (const name of Object.keys(questions)) {
+    const rawAnswer = rawAnswers[name];
+    if (!isRecord(rawAnswer)) return null;
+    if (rawAnswer["type"] !== "noul") return null;
+    const value = rawAnswer["noul"];
+    if (!isUnitInterval(value)) return null;
+    probabilities[name] = value;
+  }
+  return probabilities;
 }
 
 type ChoiceQuestionMap = Readonly<Record<string, ChoiceQuestionInput>>;
