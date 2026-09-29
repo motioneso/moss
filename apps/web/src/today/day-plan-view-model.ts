@@ -139,6 +139,11 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
   if (input.plan === null) return events;
 
   const plan = input.plan;
+  // Moss-created calendar entries (other task blocks) are not meetings, so
+  // they never back a preparation reason.
+  const mossBlockEventIds = new Set(
+    input.events.filter((event) => event.isMossBlock).map((event) => event.id)
+  );
   const summaries = new Map(input.tasks.map((task) => [task.id, task]));
   const unavailable = new Set(input.unavailableTaskIds);
   const planHasEveningIntent = plan.eveningIntent !== null;
@@ -198,6 +203,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         block.kind === "prep" && readerEndsAt !== null
           ? events.find((event) => {
               if (event.startsAt === null) return false;
+              if (event.eventId !== null && mossBlockEventIds.has(event.eventId)) return false;
               const gap = Date.parse(event.startsAt) - Date.parse(readerEndsAt);
               return gap >= 0 && gap <= REASON_MAX_GAP_MS;
             })

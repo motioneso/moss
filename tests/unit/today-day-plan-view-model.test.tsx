@@ -600,4 +600,39 @@ describe("buildDayItems tag and reason", () => {
     });
     expect(items.find((i) => i.taskId === "t1")?.reason).toBeNull();
   });
+
+  it("does not name a Moss-created block as the event a prep block is for", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([placed("2026-06-30T20:00:00.000Z", "prep")]),
+      tasks: [summary({ id: "t1" })],
+      events: [
+        event({
+          id: "e1",
+          title: "Write the draft",
+          startsAt: "2026-06-30T20:30:00.000Z",
+          isMossBlock: true
+        })
+      ]
+    });
+    expect(items.find((i) => i.taskId === "t1")?.reason).toBeNull();
+  });
+
+  it("names the real meeting when a Moss block starts at the same time", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([placed("2026-06-30T20:00:00.000Z", "prep")]),
+      tasks: [summary({ id: "t1" })],
+      events: [
+        event({
+          id: "e1",
+          title: "Write the draft",
+          startsAt: "2026-06-30T20:30:00.000Z",
+          isMossBlock: true
+        }),
+        event({ id: "e2", title: "Project review", startsAt: "2026-06-30T20:30:00.000Z" })
+      ]
+    });
+    expect(items.find((i) => i.taskId === "t1")?.reason).toBe("For Project review at 1:30pm");
+  });
 });
