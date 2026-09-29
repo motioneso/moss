@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
 
+import type { ChangedBriefingBlock } from "../../apps/web/src/today/briefing-callout.js";
 import {
   TodayRail,
   preparationBlockMinutes,
@@ -69,7 +70,10 @@ describe("preparationBlockMinutes", () => {
   });
 });
 
-function baseRailProps(precedingEvents: readonly CalendarEventDto[]) {
+function baseRailProps(
+  precedingEvents: readonly CalendarEventDto[],
+  changed: readonly ChangedBriefingBlock[] = []
+) {
   return {
     mode: "day" as const,
     now: new Date("2026-09-28T16:00:00.000Z"),
@@ -77,12 +81,7 @@ function baseRailProps(precedingEvents: readonly CalendarEventDto[]) {
     nextEvent,
     precedingEvents,
     nextStarted: false,
-    hasStatSignal: false,
-    prioritiesCount: 0,
-    atRiskCount: 0,
-    eventsCount: 0,
-    doneToday: 0,
-    agenda: [],
+    changedSinceLastNight: changed,
     onNavigate: () => undefined,
     showEveningReview: false,
     showEveningPrep: false,
@@ -100,11 +99,47 @@ function baseRailProps(precedingEvents: readonly CalendarEventDto[]) {
   };
 }
 
-function renderRail(precedingEvents: readonly CalendarEventDto[]): string {
+function renderRail(
+  precedingEvents: readonly CalendarEventDto[],
+  changed: readonly ChangedBriefingBlock[] = []
+): string {
   return renderToString(
-    createElement(MemoryRouter, null, createElement(TodayRail, baseRailProps(precedingEvents)))
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(TodayRail, baseRailProps(precedingEvents, changed))
+    )
   );
 }
+
+describe("TodayRail morning column sections", () => {
+  it("names a moved block under Since last night", () => {
+    const html = renderRail(
+      [],
+      [
+        {
+          title: "Review",
+          oldStartsAt: "2026-09-28T21:00:00.000Z",
+          newStartsAt: "2026-09-28T20:00:00.000Z",
+          proposed: false
+        }
+      ]
+    );
+    expect(html).toContain("Since last night");
+    expect(html).toContain("Review is now at");
+  });
+
+  it("shows no Since last night section when nothing moved", () => {
+    expect(renderRail([])).not.toContain("Since last night");
+  });
+
+  it("no longer carries At a glance, Today's agenda or a preparation list", () => {
+    const html = renderRail([]);
+    expect(html).not.toContain("At a glance");
+    expect(html).not.toContain("Today&#x27;s agenda");
+    expect(html).not.toContain("Your preparation");
+  });
+});
 
 describe("TodayRail preparation line", () => {
   it("shows the preparation note when a matching preparation block precedes the meeting", () => {
