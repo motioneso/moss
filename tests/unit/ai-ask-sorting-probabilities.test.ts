@@ -36,6 +36,8 @@ function makeDeps(options: {
   model: unknown;
   fetch?: typeof fetch;
   adapter?: StructuredProviderAdapter;
+  cliAdapter?: StructuredProviderAdapter;
+  authMethod?: "api_key" | "cli";
 }): AskSortingQuestionsDeps {
   return {
     repository: {
@@ -43,14 +45,15 @@ function makeDeps(options: {
       resolveModelForService: vi.fn(async () => ({ model: null, reason: "needs-config" as const })),
       selectProviderWithCredential: vi.fn(async (_db, providerId: string) => ({
         id: providerId,
-        auth_method: "api_key",
+        auth_method: options.authMethod ?? "api_key",
         base_url: "https://example.test",
         encrypted_credential: {}
       })) as never
     } as AskSortingQuestionsDeps["repository"],
     cipher: { decryptJson: vi.fn(() => ({ apiKey: "sk-test" })) },
     ...(options.fetch ? { fetch: options.fetch } : {}),
-    ...(options.adapter ? { createAdapter: () => options.adapter! } : {})
+    ...(options.adapter ? { createAdapter: () => options.adapter! } : {}),
+    ...(options.cliAdapter ? { createCliStructuredAdapter: () => options.cliAdapter! } : {})
   };
 }
 
@@ -136,6 +139,36 @@ describe("askSortingProbabilities", () => {
     expect(result.probabilities.q_a).toBeCloseTo(0.8);
     expect(result.probabilities.q_b).toBeCloseTo(0.3);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("answers through a command-line sorting model only when the caller supplies its adapter", async () => {
+    const generateStructured = vi.fn(async (_input: unknown) => ({
+      rawObject: {
+        answers: [
+          { id: "q_a", answer: "no", confidence: 0.9 },
+          { id: "q_b", answer: "yes", confidence: 0.6 }
+        ]
+      },
+      usage: { inputTokens: 5, outputTokens: 2 }
+    }));
+    const input = { service: "module.connectors.email-sort" as const, state: {}, questions };
+
+    const withAdapter = await askSortingProbabilities(
+      scopedDb,
+      input,
+      makeDeps({ model: jsonModel, authMethod: "cli", cliAdapter: { generateStructured } })
+    );
+    expect(withAdapter.ok).toBe(true);
+    if (!withAdapter.ok) return;
+    expect(withAdapter.probabilities.q_a).toBeCloseTo(0.1);
+    expect(withAdapter.probabilities.q_b).toBeCloseTo(0.6);
+
+    const without = await askSortingProbabilities(
+      scopedDb,
+      input,
+      makeDeps({ model: jsonModel, authMethod: "cli" })
+    );
+    expect(without).toEqual({ ok: false, error: "needs_config" });
   });
 
   it("reports not_supported and calls nothing when no sorting model is bound", async () => {

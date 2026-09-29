@@ -28,6 +28,7 @@ import {
 } from "@moss/connectors";
 import { DataContextRunner, createDatabase, getMossDatabaseUrls } from "@moss/db";
 import { EmailRepository } from "@moss/email";
+import { createCliStructuredAdapterFactory } from "@moss/module-registry";
 
 const CONCURRENCY = 4;
 
@@ -73,7 +74,11 @@ async function main(): Promise<void> {
   const urls = getMossDatabaseUrls();
   const appDb = createDatabase({ connectionString: urls.app, maxConnections: 2 });
   const dataContext = new DataContextRunner(appDb);
-  const aiDeps = { repository: new AiRepository(), cipher: createAiSecretCipher() };
+  const aiDeps = {
+    repository: new AiRepository(),
+    cipher: createAiSecretCipher(),
+    createCliStructuredAdapter: createCliStructuredAdapterFactory()
+  };
   const emails = new EmailRepository();
 
   try {
@@ -108,9 +113,19 @@ async function main(): Promise<void> {
             );
           const cached = threadCache.get(threadId);
           if (cached !== undefined) return cached;
+          // listByThread returns the oldest messages up to a cap; add the newest one past them.
           const thread = await emails.listByThread(scopedDb, userId, threadId);
+          const last = thread.at(-1);
+          const newer = last
+            ? await emails.listNewerInThreads(scopedDb, userId, [
+                { threadId, afterExternalId: last.external_id }
+              ])
+            : [];
           const value = userSentLastInThread(
-            thread.map((m) => ({ sender: m.sender, receivedAt: m.received_at })),
+            [...thread, ...newer.map((n) => n.message)].map((m) => ({
+              sender: m.sender,
+              receivedAt: m.received_at
+            })),
             mine
           );
           threadCache.set(threadId, value);
