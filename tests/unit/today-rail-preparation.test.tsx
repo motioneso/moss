@@ -126,7 +126,7 @@ describe("TodayRail morning column sections", () => {
       ]
     );
     expect(html).toContain("Since last night");
-    expect(html).toContain("Review is now at");
+    expect(html).toContain("Review is set for");
   });
 
   it("shows no Since last night section when nothing moved", () => {

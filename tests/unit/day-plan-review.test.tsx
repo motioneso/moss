@@ -419,14 +419,15 @@ describe("useDayPlanReview writes", () => {
     expect(current().approval).toBe(null);
     const keys = invalidate.mock.calls.map((args) => (args[0] as { queryKey: unknown }).queryKey);
     const unique = new Set(keys.map((key) => JSON.stringify(key)));
-    // Preview and apply each invalidate the same four keys, nothing else.
+    // Preview and apply each invalidate the same five keys, nothing else.
     expect(unique).toEqual(
       new Set(
         [
           ["calendar", "day-plan", DAY, TZ],
           ["calendar", "list"],
           ["tasks", "list"],
-          ["briefings", "runs", "def-morning"]
+          ["briefings", "runs", "def-morning"],
+          ["briefings", "run", "def-morning"]
         ].map((key) => JSON.stringify(key))
       )
     );
