@@ -88,6 +88,7 @@ import "../styles/kit-today-timeline.css";
 import "../styles/kit-today-desks.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
+import "../styles/kit-evening-loops.css";
 import "../styles/kit-briefing-reader.css";
 import "../styles/kit-day-plan-review.css";
 import "../styles/kit-evening-planning.css";
