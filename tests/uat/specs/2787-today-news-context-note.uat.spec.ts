@@ -39,6 +39,15 @@ test("Today's news side stories show the context note and no invented topic labe
     await expect(note.locator(".nw-twnote__eyebrow")).toHaveText("Your news, in context");
     await expect(note.locator(".nw-twnote__text")).not.toBeEmpty();
 
+    // Approved design: gold left border, left inset, no top divider, capped width.
+    await expect(note).toHaveCSS("border-left-width", "2px");
+    await expect(note).toHaveCSS("border-left-color", "rgb(194, 135, 43)");
+    await expect(note).toHaveCSS("border-top-width", "0px");
+    await expect(note).toHaveCSS("padding-left", "16px");
+    await expect(note).toHaveCSS("margin-top", "19px");
+    await expect(note).toHaveCSS("max-width", "290px");
+    await expect(note.locator(".nw-twnote__eyebrow")).toHaveCSS("font-weight", "700");
+
     await desk.screenshot({ path: `/tmp/2787-news-desk-${viewport.width}.png` });
   }
 });
