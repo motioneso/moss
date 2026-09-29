@@ -398,6 +398,10 @@ export const EVENING_SNAPSHOT_INTENT = {
 } as const;
 export const EVENING_SNAPSHOT_NO_BLOCKS = "No task blocks selected. The rest stays open.";
 export const EVENING_SNAPSHOT_REST = "The rest stays open.";
+export const EVENING_SNAPSHOT_ROOM_NOTE = "Room to get home and have lunch.";
+export const EVENING_SNAPSHOT_EXISTING_BLOCKS = "Existing calendar task blocks";
+export const eveningBetweenBlocksNote = (minutes: number): string =>
+  `${minutes} minutes between task blocks.`;
 export const EVENING_PLACEMENT_NOTES = {
   auto: {
     title: "Automatic scheduling is on",

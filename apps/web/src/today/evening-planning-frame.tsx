@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
 import type {
   CalendarEventDto,
@@ -21,10 +21,13 @@ import {
   EVENING_REFLECT_ADD_NOTE_LABEL,
   EVENING_REFLECT_NOTE_LABEL,
   EVENING_REFLECT_NOTE_PLACEHOLDER,
+  EVENING_SNAPSHOT_EXISTING_BLOCKS,
   EVENING_SNAPSHOT_INTENT,
   EVENING_SNAPSHOT_NO_BLOCKS,
   EVENING_SNAPSHOT_REST,
+  eveningBetweenBlocksNote,
   eveningMobilePlanLabel,
+  EVENING_SNAPSHOT_ROOM_NOTE,
   timeLabel
 } from "./today-labels.js";
 
@@ -98,9 +101,46 @@ export interface EveningSnapshotProps {
   readonly policyMode: "off" | "suggest" | "auto";
 }
 
+/** Moss task blocks already on tomorrow's calendar. Unless automatic scheduling
+    is on they stay put until the plan is accepted, so they sit in a fold. */
+function existingMossBlocks(props: EveningSnapshotProps): CalendarEventDto[] {
+  if (props.policyMode === "auto") return [];
+  return props.events.filter((event) => !event.allDay && event.isMossBlock);
+}
+
+const ROOM_MINUTES = 60;
+
+/** Minutes between the end of one entry and the start of the next. */
+function gapBetween(before: SnapshotEntry, after: SnapshotEntry): number {
+  return Math.round(
+    (Date.parse(after.startsAt) - Date.parse(before.startsAt) - before.minutes * 60_000) / 60_000
+  );
+}
+
+/** Notes drawn only from real gaps: room after the last fixed entry before the
+    first task block, and a shared gap between consecutive task blocks. */
+function snapshotGapNotes(entries: readonly SnapshotEntry[]): {
+  readonly room: number | null;
+  readonly between: string | null;
+} {
+  const firstDraft = entries.findIndex((entry) => entry.draft);
+  if (firstDraft < 0) return { room: null, between: null };
+  const before = entries.slice(0, firstDraft).at(-1);
+  const roomIndex =
+    before !== undefined && gapBetween(before, entries[firstDraft]!) >= ROOM_MINUTES
+      ? firstDraft
+      : null;
+  const drafts = entries.filter((entry) => entry.draft);
+  const gaps = drafts.slice(1).map((entry, index) => gapBetween(drafts[index]!, entry));
+  const [first] = gaps;
+  const uniform = first !== undefined && first > 0 && gaps.every((gap) => gap === first);
+  return { room: roomIndex, between: uniform ? eveningBetweenBlocksNote(first) : null };
+}
+
 function snapshotEntries(props: EveningSnapshotProps): SnapshotEntry[] {
+  const hidden = new Set(existingMossBlocks(props).map((event) => event.id));
   const fixed = props.events
-    .filter((event) => !event.allDay)
+    .filter((event) => !event.allDay && !hidden.has(event.id))
     .map((event) => ({
       key: `event-${event.id}`,
       startsAt: event.startsAt,
@@ -134,6 +174,8 @@ export function draftBlockCount(proposals: readonly DayPlanBlockInput[]): number
 /** Tomorrow snapshot: fixed events and proposed task blocks in time order. */
 function EveningSnapshot(props: EveningSnapshotProps & { readonly withHeading: boolean }) {
   const entries = snapshotEntries(props);
+  const existing = existingMossBlocks(props);
+  const notes = snapshotGapNotes(entries);
   const taskMinutes = entries
     .filter((entry) => entry.draft)
     .reduce((sum, entry) => sum + entry.minutes, 0);
@@ -153,22 +195,29 @@ function EveningSnapshot(props: EveningSnapshotProps & { readonly withHeading: b
         </div>
       ) : null}
       <p className="evening-plan__snapshot-intent">{EVENING_SNAPSHOT_INTENT[props.capacity]}</p>
-      {entries.map((entry) => (
-        <div
-          key={entry.key}
-          className={
-            entry.draft
-              ? "evening-plan__snapshot-entry evening-plan__snapshot-entry--draft"
-              : "evening-plan__snapshot-entry"
-          }
-        >
-          <span>{`${timeLabel(entry.startsAt, props.locale)}${ampm(entry.startsAt, props.locale)}`}</span>
-          <div>
-            {entry.title}
-            <small>{`${entry.minutes} minutes \u00b7 ${entry.note}`}</small>
+      {entries.map((entry, index) => (
+        <Fragment key={entry.key}>
+          {notes.room === index ? (
+            <p className="evening-plan__snapshot-gap">{EVENING_SNAPSHOT_ROOM_NOTE}</p>
+          ) : null}
+          <div
+            className={
+              entry.draft
+                ? "evening-plan__snapshot-entry evening-plan__snapshot-entry--draft"
+                : "evening-plan__snapshot-entry"
+            }
+          >
+            <span>{`${timeLabel(entry.startsAt, props.locale)}${ampm(entry.startsAt, props.locale)}`}</span>
+            <div>
+              {entry.title}
+              <small>{`${entry.minutes} minutes \u00b7 ${entry.note}`}</small>
+            </div>
           </div>
-        </div>
+        </Fragment>
       ))}
+      {notes.between !== null ? (
+        <p className="evening-plan__snapshot-gap">{notes.between}</p>
+      ) : null}
       {taskMinutes === 0 ? (
         <p className="evening-plan__snapshot-gap">{EVENING_SNAPSHOT_NO_BLOCKS}</p>
       ) : null}
@@ -176,6 +225,16 @@ function EveningSnapshot(props: EveningSnapshotProps & { readonly withHeading: b
         <strong>{`${taskMinutes} minutes of task time`}</strong>
         <span>{EVENING_SNAPSHOT_REST}</span>
       </div>
+      {existing.length > 0 ? (
+        <details className="evening-plan__existing-blocks">
+          <summary>{EVENING_SNAPSHOT_EXISTING_BLOCKS}</summary>
+          {existing.map((event) => (
+            <p key={event.id}>
+              {`${timeLabel(event.startsAt, props.locale)}${ampm(event.startsAt, props.locale)} \u00b7 ${event.title}`}
+            </p>
+          ))}
+        </details>
+      ) : null}
     </div>
   );
 }

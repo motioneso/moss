@@ -161,6 +161,7 @@ export function EveningReviewSection(props: {
         run={props.run}
         loading={props.loading}
         completedToday={props.completedToday ?? []}
+        locale={props.locale}
         proseText={props.recapProse ?? ""}
         dateLabel={props.recapDateLabel ?? ""}
         onOpenTask={props.onOpenTask}
@@ -207,6 +208,7 @@ function EveningRecapSection(props: {
   readonly run: BriefingRunDto | null;
   readonly loading?: boolean;
   readonly completedToday: readonly TaskDto[];
+  readonly locale: LocaleSettingsDto;
   readonly proseText: string;
   readonly dateLabel: string;
   readonly onOpenTask?: (taskId: string) => void;
@@ -232,6 +234,7 @@ function EveningRecapSection(props: {
           {prose !== "" ? <p className="ev-recap__intro">{prose}</p> : null}
           <EveningRecapRows
             tasks={props.completedToday}
+            locale={props.locale}
             hideEmpty={prose !== ""}
             onOpenTask={props.onOpenTask}
           />
@@ -241,12 +244,13 @@ function EveningRecapSection(props: {
   );
 }
 
-/** Completed-today rows: checkmark, bold title and the task's own description
-    as a one-line sub-line. A task without one keeps an empty sub-line of the
-    same height so the row geometry holds. The empty line is hidden when the
+/** Completed-today rows: checkmark, bold title and a one-line note. The note is
+    the task's own description, or when it has none the time it was completed.
+    A task with neither shows no note. The empty-list line is hidden when the
     report's own recap prose already says the day. */
 function EveningRecapRows(props: {
   readonly tasks: readonly TaskDto[];
+  readonly locale: LocaleSettingsDto;
   readonly hideEmpty: boolean;
   readonly onOpenTask?: (taskId: string) => void;
 }) {
@@ -271,12 +275,21 @@ function EveningRecapRows(props: {
             onClick={() => props.onOpenTask?.(task.id)}
           >
             <span className="ev-done__title">{task.title}</span>
-            {task.description ? <span className="ev-done__sub">{task.description}</span> : null}
+            {doneNote(task, props.locale) ? (
+              <span className="ev-done__sub">{doneNote(task, props.locale)}</span>
+            ) : null}
           </button>
         </div>
       ))}
     </div>
   );
+}
+
+function doneNote(task: TaskDto, locale: LocaleSettingsDto): string | null {
+  const description = task.description?.trim();
+  if (description) return description;
+  if (task.completedAt === null) return null;
+  return `Completed at ${timeLabel(task.completedAt, locale)} ${ampm(task.completedAt, locale)}`;
 }
 
 export function BriefingProse({ summaryText }: { readonly summaryText: string }) {
