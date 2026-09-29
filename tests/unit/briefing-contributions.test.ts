@@ -157,6 +157,24 @@ describe("contributionFor on current runs", () => {
     expect(contributionFor("day_plan", current)).toBe("2 time blocks from last evening");
   });
 
+  it("names today's timeline events and the forecast", () => {
+    const md = { ...current, sectionLines: { calendar_today: 3, weather: 1 } };
+    expect(contributionFor("calendar_today", md)).toBe("3 events in today's timeline");
+    expect(contributionFor("weather", md)).toBe("today's forecast");
+  });
+
+  it("shows no line for empty or failed timeline and weather sources", () => {
+    const empty = { ...current, sectionLines: { calendar_today: 0, weather: 0 } };
+    expect(contributionFor("calendar_today", empty)).toBeNull();
+    expect(contributionFor("weather", empty)).toBeNull();
+    const failed = {
+      ...current,
+      sectionLines: { weather: 1 },
+      gaps: [{ source: "weather", reason: "tool_failed" }]
+    };
+    expect(contributionFor("weather", failed)).toBeNull();
+  });
+
   it("shows no line when a section gave nothing", () => {
     expect(contributionFor("vault", { ...current, sectionLines: { vault: 0 } })).toBeNull();
     expect(contributionFor("mystery", current)).toBeNull();

@@ -53,6 +53,10 @@ function lineFor(source: string, lines: number): string | null {
       return countLine(lines, "top story", undefined, "top stories");
     case "sports":
       return countLine(lines, "sports update");
+    case "calendar_today":
+      return countLine(lines, "event", "in today's timeline");
+    case "weather":
+      return "today's forecast";
     default:
       return null;
   }

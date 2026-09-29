@@ -9,6 +9,8 @@ const EMAIL_DELAY_THRESHOLD_MS = 60 * 60 * 1000;
 const SOURCE_LABEL: Record<string, string> = {
   email: "Email",
   calendar: "Calendar",
+  calendar_today: "Today's schedule",
+  weather: "Weather",
   vault: "Notes",
   tasks: "Tasks",
   commitments: "Commitments",

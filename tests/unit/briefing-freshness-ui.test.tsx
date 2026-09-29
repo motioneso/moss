@@ -189,3 +189,29 @@ describe("delayedEmailSource", () => {
     expect(delayedEmailSource(invalidEmailTime)).toBeNull();
   });
 });
+
+describe("BriefingFreshnessList plain names", () => {
+  it("names the timeline and weather rows in plain words with a contribution", () => {
+    const f: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [
+        { source: "calendar_today", freshnessKind: "realtime", asOf: CAPTURED },
+        { source: "weather", freshnessKind: "realtime", asOf: CAPTURED }
+      ]
+    };
+    const html = renderToString(
+      createElement(BriefingFreshnessList, {
+        freshness: f,
+        locale,
+        sourceMetadata: { sectionLines: { calendar_today: 2, weather: 1 } }
+      })
+    );
+    expect(html).toContain("Today&#x27;s schedule");
+    expect(html).toContain("2 events in today&#x27;s timeline.");
+    expect(html).toContain("Weather");
+    expect(html).toContain("today&#x27;s forecast.");
+    expect(html).not.toContain("calendar_today");
+    expect(html).not.toMatch(/>weather</);
+  });
+});
