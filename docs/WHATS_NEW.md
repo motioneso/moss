@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Cleaner Today header.** The Today header no longer has a faint line pattern behind it, and "Prepared at" now shows am or pm. [PR #2795](https://github.com/motioneso/moss/pull/2795)
 
+#### Added
+
+- **News note on Today.** The news section on your Today page now has a short "Your news, in context" note under the smaller stories. [PR #2798](https://github.com/motioneso/moss/pull/2798)
+
 ### 2026-09-28
 
 #### Fixed
