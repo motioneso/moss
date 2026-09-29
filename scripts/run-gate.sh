@@ -235,13 +235,20 @@ cmd_start() {
     fi
   fi
 
-  # Refuse to point at production under any circumstance. There is a
-  # jarv1s-prod-postgres-1 container sitting beside the dev one on this box.
+  # Refuse to point at production under any circumstance. The prod database
+  # (container moss-postgres, compose project jarv1s-prod) sits beside the dev
+  # one on this box. Check the compose project too, so a renamed prod container
+  # is still refused.
   case "$CONTAINER" in
-    *prod*) die "refusing to run a gate against container '$CONTAINER' (looks like production)" ;;
+    *prod* | moss-postgres) die "refusing to run a gate against container '$CONTAINER' (looks like production)" ;;
   esac
   docker inspect "$CONTAINER" >/dev/null 2>&1 ||
     die "container '$CONTAINER' not found — is the dev stack up?"
+  local container_project
+  container_project="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$CONTAINER" 2>/dev/null || true)"
+  case "$container_project" in
+    *prod*) die "refusing to run a gate against container '$CONTAINER' (compose project '$container_project' looks like production)" ;;
+  esac
 
   # Serialize the DROP/CREATE. These touch shared catalogs (pg_database), which
   # per-database isolation does not cover — concurrent create/drop across lanes

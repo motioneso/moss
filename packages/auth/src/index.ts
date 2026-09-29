@@ -181,6 +181,17 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     max: Number(resolveMossEnv(env, "JARVIS_AUTH_DB_POOL_SIZE") ?? 4),
     options: "-c search_path=app,public"
   });
+
+  // A server-side disconnect of an idle client (database restart, failover) is emitted
+  // here. Without a listener Node treats it as uncaught and the process exits. The pool
+  // has already discarded the client, and the next query opens a fresh connection.
+  pool.on("error", (error) => {
+    options.logger?.warn?.(
+      { event: "auth.db_pool_idle_client_error", err: error.message },
+      "auth database connection dropped"
+    );
+  });
+
   const legacySessions = new AuthSessionResolver(options.appDb);
   const settings: BootstrapSettings = options._settingsOverride ?? {
     recordBootstrapOwnerAuditEvent: settingsRecordBootstrapOwnerAuditEvent,
