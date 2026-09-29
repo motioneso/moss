@@ -29,6 +29,7 @@ export * from "./structured/generate-structured.js";
 export * from "./structured/generate-choices.js";
 export * from "./generate-text.js";
 export * from "./structured/ask-sorting-questions.js";
+export * from "./structured/ask-sorting-probabilities.js";
 export * from "./adapters/http-api.js";
 export * from "./adapters/http-api-structured.js";
 export * from "./adapters/tmux-bridge.js";
