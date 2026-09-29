@@ -171,6 +171,29 @@ describe("News Today widget", () => {
     expect(html).toContain("Summary");
   });
 
+  it("shows the context note only when there are side stories beside the lead", () => {
+    const render = (count: number) => {
+      const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+      const topStories = Array.from({ length: count }, (_, i) => story(i + 1));
+      client.setQueryData(newsQueryKeys.overview, {
+        topStories,
+        rankedStories: topStories,
+        sourceGroups: [],
+        activeTopics: [],
+        enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+        degraded: false
+      } satisfies NewsOverviewResponse);
+      return renderToString(
+        <QueryClientProvider client={client}>
+          <NewsTodayWidget />
+        </QueryClientProvider>
+      );
+    };
+
+    expect(render(3)).toContain("Your news, in context");
+    expect(render(1)).not.toContain("Your news, in context");
+  });
+
   it("renders the editorial desk head with the lead before the list", () => {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
     const topStories = Array.from({ length: 4 }, (_, index) => story(index + 1));

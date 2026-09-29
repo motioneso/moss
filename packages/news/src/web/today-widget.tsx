@@ -150,6 +150,12 @@ export function NewsTodayWidget(): ReactNode {
                 </li>
               ))}
             </ul>
+            <div className="nw-twnote">
+              <span className="nw-twnote__eyebrow">Your news, in context</span>
+              <p className="nw-twnote__text">
+                A few stories worth knowing, with the reporting a click away.
+              </p>
+            </div>
           </div>
         ) : null}
       </div>

@@ -500,6 +500,12 @@ export const newsModuleManifest = {
         "with no working picture gets a drawing in its topic colors."
     },
     {
+      id: "news.today_context_note",
+      description:
+        "Today's side stories carry a topic label when the feed gave one, and a \"Your news, in " +
+        'context" note sits under them whenever any show.'
+    },
+    {
       id: "news.same_story_merge",
       description:
         "The same story from different outlets shows once in Today's lead and side stories, " +
