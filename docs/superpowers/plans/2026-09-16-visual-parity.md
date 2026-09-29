@@ -623,8 +623,12 @@ Decisions, real sources only:
 2. **Your preparation: not built.** #2744 verified that no source links
    materials to a meeting (see the proposal-materials amendment above). The
    section renders nothing until a source lands.
-3. **Practical-context note: not built.** No data source exists (no travel or
-   errand entity). Tracked separately as gap 3.
+3. **Practical-context note: built from calendar places only (#2785).** No
+   travel-time or errand source exists, so the note never states a leave time.
+   Source is today's calendar events already loaded on the page. It names the
+   first timed, not-yet-started, non-Moss event that has a place, other than the
+   event the First meeting card shows: "<title> at <time> is at <place>." No such
+   event, no note. A real travel-time source would extend this later.
 4. **Extras removed from the morning column: "At a glance" and "Today's agenda".**
    Both repeat what the page already shows in its main column (the day plan
    lists every event and task block with times; the counts come from the same

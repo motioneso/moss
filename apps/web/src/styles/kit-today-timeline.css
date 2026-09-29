@@ -533,6 +533,23 @@
   cursor: pointer;
 }
 
+/* --- Morning rail: practical context note, study .support-note --- */
+.cmd-practical {
+  padding: 14px;
+  background: var(--sage-light);
+  border-left: 2px solid var(--gold);
+}
+.cmd-practical p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--forest);
+}
+.cmd-practical strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
 /* --- Morning rail: quick actions flush with the column, study .solid button --- */
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside__inner {
   gap: 24px;
