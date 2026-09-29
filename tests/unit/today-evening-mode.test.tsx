@@ -260,6 +260,8 @@ describe("TodayPage evening mode", () => {
     expect(body).toContain("Ship release note");
     expect(body).toContain("Shipped to the changelog");
     expect(body).toContain("Merge the hotfix");
+    // No description falls back to the completion time; no time shows nothing.
+    expect(body).toMatch(/Merge the hotfix<\/span><span class="ev-done__sub">Completed at /);
   });
 
   it("shows each part of the evening report once, in its own slot", () => {

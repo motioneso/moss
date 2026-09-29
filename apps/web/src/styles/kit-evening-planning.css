@@ -430,6 +430,20 @@
   line-height: 1.6;
 }
 
+.evening-plan__existing-blocks {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.evening-plan__existing-blocks summary {
+  cursor: pointer;
+}
+
+.evening-plan__existing-blocks p {
+  margin: 6px 0 0;
+}
+
 .evening-plan__snapshot-bottom {
   display: grid;
   gap: 4px;
