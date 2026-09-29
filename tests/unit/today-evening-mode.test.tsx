@@ -18,6 +18,7 @@ import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
 import {
   deriveTodayMode,
+  eveningLoopReason,
   latestEveningRunForToday,
   scheduleTodayModeRefresh,
   selectActionRowsRun
@@ -370,7 +371,28 @@ describe("TodayPage evening mode", () => {
     const body = html.slice(html.indexOf('<div class="cmd-wrap">'));
 
     expect(body).toContain("Close the open loops");
-    expect(body).toContain("Nothing urgent is carrying forward.");
+    expect(body).toContain("Nothing needs a decision tonight.");
+  });
+
+  it("gives each open loop a due-date reason and three choices", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [],
+      tasks: [task({ title: "Book the bike service", dueAt: "2026-06-28T19:00:00.000Z" })],
+      events: []
+    });
+
+    expect(html).toContain("Book the bike service");
+    expect(html).toContain("Was due Jun 28 and is still open.");
+    expect(html).toContain(">Tomorrow<");
+    expect(html).toContain(">Choose a day<");
+    expect(html).toContain(">Let it go<");
+  });
+
+  it("gives no reason to an open loop without a due date", () => {
+    expect(eveningLoopReason(task({ dueAt: null }), locale)).toBeNull();
   });
 
   it("leaves the morning hero without evening links", () => {

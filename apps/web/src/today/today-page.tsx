@@ -23,6 +23,7 @@ import {
 } from "../api/client";
 import { findDefinition, targetTimeFor } from "../briefings/briefing-settings-model";
 import { formatDate, useUserLocale } from "../locale/locale-format";
+import { localTimeToIso } from "./day-plan-review-model.js";
 import { hasConnectedProvider } from "../onboarding/chat-availability";
 import { useChatControls } from "../shell/chat-controls-context";
 import { readColorMode } from "../theme/color-mode";
@@ -36,6 +37,7 @@ import {
   effectiveBriefingTimeZone,
   EveningReviewSection,
   EveningSupportSections,
+  type EveningLoopDecision,
   latestBriefingRunForToday,
   latestEveningRunForToday,
   scheduleTodayModeRefresh,
@@ -86,6 +88,7 @@ import "../styles/kit-today-timeline.css";
 import "../styles/kit-today-desks.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
+import "../styles/kit-evening-loops.css";
 import "../styles/kit-briefing-reader.css";
 import "../styles/kit-day-plan-review.css";
 import "../styles/kit-evening-planning.css";
@@ -254,6 +257,22 @@ export function TodayPage(props: {
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
       }, 500);
+    }
+  });
+  const loopMutation = useMutation({
+    mutationFn: (input: { taskId: string; decision: EveningLoopDecision }) => {
+      const { decision } = input;
+      if (decision.kind === "drop") return updateTask(input.taskId, { status: "archived" });
+      const day =
+        decision.kind === "tomorrow"
+          ? addDaysToKey(localDay(new Date(), locale.timezone), 1)
+          : decision.date;
+      const dueAt = localTimeToIso(day, "00:00", locale.timezone);
+      if (dueAt === null) return Promise.reject(new Error("invalid day"));
+      return updateTask(input.taskId, { dueAt });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
     }
   });
   const theme = readColorMode();
@@ -586,7 +605,12 @@ export function TodayPage(props: {
                 <EveningSupportSections
                   openLoopsDek={eveningReport?.openLoops || null}
                   carryingForward={looseEnds}
+                  locale={locale}
+                  busyTaskId={
+                    loopMutation.isPending ? (loopMutation.variables?.taskId ?? null) : null
+                  }
                   onOpenTask={(id) => setDialog({ id })}
+                  onDecide={(taskId, decision) => loopMutation.mutateAsync({ taskId, decision })}
                 />
               </>
             ) : null}
