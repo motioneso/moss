@@ -103,6 +103,10 @@ export interface GoogleSyncContinuationPayload extends ActorScopedJobPayload {
   /** Why email work was set aside, as a fixed code the shared wording module understands. */
   readonly deferredReason?: ConnectorSyncDeferredReason | null;
   readonly errors: readonly string[];
+  /** Set on a lineage that stops after the last day of mail and never walks the backlog. */
+  readonly recentOnly?: boolean;
+  /** What started the lineage, restamped with its outcome. Absent on older queued jobs. */
+  readonly trigger?: ConnectorSyncTrigger;
 }
 
 export type GoogleSyncContinuationState = Omit<
@@ -199,6 +203,12 @@ export interface GoogleSyncDeps {
    * and the small default applies; a test can set 0 to exercise a retry without waiting.
    */
   readonly googleRetryDelayMs?: number;
+  /**
+   * Stop after the calendar and the last day of mail. A root admitted while another lineage's
+   * continuation is still in flight runs this way so new mail keeps arriving during a long
+   * backlog walk. A continuation reads the flag from its own payload instead.
+   */
+  readonly recentOnly?: boolean;
 }
 
 /** Sanitized structured logging for partial-failure observability (never secrets/body). */
@@ -283,11 +293,22 @@ export async function runGoogleSyncChunk(
     };
   }
 
+  // Chunks for one account take turns, so a root admitted during a running lineage cannot
+  // deadlock with it.
+  await connectorsRepo.lockAccountSync(scopedDb, account.id);
+
+  const startedAt = continuation?.startedAt ?? now().toISOString();
+  const recentOnly = continuation?.recentOnly ?? deps.recentOnly ?? false;
+  // An email refresh names its trigger on the deps; an old queued job carries none.
+  const trigger = continuation
+    ? (continuation.trigger ?? deps.trigger)
+    : (deps.trigger ?? "manual");
+
   // Stamp the start of the run on the account row (health metadata only — never status).
   if (!continuation) {
     await connectorsRepo.markSyncStarted(scopedDb, account.id, {
-      startedAt: now(),
-      trigger: deps.trigger ?? "manual"
+      startedAt: new Date(startedAt),
+      trigger: trigger ?? "manual"
     });
   }
 
@@ -304,6 +325,8 @@ export async function runGoogleSyncChunk(
     // Record a failed run with the bounded auth label only — never the raw provider error.
     try {
       await connectorsRepo.markSyncFinished(scopedDb, account.id, {
+        startedAt: new Date(startedAt),
+        ...(trigger ? { trigger } : {}),
         finishedAt: now(),
         status: "failed",
         error: "auth-error",
@@ -345,7 +368,6 @@ export async function runGoogleSyncChunk(
     continuation?.phase ??
     (calendarEnabled ? "calendar" : emailEnabled ? "email-current-day" : undefined);
   let phaseCursor = continuation?.cursor;
-  const startedAt = continuation?.startedAt ?? now().toISOString();
   const calendarSeenSince = continuation?.calendarSeenSince ?? new Date().toISOString();
   const runId = continuation?.idempotencyKey ?? deps.runId ?? randomUUID();
   const chunkIndex = continuation?.chunkIndex ?? 0;
@@ -404,7 +426,9 @@ export async function runGoogleSyncChunk(
       emailDeferred,
       deferredKeys: [...deferredKeys],
       deferredReason,
-      errors
+      errors,
+      ...(recentOnly ? { recentOnly: true } : {}),
+      ...(trigger ? { trigger } : {})
     }
   });
 
@@ -428,7 +452,7 @@ export async function runGoogleSyncChunk(
     deferredReason = progress.deferredReason;
     if (result.retry) return next(phase, phaseCursor);
     if (result.nextCursor) return next(phase, result.nextCursor);
-    if (phase === "email-current-day") return next("email");
+    if (phase === "email-current-day" && !recentOnly) return next("email");
   }
 
   logger.info(
@@ -449,7 +473,11 @@ export async function runGoogleSyncChunk(
   // The persisted error is the first bounded label only — never raw provider/error text.
   const status: ConnectorSyncStatus = errors.length > 0 ? "partial" : "success";
   try {
+    // Two lineages can overlap, so each finish restamps its own start and the row always
+    // describes one run.
     await connectorsRepo.markSyncFinished(scopedDb, account.id, {
+      startedAt: new Date(startedAt),
+      ...(trigger ? { trigger } : {}),
       finishedAt: now(),
       status,
       error: errors[0] ?? null,
@@ -509,27 +537,22 @@ export async function handleGoogleSyncJob(
   job: Job<GoogleSyncPayload | GoogleSyncContinuationPayload>,
   runChunk: (
     scopedDb: DataContextDb,
-    continuation?: GoogleSyncContinuationState
+    continuation?: GoogleSyncContinuationState,
+    options?: { readonly recentOnly: boolean }
   ) => Promise<GoogleSyncChunkOutcome>,
-  shouldSkipRoot?: (actorUserId: string) => Promise<boolean>
+  hasInFlightLineage?: (actorUserId: string) => Promise<boolean>
 ): Promise<GoogleSyncResult> {
-  if (job.data.kind === "google-sync" && (await shouldSkipRoot?.(job.data.actorUserId))) {
-    return {
-      calendarUpserted: 0,
-      calendarReconciled: 0,
-      emailUpserted: 0,
-      emailFailures: 0,
-      escalations: 0,
-      errors: [],
-      truncated: false
-    };
-  }
+  // A root admitted during a running lineage still fetches the calendar and the last day of
+  // mail once the running chunk ends, and leaves the backlog walk to that lineage.
+  const recentOnly =
+    job.data.kind === "google-sync" &&
+    ((await hasInFlightLineage?.(job.data.actorUserId)) ?? false);
   const continuation =
     job.data.kind === "google-sync-continuation"
       ? ((assertGoogleSyncContinuationPayload(job.data), job.data) as GoogleSyncContinuationState)
       : undefined;
   const outcome = await dataContext.withDataContext(toAccessContext(job), (scopedDb) =>
-    runChunk(scopedDb, continuation)
+    runChunk(scopedDb, continuation, { recentOnly })
   );
   if (outcome.continuation) {
     const payload: GoogleSyncContinuationPayload = {
@@ -588,7 +611,7 @@ export async function registerConnectorsJobWorkers(
       boss,
       deps.dataContext,
       job,
-      (scopedDb, state) => {
+      (scopedDb, state, options) => {
         const emailExtractDeps = buildEmailExtractDeps(scopedDb, aiRepo, aiCipher, {
           createCliStructuredAdapter: deps.createCliStructuredAdapter,
           logger: deps.logger
@@ -619,24 +642,25 @@ export async function registerConnectorsJobWorkers(
             runId: job.data.kind === "google-sync" ? job.id : job.data.idempotencyKey,
             trigger: job.data.kind === "google-sync" ? job.data.trigger : undefined,
             threadJudgementRequester: deps.threadJudgementRequester,
-            knownSenderAddresses: deps.knownSenderAddresses
+            knownSenderAddresses: deps.knownSenderAddresses,
+            recentOnly: options?.recentOnly
           },
           state
         );
       },
       async (actorUserId) => {
-        const skipped = await hasInFlightJob(
+        const inFlight = await hasInFlightJob(
           deps.rootDb,
           GOOGLE_SYNC_CONTINUATION_QUEUE,
           actorUserId
         );
-        if (skipped) {
+        if (inFlight) {
           deps.logger?.info(
-            { actorScoped: true, event: "skipped:lineage-in-flight" },
-            "google-sync root skipped while continuation lineage is in flight"
+            { actorScoped: true, event: "recent-only:lineage-in-flight" },
+            "google-sync root fetching recent mail only while a continuation lineage is in flight"
           );
         }
-        return skipped;
+        return inFlight;
       }
     );
     if (!result.truncated) deps.onResult?.(job, result);

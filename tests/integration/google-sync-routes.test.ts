@@ -87,14 +87,15 @@ describe("google-sync queue contract", () => {
       emailFailures: 0,
       emailDeferred: 0,
       escalations: 0,
-      errors: []
+      errors: [],
+      recentOnly: true
     };
     for (const key of Object.keys(payload)) expect(ALLOWED_PAYLOAD_KEYS.has(key)).toBe(true);
   });
 });
 
 describe("google-sync continuation handoff", () => {
-  it("admits one root per actor while its continuation lineage is in flight", async () => {
+  it("runs a root as recent-only while its actor's continuation lineage is in flight (#2804)", async () => {
     const accountA = await seedGoogleAccount(handles.dataContext, [GMAIL_SCOPE], ids.userA);
     await seedGoogleAccount(handles.dataContext, [GMAIL_SCOPE], ids.userB);
     const boss = createPgBossClient(connectionStrings.worker, {
@@ -121,30 +122,15 @@ describe("google-sync continuation handoff", () => {
       return hasInFlightJob(handles.workerDb, GOOGLE_SYNC_CONTINUATION_QUEUE, actorUserId);
     };
 
-    const healthSnapshot = async () => {
-      const result = await sql<{
-        last_sync_started_at: string | null;
-        last_sync_finished_at: string | null;
-        last_sync_status: string | null;
-        last_sync_error: string | null;
-        last_sync_counts: unknown;
-      }>`
-        select last_sync_started_at, last_sync_finished_at, last_sync_status,
-               last_sync_error, last_sync_counts
-        from app.connector_accounts
-        where id = ${accountA}
-      `.execute(handles.workerDb);
-      return result.rows[0];
-    };
-
     const runRoot = (job: Job<GoogleSyncPayload>) =>
       handleRoot(
         boss,
         handles.workerDataContext,
         job,
-        async () => {
-          chunkCalls.push(job.data.actorUserId);
-          if (job.data.actorUserId === ids.userA) {
+        async (_scopedDb, _continuation, options) => {
+          const mode = options?.recentOnly ? "recent" : "full";
+          chunkCalls.push(`${job.data.actorUserId}:${mode}`);
+          if (job.data.actorUserId === ids.userA && mode === "full") {
             return {
               result: {
                 calendarUpserted: 0,
@@ -220,7 +206,7 @@ describe("google-sync continuation handoff", () => {
       const firstRootId = await sendRoot(ids.userA, "test:lineage:a:first");
       const firstResult = await waitForResult(firstRootId);
       expect(firstResult).toMatchObject({ emailUpserted: 1, truncated: true });
-      expect(chunkCalls).toEqual([ids.userA]);
+      expect(chunkCalls).toEqual([`${ids.userA}:full`]);
 
       const continuationRows = await sql<{
         root_id: string;
@@ -235,28 +221,19 @@ describe("google-sync continuation handoff", () => {
       `.execute(handles.workerDb);
       expect(continuationRows.rows).toEqual([{ root_id: firstRootId, chunk_index: 1 }]);
 
-      const healthBeforeSecondRoot = await healthSnapshot();
+      // The second root still runs, but only for new mail; the backlog stays with lineage one.
       const secondRootId = await sendRoot(ids.userA, "test:lineage:a:second");
       const secondResult = await waitForResult(secondRootId);
-      expect(secondResult).toEqual({
-        calendarUpserted: 0,
-        calendarReconciled: 0,
-        emailUpserted: 0,
-        emailFailures: 0,
-        escalations: 0,
-        errors: [],
-        truncated: false
-      });
-      expect(chunkCalls).toEqual([ids.userA]);
+      expect(secondResult).toMatchObject({ emailUpserted: 1, truncated: false });
+      expect(chunkCalls).toEqual([`${ids.userA}:full`, `${ids.userA}:recent`]);
       expect(admissionCalls).toEqual([ids.userA, ids.userA]);
-      expect(dataContextCalls).toHaveBeenCalledTimes(1);
-      expect(await healthSnapshot()).toEqual(healthBeforeSecondRoot);
+      expect(dataContextCalls).toHaveBeenCalledTimes(2);
 
       const bRootId = await sendRoot(ids.userB, "test:lineage:b:first");
       const bResult = await waitForResult(bRootId);
       expect(bResult).toMatchObject({ emailUpserted: 1, truncated: false });
-      expect(chunkCalls).toEqual([ids.userA, ids.userB]);
-      expect(dataContextCalls).toHaveBeenCalledTimes(2);
+      expect(chunkCalls).toEqual([`${ids.userA}:full`, `${ids.userA}:recent`, `${ids.userB}:full`]);
+      expect(dataContextCalls).toHaveBeenCalledTimes(3);
     } finally {
       dataContextCalls.mockRestore();
       await boss.stop({ graceful: false });
