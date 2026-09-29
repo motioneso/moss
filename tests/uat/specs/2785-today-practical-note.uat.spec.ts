@@ -142,4 +142,13 @@ test("morning side column shows a practical note only when a later event has a p
   await expect(note).toContainText("Pick up the repair at 4:00 pm is at Main Street Repairs.");
   await expect(note).not.toContainText("Leave at");
   await side.screenshot({ path: "test-results/2785-side-column-note.png" });
+
+  // Phone width: the same note is present and inside the viewport.
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.reload();
+  const phoneNote = page.getByLabel("A little practical context");
+  await expect(phoneNote).toContainText("Pick up the repair at 4:00 pm is at Main Street Repairs.");
+  const box = await phoneNote.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 375).toBe(true);
+  await phoneNote.screenshot({ path: "test-results/2785-note-phone-375.png" });
 });
