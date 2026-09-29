@@ -993,3 +993,13 @@ button.ev-tomorrow__item {
     font-size: 15px;
   }
 }
+.ev-loop__moved {
+  display: block;
+  margin-top: 4px;
+  color: var(--accent-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ev-loop__actions[hidden] {
+  display: none;
+}

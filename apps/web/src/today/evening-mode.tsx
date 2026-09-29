@@ -316,6 +316,11 @@ export function EveningSupportSections(props: {
 }) {
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [pickedDate, setPickedDate] = useState("");
+  const [moved, setMoved] = useState<Record<string, string>>({});
+  const decide = (task: TaskDto, decision: EveningLoopDecision, note: string) => {
+    setMoved((prev) => ({ ...prev, [task.id]: note }));
+    props.onDecide(task.id, decision);
+  };
   return (
     <section className="ev-study ev-loops" id="evening-open-loops">
       <h2 className="ev-loops__title">{EVENING_OPEN_LOOPS_HEADING}</h2>
@@ -336,11 +341,16 @@ export function EveningSupportSections(props: {
                   <span className="ev-loop__title">{task.title}</span>
                 </button>
                 {why ? <span className="ev-loop__sub">{why.reason}</span> : null}
-                <div className="ev-loop__actions">
+                {moved[task.id] ? (
+                  <span className="ev-loop__moved" role="status">
+                    {moved[task.id]}
+                  </span>
+                ) : null}
+                <div className="ev-loop__actions" hidden={moved[task.id] !== undefined}>
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => props.onDecide(task.id, { kind: "tomorrow" })}
+                    onClick={() => decide(task, { kind: "tomorrow" }, "Moved to tomorrow.")}
                   >
                     Tomorrow
                   </button>
@@ -358,7 +368,7 @@ export function EveningSupportSections(props: {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => props.onDecide(task.id, { kind: "drop" })}
+                    onClick={() => decide(task, { kind: "drop" }, "Let go.")}
                   >
                     Let it go
                   </button>
@@ -375,7 +385,11 @@ export function EveningSupportSections(props: {
                       type="button"
                       disabled={busy || pickedDate === ""}
                       onClick={() => {
-                        props.onDecide(task.id, { kind: "date", date: pickedDate });
+                        decide(
+                          task,
+                          { kind: "date", date: pickedDate },
+                          `Moved to ${formatDate(`${pickedDate}T12:00:00Z`, props.locale, { month: "short", day: "numeric", timeZone: "UTC" })}.`
+                        );
                         setPickingId(null);
                       }}
                     >
