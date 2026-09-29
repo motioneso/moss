@@ -314,4 +314,45 @@ test("evening finished items and planning side column carry grounded notes", asy
     expect(overflow, `no sideways scroll at ${name}`).toBeLessThanOrEqual(0);
     await dialog.screenshot({ path: `/tmp/2789-shots/dialog-${name}.png` });
   }
+
+  // Save the plan for real and check the saved screen at both widths.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await dialog.getByRole("button", { name: "Review the plan \u2192" }).click();
+  await dialog.getByRole("button", { name: "Save proposed plan" }).click();
+  const saved = dialog.getByRole("region", { name: "Plan saved" });
+  await expect(saved).toBeVisible();
+  await expect(saved).toContainText("Tomorrow is ready to meet you.");
+
+  for (const [name, width, height] of [
+    ["1440", 1440, 900],
+    ["375", 375, 800]
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    let column = rail;
+    if (width < 700) {
+      column = dialog.locator("details.evening-plan__mobile-plan");
+      if (!(await column.evaluate((node) => (node as HTMLDetailsElement).open))) {
+        await column.locator(":scope > summary").click();
+      }
+    }
+    const savedFold = column.locator("details.evening-plan__existing-blocks");
+    await expect(savedFold).toHaveCount(1);
+    await expect(savedFold.locator("summary")).toHaveText("Existing calendar task blocks");
+    if (!(await savedFold.evaluate((node) => (node as HTMLDetailsElement).open))) {
+      await savedFold.locator("summary").click();
+    }
+    await expect(savedFold).toContainText("#2789 old moss block");
+    await expect(savedFold).toContainText("4:00");
+    // The folded block stays out of the main list on the saved screen too.
+    await expect(
+      column.locator(".evening-plan__snapshot-entry", { hasText: "old moss block" })
+    ).toHaveCount(0);
+    await testInfo.attach(`saved-screen-${name}`, { body: await saved.innerText() });
+    console.log(`[2789 saved screen ${name}] fold: ${await savedFold.innerText()}`);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, `no sideways scroll on saved screen at ${name}`).toBeLessThanOrEqual(0);
+    await dialog.screenshot({ path: `/tmp/2789-shots/saved-${name}.png` });
+  }
 });

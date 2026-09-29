@@ -69,6 +69,26 @@ describe("evening snapshot notes", () => {
     expect(html).not.toContain("between task blocks");
   });
 
+  it("never calls booked time free when a folded Moss block fills the gap", () => {
+    const html = render({
+      events: [
+        event("Dental", "09:00", "09:45"),
+        event("Old block", "09:45", "13:00", { isMossBlock: true })
+      ],
+      proposals: [draft("a", "13:00")]
+    });
+    expect(html).toContain("Existing calendar task blocks");
+    expect(html).not.toContain("Room to get home");
+  });
+
+  it("measures room from the event that ends last when events overlap", () => {
+    const html = render({
+      events: [event("Long", "09:00", "12:30"), event("Short", "10:00", "10:30")],
+      proposals: [draft("a", "13:00")]
+    });
+    expect(html).not.toContain("Room to get home");
+  });
+
   it("folds existing Moss blocks unless automatic scheduling is on", () => {
     const moss = event("Old block", "09:00", "09:30", { isMossBlock: true });
     const suggest = render({ events: [moss], proposals: [draft("a", "13:00")] });

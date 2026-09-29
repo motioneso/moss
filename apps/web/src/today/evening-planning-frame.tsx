@@ -117,17 +117,23 @@ function gapBetween(before: SnapshotEntry, after: SnapshotEntry): number {
   );
 }
 
-/** Notes drawn only from real gaps: room after the last fixed entry before the
-    first task block, and a shared gap between consecutive task blocks. */
-function snapshotGapNotes(entries: readonly SnapshotEntry[]): {
+/** Notes drawn only from real gaps. Room counts every timed calendar event, folded
+    Moss blocks and overlaps included, so booked time is never called free. */
+function snapshotGapNotes(
+  entries: readonly SnapshotEntry[],
+  events: readonly CalendarEventDto[]
+): {
   readonly room: number | null;
   readonly between: string | null;
 } {
   const firstDraft = entries.findIndex((entry) => entry.draft);
   if (firstDraft < 0) return { room: null, between: null };
-  const before = entries.slice(0, firstDraft).at(-1);
+  const draftStart = Date.parse(entries[firstDraft]!.startsAt);
+  const busyEnds = events
+    .filter((event) => !event.allDay && Date.parse(event.startsAt) < draftStart)
+    .map((event) => Date.parse(event.endsAt));
   const roomIndex =
-    before !== undefined && gapBetween(before, entries[firstDraft]!) >= ROOM_MINUTES
+    busyEnds.length > 0 && (draftStart - Math.max(...busyEnds)) / 60_000 >= ROOM_MINUTES
       ? firstDraft
       : null;
   const drafts = entries.filter((entry) => entry.draft);
@@ -175,7 +181,7 @@ export function draftBlockCount(proposals: readonly DayPlanBlockInput[]): number
 function EveningSnapshot(props: EveningSnapshotProps & { readonly withHeading: boolean }) {
   const entries = snapshotEntries(props);
   const existing = existingMossBlocks(props);
-  const notes = snapshotGapNotes(entries);
+  const notes = snapshotGapNotes(entries, props.events);
   const taskMinutes = entries
     .filter((entry) => entry.draft)
     .reduce((sum, entry) => sum + entry.minutes, 0);
