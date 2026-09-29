@@ -1,9 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // #2788: the Today hero has no contour-line layer behind it, and both "Prepared at" times (the
-// hero line and the full reader) show the 12-hour clock with am/pm. Runs a real signup and a real
-// morning briefing in the UAT harness's own ephemeral stack, like 1452-briefing-live-content.
-export const uatLevel = { level: "bare", without: [] } as const;
+// hero line and the full reader) show the 12-hour clock with am/pm. Signs in as the seeded admin
+// and generates a real morning briefing whose prose comes from the writer fixture.
+export const uatLevel = {
+  level: "admin+data",
+  without: [],
+  withBriefingWriterFixture: true
+} as const;
 
 const PREPARED_AT = /^Prepared at (1[0-2]|[1-9]):[0-5]\d (am|pm)$/;
 
@@ -15,21 +20,12 @@ function requireBaseURL(): string {
   return baseURL;
 }
 
-async function signUp(page: Page): Promise<void> {
+async function signIn(page: Page): Promise<void> {
   await page.goto(requireBaseURL());
-  await page.getByLabel("Name").fill("UAT Throwaway Owner");
-  await page.getByLabel("Email").fill("uat-1452-throwaway@example.com");
-  await page.getByLabel("Password").fill("uat-1452-password");
-  await page.getByRole("button", { name: "Create account" }).click();
-
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skipSetup.or(userMenu).first()).toBeVisible();
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
+  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
+  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
+  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
 }
 
 test("hero has no contour layer and Prepared at shows am/pm in the hero and the reader", async ({
@@ -37,7 +33,7 @@ test("hero has no contour layer and Prepared at shows am/pm in the hero and the 
 }) => {
   test.setTimeout(180_000);
 
-  await signUp(page);
+  await signIn(page);
 
   const created = await page.evaluate(async () => {
     const response = await fetch("/api/briefings/definitions", {
@@ -93,7 +89,7 @@ test("hero has no contour layer and Prepared at shows am/pm in the hero and the 
   expect(matchedRun).toBeDefined();
   expect(matchedRun?.status).toBe("succeeded");
   expect(matchedRun?.summaryText.trim()).not.toHaveLength(0);
-  console.log("[live proof] morning briefing with a sports follow persisted successfully");
+  console.log("[live proof] morning briefing persisted with writer-fixture prose");
 
   await page.reload();
   const hero = page.locator(".today-hero");
