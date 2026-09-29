@@ -250,7 +250,7 @@ describe("MorningBriefingReader report", () => {
     // task-gone (row and intent priority) and chats (gap) are absent; task-1 is present.
     const html = await renderReader(client);
     expect(html).toContain("No longer available");
-    expect(html).toContain("chats");
+    expect(html).toContain("Chats: No longer available");
     expect(html).not.toContain("Book the launch room");
     expect(html).not.toContain("Ghost row title");
     expect(html).not.toContain("Why Ghost row title matters");

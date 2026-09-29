@@ -157,6 +157,62 @@ describe("contributionFor on current runs", () => {
     expect(contributionFor("day_plan", current)).toBe("2 time blocks from last evening");
   });
 
+  it("names today's timeline events and the forecast", () => {
+    const md = { ...current, sectionLines: { calendar_today: 3, weather: 1 } };
+    expect(contributionFor("calendar_today", md)).toBe("3 events in today's timeline");
+    expect(contributionFor("weather", md)).toBe("today's forecast");
+  });
+
+  it("names the evening sources' contributions", () => {
+    const md = {
+      ...current,
+      sectionLines: { calendar_tomorrow: 2, tasks_reconciliation: 5, morning_plan: 1 },
+      emailMessageCount: 4
+    };
+    expect(contributionFor("calendar_tomorrow", md)).toBe("2 events tonight or tomorrow");
+    expect(contributionFor("tasks_reconciliation", md)).toBe("5 tasks reviewed");
+    expect(contributionFor("morning_plan", md)).toBe("1 item from this morning's plan");
+    expect(contributionFor("email_today", md)).toBe("4 emails read");
+  });
+
+  it("does not call events later tonight tomorrow's", () => {
+    // The source keeps one event later tonight and one tomorrow (evening-lenses).
+    const md = { ...current, sectionLines: { calendar_tomorrow: 2 } };
+    expect(contributionFor("calendar_tomorrow", md)).toBe("2 events tonight or tomorrow");
+    const legacy = { ...current, sectionLines: undefined, tomorrowEventCount: 1 };
+    expect(contributionFor("calendar_tomorrow", legacy)).toBe("1 event tonight or tomorrow");
+  });
+
+  it("shows no line for empty, failed or unsaved evening sources", () => {
+    const md = {
+      ...current,
+      sectionLines: { calendar_tomorrow: 0, tasks_reconciliation: 0, morning_plan: 0 },
+      emailMessageCount: 0
+    };
+    for (const source of ["calendar_tomorrow", "tasks_reconciliation", "morning_plan"]) {
+      expect(contributionFor(source, md)).toBeNull();
+    }
+    expect(contributionFor("email_today", md)).toBeNull();
+    const gapped = {
+      ...current,
+      emailMessageCount: 3,
+      gaps: [{ source: "email_today", reason: "filtered_out" }]
+    };
+    expect(contributionFor("email_today", gapped)).toBeNull();
+  });
+
+  it("shows no line for empty or failed timeline and weather sources", () => {
+    const empty = { ...current, sectionLines: { calendar_today: 0, weather: 0 } };
+    expect(contributionFor("calendar_today", empty)).toBeNull();
+    expect(contributionFor("weather", empty)).toBeNull();
+    const failed = {
+      ...current,
+      sectionLines: { weather: 1 },
+      gaps: [{ source: "weather", reason: "tool_failed" }]
+    };
+    expect(contributionFor("weather", failed)).toBeNull();
+  });
+
   it("shows no line when a section gave nothing", () => {
     expect(contributionFor("vault", { ...current, sectionLines: { vault: 0 } })).toBeNull();
     expect(contributionFor("mystery", current)).toBeNull();

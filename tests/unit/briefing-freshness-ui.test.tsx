@@ -5,6 +5,7 @@ import {
   BriefingFreshnessList,
   BriefingStaleBanner,
   delayedEmailSource,
+  sourceLabel,
   parseBriefingFreshness
 } from "../../apps/web/src/today/briefing-freshness.js";
 import type { LocaleSettingsDto, SourceFreshnessV1 } from "@moss/shared";
@@ -187,5 +188,72 @@ describe("delayedEmailSource", () => {
     };
     expect(delayedEmailSource(invalidCapture)).toBeNull();
     expect(delayedEmailSource(invalidEmailTime)).toBeNull();
+  });
+});
+
+describe("BriefingFreshnessList plain names", () => {
+  it("names the timeline and weather rows in plain words with a contribution", () => {
+    const f: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: [
+        { source: "calendar_today", freshnessKind: "realtime", asOf: CAPTURED },
+        { source: "weather", freshnessKind: "realtime", asOf: CAPTURED }
+      ]
+    };
+    const html = renderToString(
+      createElement(BriefingFreshnessList, {
+        freshness: f,
+        locale,
+        sourceMetadata: { sectionLines: { calendar_today: 2, weather: 1 } }
+      })
+    );
+    expect(html).toContain("Today&#x27;s schedule");
+    expect(html).toContain("2 events in today&#x27;s timeline.");
+    expect(html).toContain("Weather");
+    expect(html).toContain("today&#x27;s forecast.");
+    expect(html).not.toContain("calendar_today");
+    expect(html).not.toMatch(/>weather</);
+  });
+});
+
+describe("evening source names", () => {
+  it("gives every evening source a plain name and a contribution", () => {
+    const sources = ["tasks_reconciliation", "calendar_tomorrow", "email_today", "morning_plan"];
+    const f: SourceFreshnessV1 = {
+      version: 1,
+      capturedAt: CAPTURED,
+      sources: sources.map((source) => ({
+        source,
+        freshnessKind: "realtime" as const,
+        asOf: CAPTURED
+      }))
+    };
+    const html = renderToString(
+      createElement(BriefingFreshnessList, {
+        freshness: f,
+        locale,
+        sourceMetadata: {
+          sectionLines: { tasks_reconciliation: 3, calendar_tomorrow: 1, morning_plan: 2 },
+          emailMessageCount: 5
+        }
+      })
+    );
+    for (const name of ["Task review", "Tonight and tomorrow", "Today&#x27;s email"]) {
+      expect(html).toContain(name);
+    }
+    expect(html).toContain("This morning&#x27;s plan");
+    expect(html).toContain("3 tasks reviewed.");
+    expect(html).toContain("1 event tonight or tomorrow.");
+    expect(html).toContain("5 emails read.");
+    expect(html).toContain("2 items from this morning&#x27;s plan.");
+    for (const raw of sources) expect(html).not.toContain(raw);
+  });
+
+  it("uses plain names for gap notes", () => {
+    expect(sourceLabel("calendar_today")).toBe("Today's schedule");
+    expect(sourceLabel("calendar_tomorrow")).toBe("Tonight and tomorrow");
+    expect(sourceLabel("tasks_reconciliation")).toBe("Task review");
+    expect(sourceLabel("commitments")).toBe("Commitments");
   });
 });
