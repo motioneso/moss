@@ -139,7 +139,7 @@ export const chatModuleManifest = {
         {
           id: "chat.acp_per_user_mode_required.host",
           description:
-            "An administrator turns on per-user mode in the host environment file and recreates the app container; no Settings control changes this. A development host may instead start the chat runner with MOSS_CLI_ALLOW_SHARED_UID=1 and NODE_ENV=development, which production ignores.",
+            "An administrator turns on per-user mode in the host environment file and recreates the app container; no Settings control does this. Dev hosts may set MOSS_CLI_ALLOW_SHARED_UID=1 with NODE_ENV=development instead.",
           path: "/settings?section=aiproviders"
         }
       ]
