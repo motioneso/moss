@@ -32,6 +32,7 @@ import { projectEmailActions } from "./monitor-jobs.js";
 import { listSavedEmailContext } from "./source-context/email.js";
 import type { ConnectorsRepository } from "./repository.js";
 import type { GoogleSyncDeps, SyncLogger } from "./sync-jobs.js";
+import { resolveHistoryWalk } from "./google-sync-history.js";
 import { MAX_DEFERRED_KEYS } from "./google-sync-payload.js";
 import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
 
@@ -732,69 +733,24 @@ export async function runGoogleEmailPhase(
     const provider = new GoogleEmailReadProvider(context.deps.googleClient, query);
     const client = context.deps.googleClient;
     let page: { keys: MailMessageKey[]; nextCursor?: string } | undefined;
-    if (phase === "email" && client.getProfileHistoryId && client.listHistoryPage) {
-      const listHistoryPage = client.listHistoryPage.bind(client);
-      const getProfileHistoryId = client.getProfileHistoryId.bind(client);
-      // A continuation queued before the walk state existed has a cursor and no mode: it is a
-      // plain listing with no position to save.
-      if (!walkMode) {
-        if (context.cursor) walkMode = "full";
-        else {
-          const stored = await context.connectorsRepo.getEmailHistoryId(
-            context.scopedDb,
-            context.account.id
-          );
-          try {
-            walkAnchor = await withTokenRetry(
-              context.scopedDb,
-              context.deps,
-              context.tokenHolder,
-              (token) => getProfileHistoryId({ accessToken: token })
-            );
-          } catch (error) {
-            context.logger.warn(
-              { stage: "email-history", ...googleFailureFields(error) },
-              "google-sync mailbox position read failed; listing the whole window"
-            );
-          }
-          walkMode = stored && walkAnchor ? "history" : "full";
-        }
-      }
-      if (walkMode === "history") {
-        const stored = await context.connectorsRepo.getEmailHistoryId(
-          context.scopedDb,
-          context.account.id
-        );
-        try {
-          if (!stored) throw new Error("no saved mailbox position");
-          const changed = await withTokenRetry(
-            context.scopedDb,
-            context.deps,
-            context.tokenHolder,
-            (token) =>
-              listHistoryPage({
-                accessToken: token,
-                startHistoryId: stored,
-                pageToken: listedCursor,
-                maxResults: pageLimit
-              })
-          );
-          page = {
-            keys: changed.messageIds.map((id) => ({ folder: GMAIL_READ_FOLDER, id })),
-            nextCursor: changed.nextPageToken
-          };
-        } catch (error) {
-          // Any history failure (an expired position answers 404) falls back to listing the
-          // whole window from its first page; the walk then saves a fresh position.
-          context.logger.warn(
-            { stage: "email-history", ...googleFailureFields(error) },
-            "google-sync change history failed; listing the whole window"
-          );
-          walkMode = "full";
-          listedCursor = undefined;
-        }
-      }
-    }
+    const walked = await resolveHistoryWalk({
+      phase,
+      cursor: context.cursor,
+      walkMode,
+      walkAnchor,
+      listedCursor,
+      pageLimit,
+      client,
+      logger: context.logger,
+      getStoredPosition: () =>
+        context.connectorsRepo.getEmailHistoryId(context.scopedDb, context.account.id),
+      withToken: (run) => withTokenRetry(context.scopedDb, context.deps, context.tokenHolder, run),
+      failureFields: googleFailureFields
+    });
+    walkMode = walked.walkMode;
+    walkAnchor = walked.walkAnchor;
+    listedCursor = walked.listedCursor;
+    page = walked.page;
     page ??= await withTokenRetry(context.scopedDb, context.deps, context.tokenHolder, (token) =>
       provider.listMessageKeyPage(token, GMAIL_READ_FOLDER, {
         cursor: listedCursor,
