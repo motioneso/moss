@@ -17,6 +17,11 @@ import { recordProviderLoginRejected } from "./provider-probe.js";
 
 import { CliChatUnavailableError } from "./errors.js";
 import { authFailureMessage } from "./auth-errors.js";
+import {
+  CLI_VERSION_TOO_OLD_MESSAGE,
+  isCliVersionTooOldError,
+  isCliVersionTooOldReply
+} from "./cli-version-errors.js";
 import type { RpcConnection } from "./chat-engine-rpc-client.js";
 import type { RpcAcpKillParams, RpcAcpSpawnParams } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
@@ -560,6 +565,10 @@ export class AcpChatEngine implements CliChatEngine {
         await this.closeQuietly();
         throw new CliChatUnavailableError(authFailureMessage(kind), { cause: error });
       }
+      if (isCliVersionTooOldError(error)) {
+        await this.closeQuietly();
+        throw new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
+      }
       await this.closeQuietly();
       throw error;
     }
@@ -581,6 +590,11 @@ export class AcpChatEngine implements CliChatEngine {
       .then((result) => {
         this.flushCurrentThought();
         const elapsedMs = Math.max(0, Date.now() - startedAt);
+        // #2689: a reply that is only the provider's "version X or newer" API error is a refusal.
+        if (result.text && isCliVersionTooOldReply(result.text)) {
+          this.promptError = new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
+          return;
+        }
         if (result.text) {
           this.records.push({
             ...formatReplyRecord(result.text, elapsedMs, result.usage),
@@ -604,6 +618,8 @@ export class AcpChatEngine implements CliChatEngine {
             authFailureMessage(toAcpProviderKind(this.provider, this.opts.acpAgentId)),
             { cause: error }
           );
+        } else if (isCliVersionTooOldError(error)) {
+          this.promptError = new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
         } else {
           this.promptError = normalizeAcpPromptFailure(error);
         }

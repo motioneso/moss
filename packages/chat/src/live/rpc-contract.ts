@@ -171,6 +171,7 @@ export type RpcMethod =
   | "submitLoginToken" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "cancelLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "listProviderModels" // non-session (#2208 live model list from the provider's vendor — ADDITIVE)
+  | "listCliToolVersions" // non-session (#2689 installed tool versions — ADDITIVE)
   // #1059 owner terminal — additive, never used by the chat runtime
   | "openTerminal"
   | "writeTerminal"
@@ -523,6 +524,16 @@ export interface RpcListProviderModelsParams {
 }
 /** result for method "listProviderModels" (#2208) — the shared `AiCliModelListResult` verbatim. */
 export type RpcListProviderModelsResult = AiCliModelListResult;
+
+/**
+ * result for method "listCliToolVersions" (#2689) — instance-wide, no params. The version each
+ * installed command-line tool reports in its package metadata; `null` when the tool is not
+ * installed. Only version strings cross the socket.
+ */
+export interface RpcListCliToolVersionsResult {
+  readonly providers: Readonly<Record<RpcProviderKind, string | null>>;
+  readonly opencode: string | null;
+}
 
 // #1059 terminal method params/results (interface-pair pattern, mirrors RpcSubmit*). Additive
 // only — no existing method's request/response shape changes.

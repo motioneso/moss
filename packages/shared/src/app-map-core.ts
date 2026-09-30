@@ -268,7 +268,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "field below it is described as giving consistent results for every model, including " +
       "local ones. Shared CLI software is usable by separate Moss accounts; runner startup " +
       "automatically repairs the older installation-directory permission defect using the pinned " +
-      "version, so users need no reinstall action. Only administrators can connect CLI providers.",
+      "version, so users need no reinstall action. Only administrators can connect CLI providers. " +
+      "The line under each CLI provider's name shows the installed tool and its version, for " +
+      "example 'Claude CLI 2.1.282'; the OpenCode card shows 'OpenCode CLI' and its version the " +
+      "same way.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
@@ -318,6 +321,14 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     description: "An agent action was not approved, so it was not done."
   },
   {
+    code: "core.ai.cli_version_too_old",
+    class: "prerequisite",
+    remediationRef: "core.ai.check_cli_version",
+    description:
+      "The installed AI tool is too old for this model. Moss updates it automatically; an admin " +
+      "can check Settings > AI providers."
+  },
+  {
     code: "core.ai.api_key_live_chat_unavailable",
     class: "prerequisite",
     remediationRef: "core.ai.connect_cli_provider",
@@ -364,6 +375,14 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     description: "Ask the user to approve the action before trying it again.",
     path: "/",
     scope: "user"
+  },
+  {
+    id: "core.ai.check_cli_version",
+    description:
+      "Open Settings > AI providers and read the tool version under the provider's name. A Moss " +
+      "update brings a newer tool; until then, choose a model the installed tool supports.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
   },
   {
     id: "core.ai.connect_cli_provider",

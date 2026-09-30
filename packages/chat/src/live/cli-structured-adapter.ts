@@ -422,6 +422,10 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         throw new CliChatUnavailableError("CLI structured generation completed without a reply");
       }
       if (!(await engine.isAlive())) {
+        // #2689: the engine names a known refusal only once the child's output has closed, which
+        // can land just after exit. Give it one poll, then read again so that error wins.
+        await new Promise((resolve) => setTimeout(resolve, this.pollMs));
+        await engine.readNew(offset);
         throw new CliChatUnavailableError("CLI structured generation exited without a reply");
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollMs));

@@ -44,6 +44,7 @@ export * from "./rpc-contract.js";
 export * from "./login-contract.js";
 export * from "./install-contract.js";
 export * from "./errors.js";
+export * from "./cli-version-errors.js";
 export * from "./private-transcript-cleanup.js";
 export * from "./terminal-rpc-client.js";
 // #1554 Decision 3 — the composition-root-owned idle-reap timer that drives

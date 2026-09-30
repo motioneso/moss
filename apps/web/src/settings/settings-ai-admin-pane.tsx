@@ -53,6 +53,7 @@ import { VoiceConfigGroup } from "./settings-voice-config-group";
 import { SortingModelRow } from "./settings-ai-sorting-row";
 import {
   type AiAuthMethod,
+  type AiCliToolsDto,
   type AiConfiguredModelDto,
   type AiModelCapability,
   type AiModelTier,
@@ -179,7 +180,7 @@ function ProviderCard(props: {
             )}
             {provider.authMethod === "cli"
               ? provider.cliAvailable
-                ? `${provider.displayName} CLI`
+                ? cliVersionLine(provider.displayName, provider.cliTools)
                 : `${provider.displayName} CLI unavailable`
               : provider.hasCredential
                 ? "API key stored"
@@ -368,7 +369,12 @@ function ProviderCard(props: {
   );
 }
 
-function OpenCodeAcpCard() {
+/** #2689: "Claude CLI 2.1.282" when the runner reported a version, "Claude CLI" otherwise. */
+function cliVersionLine(name: string, tools: AiCliToolsDto | undefined): string {
+  return tools?.version ? `${name} CLI ${tools.version}` : `${name} CLI`;
+}
+
+function OpenCodeAcpCard(props: { readonly cli: AiCliToolsDto | undefined }) {
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({
     queryKey: queryKeys.chat.settings,
@@ -388,7 +394,8 @@ function OpenCodeAcpCard() {
         <div className="prov__id">
           <div className="prov__name">OpenCode</div>
           <div className="prov__auth">
-            <Terminal size={12} aria-hidden="true" /> ACP chat provider
+            <Terminal size={12} aria-hidden="true" />{" "}
+            {props.cli?.version ? cliVersionLine("OpenCode", props.cli) : "ACP chat provider"}
           </div>
         </div>
       </div>
@@ -757,11 +764,15 @@ export function AiProvidersPane() {
                 </div>
               </div>
             </div>
-            {hasOpenCodeProvider ? <OpenCodeAcpCard /> : null}
+            {hasOpenCodeProvider ? (
+              <OpenCodeAcpCard cli={providersQuery.data?.openCodeCli} />
+            ) : null}
           </>
         ) : (
           <div className="prov-list">
-            {hasOpenCodeProvider ? <OpenCodeAcpCard /> : null}
+            {hasOpenCodeProvider ? (
+              <OpenCodeAcpCard cli={providersQuery.data?.openCodeCli} />
+            ) : null}
             {providers.map((provider) => (
               <ProviderCard
                 key={provider.id}
