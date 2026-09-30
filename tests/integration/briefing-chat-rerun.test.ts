@@ -3,6 +3,7 @@ import pg from "pg";
 
 import {
   BRIEFINGS_RUN_QUEUE,
+  buildManualBriefingRunJob,
   briefingsGetRunStatusExecute,
   briefingsRerunExecute,
   createBriefingRunJobReadService,
@@ -12,6 +13,7 @@ import {
   type BriefingRunQueueService
 } from "@moss/briefings";
 import type { AccessContext, BriefingDefinition } from "@moss/db";
+import { sendJob } from "@moss/jobs";
 import type { ToolInput } from "@moss/module-sdk";
 
 import { connectionStrings } from "./test-database.js";
@@ -53,7 +55,11 @@ describe("briefings chat re-run tools", () => {
   });
 
   function toolCtx(access: AccessContext) {
-    return { actorUserId: access.actorUserId, requestId: access.requestId, chatSessionId: "c" };
+    return {
+      actorUserId: access.actorUserId,
+      requestId: access.requestId ?? "briefing-chat-rerun",
+      chatSessionId: "c"
+    };
   }
 
   function rerun(access: AccessContext, input: ToolInput) {
@@ -111,6 +117,52 @@ describe("briefings chat re-run tools", () => {
     const next = await rerun(userAContext(), { definitionId: evening.id });
     expect(next.data.status).toBe("queued");
     expect(next.data.runId).not.toBe(runId);
+    await handleNextBriefingJob(harness.workerBoss);
+  }, 60_000);
+
+  it("follows a scheduled run already going, which has no run id until the worker starts it", async () => {
+    const scheduledJobId = await sendJob(harness.appBoss, BRIEFINGS_RUN_QUEUE, {
+      actorUserId: evening.owner_user_id,
+      definitionId: evening.id,
+      runKind: "scheduled",
+      briefingType: "evening"
+    });
+
+    const repeat = await rerun(userAContext(), { briefingType: "evening" });
+    expect(repeat.data).toMatchObject({
+      status: "already_running",
+      runId: null,
+      jobId: scheduledJobId
+    });
+    expect(await openJobCount(evening.id)).toBe(1);
+
+    const input = { jobId: scheduledJobId as string, definitionId: evening.id };
+    expect((await status(userAContext(), input)).data).toMatchObject({ state: "pending" });
+    expect((await status(userBContext(), input)).data.state).toBe("not_found");
+
+    const result = await handleNextBriefingJob(harness.workerBoss);
+    const ready = await status(userAContext(), input);
+    expect(ready.data).toMatchObject({ state: "ready", runId: result.runId });
+  }, 60_000);
+
+  it("withdraws its own job when the Today button queued one in the same moment", async () => {
+    // Inject a Today-style run (its own idempotency key) between the chat check and its send.
+    const racing: BriefingRunQueueService = {
+      ...queue,
+      async send(job) {
+        const today = buildManualBriefingRunJob(evening.owner_user_id, evening, "today-click");
+        await queue.send(today);
+        return queue.send(job);
+      }
+    };
+    const result = await harness.dataContext.withDataContext(userAContext(), (db) =>
+      briefingsRerunExecute(db, { briefingType: "evening" }, toolCtx(userAContext()), {
+        briefingRunQueue: racing
+      })
+    );
+
+    expect(result.data.status).toBe("already_running");
+    expect(await openJobCount(evening.id)).toBe(1);
     await handleNextBriefingJob(harness.workerBoss);
   }, 60_000);
 

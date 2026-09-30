@@ -41,17 +41,24 @@ second run.
    `exclusive` policy keeps at most one non-terminal job per key, so two racing chat requests
    collapse to one. A null job id here means the race was lost: re-read and return
    `already_running`.
+3. After a successful send, look again for an older in-flight job for the definition, skipping
+   ours. Today and the schedule use other singleton keys, so one of them can land between steps 1
+   and 2. Found: cancel ours and return `already_running` with the older job. Chat therefore never
+   adds a second run; the Today button keeps its existing behavior.
 
 This extends the route's `briefing_run_in_flight` rule (a repeated idempotency key) to cover any
 running job for the definition, including one started from Today or by the schedule.
 
 ### `briefings.getRunStatus`
 
-- Input: `runId`, optional `jobId` (both from `briefings.rerun`).
+- Input: `runId` and `jobId` from `briefings.rerun`. When `runId` is null (a scheduled run already
+  going), `jobId` and `definitionId` instead.
 - A stored run row visible to the actor: `succeeded` is `ready` with its summary text; `failed` or
   `blocked` is `failed`.
 - No row: the actor's own job for that run decides `pending` or `failed`. A job whose payload names
   another actor or run is ignored.
+- By job and definition: the actor's own scheduled job for that definition decides `pending` or
+  `failed`. Once the job is done or gone, the newest run of the owned definition answers.
 - Nothing found: `not_found`. Missing and not-owned look the same.
 - Output is marked external content, because the summary text is written from email and other
   sources.
@@ -60,7 +67,7 @@ running job for the definition, including one started from Today or by the sched
 
 Tools reach pg-boss only through services the chat host builds from briefings-owned factories:
 
-- `briefingRunQueue` (write registry): find an in-flight job, send one job.
+- `briefingRunQueue` (write registry): find an in-flight job, send one job, cancel one job it sent.
 - `briefingRunJobs` (read registry): read one job by id.
 
 The chat package constructs both in `buildChatToolServices` / `buildChatGatewayDependencies`. No

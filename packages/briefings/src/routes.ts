@@ -33,7 +33,7 @@ import {
 import { sendJob } from "@moss/jobs";
 
 import { isBriefingRunPayloadMetadataOnly, type BriefingRunPayload } from "./jobs.js";
-import { BRIEFINGS_RUN_QUEUE } from "./manifest.js";
+import { BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import { BriefingsRepository, type CreateBriefingDefinitionInput } from "./repository.js";
 import { buildManualBriefingRunJob } from "./run-queue.js";
 import {

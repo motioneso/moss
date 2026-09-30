@@ -1,4 +1,9 @@
-import { assertDataContextDb, type BriefingDefinition, type DataContextDb } from "@moss/db";
+import {
+  assertDataContextDb,
+  type BriefingDefinition,
+  type BriefingRun,
+  type DataContextDb
+} from "@moss/db";
 import type { ToolContext, ToolInput, ToolResult, ToolServices } from "@moss/module-sdk";
 import type { BriefingType } from "@moss/shared";
 
@@ -12,9 +17,6 @@ import {
   type BriefingRunJobRef,
   type BriefingRunQueueService
 } from "./run-queue.js";
-
-// Only function declarations are exported here. manifest.ts imports this file and this file
-// reaches manifest.ts through run-queue.ts, so exported consts would hit the cycle's TDZ.
 
 const repository = new BriefingsRepository();
 
@@ -67,6 +69,14 @@ export async function briefingsRerunExecute(
     throw new Error("Briefing run could not be queued");
   }
 
+  // Today and the schedule use other singleton keys, so one of them may have queued between the
+  // check above and this send. Keep the older job and withdraw ours.
+  const earlier = await queue.findInFlight(ctx.actorUserId, definition.id, jobId);
+  if (earlier) {
+    await queue.cancel(jobId);
+    return alreadyRunning(definition, earlier);
+  }
+
   return {
     data: {
       status: "queued",
@@ -80,7 +90,8 @@ export async function briefingsRerunExecute(
 
 /**
  * Reads one briefing run's state for the actor: ready with its text, pending, failed, or not
- * found. Another user's run and a missing run look the same.
+ * found. Another user's run and a missing run look the same. A scheduled run has no run id while
+ * it is queued, so it is followed by job id and definition id instead.
  */
 export async function briefingsGetRunStatusExecute(
   scopedDb: unknown,
@@ -89,39 +100,56 @@ export async function briefingsGetRunStatusExecute(
   services?: ToolServices
 ): Promise<ToolResult> {
   assertDataContextDb(scopedDb);
-  const runId = requireString(input.runId, "runId");
-  const jobId =
-    typeof input.jobId === "string" && UUID_PATTERN.test(input.jobId) ? input.jobId : null;
+  const runId = optionalString(input.runId);
+  const definitionId = optionalString(input.definitionId);
+  const jobId = optionalUuid(input.jobId);
+  if (runId === null && (jobId === null || definitionId === null)) {
+    throw new Error("Give runId, or jobId with definitionId");
+  }
 
-  const run = UUID_PATTERN.test(runId)
-    ? await repository.getOwnedRunById(scopedDb, runId)
-    : undefined;
-  if (run) {
-    const ready = run.status === "succeeded";
-    return {
-      data: {
-        state: ready ? "ready" : "failed",
-        runId: run.id,
-        definitionId: run.definition_id,
-        briefingType: run.briefing_type,
-        createdAt: toIsoString(run.created_at),
-        summaryText: ready ? displaySummaryText(run.summary_text, run.source_metadata) : null
-      }
-    };
+  if (runId !== null) {
+    const run = UUID_PATTERN.test(runId)
+      ? await repository.getOwnedRunById(scopedDb, runId)
+      : undefined;
+    if (run) return runStatus(run);
   }
 
   const jobs = services?.briefingRunJobs as BriefingRunJobReadService | undefined;
   const job = jobId && jobs ? await jobs.readJob(jobId) : null;
   const ownJob =
-    job?.data && job.data.actorUserId === ctx.actorUserId && job.data.briefingRunId === runId;
-  const state = !ownJob
-    ? "not_found"
-    : IN_FLIGHT_JOB_STATES.has(job.state)
-      ? "pending"
-      : FAILED_JOB_STATES.has(job.state)
-        ? "failed"
-        : "not_found";
+    job !== null &&
+    job.data.actorUserId === ctx.actorUserId &&
+    (runId !== null
+      ? job.data.briefingRunId === runId
+      : job.data.definitionId === definitionId && job.data.briefingRunId === undefined);
+  if (ownJob && IN_FLIGHT_JOB_STATES.has(job.state)) return jobStatus("pending", runId);
+  if (ownJob && FAILED_JOB_STATES.has(job.state)) return jobStatus("failed", runId);
 
+  // A finished scheduled job: its run is the newest one of this owned definition.
+  if (runId === null && definitionId !== null && UUID_PATTERN.test(definitionId)) {
+    const owned = await repository.getOwnedDefinitionById(scopedDb, definitionId);
+    const latest = owned ? (await repository.listRuns(scopedDb, owned.id))[0] : undefined;
+    if (latest && latest.owner_user_id === ctx.actorUserId) return runStatus(latest);
+  }
+
+  return jobStatus("not_found", runId);
+}
+
+function runStatus(run: BriefingRun): ToolResult {
+  const ready = run.status === "succeeded";
+  return {
+    data: {
+      state: ready ? "ready" : "failed",
+      runId: run.id,
+      definitionId: run.definition_id,
+      briefingType: run.briefing_type,
+      createdAt: toIsoString(run.created_at),
+      summaryText: ready ? displaySummaryText(run.summary_text, run.source_metadata) : null
+    }
+  };
+}
+
+function jobStatus(state: "pending" | "failed" | "not_found", runId: string | null): ToolResult {
   return {
     data: {
       state,
@@ -171,11 +199,12 @@ function alreadyRunning(definition: BriefingDefinition, ref: BriefingRunJobRef):
   };
 }
 
-function requireString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`${field} is required`);
-  }
-  return value;
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function optionalUuid(value: unknown): string | null {
+  return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
 }
 
 function toIsoString(value: Date | string): string {

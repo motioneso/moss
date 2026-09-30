@@ -6,7 +6,7 @@ import type { BriefingDefinition } from "@moss/db";
 import { sendJob } from "@moss/jobs";
 
 import { isBriefingRunPayloadMetadataOnly, type BriefingRunPayload } from "./jobs.js";
-import { BRIEFINGS_RUN_QUEUE } from "./manifest.js";
+import { BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import type { RunStatusJob } from "./run-status.js";
 
 /** Job states that still hold a run open: queued, waiting to retry, or running. */
@@ -54,35 +54,58 @@ export function buildManualBriefingRunJob(
 
 /** Write-capable queue access for the chat re-run tool. Built by the host, never by a tool. */
 export interface BriefingRunQueueService {
-  /** The actor's queued or running job for this definition, from any source. */
-  findInFlight(actorUserId: string, definitionId: string): Promise<BriefingRunJobRef | null>;
+  /**
+   * The actor's oldest queued or running job for this definition, from any source (chat, Today
+   * or the schedule). `excludeJobId` skips a job the caller just sent.
+   */
+  findInFlight(
+    actorUserId: string,
+    definitionId: string,
+    excludeJobId?: string
+  ): Promise<BriefingRunJobRef | null>;
   /** Sends one job; null when the singleton key is already held by a non-terminal job. */
   send(job: ManualBriefingRunJob): Promise<string | null>;
+  /** Cancels one job the caller sent. */
+  cancel(jobId: string): Promise<void>;
+}
+
+export interface BriefingRunJobSnapshot extends RunStatusJob {
+  readonly data: {
+    readonly actorUserId: string;
+    readonly definitionId: string;
+    readonly briefingRunId: string | undefined;
+  };
 }
 
 /** Read-only job lookup for the chat run-status tool. */
 export interface BriefingRunJobReadService {
-  readJob(jobId: string): Promise<RunStatusJob | null>;
+  readJob(jobId: string): Promise<BriefingRunJobSnapshot | null>;
 }
 
 export function createBriefingRunQueueService(boss: PgBoss): BriefingRunQueueService {
   return {
-    async findInFlight(actorUserId, definitionId) {
+    async findInFlight(actorUserId, definitionId, excludeJobId) {
       const jobs = await boss.findJobs<BriefingRunPayload>(BRIEFINGS_RUN_QUEUE, {
         data: { actorUserId, definitionId }
       });
-      const open = jobs.find(
-        (job) =>
-          IN_FLIGHT_JOB_STATES.has(job.state) &&
-          isBriefingRunPayloadMetadataOnly(job.data) &&
-          job.data.actorUserId === actorUserId &&
-          job.data.definitionId === definitionId
-      );
+      const open = jobs
+        .filter(
+          (job) =>
+            job.id !== excludeJobId &&
+            IN_FLIGHT_JOB_STATES.has(job.state) &&
+            isBriefingRunPayloadMetadataOnly(job.data) &&
+            job.data.actorUserId === actorUserId &&
+            job.data.definitionId === definitionId
+        )
+        .sort((a, b) => a.createdOn.getTime() - b.createdOn.getTime())[0];
       if (!open) return null;
       return { jobId: open.id, runId: open.data.briefingRunId ?? null };
     },
     send(job) {
       return sendJob(boss, BRIEFINGS_RUN_QUEUE, job.payload, { singletonKey: job.singletonKey });
+    },
+    async cancel(jobId) {
+      await boss.cancel(BRIEFINGS_RUN_QUEUE, jobId);
     }
   };
 }
@@ -94,7 +117,11 @@ export function createBriefingRunJobReadService(boss: PgBoss): BriefingRunJobRea
       if (!stored || !isBriefingRunPayloadMetadataOnly(stored.data)) return null;
       return {
         state: stored.state,
-        data: { actorUserId: stored.data.actorUserId, briefingRunId: stored.data.briefingRunId }
+        data: {
+          actorUserId: stored.data.actorUserId,
+          definitionId: stored.data.definitionId,
+          briefingRunId: stored.data.briefingRunId
+        }
       };
     }
   };

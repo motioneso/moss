@@ -49,7 +49,8 @@ function fakeQueue(inFlight: Array<{ jobId: string; runId: string | null } | nul
     send: vi.fn(async (job: ManualBriefingRunJob) => {
       sent.push(job);
       return "30000000-0000-4000-8000-000000000001";
-    })
+    }),
+    cancel: vi.fn(async () => undefined)
   };
   return { queue, sent };
 }
@@ -166,6 +167,29 @@ describe("briefings.rerun", () => {
     expect(result.data).toMatchObject({ status: "already_running", runId: "run-winner" });
   });
 
+  it("withdraws its own job when Today or the schedule queued one in the same moment", async () => {
+    vi.spyOn(BriefingsRepository.prototype, "getOwnedDefinitionById").mockResolvedValue(eveningA);
+    const earlier = { jobId: "30000000-0000-4000-8000-000000000007", runId: null };
+    const { queue, sent } = fakeQueue([null, earlier]);
+
+    const result = await briefingsRerunExecute(scopedDb, { definitionId: eveningA.id }, ctx, {
+      briefingRunQueue: queue
+    });
+
+    expect(sent).toHaveLength(1);
+    expect(queue.findInFlight).toHaveBeenLastCalledWith(
+      userA,
+      eveningA.id,
+      "30000000-0000-4000-8000-000000000001"
+    );
+    expect(queue.cancel).toHaveBeenCalledWith("30000000-0000-4000-8000-000000000001");
+    expect(result.data).toMatchObject({
+      status: "already_running",
+      jobId: earlier.jobId,
+      runId: null
+    });
+  });
+
   it("rejects both or neither selector, and fails closed without the queue service", async () => {
     const { queue } = fakeQueue();
     await expect(
@@ -186,11 +210,33 @@ describe("briefings.getRunStatus", () => {
   const runId = "40000000-0000-4000-8000-000000000001";
   const jobId = "30000000-0000-4000-8000-000000000001";
 
-  function jobs(state: string, actorUserId = userA, briefingRunId = runId) {
+  function jobs(
+    state: string,
+    actorUserId = userA,
+    briefingRunId: string | null = runId,
+    definitionId = eveningA.id
+  ) {
     const service: BriefingRunJobReadService = {
-      readJob: vi.fn(async () => ({ state, data: { actorUserId, briefingRunId } }))
+      readJob: vi.fn(async () => ({
+        state,
+        data: { actorUserId, definitionId, briefingRunId: briefingRunId ?? undefined }
+      }))
     };
     return service;
+  }
+
+  function storedRun(status: string) {
+    return {
+      id: runId,
+      definition_id: eveningA.id,
+      owner_user_id: userA,
+      status,
+      run_kind: "scheduled",
+      briefing_type: "evening",
+      summary_text: "Your evening review.",
+      source_metadata: {},
+      created_at: new Date("2026-09-29T20:00:00.000Z")
+    } as never;
   }
 
   it("is ready with the briefing text once the run is stored", async () => {
@@ -235,6 +281,44 @@ describe("briefings.getRunStatus", () => {
       });
       expect(result.data.state).toBe("not_found");
     }
+  });
+
+  it("follows a scheduled run with no run id by its job, then by the newest run", async () => {
+    const scheduled = { jobId, definitionId: eveningA.id };
+    const pending = await briefingsGetRunStatusExecute(scopedDb, scheduled, ctx, {
+      briefingRunJobs: jobs("active", userA, null)
+    });
+    expect(pending.data).toMatchObject({ state: "pending", runId: null });
+
+    vi.spyOn(BriefingsRepository.prototype, "getOwnedDefinitionById").mockResolvedValue(eveningA);
+    vi.spyOn(BriefingsRepository.prototype, "listRuns").mockResolvedValue([storedRun("succeeded")]);
+    const ready = await briefingsGetRunStatusExecute(scopedDb, scheduled, ctx, {
+      briefingRunJobs: jobs("completed", userA, null)
+    });
+    expect(ready.data).toMatchObject({
+      state: "ready",
+      runId,
+      summaryText: "Your evening review."
+    });
+  });
+
+  it("does not follow another user's scheduled job or briefing", async () => {
+    vi.spyOn(BriefingsRepository.prototype, "getOwnedDefinitionById").mockResolvedValue(undefined);
+    const listRuns = vi.spyOn(BriefingsRepository.prototype, "listRuns");
+    const result = await briefingsGetRunStatusExecute(
+      scopedDb,
+      { jobId, definitionId: eveningSharedFromB.id },
+      ctx,
+      { briefingRunJobs: jobs("active", userB, null, eveningSharedFromB.id) }
+    );
+    expect(result.data.state).toBe("not_found");
+    expect(listRuns).not.toHaveBeenCalled();
+  });
+
+  it("needs a run id, or a job id with a definition id", async () => {
+    await expect(briefingsGetRunStatusExecute(scopedDb, { jobId }, ctx, {})).rejects.toThrow(
+      /runId, or jobId with definitionId/
+    );
   });
 
   it("treats a malformed id as not found without querying", async () => {

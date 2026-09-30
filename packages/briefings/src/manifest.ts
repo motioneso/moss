@@ -15,10 +15,10 @@ import {
   updateBriefingDefinitionResponseSchema
 } from "@moss/shared";
 
+import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import { briefingsGetRunStatusExecute, briefingsRerunExecute } from "./tools.js";
 
-export const BRIEFINGS_MODULE_ID = "briefings";
-export const BRIEFINGS_RUN_QUEUE = "briefings-run";
+export { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE };
 export const briefingsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
 );
@@ -165,7 +165,8 @@ export const briefingsModuleManifest = {
     {
       name: "briefings.getRunStatus",
       description:
-        "Check one briefing run of the user's, by the runId and jobId from briefings.rerun. " +
+        "Check one briefing run of the user's, with the runId and jobId from briefings.rerun. " +
+        "When runId is null (a scheduled run already going), pass jobId and definitionId. " +
         "state is pending (still being written), ready (summaryText holds the briefing), " +
         "failed, or not_found. Check again later while pending; never re-run to check.",
       permissionId: "briefings.view",
@@ -174,10 +175,13 @@ export const briefingsModuleManifest = {
       inputSchema: {
         type: "object",
         additionalProperties: false,
-        required: ["runId"],
         properties: {
           runId: { type: "string", description: "runId from briefings.rerun" },
-          jobId: { type: "string", description: "jobId from briefings.rerun" }
+          jobId: { type: "string", description: "jobId from briefings.rerun" },
+          definitionId: {
+            type: "string",
+            description: "definitionId from briefings.rerun; needed when runId is null"
+          }
         }
       },
       outputSchema: {
@@ -186,7 +190,7 @@ export const briefingsModuleManifest = {
         required: ["state", "runId", "definitionId", "briefingType", "createdAt", "summaryText"],
         properties: {
           state: { type: "string", enum: ["pending", "ready", "failed", "not_found"] },
-          runId: { type: "string" },
+          runId: nullableStringSchema,
           definitionId: nullableStringSchema,
           briefingType: nullableStringSchema,
           createdAt: nullableStringSchema,
