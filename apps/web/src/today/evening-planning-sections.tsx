@@ -25,6 +25,7 @@ import {
   eveningCommitProse,
   NO_ROOM_FOUND
 } from "./today-labels.js";
+import { BriefingMarkdown, EVENING_SECTION_NAMES } from "./briefing-markdown.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
 
@@ -93,7 +94,9 @@ export function ReflectStep(props: {
         />
       ) : null}
       {props.summaryText !== null ? (
-        <p className="evening-plan__prose">{props.summaryText}</p>
+        <div className="evening-plan__prose evening-plan__report">
+          <BriefingMarkdown text={props.summaryText} sectionNames={EVENING_SECTION_NAMES} />
+        </div>
       ) : (
         <p className="evening-plan__prose" role="status">
           {EVENING_REVIEW_NOT_READY}
