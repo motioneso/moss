@@ -515,6 +515,8 @@ export interface ConnectorAccountsTable {
   last_sync_counts: JsonColumn | null;
   last_sync_trigger: string | null;
   previous_sync: JsonColumn | null;
+  // #2804: Gmail history position at the start of the last clean backlog walk.
+  email_history_id: string | null;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -624,6 +626,8 @@ export interface EmailMessagesTable {
   // #2804: failed analysis attempts for the stored revision (NOT NULL DEFAULT 0,
   // so inserts omit it and the update path writes it explicitly).
   analysis_attempts: ColumnType<number, number | undefined, number>;
+  // #2804: when the thread judgement was last requested for the stored revision.
+  judgement_requested_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

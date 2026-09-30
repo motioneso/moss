@@ -494,6 +494,16 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0247",
           name: "0247_email_analysis_attempts.sql"
+        },
+        // #2804 — remember the Gmail change-history position so the backlog walk reads only changes.
+        {
+          version: "0248",
+          name: "0248_connector_email_history_id.sql"
+        },
+        // #2804 — stamp when a thread judgement was last requested so unchanged mail is not re-sent.
+        {
+          version: "0249",
+          name: "0249_email_judgement_requested_at.sql"
         }
       ]);
     } finally {

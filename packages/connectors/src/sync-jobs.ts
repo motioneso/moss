@@ -109,6 +109,12 @@ export interface GoogleSyncContinuationPayload extends ActorScopedJobPayload {
    */
   readonly errorDetail?: ConnectorSyncErrorDetail | null;
   readonly errors: readonly string[];
+  /**
+   * How the backlog walk is listing mail and the mailbox position captured before it began.
+   * Saved as the account's position only when the whole walk ends with no email errors.
+   */
+  readonly historyMode?: "history" | "full";
+  readonly historyAnchor?: string;
   /** Set on a lineage that stops after the last day of mail and never walks the backlog. */
   readonly recentOnly?: boolean;
   /** What started the lineage, restamped with its outcome. Absent on older queued jobs. */
@@ -173,6 +179,14 @@ interface GoogleClientLike {
     maxResults?: number;
   }): Promise<{ messages: Array<{ id: string }>; nextPageToken?: string }>;
   getMessage(input: { accessToken: string; id: string }): Promise<GmailMessageFull>;
+  /** Optional: without both history methods the backlog always lists the whole window. */
+  getProfileHistoryId?(input: { accessToken: string }): Promise<string>;
+  listHistoryPage?(input: {
+    accessToken: string;
+    startHistoryId: string;
+    pageToken?: string;
+    maxResults?: number;
+  }): Promise<{ messageIds: string[]; nextPageToken?: string }>;
 }
 
 export interface GoogleSyncDeps {
@@ -375,6 +389,11 @@ export async function runGoogleSyncChunk(
     continuation?.phase ??
     (calendarEnabled ? "calendar" : emailEnabled ? "email-current-day" : undefined);
   let phaseCursor = continuation?.cursor;
+  let historyMode = continuation?.historyMode;
+  let historyAnchor = continuation?.historyAnchor;
+  // Set only when this chunk finishes the backlog walk, so a position is never saved from a
+  // run that skipped it.
+  let backlogWalkFinished = false;
   const calendarSeenSince = continuation?.calendarSeenSince ?? new Date().toISOString();
   const runId = continuation?.idempotencyKey ?? deps.runId ?? randomUUID();
   const chunkIndex = continuation?.chunkIndex ?? 0;
@@ -404,7 +423,9 @@ export async function runGoogleSyncChunk(
     runId,
     now,
     logger,
-    progress
+    progress,
+    historyMode,
+    historyAnchor
   };
 
   const next = (nextPhase: GoogleSyncPhase, cursor?: string): GoogleSyncChunkOutcome => ({
@@ -436,6 +457,8 @@ export async function runGoogleSyncChunk(
       deferredReason,
       errorDetail,
       errors,
+      ...(historyMode ? { historyMode } : {}),
+      ...(historyAnchor ? { historyAnchor } : {}),
       ...(recentOnly ? { recentOnly: true } : {}),
       ...(trigger ? { trigger } : {})
     }
@@ -460,9 +483,14 @@ export async function runGoogleSyncChunk(
     emailDeferred = carriedDeferred + progress.deferredKeys.size;
     deferredReason = progress.deferredReason;
     errorDetail = progress.errorDetail;
-    if (result.retry) return next(phase, phaseCursor);
+    if (phase === "email") {
+      historyMode = result.historyMode;
+      historyAnchor = result.historyAnchor;
+    }
+    if (result.retry) return next(phase, result.listedCursor);
     if (result.nextCursor) return next(phase, result.nextCursor);
     if (phase === "email-current-day" && !recentOnly) return next("email");
+    backlogWalkFinished = phase === "email";
   }
 
   logger.info(
@@ -505,6 +533,15 @@ export async function runGoogleSyncChunk(
     });
   } catch (error) {
     logger.warn({ err: error }, "google-sync: failed to persist sync outcome; not retrying job");
+  }
+  // Save the mailbox position only after a backlog walk that ended with no errors, so a bad
+  // run can never make the next walk skip mail it did not handle.
+  if (backlogWalkFinished && historyAnchor && errors.length === 0) {
+    try {
+      await connectorsRepo.setEmailHistoryId(scopedDb, account.id, historyAnchor);
+    } catch (error) {
+      logger.warn({ err: error }, "google-sync: failed to save mailbox position");
+    }
   }
   return {
     result: {
