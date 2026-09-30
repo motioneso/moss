@@ -42,6 +42,11 @@ import {
 import { DayPlanSection } from "./day-plan.js";
 
 export interface MorningBriefingReaderProps {
+  /** Which briefing this run belongs to. The evening report has no task-block
+      review, footer actions or overnight-change callout. Defaults to morning. */
+  readonly kind?: "morning" | "evening";
+  /** Open with the report's source list expanded and scrolled into view. */
+  readonly initialSection?: "sources";
   readonly definitionId: string;
   readonly initialRunId: string;
   readonly runs: readonly BriefingRunDto[];
@@ -73,6 +78,8 @@ export function dayPlanReviewUnavailableMessage(input: {
 
 /** Full morning report for one run, from the run response only. Nothing here writes. */
 export function MorningBriefingReader(props: MorningBriefingReaderProps) {
+  const evening = props.kind === "evening";
+  const briefingName = evening ? "evening briefing" : "morning briefing";
   const queryClient = useQueryClient();
   const [selectedRunId, setSelectedRunId] = useState(props.initialRunId);
   const [retryRunId, setRetryRunId] = useState<string | null>(null);
@@ -129,7 +136,11 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   const hasAutomaticPlacement = (props.dayPlan?.plan?.blocks ?? []).some(
     (block) => block.pendingChange === null && block.actualPlacement?.startsAt != null
   );
-  const briefingSurface = hasAutomaticPlacement ? "automatic-read" : "proposed-read";
+  const briefingSurface = evening
+    ? "evening-read"
+    : hasAutomaticPlacement
+      ? "automatic-read"
+      : "proposed-read";
   const { choiceFor, touchedIds } = props.controller;
   const acceptPlan = props.dayPlan?.plan ?? null;
   const acceptSelection = acceptPlan
@@ -212,12 +223,12 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
 
   return (
     <BriefingReportShell
-      eyebrow="Moss / Morning briefing"
-      title="Your day, prepared."
+      eyebrow={evening ? "Moss / Evening briefing" : "Moss / Morning briefing"}
+      title={evening ? "Your day, reviewed." : "Your day, prepared."}
       opener={props.opener}
       onClose={props.onClose}
-      reviewTabLabel={reviewTabLabel}
-      onSelectReviewTab={openReaderReview}
+      reviewTabLabel={evening ? undefined : reviewTabLabel}
+      onSelectReviewTab={evening ? undefined : openReaderReview}
       jumpLinks={
         newsPreview || sportsPreview ? (
           <nav className="brief-reader__jump" aria-label="Report sections">
@@ -250,20 +261,23 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
               selectedRunId={selectedRunId}
               onSelectRun={selectSavedRun}
               onMoreOnToday={props.onClose}
+              evening={evening}
+              openSources={props.initialSection === "sources"}
             />
           ) : (
             <div>
               <p className="cmd-empty" role="status">
                 {failed
-                  ? "Your morning briefing isn't available."
-                  : "Your morning briefing is being prepared."}
+                  ? `Your ${briefingName} isn't available.`
+                  : `Your ${briefingName} is being prepared.`}
               </p>
               {failed ? (
                 <>
                   {retryMutation.isError ? (
                     <p className="brief-reader__retry-error" role="status">
-                      The retry request couldn’t be confirmed. Your task-block choices are still
-                      here; try again.
+                      {evening
+                        ? "The retry request couldn’t be confirmed. Try again."
+                        : "The retry request couldn’t be confirmed. Your task-block choices are still here; try again."}
                     </p>
                   ) : null}
                   <Button
@@ -302,7 +316,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         />
       }
       footerActions={
-        briefingSurface === "proposed-read" ? (
+        evening ? null : briefingSurface === "proposed-read" ? (
           <>
             <span className="brief-reader__review-link">
               <Button variant="quiet" onClick={openReaderReview}>
@@ -330,7 +344,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         )
       }
       footerStatus={
-        acceptPhase !== "idle" ? (
+        !evening && acceptPhase !== "idle" ? (
           <p className="brief-reader__accept-status" role="status">
             {acceptStatus.line} {acceptReviewButton}
           </p>
@@ -383,8 +397,22 @@ function ReportBody(props: {
   readonly selectedRunId: string;
   readonly onSelectRun: (runId: string) => void;
   readonly onMoreOnToday: () => void;
+  readonly evening: boolean;
+  readonly openSources: boolean;
 }) {
   const { run } = props;
+  const sourcesRef = useRef<HTMLDetailsElement | null>(null);
+  useEffect(() => {
+    if (!props.openSources) return;
+    const sources = sourcesRef.current;
+    if (!sources) return;
+    sources.open = true;
+
+    // Scroll on the next frame so the dialog's own title focus on open runs
+    // first. scrollIntoView is absent under jsdom.
+    const frame = requestAnimationFrame(() => sources.scrollIntoView?.({ block: "start" }));
+    return () => cancelAnimationFrame(frame);
+  }, [props.openSources]);
   const headline = splitHeadline(run.summaryText);
   const planContext = readPlanContext(run.structuredPayload);
   const freshness = parseBriefingFreshness(run.sourceMetadata);
@@ -394,6 +422,7 @@ function ReportBody(props: {
     (gap) => gap.source === "day_plan" && gap.reason === "tool_failed"
   );
   const noEveningPlan =
+    !props.evening &&
     !dayPlanReadFailed &&
     (run.structuredPayload.planContext === null || planContext?.eveningIntent === null);
   const news = readEditorial(run.sourceMetadata, "news", isNewsBriefingEvidence);
@@ -417,7 +446,8 @@ function ReportBody(props: {
           sources, including tasks and calendar.
         </p>
       ) : null}
-      {props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable" ? (
+      {!props.evening &&
+      (props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable") ? (
         <BriefingCallout
           before={planContext}
           after={props.detail.plan.current}
@@ -473,7 +503,7 @@ function ReportBody(props: {
         />
       ) : null}
       {freshness || gaps.length > 0 ? (
-        <details className="brief-reader__sources">
+        <details className="brief-reader__sources" ref={sourcesRef}>
           <summary>What informed this briefing?</summary>
           {freshness ? (
             <BriefingFreshnessList
