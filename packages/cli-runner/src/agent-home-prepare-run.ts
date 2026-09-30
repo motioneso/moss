@@ -33,18 +33,20 @@ export type AgentHomePrepareRun = (
  * given the request as one JSON argv element (never through a shell, so
  * nothing in it is ever interpolated). Secret files travel by stdin. A non-zero exit fails the launch with
  * the step's own stderr (task 5b, Architect ruling, 2026-09-08).
+ *
+ * A null identity runs the step as the runner itself, with no setpriv. Only the
+ * development-only shared-account mode passes null.
  */
 export async function runAgentHomePrepareAsOwner(
   request: AgentHomePrepareRequest,
-  identity: { uid: number; gid: number },
+  identity: { uid: number; gid: number } | null,
   secretFiles: readonly AgentHomeSecretFile[] = []
 ): Promise<void> {
   const script = createRequire(import.meta.url).resolve("./agent-home-prepare.mjs");
-  const { command, args } = buildSetprivDropCommand(
-    process.execPath,
-    [script, JSON.stringify(request)],
-    identity
-  );
+  const scriptArgs = [script, JSON.stringify(request)];
+  const { command, args } = identity
+    ? buildSetprivDropCommand(process.execPath, scriptArgs, identity)
+    : { command: process.execPath, args: scriptArgs };
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ["pipe", "ignore", "pipe"],
