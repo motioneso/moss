@@ -1,0 +1,215 @@
+# #2689 slice 3: publishes the signed CLI tools manifest to the rolling GitHub Release tagged
+# `cli-tools`. Three jobs keep the signing key away from any package code:
+#   prepare  reads the registry and builds lockfiles. Runs no package code. No secrets.
+#   check    installs and starts the candidate tools. Runs package code. No secrets, read-only.
+#   sign     reads only the check job's pass/fail. Never runs package code. Holds the key.
+name: cli-tools-manifest
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to pin (leave empty for the newest of everything)"
+        required: false
+        type: string
+      version:
+        description: "Exact version to pin. Older than the published one is refused."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Serialized: each run reads the release's current manifest to pick the next sequence number.
+concurrency:
+  group: cli-tools-manifest
+  cancel-in-progress: false
+
+env:
+  RELEASE: cli-tools
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Download the published release (absent on first publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/previous
+          gh release download "$RELEASE" --dir dist/previous --repo "$GITHUB_REPOSITORY" \
+            || echo "no existing $RELEASE release, publishing fresh"
+      - name: Choose versions, build lockfiles, run trust checks
+        env:
+          INPUT_PACKAGE: ${{ inputs.package }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: pnpm tsx scripts/cli-tools-manifest/cli.ts prepare --out dist/cli-tools --previous-dir dist/previous
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-tools-prepared
+          path: dist/cli-tools
+          if-no-files-found: error
+
+  check:
+    needs: prepare
+    runs-on: ubuntu-latest
+    # Runs candidate package code. Nothing secret exists in this job and the token is read-only.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-tools-prepared
+          path: dist/cli-tools
+      - name: Run the offline contract check
+        run: pnpm tsx scripts/cli-tools-manifest/cli.ts check --in dist/cli-tools
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-tools-checked
+          path: dist/cli-tools/check-result.json
+          if-no-files-found: warn
+
+  sign:
+    needs: [prepare, check]
+    # A crashed check job still reaches here, where its missing result counts as a failure.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    # Scheduled runs use the main-only environment. A manual run needs Ben's approval.
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'cli-tools-signing-manual' || 'cli-tools-signing' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-tools-prepared
+          path: dist/cli-tools
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: cli-tools-checked
+          path: dist/cli-tools
+      - name: Download the published release (absent on first publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/previous
+          gh release download "$RELEASE" --dir dist/previous --repo "$GITHUB_REPOSITORY" \
+            || echo "no existing $RELEASE release, publishing fresh"
+      # The only step that sees the signing key.
+      - name: Verify, assemble and sign the manifest
+        id: sign
+        env:
+          MOSS_MODULE_CATALOG_SIGNING_KEY_ID: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_KEY_ID }}
+          MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY }}
+        run: pnpm tsx scripts/cli-tools-manifest/cli.ts sign --in dist/cli-tools --previous-dir dist/previous
+      - name: Ensure rolling release exists
+        if: steps.sign.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE" \
+            || gh release create "$RELEASE" --title "CLI tools manifest" --latest=false \
+                 --notes "Rolling release. Assets are managed by the cli-tools-manifest workflow. Do not edit by hand."
+      - name: Upload manifest and lockfiles
+        if: steps.sign.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Lockfiles first, manifest and signature last, so a reader never sees a manifest
+          # that names a lockfile not yet uploaded.
+          jq -r '.toolsets[].packages[].lockfile' dist/cli-tools/cli-tools-manifest.json | sort -u \
+            | while read -r f; do gh release upload "$RELEASE" "dist/cli-tools/$f" --clobber; done
+          gh release upload "$RELEASE" dist/cli-tools/cli-tools-manifest.json --clobber
+          gh release upload "$RELEASE" dist/cli-tools/cli-tools-manifest.json.sig --clobber
+      - name: Prune assets the manifest no longer names
+        if: steps.sign.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -r '[.toolsets[].packages[].lockfile] + ["cli-tools-manifest.json", "cli-tools-manifest.json.sig"] | .[]' \
+            dist/cli-tools/cli-tools-manifest.json > /tmp/keep.txt
+          gh api "repos/${{ github.repository }}/releases/tags/$RELEASE" \
+            --jq '.assets[] | "\(.id)\t\(.name)"' | while IFS=$'\t' read -r id name; do
+            if ! grep -qxF "$name" /tmp/keep.txt; then
+              echo "pruning $name"
+              gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id"
+            fi
+          done
+      # A blocked update has no visible symptom for users, so each one files an issue.
+      - name: File an issue for each blocked update
+        if: always() && steps.sign.outputs.blocked != '' && steps.sign.outputs.blocked != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -c '.[]' dist/cli-tools/blocked.json | while read -r row; do
+            PKG="$(jq -r .pkg <<<"$row")"; VER="$(jq -r .version <<<"$row")"
+            WHY="$(jq -r 'if .reason == "contract-check" then "The offline contract check failed. See the check job log." else (.failures | join("\n")) end' <<<"$row")"
+            TITLE="CLI tool update blocked: $PKG $VER"
+            EXISTING="$(gh issue list --state open --label bug --search "$TITLE in:title" \
+              --json number --jq '.[0].number // empty')"
+            BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          $WHY
+
+          The previous version stays published until this is resolved."
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "$BODY"
+            else
+              gh issue create --title "$TITLE" --label bug --body "$BODY"
+            fi
+          done
+      - name: File an issue if the publish failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="CLI tools manifest publish is failing"
+          EXISTING="$(gh issue list --state open --label bug --search "$TITLE in:title" \
+            --json number --jq '.[0].number // empty')"
+          BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit: ${{ github.sha }}
+
+          No CLI tool update is being offered until this publishes."
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label bug --body "$BODY"
+          fi
