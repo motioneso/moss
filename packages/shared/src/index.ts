@@ -9,6 +9,7 @@ export * from "./schema-fragments.js";
 export * from "./ai-api.js";
 export * from "./ai-service-binding-api.js";
 export * from "./ai-voice-api.js";
+export * from "./ai-chat-favorites-api.js";
 export * from "./ai-audit-api.js";
 export * from "./ai-summary-api.js";
 export * from "./briefings-api.js";

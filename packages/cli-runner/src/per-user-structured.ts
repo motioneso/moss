@@ -297,12 +297,17 @@ export function runBounded(
  * cover reading or writing inside a folder it has handed over. Paths travel by env and content by
  * stdin or stdout, never by argv. With `limits`, every command is bounded by them. With `home`,
  * every command runs in the owner's home, where Codex finds its login.
+ *
+ * A null identity runs every command as the runner itself, with no setpriv. Only the
+ * development-only shared-account mode passes null.
  */
 export function createOwnerIo(
-  identity: { readonly uid: number; readonly gid: number },
+  identity: { readonly uid: number; readonly gid: number } | null,
   opts: { readonly limits?: OwnerRunLimits; readonly home?: string } = {}
 ): TmuxIo {
   const homeEnv = opts.home ? { HOME: opts.home, CODEX_HOME: join(opts.home, ".codex") } : {};
+  const asOwner = (command: string, args: readonly string[]) =>
+    identity ? buildSetprivDropCommand(command, args, identity) : { command, args: [...args] };
   const run = (
     cmd: string,
     args: readonly string[],
@@ -311,12 +316,14 @@ export function createOwnerIo(
   ): Promise<{ code: number; stdout: string; stderr: string }> => {
     // The runner may not signal the owner's process, so `timeout` enforces the deadline as the owner.
     const dropped = opts.limits
-      ? buildSetprivDropCommand(
-          "timeout",
-          ["-s", "KILL", String(Math.ceil(opts.limits.timeoutMs / 1000)), cmd, ...args],
-          identity
-        )
-      : buildSetprivDropCommand(cmd, args, identity);
+      ? asOwner("timeout", [
+          "-s",
+          "KILL",
+          String(Math.ceil(opts.limits.timeoutMs / 1000)),
+          cmd,
+          ...args
+        ])
+      : asOwner(cmd, args);
     const env = { ...buildSanitizedCliEnv(process.env), ...homeEnv, ...extraEnv };
     return runBounded(dropped.command, dropped.args, env, input ?? "", opts.limits);
   };

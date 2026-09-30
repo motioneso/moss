@@ -1,5 +1,18 @@
 export const CHAT_MODEL_OVERRIDE_PREFERENCE_KEY = "chat.modelOverride";
 export const CHAT_MODEL_OVERRIDE_SETTING_KEY = "ai.chat_model_override.enabled";
+export const CHAT_MODEL_FAVORITES_PREFERENCE_KEY = "chat.favoriteModels";
+
+/** Keeps the first occurrence of each non-empty string id, up to `max` ids. */
+export function normalizeChatModelFavorites(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || item.length === 0 || ids.includes(item)) continue;
+    ids.push(item);
+    if (ids.length >= max) break;
+  }
+  return ids;
+}
 
 export interface ChatModelOverrideCandidate {
   readonly id: string;

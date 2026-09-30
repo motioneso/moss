@@ -174,6 +174,71 @@ describe("AI chat model override", () => {
     expect(disabledGlobal.statusCode).toBe(200);
     expect(disabledGlobal.json()).toMatchObject({ settings: { overrideEnabled: false } });
   });
+
+  it("stores starred chat models per user, deduped, and keeps them private to the owner", async () => {
+    const empty = await server.inject({
+      method: "GET",
+      url: "/api/ai/chat-model-favorites",
+      headers: { authorization: `Bearer ${ids.sessionB}` }
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json()).toEqual({ modelIds: [] });
+
+    const saved = await server.inject({
+      method: "PUT",
+      url: "/api/ai/chat-model-favorites",
+      headers: { authorization: `Bearer ${ids.sessionB}` },
+      payload: { modelIds: ["model-x", "model-y", "model-x"] }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toEqual({ modelIds: ["model-x", "model-y"] });
+
+    const reread = await server.inject({
+      method: "GET",
+      url: "/api/ai/chat-model-favorites",
+      headers: { authorization: `Bearer ${ids.sessionB}` }
+    });
+    expect(reread.json()).toEqual({ modelIds: ["model-x", "model-y"] });
+
+    // Another user, including an instance admin, sees only their own (empty) list.
+    const otherUser = await server.inject({
+      method: "GET",
+      url: "/api/ai/chat-model-favorites",
+      headers: { authorization: `Bearer ${ids.sessionA}` }
+    });
+    expect(otherUser.json()).toEqual({ modelIds: [] });
+    const userARows = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "request:user-a-chat-favorites" },
+      (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.preferences")
+          .select("key")
+          .where("key", "=", "chat.favoriteModels")
+          .execute()
+    );
+    expect(userARows).toEqual([]);
+
+    const tooMany = await server.inject({
+      method: "PUT",
+      url: "/api/ai/chat-model-favorites",
+      headers: { authorization: `Bearer ${ids.sessionB}` },
+      payload: { modelIds: Array.from({ length: 101 }, (_, index) => `model-${index}`) }
+    });
+    expect(tooMany.statusCode).toBe(400);
+
+    const cleared = await server.inject({
+      method: "PUT",
+      url: "/api/ai/chat-model-favorites",
+      headers: { authorization: `Bearer ${ids.sessionB}` },
+      payload: { modelIds: [] }
+    });
+    expect(cleared.json()).toEqual({ modelIds: [] });
+  });
+
+  it("rejects favorites requests without a session", async () => {
+    const response = await server.inject({ method: "GET", url: "/api/ai/chat-model-favorites" });
+    expect(response.statusCode).toBe(401);
+  });
 });
 
 async function setUserAInstanceAdmin(): Promise<void> {

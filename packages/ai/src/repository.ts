@@ -35,7 +35,8 @@ import {
   type AiServiceKey,
   type ModuleServiceBindingMap,
   type ModuleServiceKey,
-  type SortingServiceKey
+  type SortingServiceKey,
+  CHAT_MODEL_FAVORITES_MAX
 } from "@moss/shared";
 
 import type { EncryptedAiSecret } from "./crypto.js";
@@ -47,8 +48,10 @@ import {
   parseServiceBindingMap
 } from "./service-binding-map.js";
 import {
+  CHAT_MODEL_FAVORITES_PREFERENCE_KEY,
   CHAT_MODEL_OVERRIDE_PREFERENCE_KEY,
   CHAT_MODEL_OVERRIDE_SETTING_KEY,
+  normalizeChatModelFavorites,
   resolveChatModelOverride
 } from "./chat-model-override.js";
 
@@ -1754,6 +1757,42 @@ export class AiRepository {
     }
 
     return this.getChatModelOverrideSettings(scopedDb);
+  }
+
+  async getChatModelFavorites(scopedDb: DataContextDb): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+
+    const row = await scopedDb.db
+      .selectFrom("app.preferences")
+      .select("value_json")
+      .where("key", "=", CHAT_MODEL_FAVORITES_PREFERENCE_KEY)
+      .executeTakeFirst();
+    return normalizeChatModelFavorites(row?.value_json, CHAT_MODEL_FAVORITES_MAX);
+  }
+
+  async setChatModelFavorites(
+    scopedDb: DataContextDb,
+    modelIds: readonly string[]
+  ): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+
+    const ids = normalizeChatModelFavorites(modelIds, CHAT_MODEL_FAVORITES_MAX);
+    await scopedDb.db
+      .insertInto("app.preferences")
+      .values({
+        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        key: CHAT_MODEL_FAVORITES_PREFERENCE_KEY,
+        value_json: jsonb(ids),
+        updated_at: new Date()
+      })
+      .onConflict((oc) =>
+        oc.columns(["owner_user_id", "key"]).doUpdateSet({
+          value_json: jsonb(ids),
+          updated_at: new Date()
+        })
+      )
+      .execute();
+    return ids;
   }
 
   async getAdminPinnedModelId(scopedDb: DataContextDb): Promise<string | null> {

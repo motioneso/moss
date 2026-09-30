@@ -124,15 +124,22 @@ function sleep(ms: number): Promise<void> {
  * Start the cli-runner the way prod does — `tsx packages/cli-runner/src/main-entry.ts` with the
  * env `buildChildEnv("cli-runner", …)` produces — but detached, from source, with dev's own HOME
  * base rather than the container's `/data` paths.
+ *
+ * A dev runner has no root, so per-user mode is off. The development-only shared-account opt-in
+ * lets chat launch anyway; prod's own `buildChildEnv` allowlist drops both keys.
  */
 function spawnDevCliRunner(config: DevInstanceConfig, env: NodeJS.ProcessEnv): void {
-  const childEnv = buildChildEnv("cli-runner", {
-    ...env,
-    JARVIS_CLI_HOME: env.JARVIS_CLI_HOME ?? config.cliHomeBase,
-    JARVIS_CLI_HOME_BASE: env.JARVIS_CLI_HOME_BASE ?? config.cliHomeBase,
-    JARVIS_CLI_RUNNER_SOCKET: config.cliRunnerSocketPath,
-    JARVIS_CLI_TOOLS_PREFIX: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? ""
-  });
+  const childEnv = {
+    ...buildChildEnv("cli-runner", {
+      ...env,
+      JARVIS_CLI_HOME: env.JARVIS_CLI_HOME ?? config.cliHomeBase,
+      JARVIS_CLI_HOME_BASE: env.JARVIS_CLI_HOME_BASE ?? config.cliHomeBase,
+      JARVIS_CLI_RUNNER_SOCKET: config.cliRunnerSocketPath,
+      JARVIS_CLI_TOOLS_PREFIX: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? ""
+    }),
+    NODE_ENV: "development",
+    MOSS_CLI_ALLOW_SHARED_UID: "1"
+  };
 
   const child = spawn("node_modules/.bin/tsx", ["packages/cli-runner/src/main-entry.ts"], {
     detached: true,

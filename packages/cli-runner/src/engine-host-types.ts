@@ -40,6 +40,8 @@ export interface EngineHostDeps {
    * never opt in (every current caller) get the proven single-identity topology for free.
    */
   readonly perUserUid?: boolean;
+  /** Development-only shared-account mode for chat agents; see `AcpHostDeps.allowSharedUid`. */
+  readonly allowSharedUid?: boolean;
   /**
    * Builds the owner-switched io for one per-user slot. Defaults to the sanitized setpriv io;
    * tests inject a fake because a non-root process cannot switch owner.

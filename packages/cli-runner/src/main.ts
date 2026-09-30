@@ -39,11 +39,11 @@ import { CliRunnerServer } from "./server.js";
 import { TerminalHost } from "./terminal-host.js";
 import { ensureOwnedTopLevel, prepareOwnedPathWithOwnership } from "./owned-fs.js";
 import { createOwnerIo } from "./per-user-structured.js";
+import { codexPeerHomesFor, runnerOwnIdentity } from "./shared-uid.js";
 import { allocateUidSlot } from "./uid-allocator.js";
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
 import {
-  codexPeerHomes,
   CODEX_LOGIN_READ_LIMITS,
   ownerCodexHomeAccess,
   promoteCodexLogin,
@@ -58,6 +58,12 @@ export interface CliRunnerConfig {
   readonly singleUser: boolean;
   /** #347 per-user UID isolation (`JARVIS_CLI_PER_USER_UID`); default OFF — see EngineHostDeps. */
   readonly perUserUid: boolean;
+  /**
+   * Development-only opt-in (`MOSS_CLI_ALLOW_SHARED_UID=1` with `NODE_ENV=development`): with
+   * per-user mode off, chat and logins run as the runner's own account instead of refusing.
+   * Each person still gets their own home folder. See {@link readSharedUidOptIn}.
+   */
+  readonly allowSharedUid?: boolean;
   readonly neutralBase: string;
   readonly homeBase: string;
   /** Tools-volume prefix the installer stages/promotes into (`NPM_CONFIG_PREFIX`, §7.1). */
@@ -114,6 +120,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfi
     // pre-#347 topology. Set "1" ONLY with a root container + the completed file-permission model
     // (parallel proper-fix track); ON without root fails every launch (setuid EPERM).
     perUserUid: env.JARVIS_CLI_PER_USER_UID === "1",
+    allowSharedUid: env.JARVIS_CLI_PER_USER_UID !== "1" && readSharedUidOptIn(env) === "honoured",
     neutralBase: resolveMossEnv(env, "JARVIS_CLI_NEUTRAL_BASE") ?? DEFAULT_NEUTRAL_BASE,
     homeBase,
     toolsPrefix:
@@ -130,6 +137,36 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfi
       DEFAULT_PERSISTENT_IDLE_REAP_MINUTES
     )
   };
+}
+
+/**
+ * The shared-account opt-in is honoured only when `NODE_ENV` is exactly `development`.
+ * Production, or an unset `NODE_ENV`, ignores it, so a stray setting never weakens a real
+ * install: chat there still refuses to start without per-user mode.
+ */
+export function readSharedUidOptIn(env: NodeJS.ProcessEnv): "off" | "honoured" | "ignored" {
+  if (env.MOSS_CLI_ALLOW_SHARED_UID !== "1") return "off";
+  return env.NODE_ENV === "development" ? "honoured" : "ignored";
+}
+
+/** The startup warning for the shared-account opt-in, or null when it is off. */
+export function sharedUidStartupWarning(env: NodeJS.ProcessEnv): string | null {
+  const optIn = readSharedUidOptIn(env);
+  if (optIn === "off") return null;
+  if (optIn === "ignored") {
+    return (
+      "[cli-runner] MOSS_CLI_ALLOW_SHARED_UID=1 is ignored: it is honoured only with " +
+      `NODE_ENV=development (NODE_ENV is ${env.NODE_ENV ?? "unset"})`
+    );
+  }
+  if (env.JARVIS_CLI_PER_USER_UID === "1") {
+    return "[cli-runner] MOSS_CLI_ALLOW_SHARED_UID=1 has no effect: per-user mode is on";
+  }
+  return (
+    "[cli-runner] WARNING: MOSS_CLI_ALLOW_SHARED_UID=1 (development only). Chat agents and " +
+    "logins run as this runner's own account, with no per-user isolation. Never use this on " +
+    "a shared or production host."
+  );
 }
 
 /**
@@ -197,37 +234,55 @@ function ownerCodexAccess(
   );
 }
 
+/** Shared-account mode: the same access, run as the runner itself with no setpriv. */
+function selfCodexAccess(
+  agentHome: string,
+  identity: { readonly uid: number; readonly gid: number }
+): CodexHomeAccess {
+  return ownerCodexHomeAccess(
+    agentHome,
+    identity,
+    createOwnerIo(null, { limits: CODEX_LOGIN_READ_LIMITS }),
+    (request, _identity, files) => runAgentHomePrepareAsOwner(request, null, files)
+  );
+}
+
 /**
  * Resolve one isolated login runtime with owner-switched commands and credential reads. With
  * `syncCodexLogin`, the instance's shared Codex login is brought into the user's home first, so a
- * readiness check sees the login their chat will use (#2687).
+ * readiness check sees the login their chat will use (#2687). In development-only shared-account
+ * mode the runtime runs as the runner itself, still in the user's own home.
  */
 export async function resolveIsolatedUserRuntime(
-  config: Pick<CliRunnerConfig, "perUserUid" | "homeBase">,
+  config: Pick<CliRunnerConfig, "perUserUid" | "homeBase" | "allowSharedUid">,
   userId: string,
   opts?: { readonly syncCodexLogin?: boolean }
 ): Promise<LoginUserRuntime> {
-  if (!config.perUserUid) {
+  const shared = !config.perUserUid && config.allowSharedUid === true;
+  if (!config.perUserUid && !shared) {
     throw new Error("per-user CLI isolation is disabled; refusing shared-home login");
   }
-  const slot = allocateUidSlot(config.homeBase, userId);
+  const slot = shared ? runnerOwnIdentity() : allocateUidSlot(config.homeBase, userId);
   const agentsParent = (await prepareOwnedPathWithOwnership(config.homeBase, userId, ["agents"], 1))
     .path;
   const agentHome = (await ensureOwnedTopLevel(userId, agentsParent, userId, slot.uid, slot.gid))
     .path;
   const baseIo = createSanitizedTmuxIo(buildCliRunnerChildEnv({ homeBase: agentHome }));
-  const io: LoginUserRuntime["io"] = {
-    ...baseIo,
-    run: async (command, args, opts) => {
-      const dropped = buildSetprivDropCommand(command, args, slot);
-      return baseIo.run(dropped.command, dropped.args, { env: opts?.env });
-    }
-  };
+  const io: LoginUserRuntime["io"] = shared
+    ? baseIo
+    : {
+        ...baseIo,
+        run: async (command, args, opts) => {
+          const dropped = buildSetprivDropCommand(command, args, slot);
+          return baseIo.run(dropped.command, dropped.args, { env: opts?.env });
+        }
+      };
   if (opts?.syncCodexLogin) {
+    const access = shared ? selfCodexAccess : ownerCodexAccess;
     await syncCodexLoginIntoHome(
       config.homeBase,
-      ownerCodexAccess(agentHome, slot),
-      codexPeerHomes(config.homeBase, userId, ownerCodexAccess)
+      access(agentHome, slot),
+      codexPeerHomesFor(shared, config.homeBase, userId, access)
     );
   }
   return {
@@ -379,15 +434,22 @@ export function createCliRunner(
     homeBase: config.homeBase,
     singleUser: config.singleUser,
     perUserUid: config.perUserUid,
+    allowSharedUid: config.allowSharedUid,
     installService,
     loginService,
     resolveUserRuntime,
     // #2687: model listing reads the shared Codex login, so it first picks up any newer refresh.
     beforeModelList: async (_provider, acpAgentId) => {
-      if (acpAgentId !== "codex-acp" || !config.perUserUid) return;
+      const shared = config.allowSharedUid === true;
+      if (acpAgentId !== "codex-acp" || (!config.perUserUid && !shared)) return;
       await publishNewestCodexLogin(
         config.homeBase,
-        codexPeerHomes(config.homeBase, undefined, ownerCodexAccess)
+        codexPeerHomesFor(
+          shared,
+          config.homeBase,
+          undefined,
+          shared ? selfCodexAccess : ownerCodexAccess
+        )
       ).catch(() => undefined);
     },
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).
@@ -431,6 +493,8 @@ export async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  const sharedUidWarning = sharedUidStartupWarning(process.env);
+  if (sharedUidWarning) console.warn(sharedUidWarning);
   const server = createCliRunner(config, (msg) => {
     console.log(msg);
   });

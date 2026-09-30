@@ -139,7 +139,7 @@ export const chatModuleManifest = {
         {
           id: "chat.acp_per_user_mode_required.host",
           description:
-            "An administrator turns on per-user mode in the host environment file and recreates the app container; no Settings control changes this.",
+            "An administrator turns on per-user mode in the host environment file and recreates the app container; no Settings control does this. Dev hosts may set MOSS_CLI_ALLOW_SHARED_UID=1 with NODE_ENV=development instead.",
           path: "/settings?section=aiproviders"
         }
       ]
@@ -160,6 +160,13 @@ export const chatModuleManifest = {
       description:
         "Each ACP reply shows elapsed time and the token counts reported by the provider.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.model_picker",
+      description:
+        "Pick the chat model from the button above the message box: starred favorites first, " +
+        "then providers you open to see their models. Stars follow your account across " +
+        "devices. Search appears past eight models."
     },
     {
       id: "chat.response_styles",

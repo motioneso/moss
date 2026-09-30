@@ -32,8 +32,10 @@ import {
   AI_MODEL_CAPABILITIES,
   createAiConfiguredModelRouteSchema,
   createAiProviderConfigRouteSchema,
+  getChatModelFavoritesRouteSchema,
   getChatModelOverrideSettingsRouteSchema,
   invokeAiAssistantToolRouteSchema,
+  putChatModelFavoritesRouteSchema,
   listAiAssistantActionsRouteSchema,
   listAiAssistantToolsRouteSchema,
   putAdminChatModelOverrideSettingsRouteSchema,
@@ -619,6 +621,39 @@ export function registerAiRoutes(
         return {
           settings: serializeChatModelOverrideSettings(settings, accessContext.actorUserId)
         };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.get(
+    "/api/ai/chat-model-favorites",
+    { schema: getChatModelFavoritesRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const modelIds = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.getChatModelFavorites(scopedDb)
+        );
+        return { modelIds };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.put(
+    "/api/ai/chat-model-favorites",
+    { schema: putChatModelFavoritesRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const body = request.body as { readonly modelIds: readonly string[] };
+        const modelIds = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.setChatModelFavorites(scopedDb, body.modelIds)
+        );
+        return { modelIds };
       } catch (error) {
         return handleRouteError(error, reply);
       }

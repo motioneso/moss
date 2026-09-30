@@ -1,27 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, GitCommitHorizontal, Lock } from "lucide-react";
+import { ChevronDown, GitCommitHorizontal, Lock } from "lucide-react";
 import { useRef, useState } from "react";
 
 import {
+  getChatModelFavorites,
   getChatSettings,
   getChatModelOverrideSettings,
+  putChatModelFavorites,
   putChatModelOverride,
   putChatSettings,
   switchChatProvider
 } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
-import type { AiConfiguredModelDto, ChatModelOverrideSettingsDto, ChatSurface } from "@moss/shared";
+import { ChatModelPickerMenu } from "./chat-model-picker-menu.js";
+import {
+  providerLabelFor,
+  toggleFavoriteIds,
+  type ModelChoice
+} from "./chat-model-picker-model.js";
+import type {
+  AiConfiguredModelDto,
+  ChatModelFavoritesDto,
+  ChatModelOverrideSettingsDto,
+  ChatSurface
+} from "@moss/shared";
 import "./chat-model-pill.css";
-
-type ModelChoice = {
-  readonly modelId: string | null;
-  readonly model: AiConfiguredModelDto;
-  readonly label: string;
-  readonly providerLabel: string;
-  readonly relation: "same-provider" | "cross-provider";
-  readonly selected: boolean;
-};
 
 export function ChatModelPill(props: {
   readonly disabled: boolean;
@@ -49,6 +53,41 @@ export function ChatModelPill(props: {
     open,
     onClose: closeMenu
   });
+  // Favorites are a convenience: a failed load shows the picker without them. Starring waits for
+  // a successful load, because each save replaces the whole stored list.
+  const favoritesQuery = useQuery({
+    queryKey: queryKeys.ai.chatModelFavorites,
+    queryFn: getChatModelFavorites,
+    retry: false
+  });
+  const favoriteIds = favoritesQuery.data?.modelIds ?? [];
+  const favoritesReady = favoritesQuery.isSuccess;
+
+  // Saves share a scope so they reach the server in click order. Each one is built from the
+  // optimistic list, so the last click wins. Refetch only once the queue drains, so an earlier
+  // response cannot overwrite a later optimistic state; a failure refetches the stored list.
+  const favoritesMutation = useMutation({
+    mutationKey: queryKeys.ai.chatModelFavorites,
+    scope: { id: "chat-model-favorites" },
+    mutationFn: (modelIds: readonly string[]) => putChatModelFavorites({ modelIds }),
+    onMutate: async (modelIds) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.ai.chatModelFavorites });
+      queryClient.setQueryData<ChatModelFavoritesDto>(queryKeys.ai.chatModelFavorites, {
+        modelIds
+      });
+    },
+    onSettled: async (_data, error) => {
+      const pending = queryClient.isMutating({ mutationKey: queryKeys.ai.chatModelFavorites });
+      if (error || pending <= 1) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.ai.chatModelFavorites });
+      }
+    }
+  });
+  const toggleFavorite = (choice: ModelChoice) => {
+    if (choice.modelId === null) return;
+    const offeredIds = choices.flatMap((c) => (c.modelId === null ? [] : [c.modelId]));
+    favoritesMutation.mutate(toggleFavoriteIds(favoriteIds, choice.modelId, offeredIds));
+  };
   const mutation = useMutation({
     mutationFn: async (vars: { readonly choice: ModelChoice; readonly surface: ChatSurface }) => {
       // OpenCode is an ACP variant of the Codex route. Choosing a configured Codex model must
@@ -123,31 +162,25 @@ export function ChatModelPill(props: {
         className="chatd-model__trigger"
         onClick={() => (open ? closeMenu() : setOpen(true))}
         aria-expanded={open}
+        aria-haspopup="true"
+        aria-label={`Chat model: ${active?.providerModelId ?? "Instance default"}`}
       >
         <GitCommitHorizontal size={13} aria-hidden="true" />
         <span>{active?.providerModelId ?? "Instance default"}</span>
         <ChevronDown size={13} aria-hidden="true" />
       </button>
       {open ? (
-        <div className="chatd-model__menu">
-          {choices.map((choice) => (
-            <button
-              key={choice.modelId ?? "default"}
-              type="button"
-              disabled={props.disabled || mutation.isPending}
-              onClick={() => {
-                closeMenu();
-                selectChoice(choice);
-              }}
-            >
-              <span>
-                <b>{choice.label}</b>
-                <small>{choice.providerLabel}</small>
-              </span>
-              {choice.selected ? <Check size={13} aria-hidden="true" /> : null}
-            </button>
-          ))}
-        </div>
+        <ChatModelPickerMenu
+          choices={choices}
+          favoriteIds={favoriteIds}
+          favoritesReady={favoritesReady}
+          disabled={props.disabled || mutation.isPending}
+          onPick={(choice) => {
+            closeMenu();
+            selectChoice(choice);
+          }}
+          onToggleFavorite={toggleFavorite}
+        />
       ) : null}
     </div>
   );
@@ -176,7 +209,7 @@ export function buildChatModelChoices(settings: ChatModelOverrideSettingsDto): M
 
   return models.map((choice) => ({
     ...choice,
-    providerLabel: choice.model.providerDisplayName,
+    providerLabel: providerLabelFor(choice.model),
     relation:
       current?.providerConfigId && choice.model.providerConfigId === current.providerConfigId
         ? "same-provider"
