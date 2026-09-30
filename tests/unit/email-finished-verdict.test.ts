@@ -17,6 +17,15 @@ describe("hasFinishedVerdict (#2804)", () => {
     expect(hasFinishedVerdict(junk.summary, junk.signals)).toBe(true);
   });
 
+  it("counts a receipt or notice as finished even without a summary (#2805)", () => {
+    expect(
+      hasFinishedVerdict(null, {
+        actionability: { category: "receipt_or_notice" },
+        confidence: 0.9
+      })
+    ).toBe(true);
+  });
+
   it("counts a message handed to the thread judgement as finished", () => {
     const owed = gated({
       gate: "maybe_owed",

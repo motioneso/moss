@@ -170,8 +170,8 @@ Model for each job
    run; a run with no sorting model keeps that prompt unchanged. The focus feature keeps its own
    approved behaviour and interface.
 3. **More jobs.**
-   - Email category and sign-in code split into a new job key with its own setup gate defined in
-     that slice.
+   - Email category and sign-in code split into a new job key with its own setup gate. Design
+     agreed with Ben 2026-09-29 (#2805); section 11 records it.
    - Commitments and task search opt in. Their today's path is preserved by construction.
    - News source and topic safety checks, after rewording away from "the active provider's policy".
    - The disclosure line is extended for each new data type.
@@ -261,3 +261,165 @@ binding. With no sorting model the matcher runs today's main-model path and noth
 - Integration: one user cannot read another user's remembered answers, cannot write a row claiming
   another user's id, and cannot delete another user's rule's answers; a write sweeps the owner's
   lapsed rows; editing, replacing or taking back a rule drops its answers.
+
+## 11. Slice 3: email sorting on the sorting model (#2805)
+
+Status: design agreed with Ben 2026-09-29. Step 1 (shadow comparison) built in PR #2807. Step 2
+(switch), the sixth question and the unclear sign-in rule built for #2805 after Ben's rulings of
+2026-09-29.
+
+### Questions
+
+The sorting model answers six atomic yes/no questions per email, in one request. On System One
+each is a `noul` question, whose answer is one probability of yes with no separate confidence.
+Any other sorting-capable provider answers yes or no with a confidence through the structured
+path, read as a probability of yes (`confidence` for yes, `1 - confidence` for no).
+
+| Id                  | Question                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| `personal_sender`   | Did a real person write this to you personally, rather than an automated or bulk sender? |
+| `asks_reply`        | Does it ask you a question or expect a reply?                                            |
+| `asks_action`       | Does it ask you to do something (pay, sign, book, fill in a form)?                       |
+| `near_deadline`     | Does it mention a date or deadline in the next week?                                     |
+| `marketing`         | Is it marketing, a newsletter or a promotion?                                            |
+| `receipt_or_notice` | Is this a receipt, order or booking confirmation, or an account or policy notice?        |
+
+The model never picks the category. The state carries the subject, sender, received date, today's
+date and the body, cut so the whole request stays under System One's 12,000-byte cap.
+
+### Code-side facts
+
+Not asked of the model:
+
+- **Sign-in code.** The existing code check (`signInCodeDecision`). `hands-over-a-code` and
+  `unclear` both decide: an unclear message is filtered as a sign-in code and no question is asked
+  (Ben, 2026-09-29). This applies where the sorting model sorts; with no sorting model, `unclear`
+  still makes the general model answer `deliversSignInCode` as before.
+- **The user sent the last message in the thread.** The newest cached message in the email's
+  thread came from one of the user's own addresses (the same address set the thread judgement
+  uses).
+
+### Mapping
+
+First match wins:
+
+1. Sign-in code -> skipped as a sign-in code, as today.
+2. `marketing` yes and `personal_sender` no -> `noise`.
+3. `asks_reply` yes -> `needs_reply`.
+4. `asks_action` yes -> `needs_action`.
+5. `receipt_or_notice` yes -> `receipt_or_notice`.
+6. The user sent the last message -> `waiting_on_someone`.
+7. `near_deadline` yes -> `time_sensitive_info`.
+8. Otherwise -> `fyi`.
+
+`receipt_or_notice` is a new stored category. Receipts, order and booking confirmations, terms of
+service updates and account notices are not junk: they stay kept and searchable, but no briefing
+reads them. A receipt that asks for a reply or an action takes that label instead (steps 3 and 4
+win). The category lives in the `signals` jsonb, so no migration is needed.
+
+### Unsure band
+
+`unknown` is not produced. An answer from 0.35 to 0.65 inclusive is unsure; below is no, above is
+yes. Each step reads its answers three ways (yes, no, unsure). A step that is clearly true decides,
+clearly false moves on, and one that depends on an unsure answer sends the email to the general
+model as today. An unsure answer that no reached step depends on is ignored: an unsure `marketing`
+answer does not matter when `personal_sender` is clearly yes, and nothing after the deciding step
+is read.
+
+### Job key and gate
+
+The job key is `module.connectors.email-sort`. It goes through the slice 1 gate unchanged: no
+sorting model bound, an admin pin, or an exact `module.connectors.email-sort` binding all mean the
+general model sorts as today. It accepts a System One model.
+
+### Rollout
+
+1. **Shadow comparison (built).** `pnpm email:compare-sorting <userId>` re-sorts one user's
+   already-sorted mail through the path above and prints, side by side with the stored verdict,
+   the agreement rate where the sorting model decided, the unsure count by step, how mail held for
+   a closer look would have been sorted, a stored-versus-sorting table, and each disagreement with
+   its six probabilities. `--out` writes the same as JSON (ids, verdicts and probabilities, no
+   content). Nothing is written to the database and nothing the user sees changes; sync is
+   untouched.
+2. **Switch (built).** Sync asks the sorting model first. See "Switch" below. The comparison also
+   reports how many messages it would file as `receipt_or_notice`, by stored verdict, and how many
+   stored verdicts the sorting model set itself (agreement there is expected).
+
+### Switch
+
+Google and IMAP sync run a sorting-model pass before the general model's first pass
+(`packages/connectors/src/email-sorting-live.ts`). The pass runs before any general-model batch,
+so the scoped CLI session the general batches open and close covers only mail left for it.
+
+- One settings read per pass (`resolveSortingModel` for the email job key) decides whether a
+  sorting model is set. None set, or the read failing, sends every message to the general model.
+- Each message is asked on its own. An unsure answer the decision depends on, a failed or thrown
+  request, or a `not_supported` / `needs_config` answer sends that message to the general model's
+  first pass, unchanged. The first `not_supported` / `needs_config` answer stops asking for the
+  rest of the pass.
+- Nothing names a model or provider. The slice 1 gate (binding, admin pin, exact job binding)
+  decides, and the default is the general model. No new setting: the existing Sorting model row
+  turns this on.
+
+Stored shapes match the general model's first pass, so every reader keeps working. Every message
+the sorting model settles carries `signals.sortedBy = "sorting_model"`.
+
+| Category                                             | Stored as                                                                         |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `sign_in_code`                                       | The sign-in code skip (`skipped: "otp"`).                                         |
+| `noise`                                              | Gate `nothing`, category `noise`, no summary.                                     |
+| `needs_reply`, `needs_action`, `time_sensitive_info` | Gate `maybe_owed`, `pendingJudgement`; the thread judgement decides what is owed. |
+| `fyi`                                                | Gate `worth_knowing`, category `fyi`, the preview summary.                        |
+| `receipt_or_notice`, `waiting_on_someone`            | That category and the preview summary, no gate.                                   |
+
+The preview summary is the same one the general path stores for worth-knowing mail: the snippet or
+subject, through the body-echo guard. `hasFinishedVerdict` counts a bare `receipt_or_notice`
+like bare `noise`, so an unchanged revision is not sorted again.
+
+Readers checked:
+
+- The morning and evening briefings read allow-lists (`fyi` for the worth-knowing roundup;
+  `needs_reply`, `needs_action`, `time_sensitive_info` and important `waiting_on_someone` for
+  action rows and the email catch-up). `receipt_or_notice` is on none of them.
+- The email read tool and source context list the new value in their category enums, so a
+  receipt stays visible to search and chat.
+- No screen filters by category.
+
+Settings disclosure: once a sorting model is chosen, the line under the row says each email's
+subject, sender, dates and text go to it first. For System One it says TypeSafe answers News,
+Sports and email sorting questions, so each email's subject, sender, dates and text go there too.
+
+Sync logs counts only (`stage: "email-sorting"`): messages sorted per category and messages sent
+to the general model per reason. No content goes into logs or job payloads.
+
+### Data boundary (shadow)
+
+- The comparison runs inside the named user's own data context, so row level security limits it
+  to that user's mail. It is an operator command, not a product surface.
+- The sorting model receives what the cache holds: subject, sender, dates and the stored excerpt
+  (at most 500 characters), not the full body a live sync reads. Agreement from a comparison run
+  is therefore a lower bound on agreement with full bodies.
+- No content goes into logs, job payloads or the `--out` file. `--show-subjects` prints the
+  subjects of disagreements to the operator's terminal only.
+
+### Data boundary (switch)
+
+- Live sync sends the sorting model the subject, sender, received date, today's date and the body,
+  cut so the whole request fits the 12 KB cap. This is the same mail the general model already
+  reads, and the settings disclosure line names it.
+- Only counts are logged. Job payloads are unchanged: sync jobs carry ids, never email content.
+
+### Tests
+
+- Mapping order: each step beats the ones after it.
+- Unsure band: both edges, each step deferring on its own unsure answer, unsure answers that do
+  not matter, a missing answer read as unsure.
+- The request stays under 12,000 bytes with a long multi-byte body.
+- System One noul answers read as-is; a missing, out-of-range or wrong-type answer fails; a
+  structured yes/no answer converts to a probability of yes; nothing is called with no sorting
+  model bound.
+- Comparison summary: agreement, unsure, pending and failed are counted separately; the receipt
+  outcome and sorting-model-stored verdicts are reported.
+- Switch: the receipt question and its place in the order, an unclear sign-in code filtered
+  without a request, each stored shape, fallback when the sorting model fails, throws or is not
+  set, the per-pass stop, and a stored receipt left out of a generated morning briefing.

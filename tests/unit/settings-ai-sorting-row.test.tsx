@@ -167,7 +167,8 @@ describe("SortingModelRow", () => {
     );
     const rendered = text(renderer);
     expect(rendered).toContain(SYSTEM_ONE_SORTING_NOTE);
-    expect(rendered).toContain("answers News and Sports sorting questions with a yes or no");
+    expect(rendered).toContain("answers News, Sports and email sorting questions with a yes or no");
+    expect(rendered).toContain("each email's subject, sender, dates and text go there");
     expect(rendered).not.toContain("Sorting keeps using your main model");
     expect(rendered).not.toContain(SORTING_DISCLOSURE);
   });

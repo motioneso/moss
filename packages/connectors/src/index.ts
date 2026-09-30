@@ -2,6 +2,8 @@ export * from "./crypto.js";
 export * from "./action-suppression-repository.js";
 export * from "./action-row-relevance.js";
 export * from "./email-extract.js";
+export * from "./email-sorting.js";
+export * from "./email-sorting-comparison.js";
 export * from "./email-refresh.js";
 export * from "./email-refresh-jobs.js";
 export * from "./email-read-provider.js";

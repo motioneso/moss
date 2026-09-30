@@ -4,6 +4,7 @@ import { resolveMossEnv } from "@moss/db";
 
 import { looksLikeBulkMail } from "./email-bulk-rule.js";
 import { applyGate } from "./email-gate.js";
+import type { EmailSortingService } from "./email-sorting-live.js";
 import {
   looksLikeOneTimeCodeEmail,
   signInCodeDecision,
@@ -176,6 +177,7 @@ export type EmailActionabilityCategory =
   | "time_sensitive_info"
   | "waiting_on_someone"
   | "fyi"
+  | "receipt_or_notice"
   | "noise"
   | "unknown";
 
@@ -197,6 +199,7 @@ const ACTIONABILITY_CATEGORIES: readonly EmailActionabilityCategory[] = [
   "time_sensitive_info",
   "waiting_on_someone",
   "fyi",
+  "receipt_or_notice",
   "noise",
   "unknown"
 ];
@@ -235,6 +238,8 @@ export interface EmailSignals {
   readonly skipped?: "otp";
   /** The gate said maybe_owed: no verdict yet, the thread's judgement worker decides. */
   readonly pendingJudgement?: boolean;
+  /** #2805: the sorting model settled the first pass; the general model was not asked. */
+  readonly sortedBy?: "sorting_model";
 }
 
 export function otpSkippedResult(): EmailExtractResult {
@@ -285,6 +290,8 @@ export interface EmailExtractDeps {
     scope?: StructuredRunScope,
     closeScope?: boolean
   ) => Promise<{ readonly text: string }>;
+  /** #2805: the sorting model sync asks first. Absent means the general model sorts everything. */
+  readonly sorting?: EmailSortingService;
 }
 
 export interface EmailExtractOptions {
@@ -693,7 +700,7 @@ function stripIfBodyReconstructed(signals: EmailSignals, normalizedBody: string)
   return signals;
 }
 
-function sanitizeExtractResult(
+export function sanitizeExtractResult(
   parsed: ParsedEmail,
   initial: EmailExtractResult,
   knownSender: boolean
