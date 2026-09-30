@@ -57,6 +57,8 @@ export interface ToolsetOutcome {
   readonly subject?: { readonly pkg: string; readonly version: string };
   /** For "updated": the full package list, carried entries included. */
   readonly manifestToolset?: ManifestToolset;
+  /** For "updated": packages whose provenance passed, for the signed history. */
+  readonly attested?: readonly { readonly pkg: string; readonly version: string }[];
   /** For "updated": the packages the contract check must run against. */
   readonly candidates?: readonly {
     readonly role: ManifestPackage["role"];
@@ -189,11 +191,12 @@ export async function prepare(input: PrepareInput): Promise<PrepareResult> {
         continue;
       }
       const fresh = new Map<string, ManifestPackage>();
+      const toolsetAttested: { pkg: string; version: string }[] = [];
       for (const { spec, version } of work) {
         subject = { pkg: spec.pkg, version };
         const checked = await prepareOne(input, spec, version, toolset);
         fresh.set(spec.pkg, checked.manifestPackage);
-        attested.push(...checked.attested);
+        toolsetAttested.push(...checked.attested);
       }
       const packages = specs.map((spec) => {
         const next = fresh.get(spec.pkg);
@@ -202,10 +205,12 @@ export async function prepare(input: PrepareInput): Promise<PrepareResult> {
         if (kept === undefined) throw new Error(`no version chosen for ${spec.pkg}`);
         return kept;
       });
+      attested.push(...toolsetAttested);
       outcomes.push({
         toolset,
         status: "updated",
         failures: [],
+        attested: toolsetAttested,
         manifestToolset: { packages, minMossVersion: input.minMossVersion },
         candidates: packages.map((p) => ({
           role: p.role,
