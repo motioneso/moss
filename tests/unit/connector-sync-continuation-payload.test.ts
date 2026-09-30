@@ -75,4 +75,28 @@ describe("assertGoogleSyncContinuationPayload", () => {
       } as unknown as GoogleSyncContinuationPayload)
     ).toThrow("invalid continuation deferred reason");
   });
+
+  it("accepts a job carrying the run's first provider refusal (#2804)", () => {
+    expect(() =>
+      assertGoogleSyncContinuationPayload({
+        ...OLD_QUEUED_JOB,
+        errorDetail: { status: 403, reason: "rateLimitExceeded", operation: "gmail.messages.list" }
+      } as GoogleSyncContinuationPayload)
+    ).not.toThrow();
+  });
+
+  it("rejects a refusal with a non-status or an over-long token", () => {
+    for (const errorDetail of [
+      { status: 99, reason: "rateLimitExceeded", operation: "gmail.messages.list" },
+      { status: 403, reason: "x".repeat(65), operation: "gmail.messages.list" },
+      { status: 403, reason: "rateLimitExceeded", operation: "" }
+    ]) {
+      expect(() =>
+        assertGoogleSyncContinuationPayload({
+          ...OLD_QUEUED_JOB,
+          errorDetail
+        } as unknown as GoogleSyncContinuationPayload)
+      ).toThrow("invalid continuation error detail");
+    }
+  });
 });

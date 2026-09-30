@@ -136,6 +136,9 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   // reason code for the wait. Ids and a closed vocabulary only - never message content.
   "deferredKeys",
   "deferredReason",
+  // #2804: the run's first provider refusal as HTTP status, provider reason code,
+  // and refused operation. Bounded tokens only - never a body, content, or secret.
+  "errorDetail",
   "calendarReconciled",
   "emailUpserted",
   "emailFailures",

@@ -3,6 +3,7 @@ import type {
   ConnectorProviderType,
   ConnectorSyncCounts,
   ConnectorSyncDeferredReason,
+  ConnectorSyncErrorDetail,
   ConnectorSyncStatus
 } from "./connectors-api.js";
 
@@ -314,11 +315,15 @@ function errorCodeSentence(
       return "Calendar could not be read.";
     case "calendar-item-error":
       return "Some calendar events could not be saved.";
-    case "email-error":
-      return "Mailbox could not be read.";
+    case "email-error": {
+      const detail = counts?.emailErrorDetail ? errorDetailClause(counts.emailErrorDetail) : null;
+      return detail ? `Mailbox could not be read (${detail}).` : "Mailbox could not be read.";
+    }
     case "email-message-error": {
       const n = counts?.emailFailures ?? 0;
-      return `${n} message${n === 1 ? "" : "s"} could not be read; usually the provider refused them one at a time.`;
+      const base = `${n} message${n === 1 ? "" : "s"} could not be read; usually the provider refused them one at a time.`;
+      const detail = counts?.emailErrorDetail ? errorDetailClause(counts.emailErrorDetail) : null;
+      return detail ? `${base.slice(0, -1)} (${detail}).` : base;
     }
     case "no-active-connection":
       return "There is no active connection for this account.";
@@ -326,6 +331,45 @@ function errorCodeSentence(
       return null;
     default:
       return error.replace(/-/g, " ");
+  }
+}
+
+/**
+ * The kept failure reason as a lowercase clause, e.g. "provider rate limit
+ * exceeded on message read". Built only from the bounded tokens in the sync
+ * record, never from provider prose.
+ */
+function errorDetailClause(detail: ConnectorSyncErrorDetail): string | null {
+  const reason = detail.reason ? humanizeReasonToken(detail.reason) : null;
+  const operation = detail.operation ? humanizeOperationToken(detail.operation) : null;
+  if (reason && operation) return `provider ${reason} on ${operation}`;
+  if (reason) return `provider ${reason}`;
+  if (operation) return `provider refused ${operation}`;
+  if (detail.status !== null) return `provider status ${detail.status}`;
+  return null;
+}
+
+/** A camel-case or dotted reason code as plain words. */
+function humanizeReasonToken(token: string): string {
+  return token
+    .replace(/[._-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+}
+
+/** A refused operation as plain words. Unknown operations read out as-is. */
+function humanizeOperationToken(operation: string): string {
+  switch (operation) {
+    case "gmail.messages.list":
+      return "message list";
+    case "gmail.messages.get":
+      return "message read";
+    case "calendar.events.list":
+      return "calendar list";
+    case "calendar.events.get":
+      return "calendar read";
+    default:
+      return operation;
   }
 }
 

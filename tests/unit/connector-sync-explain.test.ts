@@ -159,6 +159,29 @@ describe("explainConnectorSync", () => {
     expect(result.next).toBe("The next run will retry what failed.");
   });
 
+  it("a partial run with a kept failure reason names it in plain words (#2804)", () => {
+    const result = explainConnectorSync(
+      {
+        ...base,
+        lastSyncStatus: "partial",
+        lastSyncError: "email-message-error",
+        lastSyncCounts: {
+          emailFailures: 2,
+          emailErrorDetail: {
+            status: 403,
+            reason: "rateLimitExceeded",
+            operation: "gmail.messages.get"
+          }
+        }
+      },
+      NOW
+    );
+    expect(result.reason).toBe(
+      "2 messages could not be read; usually the provider refused them one at a time " +
+        "(provider rate limit exceeded on message read)."
+    );
+  });
+
   it("a partial run capped by the message limit says so, not a made-up item error", () => {
     const result = explainConnectorSync(
       {

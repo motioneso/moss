@@ -621,6 +621,9 @@ export interface EmailMessagesTable {
   // email body is NEVER a column (privacy posture, spec §6).
   summary: string | null;
   signals: JsonColumn;
+  // #2804: failed analysis attempts for the stored revision (NOT NULL DEFAULT 0,
+  // so inserts omit it and the update path writes it explicitly).
+  analysis_attempts: ColumnType<number, number | undefined, number>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
