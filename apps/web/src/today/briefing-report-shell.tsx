@@ -101,52 +101,54 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
       opener={props.opener}
       onClose={props.onClose}
       nav={
-        <div className="brief-reader__tabs">
-          {hasTabs ? (
-            <div
-              role="tablist"
-              aria-label="Morning briefing views"
-              onKeyDown={onTablistKeyDown}
-              className="brief-reader__tablist"
-            >
-              <button
-                type="button"
-                role="tab"
-                id={briefingTabId}
-                aria-selected={!reviewSelected}
-                aria-controls={reportPanelId}
-                tabIndex={reviewSelected ? -1 : 0}
-                ref={briefingTabRef}
-                onClick={(event) => props.onSelectBriefingTab?.(event)}
-                className={
-                  reviewSelected
-                    ? "brief-reader__tab"
-                    : "brief-reader__tab brief-reader__tab--selected"
-                }
+        !hasTabs && !props.jumpLinks ? undefined : (
+          <div className="brief-reader__tabs">
+            {hasTabs ? (
+              <div
+                role="tablist"
+                aria-label="Morning briefing views"
+                onKeyDown={onTablistKeyDown}
+                className="brief-reader__tablist"
               >
-                {BRIEFING_TAB_LABEL}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id={reviewTabId}
-                aria-selected={reviewSelected}
-                aria-controls={reportPanelId}
-                tabIndex={reviewSelected ? 0 : -1}
-                ref={reviewTabRef}
-                onClick={(event) => props.onSelectReviewTab?.(event)}
-                className={
-                  reviewSelected
-                    ? "brief-reader__tab brief-reader__tab--selected"
-                    : "brief-reader__tab"
-                }
-              >
-                {props.reviewTabLabel}
-              </button>
-            </div>
-          ) : null}
-          {props.jumpLinks}
-        </div>
+                <button
+                  type="button"
+                  role="tab"
+                  id={briefingTabId}
+                  aria-selected={!reviewSelected}
+                  aria-controls={reportPanelId}
+                  tabIndex={reviewSelected ? -1 : 0}
+                  ref={briefingTabRef}
+                  onClick={(event) => props.onSelectBriefingTab?.(event)}
+                  className={
+                    reviewSelected
+                      ? "brief-reader__tab"
+                      : "brief-reader__tab brief-reader__tab--selected"
+                  }
+                >
+                  {BRIEFING_TAB_LABEL}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  id={reviewTabId}
+                  aria-selected={reviewSelected}
+                  aria-controls={reportPanelId}
+                  tabIndex={reviewSelected ? 0 : -1}
+                  ref={reviewTabRef}
+                  onClick={(event) => props.onSelectReviewTab?.(event)}
+                  className={
+                    reviewSelected
+                      ? "brief-reader__tab brief-reader__tab--selected"
+                      : "brief-reader__tab"
+                  }
+                >
+                  {props.reviewTabLabel}
+                </button>
+              </div>
+            ) : null}
+            {props.jumpLinks}
+          </div>
+        )
       }
       footer={
         <>
