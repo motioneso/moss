@@ -39,12 +39,11 @@ import { CliRunnerServer } from "./server.js";
 import { TerminalHost } from "./terminal-host.js";
 import { ensureOwnedTopLevel, prepareOwnedPathWithOwnership } from "./owned-fs.js";
 import { createOwnerIo } from "./per-user-structured.js";
-import { runnerOwnIdentity } from "./acp-host.js";
+import { codexPeerHomesFor, runnerOwnIdentity } from "./shared-uid.js";
 import { allocateUidSlot } from "./uid-allocator.js";
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import { runAgentHomePrepareAsOwner } from "./agent-home-prepare-run.js";
 import {
-  codexPeerHomes,
   CODEX_LOGIN_READ_LIMITS,
   ownerCodexHomeAccess,
   promoteCodexLogin,
@@ -283,7 +282,7 @@ export async function resolveIsolatedUserRuntime(
     await syncCodexLoginIntoHome(
       config.homeBase,
       access(agentHome, slot),
-      codexPeerHomes(config.homeBase, userId, access)
+      codexPeerHomesFor(shared, config.homeBase, userId, access)
     );
   }
   return {
@@ -441,10 +440,16 @@ export function createCliRunner(
     resolveUserRuntime,
     // #2687: model listing reads the shared Codex login, so it first picks up any newer refresh.
     beforeModelList: async (_provider, acpAgentId) => {
-      if (acpAgentId !== "codex-acp" || !config.perUserUid) return;
+      const shared = config.allowSharedUid === true;
+      if (acpAgentId !== "codex-acp" || (!config.perUserUid && !shared)) return;
       await publishNewestCodexLogin(
         config.homeBase,
-        codexPeerHomes(config.homeBase, undefined, ownerCodexAccess)
+        codexPeerHomesFor(
+          shared,
+          config.homeBase,
+          undefined,
+          shared ? selfCodexAccess : ownerCodexAccess
+        )
       ).catch(() => undefined);
     },
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).

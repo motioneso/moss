@@ -51,13 +51,13 @@ import {
   type AgentHomeSecretFile
 } from "./agent-home-prepare-run.js";
 import {
-  codexPeerHomes,
   CODEX_LOGIN_READ_LIMITS,
   ownerCodexHomeAccess,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
 } from "./codex-shared-login.js";
 import { createOwnerIo } from "./per-user-structured.js";
+import { codexPeerHomesFor, runnerOwnIdentity, sweepIdentity } from "./shared-uid.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
@@ -89,11 +89,7 @@ export interface AcpHostDeps {
   readonly homeBase?: string;
   /** Mirrors the engine host flag: setuid spawn only with a root container. */
   readonly perUserUid?: boolean;
-  /**
-   * Development-only shared-account mode, already gated on NODE_ENV by the runner's config.
-   * With per-user mode off, agents run as the runner's own account in each person's own home,
-   * with no setpriv anywhere, instead of refusing to launch.
-   */
+  /** Development-only: with per-user mode off, run agents as the runner itself (shared-uid.ts). */
   readonly allowSharedUid?: boolean;
   /** Hands a folder/file to its owner; injected so tests can prove routing without real
    * chown privileges. Prod default really calls chown; the failure-and-cleanup behavior
@@ -207,14 +203,6 @@ const IDLE_REAP_MS = 30 * 60 * 1000;
 const MAX_LINE_BYTES = 256 * 1024;
 /** How long a stop waits for the signalled process to actually exit before reporting it as refused. */
 const KILL_CONFIRM_TIMEOUT_MS = 5000;
-
-/** The runner's own account, used as the slot in development-only shared-account mode. */
-export function runnerOwnIdentity(): { uid: number; gid: number } {
-  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
-    throw new Error("AcpHost: shared-account mode needs a POSIX host");
-  }
-  return { uid: process.getuid(), gid: process.getgid() };
-}
 
 interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
@@ -373,8 +361,7 @@ export class AcpHost {
     }
     const codexAuth = providerKind === "openai" ? codexAuthPath(homeBase, userId) : null;
 
-    // One slot per person, never per conversation. In shared mode the runner's own
-    // account stands in for the slot and no step switches identity.
+    // One slot per person, never per conversation. Shared mode uses the runner's own account.
     const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;
     const slot = shared ? runnerOwnIdentity() : allocate(homeBase, userId);
     const uid = slot.uid;
@@ -451,7 +438,7 @@ export class AcpHost {
           await syncCodexLoginIntoHome(
             homeBase,
             access(agentHome, { uid, gid }),
-            codexPeerHomes(homeBase, userId, access)
+            codexPeerHomesFor(shared, homeBase, userId, access)
           );
         }
         await runAgentHomePrepare(
@@ -855,16 +842,10 @@ export class AcpHost {
         continue;
       }
       const record = read.record;
-      // A shared-mode marker names the runner's own account, which setpriv cannot switch to
-      // without root. Only shared mode reads it as "no switch"; per-user mode never does.
-      const self = runnerOwnIdentity();
-      const identity =
-        !this.deps.perUserUid &&
-        this.deps.allowSharedUid === true &&
-        record.uid === self.uid &&
-        record.gid === self.gid
-          ? null
-          : { uid: record.uid, gid: record.gid };
+      const identity = sweepIdentity(
+        !this.deps.perUserUid && this.deps.allowSharedUid === true,
+        record
+      );
       try {
         // A marker written between spawn and the pid/start-time backfill (or
         // one whose backfill write itself failed) names no process to check.

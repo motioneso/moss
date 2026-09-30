@@ -22,6 +22,7 @@ import {
   resolveIsolatedUserRuntime,
   sharedUidStartupWarning
 } from "../../packages/cli-runner/src/main.js";
+import { codexPeerHomesFor } from "../../packages/cli-runner/src/shared-uid.js";
 
 const BASE_ENV: NodeJS.ProcessEnv = { JARVIS_CLI_RUNNER_RPC_SECRET: "x" };
 const self = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
@@ -200,6 +201,38 @@ describe("login runtime without per-user mode", () => {
       expect(probe.stdout.trim()).toBe(String(self.uid));
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("shared-account Codex peer discovery", () => {
+  it("lists every other person's agent home, read as the runner itself", () => {
+    const base = mkdtempSync(join(tmpdir(), "shared-uid-peers-"));
+    try {
+      for (const id of ["user-1", "user-2", "user-3"]) {
+        mkdirSync(join(base, "agents", id), { recursive: true });
+      }
+      const seen: Array<{ home: string; uid: number }> = [];
+      codexPeerHomesFor(true, base, "user-2", (home, identity) => {
+        seen.push({ home, uid: identity.uid });
+        return {} as never;
+      });
+      expect(seen.map((s) => s.home).sort()).toEqual([
+        join(base, "agents", "user-1"),
+        join(base, "agents", "user-3")
+      ]);
+      expect(seen.every((s) => s.uid === self.uid)).toBe(true);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("finds nothing when no agent homes exist yet", () => {
+    const base = mkdtempSync(join(tmpdir(), "shared-uid-peers-"));
+    try {
+      expect(codexPeerHomesFor(true, base, undefined, () => ({}) as never)).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
     }
   });
 });
