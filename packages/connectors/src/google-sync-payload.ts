@@ -75,6 +75,24 @@ export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuat
   ) {
     throw new Error("invalid continuation deferred reason");
   }
+  if (payload.errorDetail !== undefined && payload.errorDetail !== null) {
+    const detail = payload.errorDetail;
+    if (
+      typeof detail !== "object" ||
+      (detail.status !== null &&
+        (!Number.isInteger(detail.status) || detail.status < 100 || detail.status > 599)) ||
+      (detail.reason !== null &&
+        (typeof detail.reason !== "string" ||
+          detail.reason.length === 0 ||
+          detail.reason.length > 64)) ||
+      (detail.operation !== null &&
+        (typeof detail.operation !== "string" ||
+          detail.operation.length === 0 ||
+          detail.operation.length > 64))
+    ) {
+      throw new Error("invalid continuation error detail");
+    }
+  }
   if (payload.recentOnly !== undefined && typeof payload.recentOnly !== "boolean") {
     throw new Error("invalid continuation recent-only flag");
   }

@@ -1,6 +1,6 @@
 import { sql } from "kysely";
 
-import type { ConnectorSyncDeferredReason } from "@moss/shared";
+import type { ConnectorSyncDeferredReason, ConnectorSyncErrorDetail } from "@moss/shared";
 import type { StructuredRunScope } from "@moss/ai";
 import type { DataContextDb } from "@moss/db";
 import type { CalendarRepository } from "@moss/calendar";
@@ -32,8 +32,21 @@ import { MAX_DEFERRED_KEYS } from "./google-sync-payload.js";
 import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
 
 export const GOOGLE_EMAIL_CHUNK_SIZE = 8;
-export const GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE = 500;
 export const GOOGLE_EMAIL_FETCH_CONCURRENCY = 8;
+/**
+ * A chunk hands off the rest of its page well before the 840 s job expiry,
+ * so a slow model can never trap the whole page in an expired job. Each
+ * chunk still attempts its first unit unconditionally, so a stuck page makes
+ * progress (or a recorded failure) instead of handing off forever.
+ */
+export const GOOGLE_SYNC_CHUNK_TIME_BUDGET_MS = 600_000;
+/**
+ * A message whose analysis failed this many times is given up on: the next
+ * sync leaves it alone instead of re-sending it. Attempts count once per run
+ * (a chunk retry inside the same run does not count again), and a new Gmail
+ * revision resets the count.
+ */
+export const MAX_ANALYSIS_ATTEMPTS = 5;
 export const GOOGLE_CALENDAR_CHUNK_SIZE = 100;
 /**
  * A transient Google failure (rate limit / 5xx) is retried this many times in total before the
@@ -70,6 +83,12 @@ interface PhaseProgress {
   readonly deferredKeys: Set<string>;
   /** The most recent reason a message was deferred, for the sync-status "why" text. */
   deferredReason: ConnectorSyncDeferredReason | null;
+  /**
+   * The first provider refusal this run (HTTP status, provider reason, refused
+   * operation). First wins: the earliest failure is usually the root cause and
+   * later ones its echo. Secret-free by construction, stored in the sync record.
+   */
+  errorDetail: ConnectorSyncErrorDetail | null;
 }
 
 interface PhaseContext {
@@ -152,6 +171,31 @@ export async function withTokenRetry<T>(
       throw error;
     }
   }
+}
+
+/**
+ * The storable subset of a provider refusal: HTTP status, Google's reason code,
+ * refused operation. Tokens are bounded to a safe alphabet and length, so a
+ * hostile or chatty provider body can never smuggle content or secrets into
+ * the sync record. Null when the error names nothing worth keeping.
+ */
+export function toSyncErrorDetail(error: unknown): ConnectorSyncErrorDetail | null {
+  const fields = googleFailureFields(error);
+  const detail: ConnectorSyncErrorDetail = {
+    status: Number.isInteger(fields.status) ? fields.status : null,
+    reason: sanitizeDetailToken(fields.reason),
+    operation: sanitizeDetailToken(fields.operation)
+  };
+  if (detail.status === null && detail.reason === null && detail.operation === null) return null;
+  return detail;
+}
+
+/** Reason and operation codes are short dotted or camel-case tokens, never prose. */
+function sanitizeDetailToken(value: string | null): string | null {
+  if (value === null) return null;
+  const token = value.trim().slice(0, 64);
+  if (token.length === 0 || /[^A-Za-z0-9_.-]/.test(token)) return null;
+  return token;
 }
 
 /**
@@ -289,6 +333,8 @@ export interface SavedEmailMarker {
   readonly hasFinishedVerdict: boolean;
   /** Handed to the thread judgement, which may not have run yet. */
   readonly awaitingJudgement?: boolean;
+  /** How many times analysis already failed for this revision. */
+  readonly analysisAttempts: number;
 }
 
 export interface SortFetchedEmailsInput {
@@ -311,18 +357,22 @@ export interface SortFetchedEmailsInput {
  *
  * An unchanged hand-off returns its thread in rejudgeThreadRefs, once per thread, so the sync
  * asks for the judgement again. The judgement skips a thread it already judged, so a repeat
- * request is cheap, and a hand-off whose first request was lost still gets judged.
+ * request is cheap, and a hand-off whose first request was lost still gets judged. A message
+ * whose analysis already failed MAX_ANALYSIS_ATTEMPTS times returns in gaveUpKeys and is
+ * never written or queued again for this revision.
  */
 export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<{
   readonly pending: ParsedEmail[];
   readonly unchangedKeys: string[];
   readonly otpKeys: string[];
   readonly rejudgeThreadRefs: string[];
+  readonly gaveUpKeys: string[];
 }> {
   const pending: ParsedEmail[] = [];
   const rejudgeThreadRefs = new Set<string>();
   const unchangedKeys: string[] = [];
   const otpKeys: string[] = [];
+  const gaveUpKeys: string[] = [];
   const fail = (error: unknown): void => {
     input.progress.emailFailures += 1;
     if (!input.progress.errors.includes("email-message-error")) {
@@ -335,6 +385,14 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
     const unchanged = Boolean(
       parsed.historyId && prior?.historyId === parsed.historyId && prior.hasFinishedVerdict
     );
+    // A message whose analysis already failed enough times is left alone, so it
+    // stops being re-sent every sync. Only the same revision counts: a changed
+    // message resets its attempts when it is saved and is analysed as new.
+    const sameRevision = Boolean(parsed.historyId && prior?.historyId === parsed.historyId);
+    if (sameRevision && (prior?.analysisAttempts ?? 0) >= MAX_ANALYSIS_ATTEMPTS) {
+      gaveUpKeys.push(parsed.externalId);
+      continue;
+    }
     if (looksLikeOneTimeCodeEmail(parsed)) {
       try {
         await input.persistEmail(parsed, otpSkippedResult());
@@ -363,7 +421,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
       right.receivedAt.localeCompare(left.receivedAt) ||
       left.externalId.localeCompare(right.externalId)
   );
-  return { pending, unchangedKeys, otpKeys, rejudgeThreadRefs: [...rejudgeThreadRefs] };
+  return { pending, unchangedKeys, otpKeys, rejudgeThreadRefs: [...rejudgeThreadRefs], gaveUpKeys };
 }
 
 export interface EmailBatchExtractOptionsInput {
@@ -508,6 +566,7 @@ async function sortOnSortingModelFirst(
       persistEmail: io.persistEmail,
       progress: context.progress,
       onFailure: (error) => {
+        context.progress.errorDetail ??= toSyncErrorDetail(error);
         context.logger.warn(
           { stage: "email-message", ...googleFailureFields(error) },
           "google-sync email message failed"
@@ -538,8 +597,16 @@ export async function runGoogleEmailPhase(
   // the batch loop, so without this the run knows a message was deferred but not which one.
   let inFlightKeys: readonly string[] = [];
   const query = phase === "email-current-day" ? CURRENT_DAY_EMAIL_QUERY : EMAIL_QUERY;
-  const pageLimit =
-    phase === "email-current-day" ? GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE : GOOGLE_EMAIL_CHUNK_SIZE;
+  // Both phases list at most one chunk per page, so every chunk commits a small batch and
+  // new mail saved with an empty analysis is visible as soon as its chunk commits (#2804).
+  const pageLimit = GOOGLE_EMAIL_CHUNK_SIZE;
+  // The job expires 840 s after it was queued. When this chunk has spent its budget it
+  // hands the rest of the page to the next chunk (same phase and cursor) instead of
+  // running past the expiry. The first unit always runs, so a page still moves forward.
+  const chunkStartMs = context.now().getTime();
+  let completedUnits = 0;
+  const timeBudgetSpent = (): boolean =>
+    completedUnits > 0 && context.now().getTime() - chunkStartMs > GOOGLE_SYNC_CHUNK_TIME_BUDGET_MS;
   const extractionScope = context.deps.actorUserId
     ? {
         actorUserId: context.deps.actorUserId,
@@ -615,6 +682,8 @@ export async function runGoogleEmailPhase(
     const seen = new Map(existing.map((marker) => [marker.externalId, marker]));
     const parsedMessages: ParsedEmail[] = [];
     for (let start = 0; start < page.keys.length; start += GOOGLE_EMAIL_FETCH_CONCURRENCY) {
+      // Same phase and cursor: the next chunk re-lists this page and skips what is done.
+      if (timeBudgetSpent()) return { nextCursor: undefined, retry: true };
       const keys = page.keys.slice(start, start + GOOGLE_EMAIL_FETCH_CONCURRENCY);
       const fetched = await Promise.allSettled(
         keys.map((key) =>
@@ -630,39 +699,49 @@ export async function runGoogleEmailPhase(
           if (!context.progress.errors.includes("email-message-error")) {
             context.progress.errors.push("email-message-error");
           }
+          context.progress.errorDetail ??= toSyncErrorDetail(result.reason);
           context.logger.warn(
             { stage: "email-message", ...googleFailureFields(result.reason) },
             "google-sync email message failed"
           );
         }
       }
+      completedUnits += 1;
     }
+    const recordMessageFailure = (error: unknown): void => {
+      context.progress.errorDetail ??= toSyncErrorDetail(error);
+      context.logger.warn(
+        { stage: "email-message", ...googleFailureFields(error) },
+        "google-sync email message failed"
+      );
+    };
     const { pending, unchangedKeys, otpKeys, rejudgeThreadRefs } = await sortFetchedEmails({
       parsedMessages,
       seen,
       persistEmail,
       progress: context.progress,
-      onFailure: (error) => {
-        context.logger.warn(
-          { stage: "email-message", ...googleFailureFields(error) },
-          "google-sync email message failed"
-        );
-      }
+      onFailure: recordMessageFailure
     });
     const knownSenders =
       context.deps.knownSenderAddresses && context.deps.actorUserId
         ? await context.deps.knownSenderAddresses(context.scopedDb, context.deps.actorUserId)
         : undefined;
+    // The sorting pass is also an extraction attempt: if it fails retryably the
+    // pending messages count as tried, just like a failed model batch below.
+    inFlightKeys = pending.map((message) => message.externalId);
     const general = await sortOnSortingModelFirst(context, pending, knownSenders, {
       persistEmail,
       projectKeys
     });
+    inFlightKeys = [];
     // Skipped messages never reach the model call (never sent, never logged), so the batches
     // below — and the closeScope index that finalizes a scoped CLI session on the last real
     // batch — only ever cover messages that actually go to the model.
     let processed = 0;
     const batches = general.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
+      // Same phase and cursor: the next chunk re-lists this page and skips what is done.
+      if (timeBudgetSpent()) return { nextCursor: undefined, retry: true };
       let batchResults: EmailExtractResult[];
       inFlightKeys = batch.map((message) => message.externalId);
       try {
@@ -694,12 +773,7 @@ export async function runGoogleEmailPhase(
         batchResults,
         persistEmail,
         progress: context.progress,
-        onFailure: (error) => {
-          context.logger.warn(
-            { stage: "email-message", ...googleFailureFields(error) },
-            "google-sync email message failed"
-          );
-        },
+        onFailure: recordMessageFailure,
         actorUserId: context.deps.actorUserId,
         threadJudgementRequester: context.deps.threadJudgementRequester
       });
@@ -711,6 +785,7 @@ export async function runGoogleEmailPhase(
       }
       context.progress.emailDeferred = context.progress.deferredKeys.size;
       processed += batch.length;
+      completedUnits += 1;
       context.logger.info(
         {
           stage: phase,
@@ -731,9 +806,27 @@ export async function runGoogleEmailPhase(
       context.progress.emailFailures += 1;
       // Count message units, not attempts: retrying the same page re-adds ids that are
       // already in the set, so emailDeferred can never run ahead of emailUpserted.
+      // Only newly set-aside messages count a failed analysis attempt: chunk retries
+      // inside the same run must not burn the whole cap at once.
+      const newlyDeferred: string[] = [];
       for (const key of inFlightKeys) {
         if (context.progress.deferredKeys.size >= MAX_DEFERRED_KEYS) break;
+        if (!context.progress.deferredKeys.has(key)) newlyDeferred.push(key);
         context.progress.deferredKeys.add(key);
+      }
+      if (newlyDeferred.length > 0) {
+        try {
+          await context.emailRepo.recordAnalysisAttempts(
+            context.scopedDb,
+            context.account.id,
+            newlyDeferred
+          );
+        } catch (recordError) {
+          context.logger.warn(
+            { stage: "email-attempts", name: (recordError as Error).name },
+            "google-sync analysis attempt count failed"
+          );
+        }
       }
       context.progress.emailDeferred = context.progress.deferredKeys.size;
       context.progress.deferredReason = deferredReasonCode(error.reason);
@@ -756,6 +849,8 @@ export async function runGoogleEmailPhase(
         "google-sync email extraction unavailable; continuing metadata-only"
       );
     } else {
+      // A failed list page keeps its bounded reason in the sync record (#2804).
+      context.progress.errorDetail ??= toSyncErrorDetail(error);
       context.logger.warn(logData, "google-sync email failed");
     }
     if (!context.progress.errors.includes(errorLabel)) context.progress.errors.push(errorLabel);

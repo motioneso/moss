@@ -389,7 +389,7 @@ describe("a skipped message creates no task", () => {
     const sorted = await sortFetchedEmails({
       parsedMessages: [parsed],
       seen: new Map<string, SavedEmailMarker>([
-        ["otp-msg-2", { historyId: "history-1", hasFinishedVerdict: true }]
+        ["otp-msg-2", { historyId: "history-1", hasFinishedVerdict: true, analysisAttempts: 0 }]
       ]),
       persistEmail: async (_message, extracted) => {
         saved.push(extracted);

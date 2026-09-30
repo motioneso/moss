@@ -102,7 +102,8 @@ function cachedEmail(accountId: string, id: string): EmailMessage {
     summary: `Cached summary for ${accountId}`,
     signals: { actionability: { category: "needs_action" }, confidence: 0.9 },
     created_at: new Date("2026-07-04T09:00:00.000Z"),
-    updated_at: new Date("2026-07-04T09:00:00.000Z")
+    updated_at: new Date("2026-07-04T09:00:00.000Z"),
+    analysis_attempts: 0
   };
 }
 

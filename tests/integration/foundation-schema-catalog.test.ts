@@ -489,6 +489,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0246",
           name: "0246_ai_provider_acp_agent_id.sql"
+        },
+        // #2804 — count failed email analysis attempts so a poison message stops re-sending.
+        {
+          version: "0247",
+          name: "0247_email_analysis_attempts.sql"
         }
       ]);
     } finally {

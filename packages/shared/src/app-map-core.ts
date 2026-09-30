@@ -248,6 +248,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
+      "The Services group has an Email reading row: it reads the emails the sorting model " +
+      "cannot settle and writes their summaries and suggested actions. " +
       "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +

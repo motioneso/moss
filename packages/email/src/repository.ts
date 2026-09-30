@@ -267,6 +267,12 @@ export class EmailRepository {
           body_excerpt: bodyExcerpt,
           received_at: input.receivedAt,
           external_metadata: input.externalMetadata ?? {},
+          // A new Gmail revision restarts the analysis-attempt count (#2804).
+          analysis_attempts: sql<number>`
+            case when (app.email_messages.external_metadata->>'historyId')
+              is distinct from ${incomingHistoryId}
+            then 0
+            else app.email_messages.analysis_attempts end`,
           summary: preserveSameRevisionTriage
             ? sql<
                 string | null
@@ -324,12 +330,13 @@ export class EmailRepository {
       historyId: string | null;
       hasFinishedVerdict: boolean;
       awaitingJudgement: boolean;
+      analysisAttempts: number;
     }>
   > {
     assertDataContextDb(scopedDb);
     const rows = await scopedDb.db
       .selectFrom("app.email_messages")
-      .select(["external_id", "external_metadata", "summary", "signals"])
+      .select(["external_id", "external_metadata", "summary", "signals", "analysis_attempts"])
       .where("connector_account_id", "=", connectorAccountId)
       .execute();
     return rows.map((r) => ({
@@ -337,8 +344,32 @@ export class EmailRepository {
       historyId: (r.external_metadata as { historyId?: string | null } | null)?.historyId ?? null,
       hasFinishedVerdict: hasFinishedVerdict(r.summary, r.signals),
       awaitingJudgement:
-        (r.signals as { pendingJudgement?: unknown } | null)?.pendingJudgement === true
+        (r.signals as { pendingJudgement?: unknown } | null)?.pendingJudgement === true,
+      analysisAttempts: Number(r.analysis_attempts ?? 0)
     }));
+  }
+
+  /**
+   * Count one failed analysis attempt per message (#2804). The caller passes
+   * only newly failed keys, so retries inside the same run never count twice.
+   * Metadata only: the counter, never content.
+   */
+  async recordAnalysisAttempts(
+    scopedDb: DataContextDb,
+    connectorAccountId: string,
+    externalIds: readonly string[]
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    if (externalIds.length === 0) return;
+    await scopedDb.db
+      .updateTable("app.email_messages")
+      .set((eb) => ({
+        analysis_attempts: eb("analysis_attempts", "+", 1),
+        updated_at: new Date()
+      }))
+      .where("connector_account_id", "=", connectorAccountId)
+      .where("external_id", "in", [...externalIds])
+      .execute();
   }
 
   /** Hard cap on the messages one thread judgement reads (spec 2026-09-04-email-chief-of-staff). */

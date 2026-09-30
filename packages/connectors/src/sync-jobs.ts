@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Job, PgBoss, WorkOptions } from "pg-boss";
 import type { Kysely } from "kysely";
 
-import type { ConnectorSyncDeferredReason } from "@moss/shared";
+import type { ConnectorSyncDeferredReason, ConnectorSyncErrorDetail } from "@moss/shared";
 import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import { hasInFlightJob, sendJob, toAccessContext } from "@moss/jobs";
@@ -36,9 +36,10 @@ export const GOOGLE_SYNC_EXPIRE_SECONDS = 840;
 
 export {
   GOOGLE_CALENDAR_CHUNK_SIZE,
-  GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE,
   GOOGLE_EMAIL_CHUNK_SIZE,
   GOOGLE_EMAIL_FETCH_CONCURRENCY,
+  GOOGLE_SYNC_CHUNK_TIME_BUDGET_MS,
+  MAX_ANALYSIS_ATTEMPTS,
   withSavepoint
 } from "./google-sync-phases.js";
 
@@ -102,6 +103,11 @@ export interface GoogleSyncContinuationPayload extends ActorScopedJobPayload {
   readonly deferredKeys?: readonly string[];
   /** Why email work was set aside, as a fixed code the shared wording module understands. */
   readonly deferredReason?: ConnectorSyncDeferredReason | null;
+  /**
+   * The run's first provider refusal (HTTP status, provider reason, refused
+   * operation). Absent on a job queued before this field existed.
+   */
+  readonly errorDetail?: ConnectorSyncErrorDetail | null;
   readonly errors: readonly string[];
   /** Set on a lineage that stops after the last day of mail and never walks the backlog. */
   readonly recentOnly?: boolean;
@@ -263,6 +269,7 @@ export async function runGoogleSyncChunk(
     continuation?.deferredKeys === undefined ? (continuation?.emailDeferred ?? 0) : 0;
   const deferredKeys = new Set<string>(continuation?.deferredKeys ?? []);
   let deferredReason: ConnectorSyncDeferredReason | null = continuation?.deferredReason ?? null;
+  let errorDetail: ConnectorSyncErrorDetail | null = continuation?.errorDetail ?? null;
   let emailDeferred = carriedDeferred + deferredKeys.size;
 
   const account = await deps.getActiveAccount(scopedDb);
@@ -380,6 +387,7 @@ export async function runGoogleSyncChunk(
     emailDeferred,
     deferredKeys,
     deferredReason,
+    errorDetail,
     errors
   };
   const phaseContext = {
@@ -426,6 +434,7 @@ export async function runGoogleSyncChunk(
       emailDeferred,
       deferredKeys: [...deferredKeys],
       deferredReason,
+      errorDetail,
       errors,
       ...(recentOnly ? { recentOnly: true } : {}),
       ...(trigger ? { trigger } : {})
@@ -450,6 +459,7 @@ export async function runGoogleSyncChunk(
     escalations = progress.escalations;
     emailDeferred = carriedDeferred + progress.deferredKeys.size;
     deferredReason = progress.deferredReason;
+    errorDetail = progress.errorDetail;
     if (result.retry) return next(phase, phaseCursor);
     if (result.nextCursor) return next(phase, result.nextCursor);
     if (phase === "email-current-day" && !recentOnly) return next("email");
@@ -489,6 +499,7 @@ export async function runGoogleSyncChunk(
         escalations,
         emailDeferred,
         deferredReason,
+        ...(errorDetail ? { emailErrorDetail: errorDetail } : {}),
         truncated: false
       }
     });

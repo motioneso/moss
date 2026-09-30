@@ -16,6 +16,17 @@ export type ConnectorSyncDeferredReason =
   | "structured-output";
 
 /**
+ * Bounded, secret-free reason for a refused provider call: the HTTP status,
+ * Google's own reason code (such as rateLimitExceeded), and which operation
+ * was refused. Never a response body, message content, or credential.
+ */
+export interface ConnectorSyncErrorDetail {
+  readonly status: number | null;
+  readonly reason: string | null;
+  readonly operation: string | null;
+}
+
+/**
  * Aggregate-only sync counts surfaced to owners/admins. Never carries per-item
  * detail (subjects, titles, external IDs) — just bounded tallies for health display.
  */
@@ -36,6 +47,11 @@ export interface ConnectorSyncCounts {
    * deferred. Never carries a provider message, prompt, or any message content.
    */
   readonly deferredReason?: ConnectorSyncDeferredReason | null;
+  /**
+   * Why a provider call failed, when one did: HTTP status, provider reason,
+   * refused operation. Absent when nothing failed. Secret-free by construction.
+   */
+  readonly emailErrorDetail?: ConnectorSyncErrorDetail | null;
 }
 
 export interface ConnectorProviderDto {
@@ -308,7 +324,16 @@ const connectorSyncCountsSchema = {
     emailFailures: { type: "number" },
     escalations: { type: "number" },
     truncated: { type: "boolean" },
-    emailDeferred: { type: "number" }
+    emailDeferred: { type: "number" },
+    emailErrorDetail: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      properties: {
+        status: { type: ["integer", "null"] },
+        reason: { type: ["string", "null"] },
+        operation: { type: ["string", "null"] }
+      }
+    }
   }
 } as const;
 

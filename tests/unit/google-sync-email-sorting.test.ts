@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  MAX_ANALYSIS_ATTEMPTS,
   sortFetchedEmails,
   type SavedEmailMarker
 } from "../../packages/connectors/src/google-sync-phases.js";
@@ -69,7 +70,7 @@ describe("sortFetchedEmails", () => {
     const result = await sortFetchedEmails({
       parsedMessages: [signInCode],
       seen: new Map<string, SavedEmailMarker>([
-        ["otp-1", { historyId: "history-1", hasFinishedVerdict: true }]
+        ["otp-1", { historyId: "history-1", hasFinishedVerdict: true, analysisAttempts: 0 }]
       ]),
       persistEmail,
       progress,
@@ -92,7 +93,7 @@ describe("sortFetchedEmails", () => {
     const result = await sortFetchedEmails({
       parsedMessages: [unchanged, older, newer],
       seen: new Map<string, SavedEmailMarker>([
-        ["a", { historyId: "history-1", hasFinishedVerdict: true }]
+        ["a", { historyId: "history-1", hasFinishedVerdict: true, analysisAttempts: 0 }]
       ]),
       persistEmail,
       progress,
@@ -110,8 +111,8 @@ describe("sortFetchedEmails", () => {
     const result = await sortFetchedEmails({
       parsedMessages: [fixture({ externalId: "junk" }), fixture({ externalId: "failed" })],
       seen: new Map<string, SavedEmailMarker>([
-        ["junk", { historyId: "history-1", hasFinishedVerdict: true }],
-        ["failed", { historyId: "history-1", hasFinishedVerdict: false }]
+        ["junk", { historyId: "history-1", hasFinishedVerdict: true, analysisAttempts: 0 }],
+        ["failed", { historyId: "history-1", hasFinishedVerdict: false, analysisAttempts: 0 }]
       ]),
       persistEmail,
       progress: newProgress(),
@@ -120,6 +121,41 @@ describe("sortFetchedEmails", () => {
 
     expect(result.unchangedKeys).toEqual(["junk"]);
     expect(result.pending.map((message) => message.externalId)).toEqual(["failed"]);
+  });
+
+  it("leaves a message alone once its analysis failed enough times, but retries a new revision (#2804)", async () => {
+    const persistEmail = vi.fn<PersistEmail>(async () => {});
+    const result = await sortFetchedEmails({
+      parsedMessages: [
+        fixture({ externalId: "given-up" }),
+        fixture({ externalId: "changed", historyId: "history-2" })
+      ],
+      seen: new Map<string, SavedEmailMarker>([
+        [
+          "given-up",
+          {
+            historyId: "history-1",
+            hasFinishedVerdict: false,
+            analysisAttempts: MAX_ANALYSIS_ATTEMPTS
+          }
+        ],
+        [
+          "changed",
+          {
+            historyId: "history-1",
+            hasFinishedVerdict: false,
+            analysisAttempts: MAX_ANALYSIS_ATTEMPTS
+          }
+        ]
+      ]),
+      persistEmail,
+      progress: newProgress(),
+      onFailure: () => {}
+    });
+
+    expect(result.gaveUpKeys).toEqual(["given-up"]);
+    expect(result.pending.map((message) => message.externalId)).toEqual(["changed"]);
+    expect(persistEmail).toHaveBeenCalledTimes(1);
   });
 
   it("asks again for the judgement on each unchanged hand-off thread, once per thread (#2804)", async () => {
@@ -131,13 +167,42 @@ describe("sortFetchedEmails", () => {
         fixture({ externalId: "junk" })
       ],
       seen: new Map<string, SavedEmailMarker>([
-        ["owed-a", { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: true }],
-        ["owed-b", { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: true }],
+        [
+          "owed-a",
+          {
+            historyId: "history-1",
+            hasFinishedVerdict: true,
+            awaitingJudgement: true,
+            analysisAttempts: 0
+          }
+        ],
+        [
+          "owed-b",
+          {
+            historyId: "history-1",
+            hasFinishedVerdict: true,
+            awaitingJudgement: true,
+            analysisAttempts: 0
+          }
+        ],
         [
           "owed-solo",
-          { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: true }
+          {
+            historyId: "history-1",
+            hasFinishedVerdict: true,
+            awaitingJudgement: true,
+            analysisAttempts: 0
+          }
         ],
-        ["junk", { historyId: "history-1", hasFinishedVerdict: true, awaitingJudgement: false }]
+        [
+          "junk",
+          {
+            historyId: "history-1",
+            hasFinishedVerdict: true,
+            awaitingJudgement: false,
+            analysisAttempts: 0
+          }
+        ]
       ]),
       persistEmail: vi.fn<PersistEmail>(async () => {}),
       progress: newProgress(),
