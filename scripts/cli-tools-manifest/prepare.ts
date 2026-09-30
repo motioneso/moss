@@ -110,12 +110,13 @@ async function prepareOne(
   const attested: { pkg: string; version: string }[] = [];
   let topLevel: "attested" | "none" = "none";
   const watched = new Set([spec.pkg, ...spec.archPackages]);
+  const known = new Set(input.packages.flatMap((p) => [p.pkg, ...p.archPackages]));
 
   for (const entry of listLockEntries(lockfile)) {
     const at = `${entry.installedAs}@${entry.version}`;
-    // An alias (codex ships its platform binaries as versions of itself) may only point at
-    // a package this toolset already names.
-    if (entry.aliased && entry.name !== spec.pkg && !watched.has(entry.name)) {
+    // An alias (codex ships its platform binaries as versions of itself, and its adapter
+    // depends on them) may only point at a package the publisher list already names.
+    if (entry.aliased && !known.has(entry.name)) {
       throw new Blocked([`${at} is an alias for unrelated package ${entry.name}`], subject);
     }
     if (!entry.resolved.startsWith(REGISTRY_PREFIX)) {

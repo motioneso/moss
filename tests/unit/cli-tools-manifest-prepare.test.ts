@@ -287,6 +287,20 @@ describe("prepare", () => {
       expect(r.outcomes[0]!.status).toBe("updated");
     });
 
+    it("accepts an alias that points at a package another toolset names", async () => {
+      const w = goodWorld();
+      w.versions["tool-a"] = ["3.0.0"];
+      const adapter = PACKAGES.filter((p) => p.toolset === "b").map((p) => ({
+        ...p,
+        archPackages: []
+      }));
+      const both = [...PACKAGES.filter((p) => p.toolset === "a"), ...adapter];
+      const r = await run(w, { packages: both, runNpm: aliasNpm("tool-a") });
+      const b = r.outcomes.find((o) => o.toolset === "b")!;
+      expect(b.failures, b.failures.join("; ")).toEqual([]);
+      expect(b.status).toBe("updated");
+    });
+
     it("blocks an alias that points at an unrelated package", async () => {
       const w = goodWorld();
       w.versions["evil-pkg"] = ["3.0.0"];
