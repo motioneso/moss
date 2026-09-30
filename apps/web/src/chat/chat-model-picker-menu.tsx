@@ -174,7 +174,7 @@ export function ChatModelPickerMenu(props: {
                 <ModelRow
                   choice={defaultChoice}
                   showProvider
-                  subtitle={defaultChoice.model.providerModelId ?? undefined}
+                  subtitle={defaultChoice.model.providerModelId ?? defaultChoice.model.displayName}
                   starred={false}
                   disabled={props.disabled}
                   onPick={props.onPick}

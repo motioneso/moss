@@ -21,6 +21,9 @@ scrolling the whole list.
 - `Providers` section: one row per provider, ordered as the models arrive from the server. Each
   row shows the model count and a chevron. The provider holding the current choice shows that
   model's id underneath and a check.
+- Models another user configured arrive with their provider hidden (null `providerConfigId`,
+  provider name `Instance default`). They group under `Shared models` so the list never shows a
+  second `Instance default` beside the default row.
 
 ### Provider view
 

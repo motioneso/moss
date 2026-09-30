@@ -14,7 +14,11 @@ import {
 import { queryKeys } from "../api/query-keys.js";
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
 import { ChatModelPickerMenu } from "./chat-model-picker-menu.js";
-import { toggleFavoriteIds, type ModelChoice } from "./chat-model-picker-model.js";
+import {
+  providerLabelFor,
+  toggleFavoriteIds,
+  type ModelChoice
+} from "./chat-model-picker-model.js";
 import type {
   AiConfiguredModelDto,
   ChatModelFavoritesDto,
@@ -200,7 +204,7 @@ export function buildChatModelChoices(settings: ChatModelOverrideSettingsDto): M
 
   return models.map((choice) => ({
     ...choice,
-    providerLabel: choice.model.providerDisplayName,
+    providerLabel: providerLabelFor(choice.model),
     relation:
       current?.providerConfigId && choice.model.providerConfigId === current.providerConfigId
         ? "same-provider"

@@ -16,6 +16,17 @@ export interface ProviderGroup {
   readonly selectedChoice: ModelChoice | null;
 }
 
+/**
+ * Group label for models another user configured. The API hides their provider (null
+ * providerConfigId, providerDisplayName "Instance default"), which would read as a second
+ * copy of the instance-default row.
+ */
+export const SHARED_PROVIDER_LABEL = "Shared models";
+
+export function providerLabelFor(model: AiConfiguredModelDto): string {
+  return model.providerConfigId ? model.providerDisplayName : SHARED_PROVIDER_LABEL;
+}
+
 /** Search box appears once the picker holds more models than this. */
 export const MODEL_SEARCH_THRESHOLD = 8;
 

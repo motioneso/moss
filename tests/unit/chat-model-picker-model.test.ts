@@ -4,6 +4,8 @@ import {
   favoriteChoices,
   filterChoices,
   groupChoicesByProvider,
+  providerLabelFor,
+  SHARED_PROVIDER_LABEL,
   toggleFavoriteIds,
   type ModelChoice
 } from "../../apps/web/src/chat/chat-model-picker-model.js";
@@ -42,6 +44,16 @@ const choices = [
   choice("claude-sonnet", anthropic),
   choice("gpt-luna", openai)
 ];
+
+describe("chat model picker provider labels", () => {
+  it("names models with a hidden provider as shared instead of repeating the default label", () => {
+    const own = { providerConfigId: "p-openai", providerDisplayName: "OpenAI" };
+    const shared = { providerConfigId: null, providerDisplayName: "Instance default" };
+
+    expect(providerLabelFor(own as AiConfiguredModelDto)).toBe("OpenAI");
+    expect(providerLabelFor(shared as AiConfiguredModelDto)).toBe(SHARED_PROVIDER_LABEL);
+  });
+});
 
 describe("chat model picker grouping", () => {
   it("groups real models by provider in first-seen order and leaves out the default row", () => {
