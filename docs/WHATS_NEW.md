@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-30
+
+#### Added
+
+- **Favorite models in the chat model picker.** The chat model picker now groups models by provider, and you can star models to keep them at the top. [PR #2812](https://github.com/motioneso/moss/pull/2812)
+
 ### 2026-09-29
 
 #### Fixed
