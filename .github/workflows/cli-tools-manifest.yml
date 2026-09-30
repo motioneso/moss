@@ -6,6 +6,8 @@
 name: cli-tools-manifest
 
 on:
+  push:
+    branches: [feat/2689-slice3-manifest]
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
