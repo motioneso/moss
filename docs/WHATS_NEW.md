@@ -46,6 +46,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Smarter email sorting.** Moss can now sort your email with your chosen sorting model, and it keeps receipts, confirmations and account notices out of your briefings while leaving them in your mail and search. [PR #2808](https://github.com/motioneso/moss/pull/2808)
 - **Evening open loops offer choices.** In the evening, each open item now says why it is still open and lets you move it to tomorrow, pick another day, or let it go. [PR #2800](https://github.com/motioneso/moss/pull/2800)
 - **Morning side column shows what moved overnight.** The morning Today page now tells you when a block in your plan moved since your morning report was prepared, and no longer repeats your counts and agenda beside the schedule. [PR #2797](https://github.com/motioneso/moss/pull/2797)
 
