@@ -1,0 +1,37 @@
+[
+  {
+    "toolset": "anthropic",
+    "role": "cli",
+    "pkg": "@anthropic-ai/claude-code",
+    "expectedRepo": "anthropics/claude-code",
+    "archPackages": ["@anthropic-ai/claude-code-linux-x64", "@anthropic-ai/claude-code-linux-arm64"]
+  },
+  {
+    "toolset": "anthropic",
+    "role": "chat-adapter",
+    "pkg": "@agentclientprotocol/claude-agent-acp",
+    "expectedRepo": "agentclientprotocol/claude-agent-acp",
+    "archPackages": []
+  },
+  {
+    "toolset": "openai-compatible",
+    "role": "cli",
+    "pkg": "@openai/codex",
+    "expectedRepo": "openai/codex",
+    "archPackages": ["@openai/codex-linux-x64", "@openai/codex-linux-arm64"]
+  },
+  {
+    "toolset": "openai-compatible",
+    "role": "chat-adapter",
+    "pkg": "@agentclientprotocol/codex-acp",
+    "expectedRepo": "agentclientprotocol/codex-acp",
+    "archPackages": []
+  },
+  {
+    "toolset": "google",
+    "role": "cli",
+    "pkg": "@google/gemini-cli",
+    "expectedRepo": "google-gemini/gemini-cli",
+    "archPackages": []
+  }
+]
