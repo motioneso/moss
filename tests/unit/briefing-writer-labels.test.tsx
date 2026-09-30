@@ -81,7 +81,8 @@ describe("writer labels on screen", () => {
       ledeHtml: "<span>Fallback lede</span>",
       locale,
       onFeedbackChanged: () => {},
-      onOpenReader: () => {}
+      onOpenReader: () => {},
+      onOpenEveningReader: () => {}
     });
     const markup = renderToStaticMarkup(
       <TodayHero
