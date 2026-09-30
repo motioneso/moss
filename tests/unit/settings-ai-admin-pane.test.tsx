@@ -219,8 +219,8 @@ describe("AiProvidersPane services group (#2594)", () => {
     } as never);
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
-    expect(text.indexOf("Email extraction")).toBeGreaterThan(-1);
-    expect(text.indexOf("Sorting model")).toBeGreaterThan(text.indexOf("Email extraction"));
+    expect(text.indexOf("Email reading")).toBeGreaterThan(-1);
+    expect(text.indexOf("Sorting model")).toBeGreaterThan(text.indexOf("Email reading"));
   });
 });
 
@@ -316,7 +316,7 @@ describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () =
     seedSystemOne();
     const renderer = await renderPane();
     expect(optionTexts(renderer, SORTING_LABEL)).toContain("Jev");
-    expect(optionTexts(renderer, "Binding for Email extraction")).not.toContain("Jev");
+    expect(optionTexts(renderer, "Binding for Email reading")).not.toContain("Jev");
     const setDefault = renderer.root
       .findAllByType("button")
       .filter((button) => button.children.includes("Set as default"));
