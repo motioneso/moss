@@ -98,6 +98,7 @@ export interface TodayHeroContentInput {
   readonly locale: LocaleSettingsDto;
   readonly onFeedbackChanged: () => void;
   readonly onOpenReader: (anchor: HTMLElement) => void;
+  readonly onOpenEveningReader: (anchor: HTMLElement, section?: "sources") => void;
 }
 
 export interface TodayHeroContent {
@@ -147,7 +148,9 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
       preparedAt: input.eveningRun
         ? preparedAtLabel(input.eveningRun.createdAt, input.locale)
         : null,
-      readerControl: input.eveningRun ? <EveningHeroLinks /> : null
+      readerControl: input.eveningRun ? (
+        <EveningHeroLinks onOpenReader={input.onOpenEveningReader} />
+      ) : null
     };
   }
   // The stale banner shows whenever freshness data exists, including with a
@@ -206,16 +209,25 @@ function MorningHeroLinks(props: { readonly onOpenReader: (anchor: HTMLElement) 
   );
 }
 
-/** Evening hero report links. No evening briefing reader or sources view exists
-    yet, so these render named but unwired; the wiring is a recorded finding for
-    Architect and must not be invented here. */
-export function EveningHeroLinks() {
+/** Evening hero report links. Both open the briefing reader on the latest
+    evening run; the sources link opens it at the source list. */
+export function EveningHeroLinks(props: {
+  readonly onOpenReader: (anchor: HTMLElement, section?: "sources") => void;
+}) {
   return (
     <>
-      <button type="button" className="today-hero__link">
+      <button
+        type="button"
+        className="today-hero__link"
+        onClick={(event) => props.onOpenReader(event.currentTarget)}
+      >
         {EVENING_READ_FULL_LABEL}
       </button>
-      <button type="button" className="today-hero__link">
+      <button
+        type="button"
+        className="today-hero__link"
+        onClick={(event) => props.onOpenReader(event.currentTarget, "sources")}
+      >
         {EVENING_SOURCES_LABEL}
       </button>
     </>

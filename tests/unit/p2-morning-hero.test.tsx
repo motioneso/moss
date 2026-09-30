@@ -47,7 +47,8 @@ const baseInput = {
   ledeHtml: "<span>Fallback lede</span>",
   locale,
   onFeedbackChanged: () => {},
-  onOpenReader: () => {}
+  onOpenReader: () => {},
+  onOpenEveningReader: () => {}
 };
 
 describe("buildTodayHeroContent — morning (day) mode", () => {

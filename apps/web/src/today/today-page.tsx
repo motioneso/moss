@@ -117,6 +117,8 @@ export function TodayPage(props: {
   const [reader, setReader] = useState<{
     readonly definitionId: string;
     readonly runId: string;
+    readonly kind?: "morning" | "evening";
+    readonly section?: "sources";
   } | null>(null);
   const readerOpener = useRef<HTMLElement | null>(null);
   const [review, setReview] = useState(false);
@@ -398,6 +400,12 @@ export function TodayPage(props: {
       setReader({ definitionId: morningDefinition.id, runId });
     });
   };
+  const openEveningReader = (anchor: HTMLElement, section?: "sources") => {
+    const runId = latestEveningRun?.id;
+    if (!eveningDefinition || !runId) return;
+    readerOpener.current = anchor;
+    setReader({ definitionId: eveningDefinition.id, runId, kind: "evening", section });
+  };
   const eveningTargetTime = eveningDefinition ? targetTimeFor(eveningDefinition, "evening") : "";
   const heroContent = buildTodayHeroContent({
     mode: todayMode,
@@ -419,7 +427,8 @@ export function TodayPage(props: {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.briefings.runs(eveningDefinition?.id ?? "")
       }),
-    onOpenReader: openMorningReader
+    onOpenReader: openMorningReader,
+    onOpenEveningReader: openEveningReader
   });
   const sectionLinks = (
     <nav aria-label="Sections" className="cmd-sections today-hero__sections">
@@ -687,9 +696,13 @@ export function TodayPage(props: {
         ) : null}
         {reader ? (
           <MorningBriefingReader
+            kind={reader.kind}
+            initialSection={reader.section}
             definitionId={reader.definitionId}
             initialRunId={reader.runId}
-            runs={morningRunsQuery.data?.runs ?? []}
+            runs={
+              (reader.kind === "evening" ? eveningRunsQuery : morningRunsQuery).data?.runs ?? []
+            }
             tasks={tasks}
             locale={locale}
             dayPlan={dayPlanQuery.data}
