@@ -271,7 +271,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "version, so users need no reinstall action. Only administrators can connect CLI providers. " +
       "The line under each CLI provider's name shows the installed tool and its version, for " +
       "example 'Claude CLI 2.1.282'; the OpenCode card shows 'OpenCode CLI' and its version the " +
-      "same way.",
+      "same way. Installing Claude or Codex also installs the small chat helper that connects it " +
+      "to Moss chat; if that step fails the install reports an error naming the chat helper, the " +
+      "tool itself stays installed, and installing again retries the helper. Until the helper is " +
+      "installed, chat uses the copy that shipped with Moss.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
