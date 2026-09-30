@@ -85,6 +85,21 @@ describe("BriefingMarkdown", () => {
     expect(html).toContain('<h4 class="brief-reader__section-heading">Tomorrow</h4>');
     expect(html).toContain('<p class="jds-brief__body">Tomorrow looks clear.</p>');
   });
+
+  it("leaves a section name alone inside code, indented code and list items", () => {
+    const render = (text: string) =>
+      renderToStaticMarkup(
+        createElement(BriefingMarkdown, { text, sectionNames: EVENING_SECTION_NAMES })
+      );
+    const fenced = render("```text\n\nTomorrow\n```");
+    expect(fenced).toContain("Tomorrow");
+    expect(fenced).not.toContain("## Tomorrow");
+    expect(fenced).not.toContain("<h4");
+    expect(render("    Tomorrow")).not.toContain("<h4");
+    const listed = render("- Plan for next week\n\n  Tomorrow\n  needs a draft.");
+    expect(listed).not.toContain("<h4");
+    expect(listed).toMatch(/<li>[\s\S]*Tomorrow[\s\S]*<\/li>/);
+  });
 });
 
 describe("evening planning reflect step", () => {

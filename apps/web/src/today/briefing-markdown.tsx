@@ -25,18 +25,25 @@ function boldLinesAsHeadings(text: string): string {
 
 /**
  * The evening writer may put a section name on a bare line. Such a line is a heading
- * only when it names a known section and starts a paragraph, so a lone "Tomorrow"
- * inside prose stays prose.
+ * only when it names a known section, starts a top-level paragraph and sits outside
+ * a code fence, so a lone "Tomorrow" in prose, a list item or code stays as written.
  */
 function bareSectionLinesAsHeadings(text: string, sectionNames: readonly string[]): string {
   if (sectionNames.length === 0) return text;
   const known = new Set(sectionNames.map((name) => name.toLowerCase()));
   let previous = "";
+  let fence: string | null = null;
   return text
     .split(/\r?\n/)
     .map((line) => {
       const startsParagraph = previous.trim() === "";
       previous = line;
+      const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+      if (marker && (fence === null || marker.startsWith(fence))) {
+        fence = fence === null ? marker : null;
+        return line;
+      }
+      if (fence !== null || /^\s/.test(line)) return line;
       const bare = line.trim().replace(/:$/, "").trim();
       return startsParagraph && known.has(bare.toLowerCase()) ? `## ${bare}` : line;
     })
