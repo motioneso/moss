@@ -5,7 +5,7 @@ import type { BriefingDefinition, BriefingType, DataContextDb } from "@moss/db";
 import { assertMetadataOnlyPayload } from "@moss/jobs";
 import { cronExprFor, timezoneFor } from "@moss/shared";
 
-import { BRIEFINGS_RUN_QUEUE } from "./manifest.js";
+import { BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import type { BriefingsRepository } from "./repository.js";
 export { cronExprFor, timezoneFor } from "@moss/shared";
 
