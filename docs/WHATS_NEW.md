@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Favorite models in the chat model picker.** The chat model picker now groups models by provider, and you can star models to keep them at the top. [PR #2812](https://github.com/motioneso/moss/pull/2812)
 
+#### Fixed
+
+- **Fresher email, clearer sync errors.** New mail shows up sooner during long catch-ups, a failed sync now says why in plain words, and a message that keeps failing stops being retried forever. The Email extraction setting is now called Email reading. [PR #2819](https://github.com/motioneso/moss/pull/2819)
+
 ### 2026-09-29
 
 #### Fixed
