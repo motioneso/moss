@@ -15,7 +15,8 @@ import {
   type TmuxIo
 } from "@moss/ai";
 
-import { CliTranscriptLocationMismatchError } from "./errors.js";
+import { CLI_VERSION_TOO_OLD_MESSAGE, isCliVersionTooOldText } from "./cli-version-errors.js";
+import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import type { ChatRecordKind, CliChatEngine, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 import { writeClaudeOneShotPermissionHook } from "./persistent-claude-permission-hook.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
@@ -139,8 +140,14 @@ export class ClaudePrintChatEngine implements CliChatEngine {
    * object instead of `this`, so an abandoned child's writes land only in its own unreferenced,
    * garbage-collectable capture. Nothing about child process lifecycle (kill/detach/spawn) changes.
    */
-  private currentCapture: { stderrTail: string; exitCode: number | null; readonly prompt: string } =
-    { stderrTail: "", exitCode: null, prompt: "" };
+  private currentCapture: OneShotCapture = {
+    stderrTail: "",
+    exitCode: null,
+    prompt: "",
+    versionTooOld: false
+  };
+  /** #2689: the structured stream reported the provider's "version X or newer" refusal. */
+  private structuredVersionTooOld = false;
 
   constructor(
     _threadKey: string,
@@ -176,7 +183,12 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     await this.io.writeFile(promptPath, sanitizedPrompt);
     const launchLine = await this.buildCommand(this.launchOpts, promptPath);
 
-    const capture = { stderrTail: "", exitCode: null as number | null, prompt: sanitizedPrompt };
+    const capture: OneShotCapture = {
+      stderrTail: "",
+      exitCode: null,
+      prompt: sanitizedPrompt,
+      versionTooOld: false
+    };
     this.currentCapture = capture;
     const identity = this.childIdentity;
     const launch = identity
@@ -185,7 +197,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.currentProcess = spawn(launch.command, launch.args, {
       ...(identity ? {} : { cwd: this.launchOpts.neutralDir }),
       detached: true,
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       ...(await this.childEnv())
     });
     this.currentProcess.on("error", () => undefined);
@@ -206,8 +218,24 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       }
       capture.stderrTail = tail;
     });
+    // #2689 — `claude -p` prints a refused request to stdout and exits non-zero. Keep a small tail
+    // of each stream in memory only, and check it once both streams have closed.
+    const refusalTails = { stdout: "", stderr: "" };
+    this.currentProcess.stdout?.setEncoding("utf8");
+    this.currentProcess.stdout?.on("data", (chunk: string) => {
+      refusalTails.stdout = (refusalTails.stdout + chunk).slice(-REFUSAL_TAIL_CHARS);
+    });
+    this.currentProcess.stderr?.on("data", (chunk: string) => {
+      refusalTails.stderr = (refusalTails.stderr + chunk).slice(-REFUSAL_TAIL_CHARS);
+    });
     this.currentProcess.once("exit", (code) => {
       capture.exitCode = code;
+    });
+    this.currentProcess.once("close", (code) => {
+      capture.versionTooOld =
+        code !== 0 &&
+        (isCliVersionTooOldText(refusalTails.stdout) ||
+          isCliVersionTooOldText(refusalTails.stderr));
     });
     this.currentProcess.unref();
     this.hasSubmitted = true;
@@ -258,6 +286,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.structuredProcess = child;
     this.structuredExited = false;
     this.structuredOutput = "";
+    this.structuredVersionTooOld = false;
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       this.structuredOutput += chunk;
@@ -298,6 +327,10 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     const offset = this.structuredOutput.length - (lines.at(-1)?.length ?? 0);
     for (const line of completeLines) {
       const record = parseStructuredRecord(line);
+      if (record.versionTooOld) this.structuredVersionTooOld = true;
+      if (this.structuredVersionTooOld) {
+        throw new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
+      }
       if (record.text !== undefined) return { ...record, offset, complete: true };
       if (record.complete) return { offset, complete: true };
     }
@@ -308,6 +341,9 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   async readNew(
     afterOffset: number
   ): Promise<{ records: TranscriptRecord[]; offset: number; complete: boolean }> {
+    if (this.currentCapture.versionTooOld) {
+      throw new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
+    }
     if (this.transcriptPathValue === null) {
       return { records: [], offset: afterOffset, complete: false };
     }
@@ -587,6 +623,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
 function parseStructuredRecord(line: string): {
   readonly text?: string;
   readonly complete?: boolean;
+  readonly versionTooOld?: boolean;
 } {
   let record: Record<string, unknown>;
   try {
@@ -595,6 +632,14 @@ function parseStructuredRecord(line: string): {
     return {};
   }
   if (record.type !== "result") return {};
+  // #2689: only an error result is checked, so model output can never trip it.
+  if (
+    record.is_error === true &&
+    typeof record.result === "string" &&
+    isCliVersionTooOldText(record.result)
+  ) {
+    return { versionTooOld: true };
+  }
   const candidate = record.structured_output ?? record.result;
   if (typeof candidate === "object" && candidate !== null) {
     return { text: JSON.stringify(candidate) };
@@ -609,6 +654,15 @@ function parseStructuredRecord(line: string): {
   }
   return { complete: true };
 }
+
+interface OneShotCapture {
+  stderrTail: string;
+  exitCode: number | null;
+  readonly prompt: string;
+  versionTooOld: boolean;
+}
+
+const REFUSAL_TAIL_CHARS = 2048;
 
 function sanitizeInput(text: string): string {
   return text.replace(/^(\s*)!+/, "$1");

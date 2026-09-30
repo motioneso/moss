@@ -502,6 +502,9 @@ async function invoke(
       }
       return host.listProviderModels(provider, acpAgentId);
     }
+    case "listCliToolVersions":
+      // #2689: non-session, no params; version strings only.
+      return (await host.listCliToolVersions()) ?? null;
     case "beginLogin": {
       // login-contract §L.2.2: kind guard FIRST (bad_request). The catalog/adapter-blocked gate
       // (no adapter / agy) lives in the login service (LoginBadRequestError → bad_request).

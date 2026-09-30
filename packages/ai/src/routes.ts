@@ -80,7 +80,12 @@ import {
   boundedAssistantToolResultData
 } from "./gateway/output-validation.js";
 import { ToolInputValidationError, validateToolInput } from "./gateway/input-validation.js";
-import { cliAvailableForAcpAgent } from "./cli-availability.js";
+import { cliAvailableForAcpAgent, type ProviderKind } from "./cli-availability.js";
+import {
+  cliToolsDto,
+  type CliToolVersionReader,
+  type CliToolVersions
+} from "./cli-tool-versions.js";
 import { registerAiAdminPinRoutes } from "./admin-ai-pin-routes.js";
 import { registerAiServiceRoutes } from "./capability-route-routes.js";
 import { registerAiTranscriptionRoutes } from "./transcription-routes.js";
@@ -120,6 +125,8 @@ export interface AiRoutesDependencies {
   readonly repository?: AiRepository;
   readonly secretCipher?: AiSecretCipher;
   readonly modelDiscovery?: ModelDiscoveryService;
+  // #2689: installed CLI tool versions for the provider cards; absent off the runner socket path.
+  readonly cliToolVersionReader?: CliToolVersionReader;
   readonly tasksCompatibility?: {
     getResolvedTaskChangesPolicy: (db: DataContextDb) => Promise<MossActionPermissionTier>;
     setTaskChangesPolicy: (db: DataContextDb, tier: MossActionPermissionTier) => Promise<void>;
@@ -1116,11 +1123,19 @@ function serializeAssistantAction(action: AiAssistantActionRequestSafeRow): AiAs
 }
 
 export async function serializeProvider(
-  provider: AiProviderConfigSafeRow
+  provider: AiProviderConfigSafeRow,
+  cliToolVersions?: CliToolVersions
 ): Promise<AiProviderConfigDto> {
   const isCli = provider.auth_method === "cli";
   const cliAvailableFlag =
     isCli && provider.acp_agent_id ? await cliAvailableForAcpAgent(provider.acp_agent_id) : false;
+  // #2689: only the kinds the runner reports versions for get a cliTools block. Any
+  // other command-line kind (the database allows ollama/custom CLI rows) omits it, since an
+  // undefined version would fail response validation and break the whole provider list.
+  const cliTools =
+    isCli && cliToolVersions && provider.provider_kind in cliToolVersions.providers
+      ? cliToolsDto(cliToolVersions.providers[provider.provider_kind as ProviderKind])
+      : undefined;
 
   return {
     id: provider.id,
@@ -1134,6 +1149,7 @@ export async function serializeProvider(
     cliAvailable: cliAvailableFlag,
     // #870/H1: expose the single instance-default flag so the admin UI can render the radio state.
     isInstanceDefault: provider.is_instance_default,
+    ...(cliTools ? { cliTools } : {}),
     revokedAt: toIsoString(provider.revoked_at),
     createdAt: serializeDate(provider.created_at),
     updatedAt: serializeDate(provider.updated_at)

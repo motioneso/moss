@@ -10,6 +10,7 @@ export * from "./auto-register.js";
 export * from "./chat-model-override.js";
 export * from "./chat-adapter.js";
 export * from "./cli-availability.js";
+export * from "./cli-tool-versions.js";
 export * from "./crypto.js";
 export * from "./credentials.js";
 export * from "./manifest.js";

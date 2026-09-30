@@ -258,6 +258,25 @@ describe("serveConnection (§3.4/§3.7)", () => {
     expect(channel.closed).toBe(false);
   });
 
+  it("#2689 listCliToolVersions dispatches non-session and returns versions only", async () => {
+    const host = fakeHost();
+    const versions = {
+      providers: { anthropic: "2.1.183", "openai-compatible": null, google: null },
+      opencode: null
+    };
+    vi.spyOn(host, "listCliToolVersions").mockResolvedValue(versions);
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    channel.feed(encodeFrame({ t: "req", id: 23, method: "listCliToolVersions", params: {} }));
+    await new Promise((r) => setTimeout(r, 5));
+
+    const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 23) as RpcOk;
+    expect(ok.t).toBe("ok");
+    expect(ok.result).toEqual(versions);
+  });
+
   it("a readNew with an out-of-range afterOffset returns bad_request WITHOUT closing", async () => {
     const channel = new FakeChannel();
     serveConnection(channel, deps());

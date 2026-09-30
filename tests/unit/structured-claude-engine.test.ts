@@ -132,7 +132,7 @@ describe("ClaudePrintChatEngine", () => {
       expect.objectContaining({
         cwd: "/tmp/jarvis-neutral",
         detached: true,
-        stdio: ["ignore", "ignore", "pipe"]
+        stdio: ["ignore", "pipe", "pipe"]
       })
     );
     expect(await engine.isAlive()).toBe(true);

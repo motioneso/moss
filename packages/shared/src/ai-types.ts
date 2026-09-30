@@ -44,6 +44,17 @@ export type AiCapabilityRouteReason =
   // renders needs-config as an actionable admin prompt, not a silent worker skip. See resolver.
   | "needs-config";
 
+/**
+ * #2689: the command-line tool a CLI provider runs. `version` is what the installed tool reports;
+ * `null` when it is not installed. Slice 4 of the auto-update spec widens `state`.
+ */
+export type AiCliToolsState = "current" | "not_installed";
+
+export interface AiCliToolsDto {
+  readonly version: string | null;
+  readonly state: AiCliToolsState;
+}
+
 export interface AiProviderConfigDto {
   readonly id: string;
   readonly providerKind: AiProviderKind;
@@ -59,6 +70,8 @@ export interface AiProviderConfigDto {
   // (tier) resolve their model INSIDE this provider. Globally single-valued (DB partial unique
   // index in migration 0147); the UI renders it as a mutually-exclusive radio across providers.
   readonly isInstanceDefault: boolean;
+  // #2689: present only for CLI providers when the runner answered.
+  readonly cliTools?: AiCliToolsDto;
   readonly revokedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -290,6 +303,8 @@ export interface AiAssistantActionDto {
 
 export interface ListAiProviderConfigsResponse {
   readonly providers: readonly AiProviderConfigDto[];
+  // #2689: the OpenCode chat tool, which has no provider row of its own.
+  readonly openCodeCli?: AiCliToolsDto;
 }
 
 export interface CreateAiProviderConfigRequest {
