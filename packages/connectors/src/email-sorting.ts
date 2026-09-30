@@ -3,11 +3,11 @@ import type { SignInCodeDecision } from "@moss/shared/email-otp-rule";
 /**
  * #2805: email sorting on the sorting model (spec 2026-09-22-sorting-model.md, section 11).
  *
- * The sorting model answers five atomic yes/no questions per email. Code, not the model, turns the
+ * The sorting model answers six atomic yes/no questions per email. Code, not the model, turns the
  * answers and two code-side facts into a category, first match wins. When an answer the decision
  * depends on sits inside the unsure band, the email goes to the general model instead.
  *
- * Shadow mode only: nothing here changes the stored verdict. The comparison run is the only caller.
+ * Sync stores this verdict (email-sorting-live.ts); the comparison command re-sorts stored mail.
  */
 
 /** A job key of its own, so an admin can bind or bypass email sorting separately. */
@@ -18,9 +18,10 @@ export type EmailSortingQuestionId =
   | "asks_reply"
   | "asks_action"
   | "near_deadline"
-  | "marketing";
+  | "marketing"
+  | "receipt_or_notice";
 
-/** The five agreed questions (Ben, 2026-09-29). Wording is part of the approved design. */
+/** The six agreed questions (Ben, 2026-09-29). Wording is part of the approved design. */
 export const EMAIL_SORTING_QUESTIONS: Readonly<
   Record<EmailSortingQuestionId, { readonly instructions: string }>
 > = {
@@ -33,7 +34,11 @@ export const EMAIL_SORTING_QUESTIONS: Readonly<
     instructions: "Does it ask you to do something (pay, sign, book, fill in a form)?"
   },
   near_deadline: { instructions: "Does it mention a date or deadline in the next week?" },
-  marketing: { instructions: "Is it marketing, a newsletter or a promotion?" }
+  marketing: { instructions: "Is it marketing, a newsletter or a promotion?" },
+  receipt_or_notice: {
+    instructions:
+      "Is this a receipt, order or booking confirmation, or an account or policy notice?"
+  }
 };
 
 export const EMAIL_SORTING_QUESTION_IDS = Object.keys(
@@ -49,6 +54,7 @@ export type EmailSortingCategory =
   | "noise"
   | "needs_reply"
   | "needs_action"
+  | "receipt_or_notice"
   | "waiting_on_someone"
   | "time_sensitive_info"
   | "fyi";
@@ -58,15 +64,18 @@ export type EmailSortingDecision =
   /** The general model decides. `reason` names the step that could not be settled. */
   | {
       readonly kind: "unsure";
-      readonly reason: "sign_in_code" | EmailSortingCategory;
+      readonly reason: EmailSortingCategory;
       readonly questions: readonly EmailSortingQuestionId[];
     };
 
 export interface EmailSortingFacts {
-  /** The existing code check. `unclear` is today's cue to ask the general model. */
+  /** The existing code check. `unclear` counts as a sign-in code too (Ben, 2026-09-29). */
   readonly signInCode: SignInCodeDecision;
-  /** The newest cached message in the email's thread was sent by the user. */
-  readonly userSentLast: boolean;
+  /**
+   * The newest cached message in the email's thread was sent by the user. `unknown` when the
+   * thread could not be read; the step that needs it then defers to the general model.
+   */
+  readonly userSentLast: boolean | "unknown";
 }
 
 type Answer = "yes" | "no" | "unsure";
@@ -79,7 +88,8 @@ export function readSortingAnswer(probability: number): Answer {
 
 /**
  * The agreed mapping, first match wins: sign-in code, noise (marketing and not a personal
- * sender), needs_reply, needs_action, waiting_on_someone, time_sensitive_info, fyi.
+ * sender), needs_reply, needs_action, receipt_or_notice, waiting_on_someone,
+ * time_sensitive_info, fyi. A receipt that asks for a reply or an action keeps that label.
  *
  * Each step is three-valued. A step that is clearly true decides; clearly false moves on; a step
  * that depends on an unsure answer stops the walk and hands the email to the general model. An
@@ -89,11 +99,8 @@ export function decideEmailCategory(
   facts: EmailSortingFacts,
   probabilities: Readonly<Partial<Record<EmailSortingQuestionId, number>>>
 ): EmailSortingDecision {
-  if (facts.signInCode === "hands-over-a-code")
-    return { kind: "category", category: "sign_in_code" };
-  if (facts.signInCode === "unclear") {
-    return { kind: "unsure", reason: "sign_in_code", questions: [] };
-  }
+  // An unclear sign-in code is filtered as one and never reaches a model (Ben, 2026-09-29).
+  if (facts.signInCode !== "ordinary") return { kind: "category", category: "sign_in_code" };
 
   const answer = (id: EmailSortingQuestionId): Answer => {
     const value = probabilities[id];
@@ -115,7 +122,8 @@ export function decideEmailCategory(
 
   const steps: readonly [EmailSortingQuestionId, EmailSortingCategory][] = [
     ["asks_reply", "needs_reply"],
-    ["asks_action", "needs_action"]
+    ["asks_action", "needs_action"],
+    ["receipt_or_notice", "receipt_or_notice"]
   ];
   for (const [id, category] of steps) {
     const value = answer(id);
@@ -123,6 +131,9 @@ export function decideEmailCategory(
     if (value === "unsure") return { kind: "unsure", reason: category, questions: [id] };
   }
 
+  if (facts.userSentLast === "unknown") {
+    return { kind: "unsure", reason: "waiting_on_someone", questions: [] };
+  }
   if (facts.userSentLast) return { kind: "category", category: "waiting_on_someone" };
 
   const deadline = answer("near_deadline");
@@ -203,3 +214,18 @@ function bareAddress(from: string): string {
   const m = from.match(/<([^>]+)>/);
   return (m ? m[1]! : from).trim().toLowerCase();
 }
+
+/** Raw address header values as the bare, lower-cased set userSentLastInThread compares with. */
+export function ownAddressSet(raw: readonly string[]): ReadonlySet<string> {
+  return new Set(raw.map(bareAddress).filter((address) => address.length > 0));
+}
+
+/** Ask the sorting model the questions; the probability of yes per question id, or an error. */
+export type EmailSortingAsk = (
+  state: Record<string, unknown>,
+  questions: typeof EMAIL_SORTING_QUESTIONS,
+  signal?: AbortSignal
+) => Promise<
+  | { readonly ok: true; readonly probabilities: Readonly<Record<string, number>> }
+  | { readonly ok: false; readonly error: string }
+>;

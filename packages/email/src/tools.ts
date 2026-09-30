@@ -60,6 +60,7 @@ export const emailToolMessageOutputSchema = {
         "time_sensitive_info",
         "waiting_on_someone",
         "fyi",
+        "receipt_or_notice",
         "noise",
         "unknown"
       ]

@@ -11,6 +11,8 @@ import { EmailRepository } from "@moss/email";
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
 import { extractEmailSignals, senderAddress } from "./email-extract.js";
+import { ownAddressSet, userSentLastInThread } from "./email-sorting.js";
+import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
 import type { EmailReadProvider } from "./email-read-provider.js";
 import { ImapEmailReadProvider, IMAP_DEFAULT_FOLDER } from "./imap-email-read-provider.js";
@@ -157,12 +159,37 @@ export async function runImapSync(
         ? await deps.knownSenderAddresses(scopedDb, deps.actorUserId)
         : undefined;
 
+    // #2805: IMAP has no threads, so "the user sent the last message" reads the message itself.
+    let ownAddresses: ReadonlySet<string> | undefined;
+    const sorting = sortingSession(deps.emailExtractDeps.sorting);
+    const sortingCounts: Record<string, number> = {};
+
     for (const key of keys) {
       try {
         const parsed = await provider.getMessage(secret, key);
-        const extracted = await extractEmailSignals(parsed, deps.emailExtractDeps, {
-          knownSender: knownSenders?.has(senderAddress(parsed.from)) ?? false
+        const knownSender = knownSenders?.has(senderAddress(parsed.from)) ?? false;
+        const pass = await runSortingModelPass({
+          pending: [parsed],
+          sorting,
+          userSentLast: async (message) => {
+            if (!deps.actorUserId) return false;
+            ownAddresses ??= ownAddressSet(
+              await emailRepo.listFrequentRecipientAddresses(scopedDb, deps.actorUserId)
+            );
+            return userSentLastInThread(
+              [{ sender: message.from, receivedAt: message.receivedAt }],
+              ownAddresses
+            );
+          },
+          knownSender: () => knownSender,
+          now,
+          guard: (work) => withSavepoint(scopedDb, () => work())
         });
+        const sorted = pass.sorted[0]?.result;
+        const outcome = Object.keys(pass.counts.sorted)[0] ?? Object.keys(pass.counts.general)[0];
+        if (outcome) sortingCounts[outcome] = (sortingCounts[outcome] ?? 0) + 1;
+        const extracted =
+          sorted ?? (await extractEmailSignals(parsed, deps.emailExtractDeps, { knownSender }));
         await withSavepoint(scopedDb, (savepointDb) =>
           emailRepo.upsertCachedMessage(savepointDb, {
             connectorAccountId,
@@ -198,6 +225,9 @@ export async function runImapSync(
           "imap-sync email message failed"
         );
       }
+    }
+    if (keys.length > 0) {
+      logger.info({ stage: "email-sorting", outcomes: sortingCounts }, "imap-sync email sorting");
     }
   } catch (error) {
     if (isImapSignInRefused(error)) {

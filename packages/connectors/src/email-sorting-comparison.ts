@@ -4,15 +4,18 @@ import {
   EMAIL_SORTING_QUESTIONS,
   buildEmailSortingState,
   decideEmailCategory,
+  type EmailSortingAsk,
   type EmailSortingCategory,
   type EmailSortingDecision,
   type EmailSortingQuestionId
 } from "./email-sorting.js";
 
 /**
- * #2805 shadow comparison: re-sort mail the current model already sorted through the sorting-model
- * path, side by side with the stored verdict. Read-only; the stored verdict is never changed.
+ * #2805 comparison: re-sort already-sorted mail through the sorting-model path, side by side with
+ * the stored verdict. Read-only; the stored verdict is never changed.
  */
+
+export type { EmailSortingAsk };
 
 /** The stored verdict as the comparison reads it. `pending` is held for the thread's closer look. */
 export type StoredEmailVerdict =
@@ -21,6 +24,7 @@ export type StoredEmailVerdict =
   | "noise"
   | "needs_reply"
   | "needs_action"
+  | "receipt_or_notice"
   | "waiting_on_someone"
   | "time_sensitive_info"
   | "fyi"
@@ -30,6 +34,7 @@ const STORED_CATEGORIES = new Set<string>([
   "noise",
   "needs_reply",
   "needs_action",
+  "receipt_or_notice",
   "waiting_on_someone",
   "time_sensitive_info",
   "fyi",
@@ -60,14 +65,6 @@ export interface EmailSortingComparisonMessage {
   readonly userSentLast: boolean;
 }
 
-export type EmailSortingAsk = (
-  state: Record<string, unknown>,
-  questions: typeof EMAIL_SORTING_QUESTIONS
-) => Promise<
-  | { readonly ok: true; readonly probabilities: Readonly<Record<string, number>> }
-  | { readonly ok: false; readonly error: string }
->;
-
 export type EmailSortingShadowOutcome =
   | EmailSortingDecision
   | { readonly kind: "failed"; readonly error: string };
@@ -77,9 +74,20 @@ export interface EmailSortingComparisonRow {
   readonly stored: StoredEmailVerdict;
   readonly shadow: EmailSortingShadowOutcome;
   readonly probabilities: Readonly<Partial<Record<EmailSortingQuestionId, number>>> | null;
+  /** The stored verdict came from the sorting model, so agreement there says little. */
+  readonly storedBySortingModel?: boolean;
 }
 
-/** Sort one message on the shadow path. Skips the request when code alone settles or defers it. */
+/** Whether a stored verdict was set by the sorting model rather than the general model. */
+export function storedBySortingModel(signals: unknown): boolean {
+  return (
+    !!signals &&
+    typeof signals === "object" &&
+    (signals as Record<string, unknown>).sortedBy === "sorting_model"
+  );
+}
+
+/** Sort one message on the sorting-model path. Skips the request when code alone settles it. */
 export async function shadowSortEmail(
   message: EmailSortingComparisonMessage,
   ask: EmailSortingAsk,
@@ -124,6 +132,10 @@ export interface EmailSortingComparisonSummary {
   readonly pending: Readonly<Record<string, number>>;
   /** stored verdict -> shadow category -> count, over decided messages. */
   readonly confusion: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** Messages the shadow path files as receipt_or_notice, by stored verdict (pending included). */
+  readonly receiptOrNotice: Readonly<Record<string, number>>;
+  /** Stored verdicts the sorting model set itself, by stored verdict. */
+  readonly storedBySortingModel: Readonly<Record<string, number>>;
   readonly disagreements: readonly EmailSortingComparisonRow[];
 }
 
@@ -140,9 +152,15 @@ export function summarizeEmailSortingComparison(
   const unsure: Record<string, number> = {};
   const pending: Record<string, number> = {};
   const confusion: Record<string, Record<string, number>> = {};
+  const receiptOrNotice: Record<string, number> = {};
+  const bySortingModel: Record<string, number> = {};
   const disagreements: EmailSortingComparisonRow[] = [];
 
   for (const row of rows) {
+    if (row.storedBySortingModel) bump(bySortingModel, row.stored);
+    if (row.shadow.kind === "category" && row.shadow.category === "receipt_or_notice") {
+      bump(receiptOrNotice, row.stored);
+    }
     if (row.shadow.kind === "failed") {
       failed += 1;
       continue;
@@ -171,6 +189,8 @@ export function summarizeEmailSortingComparison(
     failed,
     pending,
     confusion,
+    receiptOrNotice,
+    storedBySortingModel: bySortingModel,
     disagreements
   };
 }

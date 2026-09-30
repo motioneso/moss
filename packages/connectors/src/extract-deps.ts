@@ -1,5 +1,6 @@
 import type { createAiSecretCipher } from "@moss/ai";
 import {
+  askSortingProbabilities,
   generateStructured,
   type AiRepository,
   type GenerateStructuredDeps,
@@ -9,6 +10,8 @@ import {
 } from "@moss/ai";
 import type { DataContextDb } from "@moss/db";
 import { EmailExtractNeedsConfigurationError, type EmailExtractDeps } from "./email-extract.js";
+import { EMAIL_SORTING_SERVICE } from "./email-sorting.js";
+import type { EmailSortingService } from "./email-sorting-live.js";
 
 type AiSecretCipher = ReturnType<typeof createAiSecretCipher>;
 
@@ -50,6 +53,41 @@ const EMAIL_SIGNALS_SCHEMA = {
 
 const EMAIL_EXTRACT_SERVICE = "module.connectors.email-extract";
 
+/**
+ * #2805: the sorting model for email sorting. The router picks it from the admin's settings through
+ * the email sorting job key; nothing here names a model or provider.
+ */
+function buildEmailSortingService(
+  scopedDb: DataContextDb,
+  aiRepo: AiRepository,
+  aiCipher: AiSecretCipher,
+  options: BuildEmailExtractDepsOptions
+): EmailSortingService {
+  return {
+    available: async () =>
+      (await aiRepo.resolveSortingModel(scopedDb, EMAIL_SORTING_SERVICE, {
+        acceptSystemOne: true
+      })) !== null,
+    ask: (state, questions, signal) =>
+      askSortingProbabilities(
+        scopedDb,
+        { service: EMAIL_SORTING_SERVICE, state, questions, ...(signal ? { signal } : {}) },
+        {
+          repository: aiRepo,
+          cipher: aiCipher,
+          // askSortingProbabilities uses only the two-argument structured logger form.
+          ...(options.logger
+            ? { logger: options.logger as Parameters<typeof askSortingProbabilities>[2]["logger"] }
+            : {}),
+          ...(options.createAdapter ? { createAdapter: options.createAdapter } : {}),
+          ...(options.createCliStructuredAdapter
+            ? { createCliStructuredAdapter: options.createCliStructuredAdapter }
+            : {})
+        }
+      )
+  };
+}
+
 /** Shared production composition for Google/IMAP sync and live source-context triage. */
 export function buildEmailExtractDeps(
   scopedDb: DataContextDb,
@@ -58,6 +96,7 @@ export function buildEmailExtractDeps(
   options: BuildEmailExtractDepsOptions = {}
 ): EmailExtractDeps {
   return {
+    sorting: buildEmailSortingService(scopedDb, aiRepo, aiCipher, options),
     runChat: async (
       prompt,
       signal,

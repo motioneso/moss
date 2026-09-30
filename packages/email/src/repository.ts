@@ -34,8 +34,9 @@ function hasCompleteTriage(signals: unknown): boolean {
 
 /**
  * Whether a stored message already carries a finished first-pass verdict, so a sync can leave an
- * unchanged revision alone. Three shapes count: a summary with complete triage, the gate's junk
- * verdict (no summary, bare noise category), and a message handed to the thread judgement.
+ * unchanged revision alone. Three shapes count: a summary with complete triage, a bare noise or
+ * receipt_or_notice category (either may carry no summary), and a message handed to the thread
+ * judgement.
  * A reply that failed or never arrived stores none of these and stays open for a retry.
  */
 export function hasFinishedVerdict(summary: string | null, signals: unknown): boolean {
@@ -48,7 +49,7 @@ export function hasFinishedVerdict(summary: string | null, signals: unknown): bo
     typeof actionability === "object" &&
     actionability !== null &&
     !Array.isArray(actionability) &&
-    actionability.category === "noise"
+    (actionability.category === "noise" || actionability.category === "receipt_or_notice")
   );
 }
 
