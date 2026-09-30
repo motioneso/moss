@@ -746,7 +746,7 @@
 .chatd-model__pick:hover:not(:disabled),
 .chatd-model__provider:hover,
 .chatd-model__back:hover,
-.chatd-model__star:hover {
+.chatd-model__star:hover:not(:disabled) {
   background: var(--surface-2);
 }
 
@@ -785,6 +785,10 @@
 
 .chatd-model__star[aria-pressed="true"] {
   color: var(--gold-strong);
+}
+
+.chatd-model__star:disabled {
+  opacity: 0.4;
 }
 
 /* from apps/web/src/chat/assistant-surface/assistant-surface.css */

@@ -36,8 +36,17 @@ const sonnet = anthropicModel("claude-sonnet");
 const sol = openAiModel("gpt-sol");
 const luna = openAiModel("gpt-luna");
 
-async function mockPicker(page: Page) {
-  const state = { overrideId: null as string | null, favoriteIds: [] as string[], switches: 0 };
+async function mockPicker(
+  page: Page,
+  options: { readonly failFavoritesRead?: boolean; readonly firstSaveDelayMs?: number } = {}
+) {
+  const state = {
+    overrideId: null as string | null,
+    favoriteIds: [] as string[],
+    switches: 0,
+    saves: 0,
+    savesDone: 0
+  };
   await mockApi(page, {
     authenticated: true,
     aiModels: [opus, sonnet, sol, luna],
@@ -69,7 +78,17 @@ async function mockPicker(page: Page) {
   });
   await page.route("**/api/ai/chat-model-favorites", async (route) => {
     if (route.request().method() === "PUT") {
-      state.favoriteIds = (route.request().postDataJSON() as { modelIds: string[] }).modelIds;
+      const modelIds = (route.request().postDataJSON() as { modelIds: string[] }).modelIds;
+      state.saves += 1;
+      // A slow first save lands after any save sent while it was in flight.
+      if (state.saves === 1 && options.firstSaveDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.firstSaveDelayMs));
+      }
+      state.favoriteIds = modelIds;
+      state.savesDone += 1;
+    } else if (options.failFavoritesRead) {
+      await route.fulfill({ status: 500, json: { error: "unavailable" } });
+      return;
     }
     await route.fulfill({ status: 200, json: { modelIds: state.favoriteIds } });
   });
@@ -158,6 +177,53 @@ test("starring puts a model under Favorites, survives a reload, and unstarring r
   await expect.poll(() => state.favoriteIds).toEqual([]);
   await expect(menu.getByRole("group", { name: "Favorites" })).toHaveCount(0);
   await expect(menu.getByText("Star a model to pin it here.")).toBeVisible();
+});
+
+test("quick star clicks save in click order even when the first save is slow", async ({ page }) => {
+  const state = await mockPicker(page, { firstSaveDelayMs: 800 });
+  await page.goto("/");
+  const menu = await openPicker(page);
+
+  await menu.getByRole("button", { name: /^OpenAI/ }).click();
+  await menu.getByRole("button", { name: "Star gpt-luna" }).click();
+  await menu.getByRole("button", { name: "Star gpt-sol" }).click();
+
+  await expect.poll(() => state.savesDone).toBe(2);
+  expect(state.favoriteIds).toEqual(["gpt-luna", "gpt-sol"]);
+  await expect(menu.getByRole("button", { name: "Unstar gpt-luna" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Unstar gpt-sol" })).toBeVisible();
+});
+
+test("stars stay off when favorites cannot be read, so saved stars are never overwritten", async ({
+  page
+}) => {
+  const state = await mockPicker(page, { failFavoritesRead: true });
+  state.favoriteIds = ["claude-sonnet"];
+  await page.goto("/");
+  const menu = await openPicker(page);
+
+  await menu.getByRole("button", { name: /^OpenAI/ }).click();
+  await expect(menu.getByRole("button", { name: "Star gpt-luna" })).toBeDisabled();
+  // Picking still works without favorites.
+  await expect(menu.getByRole("button", { name: "gpt-luna", exact: true })).toBeEnabled();
+  expect(state.saves).toBe(0);
+  expect(state.favoriteIds).toEqual(["claude-sonnet"]);
+});
+
+test("unstarring a favorite from the keyboard keeps focus in the picker", async ({ page }) => {
+  const state = await mockPicker(page);
+  state.favoriteIds = ["claude-sonnet", "gpt-sol"];
+  await page.goto("/");
+  const menu = await openPicker(page);
+  const favorites = menu.getByRole("group", { name: "Favorites" });
+
+  await favorites.getByRole("button", { name: "Unstar claude-sonnet" }).focus();
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => state.favoriteIds).toEqual(["gpt-sol"]);
+  await expect(favorites.getByRole("button", { name: /^gpt-sol/ })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("button", { name: /^Anthropic/ })).toBeFocused();
 });
 
 test("a favorite is selectable straight from the top level", async ({ page }) => {

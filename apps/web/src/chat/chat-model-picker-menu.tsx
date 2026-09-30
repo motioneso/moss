@@ -22,6 +22,7 @@ const ROW_SELECTOR = "[data-picker-row]";
 export function ChatModelPickerMenu(props: {
   readonly choices: readonly ModelChoice[];
   readonly favoriteIds: readonly string[];
+  readonly favoritesReady: boolean;
   readonly disabled: boolean;
   readonly onPick: (choice: ModelChoice) => void;
   readonly onToggleFavorite: (choice: ModelChoice) => void;
@@ -31,6 +32,7 @@ export function ChatModelPickerMenu(props: {
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const returnToProvider = useRef<string | null>(null);
+  const refocusRowIndex = useRef<number | null>(null);
 
   const defaultChoice = props.choices.find((choice) => choice.modelId === null) ?? null;
   const models = starrableChoices(props.choices);
@@ -63,6 +65,27 @@ export function ChatModelPickerMenu(props: {
     const firstModel = view.kind === "provider" ? rows[1] : rows[0];
     (selected ?? firstModel ?? rows[0])?.focus();
   }, [view]);
+
+  // Unstarring a top-level favorite unmounts the focused star. Keep focus in the picker by
+  // moving it to the row that took that place.
+  useEffect(() => {
+    const index = refocusRowIndex.current;
+    refocusRowIndex.current = null;
+    const menu = menuRef.current;
+    if (index === null || !menu || menu.contains(document.activeElement)) return;
+    const rows = [...menu.querySelectorAll<HTMLElement>(ROW_SELECTOR)];
+    rows[Math.min(index, rows.length - 1)]?.focus();
+  }, [props.favoriteIds]);
+
+  const toggleFavorite = (choice: ModelChoice, row: HTMLElement | null) => {
+    const menu = menuRef.current;
+    if (menu && row) {
+      const rows = [...menu.querySelectorAll<HTMLElement>(ROW_SELECTOR)];
+      const pick = row.querySelector<HTMLElement>(ROW_SELECTOR);
+      refocusRowIndex.current = pick ? rows.indexOf(pick) : null;
+    }
+    props.onToggleFavorite(choice);
+  };
 
   const goBack = () => {
     if (view.kind !== "provider") return;
@@ -125,8 +148,9 @@ export function ChatModelPickerMenu(props: {
       showProvider={options.showProvider}
       starred={choice.modelId !== null && favoriteSet.has(choice.modelId)}
       disabled={props.disabled}
+      favoritesReady={props.favoritesReady}
       onPick={props.onPick}
-      onToggleFavorite={choice.modelId === null ? null : props.onToggleFavorite}
+      onToggleFavorite={choice.modelId === null ? null : toggleFavorite}
     />
   );
 
@@ -177,6 +201,7 @@ export function ChatModelPickerMenu(props: {
                   subtitle={defaultChoice.model.providerModelId ?? defaultChoice.model.displayName}
                   starred={false}
                   disabled={props.disabled}
+                  favoritesReady={false}
                   onPick={props.onPick}
                   onToggleFavorite={null}
                 />
@@ -213,8 +238,9 @@ function ModelRow(props: {
   readonly subtitle?: string;
   readonly starred: boolean;
   readonly disabled: boolean;
+  readonly favoritesReady: boolean;
   readonly onPick: (choice: ModelChoice) => void;
-  readonly onToggleFavorite: ((choice: ModelChoice) => void) | null;
+  readonly onToggleFavorite: ((choice: ModelChoice, row: HTMLElement | null) => void) | null;
 }) {
   const { choice } = props;
   const subtitle = props.subtitle ?? (props.showProvider ? choice.providerLabel : null);
@@ -241,7 +267,13 @@ function ModelRow(props: {
           className="chatd-model__star"
           aria-pressed={props.starred}
           aria-label={props.starred ? `Unstar ${choice.label}` : `Star ${choice.label}`}
-          onClick={() => props.onToggleFavorite?.(choice)}
+          disabled={!props.favoritesReady}
+          onClick={(event) =>
+            props.onToggleFavorite?.(
+              choice,
+              event.currentTarget.closest<HTMLElement>(".chatd-model__row")
+            )
+          }
         >
           <Star size={14} aria-hidden="true" fill={props.starred ? "currentColor" : "none"} />
         </button>

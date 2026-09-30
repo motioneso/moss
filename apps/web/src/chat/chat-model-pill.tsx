@@ -53,31 +53,35 @@ export function ChatModelPill(props: {
     open,
     onClose: closeMenu
   });
-  // Favorites are a convenience: a failed load shows the picker without them.
+  // Favorites are a convenience: a failed load shows the picker without them. Starring waits for
+  // a successful load, because each save replaces the whole stored list.
   const favoritesQuery = useQuery({
     queryKey: queryKeys.ai.chatModelFavorites,
     queryFn: getChatModelFavorites,
     retry: false
   });
   const favoriteIds = favoritesQuery.data?.modelIds ?? [];
+  const favoritesReady = favoritesQuery.isSuccess;
+
+  // Saves share a scope so they reach the server in click order. Each one is built from the
+  // optimistic list, so the last click wins. Refetch only once the queue drains, so an earlier
+  // response cannot overwrite a later optimistic state; a failure refetches the stored list.
   const favoritesMutation = useMutation({
+    mutationKey: queryKeys.ai.chatModelFavorites,
+    scope: { id: "chat-model-favorites" },
     mutationFn: (modelIds: readonly string[]) => putChatModelFavorites({ modelIds }),
     onMutate: async (modelIds) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.ai.chatModelFavorites });
-      const previous = queryClient.getQueryData<ChatModelFavoritesDto>(
-        queryKeys.ai.chatModelFavorites
-      );
       queryClient.setQueryData<ChatModelFavoritesDto>(queryKeys.ai.chatModelFavorites, {
         modelIds
       });
-      return { previous };
     },
-    onError: (_error, _modelIds, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKeys.ai.chatModelFavorites, context.previous);
+    onSettled: async (_data, error) => {
+      const pending = queryClient.isMutating({ mutationKey: queryKeys.ai.chatModelFavorites });
+      if (error || pending <= 1) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.ai.chatModelFavorites });
       }
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.ai.chatModelFavorites })
+    }
   });
   const toggleFavorite = (choice: ModelChoice) => {
     if (choice.modelId === null) return;
@@ -169,6 +173,7 @@ export function ChatModelPill(props: {
         <ChatModelPickerMenu
           choices={choices}
           favoriteIds={favoriteIds}
+          favoritesReady={favoritesReady}
           disabled={props.disabled || mutation.isPending}
           onPick={(choice) => {
             closeMenu();

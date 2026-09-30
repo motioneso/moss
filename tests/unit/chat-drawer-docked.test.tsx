@@ -52,7 +52,9 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
       selectedModel: null,
       selectableOverrideModels: []
     }
-  }))
+  })),
+  getChatModelFavorites: vi.fn(async () => ({ modelIds: [] })),
+  putChatModelFavorites: vi.fn(async (input: { modelIds: string[] }) => input)
 }));
 
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";

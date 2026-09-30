@@ -40,6 +40,7 @@ private-mode confirms, and closes the menu. Starring never closes the menu or se
 - Up/Down move focus between rows; Home/End jump to the ends.
 - Right (or Enter) on a provider row drills in; Left or Backspace in the provider view goes back.
 - The star is a separate button in each row, reachable with Tab.
+- Unstarring a top-level favorite moves focus to the row that takes its place.
 - Escape closes and returns focus to the trigger (existing dismiss hook).
 
 ### Phone
@@ -54,6 +55,9 @@ width and gains a max height with internal scroll.
 - `GET /api/ai/chat-model-favorites` returns `{ modelIds }`; `PUT` with `{ modelIds }` replaces
   the list (deduped, max 100 ids). Permissions match the override routes (`ai.view` / `ai.route`).
 - Ids for models no longer selectable are ignored at render and dropped on the next write.
+- Each `PUT` replaces the whole list, so star buttons stay disabled until the list has loaded
+  once, and saves run one at a time in click order (shared mutation scope). The list is
+  refetched when the queue drains or a save fails.
 - The list is ordinary user data, so the existing user export already includes it.
 
 ## Out of scope
