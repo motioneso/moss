@@ -98,7 +98,7 @@ describe("signing", () => {
   it("fails verification when a single byte changes", () => {
     const signed = signManifest(first(), key, { allowUnpinnedKey: true });
     const tampered = Buffer.from(signed.bytes);
-    tampered[tampered.length - 3] ^= 1;
+    tampered.writeUInt8(tampered.readUInt8(tampered.length - 3) ^ 1, tampered.length - 3);
     expect(() =>
       loadPreviousManifest(tampered, signed.signature, [{ keyId: key.keyId, publicKeyPem }])
     ).toThrow(/signature is invalid/);

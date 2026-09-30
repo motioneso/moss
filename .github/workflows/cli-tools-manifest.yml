@@ -28,7 +28,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE: cli-tools
+  # Only main publishes to the real release. A branch run publishes to a separate proof release.
+  RELEASE: ${{ github.ref == 'refs/heads/main' && 'cli-tools' || 'cli-tools-proof' }}
 
 jobs:
   prepare:
@@ -100,8 +101,9 @@ jobs:
     # A crashed check job still reaches here, where its missing result counts as a failure.
     if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
-    # Scheduled runs use the main-only environment. A manual run needs Ben's approval.
-    environment: ${{ github.event_name == 'workflow_dispatch' && 'cli-tools-signing-manual' || 'cli-tools-signing' }}
+    # cli-tools-signing is restricted to main and needs the repo owner's approval. A branch run
+    # uses cli-tools-proof, which holds only a throwaway key.
+    environment: ${{ github.ref == 'refs/heads/main' && 'cli-tools-signing' || 'cli-tools-proof' }}
     permissions:
       contents: write
       issues: write
@@ -139,7 +141,11 @@ jobs:
         env:
           MOSS_MODULE_CATALOG_SIGNING_KEY_ID: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_KEY_ID }}
           MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY }}
-        run: pnpm tsx scripts/cli-tools-manifest/cli.ts sign --in dist/cli-tools --previous-dir dist/previous
+        run: |
+          # The throwaway proof key is not pinned in the shipped keyring. Only a branch run may use it.
+          UNPINNED=""
+          [ "$GITHUB_REF" = "refs/heads/main" ] || UNPINNED="--allow-unpinned-key"
+          pnpm tsx scripts/cli-tools-manifest/cli.ts sign --in dist/cli-tools --previous-dir dist/previous $UNPINNED
       - name: Ensure rolling release exists
         if: steps.sign.outputs.publish == 'true'
         env:

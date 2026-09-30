@@ -63,9 +63,21 @@ describe("cli-tools-manifest workflow", () => {
   it("makes signing wait for the check job and for the environment gate", () => {
     const sign = jobBody("sign");
     expect(sign).toMatch(/needs: \[prepare, check\]/);
-    expect(sign).toMatch(
-      /environment: \$\{\{ github\.event_name == 'workflow_dispatch' && 'cli-tools-signing-manual' \|\| 'cli-tools-signing' \}\}/
+    expect(sign).toContain(
+      "environment: ${{ github.ref == 'refs/heads/main' && 'cli-tools-signing' || 'cli-tools-proof' }}"
     );
+    expect(source).not.toContain("cli-tools-signing-manual");
+  });
+
+  it("publishes a branch run only to the proof release and only it may use an unpinned key", () => {
+    expect(source).toContain(
+      "RELEASE: ${{ github.ref == 'refs/heads/main' && 'cli-tools' || 'cli-tools-proof' }}"
+    );
+    const signStep = stepBody(jobBody("sign"), "Verify, assemble and sign the manifest");
+    expect(signStep).toContain(
+      '[ "$GITHUB_REF" = "refs/heads/main" ] || UNPINNED="--allow-unpinned-key"'
+    );
+    expect(source.match(/--allow-unpinned-key/g)).toHaveLength(1);
   });
 
   it("only gives the write token to the signing job", () => {
