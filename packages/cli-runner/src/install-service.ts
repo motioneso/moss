@@ -60,8 +60,8 @@ import type {
   RpcProviderKind
 } from "@moss/chat/live";
 
-import { readOpenCodeVersion } from "./acp-host.js";
 import { findRepoRoot } from "./catalog.js";
+import { readOpenCodeVersion } from "./opencode-version.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { Mutex } from "./mutex.js";
 import { resolveDefaultToolsPrefix } from "./tools-prefix.js";
