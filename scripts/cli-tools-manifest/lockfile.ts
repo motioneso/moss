@@ -15,8 +15,10 @@ interface Lockfile {
 
 export interface LockEntry {
   readonly key: string;
-  /** The real package name, taken from the install path. */
+  /** The real package name. For an alias this is the package the entry actually downloads. */
   readonly name: string;
+  /** The name it is installed under, taken from the install path. */
+  readonly installedAs: string;
   readonly version: string;
   readonly resolved: string;
   readonly integrity: string;
@@ -33,7 +35,8 @@ export function listLockEntries(raw: string): LockEntry[] {
       const tail = key.slice(key.lastIndexOf("node_modules/") + "node_modules/".length);
       return {
         key,
-        name: tail,
+        name: meta.name ?? tail,
+        installedAs: tail,
         version: meta.version ?? "",
         resolved: meta.resolved ?? "",
         integrity: meta.integrity ?? "",

@@ -112,8 +112,12 @@ async function prepareOne(
   const watched = new Set([spec.pkg, ...spec.archPackages]);
 
   for (const entry of listLockEntries(lockfile)) {
-    const at = `${entry.name}@${entry.version}`;
-    if (entry.aliased) throw new Blocked([`${at} is installed under another name`], subject);
+    const at = `${entry.installedAs}@${entry.version}`;
+    // An alias (codex ships its platform binaries as versions of itself) may only point at
+    // a package this toolset already names.
+    if (entry.aliased && entry.name !== spec.pkg && !watched.has(entry.name)) {
+      throw new Blocked([`${at} is an alias for unrelated package ${entry.name}`], subject);
+    }
     if (!entry.resolved.startsWith(REGISTRY_PREFIX)) {
       throw new Blocked([`${at} is not fetched from the npm registry`], subject);
     }
@@ -130,9 +134,11 @@ async function prepareOne(
         subject
       );
     }
-    if (!watched.has(entry.name) || entry.key !== `node_modules/${entry.name}`) continue;
+    if (!watched.has(entry.installedAs) || entry.key !== `node_modules/${entry.installedAs}`) {
+      continue;
+    }
     const verdict = checkProvenance({
-      pkg: entry.name,
+      pkg: entry.installedAs,
       expectedRepo: spec.expectedRepo,
       attestations: await input.registry.attestations(entry.name, entry.version),
       tarballIntegrity: entry.integrity,
@@ -140,8 +146,8 @@ async function prepareOne(
     });
     if (!verdict.ok) throw new Blocked([...verdict.errors], subject);
     if (verdict.provenance === "attested")
-      attested.push({ pkg: entry.name, version: entry.version });
-    if (entry.name === spec.pkg) topLevel = verdict.provenance;
+      attested.push({ pkg: entry.installedAs, version: entry.version });
+    if (entry.installedAs === spec.pkg) topLevel = verdict.provenance;
   }
 
   // Unpacks without running any package script, then checks the registry's own signatures.

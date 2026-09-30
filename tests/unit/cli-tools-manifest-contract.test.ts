@@ -26,6 +26,17 @@ describe("launch flag extraction", () => {
     expect(missingFlags(["--print", "--strict-mcp-config"], help)).toEqual(["--strict-mcp-config"]);
   });
 
+  it("reads a folded help entry such as --append-system-prompt[-file]", () => {
+    const help =
+      "  --append-system-prompt <prompt>  x\n  e.g. --append-system-prompt[-file], --add-dir";
+    expect(missingFlags(["--append-system-prompt-file", "--append-system-prompt"], help)).toEqual(
+      []
+    );
+    expect(missingFlags(["--append-system-prompt-files"], help)).toEqual([
+      "--append-system-prompt-files"
+    ]);
+  });
+
   it("does not let a longer flag name satisfy a shorter one", () => {
     expect(missingFlags(["--tools"], "  --tools-extra  something")).toEqual(["--tools"]);
   });

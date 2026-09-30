@@ -249,4 +249,50 @@ describe("prepare", () => {
     const r = await run(w, { previous: previous("1.1.0") });
     expect(r.outcomes[0]!.status).toBe("unchanged");
   });
+
+  describe("aliased platform packages", () => {
+    // The real codex tarballs install its platform builds as versions of the package itself.
+    const aliasNpm =
+      (real: string) =>
+      async (args: readonly string[], cwd: string): Promise<void> => {
+        calls.push([...args]);
+        if (args[0] !== "install") return;
+        const version = args[1]!.slice(args[1]!.lastIndexOf("@") + 1);
+        const plain = (n: string): object => ({
+          version,
+          resolved: tarballUrl(n, version),
+          integrity: sha512Integrity(tarballBytes(n, version))
+        });
+        const packages = {
+          "": {},
+          "node_modules/tool-b": plain("tool-b"),
+          "node_modules/tool-a-x64": {
+            name: real,
+            version,
+            resolved: tarballUrl(real, version),
+            integrity: sha512Integrity(tarballBytes(real, version))
+          }
+        };
+        await writeFile(path.join(cwd, "package-lock.json"), JSON.stringify({ packages }));
+      };
+    const only = PACKAGES.filter((p) => p.toolset === "b").map((p) => ({
+      ...p,
+      archPackages: ["tool-a-x64"]
+    }));
+
+    it("accepts an alias that points back at a package the toolset names", async () => {
+      const w = goodWorld();
+      w.versions["tool-a-x64"] = ["3.0.0"];
+      const r = await run(w, { packages: only, runNpm: aliasNpm("tool-b") });
+      expect(r.outcomes[0]!.status).toBe("updated");
+    });
+
+    it("blocks an alias that points at an unrelated package", async () => {
+      const w = goodWorld();
+      w.versions["evil-pkg"] = ["3.0.0"];
+      const r = await run(w, { packages: only, runNpm: aliasNpm("evil-pkg") });
+      expect(r.outcomes[0]!.status).toBe("blocked");
+      expect(r.outcomes[0]!.failures.join(" ")).toMatch(/alias for unrelated package evil-pkg/);
+    });
+  });
 });

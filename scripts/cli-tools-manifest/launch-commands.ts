@@ -29,7 +29,9 @@ export function extractLongFlags(line: string): string[] {
 
 /** Flags absent from the tool's own help text. Empty means the tool still accepts them all. */
 export function missingFlags(flags: readonly string[], helpText: string): string[] {
-  return flags.filter((flag) => !new RegExp(`${flag}(?![A-Za-z0-9-])`).test(helpText));
+  // Help text sometimes folds two flags into one, as in `--append-system-prompt[-file]`.
+  const text = helpText.replace(/(--[A-Za-z][A-Za-z0-9-]*)\[(-[A-Za-z0-9-]+)\]/g, "$1 $1$2");
+  return flags.filter((flag) => !new RegExp(`${flag}(?![A-Za-z0-9-])`).test(text));
 }
 
 /**
