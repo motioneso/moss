@@ -27,7 +27,7 @@ import {
   readGaps
 } from "./briefing-report-shell.js";
 import { calloutCopy, findChangedBlocks } from "./briefing-callout.js";
-import { BriefingMarkdown } from "./briefing-markdown.js";
+import { BriefingMarkdown, EVENING_SECTION_NAMES } from "./briefing-markdown.js";
 import { splitHeadline } from "./today-hero.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import { acceptAllSelectionFor, hasOtherPendingEdits } from "./day-plan-review-model.js";
@@ -442,7 +442,12 @@ function ReportBody(props: {
         {acceptLabels.preparedAtLabel(run.createdAt, props.locale)}
       </p>
       {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
-      {headline.rest ? <BriefingMarkdown text={headline.rest} /> : null}
+      {headline.rest ? (
+        <BriefingMarkdown
+          text={headline.rest}
+          sectionNames={props.evening ? EVENING_SECTION_NAMES : undefined}
+        />
+      ) : null}
       {noEveningPlan ? (
         <p className="brief-reader__plan-source">
           No evening priorities were available for this briefing. Moss used today’s available

@@ -1,8 +1,12 @@
+import { EVENING_SECTION_HEADERS } from "@moss/shared";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { safeUrl } from "../chat/markdown-message.js";
+
+/** Evening report section names, for promoting bare header lines. */
+export const EVENING_SECTION_NAMES: readonly string[] = Object.values(EVENING_SECTION_HEADERS);
 
 /** Plain text of generated briefing prose, for surfaces that show one line or a lead. */
 export function plainBriefingText(text: string): string {
@@ -19,6 +23,26 @@ function boldLinesAsHeadings(text: string): string {
   return text.replace(/^[ \t]*(\*\*|__)([^*_\n]+?)\1[ \t]*:?[ \t]*$/gm, "## $2");
 }
 
+/**
+ * The evening writer may put a section name on a bare line. Such a line is a heading
+ * only when it names a known section and starts a paragraph, so a lone "Tomorrow"
+ * inside prose stays prose.
+ */
+function bareSectionLinesAsHeadings(text: string, sectionNames: readonly string[]): string {
+  if (sectionNames.length === 0) return text;
+  const known = new Set(sectionNames.map((name) => name.toLowerCase()));
+  let previous = "";
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const startsParagraph = previous.trim() === "";
+      previous = line;
+      const bare = line.trim().replace(/:$/, "").trim();
+      return startsParagraph && known.has(bare.toLowerCase()) ? `## ${bare}` : line;
+    })
+    .join("\n");
+}
+
 type HeadingProps = ComponentPropsWithoutRef<"h4"> & { node?: unknown };
 
 function SectionHeading({ node: _node, children }: HeadingProps) {
@@ -30,7 +54,11 @@ function SectionHeading({ node: _node, children }: HeadingProps) {
  * external sources, so raw HTML and images are never rendered and links pass the
  * chat allowlist.
  */
-export function BriefingMarkdown(props: { readonly text: string }) {
+export function BriefingMarkdown(props: {
+  readonly text: string;
+  /** Section names that count as headings on a bare line. */
+  readonly sectionNames?: readonly string[];
+}) {
   return (
     <div className="brief-reader__sections">
       <ReactMarkdown
@@ -59,7 +87,7 @@ export function BriefingMarkdown(props: { readonly text: string }) {
           )
         }}
       >
-        {boldLinesAsHeadings(props.text)}
+        {boldLinesAsHeadings(bareSectionLinesAsHeadings(props.text, props.sectionNames ?? []))}
       </ReactMarkdown>
     </div>
   );

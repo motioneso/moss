@@ -2,7 +2,13 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BriefingMarkdown, plainBriefingText } from "../../apps/web/src/today/briefing-markdown.js";
+import {
+  BriefingMarkdown,
+  EVENING_SECTION_NAMES,
+  plainBriefingText
+} from "../../apps/web/src/today/briefing-markdown.js";
+import type { EveningPlanningController } from "../../apps/web/src/today/evening-planning-controller.js";
+import { ReflectStep } from "../../apps/web/src/today/evening-planning-sections.js";
 import { morningReportLead, splitHeadline } from "../../apps/web/src/today/today-hero.js";
 
 describe("briefing plain text", () => {
@@ -66,5 +72,50 @@ describe("BriefingMarkdown", () => {
     expect(html).not.toContain("<img");
     expect(html).not.toContain("javascript:");
     expect(html).toContain('href="https://ok.test"');
+  });
+
+  it("promotes a bare evening section line only when it starts a paragraph", () => {
+    const html = renderToStaticMarkup(
+      createElement(BriefingMarkdown, {
+        text: "A calm day.\n\nWhat got done\n- Sent the draft\n\nTomorrow\nTomorrow looks clear.",
+        sectionNames: EVENING_SECTION_NAMES
+      })
+    );
+    expect(html).toContain('<h4 class="brief-reader__section-heading">What got done</h4>');
+    expect(html).toContain('<h4 class="brief-reader__section-heading">Tomorrow</h4>');
+    expect(html).toContain('<p class="jds-brief__body">Tomorrow looks clear.</p>');
+  });
+});
+
+describe("evening planning reflect step", () => {
+  const evening = {
+    reflection: null,
+    setReflection: () => undefined
+  } as unknown as EveningPlanningController;
+
+  it("renders the evening report sections as headings, not inline text", () => {
+    const report =
+      "The day is ready to close.\n\n**What got done**\nYou finished the interview.\n\n" +
+      "**What slipped**\nNothing fell off today.\n\n**Tomorrow**\nTomorrow looks clear.\n\n" +
+      "## News & sports\n- Quiet day.";
+    const html = renderToStaticMarkup(
+      createElement(ReflectStep, {
+        evening,
+        headingId: "evening-step-0",
+        ledeHtml: "The day is ready to close.",
+        summaryText: report
+      })
+    );
+    const headings = [...html.matchAll(/<h4 class="brief-reader__section-heading">(.*?)<\/h4>/g)];
+    expect(headings.map((match) => match[1])).toEqual([
+      "What got done",
+      "What slipped",
+      "Tomorrow",
+      "News &amp; sports"
+    ]);
+    expect(html).toContain('<p class="jds-brief__body">Tomorrow looks clear.</p>');
+    expect(html).not.toContain("**");
+    expect(html).toContain('<ul class="brief-reader__list">');
+    expect(html).toContain("evening-plan__choices");
   });
 });
