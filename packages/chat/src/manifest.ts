@@ -164,12 +164,9 @@ export const chatModuleManifest = {
     {
       id: "chat.model_picker",
       description:
-        "Choose which model answers from the model button above the message box. The picker " +
-        "lists starred favorites first, then one row per provider; open a provider to see its " +
-        "models. Star or unstar any model to keep it under Favorites. Favorites are saved to " +
-        "your account and follow you to other devices. A search box appears when there are " +
-        "more than eight models. When an admin has turned off model choice or pinned your " +
-        "provider, the button shows the fixed model instead."
+        "Pick the chat model from the button above the message box: starred favorites first, " +
+        "then providers you open to see their models. Stars follow your account across " +
+        "devices. Search appears past eight models."
     },
     {
       id: "chat.response_styles",
