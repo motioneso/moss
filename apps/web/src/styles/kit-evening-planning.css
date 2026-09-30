@@ -161,34 +161,6 @@
   overflow-wrap: anywhere;
 }
 
-/* The evening report, rendered with the reader's briefing markdown at prose size. */
-.evening-plan__report .jds-brief__body,
-.evening-plan__report .brief-reader__list {
-  max-width: none;
-  margin: 0;
-  font-size: inherit;
-  line-height: inherit;
-  color: inherit;
-}
-
-.evening-plan__report .brief-reader__list {
-  margin-top: 6px;
-  padding-left: 20px;
-}
-
-.evening-plan__report .jds-brief__body + .jds-brief__body {
-  margin-top: 10px;
-}
-
-.evening-plan__report .brief-reader__section-heading {
-  margin: 20px 0 4px;
-  color: var(--text);
-}
-
-.evening-plan__report .brief-reader__sections > :first-child {
-  margin-top: 0;
-}
-
 .evening-plan__question {
   margin: 20px 0 0;
   color: var(--text);
