@@ -17,7 +17,7 @@ import type { BriefingRunKind, BriefingType } from "@moss/shared";
 
 import type { ComposeDeps } from "./compose.js";
 import type { BriefingDayPlanAutoPort } from "./repository.js";
-import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./manifest.js";
+import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import { BriefingsRepository } from "./repository.js";
 import { withToolSavepoint } from "./savepoint.js";
 

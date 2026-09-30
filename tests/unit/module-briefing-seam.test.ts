@@ -231,7 +231,7 @@ describe("briefings manifest refresh and history entries (T13B)", () => {
     });
   });
 
-  it("points every briefings remediation at Today or the AI provider settings", async () => {
+  it("points every briefings remediation at Today, the AI provider settings or its own settings", async () => {
     const { briefingsModuleManifest } = await import("@moss/briefings");
     const paths = (briefingsModuleManifest.features ?? []).flatMap((feature) =>
       (feature.remediations ?? []).map((remediation) => remediation.path)
@@ -240,7 +240,12 @@ describe("briefings manifest refresh and history entries (T13B)", () => {
     expect(paths).toContain("/today");
     expect(paths).toContain("/settings?section=aiproviders");
     for (const path of paths) {
-      expect(["/today", "/settings?section=aiproviders"]).toContain(path);
+      // #2809: "set up a briefing" points at the Briefings settings page, where definitions live.
+      expect([
+        "/today",
+        "/settings?section=aiproviders",
+        "/settings?section=modules&module=briefings"
+      ]).toContain(path);
     }
   });
 });

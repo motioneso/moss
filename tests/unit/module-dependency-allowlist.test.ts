@@ -96,6 +96,9 @@ const FEATURE_PACKAGES = new Set([
  */
 const SANCTIONED_FEATURE_COUPLINGS = [
   "@moss/briefings -> @moss/notifications",
+  // #2809: chat composes the briefings run-queue services for the chat re-run tools. It calls the
+  // factories briefings exports from its public API; the queue logic stays in briefings.
+  "@moss/chat -> @moss/briefings",
   "@moss/chat -> @moss/calendar",
   "@moss/chat -> @moss/connectors",
   "@moss/chat -> @moss/email",
