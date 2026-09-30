@@ -7,7 +7,39 @@ import path from "node:path";
 export type RunNpm = (args: readonly string[], cwd: string) => Promise<void>;
 
 interface Lockfile {
-  readonly packages?: Record<string, { integrity?: string; link?: boolean; version?: string }>;
+  readonly packages?: Record<
+    string,
+    { integrity?: string; link?: boolean; version?: string; name?: string; resolved?: string }
+  >;
+}
+
+export interface LockEntry {
+  readonly key: string;
+  /** The real package name, taken from the install path. */
+  readonly name: string;
+  readonly version: string;
+  readonly resolved: string;
+  readonly integrity: string;
+  /** True when the entry installs one package under another package's name. */
+  readonly aliased: boolean;
+}
+
+/** Every downloadable entry in the lockfile. Entries missing a field are returned with "". */
+export function listLockEntries(raw: string): LockEntry[] {
+  const lock = JSON.parse(raw) as Lockfile;
+  return Object.entries(lock.packages ?? {})
+    .filter(([key, meta]) => key !== "" && !meta.link)
+    .map(([key, meta]) => {
+      const tail = key.slice(key.lastIndexOf("node_modules/") + "node_modules/".length);
+      return {
+        key,
+        name: tail,
+        version: meta.version ?? "",
+        resolved: meta.resolved ?? "",
+        integrity: meta.integrity ?? "",
+        aliased: meta.name !== undefined && meta.name !== tail
+      };
+    });
 }
 
 export async function generateLockfile(
