@@ -45,9 +45,8 @@ Open questions (owner in brackets):
 - **Per-toolset independence.** Each toolset is evaluated alone. A failing toolset keeps its
   previous manifest entry unchanged (or is omitted on first publish) and adds a failure record;
   passing toolsets still publish.
-- **Provenance memory.** `provenance-history.json` is an asset on the rolling release:
-  `{ "<pkg>": { "everHadProvenance": true, "since": "<version>" } }`. It only ever gains entries. The
-  signed manifest records per package `provenance: "attested" | "none"`.
+- **Provenance memory.** Carried inside the signed manifest as `provenanceHistory`
+  (see 2a.4). It only ever gains entries.
 - **Checksums.** Lockfile generation: `npm install <pkg>@<version> --package-lock-only
   --ignore-scripts`. Every `packages[*]` entry needs `integrity` starting `sha512-` (link entries
   excluded). Each arch package named in `archPackages` must be present. Then tarballs are downloaded
@@ -73,6 +72,34 @@ Open questions (owner in brackets):
 - **No new secret, setting, env var or app-map change.** Nothing here is a screen or setting.
   App map: no entry changes (verified when implementing; if a check says otherwise, update it).
 - **Release note:** `Category: N/A` (CI only, nothing users see).
+
+## 2a. Coordinator conditions (approved 2026-09-30, from independent security review)
+
+1. **Two jobs.** `check` runs all code from new, unvetted package versions (install through
+   `InstallService`, `--help` flag checks, adapter `initialize`). It has `permissions: contents: read`,
+   `actions/checkout` with `persist-credentials: false`, and no secrets in its environment. The
+   `sign` job `needs: check`, reads only its pass/fail result per toolset, and never runs package code.
+   It downloads the lockfiles and the check's result file as data only. The signing key appears in
+   the environment of the single signing step, nowhere else in the workflow.
+2. **Signing key lives in a GitHub environment** restricted to `main`, with Ben as required reviewer
+   for manual runs. The `sign` job names that environment. The exact setup steps go in the PR body;
+   this PR changes no repo settings.
+3. **No rollback by manual run.** Any `workflow_dispatch` naming a version older than the one already
+   published for that package is refused before any work (compared by semver against the published
+   manifest). Test: older version refused, equal version is a no-op, newer accepted. Scheduled runs
+   only ever move forward by construction.
+4. **Provenance record inside the signed manifest.** Each package entry carries
+   `provenance: "attested" | "none"` and the manifest carries `provenanceHistory` (packages that have
+   ever attested). The separate unsigned history asset is dropped. The publisher reads the history from
+   the previous signed manifest (signature verified first). If the previous manifest exists and lacks
+   `provenanceHistory`, publishing fails closed. Only the very first publish may start it empty.
+   Tests: a cli-tools manifest fails the module-index validator, and a module index fails the
+   cli-tools validator (both directions); missing history after first publish fails closed.
+5. **Adapter check** starts each adapter directly from the scratch install, in the no-secrets job.
+   Ben tracks an issue that must close before slice 2 merges.
+6. **Live proof** runs from the branch with a throwaway test key into a separate proof release
+   (release name is a workflow input, default `cli-tools`; proof uses `cli-tools-proof`), never the
+   production key. One real run from main follows after merge.
 
 ## 3. Determinism boundary
 
