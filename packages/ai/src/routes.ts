@@ -1129,8 +1129,11 @@ export async function serializeProvider(
   const isCli = provider.auth_method === "cli";
   const cliAvailableFlag =
     isCli && provider.acp_agent_id ? await cliAvailableForAcpAgent(provider.acp_agent_id) : false;
+  // #2689: only the kinds the runner reports versions for get a cliTools block. Any
+  // other command-line kind (the database allows ollama/custom CLI rows) omits it, since an
+  // undefined version would fail response validation and break the whole provider list.
   const cliTools =
-    isCli && cliToolVersions
+    isCli && cliToolVersions && provider.provider_kind in cliToolVersions.providers
       ? cliToolsDto(cliToolVersions.providers[provider.provider_kind as ProviderKind])
       : undefined;
 

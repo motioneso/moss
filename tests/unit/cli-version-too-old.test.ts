@@ -236,4 +236,23 @@ describe("#2689 provider versions on the list route", () => {
     ).toBeUndefined();
     expect(cliToolsDto(null)).toEqual({ version: null, state: "not_installed" });
   });
+
+  it("omits cliTools for a command-line provider of an unknown runner kind", async () => {
+    const row = {
+      id: "p9",
+      provider_kind: "ollama",
+      display_name: "Ollama",
+      base_url: null,
+      status: "active",
+      auth_method: "cli",
+      execution_mode: "cli",
+      has_credential: false,
+      is_instance_default: false
+    } as unknown as Parameters<typeof serializeProvider>[0];
+
+    // The runner only knows three tool kinds. An unknown kind must not produce
+    // a cliTools block with an undefined version, which fails response
+    // validation and breaks the whole provider list.
+    expect((await serializeProvider(row, versions)).cliTools).toBeUndefined();
+  });
 });
