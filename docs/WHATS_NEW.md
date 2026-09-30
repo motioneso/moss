@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Evening planning shows the evening report with headings.** When you plan tomorrow, the evening report now shows its sections with proper headings and paragraphs instead of one long block of text. [PR #2815](https://github.com/motioneso/moss/pull/2815)
 - **Evening briefing links open the full report.** On Today in the evening, "Read the full evening briefing" and "What informed this?" now open the full evening report instead of doing nothing. [PR #2813](https://github.com/motioneso/moss/pull/2813)
 - **Moss stays up when its database restarts.** Moss no longer shuts down briefly when its database restarts. [PR #2803](https://github.com/motioneso/moss/pull/2803)
 - **Email sync no longer re-checks sorted mail.** Moss no longer re-reads email it has already sorted every time it syncs, and new mail now arrives on schedule even while an older catch-up is still running. [PR #2806](https://github.com/motioneso/moss/pull/2806)
