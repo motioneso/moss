@@ -127,6 +127,9 @@ export function signManifest(
   options: { allowUnpinnedKey?: boolean } = {}
 ): SignedManifest {
   const pinned = MODULE_CATALOG_PUBLIC_KEYS.some((k) => k.keyId === key.keyId);
+  if (pinned && options.allowUnpinnedKey === true) {
+    throw new Error(`pinned production key "${key.keyId}" may not sign in a proof run`);
+  }
   if (!pinned && options.allowUnpinnedKey !== true) {
     throw new Error(`signing key "${key.keyId}" is not pinned in the shipped keyring`);
   }

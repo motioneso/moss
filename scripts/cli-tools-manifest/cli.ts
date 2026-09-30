@@ -1,6 +1,7 @@
 // Entry points for the three workflow jobs. See .github/workflows/cli-tools-manifest.yml.
 //   prepare  code-free: choose versions, build and check lockfiles
 //   check    no secrets: run the candidate tools through the offline contract check
+//   digest   fingerprint the prepared bundle so the sign job can detect tampering
 //   sign     no package code: verify, assemble and sign the manifest
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -10,6 +11,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { resolveCatalogSigningKey } from "../../packages/module-registry/src/node.js";
+import { assertBundleDigest, bundleDigest } from "./bundle-digest.js";
 import { runContractCheck, type ToolsetCandidate } from "./contract-check.js";
 import { captureLaunchCommands } from "./launch-commands.js";
 import { isStableVersion, type CliToolsManifest } from "./manifest.js";
@@ -175,13 +177,18 @@ async function runCheck(): Promise<void> {
   await writeFile(path.join(dir, CHECK_RESULT), JSON.stringify(results, null, 2));
 }
 
+async function runDigest(): Promise<void> {
+  setOutput("digest", await bundleDigest(required("in")));
+}
+
 async function runSign(): Promise<void> {
   const dir = required("in");
+  await assertBundleDigest(dir, process.env.EXPECTED_BUNDLE_DIGEST);
   const previous = await loadPrevious(required("previous-dir"));
   const prepared = JSON.parse(
     await readFile(path.join(dir, PREPARE_RESULT), "utf8")
   ) as PrepareResult;
-  const checkRaw = await readOptional(path.join(dir, CHECK_RESULT));
+  const checkRaw = await readOptional(path.join(flag("check-dir") ?? dir, CHECK_RESULT));
   let checkPasses = new Map<string, boolean>();
   if (checkRaw !== null) {
     try {
@@ -214,12 +221,13 @@ async function runSign(): Promise<void> {
 const commands: Record<string, () => Promise<void>> = {
   prepare: runPrepare,
   check: runCheck,
+  digest: runDigest,
   sign: runSign
 };
 
 const command = commands[process.argv[2] ?? ""];
 if (command === undefined) {
-  console.error("usage: cli.ts <prepare|check|sign> [options]");
+  console.error("usage: cli.ts <prepare|check|digest|sign> [options]");
   process.exit(2);
 }
 command().catch((err) => {

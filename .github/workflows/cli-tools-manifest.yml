@@ -36,6 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      # Job outputs cannot be changed by a later job, so the sign job can tell whether the
+      # bundle it downloads is the one this job built.
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -60,6 +64,9 @@ jobs:
           INPUT_PACKAGE: ${{ inputs.package }}
           INPUT_VERSION: ${{ inputs.version }}
         run: pnpm tsx scripts/cli-tools-manifest/cli.ts prepare --out dist/cli-tools --previous-dir dist/previous
+      - name: Fingerprint the prepared bundle
+        id: digest
+        run: pnpm tsx scripts/cli-tools-manifest/cli.ts digest --in dist/cli-tools
       - uses: actions/upload-artifact@v4
         with:
           name: cli-tools-prepared
@@ -127,7 +134,7 @@ jobs:
         continue-on-error: true
         with:
           name: cli-tools-checked
-          path: dist/cli-tools
+          path: dist/check
       - name: Download the published release (absent on first publish)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,11 +148,12 @@ jobs:
         env:
           MOSS_MODULE_CATALOG_SIGNING_KEY_ID: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_KEY_ID }}
           MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY }}
+          EXPECTED_BUNDLE_DIGEST: ${{ needs.prepare.outputs.digest }}
         run: |
           # The throwaway proof key is not pinned in the shipped keyring. Only a branch run may use it.
           UNPINNED=""
           [ "$GITHUB_REF" = "refs/heads/main" ] || UNPINNED="--allow-unpinned-key"
-          pnpm tsx scripts/cli-tools-manifest/cli.ts sign --in dist/cli-tools --previous-dir dist/previous $UNPINNED
+          pnpm tsx scripts/cli-tools-manifest/cli.ts sign --in dist/cli-tools --check-dir dist/check --previous-dir dist/previous $UNPINNED
       - name: Ensure rolling release exists
         if: steps.sign.outputs.publish == 'true'
         env:

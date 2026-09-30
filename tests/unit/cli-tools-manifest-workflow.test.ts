@@ -98,4 +98,15 @@ describe("cli-tools-manifest workflow", () => {
     expect(source).toContain('TITLE="CLI tool update blocked: $PKG $VER"');
     expect(source).toContain('TITLE="CLI tools manifest publish is failing"');
   });
+
+  it("signs only the bundle the prepare job fingerprinted", () => {
+    expect(jobBody("prepare")).toMatch(
+      /outputs:\n {6}# .*\n(?: {6}#.*\n)* {6}digest: \$\{\{ steps\.digest\.outputs\.digest \}\}/
+    );
+    expect(jobBody("prepare")).toMatch(/cli\.ts digest --in dist\/cli-tools/);
+    const signStep = stepBody(jobBody("sign"), "Verify, assemble and sign the manifest");
+    expect(signStep).toContain("EXPECTED_BUNDLE_DIGEST: ${{ needs.prepare.outputs.digest }}");
+    // The check job's upload must never land inside the fingerprinted folder.
+    expect(jobBody("sign")).toMatch(/name: cli-tools-checked\n\s+path: dist\/check/);
+  });
 });

@@ -80,10 +80,20 @@ Open questions (owner in brackets):
    `actions/checkout` with `persist-credentials: false`, and no secrets in its environment. The
    `sign` job `needs: check`, reads only its pass/fail result per toolset, and never runs package code.
    It downloads the lockfiles and the check's result file as data only. The signing key appears in
-   the environment of the single signing step, nowhere else in the workflow.
-2. **Signing key lives in a GitHub environment** restricted to `main`, with Ben as required reviewer
-   for manual runs. The `sign` job names that environment. The exact setup steps go in the PR body;
-   this PR changes no repo settings.
+   the environment of the single signing step, nowhere else in the workflow. The `check` job can
+   still replace the prepared artifact in the same run, so `prepare` publishes a sha256 of the
+   prepared bundle as a job output and `sign` refuses any bundle that does not match it. The check
+   result is downloaded to a separate folder so it stays outside that fingerprint. The check job can
+   forge its own pass result; that is a known limit, since a malicious package can pass the
+   contract check anyway.
+2. **Signing key must live only as a secret of the `cli-tools-signing` environment** (restricted to
+   `main`, owner as required reviewer). The `sign` job names that environment on main and
+   `cli-tools-proof` elsewhere. A repository-wide secret of the same name is handed to every job of
+   every branch, so the environment gate protects the key only if no repository-wide copy exists.
+   Deleting that copy is a repo-settings step for Ben (`modules-registry.yml` reads it too, so it
+   needs its own environment first). Until then the code refuses to let a pinned production key
+   sign in a proof run, but a workflow edited on a branch could still read the repository secret.
+   The exact setup steps go in the PR body; this PR changes no repo settings.
 3. **No rollback by manual run.** Any `workflow_dispatch` naming a version older than the one already
    published for that package is refused before any work (compared by semver against the published
    manifest). Test: older version refused, equal version is a no-op, newer accepted. Scheduled runs

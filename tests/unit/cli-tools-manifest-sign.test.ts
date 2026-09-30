@@ -2,7 +2,10 @@ import { generateKeyPairSync } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { signCatalogBytes } from "../../packages/module-registry/src/node.js";
+import {
+  MODULE_CATALOG_PUBLIC_KEYS,
+  signCatalogBytes
+} from "../../packages/module-registry/src/node.js";
 import {
   assembleManifest,
   assertNotRollback,
@@ -93,6 +96,13 @@ describe("signing", () => {
 
   it("refuses a key that is not pinned in the shipped keyring", () => {
     expect(() => signManifest(first(), key)).toThrow(/not pinned/);
+  });
+
+  it("refuses to let the production key sign in a proof run", () => {
+    const pinnedId = MODULE_CATALOG_PUBLIC_KEYS[0]!.keyId;
+    expect(() =>
+      signManifest(first(), { keyId: pinnedId, privateKeyPem }, { allowUnpinnedKey: true })
+    ).toThrow(/may not sign in a proof run/);
   });
 
   it("fails verification when a single byte changes", () => {
