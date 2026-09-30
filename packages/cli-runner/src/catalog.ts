@@ -30,6 +30,8 @@ import type {
   RpcProviderKind
 } from "@moss/chat/live";
 
+import { TOOLS_VOLUME_ADAPTERS } from "./tools-volume-adapters.js";
+
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -392,3 +394,60 @@ export const PROVIDER_CATALOG: ProviderCatalog = loaded.catalog;
 
 /** Demotions recorded by the load-time pin validation (§A.1.4) — for the boot log/test. */
 export const CATALOG_VALIDATION_ISSUES: readonly CatalogValidationIssue[] = loaded.issues;
+
+// ---------------------------------------------------------------------------
+// #2689 slice 2 — chat adapter recipes
+// ---------------------------------------------------------------------------
+
+/** A chat adapter package installed onto the tools volume beside its provider's CLI. */
+export interface AdapterRecipe {
+  /** Install slot under `providers/` (distinct from the CLI's slot). */
+  readonly slot: string;
+  readonly pkg: string;
+  /** EXACT version, same rule as the CLI recipes. */
+  readonly version: string;
+  /** Committed full-tree sha512 lockfile; install runs `npm ci --ignore-scripts`. */
+  readonly lockfile: string;
+  /** File inside the installed package tree that the runner launches with node. */
+  readonly entry: string;
+}
+
+/**
+ * Adapter recipes by the CLI provider they serve. Versions match `packages/cli-runner/package.json`
+ * (the image copy, which stays as the fallback). Only exact, lockfile-backed entries survive
+ * validation; anything else is dropped and never installed.
+ */
+const RAW_ADAPTER_CATALOG: Partial<Record<RpcProviderKind, AdapterRecipe>> = {
+  anthropic: {
+    slot: TOOLS_VOLUME_ADAPTERS.anthropic.adapterSlot,
+    pkg: "@agentclientprotocol/claude-agent-acp",
+    version: "0.75.1",
+    lockfile: "packages/cli-runner/recipes/anthropic-adapter/npm-shrinkwrap.json",
+    entry: TOOLS_VOLUME_ADAPTERS.anthropic.adapterEntry
+  },
+  "openai-compatible": {
+    slot: TOOLS_VOLUME_ADAPTERS.openai.adapterSlot,
+    pkg: "@agentclientprotocol/codex-acp",
+    version: "1.10.0",
+    lockfile: "packages/cli-runner/recipes/openai-compatible-adapter/npm-shrinkwrap.json",
+    entry: TOOLS_VOLUME_ADAPTERS.openai.adapterEntry
+  }
+};
+
+/** Why an adapter recipe was dropped at load, or null when it is installable. */
+export function validateAdapterRecipe(r: AdapterRecipe): string | null {
+  if (!EXACT_SEMVER_RE.test(r.version)) return `adapter version "${r.version}" is not exact`;
+  if (hasPlaceholder(r.version, r.lockfile, r.pkg, r.entry))
+    return "adapter recipe has a placeholder";
+  return validateLockfileIntegrity(r.lockfile);
+}
+
+/** The validated adapter recipes; a failing entry is absent, so its provider keeps the image adapter. */
+export const ADAPTER_CATALOG: Readonly<Partial<Record<RpcProviderKind, AdapterRecipe>>> =
+  Object.freeze(
+    Object.fromEntries(
+      Object.entries(RAW_ADAPTER_CATALOG).filter(
+        ([, recipe]) => recipe && validateAdapterRecipe(recipe) === null
+      )
+    )
+  );

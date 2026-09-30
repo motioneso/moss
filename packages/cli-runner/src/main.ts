@@ -435,6 +435,7 @@ export function createCliRunner(
     singleUser: config.singleUser,
     perUserUid: config.perUserUid,
     allowSharedUid: config.allowSharedUid,
+    toolsPrefix: config.toolsPrefix,
     installService,
     loginService,
     resolveUserRuntime,
