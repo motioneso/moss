@@ -125,6 +125,20 @@ describe("sortEmailOnSortingModel", () => {
     ).toEqual({ kind: "general", reason: "failed" });
   });
 
+  it("gives up on a stalled sorting model within the budget and aborts the request", async () => {
+    let received: AbortSignal | undefined;
+    const stalled: EmailSortingAsk = (_state, _questions, signal) => {
+      received = signal;
+      return new Promise(() => undefined);
+    };
+    const outcome = await sortEmailOnSortingModel(
+      { parsed: email(), userSentLast: false, knownSender: false, now: NOW, timeoutMs: 20 },
+      stalled
+    );
+    expect(outcome).toEqual({ kind: "general", reason: "failed" });
+    expect(received?.aborted).toBe(true);
+  });
+
   it("reads no bound sorting model as not configured", async () => {
     expect(await sort(async () => ({ ok: false, error: "not_supported" }))).toEqual({
       kind: "general",

@@ -223,7 +223,8 @@ export function ownAddressSet(raw: readonly string[]): ReadonlySet<string> {
 /** Ask the sorting model the questions; the probability of yes per question id, or an error. */
 export type EmailSortingAsk = (
   state: Record<string, unknown>,
-  questions: typeof EMAIL_SORTING_QUESTIONS
+  questions: typeof EMAIL_SORTING_QUESTIONS,
+  signal?: AbortSignal
 ) => Promise<
   | { readonly ok: true; readonly probabilities: Readonly<Record<string, number>> }
   | { readonly ok: false; readonly error: string }

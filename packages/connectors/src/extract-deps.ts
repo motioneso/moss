@@ -68,10 +68,10 @@ function buildEmailSortingService(
       (await aiRepo.resolveSortingModel(scopedDb, EMAIL_SORTING_SERVICE, {
         acceptSystemOne: true
       })) !== null,
-    ask: (state, questions) =>
+    ask: (state, questions, signal) =>
       askSortingProbabilities(
         scopedDb,
-        { service: EMAIL_SORTING_SERVICE, state, questions },
+        { service: EMAIL_SORTING_SERVICE, state, questions, ...(signal ? { signal } : {}) },
         {
           repository: aiRepo,
           cipher: aiCipher,

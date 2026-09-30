@@ -1,7 +1,8 @@
-import type { DataContextDb } from "@moss/db";
+import { resolveMossEnv, type DataContextDb } from "@moss/db";
 import { signInCodeDecision } from "@moss/shared/email-otp-rule";
 
 import {
+  DEFAULT_EMAIL_LLM_TIMEOUT_MS,
   otpSkippedResult,
   sanitizeExtractResult,
   type EmailExtractResult,
@@ -53,10 +54,42 @@ export interface LiveEmailSortingInput {
   readonly userSentLast: boolean | "unknown";
   readonly knownSender: boolean;
   readonly now: Date;
+  /** Budget for the sorting model's answer; defaults to the email model call budget. */
+  readonly timeoutMs?: number;
 }
 
 /** Errors that mean no sorting model answers email sorting: none is bound, or it needs setup. */
 const NOT_CONFIGURED_ERRORS = new Set(["not_supported", "needs_config"]);
+
+function emailCallTimeoutMs(): number {
+  return Number(
+    resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+      String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+  );
+}
+
+/** Ask within the budget. On timeout the request is aborted and the answer reads as failed. */
+async function askWithin(
+  ask: EmailSortingAsk,
+  state: Record<string, unknown>,
+  ms: number
+): ReturnType<EmailSortingAsk> {
+  const controller = new AbortController();
+  const request = ask(state, EMAIL_SORTING_QUESTIONS, controller.signal);
+  request.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<{ readonly ok: false; readonly error: string }>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve({ ok: false, error: "timeout" });
+    }, ms);
+  });
+  try {
+    return await Promise.race([request, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Sort one message on the sorting model. Never throws: a thrown request reads as failed, so email
@@ -85,7 +118,7 @@ export async function sortEmailOnSortingModel(
     );
     let answer: Awaited<ReturnType<EmailSortingAsk>>;
     try {
-      answer = await ask(state, EMAIL_SORTING_QUESTIONS);
+      answer = await askWithin(ask, state, input.timeoutMs ?? emailCallTimeoutMs());
     } catch {
       return { kind: "general", reason: "failed" };
     }
@@ -257,8 +290,8 @@ export function sortingSession(
   let stopped = false;
   return {
     available: () => (stopped ? Promise.resolve(false) : (availability ??= service.available())),
-    ask: async (state, questions) => {
-      const answer = await service.ask(state, questions);
+    ask: async (state, questions, signal) => {
+      const answer = await service.ask(state, questions, signal);
       if (!answer.ok && NOT_CONFIGURED_ERRORS.has(answer.error)) stopped = true;
       return answer;
     }
