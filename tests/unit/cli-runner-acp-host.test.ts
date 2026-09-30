@@ -658,6 +658,32 @@ describe("AcpHost", () => {
     }
   });
 
+  it("runs the tools volume adapter when installed and the image copy once it is gone", () => {
+    const prefix = mkdtempSync(join(tmpdir(), "acp-2689-tools-"));
+    try {
+      expect(defaultResolveAdapterTarget("anthropic", prefix).args[0]).toContain(
+        join("node_modules", "@agentclientprotocol", "claude-agent-acp")
+      );
+      const release = join(prefix, "providers", "anthropic-adapter", "releases", "r1");
+      const entry = join(
+        release,
+        "node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js"
+      );
+      mkdirSync(join(entry, ".."), { recursive: true });
+      writeFileSync(entry, "//");
+      symlinkSync(
+        join("releases", "r1"),
+        join(prefix, "providers", "anthropic-adapter", "current")
+      );
+      expect(defaultResolveAdapterTarget("anthropic", prefix).args).toEqual([entry]);
+      expect(defaultResolveAdapterTarget("openai", prefix).args[0]).toContain("codex-acp");
+      rmSync(join(prefix, "providers", "anthropic-adapter"), { recursive: true, force: true });
+      expect(defaultResolveAdapterTarget("anthropic", prefix).args[0]).not.toContain(prefix);
+    } finally {
+      rmSync(prefix, { recursive: true, force: true });
+    }
+  });
+
   it("rejects multiline sends and reports exits", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
     try {
@@ -711,7 +737,8 @@ describe("task 5b launch follows the row", () => {
     neutralBase: string,
     homeBase: string,
     child: FakeChild,
-    runAgentHomePrepare: AgentHomePrepare = async (request) => fakeAgentHomePrepare(request)
+    runAgentHomePrepare: AgentHomePrepare = async (request) => fakeAgentHomePrepare(request),
+    toolsPrefix?: string
   ) {
     const seen: Array<{ command: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv }> =
       [];
@@ -720,6 +747,7 @@ describe("task 5b launch follows the row", () => {
       homeBase,
       perUserUid: true,
       allocateUidSlot: selfSlotWithRealFile,
+      toolsPrefix,
       resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
       spawnChild: (opts) => {
         seen.push({ command: opts.command, args: opts.args, cwd: opts.cwd, env: opts.env });
@@ -730,6 +758,44 @@ describe("task 5b launch follows the row", () => {
     });
     return { host, seen };
   }
+
+  it("points each adapter at the tools volume CLI by its release path, and only when one is installed", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-2689-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-2689-home-"));
+    const prefix = mkdtempSync(join(tmpdir(), "acp-2689-tools-"));
+    try {
+      const install = (slot: string, binary: string): string => {
+        const release = join(prefix, "providers", slot, "releases", "r1");
+        mkdirSync(join(release, "node_modules", ".bin"), { recursive: true });
+        writeFileSync(join(release, "node_modules", ".bin", binary), "#!/bin/sh\n", {
+          mode: 0o755
+        });
+        symlinkSync(join("releases", "r1"), join(prefix, "providers", slot, "current"));
+        return join(release, "node_modules", ".bin", binary);
+      };
+      const child = new FakeChild();
+      const { host, seen } = makeUserHost(dir, home, child, undefined, prefix);
+      await host.spawn("chat:user-1:a", "proj", "anthropic", "user-1", "workshop");
+      await host.spawn("chat:user-1:b", "proj", "openai", "user-1", "workshop");
+      expect(seen[0]?.env.CLAUDE_CODE_EXECUTABLE).toBeUndefined();
+      expect(seen[1]?.env.CODEX_PATH).toBeUndefined();
+
+      const claude = install("anthropic", "claude");
+      const codex = install("openai-compatible", "codex");
+      await host.spawn("chat:user-1:c", "proj", "anthropic", "user-1", "workshop");
+      await host.spawn("chat:user-1:d", "proj", "openai", "user-1", "workshop");
+      await host.spawn("chat:user-1:e", "proj", "opencode", "user-1", "workshop");
+      expect(seen[2]?.env.CLAUDE_CODE_EXECUTABLE).toBe(claude);
+      expect(seen[2]?.env.CODEX_PATH).toBeUndefined();
+      expect(seen[3]?.env.CODEX_PATH).toBe(codex);
+      expect(seen[4]?.env.CLAUDE_CODE_EXECUTABLE).toBeUndefined();
+      expect(seen[4]?.env.CODEX_PATH).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+      rmSync(prefix, { recursive: true, force: true });
+    }
+  });
 
   it("allocates one slot per person across conversations", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));

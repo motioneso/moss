@@ -126,7 +126,8 @@ export class CliChatEngineHost {
       neutralBase: deps.neutralBase,
       homeBase: deps.homeBase,
       perUserUid: deps.perUserUid,
-      allowSharedUid: deps.allowSharedUid
+      allowSharedUid: deps.allowSharedUid,
+      toolsPrefix: deps.toolsPrefix
     });
   }
 

@@ -42,6 +42,8 @@ export interface EngineHostDeps {
   readonly perUserUid?: boolean;
   /** Development-only shared-account mode for chat agents; see `AcpHostDeps.allowSharedUid`. */
   readonly allowSharedUid?: boolean;
+  /** Tools volume prefix, so chat adapters and CLIs installed there are preferred (#2689). */
+  readonly toolsPrefix?: string;
   /**
    * Builds the owner-switched io for one per-user slot. Defaults to the sanitized setpriv io;
    * tests inject a fake because a non-root process cannot switch owner.
