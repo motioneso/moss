@@ -37,8 +37,13 @@
 #       no PID lands within the launch bound the start fails loudly (exit 4)
 #       and marks the log, so status/wait report DEAD with the reason — a
 #       failed launch never reads as RUNNING. The log records the tested
-#       commit (### COMMIT) and dirty-tree state (### DIRTY), repeated by
-#       status/wait.
+#       commit (### COMMIT), dirty-tree state (### DIRTY), an input
+#       fingerprint over commit plus status plus file contents
+#       (### FINGERPRINT, so same-files-dirty with different bytes hashes
+#       differently), toolchain versions (### TOOLCHAIN) and the
+#       database-server version (### POSTGRES) — repeated in short form by
+#       status/wait. Full reuse rule in the verify-gate skill: changed or
+#       unknown inputs invalidate reuse.
 #
 #   scripts/run-gate.sh status [--log <path>]
 #       One-shot verdict. Reads the sentinel, the launch-failure marker, and
@@ -235,6 +240,58 @@ cmd_start() {
     fi
   fi
 
+  # Input fingerprint (#2462). sha256 over the tested commit, the full
+  # NUL-separated status (tracked and untracked, ignored excluded), and
+  # the content hash of every listed file that still exists in the tree.
+  # Two runs with the same files dirty but different bytes hash
+  # differently, so changed inputs always invalidate reuse. Only digests
+  # enter the log, never file bytes. Any failure records as unknown and
+  # never blocks a start.
+  local gate_fingerprint fp_status fp_files fp_content
+  gate_fingerprint="unknown (status failed)"
+  fp_status=""; fp_files=""; fp_content=""
+  if fp_status="$(mktemp "$STATE_DIR/fp-status.XXXXXX" 2>/dev/null)" &&
+    fp_files="$(mktemp "$STATE_DIR/fp-files.XXXXXX" 2>/dev/null)" &&
+    fp_content="$(mktemp "$STATE_DIR/fp-content.XXXXXX" 2>/dev/null)" &&
+    git --no-optional-locks -C "$root" status --porcelain=v1 -uall -z >"$fp_status" 2>/dev/null; then
+    gate_fingerprint="unknown (hash failed)"
+    if {
+      while IFS= read -r -d '' rec; do
+        for cand in "$rec" "${rec:3}"; do
+          if [ -n "$cand" ] && [ -f "$root/$cand" ]; then
+            printf '%s\0' "$root/$cand"
+            break
+          fi
+        done
+      done <"$fp_status" >"$fp_files"
+    } 2>/dev/null && <"$fp_files" xargs -0 -r sha256sum >"$fp_content" 2>/dev/null; then
+      local fp_hex
+      fp_hex="$(
+        {
+          printf 'commit %s\0' "$gate_commit"
+          cat "$fp_status"
+          printf '\0'
+          cat "$fp_content"
+        } | sha256sum | awk '{print $1}'
+      )"
+      if [ "${#fp_hex}" -eq 64 ]; then
+        gate_fingerprint="sha256:$fp_hex"
+      fi
+    fi
+  fi
+  rm -f "$fp_status" "$fp_files" "$fp_content" 2>/dev/null || true
+
+  # Toolchain and database-server identity (#2462). Compared on reuse:
+  # a different node, pnpm, or Postgres can change results without any
+  # code diff. Unknown probes never block a start.
+  local gate_node gate_pnpm gate_postgres
+  gate_node="$(node --version 2>/dev/null || echo unknown)"
+  gate_pnpm="$(pnpm --version 2>/dev/null || echo unknown)"
+  gate_postgres="$(docker exec "$CONTAINER" psql -U postgres -tAc 'SHOW server_version;' 2>/dev/null | tr -d '[:space:]' || echo unknown)"
+  [ -n "$gate_node" ] || gate_node="unknown (probe failed)"
+  [ -n "$gate_pnpm" ] || gate_pnpm="unknown (probe failed)"
+  [ -n "$gate_postgres" ] || gate_postgres="unknown (probe failed)"
+
   # Refuse to point at production under any circumstance. The prod database
   # (container moss-postgres, compose project jarv1s-prod) sits beside the dev
   # one on this box. Check the compose project too, so a renamed prod container
@@ -280,6 +337,9 @@ cmd_start() {
         echo "### + ... and $((gate_dirty_total - 50)) more"
       fi
     fi
+    echo "### FINGERPRINT $gate_fingerprint"
+    echo "### TOOLCHAIN node $gate_node pnpm $gate_pnpm"
+    echo "### POSTGRES $gate_postgres"
     echo "### DB     $gatedb (container $CONTAINER)"
     echo "### START  $(date -Is)"
     echo
@@ -412,16 +472,25 @@ cmd___run() {
 # status / wait
 # ---------------------------------------------------------------------------
 
-# One-line receipt for status output (#2462): which commit was tested and
-# whether the tree was dirty. Logs written before commit recording have
-# neither line and report as unknown.
+# One-line receipt for status output (#2462): which commit was tested,
+# whether the tree was dirty, the input fingerprint, and the toolchain.
+# Logs written before each recording report that field as unknown. The
+# full reuse rule lives in the verify-gate skill: changed or unknown
+# inputs invalidate reuse.
 receipt_summary() {
-  local log="$1" commit dirty
+  local log="$1" commit dirty fp fp_short tool
   commit="$(grep -m 1 '^### COMMIT ' "$log" | awk '{print $3}' || true)"
   dirty="$(grep -m 1 '^### DIRTY ' "$log" | sed 's/^### DIRTY  //' || true)"
+  fp="$(grep -m 1 '^### FINGERPRINT ' "$log" | awk '{print $3}' || true)"
+  tool="$(grep -m 1 '^### TOOLCHAIN ' "$log" | sed 's/^### TOOLCHAIN //' || true)"
   [ -n "$commit" ] || commit="unknown (predates commit recording)"
   [ -n "$dirty" ] || dirty="unknown (predates commit recording)"
-  echo "commit $commit, tree $dirty"
+  case "$fp" in
+    sha256:*) fp_short="$(printf '%s' "$fp" | sed 's/^sha256://' | cut -c1-12)" ;;
+    *) fp_short="unknown" ;;
+  esac
+  [ -n "$tool" ] || tool="unknown (predates toolchain recording)"
+  echo "commit $commit, tree $dirty, inputs $fp_short, tool $tool"
 }
 
 # Prints a human line; returns one of the shared exit codes.
