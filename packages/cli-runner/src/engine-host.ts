@@ -119,9 +119,8 @@ export class CliChatEngineHost {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
     // Slice 1 task 3 — the ACP adapter host rides the same identity config (uid slot
-    // when enabled, shared home base, per-session dirs). It is deliberately OUTSIDE
-    // the chat admission gate below: agent sessions are a separate surface
-    // and must never contend with the single-active-user chat lock.
+    // when enabled, shared home base, per-session dirs). Deliberately OUTSIDE the chat
+    // admission gate below: agent sessions never contend with the single-active-user lock.
     this.acp = new AcpHost({
       neutralBase: deps.neutralBase,
       homeBase: deps.homeBase,

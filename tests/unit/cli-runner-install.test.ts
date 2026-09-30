@@ -17,6 +17,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 import type { TmuxIo } from "../../packages/ai/src/index.js";
 import type * as FsPromises from "node:fs/promises";
+import type * as Catalog from "../../packages/cli-runner/src/catalog.js";
 import {
   InstallService,
   InstallBadRequestError,
@@ -26,9 +27,13 @@ import { sourceSelfUpdateDisableEnv } from "../../packages/cli-runner/src/main.j
 import { buildSanitizedCliEnv } from "../../packages/cli-runner/src/sanitized-env.js";
 import { PROVIDER_CATALOG } from "../../packages/cli-runner/src/catalog.js";
 import { createSanitizedTmuxIo } from "../../packages/cli-runner/src/runner-io.js";
-import { resolveDefaultToolsPrefix } from "../../packages/cli-runner/src/tools-prefix.js";
 import type { RpcProviderKind } from "../../packages/chat/src/live/rpc-contract.js";
 
+// Adapter installs are covered in cli-runner-adapter-install.test.ts; this fake io only builds CLIs.
+vi.mock("../../packages/cli-runner/src/catalog.js", async (orig) => ({
+  ...(await orig<typeof Catalog>()),
+  ADAPTER_CATALOG: {}
+}));
 const chmodFailure = vi.hoisted(() => ({ enabled: false }));
 vi.mock("node:fs/promises", async () => {
   const actual = await vi.importActual<typeof FsPromises>("node:fs/promises");
@@ -209,13 +214,7 @@ describe("InstallService — catalog gate (§A.2.3)", () => {
 
   it("accepts google against the REAL catalog now that #2026 pinned its recipe", async () => {
     const { io } = makeFakeIo({ installedVersion: GEMINI_PINNED, provider: "google" });
-    const svc = new InstallService({
-      io,
-      catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
-      toolsPrefix,
-      homeBase
-    });
+    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, toolsPrefix, homeBase });
     const result = await svc.installProvider("google" as RpcProviderKind);
     expect(result.state).toBe("installed");
   });
@@ -227,7 +226,6 @@ describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -255,7 +253,6 @@ describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -280,7 +277,6 @@ describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -298,7 +294,6 @@ describe("InstallService — npm install happy path (§A.3.3/§A.3.4/§A.3.5)", 
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -336,7 +331,6 @@ describe("InstallService — §A.1.3 explicit native-binary placement (stub wrap
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -377,14 +371,7 @@ describe("InstallService — §A.1.3 explicit native-binary placement (stub wrap
     // produceBinary keeps the wrapper a plain runnable; stubWrapper omitted ⇒ --version passes
     // straight from npm ci with no placement.
     const { io } = makeFakeIo({ installedVersion: PINNED });
-    const svc = new InstallService({
-      io,
-      catalog,
-      adapterCatalog: {},
-      toolsPrefix,
-      homeBase,
-      hostArch: "x64"
-    });
+    const svc = new InstallService({ io, catalog, toolsPrefix, homeBase, hostArch: "x64" });
 
     const result = await svc.installProvider("anthropic");
     expect(result.state).toBe("installed");
@@ -413,7 +400,6 @@ describe("InstallService — verify-before-promote + rollback (§A.3.4/§A.3.5)"
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -430,13 +416,7 @@ describe("InstallService — verify-before-promote + rollback (§A.3.4/§A.3.5)"
 
   it("a failed `npm ci` is a terminal error, not a promote", async () => {
     const { io } = makeFakeIo({ installedVersion: PINNED, ciFails: true });
-    const svc = new InstallService({
-      io,
-      catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
-      toolsPrefix,
-      homeBase
-    });
+    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, toolsPrefix, homeBase });
     const result = await svc.installProvider("anthropic");
     expect(result.state).toBe("error");
     await expect(stat(path.join(toolsPrefix, "bin", "claude"))).rejects.toBeTruthy();
@@ -447,7 +427,6 @@ describe("InstallService — verify-before-promote + rollback (§A.3.4/§A.3.5)"
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "riscv64"
@@ -476,7 +455,6 @@ describe("InstallService — serialize per provider (§A.3.1)", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -499,7 +477,6 @@ describe("InstallService — idempotent re-install (§A.3.6)", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -534,7 +511,6 @@ describe("InstallService — boot-time reconcile of installed providers (#1081 H
     const svc1 = new InstallService({
       io: stage1.io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -580,7 +556,6 @@ describe("InstallService — boot-time reconcile of installed providers (#1081 H
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -601,7 +576,6 @@ describe("InstallService — boot-time reconcile of installed providers (#1081 H
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -627,13 +601,7 @@ describe("InstallService — startup sweep (§A.3.2)", () => {
     await symlink(path.join("releases", "keep"), path.join(providerDir, "current"));
 
     const { io } = makeFakeIo({ installedVersion: PINNED });
-    const svc = new InstallService({
-      io,
-      catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
-      toolsPrefix,
-      homeBase
-    });
+    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, toolsPrefix, homeBase });
     await svc.startupSweep();
 
     await expect(stat(path.join(toolsPrefix, ".staging"))).rejects.toBeTruthy();
@@ -649,7 +617,6 @@ describe("InstallService — shared release permissions", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -669,7 +636,6 @@ describe("InstallService — shared release permissions", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -693,7 +659,6 @@ describe("InstallService — shared release permissions", () => {
     const svc1 = new InstallService({
       io: first.io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -708,7 +673,6 @@ describe("InstallService — shared release permissions", () => {
     const svc2 = new InstallService({
       io: second.io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -727,7 +691,6 @@ describe("InstallService — shared release permissions", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -752,7 +715,6 @@ describe("InstallService — shared release permissions", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -774,7 +736,6 @@ describe("InstallService — shared release permissions", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64"
@@ -893,7 +854,6 @@ describe("InstallService — sanitized installer env (§A.3.3)", () => {
     const svc = new InstallService({
       io,
       catalog: PROVIDER_CATALOG,
-      adapterCatalog: {},
       toolsPrefix,
       homeBase,
       hostArch: "x64",
@@ -971,7 +931,6 @@ describe("InstallService — GUARDED-LIVE real npm ci + §A.1.3 placement (netwo
       const svc = new InstallService({
         io,
         catalog: PROVIDER_CATALOG,
-        adapterCatalog: {},
         toolsPrefix,
         homeBase,
         env,
@@ -1015,7 +974,6 @@ describe("InstallService — GUARDED-LIVE real npm ci + §A.1.3 placement (netwo
       const svc = new InstallService({
         io,
         catalog: PROVIDER_CATALOG,
-        adapterCatalog: {},
         toolsPrefix,
         homeBase,
         env,
@@ -1033,15 +991,4 @@ describe("InstallService — GUARDED-LIVE real npm ci + §A.1.3 placement (netwo
     },
     600_000
   );
-});
-
-describe("InstallService — default toolsPrefix (#2340)", () => {
-  it("falls back to resolveDefaultToolsPrefix() when no override is given", () => {
-    const { io } = makeFakeIo({ installedVersion: PINNED });
-    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, adapterCatalog: {}, homeBase });
-
-    expect((svc as unknown as { toolsPrefix: string }).toolsPrefix).toBe(
-      resolveDefaultToolsPrefix()
-    );
-  });
 });

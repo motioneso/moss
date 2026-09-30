@@ -26,6 +26,7 @@ import {
   type AdapterRecipe
 } from "../../packages/cli-runner/src/catalog.js";
 import { InstallService } from "../../packages/cli-runner/src/install-service.js";
+import { resolveDefaultToolsPrefix } from "../../packages/cli-runner/src/tools-prefix.js";
 
 const CLI_PKG = "@anthropic-ai/claude-code";
 const ADAPTER_PKG = "@agentclientprotocol/claude-agent-acp";
@@ -235,5 +236,14 @@ describe("installing a provider also installs its chat adapter", () => {
     await service(makeIo().io).startupSweep();
     await expect(lstat(orphan)).rejects.toThrow();
     expect((await stat(await adapterRelease())).isDirectory()).toBe(true);
+  });
+});
+
+describe("default toolsPrefix (#2340)", () => {
+  it("falls back to resolveDefaultToolsPrefix() when no override is given", () => {
+    const svc = new InstallService({ io: makeIo().io, catalog: PROVIDER_CATALOG, homeBase });
+    expect((svc as unknown as { toolsPrefix: string }).toolsPrefix).toBe(
+      resolveDefaultToolsPrefix()
+    );
   });
 });

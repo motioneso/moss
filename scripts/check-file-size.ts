@@ -17,7 +17,11 @@ const ignoredDirectories = new Set([
   "playwright-report",
   "test-results"
 ]);
-const ignoredFiles = new Set(["pnpm-lock.yaml"]);
+// Generated lockfiles are not hand-maintained source.
+const ignoredFiles = new Set([
+  "pnpm-lock.yaml",
+  "packages/cli-runner/recipes/anthropic-adapter/npm-shrinkwrap.json"
+]);
 const exemptFiles = new Set<string>([
   "packages/ai/src/repository.ts",
   "packages/ai/src/routes.ts",
