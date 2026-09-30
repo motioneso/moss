@@ -21,7 +21,11 @@ import {
   type EmailExtractRetryableReason,
   type ParsedEmail
 } from "./email-extract.js";
-import { GoogleEmailReadProvider, GMAIL_READ_FOLDER } from "./email-read-provider.js";
+import {
+  GoogleEmailReadProvider,
+  GMAIL_READ_FOLDER,
+  type MailMessageKey
+} from "./email-read-provider.js";
 import { ownAddressSet } from "./email-sorting.js";
 import { runSortingModelPass, threadUserSentLast } from "./email-sorting-live.js";
 import { projectEmailActions } from "./monitor-jobs.js";
@@ -107,7 +111,23 @@ interface PhaseContext {
   readonly logger: SyncLogger;
   readonly progress: PhaseProgress;
   readonly cursor: string | undefined;
+  /** Backlog walk state carried from the previous chunk (#2804). */
+  readonly historyMode?: "history" | "full";
+  readonly historyAnchor?: string;
 }
+
+/** What one email chunk hands back to the sync loop. */
+export interface EmailPhaseResult {
+  readonly nextCursor: string | undefined;
+  readonly retry: boolean;
+  /** The cursor this chunk listed from. A retry resumes here, which a fallback resets. */
+  readonly listedCursor: string | undefined;
+  readonly historyMode?: "history" | "full";
+  readonly historyAnchor?: string;
+}
+
+/** The oldest mail the backlog walk keeps, matching EMAIL_QUERY's newer_than:30d. */
+const EMAIL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 let savepointCounter = 0;
 
@@ -335,7 +355,12 @@ export interface SavedEmailMarker {
   readonly awaitingJudgement?: boolean;
   /** How many times analysis already failed for this revision. */
   readonly analysisAttempts: number;
+  /** When the thread judgement was last requested for this revision, or null. */
+  readonly judgementRequestedAt?: Date | null;
 }
+
+/** An unchanged hand-off is asked about again only after this long, so a lost request heals. */
+export const REJUDGEMENT_RETRY_MS = 6 * 60 * 60 * 1000;
 
 export interface SortFetchedEmailsInput {
   readonly parsedMessages: readonly ParsedEmail[];
@@ -343,6 +368,8 @@ export interface SortFetchedEmailsInput {
   readonly persistEmail: (parsed: ParsedEmail, extracted: EmailExtractResult) => Promise<unknown>;
   readonly progress: Pick<PhaseProgress, "emailUpserted" | "emailFailures" | "errors">;
   readonly onFailure: (error: unknown) => void;
+  /** The clock for the judgement retry window. Defaults to the current time. */
+  readonly now?: Date;
 }
 
 /**
@@ -356,8 +383,9 @@ export interface SortFetchedEmailsInput {
  * empty analysis and queued for the model in the order it was fetched.
  *
  * An unchanged hand-off returns its thread in rejudgeThreadRefs, once per thread, so the sync
- * asks for the judgement again. The judgement skips a thread it already judged, so a repeat
- * request is cheap, and a hand-off whose first request was lost still gets judged. A message
+ * asks for the judgement again, but only when it was never requested or the last request is
+ * older than REJUDGEMENT_RETRY_MS. That keeps a lost request healing without a queued job and
+ * a thread read on every run. rejudgeKeys maps each returned thread to the messages to stamp. A message
  * whose analysis already failed MAX_ANALYSIS_ATTEMPTS times returns in gaveUpKeys and is
  * never written or queued again for this revision.
  */
@@ -366,8 +394,11 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   readonly unchangedKeys: string[];
   readonly otpKeys: string[];
   readonly rejudgeThreadRefs: string[];
+  readonly rejudgeKeys: ReadonlyMap<string, string[]>;
   readonly gaveUpKeys: string[];
 }> {
+  const nowMs = (input.now ?? new Date()).getTime();
+  const rejudgeKeys = new Map<string, string[]>();
   const pending: ParsedEmail[] = [];
   const rejudgeThreadRefs = new Set<string>();
   const unchangedKeys: string[] = [];
@@ -405,7 +436,15 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
     }
     if (unchanged) {
       unchangedKeys.push(parsed.externalId);
-      if (prior?.awaitingJudgement) rejudgeThreadRefs.add(parsed.threadId ?? parsed.externalId);
+      const askedAt = prior?.judgementRequestedAt?.getTime();
+      if (
+        prior?.awaitingJudgement &&
+        (askedAt === undefined || nowMs - askedAt > REJUDGEMENT_RETRY_MS)
+      ) {
+        const threadRef = parsed.threadId ?? parsed.externalId;
+        rejudgeThreadRefs.add(threadRef);
+        rejudgeKeys.set(threadRef, [...(rejudgeKeys.get(threadRef) ?? []), parsed.externalId]);
+      }
       continue;
     }
     try {
@@ -421,7 +460,14 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
       right.receivedAt.localeCompare(left.receivedAt) ||
       left.externalId.localeCompare(right.externalId)
   );
-  return { pending, unchangedKeys, otpKeys, rejudgeThreadRefs: [...rejudgeThreadRefs], gaveUpKeys };
+  return {
+    pending,
+    unchangedKeys,
+    otpKeys,
+    rejudgeThreadRefs: [...rejudgeThreadRefs],
+    rejudgeKeys,
+    gaveUpKeys
+  };
 }
 
 export interface EmailBatchExtractOptionsInput {
@@ -505,16 +551,23 @@ export async function persistExtractedBatch(input: PersistExtractedBatchInput): 
   return projectedKeys;
 }
 
-/** Asks again for each unchanged hand-off's thread judgement. A failed request is only logged. */
+/** Asks again for each unchanged hand-off's thread judgement and stamps the request. A failure is only logged. */
 async function requestRejudgements(
   context: PhaseContext,
-  threadRefs: readonly string[]
+  threadRefs: readonly string[],
+  keysByThread: ReadonlyMap<string, readonly string[]>
 ): Promise<void> {
   const { threadJudgementRequester, actorUserId } = context.deps;
   if (!threadJudgementRequester || !actorUserId) return;
   for (const threadRef of threadRefs) {
     try {
       await threadJudgementRequester.requestThreadJudgement(actorUserId, threadRef);
+      await context.emailRepo.markJudgementRequested(
+        context.scopedDb,
+        context.account.id,
+        keysByThread.get(threadRef) ?? [],
+        context.now()
+      );
     } catch (error) {
       context.logger.warn(
         { stage: "email-judgement-request", ...googleFailureFields(error) },
@@ -591,8 +644,18 @@ async function sortOnSortingModelFirst(
 export async function runGoogleEmailPhase(
   context: PhaseContext,
   phase: "email-current-day" | "email"
-): Promise<{ readonly nextCursor: string | undefined; readonly retry: boolean }> {
+): Promise<EmailPhaseResult> {
   let nextCursor: string | undefined;
+  let listedCursor = context.cursor;
+  let walkMode = context.historyMode;
+  let walkAnchor = context.historyAnchor;
+  const outcome = (next: string | undefined, retry: boolean): EmailPhaseResult => ({
+    nextCursor: next,
+    retry,
+    listedCursor,
+    ...(walkMode ? { historyMode: walkMode } : {}),
+    ...(walkAnchor ? { historyAnchor: walkAnchor } : {})
+  });
   // Which messages are inside the extraction call right now. The deferral is caught outside
   // the batch loop, so without this the run knows a message was deferred but not which one.
   let inFlightKeys: readonly string[] = [];
@@ -667,15 +730,76 @@ export async function runGoogleEmailPhase(
   };
   try {
     const provider = new GoogleEmailReadProvider(context.deps.googleClient, query);
-    const page = await withTokenRetry(
-      context.scopedDb,
-      context.deps,
-      context.tokenHolder,
-      (token) =>
-        provider.listMessageKeyPage(token, GMAIL_READ_FOLDER, {
-          cursor: context.cursor,
-          limit: pageLimit
-        })
+    const client = context.deps.googleClient;
+    let page: { keys: MailMessageKey[]; nextCursor?: string } | undefined;
+    if (phase === "email" && client.getProfileHistoryId && client.listHistoryPage) {
+      const listHistoryPage = client.listHistoryPage.bind(client);
+      const getProfileHistoryId = client.getProfileHistoryId.bind(client);
+      // A continuation queued before the walk state existed has a cursor and no mode: it is a
+      // plain listing with no position to save.
+      if (!walkMode) {
+        if (context.cursor) walkMode = "full";
+        else {
+          const stored = await context.connectorsRepo.getEmailHistoryId(
+            context.scopedDb,
+            context.account.id
+          );
+          try {
+            walkAnchor = await withTokenRetry(
+              context.scopedDb,
+              context.deps,
+              context.tokenHolder,
+              (token) => getProfileHistoryId({ accessToken: token })
+            );
+          } catch (error) {
+            context.logger.warn(
+              { stage: "email-history", ...googleFailureFields(error) },
+              "google-sync mailbox position read failed; listing the whole window"
+            );
+          }
+          walkMode = stored && walkAnchor ? "history" : "full";
+        }
+      }
+      if (walkMode === "history") {
+        const stored = await context.connectorsRepo.getEmailHistoryId(
+          context.scopedDb,
+          context.account.id
+        );
+        try {
+          if (!stored) throw new Error("no saved mailbox position");
+          const changed = await withTokenRetry(
+            context.scopedDb,
+            context.deps,
+            context.tokenHolder,
+            (token) =>
+              listHistoryPage({
+                accessToken: token,
+                startHistoryId: stored,
+                pageToken: listedCursor,
+                maxResults: pageLimit
+              })
+          );
+          page = {
+            keys: changed.messageIds.map((id) => ({ folder: GMAIL_READ_FOLDER, id })),
+            nextCursor: changed.nextPageToken
+          };
+        } catch (error) {
+          // Any history failure (an expired position answers 404) falls back to listing the
+          // whole window from its first page; the walk then saves a fresh position.
+          context.logger.warn(
+            { stage: "email-history", ...googleFailureFields(error) },
+            "google-sync change history failed; listing the whole window"
+          );
+          walkMode = "full";
+          listedCursor = undefined;
+        }
+      }
+    }
+    page ??= await withTokenRetry(context.scopedDb, context.deps, context.tokenHolder, (token) =>
+      provider.listMessageKeyPage(token, GMAIL_READ_FOLDER, {
+        cursor: listedCursor,
+        limit: pageLimit
+      })
     );
     nextCursor = page.nextCursor;
     const existing = await context.emailRepo.listSyncMarkers(context.scopedDb, context.account.id);
@@ -683,7 +807,7 @@ export async function runGoogleEmailPhase(
     const parsedMessages: ParsedEmail[] = [];
     for (let start = 0; start < page.keys.length; start += GOOGLE_EMAIL_FETCH_CONCURRENCY) {
       // Same phase and cursor: the next chunk re-lists this page and skips what is done.
-      if (timeBudgetSpent()) return { nextCursor: undefined, retry: true };
+      if (timeBudgetSpent()) return outcome(undefined, true);
       const keys = page.keys.slice(start, start + GOOGLE_EMAIL_FETCH_CONCURRENCY);
       const fetched = await Promise.allSettled(
         keys.map((key) =>
@@ -693,8 +817,19 @@ export async function runGoogleEmailPhase(
         )
       );
       for (const result of fetched) {
-        if (result.status === "fulfilled") parsedMessages.push(result.value);
-        else {
+        if (result.status === "fulfilled") {
+          // Change history can name mail older than the window; leave that alone.
+          if (
+            walkMode === "history" &&
+            Date.parse(result.value.receivedAt) < context.now().getTime() - EMAIL_WINDOW_MS
+          ) {
+            continue;
+          }
+          parsedMessages.push(result.value);
+        } else if (walkMode === "history" && isNotFound(result.reason)) {
+          // Changed and then deleted before it was fetched: nothing to keep.
+          continue;
+        } else {
           context.progress.emailFailures += 1;
           if (!context.progress.errors.includes("email-message-error")) {
             context.progress.errors.push("email-message-error");
@@ -715,13 +850,15 @@ export async function runGoogleEmailPhase(
         "google-sync email message failed"
       );
     };
-    const { pending, unchangedKeys, otpKeys, rejudgeThreadRefs } = await sortFetchedEmails({
-      parsedMessages,
-      seen,
-      persistEmail,
-      progress: context.progress,
-      onFailure: recordMessageFailure
-    });
+    const { pending, unchangedKeys, otpKeys, rejudgeThreadRefs, rejudgeKeys } =
+      await sortFetchedEmails({
+        parsedMessages,
+        seen,
+        now: context.now(),
+        persistEmail,
+        progress: context.progress,
+        onFailure: recordMessageFailure
+      });
     const knownSenders =
       context.deps.knownSenderAddresses && context.deps.actorUserId
         ? await context.deps.knownSenderAddresses(context.scopedDb, context.deps.actorUserId)
@@ -741,7 +878,7 @@ export async function runGoogleEmailPhase(
     const batches = general.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
       // Same phase and cursor: the next chunk re-lists this page and skips what is done.
-      if (timeBudgetSpent()) return { nextCursor: undefined, retry: true };
+      if (timeBudgetSpent()) return outcome(undefined, true);
       let batchResults: EmailExtractResult[];
       inFlightKeys = batch.map((message) => message.externalId);
       try {
@@ -799,7 +936,7 @@ export async function runGoogleEmailPhase(
     }
     await projectKeys(unchangedKeys);
     await projectKeys(otpKeys);
-    await requestRejudgements(context, rejudgeThreadRefs);
+    await requestRejudgements(context, rejudgeThreadRefs, rejudgeKeys);
   } catch (error) {
     if (error instanceof EmailExtractRetryableError) {
       if (!extractionScope) throw error;
@@ -837,7 +974,7 @@ export async function runGoogleEmailPhase(
         { stage: "email-extraction", name: error.name, reason: error.reason },
         "google-sync email unit deferred for retry"
       );
-      return { nextCursor, retry: true };
+      return outcome(nextCursor, true);
     }
     const errorLabel =
       error instanceof EmailExtractNeedsConfigurationError ? "email-needs-config" : "email-error";
@@ -855,7 +992,11 @@ export async function runGoogleEmailPhase(
     }
     if (!context.progress.errors.includes(errorLabel)) context.progress.errors.push(errorLabel);
   }
-  return { nextCursor, retry: false };
+  return outcome(nextCursor, false);
+}
+
+function isNotFound(error: unknown): boolean {
+  return (error as { statusCode?: number } | null)?.statusCode === 404;
 }
 
 /** Map the extraction layer's retry reason onto the fixed code the shared wording uses. */

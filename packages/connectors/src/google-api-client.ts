@@ -142,6 +142,12 @@ export interface GmailMessagePage {
   readonly nextPageToken?: string;
 }
 
+/** One page of Gmail change history: the ids of messages added or relabelled since a position. */
+export interface GmailHistoryPage {
+  readonly messageIds: string[];
+  readonly nextPageToken?: string;
+}
+
 export interface GmailMessageFull {
   readonly id: string;
   readonly threadId?: string;
@@ -250,6 +256,56 @@ export class GoogleApiClient {
       nextPageToken?: string;
     }>(url.toString(), input.accessToken, "gmail", "gmail.messages.list");
     return { messages: json.messages ?? [], nextPageToken: json.nextPageToken };
+  }
+
+  /** The mailbox's current history position (Gmail users.getProfile), a bare position string. */
+  async getProfileHistoryId(input: { accessToken: string }): Promise<string> {
+    const json = await this.getJson<{ historyId?: string }>(
+      `${GMAIL_BASE}/users/me/profile`,
+      input.accessToken,
+      "gmail",
+      "gmail.profile.get"
+    );
+    if (!json.historyId) throw new Error("gmail profile had no history position");
+    return json.historyId;
+  }
+
+  /** Messages added or relabelled since startHistoryId. Gmail answers 404 once the position is too old. */
+  async listHistoryPage(input: {
+    accessToken: string;
+    startHistoryId: string;
+    pageToken?: string;
+    maxResults?: number;
+  }): Promise<GmailHistoryPage> {
+    const url = new URL(`${GMAIL_BASE}/users/me/history`);
+    url.searchParams.set("startHistoryId", input.startHistoryId);
+    for (const type of ["messageAdded", "labelAdded", "labelRemoved"]) {
+      url.searchParams.append("historyTypes", type);
+    }
+    if (input.pageToken) url.searchParams.set("pageToken", input.pageToken);
+    if (input.maxResults !== undefined) {
+      url.searchParams.set("maxResults", String(input.maxResults));
+    }
+    type Change = { message?: { id?: string } };
+    const json = await this.getJson<{
+      history?: Array<{
+        messagesAdded?: Change[];
+        labelsAdded?: Change[];
+        labelsRemoved?: Change[];
+      }>;
+      nextPageToken?: string;
+    }>(url.toString(), input.accessToken, "gmail", "gmail.history.list");
+    const ids = new Set<string>();
+    for (const record of json.history ?? []) {
+      for (const change of [
+        ...(record.messagesAdded ?? []),
+        ...(record.labelsAdded ?? []),
+        ...(record.labelsRemoved ?? [])
+      ]) {
+        if (change.message?.id) ids.add(change.message.id);
+      }
+    }
+    return { messageIds: [...ids], nextPageToken: json.nextPageToken };
   }
 
   async getEvent(input: {

@@ -19,6 +19,8 @@ const DEFERRED_REASONS = new Set<string>([
   "structured-output"
 ]);
 
+const HISTORY_MODES = new Set<string>(["history", "full"]);
+
 const SYNC_TRIGGERS = new Set<string>(["schedule", "manual", "assistant", "on-connect"]);
 
 export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuationPayload): void {
@@ -74,6 +76,12 @@ export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuat
     !DEFERRED_REASONS.has(payload.deferredReason)
   ) {
     throw new Error("invalid continuation deferred reason");
+  }
+  if (payload.historyMode !== undefined && !HISTORY_MODES.has(payload.historyMode)) {
+    throw new Error("invalid continuation history mode");
+  }
+  if (payload.historyAnchor !== undefined && !/^[0-9]{1,32}$/.test(payload.historyAnchor)) {
+    throw new Error("invalid continuation history position");
   }
   if (payload.errorDetail !== undefined && payload.errorDetail !== null) {
     const detail = payload.errorDetail;

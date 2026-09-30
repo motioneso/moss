@@ -62,7 +62,8 @@ export const connectorsModuleManifest = {
       "sql/0131_connector_imap_definitions.sql",
       "sql/0144_google_sync_sweep_accounts.sql",
       "sql/0215_connector_sync_previous_run.sql",
-      "sql/0244_email_refresh.sql"
+      "sql/0244_email_refresh.sql",
+      "sql/0248_connector_email_history_id.sql"
     ],
     migrationDirectories: ["packages/connectors/sql"],
     ownedTables: [
