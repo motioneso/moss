@@ -172,7 +172,7 @@ import {
   type GoogleApiClient,
   type GoogleConnectionService
 } from "@moss/connectors";
-import type { ActiveModulesResolver, AiSecretCipher } from "@moss/ai";
+import type { ActiveModulesResolver, AiSecretCipher, CliToolVersionReader } from "@moss/ai";
 import {
   resolveMossEnv,
   type AccessContext,
@@ -438,7 +438,11 @@ import {
   resolveNewsCredentialCipherPort
 } from "./news-credential-cipher.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
-import { buildCliModelLister, buildOnboardingLogin } from "./onboarding-login.js";
+import {
+  buildCliModelLister,
+  buildCliToolVersionReader,
+  buildOnboardingLogin
+} from "./onboarding-login.js";
 
 // Declared here (not `apps/api/src/server.ts`, which sets it via an onRequest hook)
 // because module-registry is the composition root every consumer of the field
@@ -687,6 +691,8 @@ export interface BuiltInRouteDependencies {
    * host-dev) ⇒ the ai routes build a lister-less service and CLI discovery reports `unavailable`.
    */
   readonly aiModelDiscovery?: ModelDiscoveryService;
+  /** #2689 — installed CLI tool versions for the provider cards; socket path only. */
+  readonly aiCliToolVersionReader?: CliToolVersionReader;
   /**
    * #917 — boot-time external-module discovery snapshot, built by the API composition root
    * (apps/api discoverExternalModules) and forwarded to the settings module, where the Task 9
@@ -2024,6 +2030,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveActiveModules: deps.resolveActiveModules,
         // #2208: CLI providers discover models through the cli-runner; share the wired service.
         ...(deps.aiModelDiscovery ? { modelDiscovery: deps.aiModelDiscovery } : {}),
+        ...(deps.aiCliToolVersionReader
+          ? { cliToolVersionReader: deps.aiCliToolVersionReader }
+          : {}),
         // #915 D6: installed set, not actor-filtered enablement.
         listInstalledModuleIds: () => deps.listModuleManifests().map((manifest) => manifest.id),
         tasksCompatibility,
@@ -3489,6 +3498,10 @@ export function registerBuiltInApiRoutes(
     onboardingInstall,
     onboardingLogin,
     aiModelDiscovery,
+    aiCliToolVersionReader: buildCliToolVersionReader({
+      enabled: socketConfigured,
+      getConnection: getRpcConnection
+    }),
     // Surface a setter so the chat runtime (constructed inside registerChatRoutes) can publish the ONE
     // RPC connection it owns back to the probes + the boot lifecycle below. On the RPC path the runtime
     // wires reconcile + the idle reaper onto this connection; here we only need the handle to route

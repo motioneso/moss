@@ -287,6 +287,17 @@ export function defaultResolveAdapterTarget(kind: AcpProviderKind): AcpAdapterTa
   };
 }
 
+/** #2689: the version of the image's OpenCode package, or `null` when it cannot be read. */
+export async function readOpenCodeVersion(): Promise<string | null> {
+  try {
+    const packageJson = createRequire(import.meta.url).resolve("opencode-ai/package.json");
+    const { version } = JSON.parse(await readFile(packageJson, "utf8")) as { version?: unknown };
+    return typeof version === "string" ? version : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A process's actual start time in system ticks, read from the system process
  * table. Compared against the start time saved when the build was started:

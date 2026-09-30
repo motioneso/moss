@@ -18,7 +18,7 @@
  * CLIs live in the cli-runner container); absent ⇒ the login routes fail closed (500).
  */
 
-import type { AiAutoRegisterPort, CliModelLister } from "@moss/ai";
+import type { AiAutoRegisterPort, CliModelLister, CliToolVersionReader } from "@moss/ai";
 import { CliChatUnavailableError, type RpcConnection } from "@moss/chat";
 import { LOGIN_ADAPTERS } from "@moss/cli-runner";
 import type { AiProviderKind } from "@moss/db";
@@ -61,6 +61,24 @@ export function buildCliModelLister(deps: {
       if (error instanceof CliChatUnavailableError) throw new HttpError(503, UNAVAILABLE_MESSAGE);
       throw error;
     }
+  };
+}
+
+/**
+ * #2689: installed CLI tool versions for the provider cards, over the same lazy socket connection.
+ * A missing connection or installer rejects; the ai route treats any failure as "no version shown".
+ */
+export function buildCliToolVersionReader(deps: {
+  readonly enabled: boolean;
+  readonly getConnection: () => RpcConnection | undefined;
+}): CliToolVersionReader | undefined {
+  if (!deps.enabled) return undefined;
+  return async () => {
+    const conn = deps.getConnection();
+    if (!conn) throw new HttpError(503, UNAVAILABLE_MESSAGE);
+    const versions = await conn.listCliToolVersions();
+    if (!versions) throw new HttpError(503, UNAVAILABLE_MESSAGE);
+    return versions;
   };
 }
 

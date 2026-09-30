@@ -67,6 +67,7 @@ import {
   type RpcLaunchParams,
   type RpcLaunchResult,
   type RpcListLiveSessionsResult,
+  type RpcListCliToolVersionsResult,
   type RpcListProviderModelsParams,
   type RpcListProviderModelsResult,
   type RpcMethod,
@@ -265,6 +266,7 @@ export class RpcConnection {
       case "interrupt":
       case "kill":
       case "purgeTranscripts": // #744 — bounded per-session verb, same class as kill
+      case "listCliToolVersions": // #2689 — a few small file reads
         return this.turnTimeoutMs;
       case "launch":
         // NOTE: JARVIS_CLI_RUNNER_RPC_TIMEOUT_MS raises turnTimeoutMs for ALL turn verbs, not just
@@ -451,6 +453,11 @@ export class RpcConnection {
   /** #2208: vendor model ids only; non-ok outcomes are normal results. */
   listProviderModels(params: RpcListProviderModelsParams): Promise<RpcListProviderModelsResult> {
     return this.call<RpcListProviderModelsResult>("listProviderModels", undefined, params);
+  }
+
+  /** #2689: installed command-line tool versions; null on a runner without an installer. */
+  listCliToolVersions(): Promise<RpcListCliToolVersionsResult | null> {
+    return this.call<RpcListCliToolVersionsResult | null>("listCliToolVersions", undefined, {});
   }
 
   /** Tear down the connection (process shutdown). Idempotent. */

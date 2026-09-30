@@ -761,6 +761,11 @@ export class CliChatEngineHost {
     return this.deps.installService.installProvider(provider);
   }
 
+  /** #2689: installed tool versions; undefined on a build without an installer. */
+  async listCliToolVersions() {
+    return this.deps.installService?.toolVersions();
+  }
+
   // ─── login verbs (§L.2) — non-session; unified §L.6.1 exclusivity gate ─────────
 
   /** §L.2.2: admit one user-scoped login under the unified chat/login mutex. */

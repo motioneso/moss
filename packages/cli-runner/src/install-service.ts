@@ -56,9 +56,11 @@ import type {
   NpmInstallRecipe,
   ProviderCatalog,
   RpcInstallProviderResult,
+  RpcListCliToolVersionsResult,
   RpcProviderKind
 } from "@moss/chat/live";
 
+import { readOpenCodeVersion } from "./acp-host.js";
 import { findRepoRoot } from "./catalog.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { Mutex } from "./mutex.js";
@@ -753,6 +755,27 @@ export class InstallService {
     const tmp = `${linkPath}.tmp-${randToken()}`;
     await symlink(target, tmp);
     await rename(tmp, linkPath);
+  }
+
+  /**
+   * #2689: the version each supported npm recipe's live release reports in its package metadata,
+   * or `null` when the provider has no live release, plus the image's OpenCode version.
+   * Read-only; never probes a binary.
+   */
+  async toolVersions(): Promise<RpcListCliToolVersionsResult> {
+    const versions: Record<RpcProviderKind, string | null> = {
+      anthropic: null,
+      "openai-compatible": null,
+      google: null
+    };
+    for (const provider of Object.keys(versions) as RpcProviderKind[]) {
+      const recipe = this.deps.catalog[provider]?.recipe;
+      if (recipe?.kind !== "npm") continue;
+      const release = await this.resolveCurrent(provider);
+      if (!release) continue;
+      versions[provider] = (await this.readInstalledVersion(release, recipe.pkg)) ?? null;
+    }
+    return { providers: versions, opencode: await readOpenCodeVersion() };
   }
 
   /** Resolve the absolute dir `providers/<provider>/current` points at, or undefined. */

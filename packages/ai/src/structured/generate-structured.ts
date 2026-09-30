@@ -57,7 +57,9 @@ const RUNNER_REFUSAL_REASONS: readonly (readonly [RegExp, string])[] = [
   [/launch\.userId must match/, "launch_invalid_owner"],
   [/live chat is busy/, "runner_busy"],
   [/provider login is in progress/, "provider_login_in_progress"],
-  [/could not allocate UID slot/, "uid_slot_allocation_failed"]
+  [/could not allocate UID slot/, "uid_slot_allocation_failed"],
+  // #2689: the fixed message the engines raise for a tool too old for the model.
+  [/installed AI tool is too old for this model/, "cli_version_too_old"]
 ];
 
 export function operatorSafeReason(error: unknown): { readonly reason?: string } {

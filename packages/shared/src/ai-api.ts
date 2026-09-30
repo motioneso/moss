@@ -66,6 +66,17 @@ export const aiAuthMethodSchema = {
   enum: ["cli", "api_key"]
 } as const;
 
+// #2689: installed command-line tool version for a CLI provider card.
+const aiCliToolsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["version", "state"],
+  properties: {
+    version: { type: ["string", "null"] },
+    state: { type: "string", enum: ["current", "not_installed"] }
+  }
+} as const;
+
 const aiProviderConfigSchema = {
   type: "object",
   additionalProperties: false,
@@ -96,6 +107,7 @@ const aiProviderConfigSchema = {
     cliAvailable: { type: "boolean" },
     // #870/H1: single instance-default provider flag (migration 0147).
     isInstanceDefault: { type: "boolean" },
+    cliTools: aiCliToolsSchema,
     revokedAt: { type: ["string", "null"] },
     createdAt: { type: "string" },
     updatedAt: { type: "string" }
@@ -400,7 +412,8 @@ export const listAiProviderConfigsResponseSchema = {
   additionalProperties: false,
   required: ["providers"],
   properties: {
-    providers: { type: "array", items: aiProviderConfigSchema }
+    providers: { type: "array", items: aiProviderConfigSchema },
+    openCodeCli: aiCliToolsSchema
   }
 } as const;
 
