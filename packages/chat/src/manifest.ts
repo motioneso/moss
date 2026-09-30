@@ -162,6 +162,16 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.model_picker",
+      description:
+        "Choose which model answers from the model button above the message box. The picker " +
+        "lists starred favorites first, then one row per provider; open a provider to see its " +
+        "models. Star or unstar any model to keep it under Favorites. Favorites are saved to " +
+        "your account and follow you to other devices. A search box appears when there are " +
+        "more than eight models. When an admin has turned off model choice or pinned your " +
+        "provider, the button shows the fixed model instead."
+    },
+    {
       id: "chat.response_styles",
       description:
         "Set how long answers should be (concise, balanced or detailed), in your own settings or " +

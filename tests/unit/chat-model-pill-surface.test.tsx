@@ -55,6 +55,8 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   })),
   getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" as const } })),
   getChatModelOverrideSettings: vi.fn(),
+  getChatModelFavorites: vi.fn(async () => ({ modelIds: [] })),
+  putChatModelFavorites: vi.fn(),
   putChatModelOverride: vi.fn(),
   putChatSettings: vi.fn(),
   switchChatProvider: vi.fn()
@@ -68,6 +70,7 @@ vi.mock("../../apps/web/src/chat/chat-model-pill.js", async (importOriginal) => 
 import {
   clearChat,
   getChatSettings,
+  getChatModelFavorites,
   getChatModelOverrideSettings,
   putChatModelOverride,
   putChatSettings,
@@ -201,9 +204,12 @@ afterEach(() => {
   unmountMountedRenderers();
 });
 
+// Both override models are starred in these tests, so the picker's top level lists the model
+// rows as [instance default, same-provider, cross-provider] without drilling into a provider.
 function menuButtons(renderer: ReactTestRenderer) {
-  const menu = renderer.root.findAll((node) => node.props.className === "chatd-model__menu");
-  return menu.length > 0 ? menu[0]!.findAllByType("button") : [];
+  return renderer.root.findAll(
+    (node) => node.type === "button" && node.props.className === "chatd-model__pick"
+  );
 }
 
 async function openMenu(renderer: ReactTestRenderer): Promise<void> {
@@ -247,6 +253,9 @@ async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
 describe("ChatModelPill mutation surface routing (#1533)", () => {
   beforeEach(() => {
     vi.mocked(getChatModelOverrideSettings).mockResolvedValue({ settings: settingsFixture() });
+    vi.mocked(getChatModelFavorites).mockResolvedValue({
+      modelIds: [sameProviderModel.id, crossProviderModel.id]
+    });
     vi.mocked(putChatModelOverride).mockResolvedValue({ settings: settingsFixture() });
     vi.mocked(getChatSettings).mockResolvedValue({ chat: { responseStyle: "balanced" } });
     vi.mocked(putChatSettings).mockResolvedValue({ chat: { responseStyle: "balanced" } });
