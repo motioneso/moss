@@ -11,9 +11,8 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createRequire } from "node:module";
 import { readFile, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   AcpExecManager,
   ACP_EXEC_OUTPUT_CAP_BYTES,
