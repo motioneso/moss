@@ -408,9 +408,12 @@ function ReportBody(props: {
     if (!sources) return;
     sources.open = true;
 
-    // Scroll on the next frame so the dialog's own title focus on open runs
-    // first. scrollIntoView is absent under jsdom.
-    const frame = requestAnimationFrame(() => sources.scrollIntoView?.({ block: "start" }));
+    // Run on the next frame so this lands after the dialog's own title focus
+    // on open. scrollIntoView is absent under jsdom.
+    const frame = requestAnimationFrame(() => {
+      sources.scrollIntoView?.({ block: "start" });
+      sources.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+    });
     return () => cancelAnimationFrame(frame);
   }, [props.openSources]);
   const headline = splitHeadline(run.summaryText);

@@ -27,7 +27,13 @@ import {
 // 7:30 pm in Los Angeles, after the 19:00 evening gate.
 const NOW = new Date("2026-06-30T02:30:00.000Z");
 
+let scrolled: Element[] = [];
+
 beforeEach(() => {
+  scrolled = [];
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolled.push(this);
+  };
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   vi.stubGlobal(
@@ -38,6 +44,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await cleanupRoots();
+  delete (Element.prototype as Partial<Element>).scrollIntoView;
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -61,6 +68,7 @@ describe("Today evening hero links", () => {
     expect(dialog?.querySelector('[role="tablist"]')).toBeNull();
     const sources = dialog?.querySelector<HTMLDetailsElement>(".brief-reader__sources");
     expect(sources?.open).toBe(false);
+    expect(scrolled).not.toContain(sources);
   });
 
   it("opens the evening report at its sources from the sources link", async () => {
@@ -72,6 +80,8 @@ describe("Today evening hero links", () => {
     expect(dialog?.textContent).toContain("Moss / Evening briefing");
     const sources = dialog?.querySelector<HTMLDetailsElement>(".brief-reader__sources");
     expect(sources?.open).toBe(true);
+    expect(scrolled).toContain(sources);
+    expect(document.activeElement).toBe(sources?.querySelector("summary"));
   });
 });
 
