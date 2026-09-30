@@ -56,17 +56,11 @@ export function buildManualBriefingRunJob(
 export interface BriefingRunQueueService {
   /**
    * The actor's oldest queued or running job for this definition, from any source (chat, Today
-   * or the schedule). `excludeJobId` skips a job the caller just sent.
+   * or the schedule).
    */
-  findInFlight(
-    actorUserId: string,
-    definitionId: string,
-    excludeJobId?: string
-  ): Promise<BriefingRunJobRef | null>;
+  findInFlight(actorUserId: string, definitionId: string): Promise<BriefingRunJobRef | null>;
   /** Sends one job; null when the singleton key is already held by a non-terminal job. */
   send(job: ManualBriefingRunJob): Promise<string | null>;
-  /** Cancels one job the caller sent. */
-  cancel(jobId: string): Promise<void>;
 }
 
 export interface BriefingRunJobSnapshot extends RunStatusJob {
@@ -84,14 +78,13 @@ export interface BriefingRunJobReadService {
 
 export function createBriefingRunQueueService(boss: PgBoss): BriefingRunQueueService {
   return {
-    async findInFlight(actorUserId, definitionId, excludeJobId) {
+    async findInFlight(actorUserId, definitionId) {
       const jobs = await boss.findJobs<BriefingRunPayload>(BRIEFINGS_RUN_QUEUE, {
         data: { actorUserId, definitionId }
       });
       const open = jobs
         .filter(
           (job) =>
-            job.id !== excludeJobId &&
             IN_FLIGHT_JOB_STATES.has(job.state) &&
             isBriefingRunPayloadMetadataOnly(job.data) &&
             job.data.actorUserId === actorUserId &&
@@ -103,9 +96,6 @@ export function createBriefingRunQueueService(boss: PgBoss): BriefingRunQueueSer
     },
     send(job) {
       return sendJob(boss, BRIEFINGS_RUN_QUEUE, job.payload, { singletonKey: job.singletonKey });
-    },
-    async cancel(jobId) {
-      await boss.cancel(BRIEFINGS_RUN_QUEUE, jobId);
     }
   };
 }

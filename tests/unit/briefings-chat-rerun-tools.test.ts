@@ -49,8 +49,7 @@ function fakeQueue(inFlight: Array<{ jobId: string; runId: string | null } | nul
     send: vi.fn(async (job: ManualBriefingRunJob) => {
       sent.push(job);
       return "30000000-0000-4000-8000-000000000001";
-    }),
-    cancel: vi.fn(async () => undefined)
+    })
   };
   return { queue, sent };
 }
@@ -165,29 +164,6 @@ describe("briefings.rerun", () => {
     });
 
     expect(result.data).toMatchObject({ status: "already_running", runId: "run-winner" });
-  });
-
-  it("withdraws its own job when Today or the schedule queued one in the same moment", async () => {
-    vi.spyOn(BriefingsRepository.prototype, "getOwnedDefinitionById").mockResolvedValue(eveningA);
-    const earlier = { jobId: "30000000-0000-4000-8000-000000000007", runId: null };
-    const { queue, sent } = fakeQueue([null, earlier]);
-
-    const result = await briefingsRerunExecute(scopedDb, { definitionId: eveningA.id }, ctx, {
-      briefingRunQueue: queue
-    });
-
-    expect(sent).toHaveLength(1);
-    expect(queue.findInFlight).toHaveBeenLastCalledWith(
-      userA,
-      eveningA.id,
-      "30000000-0000-4000-8000-000000000001"
-    );
-    expect(queue.cancel).toHaveBeenCalledWith("30000000-0000-4000-8000-000000000001");
-    expect(result.data).toMatchObject({
-      status: "already_running",
-      jobId: earlier.jobId,
-      runId: null
-    });
   });
 
   it("rejects both or neither selector, and fails closed without the queue service", async () => {

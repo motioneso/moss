@@ -3,7 +3,6 @@ import pg from "pg";
 
 import {
   BRIEFINGS_RUN_QUEUE,
-  buildManualBriefingRunJob,
   briefingsGetRunStatusExecute,
   briefingsRerunExecute,
   createBriefingRunJobReadService,
@@ -143,27 +142,6 @@ describe("briefings chat re-run tools", () => {
     const result = await handleNextBriefingJob(harness.workerBoss);
     const ready = await status(userAContext(), input);
     expect(ready.data).toMatchObject({ state: "ready", runId: result.runId });
-  }, 60_000);
-
-  it("withdraws its own job when the Today button queued one in the same moment", async () => {
-    // Inject a Today-style run (its own idempotency key) between the chat check and its send.
-    const racing: BriefingRunQueueService = {
-      ...queue,
-      async send(job) {
-        const today = buildManualBriefingRunJob(evening.owner_user_id, evening, "today-click");
-        await queue.send(today);
-        return queue.send(job);
-      }
-    };
-    const result = await harness.dataContext.withDataContext(userAContext(), (db) =>
-      briefingsRerunExecute(db, { briefingType: "evening" }, toolCtx(userAContext()), {
-        briefingRunQueue: racing
-      })
-    );
-
-    expect(result.data.status).toBe("already_running");
-    expect(await openJobCount(evening.id)).toBe(1);
-    await handleNextBriefingJob(harness.workerBoss);
   }, 60_000);
 
   it("never re-runs or reads another user's briefing", async () => {

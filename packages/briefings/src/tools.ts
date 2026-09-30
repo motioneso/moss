@@ -69,14 +69,6 @@ export async function briefingsRerunExecute(
     throw new Error("Briefing run could not be queued");
   }
 
-  // Today and the schedule use other singleton keys, so one of them may have queued between the
-  // check above and this send. Keep the older job and withdraw ours.
-  const earlier = await queue.findInFlight(ctx.actorUserId, definition.id, jobId);
-  if (earlier) {
-    await queue.cancel(jobId);
-    return alreadyRunning(definition, earlier);
-  }
-
   return {
     data: {
       status: "queued",

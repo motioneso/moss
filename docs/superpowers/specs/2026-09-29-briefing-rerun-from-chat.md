@@ -41,10 +41,11 @@ second run.
    `exclusive` policy keeps at most one non-terminal job per key, so two racing chat requests
    collapse to one. A null job id here means the race was lost: re-read and return
    `already_running`.
-3. After a successful send, look again for an older in-flight job for the definition, skipping
-   ours. Today and the schedule use other singleton keys, so one of them can land between steps 1
-   and 2. Found: cancel ours and return `already_running` with the older job. Chat therefore never
-   adds a second run; the Today button keeps its existing behavior.
+3. Today and the schedule use other singleton keys, so one of them can land between steps 1 and
+   2 and the definition briefly has two runs. Chat cannot withdraw its own job to close this:
+   the app runtime role has only SELECT and INSERT on `pgboss.job`
+   (`infra/postgres/grants/0001_pgboss_runtime_grants.sql`), and widening that grant for this
+   case is not worth it. The cost is one extra run of the actor's own briefing.
 
 This extends the route's `briefing_run_in_flight` rule (a repeated idempotency key) to cover any
 running job for the definition, including one started from Today or by the schedule.
@@ -67,7 +68,7 @@ running job for the definition, including one started from Today or by the sched
 
 Tools reach pg-boss only through services the chat host builds from briefings-owned factories:
 
-- `briefingRunQueue` (write registry): find an in-flight job, send one job, cancel one job it sent.
+- `briefingRunQueue` (write registry): find an in-flight job, send one job.
 - `briefingRunJobs` (read registry): read one job by id.
 
 The chat package constructs both in `buildChatToolServices` / `buildChatGatewayDependencies`. No
