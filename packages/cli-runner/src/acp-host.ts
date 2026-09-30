@@ -46,6 +46,7 @@ import { buildSetprivDropCommand } from "./setpriv.js";
 import { codexAuthPath } from "./acp-codex-auth.js";
 import {
   runAgentHomePrepareAsOwner,
+  type AgentHomePrepareRun,
   type AgentHomePrepareRequest,
   type AgentHomeSecretFile
 } from "./agent-home-prepare-run.js";
@@ -88,6 +89,12 @@ export interface AcpHostDeps {
   readonly homeBase?: string;
   /** Mirrors the engine host flag: setuid spawn only with a root container. */
   readonly perUserUid?: boolean;
+  /**
+   * Development-only shared-account mode, already gated on NODE_ENV by the runner's config.
+   * With per-user mode off, agents run as the runner's own account in each person's own home,
+   * with no setpriv anywhere, instead of refusing to launch.
+   */
+  readonly allowSharedUid?: boolean;
   /** Hands a folder/file to its owner; injected so tests can prove routing without real
    * chown privileges. Prod default really calls chown; the failure-and-cleanup behavior
    * itself is proved separately in cli-runner-owned-fs.test.ts against an unreachable id. */
@@ -200,6 +207,14 @@ const IDLE_REAP_MS = 30 * 60 * 1000;
 const MAX_LINE_BYTES = 256 * 1024;
 /** How long a stop waits for the signalled process to actually exit before reporting it as refused. */
 const KILL_CONFIRM_TIMEOUT_MS = 5000;
+
+/** The runner's own account, used as the slot in development-only shared-account mode. */
+export function runnerOwnIdentity(): { uid: number; gid: number } {
+  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
+    throw new Error("AcpHost: shared-account mode needs a POSIX host");
+  }
+  return { uid: process.getuid(), gid: process.getgid() };
+}
 
 interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
@@ -349,18 +364,22 @@ export class AcpHost {
 
     // Per-user identity is mandatory on this path: without it every agent
     // would share one account and one home, and the deny file would land in
-    // a shared folder. Refuse rather than fall back.
+    // a shared folder. Refuse rather than fall back, unless the development-only
+    // shared-account mode is on.
     const homeBase = this.deps.homeBase;
-    if (!this.deps.perUserUid || !homeBase) {
+    const shared = !this.deps.perUserUid && this.deps.allowSharedUid === true;
+    if ((!this.deps.perUserUid && !shared) || !homeBase) {
       throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
     const codexAuth = providerKind === "openai" ? codexAuthPath(homeBase, userId) : null;
 
-    // One slot per person, never per conversation.
+    // One slot per person, never per conversation. In shared mode the runner's own
+    // account stands in for the slot and no step switches identity.
     const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;
-    const slot = allocate(this.deps.homeBase, userId);
+    const slot = shared ? runnerOwnIdentity() : allocate(homeBase, userId);
     const uid = slot.uid;
     const gid = slot.gid;
+    const switchTo = shared ? null : { uid, gid };
 
     const setup = await (async () => {
       let agentHomeTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
@@ -412,7 +431,11 @@ export class AcpHost {
         const prepareDirs = [sessionDir];
         if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
-        const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? runAgentHomePrepareAsOwner;
+        const runAgentHomePrepare: AgentHomePrepareRun =
+          this.deps.runAgentHomePrepare ??
+          (shared
+            ? (request, _identity, files) => runAgentHomePrepareAsOwner(request, null, files)
+            : runAgentHomePrepareAsOwner);
         // #2687: the instance's shared Codex login goes into this user's own home first, after
         // any newer refresh another user holds is carried back to it. The step below then checks
         // the copy, as the user, before Codex starts.
@@ -422,7 +445,7 @@ export class AcpHost {
             ownerCodexHomeAccess(
               home,
               identity,
-              createOwnerIo(identity, { limits: CODEX_LOGIN_READ_LIMITS }),
+              createOwnerIo(shared ? null : identity, { limits: CODEX_LOGIN_READ_LIMITS }),
               runAgentHomePrepare
             );
           await syncCodexLoginIntoHome(
@@ -525,8 +548,8 @@ export class AcpHost {
       args: target.args,
       cwd: sessionDir,
       env,
-      uid,
-      gid
+      uid: switchTo?.uid,
+      gid: switchTo?.gid
     });
 
     // Records the process a boot sweep must confirm has stopped before purging.
@@ -541,7 +564,7 @@ export class AcpHost {
     const session: AcpSession = {
       child,
       cwd: sessionDir,
-      identity: { uid, gid },
+      identity: switchTo,
       profile,
       home: agentHome,
       providerKind,
@@ -832,7 +855,16 @@ export class AcpHost {
         continue;
       }
       const record = read.record;
-      const identity = { uid: record.uid, gid: record.gid };
+      // A shared-mode marker names the runner's own account, which setpriv cannot switch to
+      // without root. Only shared mode reads it as "no switch"; per-user mode never does.
+      const self = runnerOwnIdentity();
+      const identity =
+        !this.deps.perUserUid &&
+        this.deps.allowSharedUid === true &&
+        record.uid === self.uid &&
+        record.gid === self.gid
+          ? null
+          : { uid: record.uid, gid: record.gid };
       try {
         // A marker written between spawn and the pid/start-time backfill (or
         // one whose backfill write itself failed) names no process to check.
@@ -881,16 +913,15 @@ export class AcpHost {
   private async confirmStoppedOrStop(
     pid: number,
     recordedStartTime: string,
-    identity: { readonly uid: number; readonly gid: number }
+    identity: { readonly uid: number; readonly gid: number } | null
   ): Promise<boolean> {
     const readStatus = this.deps.readProcStatus ?? readProcStatus;
     if (isStoppedOrRecycled(pid, recordedStartTime, readStatus)) return true;
     if (!isConfirmedRunningSameProcess(pid, recordedStartTime, readStatus)) return false;
-    const { command, args } = buildSetprivDropCommand(
-      process.execPath,
-      ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
-      identity
-    );
+    const stopArgs = ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"];
+    const { command, args } = identity
+      ? buildSetprivDropCommand(process.execPath, stopArgs, identity)
+      : { command: process.execPath, args: stopArgs };
     await new Promise<void>((resolve, reject) => {
       const stopper = spawn(command, args, {
         stdio: "ignore",

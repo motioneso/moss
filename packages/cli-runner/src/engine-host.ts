@@ -125,7 +125,8 @@ export class CliChatEngineHost {
     this.acp = new AcpHost({
       neutralBase: deps.neutralBase,
       homeBase: deps.homeBase,
-      perUserUid: deps.perUserUid
+      perUserUid: deps.perUserUid,
+      allowSharedUid: deps.allowSharedUid
     });
   }
 
