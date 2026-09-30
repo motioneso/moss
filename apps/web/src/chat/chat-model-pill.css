@@ -26,8 +26,8 @@
 }
 
 .chatd-model__trigger span,
-.chatd-model__menu b,
-.chatd-model__menu small {
+.chatd-model__text b,
+.chatd-model__text small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -39,12 +39,44 @@
   left: 0;
   bottom: calc(100% + 7px);
   z-index: 25;
+  display: flex;
+  flex-direction: column;
   width: min(320px, calc(100vw - 48px));
+  max-height: min(460px, 70vh);
+  overflow-y: auto;
   padding: 5px;
 }
 
-.chatd-model__menu button {
+.chatd-model__search {
   width: 100%;
+  margin-bottom: 4px;
+  padding: 6px 9px;
+}
+
+.chatd-model__head {
+  margin: 10px 8px 4px;
+}
+
+.chatd-model__hint {
+  margin: 2px 8px 6px;
+}
+
+.chatd-model__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.chatd-model__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chatd-model__pick,
+.chatd-model__provider,
+.chatd-model__back {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -55,16 +87,40 @@
   text-align: left;
 }
 
-.chatd-model__menu button:disabled {
+.chatd-model__back {
+  justify-content: flex-start;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.chatd-model__pick:disabled {
   opacity: 0.58;
   cursor: default;
 }
 
-.chatd-model__menu b,
-.chatd-model__menu small {
-  display: block;
+.chatd-model__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.chatd-model__menu small {
+.chatd-model__text small {
   margin-top: 2px;
+}
+
+.chatd-model__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.chatd-model__star {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  padding: 0;
 }

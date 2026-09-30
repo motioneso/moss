@@ -162,6 +162,13 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.model_picker",
+      description:
+        "Pick the chat model from the button above the message box: starred favorites first, " +
+        "then providers you open to see their models. Stars follow your account across " +
+        "devices. Search appears past eight models."
+    },
+    {
       id: "chat.response_styles",
       description:
         "Set how long answers should be (concise, balanced or detailed), in your own settings or " +

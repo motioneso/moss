@@ -12,6 +12,7 @@ import {
   discoverAiProviderModelsResponseSchema,
   getAiSummaryResponseSchema,
   getChatModelOverrideSettingsResponseSchema,
+  chatModelFavoritesSchema,
   getAiAdminUserPinResponseSchema,
   getVoiceEndpointResponseSchema,
   putVoiceEndpointRequestSchema,
@@ -450,6 +451,19 @@ export const aiModuleManifest = {
       path: "/api/ai/chat-model-override",
       requestSchema: putChatModelOverrideRequestSchema,
       responseSchema: getChatModelOverrideSettingsResponseSchema,
+      permissionId: "ai.route"
+    },
+    {
+      method: "GET",
+      path: "/api/ai/chat-model-favorites",
+      responseSchema: chatModelFavoritesSchema,
+      permissionId: "ai.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/ai/chat-model-favorites",
+      requestSchema: chatModelFavoritesSchema,
+      responseSchema: chatModelFavoritesSchema,
       permissionId: "ai.route"
     },
     {

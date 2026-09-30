@@ -733,25 +733,62 @@
   box-shadow: var(--shadow-md);
 }
 
-.chatd-model__menu button {
+.chatd-model__pick,
+.chatd-model__provider,
+.chatd-model__back,
+.chatd-model__star {
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--text);
 }
 
-.chatd-model__menu button:hover:not(:disabled) {
+.chatd-model__pick:hover:not(:disabled),
+.chatd-model__provider:hover,
+.chatd-model__back:hover,
+.chatd-model__star:hover:not(:disabled) {
   background: var(--surface-2);
 }
 
-.chatd-model__menu b {
+.chatd-model__pick:focus-visible,
+.chatd-model__provider:focus-visible,
+.chatd-model__back:focus-visible,
+.chatd-model__star:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.chatd-model__back {
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 6px 6px 0 0;
+  font-weight: 600;
+}
+
+.chatd-model__text b {
   font-size: 12.5px;
   font-weight: 600;
 }
 
-.chatd-model__menu small {
+.chatd-model__text small {
   color: var(--text-faint);
   font-size: 11px;
+}
+
+.chatd-model__count {
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+.chatd-model__star {
+  color: var(--text-faint);
+}
+
+.chatd-model__star[aria-pressed="true"] {
+  color: var(--gold-strong);
+}
+
+.chatd-model__star:disabled {
+  opacity: 0.4;
 }
 
 /* from apps/web/src/chat/assistant-surface/assistant-surface.css */

@@ -28,6 +28,8 @@ import type {
   GetChatSettingsResponse,
   GetPersonaSettingsResponse,
   GetChatModelOverrideSettingsResponse,
+  GetChatModelFavoritesResponse,
+  PutChatModelFavoritesRequest,
   GetFamilyKeysResponse,
   GetWebSearchKeyResponse,
   PutFamilyKeyRequest,
@@ -1386,6 +1388,19 @@ export async function putChatModelOverride(
   input: PutChatModelOverrideRequest
 ): Promise<GetChatModelOverrideSettingsResponse> {
   return requestJson<GetChatModelOverrideSettingsResponse>("/api/ai/chat-model-override", {
+    method: "PUT",
+    body: input
+  });
+}
+
+export async function getChatModelFavorites(): Promise<GetChatModelFavoritesResponse> {
+  return requestJson<GetChatModelFavoritesResponse>("/api/ai/chat-model-favorites");
+}
+
+export async function putChatModelFavorites(
+  input: PutChatModelFavoritesRequest
+): Promise<GetChatModelFavoritesResponse> {
+  return requestJson<GetChatModelFavoritesResponse>("/api/ai/chat-model-favorites", {
     method: "PUT",
     body: input
   });
