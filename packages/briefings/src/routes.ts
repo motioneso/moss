@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PgBoss } from "pg-boss";
 import type { UsefulnessFeedbackRepository } from "@moss/usefulness-feedback";
@@ -37,6 +35,7 @@ import { sendJob } from "@moss/jobs";
 import { isBriefingRunPayloadMetadataOnly, type BriefingRunPayload } from "./jobs.js";
 import { BRIEFINGS_RUN_QUEUE } from "./manifest.js";
 import { BriefingsRepository, type CreateBriefingDefinitionInput } from "./repository.js";
+import { buildManualBriefingRunJob } from "./run-queue.js";
 import {
   comparePlanState,
   resolveRunStatus,
@@ -196,27 +195,16 @@ export function registerBriefingsRoutes(
           return reply.code(404).send({ error: "Briefing definition not found" });
         }
 
-        const runId = randomUUID();
-        const payload: BriefingRunPayload = {
-          actorUserId: accessContext.actorUserId,
-          definitionId: definition.id,
-          briefingRunId: runId,
-          runKind: "manual",
-          briefingType: definition.briefing_type,
-          idempotencyKey: body.idempotencyKey
-        };
-
-        // A client-supplied idempotency key must actually dedupe the job, not just
-        // ride along in the payload (#150). The BRIEFINGS_RUN_QUEUE uses the
-        // `exclusive` policy, so pg-boss keeps at most one job per (queue,
-        // singletonKey) across all non-terminal states — a double-submit (retry,
-        // double-click) collapses to a single run. Namespace by definition id so one
-        // definition's key can never suppress another's. A run WITHOUT an idempotency
-        // key gets a unique per-run singletonKey (the runId) so it never falsely
-        // collides — only an explicit, repeated key dedupes.
-        const singletonKey = body.idempotencyKey
-          ? `${definition.id}:key:${body.idempotencyKey}`
-          : `${definition.id}:run:${runId}`;
+        // A client-supplied idempotency key must actually dedupe the job, not just ride
+        // along in the payload (#150). BRIEFINGS_RUN_QUEUE uses the `exclusive` policy, so
+        // pg-boss keeps at most one job per (queue, singletonKey) across all non-terminal
+        // states: a double-submit collapses to a single run. Only an explicit, repeated key
+        // dedupes; see buildManualBriefingRunJob for the key shape.
+        const { runId, payload, singletonKey } = buildManualBriefingRunJob(
+          accessContext.actorUserId,
+          definition,
+          body.idempotencyKey
+        );
         const jobId = await sendJob(dependencies.boss, BRIEFINGS_RUN_QUEUE, payload, {
           singletonKey
         });

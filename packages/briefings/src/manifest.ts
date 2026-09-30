@@ -6,6 +6,7 @@ import {
   createBriefingDefinitionRequestSchema,
   createBriefingDefinitionResponseSchema,
   getBriefingRunResponseSchema,
+  nullableStringSchema,
   listBriefingDefinitionsResponseSchema,
   listBriefingRunsResponseSchema,
   runBriefingDefinitionRequestSchema,
@@ -13,6 +14,8 @@ import {
   updateBriefingDefinitionRequestSchema,
   updateBriefingDefinitionResponseSchema
 } from "@moss/shared";
+
+import { briefingsGetRunStatusExecute, briefingsRerunExecute } from "./tools.js";
 
 export const BRIEFINGS_MODULE_ID = "briefings";
 export const BRIEFINGS_RUN_QUEUE = "briefings-run";
@@ -96,6 +99,103 @@ export const briefingsModuleManifest = {
       grantLevels: ["view", "manage"]
     }
   ],
+  assistantActionFamilies: [
+    {
+      id: "briefing_runs",
+      label: "Re-run briefings",
+      description:
+        "Let your assistant queue a fresh run of one of your briefings when you ask in chat.",
+      defaultTier: "ask_each_time",
+      allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+    }
+  ],
+  assistantTools: [
+    {
+      name: "briefings.rerun",
+      description:
+        "Re-run one of the user's own briefings now. Pick it by briefingType (morning, evening, " +
+        "weekly_review) or by definitionId; give exactly one. Returns status queued, " +
+        "already_running (a run for that briefing is still going, so no second run was started) " +
+        "or no_briefing (the user has no such briefing). Keep runId and jobId, then call " +
+        "briefings.getRunStatus to tell the user when the briefing is ready or has failed.",
+      permissionId: "briefings.run",
+      actionFamilyId: "briefing_runs",
+      risk: "write",
+      executionPolicy: "auto",
+      // Re-running only writes a new dated report; earlier reports stay. Not destructive, so
+      // installing the module grants normal use (Ben's ruling on Food, 2026-08-19).
+      selfOperationGrant: "granted_at_install",
+      requiresServices: ["briefingRunQueue"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          briefingType: {
+            type: "string",
+            enum: ["morning", "evening", "weekly_review"],
+            description: "Which of the user's briefings to re-run"
+          },
+          definitionId: {
+            type: "string",
+            description: "A specific briefing definition id, instead of briefingType"
+          }
+        }
+      },
+      outputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["status", "definitionId", "briefingType", "runId", "jobId"],
+        properties: {
+          status: { type: "string", enum: ["queued", "already_running", "no_briefing"] },
+          definitionId: nullableStringSchema,
+          briefingType: nullableStringSchema,
+          runId: {
+            type: ["string", "null"],
+            description: "Null only when the running job is a scheduled run not yet started"
+          },
+          jobId: nullableStringSchema
+        }
+      },
+      execute: briefingsRerunExecute,
+      summarize: (input) =>
+        typeof input.briefingType === "string"
+          ? `Re-run your ${input.briefingType.replace("_", " ")} briefing.`
+          : "Re-run a briefing."
+    },
+    {
+      name: "briefings.getRunStatus",
+      description:
+        "Check one briefing run of the user's, by the runId and jobId from briefings.rerun. " +
+        "state is pending (still being written), ready (summaryText holds the briefing), " +
+        "failed, or not_found. Check again later while pending; never re-run to check.",
+      permissionId: "briefings.view",
+      risk: "read",
+      externalContent: true,
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["runId"],
+        properties: {
+          runId: { type: "string", description: "runId from briefings.rerun" },
+          jobId: { type: "string", description: "jobId from briefings.rerun" }
+        }
+      },
+      outputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["state", "runId", "definitionId", "briefingType", "createdAt", "summaryText"],
+        properties: {
+          state: { type: "string", enum: ["pending", "ready", "failed", "not_found"] },
+          runId: { type: "string" },
+          definitionId: nullableStringSchema,
+          briefingType: nullableStringSchema,
+          createdAt: nullableStringSchema,
+          summaryText: nullableStringSchema
+        }
+      },
+      execute: briefingsGetRunStatusExecute
+    }
+  ],
   featureFlags: [
     {
       id: "briefings.module",
@@ -166,6 +266,40 @@ export const briefingsModuleManifest = {
           id: "briefings.refresh.wait",
           description: "Wait for the queued run, then read it again from the briefing history.",
           path: "/today"
+        }
+      ]
+    },
+    {
+      id: "briefings.chat_rerun",
+      description:
+        "Ask Moss in chat to re-run your morning, evening or weekly review briefing. It " +
+        "queues one run without an approval card and can say when it is ready or failed. " +
+        "Asking again while it is being written starts no second run.",
+      errors: [
+        {
+          code: "briefing_run_in_flight",
+          class: "transient",
+          description:
+            "A run of that briefing is already queued or being written, so no second run " +
+            "was started. Check that run instead."
+        },
+        {
+          code: "briefing_not_set_up",
+          class: "prerequisite",
+          description: "You have no briefing of that type to re-run.",
+          remediationRef: "briefings.chat_rerun.set_up"
+        }
+      ],
+      remediations: [
+        {
+          id: "briefings.chat_rerun.wait",
+          description: "Ask Moss again in a minute whether the briefing is ready.",
+          path: "/today"
+        },
+        {
+          id: "briefings.chat_rerun.set_up",
+          description: "Turn on the evening briefing or set briefing times in briefing settings.",
+          path: "/settings?section=modules&module=briefings"
         }
       ]
     },

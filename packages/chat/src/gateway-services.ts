@@ -12,6 +12,7 @@ import {
   type PlatformDiagnosticsService,
   type SessionNotifier
 } from "@moss/ai";
+import { createBriefingRunJobReadService, createBriefingRunQueueService } from "@moss/briefings";
 import { CalendarRepository, sendCalendarCacheEvictJob } from "@moss/calendar";
 import { EmailRepository } from "@moss/email";
 import { PreferencesRepository } from "@moss/structured-state";
@@ -93,6 +94,7 @@ export function buildChatToolServices(deps: {
           singletonKey: `notes-sync:${actorUserId}`
         })
     } satisfies NotesSyncToolService;
+    services.briefingRunQueue = createBriefingRunQueueService(boss);
   }
   if (deps.featureGrantService) {
     services.featureGrants = deps.featureGrantService;
@@ -188,6 +190,7 @@ export function buildChatGatewayDependencies(args: {
       args.collaborators.sourceContextService ||
       args.collaborators.currentViewService ||
       args.collaborators.attachmentsService ||
+      args.collaborators.boss ||
       args.appMapService ||
       args.platformDiagnostics
         ? {
@@ -204,6 +207,10 @@ export function buildChatGatewayDependencies(args: {
             // floor stays structurally intact (read tools never see toolServices).
             ...(args.collaborators.attachmentsService
               ? { chatAttachments: args.collaborators.attachmentsService }
+              : {}),
+            // Job lookup only; queueing lives in the write registry as briefingRunQueue.
+            ...(args.collaborators.boss
+              ? { briefingRunJobs: createBriefingRunJobReadService(args.collaborators.boss) }
               : {}),
             ...(args.appMapService ? { appMap: args.appMapService } : {}),
             ...(args.platformDiagnostics ? { platformDiagnostics: args.platformDiagnostics } : {})
