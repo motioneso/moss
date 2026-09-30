@@ -353,7 +353,7 @@ describe("runGoogleSync email orchestration", () => {
     );
   });
 
-  it("ingests a representative current-day mailbox as sequential compact classifications", async () => {
+  it("ingests a current-day page as one small chunk and hands off the rest (#2804)", async () => {
     const accountId = await seedGoogleAccount(handles.dataContext, [
       "https://www.googleapis.com/auth/gmail.modify"
     ]);
@@ -392,7 +392,7 @@ describe("runGoogleSync email orchestration", () => {
       };
     });
 
-    await handles.workerDataContext.withDataContext(ctx, (db) =>
+    const outcome = await handles.workerDataContext.withDataContext(ctx, (db) =>
       runGoogleSyncChunk(db, {
         getFreshAccessToken: async () => "tok",
         getActiveAccount: async () => ({ id: accountId, scopes: ["gmail"] }),
@@ -452,17 +452,21 @@ describe("runGoogleSync email orchestration", () => {
       modelCalls: runChat.mock.calls.length,
       classificationBoundaryMs: Math.max(...classificationCompletedAt),
       firstProjectionAt: projectionAt[0] ?? null,
-      projected: projectionAt.length
+      projected: projectionAt.length,
+      truncated: outcome.result.truncated,
+      continuationPhase: outcome.continuation?.phase
     }).toEqual({
-      requestedListLimit: 500,
-      providerFetched: messages.length,
+      requestedListLimit: 8,
+      providerFetched: 8,
       providerFetchBoundaryMs: 0,
-      persisted: messages.length,
+      persisted: 8,
       persistBoundaryMs: 0,
-      modelCalls: messages.length,
-      classificationBoundaryMs: messages.length * modelCostMs,
+      modelCalls: 8,
+      classificationBoundaryMs: 8 * modelCostMs,
       firstProjectionAt: modelCostMs,
-      projected: messages.length
+      projected: 8,
+      truncated: true,
+      continuationPhase: "email-current-day"
     });
   });
 

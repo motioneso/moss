@@ -287,7 +287,7 @@ test("configures chat and email extraction models through settings", async ({ pa
   await page.getByLabel("Binding for Chat & briefing").selectOption("mode:reasoning");
   await expect(page.getByText("Service updated")).toBeVisible();
 
-  const emailBinding = page.getByLabel("Binding for Email extraction");
+  const emailBinding = page.getByLabel("Binding for Email reading");
   await expect(emailBinding).toHaveValue("");
   // Scoped to the row: Focus (#2570) is also unbound here and shows the same text.
   await expect(emailBinding.locator("xpath=../..").getByText("Needs configuration")).toBeVisible();
@@ -297,15 +297,13 @@ test("configures chat and email extraction models through settings", async ({ pa
   await page.reload();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Assistant & AI" }).click();
-  await expect(page.getByLabel("Binding for Email extraction")).toHaveValue("model:ai-model-auto");
+  await expect(page.getByLabel("Binding for Email reading")).toHaveValue("model:ai-model-auto");
 
-  await page.getByLabel("Binding for Email extraction").selectOption("model:ai-model-mailbox");
+  await page.getByLabel("Binding for Email reading").selectOption("model:ai-model-mailbox");
   await page.reload();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Assistant & AI" }).click();
-  await expect(page.getByLabel("Binding for Email extraction")).toHaveValue(
-    "model:ai-model-mailbox"
-  );
+  await expect(page.getByLabel("Binding for Email reading")).toHaveValue("model:ai-model-mailbox");
 
   await page.getByRole("button", { name: "Remove Anthropic" }).click();
   await page.getByRole("button", { name: "Remove", exact: true }).click();
@@ -333,7 +331,7 @@ test("shows missing AI credentials as email-extraction configuration", async ({ 
   await page.getByRole("button", { name: "Assistant & AI" }).click();
 
   await expect(page.getByText("API key needed", { exact: true })).toBeVisible();
-  const emailBinding = page.getByLabel("Binding for Email extraction");
+  const emailBinding = page.getByLabel("Binding for Email reading");
   await expect(emailBinding).toHaveValue("");
   await expect(emailBinding.locator("xpath=../..").getByText("Needs configuration")).toBeVisible();
 });

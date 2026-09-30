@@ -89,7 +89,8 @@ describe("ImapEmailWriteProvider — GreenMail integration", () => {
     body_excerpt: "test excerpt",
     received_at: new Date(),
     summary: null,
-    signals: {}
+    signals: {},
+    analysis_attempts: 0
   };
 
   const testSecret: ImapConnectionSecret = {

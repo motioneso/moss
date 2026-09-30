@@ -31,7 +31,8 @@ describe("GoogleEmailWriteProvider", () => {
     body_excerpt: "test excerpt",
     received_at: new Date(),
     summary: null,
-    signals: {}
+    signals: {},
+    analysis_attempts: 0
   };
 
   it("returns success on valid draft save", async () => {
