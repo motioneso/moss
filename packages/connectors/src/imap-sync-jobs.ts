@@ -12,7 +12,7 @@ import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypt
 import type { EmailExtractDeps } from "./email-extract.js";
 import { extractEmailSignals, senderAddress } from "./email-extract.js";
 import { ownAddressSet, userSentLastInThread } from "./email-sorting.js";
-import { runSortingModelPass } from "./email-sorting-live.js";
+import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
 import type { EmailReadProvider } from "./email-read-provider.js";
 import { ImapEmailReadProvider, IMAP_DEFAULT_FOLDER } from "./imap-email-read-provider.js";
@@ -161,6 +161,7 @@ export async function runImapSync(
 
     // #2805: IMAP has no threads, so "the user sent the last message" reads the message itself.
     let ownAddresses: ReadonlySet<string> | undefined;
+    const sorting = sortingSession(deps.emailExtractDeps.sorting);
     const sortingCounts: Record<string, number> = {};
 
     for (const key of keys) {
@@ -169,7 +170,7 @@ export async function runImapSync(
         const knownSender = knownSenders?.has(senderAddress(parsed.from)) ?? false;
         const pass = await runSortingModelPass({
           pending: [parsed],
-          sorting: deps.emailExtractDeps.sorting,
+          sorting,
           userSentLast: async (message) => {
             if (!deps.actorUserId) return false;
             ownAddresses ??= ownAddressSet(

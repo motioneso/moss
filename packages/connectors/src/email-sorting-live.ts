@@ -49,7 +49,8 @@ export type LiveEmailSortingOutcome =
 
 export interface LiveEmailSortingInput {
   readonly parsed: ParsedEmail;
-  readonly userSentLast: boolean;
+  /** `unknown` when the thread could not be read; see EmailSortingFacts. */
+  readonly userSentLast: boolean | "unknown";
   readonly knownSender: boolean;
   readonly now: Date;
 }
@@ -172,7 +173,7 @@ export function sortingModelResult(
 export interface SortingModelPassInput {
   readonly pending: readonly ParsedEmail[];
   readonly sorting: EmailSortingService | undefined;
-  readonly userSentLast: (parsed: ParsedEmail) => Promise<boolean>;
+  readonly userSentLast: (parsed: ParsedEmail) => Promise<boolean | "unknown">;
   readonly knownSender: (parsed: ParsedEmail) => boolean;
   readonly now: () => Date;
   /** Runs one database-touching step so its failure cannot abort the sync's transaction. */
@@ -221,7 +222,9 @@ export async function runSortingModelPass(
       bump(generalCounts, "not_configured");
       continue;
     }
-    const userSentLast = await input.guard(() => input.userSentLast(parsed)).catch(() => false);
+    const userSentLast = await input
+      .guard(() => input.userSentLast(parsed))
+      .catch(() => "unknown" as const);
     const outcome = await input
       .guard(() =>
         sortEmailOnSortingModel(
@@ -240,6 +243,26 @@ export async function runSortingModelPass(
     bump(generalCounts, outcome.reason);
   }
   return { sorted, general, counts };
+}
+
+/**
+ * One sorting model across several single-message passes: the settings are read once, and the
+ * first answer that says no sorting model is set stops asking for the rest.
+ */
+export function sortingSession(
+  service: EmailSortingService | undefined
+): EmailSortingService | undefined {
+  if (!service) return undefined;
+  let availability: Promise<boolean> | undefined;
+  let stopped = false;
+  return {
+    available: () => (stopped ? Promise.resolve(false) : (availability ??= service.available())),
+    ask: async (state, questions) => {
+      const answer = await service.ask(state, questions);
+      if (!answer.ok && NOT_CONFIGURED_ERRORS.has(answer.error)) stopped = true;
+      return answer;
+    }
+  };
 }
 
 type ThreadMessage = { readonly sender: string; readonly received_at: string | Date };

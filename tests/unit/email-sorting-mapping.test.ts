@@ -122,6 +122,21 @@ describe("decideEmailCategory mapping order", () => {
     });
   });
 
+  it("defers to the general model when the thread could not be read", () => {
+    expect(decide({ near_deadline: YES }, { userSentLast: "unknown" })).toEqual({
+      kind: "unsure",
+      reason: "waiting_on_someone",
+      questions: []
+    });
+  });
+
+  it("still settles a higher category when the thread could not be read", () => {
+    expect(decide({ receipt_or_notice: YES }, { userSentLast: "unknown" })).toEqual({
+      kind: "category",
+      category: "receipt_or_notice"
+    });
+  });
+
   it("waiting_on_someone beats time_sensitive_info", () => {
     expect(decide({ near_deadline: YES }, { userSentLast: true })).toEqual({
       kind: "category",

@@ -71,8 +71,11 @@ export type EmailSortingDecision =
 export interface EmailSortingFacts {
   /** The existing code check. `unclear` counts as a sign-in code too (Ben, 2026-09-29). */
   readonly signInCode: SignInCodeDecision;
-  /** The newest cached message in the email's thread was sent by the user. */
-  readonly userSentLast: boolean;
+  /**
+   * The newest cached message in the email's thread was sent by the user. `unknown` when the
+   * thread could not be read; the step that needs it then defers to the general model.
+   */
+  readonly userSentLast: boolean | "unknown";
 }
 
 type Answer = "yes" | "no" | "unsure";
@@ -128,6 +131,9 @@ export function decideEmailCategory(
     if (value === "unsure") return { kind: "unsure", reason: category, questions: [id] };
   }
 
+  if (facts.userSentLast === "unknown") {
+    return { kind: "unsure", reason: "waiting_on_someone", questions: [] };
+  }
   if (facts.userSentLast) return { kind: "category", category: "waiting_on_someone" };
 
   const deadline = answer("near_deadline");

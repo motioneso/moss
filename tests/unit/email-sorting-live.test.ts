@@ -9,6 +9,7 @@ import {
 import {
   runSortingModelPass,
   sortEmailOnSortingModel,
+  sortingSession,
   type EmailSortingService
 } from "../../packages/connectors/src/email-sorting-live.js";
 
@@ -134,11 +135,15 @@ describe("sortEmailOnSortingModel", () => {
 
 const passThrough = <T>(work: () => Promise<T>) => work();
 
-function pass(sorting: EmailSortingService | undefined, pending: ParsedEmail[]) {
+function pass(
+  sorting: EmailSortingService | undefined,
+  pending: ParsedEmail[],
+  userSentLast: (parsed: ParsedEmail) => Promise<boolean | "unknown"> = async () => false
+) {
   return runSortingModelPass({
     pending,
     sorting,
-    userSentLast: async () => false,
+    userSentLast,
     knownSender: () => false,
     now: () => NOW,
     guard: passThrough
@@ -194,5 +199,44 @@ describe("runSortingModelPass", () => {
     const result = await pass({ available: async () => true, ask }, two);
     expect(ask).toHaveBeenCalledTimes(1);
     expect(result.counts.general).toEqual({ not_configured: 2 });
+  });
+
+  it("defers to the general model when the thread read fails", async () => {
+    const result = await pass({ available: async () => true, ask: answers({}) }, two, async () => {
+      throw new Error("db down");
+    });
+    expect(result.sorted).toEqual([]);
+    expect(result.counts.general).toEqual({ unsure: 2 });
+  });
+});
+
+describe("sortingSession", () => {
+  it("reads the settings once across passes", async () => {
+    const available = vi.fn(async () => true);
+    const session = sortingSession({ available, ask: answers({}) });
+    await pass(session, [email({ externalId: "a" })]);
+    await pass(session, [email({ externalId: "b" })]);
+    expect(available).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops asking in later passes once the sorting model reports it is not set up", async () => {
+    const ask = vi.fn<EmailSortingAsk>(async () => ({ ok: false, error: "not_supported" }));
+    const session = sortingSession({ available: async () => true, ask });
+    await pass(session, [email({ externalId: "a" })]);
+    const second = await pass(session, [email({ externalId: "b" })]);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(second.counts.general).toEqual({ not_configured: 1 });
+  });
+
+  it("keeps asking after an ordinary failure", async () => {
+    const ask = vi.fn<EmailSortingAsk>(async () => ({ ok: false, error: "provider_error" }));
+    const session = sortingSession({ available: async () => true, ask });
+    await pass(session, [email({ externalId: "a" })]);
+    await pass(session, [email({ externalId: "b" })]);
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes no service through as none", () => {
+    expect(sortingSession(undefined)).toBeUndefined();
   });
 });
