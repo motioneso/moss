@@ -69,9 +69,16 @@ export const emailModuleManifest = {
     {
       id: "email.skip-sign-in-code-emails",
       description:
-        "An email that clearly hands over a sign-in code is set aside without analysis. " +
-        "When the message is unclear, the model decides, so requests for help, replies, " +
-        "forwards and door, booking or discount codes still come through."
+        "An email that clearly hands over a sign-in code is set aside without analysis. An " +
+        "unclear one is set aside too when a sorting model is set; otherwise the main model " +
+        "decides, so door, booking or discount codes still come through."
+    },
+    {
+      id: "email.receipts-kept-out-of-briefing",
+      description:
+        "When a sorting model is set, receipts, order and booking confirmations, and account " +
+        "or policy notices are sorted as receipts or notices. They stay in your mail and in " +
+        "search but are left out of the morning and evening briefings."
     },
     {
       id: "email.flag-only-real-obligations",

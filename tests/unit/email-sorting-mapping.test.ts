@@ -12,13 +12,14 @@ import {
 } from "../../packages/connectors/src/email-sorting.js";
 import {
   shadowSortEmail,
+  storedBySortingModel,
   storedVerdictOf,
   summarizeEmailSortingComparison,
   type EmailSortingComparisonRow
 } from "../../packages/connectors/src/email-sorting-comparison.js";
 
 /**
- * #2805: the agreed email mapping. The sorting model answers five yes/no questions; code maps them
+ * #2805: the agreed email mapping. The sorting model answers six yes/no questions; code maps them
  * to a category, first match wins, and an unsure answer the decision depends on defers to the
  * general model.
  */
@@ -32,7 +33,8 @@ const allNo: Record<EmailSortingQuestionId, number> = {
   asks_reply: NO,
   asks_action: NO,
   near_deadline: NO,
-  marketing: NO
+  marketing: NO,
+  receipt_or_notice: NO
 };
 
 const ordinary: EmailSortingFacts = { signInCode: "ordinary", userSentLast: false };
@@ -60,11 +62,10 @@ describe("decideEmailCategory mapping order", () => {
     ).toEqual({ kind: "category", category: "sign_in_code" });
   });
 
-  it("an unclear sign-in code defers to the general model without asking", () => {
-    expect(decide({}, { signInCode: "unclear" })).toEqual({
-      kind: "unsure",
-      reason: "sign_in_code",
-      questions: []
+  it("an unclear sign-in code is filtered as a sign-in code", () => {
+    expect(decide({ asks_reply: YES }, { signInCode: "unclear" })).toEqual({
+      kind: "category",
+      category: "sign_in_code"
     });
   });
 
@@ -93,6 +94,31 @@ describe("decideEmailCategory mapping order", () => {
     expect(decide({ asks_action: YES }, { userSentLast: true })).toEqual({
       kind: "category",
       category: "needs_action"
+    });
+  });
+
+  it("needs_reply and needs_action beat receipt_or_notice", () => {
+    expect(decide({ receipt_or_notice: YES, asks_reply: YES })).toEqual({
+      kind: "category",
+      category: "needs_reply"
+    });
+    expect(decide({ receipt_or_notice: YES, asks_action: YES })).toEqual({
+      kind: "category",
+      category: "needs_action"
+    });
+  });
+
+  it("marketing noise beats receipt_or_notice", () => {
+    expect(decide({ marketing: YES, personal_sender: NO, receipt_or_notice: YES })).toEqual({
+      kind: "category",
+      category: "noise"
+    });
+  });
+
+  it("receipt_or_notice beats waiting_on_someone and time_sensitive_info", () => {
+    expect(decide({ receipt_or_notice: YES, near_deadline: YES }, { userSentLast: true })).toEqual({
+      kind: "category",
+      category: "receipt_or_notice"
     });
   });
 
@@ -160,6 +186,20 @@ describe("decideEmailCategory unsure band", () => {
       reason: "needs_action",
       questions: ["asks_action"]
     });
+  });
+
+  it("defers on an unsure receipt answer", () => {
+    expect(decide({ receipt_or_notice: UNSURE })).toEqual({
+      kind: "unsure",
+      reason: "receipt_or_notice",
+      questions: ["receipt_or_notice"]
+    });
+  });
+
+  it("the sixth question carries the agreed wording", () => {
+    expect(EMAIL_SORTING_QUESTIONS.receipt_or_notice.instructions).toBe(
+      "Is this a receipt, order or booking confirmation, or an account or policy notice?"
+    );
   });
 
   it("an unsure deadline answer does not matter once the user sent the last message", () => {
@@ -252,6 +292,9 @@ describe("shadow comparison", () => {
     expect(storedVerdictOf({ skipped: "otp" })).toBe("sign_in_code");
     expect(storedVerdictOf({ pendingJudgement: true })).toBe("pending");
     expect(storedVerdictOf({ actionability: { category: "noise" } })).toBe("noise");
+    expect(storedVerdictOf({ actionability: { category: "receipt_or_notice" } })).toBe(
+      "receipt_or_notice"
+    );
     expect(storedVerdictOf({ confidence: 0 })).toBeNull();
     expect(storedVerdictOf(null)).toBeNull();
   });
@@ -344,5 +387,36 @@ describe("shadow comparison", () => {
     expect(summary.failed).toBe(1);
     expect(summary.confusion).toEqual({ noise: { noise: 1 }, fyi: { noise: 1 } });
     expect(summary.disagreements.map((r) => r.id)).toEqual(["b"]);
+    expect(summary.receiptOrNotice).toEqual({});
+  });
+
+  it("reports the receipt outcome and verdicts the sorting model already stored", () => {
+    const rows: EmailSortingComparisonRow[] = [
+      {
+        id: "r1",
+        stored: "fyi",
+        shadow: { kind: "category", category: "receipt_or_notice" },
+        probabilities: null
+      },
+      {
+        id: "r2",
+        stored: "pending",
+        shadow: { kind: "category", category: "receipt_or_notice" },
+        probabilities: null
+      },
+      {
+        id: "r3",
+        stored: "receipt_or_notice",
+        shadow: { kind: "category", category: "receipt_or_notice" },
+        probabilities: null,
+        storedBySortingModel: true
+      }
+    ];
+    const summary = summarizeEmailSortingComparison(rows);
+    expect(summary.receiptOrNotice).toEqual({ fyi: 1, pending: 1, receipt_or_notice: 1 });
+    expect(summary.storedBySortingModel).toEqual({ receipt_or_notice: 1 });
+    expect(summary.confusion.receipt_or_notice).toEqual({ receipt_or_notice: 1 });
+    expect(storedBySortingModel({ sortedBy: "sorting_model" })).toBe(true);
+    expect(storedBySortingModel({})).toBe(false);
   });
 });

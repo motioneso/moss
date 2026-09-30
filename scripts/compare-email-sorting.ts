@@ -1,7 +1,7 @@
 /**
  * Shadow comparison for email sorting on the sorting model (#2805).
  *
- * Re-sorts one user's already-sorted mail through the sorting-model path (five yes/no questions,
+ * Re-sorts one user's already-sorted mail through the sorting-model path (six yes/no questions,
  * mapped to a category in code) and reports how often it agrees with the stored verdict. Nothing is
  * written: the stored verdict and every other column stay as they are.
  *
@@ -20,6 +20,7 @@ import { AiRepository, askSortingProbabilities, createAiSecretCipher } from "@mo
 import {
   EMAIL_SORTING_SERVICE,
   shadowSortEmail,
+  storedBySortingModel,
   storedVerdictOf,
   summarizeEmailSortingComparison,
   userSentLastInThread,
@@ -162,7 +163,11 @@ async function main(): Promise<void> {
               },
               now
             );
-            results.push({ ...shadow, stored });
+            results.push({
+              ...shadow,
+              stored,
+              storedBySortingModel: storedBySortingModel(message.signals)
+            });
           }
         });
         await Promise.all(runners);
@@ -188,6 +193,12 @@ async function main(): Promise<void> {
     console.log(`Failed requests: ${summary.failed}`);
     console.log(
       `Held for a closer look today, sorting model would say: ${JSON.stringify(summary.pending)}`
+    );
+    console.log(
+      `Sorting model would file as a receipt or notice, by stored verdict: ${JSON.stringify(summary.receiptOrNotice)}`
+    );
+    console.log(
+      `Stored verdicts the sorting model already set (agreement there is expected): ${JSON.stringify(summary.storedBySortingModel)}`
     );
     console.log("Stored verdict -> sorting model category:");
     for (const [stored, row] of Object.entries(summary.confusion)) {

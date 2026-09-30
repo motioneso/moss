@@ -16,14 +16,16 @@ import { readError } from "./settings-types";
 import { Select } from "./settings-ui";
 
 export const SORTING_DISCLOSURE =
-  "Story details and your saved story preferences go to this model first, and to your main " +
-  "model if it does not answer. Each may charge for the request.";
+  "Story details, your saved story preferences, and each email's subject, sender, dates and " +
+  "text go to this model first, and to your main model if it does not answer. Each may charge " +
+  "for the request.";
 
 export const TRAIL_MARKER_DISCLOSURE = "Trail Marker's app and window titles also go here.";
 
 export const SYSTEM_ONE_SORTING_NOTE =
-  "Trail Marker's app and window titles go to TypeSafe. It also answers News and Sports sorting " +
-  "questions with a yes or no. Your main model still handles other sorting work.";
+  "Trail Marker's app and window titles go to TypeSafe. It also answers News, Sports and email " +
+  "sorting questions with a yes or no, so each email's subject, sender, dates and text go there " +
+  "too. Your main model still handles other sorting work.";
 
 // Models the sorting model may be: the model and its provider are active, it has the json
 // capability, and its provider kind is one generateStructured executes, or System One, which

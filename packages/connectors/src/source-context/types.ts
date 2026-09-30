@@ -30,6 +30,7 @@ export type EmailActionability =
   | "time_sensitive_info"
   | "waiting_on_someone"
   | "fyi"
+  | "receipt_or_notice"
   | "noise"
   | "unknown";
 
@@ -39,6 +40,7 @@ export const EMAIL_ACTIONABILITY_VALUES: readonly EmailActionability[] = [
   "time_sensitive_info",
   "waiting_on_someone",
   "fyi",
+  "receipt_or_notice",
   "noise",
   "unknown"
 ];

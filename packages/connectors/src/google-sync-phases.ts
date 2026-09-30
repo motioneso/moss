@@ -15,12 +15,15 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
+  senderAddress,
   type EmailExtractOptions,
   type EmailExtractResult,
   type EmailExtractRetryableReason,
   type ParsedEmail
 } from "./email-extract.js";
 import { GoogleEmailReadProvider, GMAIL_READ_FOLDER } from "./email-read-provider.js";
+import { ownAddressSet } from "./email-sorting.js";
+import { runSortingModelPass, threadUserSentLast } from "./email-sorting-live.js";
 import { projectEmailActions } from "./monitor-jobs.js";
 import { listSavedEmailContext } from "./source-context/email.js";
 import type { ConnectorsRepository } from "./repository.js";
@@ -463,6 +466,69 @@ async function requestRejudgements(
   }
 }
 
+/**
+ * #2805: the sorting model sorts first. What it settles is saved (and handed to the thread
+ * judgement when it may be owed) before the general model runs; the rest is returned for the
+ * general model's first pass. Logs counts only.
+ */
+async function sortOnSortingModelFirst(
+  context: PhaseContext,
+  pending: readonly ParsedEmail[],
+  knownSenders: ReadonlySet<string> | undefined,
+  io: {
+    readonly persistEmail: (parsed: ParsedEmail, extracted: EmailExtractResult) => Promise<unknown>;
+    readonly projectKeys: (keys: readonly string[]) => Promise<void>;
+  }
+): Promise<readonly ParsedEmail[]> {
+  const actorUserId = context.deps.actorUserId;
+  let userSentLast: ((parsed: ParsedEmail) => Promise<boolean>) | undefined;
+  const pass = await runSortingModelPass({
+    pending,
+    sorting: context.deps.emailExtractDeps.sorting,
+    userSentLast: async (parsed) => {
+      if (!actorUserId) return false;
+      userSentLast ??= threadUserSentLast(
+        context.emailRepo,
+        context.scopedDb,
+        actorUserId,
+        ownAddressSet(
+          await context.emailRepo.listFrequentRecipientAddresses(context.scopedDb, actorUserId)
+        )
+      );
+      return userSentLast(parsed);
+    },
+    knownSender: (parsed) => knownSenders?.has(senderAddress(parsed.from)) ?? false,
+    now: context.now,
+    guard: (work) => withSavepoint(context.scopedDb, () => work())
+  });
+  if (pass.sorted.length > 0) {
+    const projectedKeys = await persistExtractedBatch({
+      batch: pass.sorted.map((entry) => entry.parsed),
+      batchResults: pass.sorted.map((entry) => entry.result),
+      persistEmail: io.persistEmail,
+      progress: context.progress,
+      onFailure: (error) => {
+        context.logger.warn(
+          { stage: "email-message", ...googleFailureFields(error) },
+          "google-sync email message failed"
+        );
+      },
+      actorUserId,
+      threadJudgementRequester: context.deps.threadJudgementRequester
+    });
+    await io.projectKeys(projectedKeys);
+    for (const entry of pass.sorted) context.progress.deferredKeys.delete(entry.parsed.externalId);
+    context.progress.emailDeferred = context.progress.deferredKeys.size;
+  }
+  if (pending.length > 0) {
+    context.logger.info(
+      { stage: "email-sorting", sorted: pass.counts.sorted, general: pass.counts.general },
+      "google-sync email sorting model pass"
+    );
+  }
+  return pass.general;
+}
+
 export async function runGoogleEmailPhase(
   context: PhaseContext,
   phase: "email-current-day" | "email"
@@ -583,15 +649,19 @@ export async function runGoogleEmailPhase(
         );
       }
     });
-    // Skipped messages never reach the model call (never sent, never logged), so the batches
-    // below — and the closeScope index that finalizes a scoped CLI session on the last real
-    // batch — only ever cover messages that actually go to the model.
-    let processed = 0;
-    const batches = pending.map((message) => [message]);
     const knownSenders =
       context.deps.knownSenderAddresses && context.deps.actorUserId
         ? await context.deps.knownSenderAddresses(context.scopedDb, context.deps.actorUserId)
         : undefined;
+    const general = await sortOnSortingModelFirst(context, pending, knownSenders, {
+      persistEmail,
+      projectKeys
+    });
+    // Skipped messages never reach the model call (never sent, never logged), so the batches
+    // below — and the closeScope index that finalizes a scoped CLI session on the last real
+    // batch — only ever cover messages that actually go to the model.
+    let processed = 0;
+    const batches = general.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
       let batchResults: EmailExtractResult[];
       inFlightKeys = batch.map((message) => message.externalId);
@@ -647,7 +717,7 @@ export async function runGoogleEmailPhase(
           batchIndex,
           batchSize: batch.length,
           processed,
-          total: pending.length
+          total: general.length
         },
         "google-sync email extraction progress"
       );

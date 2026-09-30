@@ -353,7 +353,7 @@ describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () =
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain("Trail Marker's app and window titles go to TypeSafe.");
-    expect(text).not.toContain("Story details and your saved story preferences");
+    expect(text).not.toContain("Story details, your saved story preferences");
     await act(async () => {
       renderer.unmount();
     });

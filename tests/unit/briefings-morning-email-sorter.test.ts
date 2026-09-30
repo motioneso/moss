@@ -20,6 +20,7 @@ import type {
   MailMessageKey
 } from "../../packages/connectors/src/email-read-provider.js";
 import type { ParsedEmail } from "../../packages/connectors/src/email-extract.js";
+import { sortingModelResult } from "../../packages/connectors/src/email-sorting-live.js";
 import {
   listEmailContext,
   type EmailSourceContextDeps
@@ -305,6 +306,52 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
     const { prompt } = await composeWith(liveEmailDeps([NEWSLETTER_MAIL], runChat));
 
     expect(emailBlock(prompt)).toContain("[worth knowing]");
+  });
+
+  it("keeps a receipt the sorting model sorted out of the briefing (#2805)", async () => {
+    const RECEIPT_MAIL: ParsedEmail = {
+      ...NEWSLETTER_MAIL,
+      externalId: "gm-receipt",
+      threadId: "th-receipt",
+      subject: "Your order receipt",
+      from: "Shop <orders@shop.example>",
+      snippet: "Order total and delivery details",
+      body: "Thanks for your order. Order total and delivery details are below.",
+      hasListUnsubscribe: false
+    };
+    const stored = (mail: ParsedEmail, category: "receipt_or_notice" | "fyi") => {
+      const sorted = sortingModelResult(mail, category, 0.9, false);
+      return {
+        id: `row-${mail.externalId}`,
+        connector_account_id: "acc-google",
+        owner_user_id: "owner-1",
+        sender: mail.from,
+        recipients: mail.recipients,
+        subject: mail.subject,
+        snippet: mail.snippet,
+        body_excerpt: null,
+        received_at: new Date(mail.receivedAt),
+        external_id: mail.externalId,
+        external_metadata: { threadId: mail.threadId },
+        summary: sorted.summary,
+        signals: { ...sorted.signals },
+        created_at: FIXED_NOW,
+        updated_at: FIXED_NOW
+      } as EmailMessage;
+    };
+    const runChat = fakeSorterModel({});
+    const { prompt } = await composeWith(
+      liveEmailDeps([RECEIPT_MAIL, NEWSLETTER_MAIL], runChat, [
+        stored(RECEIPT_MAIL, "receipt_or_notice"),
+        stored(NEWSLETTER_MAIL, "fyi")
+      ])
+    );
+
+    expect(runChat).not.toHaveBeenCalled();
+    const block = emailBlock(prompt);
+    expect(block).toContain("[worth knowing]");
+    expect(block).not.toContain("Order total");
+    expect(block).not.toContain("Your order receipt");
   });
 
   it("records a filtered-out gap when every fetched email is left out", async () => {
