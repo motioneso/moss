@@ -172,6 +172,8 @@ export type RpcMethod =
   | "cancelLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "listProviderModels" // non-session (#2208 live model list from the provider's vendor — ADDITIVE)
   | "listCliToolVersions" // non-session (#2689 installed tool versions — ADDITIVE)
+  | "promoteCliCandidate" // non-session (#2689 slice 4: flip a staged candidate live)
+  | "recordCliCheck" // non-session (#2689 slice 4: store the last live-check result)
   | "stageCliCandidate" // non-session (#2689 slice 4: install a candidate toolset, never flips current)
   | "getCliToolsState" // non-session (#2689 slice 4: last accepted manifest sequence and staged candidates)
   // #1059 owner terminal — additive, never used by the chat runtime
@@ -555,12 +557,34 @@ export type RpcStageCliCandidateResult =
   | { readonly state: "staged" }
   | { readonly state: "error"; readonly message: string };
 /** result for method "getCliToolsState" (#2689 slice 4). Versions only; no paths cross the socket. */
+export interface RpcPromoteCliCandidateParams {
+  readonly provider: RpcProviderKind;
+}
+export type RpcPromoteCliCandidateResult =
+  | { readonly state: "promoted" }
+  | { readonly state: "error"; readonly message: string };
+/** params for method "recordCliCheck". `reason` is a fixed code, never tool output. */
+export interface RpcRecordCliCheckParams {
+  readonly provider: RpcProviderKind;
+  readonly at: string;
+  readonly result: "passed" | "failed";
+  readonly reason: string;
+  readonly versions: readonly string[];
+}
+export interface RpcCliLastCheck {
+  readonly at: string;
+  readonly result: "passed" | "failed";
+  readonly reason: string;
+  readonly versions: readonly string[];
+}
 export interface RpcGetCliToolsStateResult {
   /** Highest manifest sequence accepted by any provider on this runner. 0 when none. */
   readonly manifestSequence: number;
   readonly candidates: Readonly<
     Record<RpcProviderKind, readonly { readonly pkg: string; readonly version: string }[]>
   >;
+  /** Last live-check outcome per provider; null when none is recorded. */
+  readonly lastCheck: Readonly<Record<RpcProviderKind, RpcCliLastCheck | null>>;
 }
 
 // #1059 terminal method params/results (interface-pair pattern, mirrors RpcSubmit*). Additive

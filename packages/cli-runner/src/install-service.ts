@@ -29,7 +29,12 @@
  * bad_request by the dispatcher) and would surface an unexpected fault as `internal`.
  */
 
-import { readToolsState, writeToolsState, type StagedPackage } from "./tools-state.js";
+import {
+  readToolsState,
+  writeToolsState,
+  type LastCheck,
+  type StagedPackage
+} from "./tools-state.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
@@ -58,6 +63,7 @@ import type {
   ProviderCatalog,
   RpcInstallProviderResult,
   RpcListCliToolVersionsResult,
+  RpcCliLastCheck,
   RpcGetCliToolsStateResult,
   RpcProviderKind
 } from "@moss/chat/live";
@@ -130,6 +136,10 @@ interface CandidateInstall {
   readonly lockfileText: string;
   readonly onStaged: (releaseDir: string) => void;
 }
+
+export type PromoteCandidateResult =
+  | { readonly state: "promoted" }
+  | { readonly state: "error"; readonly message: string };
 
 export type StageCandidateResult =
   | { readonly state: "staged"; readonly staged: readonly StagedPackage[] }
@@ -364,8 +374,8 @@ export class InstallService {
         // Nothing newer than live: only record that this manifest was seen. A staged candidate stays.
         const prior = await readToolsState(this.toolsPrefix, provider);
         await writeToolsState(this.toolsPrefix, provider, {
-          manifestSequence: Math.max(prior.manifestSequence, manifestSequence),
-          candidate: prior.candidate
+          ...prior,
+          manifestSequence: Math.max(prior.manifestSequence, manifestSequence)
         });
         return { state: "staged", staged: prior.candidate };
       }
@@ -416,7 +426,10 @@ export class InstallService {
         }
         const prior = await readToolsState(this.toolsPrefix, provider);
         // Replacing an older candidate frees its releases for the next sweep.
+        // A new candidate has not been checked yet, so the last check is dropped.
+        const { lastCheck: _dropped, ...kept } = prior;
         await writeToolsState(this.toolsPrefix, provider, {
+          ...kept,
           manifestSequence: Math.max(prior.manifestSequence, manifestSequence),
           candidate: staged
         });
@@ -433,6 +446,108 @@ export class InstallService {
         await cleanup();
         return { state: "error", message: redactInstallMessage(err) };
       }
+    }
+  }
+
+  /**
+   * Make the staged candidate the live toolset: flip `current` for every package, re-hash the
+   * live binary, and keep the releases that were live as `prior` until the next promote. A hash
+   * mismatch flips everything back. Only a toolset with a staged candidate can be promoted.
+   */
+  async promoteCandidate(provider: RpcProviderKind): Promise<PromoteCandidateResult> {
+    const release = await this.lockFor(provider).acquire();
+    try {
+      return await this.promoteCandidateLocked(provider);
+    } finally {
+      release();
+    }
+  }
+
+  private async promoteCandidateLocked(provider: RpcProviderKind): Promise<PromoteCandidateResult> {
+    const state = await readToolsState(this.toolsPrefix, provider);
+    if (state.candidate.length === 0) return { state: "error", message: "no staged candidate" };
+    const flipped: { slot: string; prior: string | undefined }[] = [];
+    const newPrior: StagedPackage[] = [];
+    const undo = async (): Promise<void> => {
+      for (const f of flipped.reverse()) {
+        if (!f.prior) continue;
+        const dir = path.join(this.toolsPrefix, "providers", f.slot);
+        const tmp = path.join(dir, `.current-${randToken()}`);
+        await symlink(f.prior, tmp).catch(() => undefined);
+        await rename(tmp, path.join(dir, "current")).catch(() => undefined);
+      }
+    };
+    try {
+      let expected: string | undefined;
+      let binary: string | undefined;
+      for (const c of state.candidate) {
+        const dir = path.join(this.toolsPrefix, "providers", c.slot);
+        const releaseDir = path.join(dir, "releases", c.release);
+        if (c.role === "cli") {
+          const recipe = this.resolveRecipe(provider);
+          if (recipe.kind !== "npm") return { state: "error", message: "not an npm toolset" };
+          binary = recipe.binary;
+          expected = await sha512OfResolved(
+            path.join(releaseDir, "node_modules", ".bin", recipe.binary)
+          );
+        }
+        const link = path.join(dir, "current");
+        const priorTarget = await readlink(link).catch(() => undefined);
+        const tmp = path.join(dir, `.current-${randToken()}`);
+        await symlink(path.join("releases", c.release), tmp);
+        await rename(tmp, link);
+        flipped.push({ slot: c.slot, prior: priorTarget });
+        if (priorTarget) {
+          const priorRelease = path.basename(priorTarget);
+          newPrior.push({
+            role: c.role,
+            slot: c.slot,
+            pkg: c.pkg,
+            version:
+              (await this.readInstalledVersion(path.join(dir, "releases", priorRelease), c.pkg)) ??
+              "unknown",
+            release: priorRelease
+          });
+        }
+      }
+      if (binary !== undefined && expected !== undefined) {
+        await this.ensureBinSymlink(provider, binary);
+        const actual = await sha512OfResolved(this.binPath(binary));
+        if (!hashEq(actual, expected)) {
+          await undo();
+          return { state: "error", message: "post-promote integrity check failed" };
+        }
+        this.pinnedHash.set(provider, expected);
+      }
+    } catch (err) {
+      await undo();
+      return { state: "error", message: redactInstallMessage(err) };
+    }
+    await writeToolsState(this.toolsPrefix, provider, {
+      ...state,
+      candidate: [],
+      prior: newPrior
+    });
+    // The previous generation of `prior` is no longer rollback material.
+    for (const old of state.prior) {
+      if (!newPrior.some((n) => n.slot === old.slot && n.release === old.release)) {
+        await rm(path.join(this.toolsPrefix, "providers", old.slot, "releases", old.release), {
+          recursive: true,
+          force: true
+        }).catch(() => undefined);
+      }
+    }
+    return { state: "promoted" };
+  }
+
+  /** Record the outcome of the last live check in `state.json`. */
+  async recordCheck(provider: RpcProviderKind, check: LastCheck): Promise<void> {
+    const release = await this.lockFor(provider).acquire();
+    try {
+      const state = await readToolsState(this.toolsPrefix, provider);
+      await writeToolsState(this.toolsPrefix, provider, { ...state, lastCheck: check });
+    } finally {
+      release();
     }
   }
 
@@ -908,7 +1023,7 @@ export class InstallService {
     const keep = new Set<string>();
     for (const provider of Object.keys(this.deps.catalog)) {
       const state = await readToolsState(this.toolsPrefix, provider);
-      for (const c of state.candidate) {
+      for (const c of [...state.candidate, ...state.prior]) {
         keep.add(path.join(this.toolsPrefix, "providers", c.slot, "releases", c.release));
       }
     }
@@ -1038,13 +1153,19 @@ export class InstallService {
       "openai-compatible": [],
       google: []
     };
+    const lastCheck: Record<RpcProviderKind, RpcCliLastCheck | null> = {
+      anthropic: null,
+      "openai-compatible": null,
+      google: null
+    };
     let manifestSequence = 0;
     for (const provider of Object.keys(candidates) as RpcProviderKind[]) {
       const state = await readToolsState(this.toolsPrefix, provider);
+      lastCheck[provider] = state.lastCheck ?? null;
       manifestSequence = Math.max(manifestSequence, state.manifestSequence);
       candidates[provider] = state.candidate.map((c) => ({ pkg: c.pkg, version: c.version }));
     }
-    return { manifestSequence, candidates };
+    return { manifestSequence, candidates, lastCheck };
   }
 
   /** Resolve the absolute dir `providers/<provider>/current` points at, or undefined. */

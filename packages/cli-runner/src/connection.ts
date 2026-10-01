@@ -29,6 +29,8 @@ import {
   type RpcFrame,
   type RpcHandshakeFrame,
   type RpcInstallProviderParams,
+  type RpcPromoteCliCandidateParams,
+  type RpcRecordCliCheckParams,
   type RpcStageCliCandidateParams,
   type RpcKillParams,
   type RpcKillTerminalParams,
@@ -513,6 +515,27 @@ async function invoke(
         }
       }
       return host.stageCliCandidate(p);
+    }
+    case "promoteCliCandidate": {
+      const p = req.params as RpcPromoteCliCandidateParams;
+      if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
+      return host.promoteCliCandidate(p);
+    }
+    case "recordCliCheck": {
+      const p = req.params as RpcRecordCliCheckParams;
+      if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
+      if (
+        typeof p.at !== "string" ||
+        (p.result !== "passed" && p.result !== "failed") ||
+        typeof p.reason !== "string" ||
+        p.reason.length > 64 ||
+        !Array.isArray(p.versions) ||
+        p.versions.length > 8 ||
+        !p.versions.every((v) => typeof v === "string" && v.length <= 64)
+      ) {
+        throw new BadRequestError("invalid check record");
+      }
+      return host.recordCliCheck(p);
     }
     case "getCliToolsState":
       return host.getCliToolsState();

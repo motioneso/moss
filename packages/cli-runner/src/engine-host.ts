@@ -33,6 +33,9 @@ import {
   type RpcBeginLoginResult,
   type RpcCancelLoginResult,
   type RpcInstallProviderResult,
+  type RpcPromoteCliCandidateParams,
+  type RpcPromoteCliCandidateResult,
+  type RpcRecordCliCheckParams,
   type RpcStageCliCandidateParams,
   type RpcStageCliCandidateResult,
   type RpcLaunchParams,
@@ -773,6 +776,27 @@ export class CliChatEngineHost {
       params.manifestSequence
     );
     return r.state === "staged" ? { state: "staged" } : { state: "error", message: r.message };
+  }
+
+  /** #2689 slice 4: flip a staged candidate live. */
+  async promoteCliCandidate(
+    params: RpcPromoteCliCandidateParams
+  ): Promise<RpcPromoteCliCandidateResult> {
+    if (!this.deps.installService) {
+      return { state: "error", message: "install service unavailable on this build" };
+    }
+    return this.deps.installService.promoteCandidate(params.provider);
+  }
+
+  /** #2689 slice 4: store the last live-check result. */
+  async recordCliCheck(params: RpcRecordCliCheckParams): Promise<{ ok: true }> {
+    await this.deps.installService?.recordCheck(params.provider, {
+      at: params.at,
+      result: params.result,
+      reason: params.reason,
+      versions: params.versions
+    });
+    return { ok: true };
   }
 
   /** #2689 slice 4: updater state; undefined on a build without an installer. */

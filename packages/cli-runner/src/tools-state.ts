@@ -15,12 +15,37 @@ export interface StagedPackage {
   readonly release: string;
 }
 
+export interface LastCheck {
+  /** ISO time of the check. */
+  readonly at: string;
+  readonly result: "passed" | "failed";
+  /** Fixed reason code from the check, never raw tool output. */
+  readonly reason: string;
+  /** Candidate versions the check ran against. */
+  readonly versions: readonly string[];
+}
+
 export interface ToolsState {
   readonly manifestSequence: number;
   readonly candidate: readonly StagedPackage[];
+  /** Releases that were live before the last promote. Kept until the next successful promote. */
+  readonly prior: readonly StagedPackage[];
+  readonly lastCheck?: LastCheck;
 }
 
-export const EMPTY_TOOLS_STATE: ToolsState = { manifestSequence: 0, candidate: [] };
+export const EMPTY_TOOLS_STATE: ToolsState = { manifestSequence: 0, candidate: [], prior: [] };
+
+function isLastCheck(v: unknown): v is LastCheck {
+  if (typeof v !== "object" || v === null) return false;
+  const r = v as Record<string, unknown>;
+  return (
+    typeof r.at === "string" &&
+    (r.result === "passed" || r.result === "failed") &&
+    typeof r.reason === "string" &&
+    Array.isArray(r.versions) &&
+    r.versions.every((x) => typeof x === "string")
+  );
+}
 
 const RELEASE_RE = /^[A-Za-z0-9_-]{4,64}$/;
 const SLOT_RE = /^[a-z][a-z0-9-]{0,63}$/;
@@ -51,7 +76,15 @@ export async function readToolsState(toolsPrefix: string, provider: string): Pro
     const seq = r.manifestSequence;
     if (!Number.isInteger(seq) || (seq as number) < 0) return EMPTY_TOOLS_STATE;
     if (!Array.isArray(r.candidate) || !r.candidate.every(isStaged)) return EMPTY_TOOLS_STATE;
-    return { manifestSequence: seq as number, candidate: r.candidate };
+    const prior = r.prior === undefined ? [] : r.prior;
+    if (!Array.isArray(prior) || !prior.every(isStaged)) return EMPTY_TOOLS_STATE;
+    if (r.lastCheck !== undefined && !isLastCheck(r.lastCheck)) return EMPTY_TOOLS_STATE;
+    return {
+      manifestSequence: seq as number,
+      candidate: r.candidate,
+      prior,
+      ...(r.lastCheck !== undefined ? { lastCheck: r.lastCheck as LastCheck } : {})
+    };
   } catch {
     return EMPTY_TOOLS_STATE;
   }
