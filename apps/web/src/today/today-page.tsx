@@ -8,7 +8,13 @@ import { Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
-import { localDay, readPlanContext, type MeResponse, type TaskDto } from "@moss/shared";
+import {
+  eventCoversDay,
+  localDay,
+  readPlanContext,
+  type MeResponse,
+  type TaskDto
+} from "@moss/shared";
 import {
   getBriefingRun,
   getDayPlan,
@@ -305,7 +311,7 @@ export function TodayPage(props: {
   );
   const tomorrowKey = addDaysToKey(localDay(now, locale.timezone), 1);
   const tomorrowEvents = useMemo(
-    () => events.filter((e) => localDay(e.startsAt, locale.timezone) === tomorrowKey).sort(byStart),
+    () => events.filter((e) => eventCoversDay(e, tomorrowKey, locale.timezone)).sort(byStart),
     [events, locale.timezone, tomorrowKey]
   );
   const tomorrowPlanQuery = useQuery({

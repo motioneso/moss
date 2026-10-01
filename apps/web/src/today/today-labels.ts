@@ -1,4 +1,5 @@
 import {
+  eventCoversDay,
   localDay,
   type CalendarEventDto,
   type LocaleSettingsDto,
@@ -128,9 +129,9 @@ export function dueTs(task: TaskDto): number {
   return task.dueAt ? new Date(task.dueAt).getTime() : Number.MAX_SAFE_INTEGER;
 }
 
-/** Whether a calendar event starts on the user's local "today" (#579). */
+/** Whether a calendar event falls on the user's local "today" (#579, #2503). */
 export function isToday(event: CalendarEventDto, timeZone?: string): boolean {
-  return localDay(event.startsAt, timeZone) === localDay(new Date(), timeZone);
+  return eventCoversDay(event, localDay(new Date(), timeZone), timeZone);
 }
 
 export function byStart(a: CalendarEventDto, b: CalendarEventDto): number {
