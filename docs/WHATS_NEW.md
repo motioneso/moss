@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Tool updates are tested before they are used.** When a newer version of the Claude or Codex tools is available, Moss now tries it out first and keeps the current one if the test fails, and the AI providers screen tells you what happened and lets you try again. [PR #2836](https://github.com/motioneso/moss/pull/2836)
 - **Provider cards show the installed AI tool version.** Each AI provider card now shows which version of its helper tool is installed, and a clear message appears when the tool is too old for the chosen model. [PR #2818](https://github.com/motioneso/moss/pull/2818)
 - **Favorite models in the chat model picker.** The chat model picker now groups models by provider, and you can star models to keep them at the top. [PR #2812](https://github.com/motioneso/moss/pull/2812)
 
