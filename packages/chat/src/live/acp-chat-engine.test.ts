@@ -603,6 +603,48 @@ describe("AcpChatEngine", () => {
       expect(update2?.text.endsWith("…")).toBe(true);
     });
 
+    it("shows quotes and ampersands in a gateway-wrapped result as plain characters (#2816)", () => {
+      const wrapped =
+        '<tool_result source="briefings.run">\n{&quot;title&quot;: &quot;Tom &amp;amp; Jerry&quot;, &#39;x&#39;}\n</tool_result>';
+      const record = formatResultRecord({ toolCallId: "call-q", rawOutput: wrapped });
+      expect(record?.text).toBe(`{"title": "Tom &amp; Jerry", 'x'}`);
+    });
+
+    it("keeps angle-bracket markup in a wrapped result as literal text (#2816)", () => {
+      const wrapped =
+        '<tool_result source="web.fetch">\n&lt;script&gt;alert(1)&lt;/script&gt; &amp;lt;b&amp;gt;\n</tool_result>';
+      const text = formatResultRecord({ rawOutput: wrapped })?.text ?? "";
+      expect(text).toBe("<script>alert(1)</script> &lt;b&gt;");
+    });
+
+    it("reads the wrapped text out of a nested tool response, as the live chat sends it (#2816)", () => {
+      const text =
+        '<tool_result source="briefings.getRunStatus">\n{\n  &quot;state&quot;: &quot;not_found&quot;\n}\n</tool_result>';
+      const record = formatResultRecord({
+        toolCallId: "call-n",
+        rawOutput: {
+          result: { content: [{ type: "text", text }], structuredContent: null },
+          error: null
+        }
+      });
+      expect(record?.text).toBe('{\n  "state": "not_found"\n}');
+    });
+
+    it("peels the envelope before the display cap, so long results are still plain (#2816)", () => {
+      const body = "&quot;".repeat(300);
+      const wrapped = `<tool_result source="t.tool">\n${body}\n</tool_result>`;
+      const text = formatResultRecord({ rawOutput: wrapped })?.text ?? "";
+      expect(text).toBe('"'.repeat(300));
+    });
+
+    it("leaves the model-facing wrapped text byte-identical (#2816)", async () => {
+      const { renderAndCap } = await import("@moss/ai");
+      const out = renderAndCap(undefined, { data: { q: 'a "b" & <c>' } } as never, "t.tool");
+      expect(out.text).toBe(
+        '<tool_result source="t.tool">\n{\n  &quot;q&quot;: &quot;a \\&quot;b\\&quot; &amp; &lt;c&gt;&quot;\n}\n</tool_result>'
+      );
+    });
+
     it("maps approval and refusal lines", () => {
       // Approved
       const approved = formatApprovalRecord({
