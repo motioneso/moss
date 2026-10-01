@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Steadier morning briefing order.** Your morning briefing now lists timed events in clock order before open-ended tasks, folds quiet events into the opening, and always gives sports its own heading. [PR #2849](https://github.com/motioneso/moss/pull/2849)
 
+#### Fixed
+
+- **Quote marks in chat tool steps.** Expanding a step in the chat now shows quote marks and ampersands as normal characters instead of strange codes. [PR #2848](https://github.com/motioneso/moss/pull/2848)
+
 ### 2026-09-30
 
 #### Added
