@@ -108,7 +108,7 @@ export function registerProviderVisibilityRoutes(
           }
         );
 
-        return { models: models.map((m) => serializeModel(m, accessContext.actorUserId)) };
+        return { models: models.map((m) => serializeModel(m, accessContext.actorUserId, true)) };
       } catch (error) {
         return handleRouteError(error, reply);
       }

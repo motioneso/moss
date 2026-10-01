@@ -13,13 +13,16 @@ const MODEL_CAPABILITIES = new Set<AiModelCapability>(AI_MODEL_CAPABILITIES);
  * Row -> DTO for a configured model. Lives outside routes.ts so provider-validation-routes.ts
  * (#2208 refresh route) can use it without importing routes.ts back (routes.ts imports that file).
  * Non-owners see the model through the instance-default lens: provider ids and the raw model id
- * are hidden.
+ * are hidden. Callers that have already asserted the viewer is an instance admin pass
+ * `viewerIsAdmin` for the owner view. The database still decides which rows an admin can read
+ * (own rows and active-admin-owned rows), so a regular user's personal provider never arrives here.
  */
 export function serializeModel(
   model: AiConfiguredModelSafeRow,
-  actorUserId: string
+  actorUserId: string,
+  viewerIsAdmin = false
 ): AiConfiguredModelDto {
-  const isOwner = model.owner_user_id === actorUserId;
+  const isOwner = viewerIsAdmin || model.owner_user_id === actorUserId;
   const displayProviderName = isOwner ? model.provider_display_name : "Instance default";
   return {
     id: model.id,

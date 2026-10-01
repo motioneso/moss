@@ -130,3 +130,4 @@ blocking	apps/web/src/today/today-rail.tsx	tests/uat/specs/2783-today-morning-si
 blocking	apps/web/src/today/**	tests/uat/specs/2786-task-block-detail.uat.spec.ts
 blocking	apps/web/src/settings/cli-update-status.tsx	tests/uat/specs/2689-cli-update-card.uat.spec.ts
 blocking	packages/ai/src/cli-tools-status.ts	tests/uat/specs/2689-cli-update-card.uat.spec.ts
+blocking	packages/ai/src/serialize-model.ts	tests/uat/specs/2842-admin-provider-view.uat.spec.ts
