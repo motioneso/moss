@@ -68,6 +68,9 @@ import {
   type RpcLaunchResult,
   type RpcListLiveSessionsResult,
   type RpcListCliToolVersionsResult,
+  type RpcStageCliCandidateParams,
+  type RpcStageCliCandidateResult,
+  type RpcGetCliToolsStateResult,
   type RpcListProviderModelsParams,
   type RpcListProviderModelsResult,
   type RpcMethod,
@@ -267,6 +270,7 @@ export class RpcConnection {
       case "kill":
       case "purgeTranscripts": // #744 — bounded per-session verb, same class as kill
       case "listCliToolVersions": // #2689 — a few small file reads
+      case "getCliToolsState": // #2689 slice 4 — a few small file reads
         return this.turnTimeoutMs;
       case "launch":
         // NOTE: JARVIS_CLI_RUNNER_RPC_TIMEOUT_MS raises turnTimeoutMs for ALL turn verbs, not just
@@ -458,6 +462,16 @@ export class RpcConnection {
   /** #2689: installed command-line tool versions; null on a runner without an installer. */
   listCliToolVersions(): Promise<RpcListCliToolVersionsResult | null> {
     return this.call<RpcListCliToolVersionsResult | null>("listCliToolVersions", undefined, {});
+  }
+
+  /** #2689 slice 4: stage a candidate toolset. Server-budgeted like installProvider (no deadline). */
+  stageCliCandidate(params: RpcStageCliCandidateParams): Promise<RpcStageCliCandidateResult> {
+    return this.call<RpcStageCliCandidateResult>("stageCliCandidate", undefined, params);
+  }
+
+  /** #2689 slice 4: updater state; null on a runner without an installer. */
+  getCliToolsState(): Promise<RpcGetCliToolsStateResult | null> {
+    return this.call<RpcGetCliToolsStateResult | null>("getCliToolsState", undefined, {});
   }
 
   /** Tear down the connection (process shutdown). Idempotent. */

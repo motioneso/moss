@@ -33,6 +33,8 @@ import {
   type RpcBeginLoginResult,
   type RpcCancelLoginResult,
   type RpcInstallProviderResult,
+  type RpcStageCliCandidateParams,
+  type RpcStageCliCandidateResult,
   type RpcLaunchParams,
   type RpcLaunchResult,
   type RpcKillParams,
@@ -760,6 +762,24 @@ export class CliChatEngineHost {
     }
     return this.deps.installService.installProvider(provider);
   }
+  /** #2689 slice 4: stage a candidate toolset. Errors carry redacted text only. */
+  async stageCliCandidate(params: RpcStageCliCandidateParams): Promise<RpcStageCliCandidateResult> {
+    if (!this.deps.installService) {
+      return { state: "error", message: "install service unavailable on this build" };
+    }
+    const r = await this.deps.installService.stageCandidate(
+      params.provider,
+      params.packages,
+      params.manifestSequence
+    );
+    return r.state === "staged" ? { state: "staged" } : { state: "error", message: r.message };
+  }
+
+  /** #2689 slice 4: updater state; undefined on a build without an installer. */
+  async getCliToolsState() {
+    return this.deps.installService?.toolsState();
+  }
+
   /** #2689: installed tool versions; undefined on a build without an installer. */
   async listCliToolVersions() {
     return this.deps.installService?.toolVersions();

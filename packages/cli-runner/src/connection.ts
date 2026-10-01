@@ -29,6 +29,7 @@ import {
   type RpcFrame,
   type RpcHandshakeFrame,
   type RpcInstallProviderParams,
+  type RpcStageCliCandidateParams,
   type RpcKillParams,
   type RpcKillTerminalParams,
   type RpcLaunchParams,
@@ -492,6 +493,29 @@ async function invoke(
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
       return host.installProvider(provider);
     }
+    case "stageCliCandidate": {
+      const p = req.params as RpcStageCliCandidateParams;
+      if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
+      if (!Number.isInteger(p.manifestSequence) || p.manifestSequence < 1) {
+        throw new BadRequestError("manifestSequence must be a positive integer");
+      }
+      if (!Array.isArray(p.packages) || p.packages.length > 8) {
+        throw new BadRequestError("packages must be a short list");
+      }
+      for (const pkg of p.packages) {
+        if (
+          (pkg?.role !== "cli" && pkg?.role !== "chat-adapter") ||
+          typeof pkg.pkg !== "string" ||
+          typeof pkg.version !== "string" ||
+          typeof pkg.lockfileText !== "string"
+        ) {
+          throw new BadRequestError("invalid candidate package");
+        }
+      }
+      return host.stageCliCandidate(p);
+    }
+    case "getCliToolsState":
+      return host.getCliToolsState();
     case "listProviderModels": {
       // #2208: non-session; kind and persisted ACP identity guards ⇒ bad_request. Every other outcome (not logged in,
       // unsupported, vendor failure) is a normal RpcOk result, never an RpcErr.

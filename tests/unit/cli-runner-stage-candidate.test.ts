@@ -25,6 +25,7 @@ const CLI_PKG = "@anthropic-ai/claude-code";
 const ADAPTER_PKG = "@agentclientprotocol/claude-agent-acp";
 const cli = PROVIDER_CATALOG.anthropic.recipe;
 if (cli?.kind !== "npm") throw new Error("fixture: anthropic recipe missing");
+const CLI_VERSION = cli.version;
 const adapter = ADAPTER_CATALOG.anthropic;
 if (!adapter) throw new Error("fixture: anthropic adapter missing");
 
@@ -79,7 +80,7 @@ function makeIo(): TmuxIo {
       }
       if (args.length === 1 && args[0] === "--version") {
         const bin = await readFile(cmd, "utf8").catch(() => "");
-        const v = /\n(\d+\.\d+\.\d+)\n/.exec(bin)?.[1] ?? cli.version;
+        const v = /\n(\d+\.\d+\.\d+)\n/.exec(bin)?.[1] ?? CLI_VERSION;
         return { code: 0, stdout: `${v}\n`, stderr: "" };
       }
       if (cmd === "ls") {

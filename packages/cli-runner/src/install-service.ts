@@ -58,6 +58,7 @@ import type {
   ProviderCatalog,
   RpcInstallProviderResult,
   RpcListCliToolVersionsResult,
+  RpcGetCliToolsStateResult,
   RpcProviderKind
 } from "@moss/chat/live";
 
@@ -359,6 +360,15 @@ export class InstallService {
     manifestSequence: number
   ): Promise<StageCandidateResult> {
     {
+      if (packages.length === 0) {
+        // Nothing newer than live: only record that this manifest was seen. A staged candidate stays.
+        const prior = await readToolsState(this.toolsPrefix, provider);
+        await writeToolsState(this.toolsPrefix, provider, {
+          manifestSequence: Math.max(prior.manifestSequence, manifestSequence),
+          candidate: prior.candidate
+        });
+        return { state: "staged", staged: prior.candidate };
+      }
       const staged: StagedPackage[] = [];
       const cleanup = async (): Promise<void> => {
         for (const s of staged) {
@@ -1019,6 +1029,22 @@ export class InstallService {
       versions[provider] = (await this.readInstalledVersion(release, recipe.pkg)) ?? null;
     }
     return { providers: versions, opencode: await readOpenCodeVersion() };
+  }
+
+  /** #2689 slice 4: highest accepted manifest sequence and the staged candidates, versions only. */
+  async toolsState(): Promise<RpcGetCliToolsStateResult> {
+    const candidates: Record<RpcProviderKind, { pkg: string; version: string }[]> = {
+      anthropic: [],
+      "openai-compatible": [],
+      google: []
+    };
+    let manifestSequence = 0;
+    for (const provider of Object.keys(candidates) as RpcProviderKind[]) {
+      const state = await readToolsState(this.toolsPrefix, provider);
+      manifestSequence = Math.max(manifestSequence, state.manifestSequence);
+      candidates[provider] = state.candidate.map((c) => ({ pkg: c.pkg, version: c.version }));
+    }
+    return { manifestSequence, candidates };
   }
 
   /** Resolve the absolute dir `providers/<provider>/current` points at, or undefined. */
