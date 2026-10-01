@@ -10,7 +10,7 @@ import { EmailRepository } from "@moss/email";
 
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
-import { extractEmailSignals, senderAddress } from "./email-extract.js";
+import { extractEmailSignals, looksLikeOneTimeCodeEmail, senderAddress } from "./email-extract.js";
 import { ownAddressSet, userSentLastInThread } from "./email-sorting.js";
 import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
@@ -197,7 +197,7 @@ export async function runImapSync(
             sender: parsed.from,
             recipients: parsed.recipients,
             subject: parsed.subject,
-            snippet: parsed.snippet,
+            snippet: looksLikeOneTimeCodeEmail(parsed) ? null : parsed.snippet,
             receivedAt: parsed.receivedAt,
             externalMetadata: {},
             summary: extracted.summary,
