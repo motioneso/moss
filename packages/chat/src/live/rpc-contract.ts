@@ -634,6 +634,8 @@ export interface RpcAcpSpawnParams {
   readonly userId: string;
   /** Which surface the session serves. The host applies that profile's launch rules. */
   readonly profile: string;
+  /** Run the staged candidate tools instead of the live ones. Only the version check sets this. */
+  readonly useCandidate?: boolean;
 }
 /** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
 export interface RpcAcpSpawnResult {

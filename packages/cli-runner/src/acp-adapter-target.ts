@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 
 import { getAcpProviderRow, type AcpProviderKind } from "@moss/acp";
 
-import { resolveToolsVolumeAdapterEntry } from "./tools-volume-adapters.js";
+import { resolveToolsVolumeAdapterEntry, type ReleaseOverrides } from "./tools-volume-adapters.js";
 
 /** What runs for one adapter spawn: node plus the row's pinned entry, or the provider binary. */
 export interface AcpAdapterTarget {
@@ -20,11 +20,12 @@ const ADAPTER_ENTRY_PACKAGES = {
 /** Resolve the spawn target for a provider kind; unknown kinds are refused by the row lookup. */
 export function defaultResolveAdapterTarget(
   kind: AcpProviderKind,
-  toolsPrefix?: string
+  toolsPrefix?: string,
+  overrides?: ReleaseOverrides
 ): AcpAdapterTarget {
   getAcpProviderRow(kind);
   if (toolsPrefix && (kind === "anthropic" || kind === "openai")) {
-    const installed = resolveToolsVolumeAdapterEntry(toolsPrefix, kind);
+    const installed = resolveToolsVolumeAdapterEntry(toolsPrefix, kind, overrides);
     if (installed) return { command: process.execPath, args: [installed] };
   }
   if (kind === "opencode") {

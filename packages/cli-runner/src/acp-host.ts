@@ -59,7 +59,11 @@ import { createOwnerIo } from "./per-user-structured.js";
 import { codexPeerHomesFor, runnerOwnIdentity, sweepIdentity } from "./shared-uid.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
-import { applyToolsVolumeCli } from "./tools-volume-adapters.js";
+import {
+  applyToolsVolumeCli,
+  candidateReleasesFor,
+  type ReleaseOverrides
+} from "./tools-volume-adapters.js";
 import { defaultResolveAdapterTarget, type AcpAdapterTarget } from "./acp-adapter-target.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
@@ -303,7 +307,8 @@ export class AcpHost {
     projectId: string,
     providerKind: AcpProviderKind,
     userId: string,
-    profile: AcpProfile
+    profile: AcpProfile,
+    useCandidate = false
   ): Promise<AcpSpawnResult> {
     if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
@@ -323,6 +328,17 @@ export class AcpHost {
       if (!row.chatReady) {
         throw new Error(`Not logged in (${row.chatBlockReason ?? "provider not ready"})`);
       }
+    }
+    // A check session runs the staged candidate instead of `current`. The folders come from the
+    // runner's own state file, and a missing candidate refuses the spawn.
+    let overrides: ReleaseOverrides | undefined;
+    if (useCandidate) {
+      if ((providerKind !== "anthropic" && providerKind !== "openai") || !this.deps.toolsPrefix) {
+        throw new Error("acpSpawn: no staged candidate for this provider");
+      }
+      const staged = await candidateReleasesFor(this.deps.toolsPrefix, providerKind);
+      if (!staged) throw new Error("acpSpawn: no staged candidate for this provider");
+      overrides = staged;
     }
     const key = sanitizeSessionKey(sessionKey);
     await this.killRecord(key);
@@ -375,7 +391,7 @@ export class AcpHost {
           HOME: agentHome
         };
         // One CLI copy: the adapter drives the tools volume CLI when one is installed.
-        applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind);
+        applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind, overrides);
         if (providerKind === "anthropic") {
           const token = await this.readLoginToken(homeBase);
           if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
@@ -466,7 +482,7 @@ export class AcpHost {
 
     const target =
       this.deps.resolveAdapterTarget?.(providerKind) ??
-      defaultResolveAdapterTarget(providerKind, this.deps.toolsPrefix);
+      defaultResolveAdapterTarget(providerKind, this.deps.toolsPrefix, overrides);
     const spawnChild =
       this.deps.spawnChild ??
       ((opts) => {

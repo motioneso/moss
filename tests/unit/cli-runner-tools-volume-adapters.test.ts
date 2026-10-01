@@ -2,12 +2,21 @@
  * Tools-volume adapter lookup (#2689 slice 2): the live release is found through
  * `providers/<slot>/current`, a missing or escaping path falls back to the image copy.
  */
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  candidateReleasesFor,
   resolveToolsVolumeAdapterEntry,
   resolveToolsVolumeCli
 } from "../../packages/cli-runner/src/tools-volume-adapters.js";
@@ -97,5 +106,41 @@ describe("resolveToolsVolumeCli", () => {
     mkdirSync(join(release, "node_modules/.bin"), { recursive: true });
     symlinkSync(outside, join(release, "node_modules/.bin/claude"));
     expect(resolveToolsVolumeCli(prefix, "anthropic")).toBeNull();
+  });
+});
+
+describe("candidate releases", () => {
+  function stageState(candidate: unknown[]): void {
+    writeFileSync(
+      join(prefix, "providers", "anthropic", "state.json"),
+      JSON.stringify({ manifestSequence: 1, candidate, prior: [] })
+    );
+  }
+
+  it("resolves the staged candidate and leaves the live release alone", async () => {
+    const live = installRelease("anthropic", "live1", { "node_modules/.bin/claude": "#!/bin/sh" });
+    installRelease("anthropic-adapter", "live2", { [CLAUDE_ENTRY]: "//" });
+    const cand = join(prefix, "providers", "anthropic", "releases", "cand1");
+    mkdirSync(join(cand, "node_modules/.bin"), { recursive: true });
+    writeFileSync(join(cand, "node_modules/.bin/claude"), "#!/bin/sh");
+    chmodSync(join(cand, "node_modules/.bin/claude"), 0o755);
+    stageState([
+      { role: "cli", slot: "anthropic", pkg: "p", version: "2", release: "cand1" },
+      { role: "chat-adapter", slot: "anthropic-adapter", pkg: "q", version: "2", release: "cand2" }
+    ]);
+
+    const overrides = await candidateReleasesFor(prefix, "anthropic");
+    expect(overrides).not.toBeNull();
+    expect(resolveToolsVolumeCli(prefix, "anthropic", overrides!)).toBe(
+      join(realpathSync(cand), "node_modules/.bin/claude")
+    );
+    expect(resolveToolsVolumeCli(prefix, "anthropic")).toBe(join(live, "node_modules/.bin/claude"));
+  });
+
+  it("reports no candidate when the state has none or only half a toolset", async () => {
+    mkdirSync(join(prefix, "providers", "anthropic"), { recursive: true });
+    expect(await candidateReleasesFor(prefix, "anthropic")).toBeNull();
+    stageState([{ role: "cli", slot: "anthropic", pkg: "p", version: "2", release: "cand1" }]);
+    expect(await candidateReleasesFor(prefix, "anthropic")).toBeNull();
   });
 });

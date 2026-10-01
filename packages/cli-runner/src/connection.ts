@@ -646,7 +646,8 @@ async function invoke(
         params.projectId,
         params.providerKind as AcpProviderKind,
         params.userId,
-        params.profile
+        params.profile,
+        params.useCandidate === true
       );
       if (!recordAcpSpawn(key, spawned.generation)) {
         await host.acpKill(key, { generation: spawned.generation });
