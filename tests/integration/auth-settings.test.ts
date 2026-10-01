@@ -557,6 +557,26 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
     });
   });
 
+  it.each([
+    ["pending", "account_pending_approval", "Account is pending approval"],
+    ["deactivated", "account_deactivated", "Account has been deactivated"]
+  ] as const)(
+    "answers the chat pending-action check with 403, not 500, for a %s user (#2681)",
+    async (state, code, message) => {
+      const joinRes =
+        state === "pending" ? await signUpPendingJoiner() : await signUpDeactivatedJoiner();
+
+      const res = await server.inject({
+        method: "GET",
+        url: "/api/ai/assistant-actions",
+        headers: { cookie: cookieHeader(joinRes.headers) }
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: message, code });
+    }
+  );
+
   it("blocks deactivated user from /api/modules with the fixed 403 literal (#1528)", async () => {
     const joinRes = await signUpDeactivatedJoiner();
 

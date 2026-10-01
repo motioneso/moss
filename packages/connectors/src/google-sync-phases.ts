@@ -118,6 +118,33 @@ interface PhaseContext {
 }
 
 /** What one email chunk hands back to the sync loop. */
+/**
+ * The row saved for one fetched Gmail message. A sign-in code message keeps no preview, so the
+ * code text never lands in a column other readers use.
+ */
+export function cachedEmailInput(
+  connectorAccountId: string,
+  parsed: ParsedEmail,
+  extracted: EmailExtractResult
+) {
+  return {
+    connectorAccountId,
+    externalId: parsed.externalId,
+    sender: parsed.from,
+    recipients: parsed.recipients,
+    subject: parsed.subject,
+    snippet: looksLikeOneTimeCodeEmail(parsed) ? null : parsed.snippet,
+    receivedAt: parsed.receivedAt,
+    externalMetadata: {
+      labelIds: parsed.labelIds,
+      historyId: parsed.historyId ?? null,
+      threadId: parsed.threadId ?? null
+    },
+    summary: extracted.summary,
+    signals: extracted.signals as Record<string, unknown>
+  };
+}
+
 export interface EmailPhaseResult {
   readonly nextCursor: string | undefined;
   readonly retry: boolean;
@@ -680,22 +707,10 @@ export async function runGoogleEmailPhase(
     : undefined;
   const persistEmail = (parsed: ParsedEmail, extracted: EmailExtractResult) =>
     withSavepoint(context.scopedDb, (savepointDb) =>
-      context.emailRepo.upsertCachedMessage(savepointDb, {
-        connectorAccountId: context.account.id,
-        externalId: parsed.externalId,
-        sender: parsed.from,
-        recipients: parsed.recipients,
-        subject: parsed.subject,
-        snippet: parsed.snippet,
-        receivedAt: parsed.receivedAt,
-        externalMetadata: {
-          labelIds: parsed.labelIds,
-          historyId: parsed.historyId ?? null,
-          threadId: parsed.threadId ?? null
-        },
-        summary: extracted.summary,
-        signals: extracted.signals as Record<string, unknown>
-      })
+      context.emailRepo.upsertCachedMessage(
+        savepointDb,
+        cachedEmailInput(context.account.id, parsed, extracted)
+      )
     );
   const projectKeys = async (keys: readonly string[]) => {
     if (!context.deps.actionProjection || keys.length === 0) return;
