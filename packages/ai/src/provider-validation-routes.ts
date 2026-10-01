@@ -180,7 +180,9 @@ export function registerAiProviderValidationRoutes(
         );
 
         return {
-          models: result.models.map((model) => serializeModel(model, accessContext.actorUserId)),
+          models: result.models.map((model) =>
+            serializeModel(model, accessContext.actorUserId, true)
+          ),
           ...(result.outcome.reason !== undefined ? { reason: result.outcome.reason } : {}),
           ...(result.outcome.message !== undefined ? { message: result.outcome.message } : {})
         };
