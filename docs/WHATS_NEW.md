@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Briefings skip finished commitments.** Your morning and evening briefings now only mention commitments that are still open, instead of ones you have already finished or dropped. [PR #2846](https://github.com/motioneso/moss/pull/2846)
 - **Refresh models on a shared AI provider.** An administrator can now refresh or add models on an AI provider that another administrator set up, instead of getting an error. [PR #2840](https://github.com/motioneso/moss/pull/2840)
 - **Fresher email, clearer sync errors.** New mail shows up sooner during long catch-ups, a failed sync now says why in plain words, and a message that keeps failing stops being retried forever. The Email extraction setting is now called Email reading. [PR #2819](https://github.com/motioneso/moss/pull/2819)
 
