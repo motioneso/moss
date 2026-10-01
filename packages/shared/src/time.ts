@@ -80,3 +80,29 @@ export function formatInZone(
     return rawFallback(input);
   }
 }
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+export interface DayCoverageEvent {
+  readonly startsAt: string;
+  readonly endsAt?: string | null;
+  readonly allDay?: boolean;
+}
+
+/**
+ * Whether an event falls on the calendar day `dayKey` (`YYYY-MM-DD`) for a viewer in `timeZone`.
+ *
+ * All-day events are stored as UTC midnights with an exclusive end date, so they are plain
+ * calendar dates and are compared as such. Timed events start on the viewer's local day.
+ */
+export function eventCoversDay(
+  event: DayCoverageEvent,
+  dayKey: string,
+  timeZone?: string
+): boolean {
+  if (event.allDay !== true) return localDay(event.startsAt, timeZone) === dayKey;
+  const start = event.startsAt.slice(0, 10);
+  if (!DATE_ONLY.test(start)) return false;
+  const end = typeof event.endsAt === "string" ? event.endsAt.slice(0, 10) : "";
+  return DATE_ONLY.test(end) && end > start ? start <= dayKey && dayKey < end : start === dayKey;
+}
