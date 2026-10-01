@@ -345,6 +345,53 @@ describe("AI provider model refresh (#2208)", () => {
       expect((await remove("00000000-0000-0000-0000-000000000000")).statusCode).toBe(404);
     });
   });
+  describe("a second admin on another admin's provider (#2820)", () => {
+    beforeEach(async () => {
+      await setInstanceAdmin(ids.userB);
+    });
+
+    afterAll(async () => {
+      const client = new Client({ connectionString: connectionStrings.bootstrap });
+      await client.connect();
+      try {
+        await client.query(`UPDATE app.users SET is_instance_admin = false WHERE id = $1`, [
+          ids.userB
+        ]);
+      } finally {
+        await client.end();
+      }
+    });
+
+    it("refreshes models and keeps them owned by the provider's owner", async () => {
+      const providerId = await createCliProvider();
+      listerAnswer = { status: "ok", models: [{ id: "claude-fable-5-1" }] };
+
+      const response = await refresh(providerId, ids.sessionB);
+
+      expect(response.statusCode).toBe(200);
+      const models = await dataContext.withDataContext(userContext(ids.userA), (db) =>
+        repository.listModels(db)
+      );
+      const added = models.find((model) => model.provider_model_id === "claude-fable-5-1");
+      expect(added?.owner_user_id).toBe(ids.userA);
+    });
+
+    it("adds a hand-typed model under the provider's owner", async () => {
+      const providerId = await createCliProvider();
+
+      const created = await dataContext.withDataContext(userContext(ids.userB), (db) =>
+        repository.createModel(db, {
+          providerConfigId: providerId,
+          providerModelId: "claude-hand-added",
+          displayName: "claude-hand-added",
+          capabilities: ["chat"]
+        })
+      );
+
+      expect(created.owner_user_id).toBe(ids.userA);
+    });
+  });
+
   it("tells an API-key provider's admin the key was rejected, then lists models once it is right", async () => {
     const providerId = await createSystemOneProvider();
     const realFetch = globalThis.fetch;

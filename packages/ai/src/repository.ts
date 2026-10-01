@@ -571,7 +571,7 @@ export class AiRepository {
     // The voice model row is managed solely by upsertVoiceEndpoint.
     const target = await scopedDb.db
       .selectFrom("app.ai_provider_configs")
-      .select("purpose")
+      .select(["purpose", "owner_user_id"])
       .where("id", "=", input.providerConfigId)
       .executeTakeFirst();
     if (!target || target.purpose !== "assistant") {
@@ -584,7 +584,9 @@ export class AiRepository {
       .values({
         id: randomUUID(),
         provider_config_id: input.providerConfigId,
-        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        // The model must share its provider's owner (composite foreign key), which differs from
+        // the actor when a second admin adds a model to another admin's provider (#2820).
+        owner_user_id: target.owner_user_id,
         provider_model_id: input.providerModelId,
         display_name: input.displayName,
         capabilities: [...input.capabilities],
@@ -625,6 +627,15 @@ export class AiRepository {
     assertDataContextDb(scopedDb);
     if (models.length === 0) return 0;
 
+    // Models share their provider's owner (composite foreign key), which differs from the actor
+    // when a second admin refreshes another admin's provider (#2820).
+    const provider = await scopedDb.db
+      .selectFrom("app.ai_provider_configs")
+      .select("owner_user_id")
+      .where("id", "=", providerConfigId)
+      .executeTakeFirst();
+    if (!provider) return 0;
+
     const now = new Date();
     let inserted = 0;
     for (const model of models) {
@@ -633,7 +644,7 @@ export class AiRepository {
         .values({
           id: randomUUID(),
           provider_config_id: providerConfigId,
-          owner_user_id: sql<string>`app.current_actor_user_id()`,
+          owner_user_id: provider.owner_user_id,
           provider_model_id: model.providerModelId,
           display_name: model.displayName,
           capabilities: [...model.capabilities],
