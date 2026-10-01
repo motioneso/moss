@@ -47,6 +47,15 @@ export interface HandleRouteErrorOptions {
  */
 const AUTH_401_MESSAGES = new Set(["Session is missing or expired"]);
 
+/**
+ * Account-state failures thrown by session resolution. Mapped to 403 with a fixed message so the
+ * thrown error's own text never reaches the client.
+ */
+const ACCOUNT_STATE_403: Readonly<Record<string, string>> = {
+  account_pending_approval: "Account is pending approval",
+  account_deactivated: "Account has been deactivated"
+};
+
 const DB_CONSTRAINT_FRAGMENTS = [
   "foreign key",
   "violates row-level security policy",
@@ -63,9 +72,10 @@ const DB_CONSTRAINT_FRAGMENTS = [
  *
  *  1. module-specific `mappers` (if provided)
  *  2. `HttpError` -> its own status code
- *  3. genuine auth failures -> 401 (ONLY the message above)
- *  4. DB-constraint violations -> 400 (only when `invalidRequestMessage` is set)
- *  5. anything else -> a SCRUBBED 500: the original error is logged server-side
+ *  3. account pending approval / deactivated -> 403 with a fixed message
+ *  4. genuine auth failures -> 401 (ONLY the message above)
+ *  5. DB-constraint violations -> 400 (only when `invalidRequestMessage` is set)
+ *  6. anything else -> a SCRUBBED 500: the original error is logged server-side
  *     but never echoed to the client, so internal details (stack fragments, SQL,
  *     library internals) cannot leak. Several per-module copies previously fell
  *     through to the framework's default handler, which echoes `error.message`.
@@ -90,6 +100,10 @@ export function handleRouteError(
   }
 
   if (error instanceof Error) {
+    const code = (error as Error & { code?: unknown }).code;
+    if (typeof code === "string" && Object.hasOwn(ACCOUNT_STATE_403, code)) {
+      return reply.code(403).send({ error: ACCOUNT_STATE_403[code], code });
+    }
     if (AUTH_401_MESSAGES.has(error.message)) {
       return reply.code(401).send({ error: error.message });
     }
