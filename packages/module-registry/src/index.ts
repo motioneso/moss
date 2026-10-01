@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
 import {
@@ -64,7 +64,7 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
-import { buildCliToolsRefresh } from "./cli-tools-refresh-wiring.js";
+import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
 import {
   GraphMemoryRecallService,
   ManualMemoryCandidateService,
@@ -132,6 +132,7 @@ import {
   registerChatRoutes,
   type ChatEngineFactory,
   type ChatRoutesDependencies,
+  type CheckTokenMinter,
   type RpcConnection
 } from "@moss/chat";
 // #1059 — terminal-rpc-client lives under chat's "./live" subpath (public.ts), not the package
@@ -3304,6 +3305,8 @@ export function registerBuiltInApiRoutes(
   // synchronously during the BUILT_IN_MODULES registerRoutes pass below, strictly before the
   // onReady hook further down that calls resolveChatEngineFactory (the only reader).
   let revokeMcpTokenBySessionId: ((chatSessionId: string) => void) | undefined;
+  // #2689: the chat wiring's minter for tokens limited to named tools; read by the version check.
+  let checkTokenMinter: CheckTokenMinter | undefined;
 
   // Onboarding probes: built synchronously (no boot-time probing) and forwarded to the settings
   // module. Each function probes lazily, per request, bounded by a short timeout. On the RPC path they
@@ -3537,6 +3540,9 @@ export function registerBuiltInApiRoutes(
     adoptMcpTokenRevoke: (fn: (chatSessionId: string) => void) => {
       revokeMcpTokenBySessionId = fn;
     },
+    adoptCheckTokenMinter: (minter: CheckTokenMinter) => {
+      checkTokenMinter = minter;
+    },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
       const { run, plan } = await dependencies.dataContext.withDataContext(
@@ -3598,13 +3604,31 @@ export function registerBuiltInApiRoutes(
     // the API process holds the runner connection.
     let stopCliToolsRefresh: (() => void) | undefined;
     server.addHook("onReady", async () => {
-      stopCliToolsRefresh = startCliToolsRefreshTimer(
-        buildCliToolsRefresh({
-          getConnection: getRpcConnection,
-          versionReader: deps.aiCliToolVersionReader,
-          ...(dependencies.fetchFn ? { fetchFn: dependencies.fetchFn } : {})
-        })
-      );
+      const refresh = buildCliToolsRefresh({
+        getConnection: getRpcConnection,
+        versionReader: deps.aiCliToolVersionReader,
+        ...(dependencies.fetchFn ? { fetchFn: dependencies.fetchFn } : {})
+      });
+      const check = buildCliVersionCheck({
+        getConnection: getRpcConnection,
+        getMinter: () => checkTokenMinter,
+        versionReader: deps.aiCliToolVersionReader,
+        listAdminIds: async () =>
+          (
+            await sql<{ id: string }>`
+              SELECT id FROM app.list_all_users()
+              WHERE is_instance_admin = true AND status = 'active'
+              ORDER BY is_bootstrap_owner DESC, id
+            `.execute(dependencies.rootDb)
+          ).rows.map((row) => row.id)
+      });
+      // Stage anything newer, then check whatever is staged. A failed check is not retried
+      // until 24 hours have passed, so the six-hour timer is safe.
+      stopCliToolsRefresh = startCliToolsRefreshTimer(async () => {
+        await refresh();
+        await check("anthropic");
+        await check("openai-compatible");
+      });
     });
     server.addHook("onClose", async () => {
       stopCliToolsRefresh?.();

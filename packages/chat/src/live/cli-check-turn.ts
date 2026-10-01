@@ -1,3 +1,8 @@
+import type { ProviderKind } from "@moss/ai";
+import type { AcpToolServer } from "@moss/acp";
+
+import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
+import type { RpcConnection } from "./chat-engine-rpc-client.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { CLI_VERSION_TOO_OLD_MESSAGE, isCliVersionTooOldError } from "./cli-version-errors.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
@@ -49,7 +54,7 @@ export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurn
         if (
           toolName &&
           record.kind === "tool" &&
-          normalize(record.toolName).endsWith(normalize(toolName))
+          normalize(record.toolName ?? "").endsWith(normalize(toolName))
         )
           called = true;
         if (record.kind === "reply") replyText += record.text;
@@ -78,4 +83,20 @@ export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurn
   } finally {
     await engine.kill().catch(() => undefined);
   }
+}
+
+/** An engine for one throwaway check session that runs the staged candidate tools. */
+export function createCandidateCheckEngine(opts: {
+  readonly connection: RpcConnection;
+  readonly provider: ProviderKind;
+  readonly userId: string;
+  readonly sessionKey: string;
+  readonly toolServer?: AcpToolServer;
+}): CliChatEngine {
+  return new AcpChatEngine(opts.provider, opts.sessionKey, {
+    tunnel: new RpcAcpTunnel(opts.connection, opts.sessionKey, { useCandidate: true }),
+    userId: opts.userId,
+    projectId: opts.sessionKey,
+    ...(opts.toolServer ? { toolServer: opts.toolServer } : {})
+  });
 }

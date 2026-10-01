@@ -2,12 +2,28 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { randomUUID } from "node:crypto";
+
 import {
   runCliToolsRefresh,
+  runCliVersionCheck,
+  runLiveCheckSteps,
+  STRUCTURED_CHECK_PROMPT,
+  TOOL_CHECK_PROMPT,
+  type CheckTurnOutcome,
   type CliToolVersionReader,
-  type CliToolsRefreshOutcome
+  type CliToolsRefreshOutcome,
+  type VersionCheckOutcome,
+  type CliVersionCheckPorts,
+  type LiveCheckResult,
+  type ProviderKind
 } from "@moss/ai";
-import type { RpcConnection } from "@moss/chat";
+import {
+  createCandidateCheckEngine,
+  runCheckTurn,
+  type CheckTokenMinter,
+  type RpcConnection
+} from "@moss/chat";
 
 import { MODULE_CATALOG_PUBLIC_KEYS } from "./distribution/catalog-signing.js";
 import { compareVersions } from "./distribution/cli-tools-manifest.js";
@@ -61,4 +77,107 @@ export function buildCliToolsRefresh(deps: {
       compareVersions,
       mossVersion: deps.mossVersion ?? readMossVersion
     });
+}
+
+const CHECK_TURN_TIMEOUT_MS = 90_000;
+const MAX_CHECK_USERS = 3;
+
+/**
+ * Build the version check over the one runner connection. The check runs as an active instance
+ * admin who holds a sign-in for the provider, because the program cannot answer without one. An
+ * admin whose check cannot run (no sign-in) is skipped and the next one is tried.
+ */
+export function buildCliVersionCheck(deps: {
+  readonly getConnection: () => RpcConnection | undefined;
+  readonly getMinter: () => CheckTokenMinter | undefined;
+  readonly versionReader: CliToolVersionReader | undefined;
+  readonly listAdminIds: () => Promise<readonly string[]>;
+  readonly raiseFailure?: CliVersionCheckPorts["raiseFailure"];
+}): (provider: ProviderKind, opts?: { force?: boolean }) => Promise<VersionCheckOutcome> {
+  const runTurn = async (
+    provider: ProviderKind,
+    userId: string,
+    prompt: string,
+    toolName?: string
+  ): Promise<CheckTurnOutcome> => {
+    const connection = deps.getConnection();
+    const minter = deps.getMinter();
+    if (!connection || (toolName && !minter)) return { ok: false, reason: "check_unavailable" };
+    const key = `cli-check-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+    let tokenSession: string | undefined;
+    try {
+      const toolServer =
+        toolName && minter
+          ? (() => {
+              tokenSession = key;
+              const minted = minter.mint(userId, key, [toolName]);
+              return {
+                url: minted.mcpServerUrl,
+                bearer: minted.token,
+                onClose: () => minter.revoke(key)
+              };
+            })()
+          : undefined;
+      const engine = createCandidateCheckEngine({
+        connection,
+        provider,
+        userId,
+        sessionKey: key,
+        ...(toolServer ? { toolServer } : {})
+      });
+      return await runCheckTurn({
+        engine,
+        launch: { neutralDir: "", personaPath: "", model: "default" },
+        prompt,
+        ...(toolName ? { toolName } : {}),
+        timeoutMs: CHECK_TURN_TIMEOUT_MS
+      });
+    } catch {
+      return { ok: false, reason: "check_unavailable" };
+    } finally {
+      if (tokenSession) minter?.revoke(tokenSession);
+    }
+  };
+
+  const runLiveCheck: CliVersionCheckPorts["runLiveCheck"] = async (provider) => {
+    const admins = (await deps.listAdminIds()).slice(0, MAX_CHECK_USERS);
+    let last: LiveCheckResult = { passed: false, reason: "check_unavailable" };
+    for (const userId of admins) {
+      last = await runLiveCheckSteps({
+        toolTurn: () => runTurn(provider, userId, TOOL_CHECK_PROMPT, "app.getMapSlice"),
+        structuredTurn: () => runTurn(provider, userId, STRUCTURED_CHECK_PROMPT)
+      });
+      if (last.reason !== "check_unavailable") return last;
+    }
+    return last;
+  };
+
+  return (provider, opts) =>
+    runCliVersionCheck(
+      provider,
+      {
+        getState: async (p) => {
+          const conn = deps.getConnection();
+          const state = await conn?.getCliToolsState();
+          if (!state) return null;
+          const versions = await deps.versionReader?.().catch(() => undefined);
+          return {
+            candidate: state.candidates[p] ?? [],
+            lastCheck: state.lastCheck[p] ?? null,
+            liveVersion: versions?.providers[p] ?? null
+          };
+        },
+        runLiveCheck,
+        promote: async (p) => {
+          const conn = deps.getConnection();
+          if (!conn) return { state: "error", message: "runner unavailable" };
+          return conn.promoteCliCandidate({ provider: p });
+        },
+        recordCheck: async (p, check) => {
+          await deps.getConnection()?.recordCliCheck({ provider: p, ...check });
+        },
+        ...(deps.raiseFailure ? { raiseFailure: deps.raiseFailure } : {})
+      },
+      opts
+    );
 }
