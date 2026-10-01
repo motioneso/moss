@@ -504,6 +504,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0249",
           name: "0249_email_judgement_requested_at.sql"
+        },
+        // #2844 — mark admin-created AI providers and models so other admins keep seeing them.
+        {
+          version: "0250",
+          name: "0250_ai_admin_created_visibility.sql"
         }
       ]);
     } finally {

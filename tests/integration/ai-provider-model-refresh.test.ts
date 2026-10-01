@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -431,9 +433,18 @@ describe("AI provider model refresh (#2208)", () => {
       }
     });
 
-    it("does not show a regular user's personal provider to an admin", async () => {
+    it("still shows an admin-created provider to another admin after the creator is demoted (#2844)", async () => {
       const providerId = await createCliProvider();
       await setInstanceAdmin(ids.userA, false);
+
+      const seenByAdmin = await dataContext.withDataContext(userContext(ids.userB), (db) =>
+        repository.listProviders(db)
+      );
+      expect(seenByAdmin.map((p) => p.id)).toContain(providerId);
+    });
+
+    it("does not show a regular user's personal provider to an admin", async () => {
+      const providerId = await createRegularUserProvider(ids.userC);
 
       const seenByAdmin = await dataContext.withDataContext(userContext(ids.userB), (db) =>
         repository.listProviders(db)
@@ -442,15 +453,20 @@ describe("AI provider model refresh (#2208)", () => {
     });
 
     it("refreshing a provider the admin cannot see saves nothing and does not leak", async () => {
-      const providerId = await createCliProvider();
-      await setInstanceAdmin(ids.userA, false);
+      const providerId = await createRegularUserProvider(ids.userC);
       listerAnswer = { status: "ok", models: [{ id: "claude-fable-5-1" }] };
 
       const response = await refresh(providerId, ids.sessionB);
 
       expect(response.statusCode).toBe(404);
-      await setInstanceAdmin(ids.userA);
-      expect(await storedModelIds(providerId)).toEqual(["default"]);
+      const ownerModels = await dataContext.withDataContext(userContext(ids.userC), (db) =>
+        repository.listModels(db)
+      );
+      expect(
+        ownerModels
+          .filter((model) => model.provider_config_id === providerId)
+          .map((model) => model.provider_model_id)
+      ).toEqual(["default"]);
     });
   });
 
@@ -483,6 +499,29 @@ describe("AI provider model refresh (#2208)", () => {
 
 function userContext(actorUserId: string): AccessContext {
   return { actorUserId, requestId: `request:${actorUserId}-model-refresh` };
+}
+
+async function createRegularUserProvider(ownerUserId: string): Promise<string> {
+  const providerId = randomUUID();
+  const client = new Client({ connectionString: connectionStrings.bootstrap });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO app.ai_provider_configs
+         (id, owner_user_id, provider_kind, display_name, auth_method, acp_agent_id, encrypted_credential)
+       VALUES ($1, $2, 'anthropic', 'Personal Claude', 'cli', 'claude-acp', $3::jsonb)`,
+      [providerId, ownerUserId, JSON.stringify(createAiSecretCipher().encryptJson({ cli: true }))]
+    );
+    await client.query(
+      `INSERT INTO app.ai_configured_models
+         (id, provider_config_id, owner_user_id, provider_model_id, display_name, capabilities)
+       VALUES ($1, $2, $3, 'default', 'Default', ARRAY['chat'])`,
+      [randomUUID(), providerId, ownerUserId]
+    );
+  } finally {
+    await client.end();
+  }
+  return providerId;
 }
 
 async function setInstanceAdmin(userId: string, value = true): Promise<void> {
