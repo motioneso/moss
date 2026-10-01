@@ -66,10 +66,15 @@ test("a second admin sees the models of a provider another admin added (#2842)",
   await page.getByRole("button", { name: "Add provider" }).click();
   await page.getByRole("button", { name: "Anthropic", exact: true }).click();
   const ownerCard = page.locator(".prov").filter({ has: page.getByLabel("Remove Anthropic") });
-  await ownerCard.getByRole("button", { name: /^Models · \d+/ }).click();
-  await expect(ownerCard.locator(".mdl__id").first()).toBeVisible({ timeout: 30_000 });
+  // No provider CLI on this stack, so nothing is discovered; admin one types a model in by hand.
+  await ownerCard.getByRole("button", { name: "Add model", exact: true }).click();
+  await ownerCard.getByLabel("Model id").fill("uat-shared-model");
+  await ownerCard.getByLabel("Display name").fill("UAT Shared Model");
+  await ownerCard.getByRole("button", { name: "Add model", exact: true }).last().click();
+  await expect(ownerCard.locator(".mdl__id", { hasText: "uat-shared-model" })).toBeVisible({
+    timeout: 30_000
+  });
   const ownerModelCount = await ownerCard.locator(".mdl__id").count();
-  expect(ownerModelCount).toBeGreaterThan(0);
   await shot(page, "01-admin-one-provider-models");
 
   // --- Host side: the second account becomes an admin (no screen promotes users here).
@@ -104,7 +109,9 @@ test("a second admin sees the models of a provider another admin added (#2842)",
     await expect(header).toBeVisible();
     await header.click();
     // The model id line is blank when the screen hides ids from a non-owner.
-    await expect(card.locator(".mdl__id").first()).toHaveText(/\S/, { timeout: 30_000 });
+    await expect(card.locator(".mdl__id", { hasText: "uat-shared-model" })).toBeVisible({
+      timeout: 30_000
+    });
     expect(await card.locator(".mdl__id").count()).toBe(ownerModelCount);
     await shot(second, "02-admin-two-sees-model-ids");
 
@@ -114,7 +121,7 @@ test("a second admin sees the models of a provider another admin added (#2842)",
     );
     await card.getByRole("button", { name: "Refresh models" }).click();
     expect((await refreshed).status()).toBe(200);
-    await expect(card.locator(".mdl__id").first()).toHaveText(/\S/);
+    await expect(card.locator(".mdl__id", { hasText: "uat-shared-model" })).toBeVisible();
     await shot(second, "03-admin-two-after-refresh");
   } finally {
     await context.close();
