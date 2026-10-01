@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Today page jump links.** Jumping to a section on the Today page now leaves a gap below the top bar instead of tucking the section underneath it. [PR #2851](https://github.com/motioneso/moss/pull/2851)
 - **Quote marks in chat tool steps.** Expanding a step in the chat now shows quote marks and ampersands as normal characters instead of strange codes. [PR #2848](https://github.com/motioneso/moss/pull/2848)
 
 ### 2026-09-30
