@@ -67,8 +67,14 @@ enough to be worth what it costs in privacy and battery?
 ## 5. Capture on the Mac
 
 - **When it reads:** on an app switch, a window-title change, and otherwise at most every 10
-  seconds while the frontmost window's pixels have changed. A cheap check on a tiny downscaled frame
-  decides "changed". An unchanged screen costs nothing but that check.
+  seconds while the frontmost window's pixels have changed. Every trigger, including a switch,
+  checks a tiny downscaled frame against up to eight recently recognized screens per window.
+  Similar screens are skipped for up to 60 seconds since that screen's last successful recognition,
+  then read again so small text changes cannot be hidden indefinitely. The cache holds fingerprints,
+  not pictures, for at most 32 windows. Failed or cancelled recognition never marks a screen read.
+  After five minutes without keyboard or mouse input, capture and recognition pause; input resumes
+  them within five seconds, subject to the same global recognition budget. This also pauses during
+  passive viewing or screen sharing without input. The existing remembered text is kept.
 - **What it reads:** only the focused window of an allowed app, never the whole display. The
   capture is bound to that window's identity: its process and frame, matched to exactly one on-screen window, read fresh just before and just after the picture, which is the same window
   the never-watch check looked at. If the identity can't be established, for example because
@@ -94,7 +100,8 @@ enough to be worth what it costs in privacy and battery?
   "code"/"verification". The server runs `redactSecrets` again on arrival. Email addresses are
   **kept** in screen history, because "who sent that?" is often the point (Ben, 2026-09-23); focus
   judgment text still strips them.
-- **Budget:** at most one recognition every 10 seconds, and none while nothing changes. If the Mac
+- **Budget:** at most one recognition every 10 seconds; similar screens are skipped between the
+  one-minute freshness reads described above. If the Mac
   reports low power or thermal pressure, it backs off to one every 60 seconds. The target is under
   3% average CPU on an M1 Air across a working day. The live proof measures it (§10).
 

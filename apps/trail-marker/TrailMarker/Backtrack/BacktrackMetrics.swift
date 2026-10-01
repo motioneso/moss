@@ -5,7 +5,7 @@ import Foundation
 import os
 
 // Kill-gate follow-up (#2638, 2026-09-24): the day-1 CPU sample failed at 10.8%, so this measures
-// where the time goes before the loop is changed. Numbers only — no app, window, address or text
+// where the time goes across trial builds. Numbers only — no app, window, address or text
 // ever reaches these lines; the unified log keeps them where `log show` can count them:
 //
 //   /usr/bin/log show --last 2h --predicate 'subsystem == "com.moss.trailmarker" AND category == "backtrack-metrics"'
@@ -32,14 +32,16 @@ struct BacktrackStopwatch {
 @MainActor
 final class BacktrackMetrics {
     private let log = Logger(subsystem: "com.moss.trailmarker", category: "backtrack-metrics")
-    /// The last greyscale thumbnail of each window, updated on every check *and* every full
-    /// capture — what the loop would know if a switch were also checked for change. Measurement
-    /// only: the real change check keeps its own memory and is not affected.
+    /// Measurement-only mean-difference baseline, updated on checks and captures. The real
+    /// detector uses successful-recognition fingerprints and is not affected by these samples.
     private var seen: [DedupeKey: [UInt8]] = [:]
+    private var order: [DedupeKey] = []
     private var totalTimer: Timer?
     private var lastTotal = (at: Date(), cpu: backtrackProcessCPUMilliseconds())
     /// Set by the runtime while a pass's segment is emitted, read back when the pass is logged.
     var emittedLines: Int?
+
+    deinit { totalTimer?.invalidate() }
 
     func start() {
         guard totalTimer == nil else { return }
@@ -61,17 +63,25 @@ final class BacktrackMetrics {
     /// the new one. Nil the first time a window is seen.
     func distance(_ key: DedupeKey, image: CGImage) -> Double? {
         guard let pixels = ThumbnailChangeDetector.greyscale(image) else { return nil }
-        defer { seen[key] = pixels }
+        defer {
+            seen[key] = pixels
+            order.removeAll { $0 == key }
+            order.append(key)
+            if order.count > ThumbnailChangeDetector.maxWindows { seen[order.removeFirst()] = nil }
+        }
         guard let previous = seen[key], previous.count == pixels.count else { return nil }
         let total = zip(previous, pixels).reduce(0) { $0 + abs(Int($1.0) - Int($1.1)) }
         return Double(total) / Double(pixels.count)
     }
 
-    func reset() { seen = [:] }
+    func reset() {
+        seen = [:]
+        order = []
+    }
 
-    func thumbnail(_ step: BacktrackStopwatch, distance: Double?, changed: Bool) {
+    func thumbnail(trigger: String, _ step: BacktrackStopwatch, distance: Double?, changed: Bool) {
         log.notice(
-            "thumb wall_ms=\(step.wallMilliseconds, privacy: .public) cpu_ms=\(step.cpuMilliseconds, privacy: .public) diff=\(Self.format(distance), privacy: .public) changed=\(changed ? 1 : 0, privacy: .public)"
+            "thumb trigger=\(trigger, privacy: .public) wall_ms=\(step.wallMilliseconds, privacy: .public) cpu_ms=\(step.cpuMilliseconds, privacy: .public) diff=\(Self.format(distance), privacy: .public) changed=\(changed ? 1 : 0, privacy: .public)"
         )
     }
 

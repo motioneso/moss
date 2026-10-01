@@ -32,7 +32,11 @@ final class BacktrackMachineTests: XCTestCase {
         _ = machine.handle(.started(inputs, at: Self.t0))
         _ = machine.handle(.frontmostChanged(Self.docs, at: Self.t0))
         let effects = machine.handle(.tick(generation: machine.generation, at: Self.t(1)))
-        XCTAssertEqual(effects, [.capture(Self.docs, generation: machine.generation)])
+        XCTAssertEqual(effects, [.checkThumbnail(Self.docs, generation: machine.generation)])
+        XCTAssertEqual(
+            machine.handle(.thumbnailChecked(generation: machine.generation, changed: true, at: Self.t(1))),
+            [.capture(Self.docs, generation: machine.generation)]
+        )
         return machine
     }
 
@@ -58,7 +62,8 @@ final class BacktrackMachineTests: XCTestCase {
             [.schedule(after: BacktrackMachine.switchSettle, generation: machine.generation)]
         )
         let generation = machine.generation
-        XCTAssertEqual(machine.handle(.tick(generation: generation, at: Self.t(1))), [.capture(secret, generation: generation)])
+        XCTAssertEqual(machine.handle(.tick(generation: generation, at: Self.t(1))), [.checkThumbnail(secret, generation: generation)])
+        _ = machine.handle(.thumbnailChecked(generation: generation, changed: true, at: Self.t(1)))
         XCTAssertEqual(machine.handle(.captured(generation: generation, at: Self.t(1.1))), [.recognize(generation: generation)])
         let effects = machine.handle(.recognized(
             generation: generation, lines: Self.lines + ["token sk-live-0123456789abcdef"],
@@ -80,6 +85,7 @@ final class BacktrackMachineTests: XCTestCase {
         ("Pause All", { $0.pausedAll = true }),
         ("screen locked", { $0.screenLocked = true }),
         ("asleep", { $0.sleeping = true }),
+        ("idle", { $0.idle = true }),
         ("consent revoked", { $0.consentAccepted = false }),
         ("Accessibility revoked", { $0.accessibilityGranted = false }),
         ("Screen Recording revoked", { $0.screenRecordingGranted = false }),
@@ -148,7 +154,8 @@ final class BacktrackMachineTests: XCTestCase {
         // A new chain for the same window starts; the first chain's late events must still not
         // land on it, which only a new generation guarantees.
         let second = machine.handle(.tick(generation: machine.generation, at: Self.t(11)))
-        XCTAssertEqual(second, [.capture(Self.docs, generation: machine.generation)])
+        XCTAssertEqual(second, [.checkThumbnail(Self.docs, generation: machine.generation)])
+        _ = machine.handle(.thumbnailChecked(generation: machine.generation, changed: true, at: Self.t(11)))
         XCTAssertNotEqual(machine.generation, first)
         XCTAssertEqual(machine.handle(.captured(generation: first, at: Self.t(11.1))), [])
     }
@@ -218,6 +225,33 @@ final class BacktrackMachineTests: XCTestCase {
         )
         let effects = machine.handle(.thumbnailChecked(generation: machine.generation, changed: false, at: Self.t(12)))
         XCTAssertFalse(effects.contains { if case .capture = $0 { return true } else { return false } })
+    }
+
+    func testReturningToAnUnchangedWindowUsesTheGateAndDoesNotRecognize() {
+        var machine = startedAtCapture()
+        let first = machine.generation
+        _ = machine.handle(.captured(generation: first, at: Self.t(1.1)))
+        _ = machine.handle(.recognized(generation: first, lines: Self.lines, address: nil, at: Self.t(2)))
+        _ = machine.handle(.frontmostChanged(Self.window("Other", x: 900), at: Self.t(3)))
+        _ = machine.handle(.frontmostChanged(Self.docs, at: Self.t(4)))
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(11))),
+                       [.checkThumbnail(Self.docs, generation: machine.generation)])
+        let effects = machine.handle(.thumbnailChecked(generation: machine.generation, changed: false, at: Self.t(11)))
+        XCTAssertFalse(effects.contains { if case .capture = $0 { return true }; return false })
+        XCTAssertTrue(schedules(effects))
+    }
+
+    func testInputAfterIdleResumesAtTheGlobalDeadlineWithoutDiscardingHistory() {
+        var machine = startedAtCapture()
+        var idle = Self.allOn
+        idle.idle = true
+        let effects = machine.handle(.inputsChanged(idle, at: Self.t(2)))
+        XCTAssertTrue(effects.contains(.cancelInFlight))
+        XCTAssertFalse(effects.contains(.discardAll))
+        XCTAssertFalse(machine.isRecording)
+        XCTAssertEqual(machine.handle(.inputsChanged(Self.allOn, at: Self.t(3))),
+                       [.schedule(after: 8, generation: machine.generation)])
+        XCTAssertTrue(machine.isRecording)
     }
 
     // MARK: - Budget (one global deadline)

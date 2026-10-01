@@ -145,6 +145,12 @@ final class BacktrackBoundaryTests: XCTestCase {
         let secure: FakeSecureFields
         let recognizer: SpyRecognizer
         let sink: SpySink
+        let activity: Activity
+    }
+
+    final class Activity {
+        var idleSeconds: TimeInterval = 0
+        var now = Date(timeIntervalSince1970: 1_000_000)
     }
 
     override func tearDown() {
@@ -178,10 +184,11 @@ final class BacktrackBoundaryTests: XCTestCase {
         let secure = FakeSecureFields()
         let recognizer = SpyRecognizer()
         let sink = SpySink()
+        let activity = Activity()
         let services = BacktrackServices(
             capture: capture, secureFields: secure, addresses: FakeAddress(value: address), recognizer: recognizer,
             thumbnails: ThumbnailChangeDetector(), freshWindowIdentity: { [weak source] _ in source?.current?.window },
-            clock: Date.init, scheduler: scheduler
+            clock: { activity.now }, scheduler: scheduler, idleSeconds: { activity.idleSeconds }
         )
         let runtime = BacktrackRuntime(
             connection: connection, permissions: permissions, focus: focus, preferences: preferences,
@@ -192,7 +199,7 @@ final class BacktrackBoundaryTests: XCTestCase {
         runtime.start()
         return Harness(
             runtime: runtime, connection: connection, focus: focus, preferences: preferences, source: source,
-            scheduler: scheduler, capture: capture, secure: secure, recognizer: recognizer, sink: sink
+            scheduler: scheduler, capture: capture, secure: secure, recognizer: recognizer, sink: sink, activity: activity
         )
     }
 
@@ -202,9 +209,60 @@ final class BacktrackBoundaryTests: XCTestCase {
 
     /// Fires the pending timer and lets the capture and recognition tasks run.
     private func runChain(_ h: Harness) async {
+        h.activity.now = h.activity.now.addingTimeInterval(10)
         h.scheduler.fire()
         await settle()
         await settle()
+    }
+
+    func testUnchangedScreenIsSkippedAfterASwitchAndRefreshedAfterAMinute() async {
+        let h = await harness()
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 1)
+        h.source.current = Self.docs.refreshed(window: WindowIdentity(frame: Self.window.frame, title: "Another tab"))
+        // Deliver the change through the real observer's poll interval.
+        await settle(2_100_000_000)
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 1, "a switch still checks the already recognized image")
+        h.activity.now = h.activity.now.addingTimeInterval(60)
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 2, "similarity cannot hide changed text indefinitely")
+    }
+
+    func testIdleStopsCaptureAndInputResumesWithoutDiscardingText() async {
+        let h = await harness()
+        await runChain(h)
+        let count = h.capture.calls.count
+        let discards = h.sink.discards
+        h.activity.idleSeconds = BacktrackRuntime.idleThreshold
+        h.runtime.inputsMayHaveChanged()
+        XCTAssertFalse(h.runtime.isRecording)
+        await runChain(h)
+        XCTAssertEqual(h.capture.calls.count, count)
+        XCTAssertEqual(h.sink.discards, discards)
+        h.activity.idleSeconds = 0
+        h.runtime.inputsMayHaveChanged()
+        XCTAssertTrue(h.runtime.isRecording)
+        await runChain(h)
+        XCTAssertGreaterThan(h.capture.calls.count, count)
+    }
+
+    func testIdleDuringRecognitionDropsLateTextAndDoesNotCacheTheUnreadScreen() async {
+        let h = await harness()
+        h.recognizer.suspend = true
+        await runChain(h)
+        XCTAssertTrue(h.recognizer.isSuspended)
+        h.activity.idleSeconds = BacktrackRuntime.idleThreshold
+        h.runtime.inputsMayHaveChanged()
+        h.recognizer.resume()
+        await settle()
+        XCTAssertEqual(h.sink.accepted, [])
+        h.activity.idleSeconds = 0
+        h.recognizer.suspend = false
+        h.runtime.inputsMayHaveChanged()
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 2)
+        XCTAssertEqual(h.sink.accepted.count, 1)
     }
 
     // MARK: - What reaches the sink is clean
@@ -277,6 +335,17 @@ final class BacktrackBoundaryTests: XCTestCase {
         await runChain(h)
         XCTAssertEqual(h.secure.calls, 3, "one timed-out try, one completed, one after the picture")
         XCTAssertEqual(h.recognizer.images.count, 1)
+        XCTAssertEqual(h.sink.accepted.count, 1)
+    }
+
+    func testFailedCaptureDoesNotSuppressTheSameScreenOnRetry() async {
+        let h = await harness()
+        h.secure.fallback = nil
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 0)
+        h.secure.fallback = []
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 1, "an unread screen must not enter the recent-screen cache")
         XCTAssertEqual(h.sink.accepted.count, 1)
     }
 

@@ -202,25 +202,74 @@ struct AXBrowserAddressReader: BrowserAddressReading {
 /// "Has the window changed?" from a tiny greyscale thumbnail, so an unchanged screen costs only
 /// this check (spec §5).
 protocol ThumbnailComparing: AnyObject {
-    func changed(_ key: DedupeKey, thumbnail: CGImage) -> Bool
+    func changed(_ key: DedupeKey, thumbnail: CGImage, at: Date) -> Bool
+    func recognized(_ key: DedupeKey, thumbnail: CGImage, at: Date)
     func reset()
 }
 
 final class ThumbnailChangeDetector: ThumbnailComparing {
     static let side = 32
-    /// Mean absolute difference, 0–255, above which the window counts as changed.
-    static let threshold = 2.0
-    private var last: [DedupeKey: [UInt8]] = [:]
+    static let maxWindows = 32
+    static let maxScreens = 8
+    static let refreshInterval: TimeInterval = 60
+    private struct Fingerprint {
+        let hash: UInt64
+        let brightness: Double
 
-    func changed(_ key: DedupeKey, thumbnail: CGImage) -> Bool {
-        guard let pixels = Self.greyscale(thumbnail) else { return true }
-        defer { last[key] = pixels }
-        guard let previous = last[key], previous.count == pixels.count else { return true }
-        let total = zip(previous, pixels).reduce(0) { $0 + abs(Int($1.0) - Int($1.1)) }
-        return Double(total) / Double(pixels.count) > Self.threshold
+        func resembles(_ other: Fingerprint) -> Bool {
+            (hash ^ other.hash).nonzeroBitCount <= 5 && abs(brightness - other.brightness) <= 10
+        }
+    }
+    private struct ReadScreen {
+        let fingerprint: Fingerprint
+        let at: Date
+    }
+    private var histories: [DedupeKey: [ReadScreen]] = [:]
+    private var order: [DedupeKey] = []
+
+    func changed(_ key: DedupeKey, thumbnail: CGImage, at: Date) -> Bool {
+        guard let fingerprint = Self.fingerprint(thumbnail), let screens = histories[key]
+        else { return true }
+        return !screens.contains {
+            at >= $0.at && at.timeIntervalSince($0.at) < Self.refreshInterval && $0.fingerprint.resembles(fingerprint)
+        }
     }
 
-    func reset() { last = [:] }
+    /// Checks and failed/cancelled captures never mark a screen as read.
+    func recognized(_ key: DedupeKey, thumbnail: CGImage, at: Date) {
+        guard let fingerprint = Self.fingerprint(thumbnail) else { return }
+        var screens = histories[key] ?? []
+        screens.removeAll { $0.fingerprint.resembles(fingerprint) }
+        screens.append(ReadScreen(fingerprint: fingerprint, at: at))
+        histories[key] = Array(screens.suffix(Self.maxScreens))
+        order.removeAll { $0 == key }
+        order.append(key)
+        if order.count > Self.maxWindows { histories[order.removeFirst()] = nil }
+    }
+
+    func reset() {
+        histories = [:]
+        order = []
+    }
+
+    /// A 64-bit horizontal difference hash and average luminance; no image is retained.
+    private static func fingerprint(_ image: CGImage) -> Fingerprint? {
+        let width = 9, height = 8
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(
+            data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var hash: UInt64 = 0
+        for y in 0..<height {
+            for x in 0..<8 where pixels[y * width + x] > pixels[y * width + x + 1] {
+                hash |= UInt64(1) << (y * 8 + x)
+            }
+        }
+        return Fingerprint(hash: hash, brightness: Double(pixels.reduce(0) { $0 + Int($1) }) / Double(pixels.count))
+    }
 
     static func greyscale(_ image: CGImage) -> [UInt8]? {
         var pixels = [UInt8](repeating: 0, count: side * side)

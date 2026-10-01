@@ -26,6 +26,7 @@ struct BacktrackInputs: Equatable {
     var pausedAll = false
     var screenLocked = false
     var sleeping = false
+    var idle = false
     var linked = false
     var accessibilityGranted = false
     var screenRecordingGranted = false
@@ -34,7 +35,7 @@ struct BacktrackInputs: Equatable {
     var policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
 
     var permitsRecording: Bool {
-        enabled && consentAccepted && menuSwitchOn && !pausedAll && !screenLocked && !sleeping && linked
+        enabled && consentAccepted && menuSwitchOn && !pausedAll && !screenLocked && !sleeping && !idle && linked
             && accessibilityGranted && screenRecordingGranted
     }
 }
@@ -146,8 +147,6 @@ struct BacktrackMachine {
     private var frontmost: Observation?
     private var chain: Chain?
     private var lastRecognitionStart: Date?
-    /// The pending timer is a coalesced switch (read now, no thumbnail), not a periodic check.
-    private var pendingSwitch = false
     private var deduper = SegmentDeduper()
 
     /// Drives the menu-bar dot.
@@ -189,10 +188,7 @@ struct BacktrackMachine {
                 // A budget change or an early timer: never start before the global deadline.
                 return [.schedule(after: last.addingTimeInterval(gap).timeIntervalSince(at), generation: generation)]
             }
-            if pendingSwitch {
-                pendingSwitch = false
-                return startCapture(observation, at: at)
-            }
+            // Switches and periodic checks use the same gate, including returns to a read screen.
             chain = Chain(observation: observation, start: at, stage: .checking)
             return [.checkThumbnail(observation, generation: generation)]
 
@@ -243,7 +239,6 @@ struct BacktrackMachine {
     /// Every change of input or window: a new generation, and whatever was in flight is dropped.
     private mutating func bump() -> [BacktrackEffect] {
         generation += 1
-        pendingSwitch = false
         guard chain != nil else { return [] }
         chain = nil
         return [.cancelInFlight]
@@ -252,7 +247,6 @@ struct BacktrackMachine {
     /// A coalesced read of the window now in front, at the global deadline, after the settle delay.
     private mutating func planSwitch(at: Date) -> [BacktrackEffect] {
         guard isRecording else { return [] }
-        pendingSwitch = true
         var delay = Self.switchSettle
         if let last = lastRecognitionStart {
             delay = max(delay, last.addingTimeInterval(inputs.budget.minGap).timeIntervalSince(at))

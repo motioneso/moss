@@ -299,7 +299,7 @@ static let backtrackEnabled = "backtrackEnabled"; static let backtrackConsentAcc
   is recognised, at the deadline, and only if it is still recording and still frontmost. Ticks use
   the same deadline. A budget change applies to the next deadline.
 - **Thumbnail decides.** A `tick` emits `checkThumbnail`. Only `thumbnailChecked(changed: true)`
-  leads to `capture`. A switch-triggered chain skips the thumbnail.
+  leads to `capture`, including switch-triggered chains (performance retry, §7).
 - **Emit threshold.** Emit a segment only if the deduper returns at least 3 new lines or 80 new
   characters. `start` is the chain's first `at`, and `end` is the `recognized` event's `at`.
 
@@ -538,6 +538,33 @@ Open for the Phase 2 planner: does `device_id` reference the companion devices t
 revoking a Mac cascade to its rows or keep them?
 
 ## 7. Kill gate (after Phase 1; Ben decides)
+
+### Performance retry (authorized by Ben, 2026-10-01)
+
+The first trial failed at 10.8% mean CPU; recognition usefulness passed (#2638). The next pass
+keeps Phase 1 Debug-only and the Phase 2 gate closed:
+
+- All triggers use the thumbnail check, including app and title switches. Remove `pendingSwitch`.
+- Remember up to eight successful screen fingerprints per window, for at most 32 windows. Use a
+  64-bit horizontal difference hash (distance at most 5) plus mean luminance (difference at most 10).
+  Each fingerprint expires after 60 seconds; checks do not extend that expiry. Commit a fingerprint
+  only after successful, current-generation OCR, using the actual masked image that OCR read.
+- Stop after 300 seconds without input. A five-second activity poll resumes recording; check idle
+  again at capture/recognition boundaries. Keep text while idle, and preserve all existing stop,
+  consent, window-identity and secure-field checks.
+- Reuse the existing `backtrack-cpu-metrics` instrumentation. Bound its thumbnail history to 32
+  windows, distinguish switch and periodic checks, and label step CPU as estimates because process
+  work can overlap. The metrics report must fail if logs fail or there are no complete totals.
+- Add a bounded `scripts/backtrack-cpu-trial.sh` sample (480 readings, 60 seconds apart, first reading
+  discarded). It rejects incomplete runs and returns nonzero above 3% mean CPU.
+- Verify machine and runtime cancellation, unchanged-switch skips, retry after failed/cancelled
+  recognition, expiry despite intervening checks or other reads, cache bounds and reset, existing
+  masking and sanitizing, and the Release exclusion. Record a new working-day sample and usefulness
+  verdict before passing the gate. A short synthetic sample is not a working-day verdict.
+
+No server storage, upload, accessibility-text extraction or Phase 2 implementation in this pass.
+
+### Original gate
 
 Two working days on the Phase 1 Debug build. The line stops, or returns to design, if any of these
 happens:
