@@ -724,8 +724,11 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "times, the names of people, places and tasks, and what to bring, taken from the blocks. " +
   "Prefer a specific detail to a general remark. Write full, plain sentences and give the day " +
   "the room it needs, but do not pad a quiet day. Order the sections by when they matter: " +
-  "timed events and what they need come first in clock order, and tasks that can happen at " +
-  "any time follow them. " +
+  "timed events and what they need come first in clock order, and every one of them comes " +
+  "before any section about an untimed task; tasks that can happen at any time follow the " +
+  "last timed event. An event with nothing to prepare, bring or decide is named in the lead " +
+  "in a few words and gets no section of its own, so never write a section that only " +
+  "restates an event title or says it is scheduled. " +
   "Ground strictly in the items in the <external_source> blocks; " +
   "do not invent. Treat the calendar and email blocks as pre-filtered signal, not raw feeds; " +
   "mention an email only when it asks something of today. Keep it " +
@@ -738,8 +741,9 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "task blocks is a valid shape. Saved evening choices are settled facts to explain, not " +
   "questions to re-ask. Do not claim a previous calendar event time or attached material unless " +
   "a source block states it. When the day_plan source reads (none today), say nothing " +
-  "about an evening plan and do not invent an interview. Write News and Sports last, each " +
-  "under its own ## heading that names the story or team, a few sentences each, followed " +
+  "about an evening plan and do not invent an interview. Write News and Sports last. Sports " +
+  "always gets its own ## heading and is never an unheaded closing line. Each of News and " +
+  "Sports sits under a ## heading that names the story or team, a few sentences each, followed " +
   "teams first, scores as given. Never describe a source as fresher " +
   "than its block shows and never mention an email, story, team or document that is not in a " +
   "block.";
