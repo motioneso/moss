@@ -16,6 +16,8 @@ import { join, sep } from "node:path";
 
 import type { AcpProviderKind } from "@moss/acp";
 
+import { readToolsState } from "./tools-state.js";
+
 /** The chat provider kinds that have an installable adapter package. */
 export type AdapterChatKind = Extract<AcpProviderKind, "anthropic" | "openai">;
 
@@ -47,11 +49,35 @@ export const TOOLS_VOLUME_ADAPTERS: Readonly<Record<AdapterChatKind, ToolsVolume
   }
 };
 
-/** The release folder `providers/<slot>/current` points at, or null when none is installed. */
-function currentRelease(toolsPrefix: string, slot: string): string | null {
+/**
+ * Release folder names, by install slot, that a launch uses instead of `current`. Built only from
+ * the runner's own state file by `candidateReleasesFor`, never from caller input.
+ */
+export type ReleaseOverrides = ReadonlyMap<string, string>;
+
+/** The staged candidate's release folder per slot, or null when the provider has no candidate. */
+export async function candidateReleasesFor(
+  toolsPrefix: string,
+  kind: AdapterChatKind
+): Promise<ReleaseOverrides | null> {
+  const { cliSlot, adapterSlot } = TOOLS_VOLUME_ADAPTERS[kind];
+  const state = await readToolsState(toolsPrefix, cliSlot);
+  const bySlot = new Map(state.candidate.map((c) => [c.slot, c.release]));
+  return bySlot.has(cliSlot) && bySlot.has(adapterSlot) ? bySlot : null;
+}
+
+/** The release folder a launch uses: the override for this slot, else `current`; null if none. */
+function currentRelease(
+  toolsPrefix: string,
+  slot: string,
+  overrides?: ReleaseOverrides
+): string | null {
   try {
     const providersRoot = realpathSync(join(toolsPrefix, "providers"));
-    const release = realpathSync(join(providersRoot, slot, "current"));
+    const staged = overrides?.get(slot);
+    const release = realpathSync(
+      staged ? join(providersRoot, slot, "releases", staged) : join(providersRoot, slot, "current")
+    );
     return release.startsWith(providersRoot + sep) ? release : null;
   } catch {
     return null;
@@ -69,10 +95,11 @@ function isRegularFile(path: string): boolean {
 /** The adapter entry file inside the live adapter release, or null (run the image copy). */
 export function resolveToolsVolumeAdapterEntry(
   toolsPrefix: string,
-  kind: AdapterChatKind
+  kind: AdapterChatKind,
+  overrides?: ReleaseOverrides
 ): string | null {
   const spec = TOOLS_VOLUME_ADAPTERS[kind];
-  const release = currentRelease(toolsPrefix, spec.adapterSlot);
+  const release = currentRelease(toolsPrefix, spec.adapterSlot, overrides);
   if (!release) return null;
   try {
     const entry = realpathSync(join(release, spec.adapterEntry));
@@ -85,9 +112,13 @@ export function resolveToolsVolumeAdapterEntry(
 }
 
 /** The CLI binary path inside the live CLI release, or null (the bundled copy runs). */
-export function resolveToolsVolumeCli(toolsPrefix: string, kind: AdapterChatKind): string | null {
+export function resolveToolsVolumeCli(
+  toolsPrefix: string,
+  kind: AdapterChatKind,
+  overrides?: ReleaseOverrides
+): string | null {
   const spec = TOOLS_VOLUME_ADAPTERS[kind];
-  const release = currentRelease(toolsPrefix, spec.cliSlot);
+  const release = currentRelease(toolsPrefix, spec.cliSlot, overrides);
   if (!release) return null;
   const bin = join(release, "node_modules", ".bin", spec.cliBinary);
   try {
@@ -106,11 +137,12 @@ export function resolveToolsVolumeCli(toolsPrefix: string, kind: AdapterChatKind
 export function applyToolsVolumeCli(
   env: NodeJS.ProcessEnv,
   toolsPrefix: string | undefined,
-  kind: AcpProviderKind
+  kind: AcpProviderKind,
+  overrides?: ReleaseOverrides
 ): void {
   if (!toolsPrefix || (kind !== "anthropic" && kind !== "openai")) return;
   const { cliEnvVar } = TOOLS_VOLUME_ADAPTERS[kind];
   if (env[cliEnvVar] !== undefined) return;
-  const cli = resolveToolsVolumeCli(toolsPrefix, kind);
+  const cli = resolveToolsVolumeCli(toolsPrefix, kind, overrides);
   if (cli) env[cliEnvVar] = cli;
 }

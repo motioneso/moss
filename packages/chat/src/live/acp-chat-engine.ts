@@ -678,7 +678,8 @@ export class AcpChatEngine implements CliChatEngine {
 export class RpcAcpTunnel implements AcpTunnel {
   constructor(
     private readonly connection: RpcConnection,
-    _sessionKey: string
+    _sessionKey: string,
+    private readonly options: { readonly useCandidate?: boolean } = {}
   ) {}
 
   async spawn(
@@ -688,7 +689,13 @@ export class RpcAcpTunnel implements AcpTunnel {
     userId: string,
     profile: "chat" | "workshop"
   ) {
-    const params: RpcAcpSpawnParams = { projectId, providerKind, userId, profile };
+    const params: RpcAcpSpawnParams = {
+      projectId,
+      providerKind,
+      userId,
+      profile,
+      ...(this.options.useCandidate ? { useCandidate: true } : {})
+    };
     return this.connection.acpSpawn(sessionKey, params);
   }
 

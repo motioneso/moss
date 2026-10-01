@@ -307,6 +307,12 @@ export const aiModuleManifest = {
     },
     {
       method: "POST",
+      path: "/api/ai/providers/:id/cli-check",
+      responseSchema: revokeAiProviderConfigResponseSchema,
+      permissionId: "ai.manage"
+    },
+    {
+      method: "POST",
       path: "/api/ai/providers/:id/test",
       responseSchema: testAiProviderConfigResponseSchema,
       permissionId: "ai.manage"

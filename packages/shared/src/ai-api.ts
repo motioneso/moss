@@ -73,7 +73,20 @@ const aiCliToolsSchema = {
   required: ["version", "state"],
   properties: {
     version: { type: ["string", "null"] },
-    state: { type: "string", enum: ["current", "not_installed"] }
+    state: {
+      type: "string",
+      enum: [
+        "current",
+        "not_installed",
+        "checking",
+        "held_back",
+        "needs_newer_moss",
+        "cannot_check"
+      ]
+    },
+    candidateVersion: { type: "string" },
+    lastCheckedAt: { type: "string" },
+    reason: { type: "string" }
   }
 } as const;
 
@@ -706,6 +719,18 @@ export const revokeAiProviderConfigRouteSchema = {
   }
 } as const;
 
+// #2689 slice 4: admin presses Retry on a held back or unchecked tool update.
+export const retryAiCliToolsCheckRouteSchema = {
+  params: idParamsSchema,
+  response: {
+    200: revokeAiProviderConfigResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
 export const testAiProviderConfigRouteSchema = {
   params: idParamsSchema,
   response: {
@@ -926,52 +951,3 @@ export const resolveAiAssistantActionRouteSchema = {
     409: errorResponseSchema
   }
 } as const;
-
-export type AiActionPolicyTier = "ask_each_time" | "trusted_auto" | "always_confirm";
-
-export interface AiActionPolicyDto {
-  readonly moduleId: string;
-  readonly actionFamilyId: string;
-  readonly tier: AiActionPolicyTier;
-}
-
-export interface GetAiActionPoliciesResponse {
-  readonly policies: readonly AiActionPolicyDto[];
-}
-
-export interface PatchAiActionPolicyRequest {
-  readonly tier: AiActionPolicyTier;
-}
-
-export type PatchAiActionPolicyResponse = AiActionPolicyDto;
-
-export const aiActionPolicyDtoSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["moduleId", "actionFamilyId", "tier"],
-  properties: {
-    moduleId: { type: "string" },
-    actionFamilyId: { type: "string" },
-    tier: { type: "string", enum: ["ask_each_time", "trusted_auto", "always_confirm"] }
-  }
-} as const;
-
-export const getAiActionPoliciesResponseSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["policies"],
-  properties: {
-    policies: { type: "array", items: aiActionPolicyDtoSchema }
-  }
-} as const;
-
-export const patchAiActionPolicyRequestSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["tier"],
-  properties: {
-    tier: { type: "string", enum: ["ask_each_time", "trusted_auto", "always_confirm"] }
-  }
-} as const;
-
-export const patchAiActionPolicyResponseSchema = aiActionPolicyDtoSchema;

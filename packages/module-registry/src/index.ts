@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
 import {
@@ -52,6 +52,7 @@ import {
   askSortingQuestions,
   generateStructured,
   ModelDiscoveryService,
+  startCliToolsRefreshTimer,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
   approveModuleBuildPlan,
@@ -63,6 +64,8 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
+import { buildCliToolAlertRaiser, buildCliVersionTooOldHandler } from "./cli-tools-alerts.js";
+import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
 import {
   GraphMemoryRecallService,
   ManualMemoryCandidateService,
@@ -130,6 +133,8 @@ import {
   registerChatRoutes,
   type ChatEngineFactory,
   type ChatRoutesDependencies,
+  type CheckTokenMinter,
+  setCliVersionTooOldListener,
   type RpcConnection
 } from "@moss/chat";
 // #1059 — terminal-rpc-client lives under chat's "./live" subpath (public.ts), not the package
@@ -172,7 +177,13 @@ import {
   type GoogleApiClient,
   type GoogleConnectionService
 } from "@moss/connectors";
-import type { ActiveModulesResolver, AiSecretCipher, CliToolVersionReader } from "@moss/ai";
+import {
+  cliToolsStatus,
+  setCliToolsRetry,
+  type ActiveModulesResolver,
+  type AiSecretCipher,
+  type CliToolVersionReader
+} from "@moss/ai";
 import {
   resolveMossEnv,
   type AccessContext,
@@ -628,6 +639,7 @@ export interface BuiltInRouteDependencies {
    * `onPersistentReap` (closes task #5's documented gap — see `chat-multiplexer.ts`).
    */
   readonly adoptMcpTokenRevoke?: ChatRoutesDependencies["adoptMcpTokenRevoke"];
+  readonly adoptCheckTokenMinter?: ChatRoutesDependencies["adoptCheckTokenMinter"];
   readonly resolveEveningInterviewSeed?: ChatRoutesDependencies["resolveEveningInterviewSeed"];
   readonly revokeUserSessions?: (userId: string) => Promise<number>;
   /** Auth-owned current-user session list/revoke service (#237). */
@@ -2143,6 +2155,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // SessionTokenRegistry.revokeBySessionId so onReady's resolveChatEngineFactory call
         // below can thread it into the persistent-runtime pool's onPersistentReap.
         adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
+        adoptCheckTokenMinter: deps.adoptCheckTokenMinter,
         resolveActiveModules: deps.resolveActiveModules,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
@@ -3300,6 +3313,8 @@ export function registerBuiltInApiRoutes(
   // synchronously during the BUILT_IN_MODULES registerRoutes pass below, strictly before the
   // onReady hook further down that calls resolveChatEngineFactory (the only reader).
   let revokeMcpTokenBySessionId: ((chatSessionId: string) => void) | undefined;
+  // #2689: the chat wiring's minter for tokens limited to named tools; read by the version check.
+  let checkTokenMinter: CheckTokenMinter | undefined;
 
   // Onboarding probes: built synchronously (no boot-time probing) and forwarded to the settings
   // module. Each function probes lazily, per request, bounded by a short timeout. On the RPC path they
@@ -3533,6 +3548,9 @@ export function registerBuiltInApiRoutes(
     adoptMcpTokenRevoke: (fn: (chatSessionId: string) => void) => {
       revokeMcpTokenBySessionId = fn;
     },
+    adoptCheckTokenMinter: (minter: CheckTokenMinter) => {
+      checkTokenMinter = minter;
+    },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
       const { run, plan } = await dependencies.dataContext.withDataContext(
@@ -3590,7 +3608,83 @@ export function registerBuiltInApiRoutes(
         );
       });
     });
+    // #2689: look for newer signed CLI tools on start and every six hours. Runs here because only
+    // the API process holds the runner connection.
+    let stopCliToolsRefresh: (() => void) | undefined;
+    server.addHook("onReady", async () => {
+      const refresh = buildCliToolsRefresh({
+        getConnection: getRpcConnection,
+        versionReader: deps.aiCliToolVersionReader,
+        ...(dependencies.fetchFn ? { fetchFn: dependencies.fetchFn } : {})
+      });
+      const listAdminIds = async () =>
+        (
+          await sql<{ id: string }>`
+            SELECT id FROM app.list_all_users()
+            WHERE is_instance_admin = true AND status = 'active'
+            ORDER BY is_bootstrap_owner DESC, id
+          `.execute(dependencies.rootDb)
+        ).rows.map((row) => row.id);
+      const raiseAlert = buildCliToolAlertRaiser({
+        dataContext: dependencies.dataContext,
+        listAdminIds
+      });
+      const check = buildCliVersionCheck({
+        getConnection: getRpcConnection,
+        getMinter: () => checkTokenMinter,
+        versionReader: deps.aiCliToolVersionReader,
+        listAdminIds,
+        raiseFailure: async (provider, versions, reason) =>
+          raiseAlert({
+            kind: "held_back",
+            provider,
+            ...(versions[0] ? { version: versions[0] } : {}),
+            reason
+          })
+      });
+      const checkTracked = async (provider: ProviderKind, opts?: { force?: boolean }) => {
+        cliToolsStatus.setChecking(provider, true);
+        try {
+          return await check(provider, opts);
+        } finally {
+          cliToolsStatus.setChecking(provider, false);
+        }
+      };
+      const refreshTracked = async () => {
+        const outcome = await refresh();
+        cliToolsStatus.recordRefresh(outcome);
+        if (cliToolsStatus.snapshot().cannotCheck) {
+          await raiseAlert({ kind: "cannot_check", provider: "anthropic" }).catch(() => undefined);
+        }
+        return outcome;
+      };
+      // Stage anything newer, then check whatever is staged. A failed check is not retried
+      // until 24 hours have passed, so the six-hour timer is safe.
+      let passRunning = false;
+      const pass = async () => {
+        if (passRunning) return;
+        passRunning = true;
+        try {
+          await refreshTracked();
+          await checkTracked("anthropic");
+          await checkTracked("openai-compatible");
+        } finally {
+          passRunning = false;
+        }
+      };
+      stopCliToolsRefresh = startCliToolsRefreshTimer(pass);
+      // A chat turn refused for an old tool asks for a pass now instead of waiting for the timer.
+      setCliVersionTooOldListener(buildCliVersionTooOldHandler({ raiseAlert, pass }));
+      // Retry is an admin pressing the button, so the 24-hour wait does not apply.
+      setCliToolsRetry(async (provider) => {
+        await refreshTracked();
+        await checkTracked(provider, { force: true });
+      });
+    });
     server.addHook("onClose", async () => {
+      setCliVersionTooOldListener(undefined);
+      setCliToolsRetry(undefined);
+      stopCliToolsRefresh?.();
       getRpcConnection()?.close();
     });
   }

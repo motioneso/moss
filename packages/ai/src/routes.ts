@@ -41,6 +41,7 @@ import {
   putAdminChatModelOverrideSettingsRouteSchema,
   putChatModelOverrideSettingsRouteSchema,
   resolveAiAssistantActionRouteSchema,
+  retryAiCliToolsCheckRouteSchema,
   revokeAiProviderConfigRouteSchema,
   updateAiConfiguredModelRouteSchema,
   deleteAiConfiguredModelRouteSchema,
@@ -81,11 +82,8 @@ import {
 } from "./gateway/output-validation.js";
 import { ToolInputValidationError, validateToolInput } from "./gateway/input-validation.js";
 import { cliAvailableForAcpAgent, type ProviderKind } from "./cli-availability.js";
-import {
-  cliToolsDto,
-  type CliToolVersionReader,
-  type CliToolVersions
-} from "./cli-tool-versions.js";
+import type { CliToolVersionReader, CliToolVersions } from "./cli-tool-versions.js";
+import { cliToolsStatus, deriveCliToolsDto, requestCliToolsRetry } from "./cli-tools-status.js";
 import { registerAiAdminPinRoutes } from "./admin-ai-pin-routes.js";
 import { registerAiServiceRoutes } from "./capability-route-routes.js";
 import { registerAiTranscriptionRoutes } from "./transcription-routes.js";
@@ -434,6 +432,37 @@ export function registerAiRoutes(
 
         modelDiscovery.invalidate(accessContext.actorUserId, request.params.id);
         return { provider: await serializeProvider(provider) };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post<{ Params: IdParams }>(
+    "/api/ai/providers/:id/cli-check",
+    { schema: retryAiCliToolsCheckRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const provider = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
+            return (await repository.listProviders(scopedDb)).find(
+              (row) => row.id === request.params.id
+            );
+          }
+        );
+        if (!provider) return reply.code(404).send({ error: "AI provider config not found" });
+        const kind = provider.provider_kind as ProviderKind;
+        const versions = await dependencies.cliToolVersionReader?.().catch(() => undefined);
+        if (provider.auth_method !== "cli" || !versions || !(kind in versions.providers)) {
+          return reply.code(400).send({ error: "This provider has no tool updates to check" });
+        }
+        if (!requestCliToolsRetry(kind)) {
+          return reply.code(400).send({ error: "Tool updates are not available here" });
+        }
+        return { provider: await serializeProvider(provider, versions) };
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -1134,7 +1163,12 @@ export async function serializeProvider(
   // undefined version would fail response validation and break the whole provider list.
   const cliTools =
     isCli && cliToolVersions && provider.provider_kind in cliToolVersions.providers
-      ? cliToolsDto(cliToolVersions.providers[provider.provider_kind as ProviderKind])
+      ? deriveCliToolsDto({
+          provider: provider.provider_kind as ProviderKind,
+          version: cliToolVersions.providers[provider.provider_kind as ProviderKind],
+          update: cliToolVersions.updates?.[provider.provider_kind as ProviderKind],
+          status: cliToolsStatus.snapshot()
+        })
       : undefined;
 
   return {

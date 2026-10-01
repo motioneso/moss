@@ -329,7 +329,14 @@ describe("serveConnection (§3.4/§3.7)", () => {
     const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 31) as RpcOk;
     expect(ok.t).toBe("ok");
     expect((ok.result as { generation: number }).generation).toBe(7);
-    expect(host.acpSpawn).toHaveBeenCalledWith("workshop:u:p", "p", "anthropic", "user-1", "chat");
+    expect(host.acpSpawn).toHaveBeenCalledWith(
+      "workshop:u:p",
+      "p",
+      "anthropic",
+      "user-1",
+      "chat",
+      false
+    );
 
     channel.triggerClose();
     expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 7 });
