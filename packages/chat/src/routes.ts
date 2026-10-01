@@ -101,6 +101,30 @@ export interface CheckTokenMinter {
   readonly revoke: (chatSessionId: string) => void;
 }
 
+/**
+ * Builds the minter for check sessions. A token it mints carries an allowlist of exactly the
+ * named tools, and the gateway refuses a call to any other tool at call time.
+ */
+export function buildCheckTokenMinter(
+  tokens: {
+    mint: (identity: {
+      actorUserId: string;
+      chatSessionId: string;
+      allowedToolNames: Set<string>;
+    }) => string;
+    revokeBySessionId: (chatSessionId: string) => void;
+  },
+  mcpServerUrl: string
+): CheckTokenMinter {
+  return {
+    mint: (actorUserId, chatSessionId, toolNames) => ({
+      token: tokens.mint({ actorUserId, chatSessionId, allowedToolNames: new Set(toolNames) }),
+      mcpServerUrl
+    }),
+    revoke: (chatSessionId) => tokens.revokeBySessionId(chatSessionId)
+  };
+}
+
 export interface ChatRoutesDependencies {
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -192,7 +216,7 @@ export interface ChatRoutesDependencies {
   readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
   /**
    * #2689: publishes a minter for a token that may call only the named tools, and a way to drop it.
-   * The version check uses it so its throwaway session can reach nothing but one read-only tool.
+   * The version check uses it so its throwaway session is refused any call to another tool.
    */
   readonly adoptCheckTokenMinter?: (minter: CheckTokenMinter) => void;
   readonly resolveEveningInterviewSeed?: (
@@ -407,17 +431,7 @@ export function registerChatRoutes(
     dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
       wiring.tokens.revokeBySessionId(chatSessionId)
     );
-    dependencies.adoptCheckTokenMinter?.({
-      mint: (actorUserId, chatSessionId, toolNames) => ({
-        token: wiring.tokens.mint({
-          actorUserId,
-          chatSessionId,
-          allowedToolNames: new Set(toolNames)
-        }),
-        mcpServerUrl: wiring.mcpServerUrl
-      }),
-      revoke: (chatSessionId) => wiring.tokens.revokeBySessionId(chatSessionId)
-    });
+    dependencies.adoptCheckTokenMinter?.(buildCheckTokenMinter(wiring.tokens, wiring.mcpServerUrl));
   }
 
   // Wire real notifier now that manager is available.

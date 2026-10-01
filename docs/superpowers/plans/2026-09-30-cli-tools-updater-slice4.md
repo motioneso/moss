@@ -46,7 +46,7 @@ Open questions (owner in brackets):
 - **Card.** `AiCliToolsState` gains `checking | held_back | needs_newer_moss | cannot_check`; `AiCliToolsDto` gains `candidateVersion?`, `lastCheckedAt?`, `reason?`. New admin route `POST /api/ai/providers/:id/cli-check` declared in the ai manifest. Existing `jds-badge` tones and a small `jds-btn` only.
 - **Determinism boundary.** Card state, badge text, alerts and audit rows render from the stored state record, never from model output. The model has exactly two jobs, both inside the live check: call the app map tool, and return a one-field object. Prompt text for each is under 30 words. The model's words are never read, only the gateway call record and the schema result.
 - **Check transcripts** are never saved to chat history, memory or the vault.
-- **Security claim to verify before writing it anywhere:** "the tool server seen by the check session carries only the app map tool." Read the code that builds the tool list before stating it in a comment or the PR.
+- **Security claim to verify before writing it anywhere:** "the check session is refused a call to any tool other than the app map tool." The tool list still shows other tools; the refusal happens at call time (`gateway.ts:210-212`). Never write that the session "sees only" one tool.
 
 ## 3. Phases
 
