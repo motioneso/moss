@@ -29,6 +29,7 @@
  * bad_request by the dispatcher) and would surface an unexpected fault as `internal`.
  */
 
+import { readToolsState, writeToolsState, type StagedPackage } from "./tools-state.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
@@ -115,6 +116,23 @@ export function buildSanitizedInstallerEnv(
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
+
+/** One package of a toolset the manifest wants staged. The lockfile text is already hash-checked. */
+export interface CandidatePackage {
+  readonly role: "cli" | "chat-adapter";
+  readonly pkg: string;
+  readonly version: string;
+  readonly lockfileText: string;
+}
+
+interface CandidateInstall {
+  readonly lockfileText: string;
+  readonly onStaged: (releaseDir: string) => void;
+}
+
+export type StageCandidateResult =
+  | { readonly state: "staged"; readonly staged: readonly StagedPackage[] }
+  | { readonly state: "error"; readonly message: string };
 
 export interface InstallServiceDeps {
   /** The execFile-style runner (NOT a shell); reuses the cli-runner discipline. */
@@ -314,11 +332,144 @@ export class InstallService {
     }
   }
 
+  // ─── #2689 slice 4: stage a candidate toolset (current is never touched) ─────
+
+  /**
+   * Install each package of a candidate toolset into a new release folder, leaving `current`
+   * where it is. Only packages named in this image's catalog are accepted, so a manifest can
+   * move versions but never introduce a package. Candidates are recorded in `state.json` so the
+   * boot sweep keeps them. Any failure removes what this call staged.
+   */
+  async stageCandidate(
+    provider: RpcProviderKind,
+    packages: readonly CandidatePackage[],
+    manifestSequence: number
+  ): Promise<StageCandidateResult> {
+    const release = await this.lockFor(provider).acquire();
+    try {
+      return await this.stageCandidateLocked(provider, packages, manifestSequence);
+    } finally {
+      release();
+    }
+  }
+
+  private async stageCandidateLocked(
+    provider: RpcProviderKind,
+    packages: readonly CandidatePackage[],
+    manifestSequence: number
+  ): Promise<StageCandidateResult> {
+    {
+      const staged: StagedPackage[] = [];
+      const cleanup = async (): Promise<void> => {
+        for (const s of staged) {
+          await rm(path.join(this.toolsPrefix, "providers", s.slot, "releases", s.release), {
+            recursive: true,
+            force: true
+          }).catch(() => undefined);
+        }
+      };
+      try {
+        const adapter = (this.deps.adapterCatalog ?? ADAPTER_CATALOG)[provider];
+        for (const p of packages) {
+          let slot: string;
+          let error: string | null;
+          let release: string | undefined;
+          const onStaged = (dir: string): void => {
+            release = path.basename(dir);
+          };
+          if (p.role === "cli") {
+            const recipe = this.resolveRecipe(provider);
+            if (recipe.kind !== "npm" || recipe.pkg !== p.pkg) {
+              await cleanup();
+              return { state: "error", message: `package ${p.pkg} is not installable here` };
+            }
+            slot = provider;
+            const r = await this.installNpm(
+              provider,
+              { ...recipe, version: p.version },
+              { lockfileText: p.lockfileText, onStaged }
+            );
+            error = r.state === "installed" ? null : (r.message ?? "install failed");
+          } else {
+            if (!adapter || adapter.pkg !== p.pkg) {
+              await cleanup();
+              return { state: "error", message: `package ${p.pkg} is not installable here` };
+            }
+            slot = adapter.slot;
+            error = await this.stageAdapter(adapter, p, onStaged);
+          }
+          if (error !== null || release === undefined) {
+            await cleanup();
+            return { state: "error", message: error ?? "nothing was staged" };
+          }
+          staged.push({ role: p.role, slot, pkg: p.pkg, version: p.version, release });
+        }
+        const prior = await readToolsState(this.toolsPrefix, provider);
+        // Replacing an older candidate frees its releases for the next sweep.
+        await writeToolsState(this.toolsPrefix, provider, {
+          manifestSequence: Math.max(prior.manifestSequence, manifestSequence),
+          candidate: staged
+        });
+        for (const old of prior.candidate) {
+          if (!staged.some((s) => s.slot === old.slot && s.release === old.release)) {
+            await rm(path.join(this.toolsPrefix, "providers", old.slot, "releases", old.release), {
+              recursive: true,
+              force: true
+            }).catch(() => undefined);
+          }
+        }
+        return { state: "staged", staged };
+      } catch (err) {
+        await cleanup();
+        return { state: "error", message: redactInstallMessage(err) };
+      }
+    }
+  }
+
+  /** Candidate form of the adapter install: same checks as `ensureAdapter`, no flip. */
+  private async stageAdapter(
+    adapter: AdapterRecipe,
+    p: CandidatePackage,
+    onStaged: (dir: string) => void
+  ): Promise<string | null> {
+    const fail = (why: string): string => `chat adapter ${adapter.pkg}: ${why}`;
+    const staging = await this.mkStaging(adapter.slot);
+    try {
+      await writeFile(path.join(staging, "npm-shrinkwrap.json"), p.lockfileText, "utf8");
+      await writeFile(
+        path.join(staging, "package.json"),
+        JSON.stringify({
+          name: "jarv1s-cli-install",
+          version: "0.0.0",
+          dependencies: { [adapter.pkg]: p.version }
+        }),
+        "utf8"
+      );
+      const ci = await this.deps.io.run(
+        "npm",
+        ["ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", staging],
+        { cwd: staging, env: this.installerEnv }
+      );
+      if (ci.code !== 0) return fail(redactNpm(`npm ci failed: ${ci.stderr ?? ""}`));
+      if ((await this.readInstalledVersion(staging, adapter.pkg)) !== p.version) {
+        return fail("installed version is not the requested version");
+      }
+      if (!(await pathExists(path.join(staging, adapter.entry)))) return fail("entry file missing");
+      onStaged(await this.stageNpmRelease(adapter.slot, staging));
+      return null;
+    } catch (err) {
+      return fail(redactInstallMessage(err));
+    } finally {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   // ─── npm path (§A.3.3/§A.3.4/§A.3.5) ────────────────────────────────────────
 
   private async installNpm(
     provider: RpcProviderKind,
-    recipe: NpmInstallRecipe
+    recipe: NpmInstallRecipe,
+    candidate?: CandidateInstall
   ): Promise<RpcInstallProviderResult> {
     // §A.1.3: resolve the host-arch key BEFORE staging — a missing entry is a DEFINED
     // verify failure, never an undefined deref.
@@ -337,8 +488,10 @@ export class InstallService {
     const staging = await this.mkStaging(provider);
     try {
       // (1) Stage: copy the COMMITTED lockfile + a minimal package.json into staging.
-      const lockSrc = this.resolveRepoPath(recipe.lockfile);
-      const lockRaw = await readFile(lockSrc, "utf8");
+      // A candidate install takes the lockfile from the signed manifest instead.
+      const lockRaw = candidate
+        ? candidate.lockfileText
+        : await readFile(this.resolveRepoPath(recipe.lockfile), "utf8");
       await writeFile(path.join(staging, "npm-shrinkwrap.json"), lockRaw, "utf8");
       await writeFile(
         path.join(staging, "package.json"),
@@ -388,6 +541,12 @@ export class InstallService {
       // (4) §A.3.7 kind:"config" self-update-disable is a FILE WRITE at install
       // (kind:"env" is wired in main.ts; nothing to write here).
       await this.writeSelfUpdateConfig(recipe);
+
+      // A candidate stops here: it is renamed into a release folder and `current` stays put.
+      if (candidate) {
+        candidate.onStaged(await this.stageNpmRelease(provider, staging));
+        return { state: "installed", version: recipe.version, binaryChanged: false };
+      }
 
       // (5) ATOMIC PROMOTE (§A.3.5): rename the verified tree into a DURABLE release lane,
       // then flip `current`; create the stable bin symlink once.
@@ -505,6 +664,23 @@ export class InstallService {
   }
 
   /**
+   * Rename a verified staging tree into a durable `providers/<provider>/releases/<rand>` lane
+   * without touching `current`. A candidate toolset stops here; a promote continues to the flip.
+   */
+  private async stageNpmRelease(provider: string, staging: string): Promise<string> {
+    const providerDir = path.join(this.toolsPrefix, "providers", provider);
+    const releasesDir = path.join(providerDir, "releases");
+    await mkdir(releasesDir, { recursive: true });
+    const releaseDir = path.join(releasesDir, randToken());
+    // Keep the staging tree private until verification is complete, then make only the
+    // published release root traversable by isolated accounts. A chmod failure aborts
+    // before the atomic same-filesystem rename.
+    await chmod(staging, 0o755);
+    await rename(staging, releaseDir);
+    return releaseDir;
+  }
+
+  /**
    * §A.3.5 npm promote: rename the verified staged tree into a DURABLE
    * `providers/<provider>/releases/<rand>` lane (same-fs, atomic), then flip
    * `providers/<provider>/current → releases/<rand>` via temp-symlink-rename. The stable
@@ -516,19 +692,7 @@ export class InstallService {
     binary: string | null
   ): Promise<{ dir: string; prior: string | undefined }> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
-    const releasesDir = path.join(providerDir, "releases");
-    await mkdir(releasesDir, { recursive: true });
-    const releaseDir = path.join(releasesDir, randToken());
-
-    // Keep the staging tree private until verification is complete, then make only the
-    // published release root traversable by isolated accounts. The contents retain npm's
-    // normal non-writable modes, and a chmod failure aborts before the atomic rename.
-    await chmod(staging, 0o755);
-
-    // The verified tree IS the staging dir's node_modules + .bin layout; rename the whole
-    // staging scratch contents into the release lane by renaming staging → releaseDir.
-    // (Same-fs under the tools volume ⇒ atomic. The `finally` rm of `staging` then no-ops.)
-    await rename(staging, releaseDir);
+    const releaseDir = await this.stageNpmRelease(provider, staging);
 
     const currentLink = path.join(providerDir, "current");
     const prior = await readlink(currentLink).catch(() => undefined);
@@ -567,13 +731,14 @@ export class InstallService {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
     const releasesDir = path.join(providerDir, "releases");
     const live = await this.resolveCurrent(provider);
+    const keep = await this.candidateReleaseDirs();
     const listed = await this.deps.io
       .run("ls", ["-A", releasesDir])
       .catch(() => ({ code: 1, stdout: "" }));
     if (listed.code !== 0) return;
     for (const name of splitLines(listed.stdout)) {
       const dir = path.join(releasesDir, name);
-      if (dir === keepDir || dir === live) continue;
+      if (dir === keepDir || dir === live || keep.has(dir)) continue;
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
@@ -728,11 +893,25 @@ export class InstallService {
     }
   }
 
+  /** Absolute release folders that any provider's `state.json` lists as a staged candidate. */
+  private async candidateReleaseDirs(): Promise<Set<string>> {
+    const keep = new Set<string>();
+    for (const provider of Object.keys(this.deps.catalog)) {
+      const state = await readToolsState(this.toolsPrefix, provider);
+      for (const c of state.candidate) {
+        keep.add(path.join(this.toolsPrefix, "providers", c.slot, "releases", c.release));
+      }
+    }
+    return keep;
+  }
+
   private async sweepReleases(provider: string): Promise<void> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
     const releasesDir = path.join(providerDir, "releases");
     if (!(await pathExists(releasesDir))) return;
     const live = await this.resolveCurrent(provider);
+    // A staged candidate is not referenced by `current` yet but must survive the sweep.
+    const keep = await this.candidateReleaseDirs();
     const listed = await this.deps.io
       .run("ls", ["-A", releasesDir])
       .catch(() => ({ code: 1, stdout: "" }));
@@ -740,6 +919,7 @@ export class InstallService {
     for (const name of splitLines(listed.stdout)) {
       const dir = path.join(releasesDir, name);
       if (dir === live) continue; // keep the one `current` points at
+      if (keep.has(dir)) continue;
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }

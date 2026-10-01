@@ -49,7 +49,7 @@ function fakeFetch(files: Record<string, Uint8Array | undefined>): typeof fetch 
     const name = String(url).split("/").pop() as string;
     const body = files[name];
     if (body === undefined) return new Response("nope", { status: 404 });
-    return new Response(body);
+    return new Response(Buffer.from(body));
   }) as typeof fetch;
 }
 
