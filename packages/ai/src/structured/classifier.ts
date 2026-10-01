@@ -152,6 +152,8 @@ export async function askClassifierChoice(
     handle.capability === "choice_only"
       ? await runChoiceOnly(scopedDb, handle, input, deps)
       : await runStructuredChoice(scopedDb, handle, input, options, deps);
+  // A cancel or the shared deadline can land while the answer is arriving. A late answer is dropped.
+  if (input.signal?.aborted) return { ok: false, error: "aborted" };
   if (!raw.ok) return raw;
 
   const shaped = shapeChoice(options, raw.answer);
@@ -194,6 +196,7 @@ export async function extractClassifierValues(
     input.signal,
     deps
   );
+  if (input.signal?.aborted) return { ok: false, error: "aborted" };
   if (!result.ok) return result;
   return { ok: true, values: result.object, usage: result.usage };
 }

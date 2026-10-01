@@ -204,6 +204,39 @@ describe("askClassifierChoice on a choice-only classifier", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("rejects a valid answer that arrives after the deadline or a cancel", async () => {
+    const controller = new AbortController();
+    const slow = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      // The cancel lands while the response body is still being read.
+      json: async () => {
+        controller.abort();
+        return {
+          answers: {
+            choice: {
+              type: "choice",
+              choice: "lights",
+              confidence: 0.95,
+              probabilities: { lights: 0.8, calendar: 0.15, none: 0.05 }
+            }
+          },
+          usage: { input_tokens: 5, output_tokens: 1 }
+        };
+      }
+    })) as unknown as typeof fetch;
+    const { deps } = makeDeps({ sortingModel: choiceOnlyModel, fetch: slow });
+    const handle = (await resolveClassifier(scopedDb, SERVICE, deps))!;
+    const result = await askClassifierChoice(
+      scopedDb,
+      handle,
+      { service: SERVICE, state: {}, question, signal: controller.signal },
+      deps
+    );
+    expect(result).toEqual({ ok: false, error: "aborted" });
+    expect(slow).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a question with fewer than two options", async () => {
     const { deps } = makeDeps({ sortingModel: choiceOnlyModel, fetch: systemOneFetch({}, "x") });
     const result = await askClassifierChoice(
