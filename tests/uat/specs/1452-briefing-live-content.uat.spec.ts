@@ -1,46 +1,30 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import {
+  bringUpRealChatModel,
+  MODEL_DISCOVERY_DEADLINE_MS,
+  signInUatAdmin
+} from "./real-chat-signin.js";
 
 // #1452 (part of #1440), see docs/superpowers/plans/2026-08-12-fix-1452-safe-seed.md.
-// Drives a real throwaway signup (bare seed level -> zero accounts, needsBootstrap true) through a
-// real briefing generation and asserts the rendered Today hero. No shared-DB seed/reset, no
-// insert-by-recorded-id fixture -- the whole run lives in the UAT harness's own ephemeral Docker
-// stack (tests/uat/provisioner.ts), torn down via its usual `down -v` + assertNoLeakedResources().
-export const uatLevel = { level: "bare", without: [] } as const;
+// Signs in as the seeded admin, drives a real briefing generation with a real model, and asserts
+// the rendered Today hero. The whole run lives in the UAT harness's own ephemeral Docker stack
+// (tests/uat/provisioner.ts), torn down via its usual `down -v` + assertNoLeakedResources().
+export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) {
-    throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  }
-  return baseURL;
-}
+// A briefing summary only exists when a real model wrote it (a run with no model is a hidden
+// fallback by design), so this spec needs the operator's Codex login the harness copies into the
+// seeded admin's slot (real-chat-env.ts). Without that login the spec skips.
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
-// `bare` has zero owner accounts, so needsBootstrap is true and auth-screen.tsx forces
-// mode="sign-up" with the segmented control omitted (no duplicate-accessible-name collision with
-// the submit button). A fresh sign-up lands on the onboarding wizard, not the Today page directly
-// -- skip it, mirroring the established pattern (real-chat-onboarding.uat.spec.ts,
-// 1311-install-grant.uat.spec.ts).
-async function signUp(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Name").fill("UAT Throwaway Owner");
-  await page.getByLabel("Email").fill("uat-1452-throwaway@example.com");
-  await page.getByLabel("Password").fill("uat-1452-password");
-  await page.getByRole("button", { name: "Create account" }).click();
+test("an admin with a sports follow drives a real briefing to Today", async ({ page }) => {
+  test.skip(
+    !REAL_CHAT_CONFIGURED,
+    "JARVIS_UAT_REAL_CHAT_TOKEN_FILE is required for a real briefing model (#1452)"
+  );
+  test.setTimeout(300_000);
 
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
-  await expect(skipSetup.or(userMenu).first()).toBeVisible();
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(userMenu).toBeVisible();
-}
-
-test("throwaway signup and a sports follow drive a real briefing to Today", async ({ page }) => {
-  test.setTimeout(180_000);
-
-  await signUp(page);
+  await signInUatAdmin(page);
+  await bringUpRealChatModel(page, MODEL_DISCOVERY_DEADLINE_MS);
 
   const followed = await page.request.post("/api/sports/follows", {
     data: { competitionKey: "eng.1" }
