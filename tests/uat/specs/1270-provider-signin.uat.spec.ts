@@ -134,7 +134,9 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   // --- A CLI catalog entry yields a CLI provider (the passthrough's cli branch).
   await addProviderFromPicker(page, "Anthropic");
   const anthropic = providerCard(page, "Anthropic");
-  await expect(anthropic.locator(".prov__auth")).toHaveText("Anthropic CLI");
+  // The card renders two .prov__auth lines (status, then an ACP sign-in note, #2727); the status
+  // line reads "Anthropic CLI", "Anthropic CLI <version>" or "Anthropic CLI unavailable".
+  await expect(anthropic.locator(".prov__auth").first()).toContainText("Anthropic CLI");
 
   // --- d05fca6c: a real sign-in path from Settings, in whichever form this stack's CLI presence
   // probe dictates. "Log in" (automated) appears in the card actions only when the CLI is present;
