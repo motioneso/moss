@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 
 - **Fresher email, clearer sync errors.** New mail shows up sooner during long catch-ups, a failed sync now says why in plain words, and a message that keeps failing stops being retried forever. The Email extraction setting is now called Email reading. [PR #2819](https://github.com/motioneso/moss/pull/2819)
 
+#### Changed
+
+- **Clearer task blocks on Today.** Task blocks on your Today schedule now show a Flexible tag, say Proposed when Moss is suggesting one, and note which meeting a preparation block is for. [PR #2799](https://github.com/motioneso/moss/pull/2799)
+
 ### 2026-09-29
 
 #### Fixed
