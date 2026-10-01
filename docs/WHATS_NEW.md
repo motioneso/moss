@@ -29,14 +29,76 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-01
+
+#### Changed
+
+- **Steadier morning briefing order.** Your morning briefing now lists timed events in clock order before open-ended tasks, folds quiet events into the opening, and always gives sports its own heading. [PR #2849](https://github.com/motioneso/moss/pull/2849)
+
+#### Fixed
+
+- **All-day events stay on the right day.** All-day calendar events now show on their own date in Today and in your briefings, instead of one day early when you are west of UTC. [PR #2852](https://github.com/motioneso/moss/pull/2852)
+- **Today page jump links.** Jumping to a section on the Today page now leaves a gap below the top bar instead of tucking the section underneath it. [PR #2851](https://github.com/motioneso/moss/pull/2851)
+- **Quote marks in chat tool steps.** Expanding a step in the chat now shows quote marks and ampersands as normal characters instead of strange codes. [PR #2848](https://github.com/motioneso/moss/pull/2848)
+
+### 2026-09-30
+
+#### Added
+
+- **Tool updates are tested before they are used.** When a newer version of the Claude or Codex tools is available, Moss now tries it out first and keeps the current one if the test fails, and the AI providers screen tells you what happened and lets you try again. [PR #2836](https://github.com/motioneso/moss/pull/2836)
+- **Provider cards show the installed AI tool version.** Each AI provider card now shows which version of its helper tool is installed, and a clear message appears when the tool is too old for the chosen model. [PR #2818](https://github.com/motioneso/moss/pull/2818)
+- **Favorite models in the chat model picker.** The chat model picker now groups models by provider, and you can star models to keep them at the top. [PR #2812](https://github.com/motioneso/moss/pull/2812)
+
+#### Fixed
+
+- **Admins see models on shared AI providers.** When one admin sets up an AI provider, other admins now see its list of models instead of an empty list. [PR #2845](https://github.com/motioneso/moss/pull/2845)
+- **Briefings skip finished commitments.** Your morning and evening briefings now only mention commitments that are still open, instead of ones you have already finished or dropped. [PR #2846](https://github.com/motioneso/moss/pull/2846)
+- **Refresh models on a shared AI provider.** An administrator can now refresh or add models on an AI provider that another administrator set up, instead of getting an error. [PR #2840](https://github.com/motioneso/moss/pull/2840)
+- **Fresher email, clearer sync errors.** New mail shows up sooner during long catch-ups, a failed sync now says why in plain words, and a message that keeps failing stops being retried forever. The Email extraction setting is now called Email reading. [PR #2819](https://github.com/motioneso/moss/pull/2819)
+
+#### Changed
+
+- **Clearer task blocks on Today.** Task blocks on your Today schedule now show a Flexible tag, say Proposed when Moss is suggesting one, and note which meeting a preparation block is for. [PR #2799](https://github.com/motioneso/moss/pull/2799)
+
+### 2026-09-29
+
+#### Fixed
+
+- **Evening planning shows the evening report with headings.** When you plan tomorrow, the evening report now shows its sections with proper headings and paragraphs instead of one long block of text. [PR #2815](https://github.com/motioneso/moss/pull/2815)
+- **Evening briefing links open the full report.** On Today in the evening, "Read the full evening briefing" and "What informed this?" now open the full evening report instead of doing nothing. [PR #2813](https://github.com/motioneso/moss/pull/2813)
+- **Moss stays up when its database restarts.** Moss no longer shuts down briefly when its database restarts. [PR #2803](https://github.com/motioneso/moss/pull/2803)
+- **Email sync no longer re-checks sorted mail.** Moss no longer re-reads email it has already sorted every time it syncs, and new mail now arrives on schedule even while an older catch-up is still running. [PR #2806](https://github.com/motioneso/moss/pull/2806)
+- **Clearer sources in the morning report.** The list of what informed your report now shows plain names for each source, with what each contributed. [PR #2791](https://github.com/motioneso/moss/pull/2791)
+- **Cleaner Today header.** The Today header no longer has a faint line pattern behind it, and "Prepared at" now shows am or pm. [PR #2795](https://github.com/motioneso/moss/pull/2795)
+
+#### Added
+
+- **Re-run a briefing from chat.** You can ask Moss in chat to re-run one of your briefings, and it tells you when the new one is ready. [PR #2811](https://github.com/motioneso/moss/pull/2811)
+- **Notes on finished items and tomorrow's plan.** Your evening recap now shows a short note under each finished task, and the plan for tomorrow points out real free time and tucks away task blocks already on your calendar. [PR #2802](https://github.com/motioneso/moss/pull/2802)
+- **Morning Today shows where your next errand is.** The morning Today page now adds a short note naming a later event today that has a place, with its time, and shows nothing when no event has one. [PR #2801](https://github.com/motioneso/moss/pull/2801)
+- **News note on Today.** The news section on your Today page now has a short "Your news, in context" note under the smaller stories. [PR #2798](https://github.com/motioneso/moss/pull/2798)
+
+#### Changed
+
+- **Smarter email sorting.** Moss can now sort your email with your chosen sorting model, and it keeps receipts, confirmations and account notices out of your briefings while leaving them in your mail and search. [PR #2808](https://github.com/motioneso/moss/pull/2808)
+- **Evening open loops offer choices.** In the evening, each open item now says why it is still open and lets you move it to tomorrow, pick another day, or let it go. [PR #2800](https://github.com/motioneso/moss/pull/2800)
+- **Morning side column shows what moved overnight.** The morning Today page now tells you when a block in your plan moved since your morning report was prepared, and no longer repeats your counts and agenda beside the schedule. [PR #2797](https://github.com/motioneso/moss/pull/2797)
+
 ### 2026-09-28
 
 #### Fixed
 
+- **Evening Today no longer repeats the day's schedule.** The evening version of the Today page no longer shows a second copy of your schedule after the open loops. [PR #2794](https://github.com/motioneso/moss/pull/2794)
+- **Sports on Today no longer comes up empty when the page loads.** Sports scores and headlines on the Today page now load reliably even when many things on the page are fetching at once. [PR #2780](https://github.com/motioneso/moss/pull/2780)
+- **Sports live browser helper works in the packaged install.** Sports can use its live browser helper again to find game sources in the packaged install. [PR #2778](https://github.com/motioneso/moss/pull/2778)
 - **Cleaner morning briefing text.** The morning briefing no longer shows stray "Headline:" and "Lead:" labels, and the full briefing now opens with a clear lead paragraph followed by lighter, easier-to-scan sections. [PR #2769](https://github.com/motioneso/moss/pull/2769)
 - **Evening briefing mentions your email again.** The evening briefing now covers email that arrived today, including mail that may need you, suggested commitments and worth-knowing updates, instead of always saying there was no email. [PR #2772](https://github.com/motioneso/moss/pull/2772)
 - **Morning briefing shows the right email and tasks.** The morning briefing now mentions email that may need you, suggested commitments and worth-knowing updates, and lists only tasks you finished since the last briefing instead of every task you ever completed. [PR #2768](https://github.com/motioneso/moss/pull/2768)
 - **Evening briefing no longer repeats itself on Today.** The evening view on Today now shows each part of your evening briefing once, in the section it belongs to, instead of repeating the whole briefing three times. [PR #2762](https://github.com/motioneso/moss/pull/2762)
+
+#### Changed
+
+- **Fuller morning briefing.** Your morning briefing now walks through the day's events in order with their times and places, includes today's forecast, and says plainly what to prepare. [PR #2773](https://github.com/motioneso/moss/pull/2773)
 
 ### 2026-09-27
 
