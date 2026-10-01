@@ -148,3 +148,16 @@ describe("resolveCatalogTrustedKeys", () => {
     ).toThrow();
   });
 });
+
+describe("MODULE_CATALOG_PUBLIC_KEYS", () => {
+  it("pins both the current and the replacement key", () => {
+    const ids = MODULE_CATALOG_PUBLIC_KEYS.map((key) => key.keyId);
+    expect(ids).toContain("moss-catalog-2026-a");
+    expect(ids).toContain("moss-catalog-2026-b");
+  });
+
+  it("has unique key ids, since lookup returns the first match", () => {
+    const ids = MODULE_CATALOG_PUBLIC_KEYS.map((key) => key.keyId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});

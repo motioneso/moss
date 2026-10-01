@@ -28,6 +28,11 @@ export const MODULE_CATALOG_PUBLIC_KEYS: readonly ModuleCatalogPublicKey[] = Obj
     keyId: "moss-catalog-2026-a",
     publicKeyPem:
       "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEApoGLINdv+F3D1Lsolboa6GoBeNkmJbCDjbUhS6TTtdU=\n-----END PUBLIC KEY-----\n"
+  },
+  {
+    keyId: "moss-catalog-2026-b",
+    publicKeyPem:
+      "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAL9NcIfB6mQh2yXa1OA0rjVyBzSbkMzQRMuF/W+T4mw8=\n-----END PUBLIC KEY-----\n"
   }
 ]);
 
