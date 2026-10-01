@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-01
+
+#### Changed
+
+- **Steadier morning briefing order.** Your morning briefing now lists timed events in clock order before open-ended tasks, folds quiet events into the opening, and always gives sports its own heading. [PR #2849](https://github.com/motioneso/moss/pull/2849)
+
 ### 2026-09-30
 
 #### Added
