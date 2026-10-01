@@ -29,7 +29,8 @@ export const DAY_ITEM_STATE_LABELS: Record<DayItemState, string> = {
 /** A block Moss is suggesting for the first time (nothing on the calendar
     yet) reads as the short "Proposed" beside its time, instead of the
     default "Change pending"/"Proposed, not on the calendar yet" text. Off
-    by default; only the morning reader's rail turns it on. */
+    by default; the morning reader's rail turns it on, and Today's timeline
+    rows show it for any item flagged `firstProposal`. */
 const PROPOSED_WITH_TIME_LABEL = "Proposed";
 
 /** Q6: the reader's rail drops "the" from the committed caption word
@@ -56,7 +57,18 @@ export interface DayItem {
   readonly unavailable: boolean;
   readonly eventId: string | null;
   readonly location: string | null;
+  /** True for a pending block with a time and nothing on the calendar yet. */
+  readonly firstProposal: boolean;
+  /** "Flexible" for a Moss-planned block already on the calendar, else null. */
+  readonly tag: string | null;
+  /** Why the block sits where it does. Set only when a real calendar event
+      starts right when a preparation block ends; otherwise null. */
+  readonly reason: string | null;
 }
+
+/** Longest gap between a preparation block's end and an event's start that
+    still counts as "for" that event. */
+const REASON_MAX_GAP_MS = 5 * 60000;
 
 export interface BuildDayItemsInput {
   readonly plan: DayPlanDto | null;
@@ -117,13 +129,21 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         taskId: null,
         unavailable: false,
         eventId: event.id,
-        location: event.location
+        location: event.location,
+        firstProposal: false,
+        tag: null,
+        reason: null
       })
     );
 
   if (input.plan === null) return events;
 
   const plan = input.plan;
+  // Moss-created calendar entries (other task blocks) are not meetings, so
+  // they never back a preparation reason.
+  const mossBlockEventIds = new Set(
+    input.events.filter((event) => event.isMossBlock).map((event) => event.id)
+  );
   const summaries = new Map(input.tasks.map((task) => [task.id, task]));
   const unavailable = new Set(input.unavailableTaskIds);
   const planHasEveningIntent = plan.eveningIntent !== null;
@@ -172,12 +192,22 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         startsAt !== null && durationMinutes !== null && durationMinutes > 0
           ? new Date(Date.parse(startsAt) + durationMinutes * 60000).toISOString()
           : null;
+      const isFirstProposal = state === "pending" && !hasActualPlacement && startsAt !== null;
       const label =
         input.proposedCaption === "short" && readerCaptionWord !== null
           ? readerEndsAt !== null
             ? `${timeLabel(readerEndsAt, input.locale)}${ampm(readerEndsAt, input.locale)} · ${readerCaptionWord}`
             : readerCaptionWord
           : DAY_ITEM_STATE_LABELS[state];
+      const reasonEvent =
+        block.kind === "prep" && readerEndsAt !== null
+          ? events.find((event) => {
+              if (event.startsAt === null) return false;
+              if (event.eventId !== null && mossBlockEventIds.has(event.eventId)) return false;
+              const gap = Date.parse(event.startsAt) - Date.parse(readerEndsAt);
+              return gap >= 0 && gap <= REASON_MAX_GAP_MS;
+            })
+          : undefined;
       return {
         order: index,
         item: {
@@ -193,7 +223,13 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
           taskId: block.taskId,
           unavailable: block.taskId !== null && unavailable.has(block.taskId),
           eventId: null,
-          location: null
+          location: null,
+          firstProposal: isFirstProposal,
+          tag: state === "committed" && block.taskId !== null ? "Flexible" : null,
+          reason:
+            reasonEvent?.startsAt != null
+              ? `For ${reasonEvent.title} at ${timeLabel(reasonEvent.startsAt, input.locale)}${ampm(reasonEvent.startsAt, input.locale)}`
+              : null
         }
       };
     });
