@@ -13,16 +13,21 @@ plan-build skill's issue prerequisite for this document only. Before product wor
 the build coordinator must record the approval and supply a GitHub `task` issue
 with its parent link. No issue number is invented here.
 
+Documentation task: update the spec status to "approved by Ben in discussion 2026-10-01, section 5 open" and reconcile spec 3.3/3.4 once Ben rules on candidate privacy.
+
 Use `.claude/skills/plan-build/SKILL.md`. Each numbered task below is one session,
 with one bounded deliverable and its own check. Do not combine sessions to fit a
-large implementation into one context. Slice 1 ships and is evaluated first;
-subsequent slices are bounded work orders to revalidate against the resulting tree,
-not prewritten implementation. No product code accompanies this plan.
+large implementation into one context. Revision 1 moves independent shadow groundwork
+earlier and adds Slice 2b before real integration tool menus enter shadow. The
+recommended execution order below supersedes the original slice-1-first sequence;
+the slice numbers retain the spec backbone. Work orders are revalidated against the
+resulting tree, not prewritten implementation. No product code accompanies this plan.
 
 **Release kill gate:** no tool executes through the gate until Ben has set the
 shadow agreement rate and review window, reviewed that tool's evidence, and approved
 its activation. Missing approval means ineligible, even if the setting says `on`.
-A new classifier selection or material tool/schema change requires fresh evidence.
+A new classifier selection, material tool/schema change or integration preparation/
+risk revision requires fresh evidence.
 The marker must ship before any real activation. Turning the setting off must restore
 today's path immediately for subsequent messages.
 
@@ -63,6 +68,23 @@ Keep this ledger, including limitations and rejected options, through future rev
 rounds. Append new tree facts with citations and decisions with their owner; do not
 remove a finding merely because a later slice fixes it.
 
+### Revision 1 ledger additions (2026-10-01)
+
+The original ledger above is retained. These additions correct its missing coverage
+of user-connected tools; they do not turn those tools into first-party modules.
+
+| Finding or ruling                                     | Evidence                                                                                                                                                                                                                                            | Planning consequence                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections already form classifier areas             | `packages/integrations/src/discovery.ts:15` dispatches discovery; `mcp-client.ts:41` maps name, description, schema and annotations; `tool-manifests.ts:281` builds one synthetic module per connection.                                            | Reuse the synthetic module as the area, shown as the connection name. Store configuration against owner/connection ID/tool name, not a mutable slug. Reject ambiguous slug/tool collisions in the gate until unambiguous; do not rename ordinary-chat tools in this slice. |
+| Discovery hints are not risk authority                | `packages/integrations/src/mcp-client.ts:48` reads `readOnlyHint` into `readOnly`; `tool-manifests.ts:272` hard-codes `outbound` and `auto` for all discovered tools. Line 174 uses the hint for the envelope action, not manifest risk.            | A server's hint is untrusted evidence only. Add reviewed classifier risk, unknown by default, without rewriting ordinary gateway risk.                                                                                                                                     |
+| Ordinary and YOLO approval differ for external tools  | `packages/ai/src/gateway/policy.ts:38` confirms outbound in normal mode; line 74 permits external tools in the YOLO family check. `gateway.ts:238` still honors per-call confirmation overrides.                                                    | The earlier general description of family trust is incomplete for integrations. Preserve this existing exception and the normal confirmation path. Classifier unknown-risk exclusion applies even in YOLO. Connection opt-in never grants gateway authority.               |
+| Discovery staleness currently survives refresh errors | `packages/integrations/src/repository.ts:203` saves discovery; its null-tools branch preserves the previous list. `routes.ts:188` refreshes and line 219 drops the resolver cache. `resolver-cache.ts:23` caches for 30 seconds.                    | New classifier eligibility must be invalidated on changed discovery, failure, or expired freshness; it cannot inherit stale ordinary-chat availability. Check stored approval versions again at dispatch.                                                                  |
+| Owner storage exists                                  | `packages/integrations/sql/0207_integration_connections.sql:24` enables/forces RLS and line 27 scopes access to the actor.                                                                                                                          | Store preparation and switches with owner-scoped connections; add a new module migration and extend isolation tests, not an admin review bypass.                                                                                                                           |
+| Code-authored result summaries exist                  | `packages/integrations/src/tool-manifests.ts:242` constructs status/action/summary/detail using `INTEGRATION_SUMMARY`; `summaries.ts:2` defines the strings. `gateway/output-validation.ts:53` returns unschematized data unchanged.                | Read only the validated envelope fields needed for replies; never dump arbitrary detail into a template. Empty summaries need explicit fixed fallbacks.                                                                                                                    |
+| Setup must use the actual chat selection              | `packages/chat/src/live/persistence.ts:165` resolves through `AiRepository.selectChatModelForUser`.                                                                                                                                                 | Inject the same selection through the AI composition boundary for setup. Do not use the Classifier binding or a generic structured default, and do not launch a user chat turn to prepare tools.                                                                           |
+| Existing UI and app-map surfaces                      | `apps/web/src/settings/settings-integrations-pane.tsx:153` renders connection detail and line 376 grouped tools; `packages/shared/src/app-map-core.ts:171` declares integrations; `packages/integrations/src/manifest.ts:35` owns feature metadata. | Extend these surfaces and declarations in Slice 2b, with mockup approval and live proof.                                                                                                                                                                                   |
+| Revision scope and ordering                           | Ben's revision-1 brief requests user-connected integrations early, parallel shadow groundwork, and no change to ordinary approval behavior.                                                                                                         | The missing-first-party-module observation remains true; its former module-identification blocker is superseded by Slice 2b.                                                                                                                                               |
+
 ### Boundary choices
 
 Use the manager boundary rather than the HTTP route: the route is simpler for one
@@ -84,7 +106,8 @@ policy-negative tests, not accept this document as proof of implementation.
   Stage two may carry named argument-choice questions in the same request. If a safe
   bounded schema cannot express the choice and its arguments within that stage, the
   tool is ineligible; do not hide extra model rounds. Typed extraction is capability
-  dependent. No names of providers or models determine gate behavior.
+  dependent. No names of providers or models determine gate behavior. Setup preparation in 2b
+  is a separate, user-reviewed default-model job; no preparation model runs per message.
 - Resolve the Classifier binding once per attempt. The AI router reports supported
   answer capabilities and returns scores in a common contract. The user's configured
   default chat model is reached only by resuming the existing chat path, unchanged.
@@ -106,7 +129,8 @@ policy-negative tests, not accept this document as proof of implementation.
   Use stable candidate IDs; labels are untrusted data, not instructions. Reject unknown
   fields, missing required values, non-finite numbers, malformed scores, and unsupported
   schemas. Never send the raw message as tool input.
-- Apply the eventual tool's risk bar to both stages and argument answers: initially
+- Apply the eventual tool's risk bar (reviewed classifier risk for integrations,
+  subject to Ben's 2b ruling) to both stages and argument answers: initially
   read 0.90, write 0.95, outbound/destructive 0.98, with a top-minus-runner-up lead of
   at least 0.40 for each choice. These are provisional shadow thresholds, not proven
   accuracy. Missing runner-up evidence means decline, not invented certainty.
@@ -133,18 +157,49 @@ policy-negative tests, not accept this document as proof of implementation.
   normalized module/tool identity; record argument agreement separately when safely
   available. Tool-name agreement alone does not certify argument safety.
 
-## First-party candidate inventory (not an activation decision)
+## Candidate inventory: first-party and user-connected tools (not an activation decision)
 
-| Requested use                  | Exact current candidate                                                                                                                       | Work and eligibility before opt-in                                                                                                                                                                                                          |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add a task                     | `tasks.create`, `packages/tasks/src/manifest.ts:638`; handler `packages/tasks/src/tools.ts:188`; input `packages/shared/src/tasks-api.ts:379` | Requires a typed title; choice-only classifiers cannot supply it. Restrict the gate's offered argument subset; validate against the real schema. Render from the returned task record. Existing gateway trust and confirmation still apply. |
-| Today's calendar               | `calendar.listVisibleEvents`, `packages/calendar/src/manifest.ts:306`; handler `packages/calendar/src/tools.ts:146`                           | Derive today's start/end from the actor's timezone in code; defaults are not "today". A bounded template must handle no events, gaps/stale results and overflow truthfully. Long/open-ended results decline.                                |
-| Smart-home switches and scenes | No first-party tool declaration found in this checkout by graph search plus manifest/path searches.                                           | Ben/build coordinator must identify the owning installed module and exact tools. Do not invent tool names or build a smart-home module as part of this plan.                                                                                |
-| Timers                         | No first-party timer action found; runtime idle-reap timers are unrelated.                                                                    | Same owner action: identify an existing installed tool and its manifest, or defer. Do not create a timer product to fill the list.                                                                                                          |
+| Requested use                  | Exact current candidate                                                                                                                       | Work and eligibility before opt-in                                                                                                                                                                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a task                     | `tasks.create`, `packages/tasks/src/manifest.ts:638`; handler `packages/tasks/src/tools.ts:188`; input `packages/shared/src/tasks-api.ts:379` | Requires a typed title; choice-only classifiers cannot supply it. Restrict the gate's offered argument subset; validate against the real schema. Render from the returned task record. Existing gateway trust and confirmation still apply.                                           |
+| Today's calendar               | `calendar.listVisibleEvents`, `packages/calendar/src/manifest.ts:306`; handler `packages/calendar/src/tools.ts:146`                           | Derive today's start/end from the actor's timezone in code; defaults are not "today". A bounded template must handle no events, gaps/stale results and overflow truthfully. Long/open-ended results decline.                                                                          |
+| Smart-home switches and scenes | Expected through a user-connected MCP integration, including Home Assistant; no first-party tool declaration is required.                     | Slice 2b prepares the discovered tool menu with user opt-in. Exact server tool names and schemas come from discovery. Choice-only classifiers need real device/area candidates for free-text name inputs; typed-capable classifiers can extract those names without a candidate list. |
+| Timers                         | Expected through user-connected integrations when the server exposes timer tools; runtime idle-reap timers are unrelated.                     | Slice 2b supplies preparation, risk review and opt-in. Do not invent a first-party timer module or assume every connected server exposes timers.                                                                                                                                      |
 
-This is the exact available shortlist for Ben's section 5 decision, not permission
-to opt in both existing tools. Third-party/integration tools are not automatically
+The two first-party tools are the available shortlist for Ben's section 5 decision,
+not permission to opt in both. Integration tools use the separate user opt-in in 2b.
+Third-party/integration tools are not automatically
 eligible merely because they are installed or have an input schema.
+
+## Recommended execution order (revision 1)
+
+Start with evidence-producing backend groundwork, not a rename-only release. This
+is a scheduling recommendation for future build sessions, not an instruction to
+spawn agents in this documentation task. Keep one session per numbered unit.
+
+1. Start 3.1 (AI routing), 3.2 (gateway), and 3.4 (shadow storage) against fixtures
+   while the UI owner reviews 1.1 and 2b.1 with Ben and the SDK owner does 2.1.
+   These have separate code ownership. The unanswered setting scope does not block
+   a decision engine tested with injected off/shadow state. No real-message shadow
+   collection starts until the privacy/state decisions and production wiring land.
+2. After the SDK contract settles, start 3.3 against synthetic tool menus. In
+   parallel, do 2b.2-2b.3 setup/storage work after their decisions clear. The AI
+   owner lands 3.1 before 2b.3 touches shared AI exports/routing. External-module
+   support in 2.2 and first-party 2.3 need not hold up the user-connected pilot.
+3. Land 1.2-1.3 and 2b.4 after mockup approval. 2b.5 needs the gateway work in 3.2
+   and the reviewed preparation contract. Complete 2b.6 before 3.5 uses real
+   integration tool menus. Then wire 3.5 and collect shadow evidence immediately;
+   do not wait for unrelated first-party or external-module opt-ins.
+4. Prepare 4.1 while shadow evidence accumulates; review/build 5.1-5.2. Complete
+   4.2 with Ben's rate/window decision before 4.3. No real tool execution precedes
+   the kill gate, marker, candidate-specific decisions and live-path proof.
+
+One integration owner serializes edits to `tool-manifests.ts`, repository/routes,
+and the integrations UI; one chat owner serializes manager/runtime/persistence.
+The shared map and each manifest have one merge owner at a time: queue their small
+same-slice edits rather than concurrently editing those files. Each product slice
+still carries its own truthful map declarations in its PR. Parallel groundwork
+may use fixtures; it may not bypass an undecided privacy or mockup dependency.
 
 ## Slice 1: rename and setting
 
@@ -194,10 +249,11 @@ settings path, selects/clears a classifier, reloads, changes the allowed gate st
 and verifies unchanged chat behavior and forbidden premature activation. Run the
 UI assertions in light, dark and one theme; record bounded DOM/network evidence.
 
-**Slice 1 evaluation:** Ben decides whether the configuration and disclosure are
-understandable and still worth pursuing. Stop here if Ben rejects the extra data
-sharing or intended latency benefit; do not start slice 2 automatically. Later
-work orders must be refreshed after this review.
+**Early evaluation:** retain Ben's stop decision after the first settings/disclosure
+review, but do not serialize independent shadow groundwork behind the rename. If
+Ben rejects the extra sharing or intended latency benefit, stop further gate work.
+Passing this review authorizes no data collection or live execution on its own;
+the privacy, mockup, and shadow release gates still apply.
 
 ## Slice 2: tool opt-in
 
@@ -249,9 +305,226 @@ only on capable classifiers. No live activation yet.
 Check declaration-to-loaded-menu eligibility, candidate authorization, schema
 validation and template output against the actual handler result. Use the existing
 tool handler tests plus `tests/uat/specs/classifier-tool-menu.uat.spec.ts` to confirm
-real module installation and unchanged default chat operation. Missing smart-home
-and timer ownership blocks only those candidates. Exit: each approved module's
+real module installation and unchanged default chat operation. User-connected
+smart-home and timer tools follow Slice 2b, not a missing-module blocker. Exit: each approved module's
 bounded session passes separately; no fictional tools in the shipped list.
+
+## Slice 2b: user-connected integrations (before real shadow tool menus)
+
+This is the headline smart-home path. Reuse each connection's synthetic module as
+its classifier area. A user, not a module author, opts these tools in. Connection
+and tool switches default off and are additional to ordinary integration curation.
+Effective eligibility requires: enabled connection, ordinary-chat tool availability,
+connection classifier switch, tool classifier opt-in, current reviewed preparation,
+known reviewed risk, supported argument capabilities and current candidates when
+needed. Live execution additionally requires 4.2 release eligibility and the existing
+gateway's authorization. Unknown or stale means decline to ordinary chat.
+
+### 2b.1 Connection and preparation mockup review (one design session)
+
+Owner: integrations UI implementer; Ben reviews before any UI build. Use the
+design-system skill and `docs/design-system.md`. Extend the real connection detail
+screen with "Let the classifier use this connection" and per-tool classifier
+opt-in/out, distinct from ordinary tool curation and repeated-call switches. Use
+existing `Switch`, `Field`, `Select`, `Button`, status and review primitives. Show
+unknown risk, not prepared, preparing, review required, approved, stale, failed,
+no tools, and disconnected states. The switch requests preparation; it does not
+silently approve its output or enable any tools.
+
+Mock up the editable review of each description, fixed-choice inputs, risk and
+reply template, including the before/after diff on re-preparation. Explain setup
+cost and data sharing before the model request, separately from runtime classifier
+sharing. Include rejection/cancel, retry cost, keyboard access and light/dark/theme
+states. Exit: Ben approves mockups; record risk and setup-definition permission
+rulings when available. No UI implementation or real definition upload beforehand.
+
+### Risk options and recommendation (Ben decides before 2b.2 ships)
+
+| Option                                     | Benefit                                                                                                                | Limitation and disposition                                                                                                                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trust `readOnlyHint` directly when present | Low setup effort; many servers supply it.                                                                              | A server can lie or be wrong; absence says nothing about a lamp versus a lock. Reject as sole authority. Retain it as a visible suggestion and flag conflicting destructive hints. |
+| Let the user classify each tool            | The owner can distinguish a read, a reversible device write, sending data, and destructive/security-sensitive actions. | User mistakes remain possible; explain consequences, require review, and do not let a generated draft lower risk automatically. Recommended basis for classifier risk.             |
+| Unknown stays outside the gate             | Preserves safety for undescribed or ambiguous tools.                                                                   | Lower initial coverage. Recommended default combined with explicit user classification; never infer read from missing hints.                                                       |
+
+Recommend an owner-reviewed `classifierRisk` of read/write/outbound/destructive,
+with unknown represented by no approved value. Server hints and setup drafts are
+untrusted inputs to the review, not proof. A lock/unlock or similarly sensitive
+operation must not be treated as a harmless switch merely because both accept a
+name; unresolved classifications stay unknown. Ben must approve this rule before it
+becomes product behavior. Persist the review against the discovered definition.
+
+**Preserve ordinary approval behavior:** leave synthetic manifest `risk: outbound`
+and `executionPolicy: auto` intact. The reviewed classification controls only gate
+eligibility and confidence thresholds; it is not a new authorization policy. All
+execution still goes through the unchanged gateway authority checks. In normal
+mode these outbound tools currently require a card, so the gate declines and the
+default model raises it. In YOLO the existing external-tool exception may permit
+execution, subject to overrides and limits; known classifier risk and the kill gate
+remain additional requirements. Do not "fix" this by downgrading manifest risk.
+Retain the outbound execution failure rule: after an integration attempt fails or
+has an unknown outcome, show a terminal code-written message, never retry via the
+default model, even if the classifier label says read. This avoids trusting a server
+read hint to authorize a repeat. Any later change to ordinary policy is out of scope.
+
+### 2b.2 Owner storage, opt-in and invalidation (one backend session)
+
+Own `packages/integrations/src/repository.ts`, `routes.ts`, shared integration API
+contracts, and a new migration under `packages/integrations/sql/`. Reuse the existing
+owner-only connection row: add a default-false classifier switch and a versioned
+JSON preparation map keyed by discovered tool name. Each approved entry stores
+opt-in (default false), reviewed risk, description, fixed-choice definitions,
+reply-template contract, optional candidate-source mapping, definition fingerprint,
+review timestamp, current/stale state and preparation version. Return drafts as
+transient review records; store prepared text only after the user reviews, edits
+and explicitly saves it. Cancelling review leaves no persisted generated draft.
+Use a canonical fingerprint over the tool list, descriptions, schemas and relevant
+annotations; use owner plus immutable connection ID for identity. Prepared text is
+private data, not logs or job payloads. Keep RLS owner-only, including administrators,
+and deletion cascading with the connection. Bound map size and input lengths.
+
+On changed list/schema/description/annotations, mark the preparation stale and require
+re-preparation plus review; new tools remain off. Compare the discovery generation
+when saving a review so old tabs cannot approve a superseded draft. Changes to
+connection endpoint/credentials, opt-out, deletion, preparation or risk invalidate
+resolver and candidate caches immediately. A discovery failure must not preserve
+classifier eligibility just because ordinary chat retains its old discovered list.
+After quick checks, before a gate attempt uses a connection menu, refresh its tool
+definitions within the shared deadline, coalescing simultaneous requests; a failed or changed result
+declines. This is discovery, not model preparation. Never claim the current discovery
+snapshot proves remote behavior cannot change after dispatch. Recheck stored revision
+and opt-in at dispatch; stale preparation never triggers an automatic default-model
+setup call from chat.
+
+Check two owners/admin, forged connection IDs, default-off, per-tool exclusions,
+changed/deleted/added tools, schema drift, stale review saves, discovery failure,
+cache invalidation and opt-out during classification. Use
+`tests/integration/integrations-classifier-settings.test.ts` under verify-gate
+isolation only. Update integrations manifest settings/features/errors/remediations,
+data-lifecycle declarations and the core app map in this same product PR.
+
+### 2b.3 One-time default-model preparation (one AI/integrations session)
+
+Depends on permission for setup definition sharing and 2b.2; serialize shared AI
+changes after 3.1. Add `packages/integrations/src/classifier-preparation.ts` and a
+small composition-layer port that selects the user's current default chat model
+through the existing AI selection machinery. Use its structured adapter with an
+explicit resolved model. If that selection cannot satisfy the schema, show a setup
+failure; do not silently switch to the classifier or another model. No provider or
+model names in feature code. No chat turn, history, memory or device invocation.
+
+When the user enables preparation, read each discovered tool once per definition
+version and draft: a short classifier description, fixed enum/choice inputs present
+in the schema, remaining inputs requiring typed extraction or a candidate source,
+and a declarative reply template using allowed envelope fields. Bound concurrent
+requests and token/output size. Do not invent device names, enum options, risk facts
+or result fields from prose. Schema metadata and descriptions are untrusted data;
+the prompt has a worked example and less than 150 words of instructions. Validate
+output with schema descriptions and a boundary validator, then present an editable
+per-tool diff for user acceptance. The model never writes executable template code
+or approves a tool. No automatic retries that repeat the setup charge; explicit retry
+is visible to the user. Re-enabling unchanged reviewed definitions reuses them.
+
+The disclosure names the discovered names/descriptions/input schemas/annotations
+sent to the user's default model, that a hosted model sends them to its provider,
+and that setup and explicit re-preparation incur model usage/cost. Do not quote an
+invented price. Strip transport URLs, credential configuration, headers and secrets;
+never include device inventories or raw tool responses in this setup request.
+Definitions themselves may contain private information: real sharing waits for Ben's
+ruling and the user's disclosed setup action. Reviewed descriptions/templates and
+candidate labels later sent to the classifier need their separate privacy ruling.
+At message time the gate uses only the classifier; setup is never repeated there.
+Declines still follow the existing default-model chat path.
+
+Check chosen-model routing, unsupported selection, call counts per version, malicious
+definitions, malformed drafts, cancelled review, edited/rejected drafts and replay of
+an old approval. Add `tests/unit/integrations-classifier-preparation.test.ts`. Update
+the integrations manifest/core map with preparation, cost, privacy and failure recovery.
+
+### 2b.4 Reviewed switches and editor (one UI session)
+
+Depends on 2b.1-2b.3. Own `apps/web/src/settings/settings-integrations-pane.tsx` and
+focused adjacent components/API hooks. Build the agreed connection switch, tool
+controls, risk choice and preparation review. Model drafts stay visually distinct
+from saved approved records. Show which tool is ineligible and why; no silent opt-in
+on a bulk connection switch. Render progress, saves and errors from records. Make
+re-preparation/edit/review accessible without changing ordinary tool or repeat-call
+controls. Match the approved empty/loading/error states. Tests cover reload, stale
+review, rejection, opt-out and keyboard interaction. Run design token/class checks;
+update integrations manifest and core map in the same PR. Exit: UI assertions pass;
+assembled proof is the 2b.6 release requirement.
+
+### 2b.5 Candidate preparation, runtime menus and replies (one integration session)
+
+Own focused `packages/integrations/src/classifier-candidates.ts` and
+`classifier-reply.ts` helpers, plus minimal `tool-manifests.ts`/cache wiring. Wait for
+2.1's contract and 3.2's gateway interface before editing their shared boundaries.
+Copy only current user-reviewed preparation into classifier metadata on synthetic
+tools. Preserve ordinary manifests and curation. The gate's area is the connection;
+the runtime menu uses reviewed descriptions and capability-filtered inputs.
+
+**Candidate recommendation, conditional on Ben's privacy ruling:** the gate's setup/
+explicit-refresh path may call an owner-selected exposed-device listing tool only
+when it has an explicit reviewed read-only classification and the existing gateway
+permits the call. This is a user-requested setup read, not a handled chat action;
+shadow itself performs no candidate-tool calls or action execution. A server hint alone cannot qualify it. Use the same gateway, never
+invoke MCP directly to evade confirmation; if confirmation would be needed, do not
+raise a gate card, leave candidates unavailable and explain the ordinary setup path.
+Validate the listing result through an explicitly reviewed extraction mapping; no
+model interprets raw device results at message time. If the server cannot provide a
+bounded usable list, choice-only classifiers cannot handle name-valued inputs.
+
+Cache minimal IDs/names under the owning connection with a source/version fingerprint,
+fetched time and expiry (initial maximum age five minutes, an implementation bound,
+not a privacy permission). Invalidate on discovery/preparation changes, known device
+list changes, refresh failure and opt-out. Never mix owners. Expired/missing/ambiguous
+names exclude that tool until the user refreshes; no hot-path listing call or stale
+fallback. A typed-capable classifier may extract a literal device/area name without
+this list, subject to the input schema, reviewed risk and existing gateway rules;
+never fabricate an ID or claim that schema validation proves a device exists.
+Candidate names and prepared text feed the still-open privacy/disclosure decision.
+No per-message setup model, background preparation queue or cross-user cache.
+
+**Reply contract:** prefer the reviewed declarative template over validated result
+fields. Otherwise render the code-authored envelope summary as plain text. For an
+empty success summary, use exactly "Action performed successfully." for performed
+and "Read succeeded." for read. For error/unknown status use "The action could not
+be confirmed. Check the connected service before trying again."; never fill an error
+with success text. Preserve the existing already-done, refused and truncated meanings
+when supplied by `INTEGRATION_SUMMARY`; do not paraphrase suppression as fresh success.
+Do not display arbitrary remote `detail` or ask a model to invent a reply. An
+informational read that needs content cannot count as handled on "Read succeeded."
+alone: it needs a useful reviewed template or must remain ineligible. After a
+mutating attempt, empty/malformed output cannot trigger fallback execution.
+
+Check device rename/removal, expiry, no listing tool, denied listing, false hints,
+unknown risk in YOLO, choice-only versus typed input, cached owner isolation, empty
+summary, remote error, suppression, truncation and partial mutation. Add
+`tests/unit/integrations-classifier-runtime.test.ts`. Update integrations manifest
+features/errors/remediations and core map in this same PR.
+
+### 2b.6 Real integrations-screen proof (one UAT session)
+
+Depends on 2b.1-2b.5. Add
+`tests/uat/specs/classifier-integrations.uat.spec.ts` using real Home Assistant or a
+faithful fake MCP server with a name-valued light switch, read-only device listing,
+a sensitive unlock action, missing/false hints and a changeable tool list/schema.
+Connect through the real integrations screen, discover and curate tools, enable
+preparation, edit/approve a draft and opt in only selected tools. Assert all-off
+initial state, unknown-risk exclusion, owner isolation, staleness/re-preparation,
+disclosure, and unchanged ordinary-chat approval in normal and YOLO modes. Count
+setup model calls and prove reconnecting unchanged configuration does not prepare
+again. No fixed pretend module or bypass of the real connection setup.
+
+Before 3.5 exists, prove persisted setup and the real menu resolver with assertions;
+this is not yet end-to-end shadow proof. Then extend the same fixture in 3.5 for
+classifier requests with zero preparation calls at message time and zero gate action
+execution. In 4.3, after shadow approval and the marker, prove a permitted light
+command executes once in YOLO, normal-mode confirmation declines to the default
+model, and unknown/sensitive unapproved tools remain ineligible. Keep gate privacy,
+rate/override checks and no-retry-on-unknown-outcome assertions. Attach bounded
+redacted UI/network assertions and exit code to each future product PR, no screenshots.
+Run only on an isolated dev target after verify-gate setup. Map/manifest truthfulness
+is checked against the actual integrations screen and its available recovery actions.
 
 ## Slice 3: shadow mode
 
@@ -293,6 +566,8 @@ pass; same-slice chat manifest/core map describe decline-to-normal-approval beha
 
 ### 3.3 Gate decision engine (one chat session)
 
+Start with synthetic fixtures after 2.1; integration-menu wiring waits for 2b.5.
+
 Own new `packages/chat/src/live/classifier-gate.ts` and
 `tests/unit/chat-classifier-gate.test.ts`. Implement quick checks, module/tool menus,
 two stages, full validation, risk thresholds, margin, shared deadline and cooldown.
@@ -314,6 +589,7 @@ Own a new `packages/chat/src/classifier-shadow-repository.ts`, a new migration u
 `tests/integration/chat-classifier-shadow.test.ts`. Do not edit applied migrations.
 Store actor, turn correlation ID, timestamps, original message text, gate mode,
 classifier configuration identity/version, module/tool, confidence and margin,
+connection ID and reviewed preparation/risk version for integrations,
 threshold version, decision/reason, timing, and first-model-tool comparison status.
 Avoid storing raw argument/result payloads merely for convenience. Use owner-only
 RLS for reads and writes with no admin or thread-sharing exception. Bound retention
@@ -329,6 +605,9 @@ procedure; this planning session runs none. Exit: scoped database proof passes;
 privacy behavior and errors are declared in the same slice's chat manifest/core map.
 
 ### 3.5 Runtime wiring and shadow live proof (one integration session)
+
+Depends on 1.2-1.3, 3.1-3.4 and 2b.6 for the user-connected pilot. First-party
+2.3 and external-module 2.2 are required only for their respective tool menus.
 
 Own `packages/chat/src/routes.ts`, `packages/chat/src/live/runtime.ts`,
 `packages/chat/src/live/chat-session-ports.ts`, the thin manager hook and
@@ -398,7 +677,9 @@ Ben-approved tools on a dev instance and exercise
 `tests/uat/specs/classifier-live.uat.spec.ts` through actual signup/settings/module/chat
 UI. Prove correct result plus marker with no default-model turn; low confidence and
 unknown arguments fall back; approved normal and YOLO tools follow the same gateway
-policy; a tool requiring approval declines and the default model shows the usual
+policy, including the integration-specific normal-mode decline and existing YOLO
+exception recorded in the revision ledger; a tool requiring approval declines and
+the default model shows the usual
 card exactly once. Include rate limits, per-call overrides, partial write failure,
 read failure, stop, settings rollback to off and refreshed history.
 
@@ -459,6 +740,8 @@ no piped verification. Use the repository's existing test runner and frameworks.
 | UI slices                                  | `pnpm check:design-tokens` and `pnpm check:ui-classes` (separately)                                           | Each exit 0 |
 | Changed product scope                      | `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm check:file-size`, `pnpm build:app-map` (separately) | Each exit 0 |
 
+Slice 2b adds `pnpm exec vitest run tests/unit/integrations-classifier-preparation.test.ts tests/unit/integrations-classifier-runtime.test.ts` (expected exit 0) and, only after verify-gate isolation, `pnpm exec tsx scripts/test-integration.ts tests/integration/integrations-classifier-settings.test.ts` (expected exit 0). Its live suite is `pnpm test:uat classifier-integrations.uat.spec.ts` (expected exit 0). Observe the unknown-risk exclusion test fail when that guard is removed, restore it and rerun; fixture hints must never become authority.
+
 Each slice's named UAT runs with `pnpm test:uat <named-file>.uat.spec.ts` after the
 verify-gate/dev-instance procedure; expected exit 0. Replace the placeholder with
 that slice's filename, for example `pnpm test:uat classifier-shadow.uat.spec.ts`.
@@ -474,24 +757,36 @@ The original four questions are unchanged:
 
 1. Is gate state per user or admin-wide? Blocks 1.2 and final settings design; the
    classifier binding remains admin-owned under either choice.
-2. Which first-party tools opt in first? The exact available candidates and missing
-   owners are above. Blocks 2.3 for any unapproved tool, not the default-off SDK work.
+2. Which first-party tools opt in first? The exact available candidates are above;
+   user-connected tools follow the separate owner opt-in in 2b. Blocks 2.3 for any unapproved tool, not the default-off SDK work.
 3. Should a later version let the gate raise its own approval card? No version-one
    task implements that, regardless of the eventual answer.
 4. What shadow agreement rate and review window permit activation? Set only when the
    data exists; blocks 4.2/4.3. Do not fill in a threshold for Ben.
 
+Revision 1 adds two decisions:
+
+5. Which risk rule applies to discovered tools? Recommend owner-reviewed classifier
+   risk, server hints as suggestions only, and unknown ineligible. Blocks 2b.2
+   eligibility behavior; ordinary gateway approvals stay unchanged under any choice.
+6. May the user's default model read discovered tool definitions during setup
+   preparation? Blocks real definition uploads in 2b.3; fixtures can proceed.
+   Preparation is one-time per version with explicit user review, not a model call
+   added to every chat message.
+
 Additional seams requiring a ruling, not an invented implementation assumption:
 
-- **Candidate privacy (Ben, before 2.3/3.5):** spec 3.3 says no stored data reaches the
-  classifier, while 3.4 allows candidate names from the user's devices. Agree the
-  narrow data allowance and corresponding disclosure. Until then use static enums
-  and synthetic fixtures; do not send private candidate lists.
+- **Prepared text and candidate privacy (Ben, before real 2b preparation/candidate
+  use and 2.3/3.5):** spec 3.3 says no stored data reaches the classifier, while 3.4
+  allows device names. Slice 2b also exposes reviewed prepared descriptions and
+  template metadata to the classifier. Agree the narrow allowance, whether the
+  read-only device-list preparation is permitted, and the corresponding disclosure.
+  Keep real definition sharing, prepared text sharing and device inventories
+  distinct; none is implicitly approved by the others. Until ruled, use static
+  enums/synthetic fixtures. Reconcile spec 3.3/3.4 after the ruling.
 - **Shadow retention/private chat (Ben, before 3.5 collection):** set retention and
   how private-chat attempts participate in review without storing their text. Existing
   incognito non-persistence wins until clarified. No new private-content sink by default.
-- **Missing tool owners (Ben/build coordinator, before their 2.3 session):** supply
-  the actual installed smart-home/timer manifests or defer those candidates.
 - **External candidate dispatch (module-platform implementer, before 2.2 completion):**
   prove the bounded actor-scoped runtime hook with a source citation and fixture.
   This plan verified declaration loading, not a preexisting candidate-hook protocol.
