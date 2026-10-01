@@ -36,6 +36,7 @@ import {
 import { resolveBriefingFreshness } from "./freshness.js";
 import { withToolSavepoint } from "./savepoint.js";
 import { resolvePlanContext } from "./plan-context.js";
+import { tidyMorningSections } from "./morning-order.js";
 import { planSection } from "./plan-prose.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveCalendarSignals, deriveEmailSignals } from "./signals.js";
@@ -613,7 +614,12 @@ export async function composeBriefing(
   }
   return {
     status: "succeeded",
-    summaryText: synth.text,
+    summaryText: tidyMorningSections(
+      synth.text,
+      (rawCalendar.rawItems ?? []).flatMap((item) =>
+        typeof item["title"] === "string" ? [item["title"]] : []
+      )
+    ),
     sourceMetadata: {
       commitmentCount: commitments.count,
       taskCount: prioritizedTasks.count,

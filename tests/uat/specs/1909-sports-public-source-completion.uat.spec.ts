@@ -7,8 +7,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import {
   bringUpRealChatModel,
   REAL_CHAT_PROVIDER_KIND,
-  requireUatBaseURL,
-  signInUatAdmin
+  requireUatBaseURL
 } from "./real-chat-signin.js";
 
 // #1909 live-path proof. The surface check remains credential-free. The full public-source path
@@ -34,6 +33,7 @@ const POLL_INITIAL_INTERVAL_MS = 500;
 const POLL_MAX_INTERVAL_MS = 4_000;
 
 interface SourceRow {
+  readonly kind: "builtin" | "custom";
   readonly id: string;
   readonly label: string;
   readonly canonicalDomain: string;
@@ -116,24 +116,35 @@ async function createPremierLeagueFollows(page: Page): Promise<{
   });
   expect(league.ok(), `league follow -> ${league.status()}`).toBeTruthy();
 
-  const search = await page.request.get("/api/sports/teams/search?q=Arsenal");
-  expect(search.ok(), `team search -> ${search.status()}`).toBeTruthy();
-  const teams = (await search.json()) as {
-    teams: readonly {
-      competitionKey: string;
-      teamKey: string;
-      name: string;
-      shortName: string;
-    }[];
+  // The search is partial until the catalog warm-fill has covered every league, so a fresh
+  // instance can miss Arsenal on the first call. Retry until it resolves or the deadline passes.
+  type TeamHit = {
+    competitionKey: string;
+    teamKey: string;
+    name: string;
+    shortName: string;
   };
-  const arsenal = teams.teams.find(
-    (team) => team.competitionKey === "eng.1" && /arsenal/i.test(`${team.name} ${team.shortName}`)
-  );
-  expect(arsenal, "Arsenal must resolve from the real Sports catalog").toBeDefined();
-  if (!arsenal) throw new Error("Arsenal was absent from the Sports catalog");
+  let arsenal: TeamHit | undefined;
+  await expect
+    .poll(
+      async () => {
+        const search = await page.request.get("/api/sports/teams/search?q=Arsenal");
+        expect(search.ok(), `team search -> ${search.status()}`).toBeTruthy();
+        const teams = (await search.json()) as { teams: readonly TeamHit[] };
+        arsenal = teams.teams.find(
+          (team) =>
+            team.competitionKey === "eng.1" && /arsenal/i.test(`${team.name} ${team.shortName}`)
+        );
+        return arsenal !== undefined;
+      },
+      { message: "Arsenal must resolve from the real Sports catalog", timeout: 90_000 }
+    )
+    .toBe(true);
+  const resolved = arsenal as TeamHit | undefined;
+  if (!resolved) throw new Error("Arsenal was absent from the Sports catalog");
 
   const team = await page.request.post("/api/sports/follows", {
-    data: { competitionKey: arsenal.competitionKey, teamKey: arsenal.teamKey }
+    data: { competitionKey: resolved.competitionKey, teamKey: resolved.teamKey }
   });
   expect(team.ok(), `team follow -> ${team.status()}`).toBeTruthy();
   const leagueRow = (await league.json()) as { follow: { id: string } };
@@ -336,8 +347,14 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   expect(drift.recipeStatus).toBe("drift");
   expect(drift.healthReasonCode).toBe("recipe_drift");
 
+  // Sign in through the API, not the sign-in screen: the screen lands on Today, whose Sports
+  // widget requests the overview. That request refreshes every source, and a refresh heals the
+  // seeded failures below (their feeds are reachable), so the Retry check would race it.
   await page.context().clearCookies();
-  await signInUatAdmin(page);
+  const reSignIn = await page.request.post("/api/auth/sign-in/email", {
+    data: { email: UAT_ADMIN_EMAIL, password: UAT_ADMIN_PASSWORD }
+  });
+  expect(reSignIn.ok(), `re-sign-in -> ${reSignIn.status()}`).toBeTruthy();
   await bringUpRealModel(page);
   const follows = await createPremierLeagueFollows(page);
   const section = await openSportsSettings(page);
@@ -425,7 +442,10 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   await test.step("Moss previews and confirms a new public source", async () => {
     const preview = await invokeReadTool<PreviewResult>(page, "sports.previewSource", {
       url: mirroredFeedUrl,
-      assignments: [{ followId: follows.leagueId }, { followId: follows.teamId }]
+      assignments: [
+        { target: { kind: "follow", followId: follows.leagueId } },
+        { target: { kind: "follow", followId: follows.teamId } }
+      ]
     });
     expect(preview.candidate?.confirmedFetchHosts).toContain("cdn.jsdelivr.net");
     await confirmThroughMoss(
@@ -445,7 +465,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   await test.step("Moss previews and confirms an exact assignment replacement", async () => {
     const preview = await invokeReadTool<PreviewResult>(page, "sports.previewSourceAssignments", {
       sourceId: mirroredSourceId,
-      assignments: [{ followId: follows.leagueId }]
+      assignments: [{ target: { kind: "follow", followId: follows.leagueId } }]
     });
     await confirmThroughMoss(
       page,
@@ -489,33 +509,33 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   expect([RAW_FIXTURE_DOMAIN, "cdn.jsdelivr.net"]).toContain(shared[0]?.publisherDomain);
   expect(shared[0]?.publisherLabel).toBeTruthy();
 
+  // Which stories rank into the visible slots changes with the day's live content, so accept the
+  // name of any source the owner added (the headline API above already pins the shared story).
+  const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const addedSourceNames = new RegExp(
+    (await listSources(page))
+      .filter((source) => source.kind === "custom")
+      .map((source) => escapeRegExp(source.label))
+      .join("|"),
+    "i"
+  );
   await page.goto(`${requireUatBaseURL()}/sports`);
-  await expect(
-    page
-      .getByText(
-        /FotMob - Football Live Scores|Issue 1909 fixture feed|Issue 1909 shared sports feed/i
-      )
-      .and(page.locator(":visible"))
-      .first()
-  ).toBeVisible({
+  await expect(page.getByText(addedSourceNames).and(page.locator(":visible")).first()).toBeVisible({
     timeout: SOURCE_DEADLINE_MS
   });
   await page.goto(`${requireUatBaseURL()}/today`);
-  await expect(
-    page
-      .getByText(
-        /BBC Sport|BBC legacy feed|FotMob - Football Live Scores|FotMob legacy scrape|Issue 1909 fixture feed/i
-      )
-      .and(page.locator(":visible"))
-      .first()
-  ).toBeVisible({ timeout: SOURCE_DEADLINE_MS });
+  await expect(page.getByText(addedSourceNames).and(page.locator(":visible")).first()).toBeVisible({
+    timeout: SOURCE_DEADLINE_MS
+  });
 
   const mossSources = (
     await invokeReadTool<{ sources: readonly SourceRow[] }>(page, "sports.listSources", {})
   ).sources;
   expect(mossSources.some((source) => source.id === mirroredSourceId)).toBe(true);
 
-  sources = await listSources(page);
+  // The built-in ESPN row has no health record to check; every source the owner added does.
+  sources = (await listSources(page)).filter((source) => source.kind === "custom");
+  expect(sources.length).toBeGreaterThan(0);
   for (const source of sources) {
     expect(source?.healthState).toBe("healthy");
     expect(source?.lastCheckedAt).toBeTruthy();
@@ -527,8 +547,13 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
 
   const finalSection = await openSportsSettings(page);
   for (const source of sources) {
-    const row = finalSection.locator(".sp-src__item").filter({ hasText: source.label });
-    await row.getByRole("button", { name: `Remove ${source.label}` }).click();
-    await expect(row).toHaveCount(0, { timeout: 30_000 });
+    // Two publishers can share one feed title, so remove one row at a time and count down.
+    const rows = finalSection.locator(".sp-src__item").filter({ hasText: source.label });
+    const before = await rows.count();
+    await rows
+      .first()
+      .getByRole("button", { name: `Remove ${source.label}` })
+      .click();
+    await expect(rows).toHaveCount(before - 1, { timeout: 30_000 });
   }
 });
