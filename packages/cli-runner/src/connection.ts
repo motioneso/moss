@@ -496,8 +496,8 @@ async function invoke(
     case "stageCliCandidate": {
       const p = req.params as RpcStageCliCandidateParams;
       if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
-      if (!Number.isInteger(p.manifestSequence) || p.manifestSequence < 1) {
-        throw new BadRequestError("manifestSequence must be a positive integer");
+      if (!Number.isInteger(p.manifestSequence) || p.manifestSequence < 0) {
+        throw new BadRequestError("manifestSequence must be a non-negative integer");
       }
       if (!Array.isArray(p.packages) || p.packages.length > 8) {
         throw new BadRequestError("packages must be a short list");

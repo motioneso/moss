@@ -52,6 +52,7 @@ import {
   askSortingQuestions,
   generateStructured,
   ModelDiscoveryService,
+  startCliToolsRefreshTimer,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
   approveModuleBuildPlan,
@@ -63,6 +64,7 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
+import { buildCliToolsRefresh } from "./cli-tools-refresh-wiring.js";
 import {
   GraphMemoryRecallService,
   ManualMemoryCandidateService,
@@ -3590,7 +3592,20 @@ export function registerBuiltInApiRoutes(
         );
       });
     });
+    // #2689: look for newer signed CLI tools on start and every six hours. Runs here because only
+    // the API process holds the runner connection.
+    let stopCliToolsRefresh: (() => void) | undefined;
+    server.addHook("onReady", async () => {
+      stopCliToolsRefresh = startCliToolsRefreshTimer(
+        buildCliToolsRefresh({
+          getConnection: getRpcConnection,
+          versionReader: deps.aiCliToolVersionReader,
+          ...(dependencies.fetchFn ? { fetchFn: dependencies.fetchFn } : {})
+        })
+      );
+    });
     server.addHook("onClose", async () => {
+      stopCliToolsRefresh?.();
       getRpcConnection()?.close();
     });
   }
