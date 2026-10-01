@@ -61,8 +61,9 @@ function minutesOf(section: Section): number | null {
     const startHour = Number(range[1]);
     const endHour = Number(range[3]);
     const endPm = range[5]!.toUpperCase() === "PM";
-    // "11-1 PM" starts before noon; otherwise the start shares the end's period.
-    const startPm = startHour !== 12 && startHour > endHour ? !endPm : endPm;
+    // "11-1 PM" and "11-12 PM" start before noon; otherwise the start shares the end's period.
+    const crossesNoon = startHour !== 12 && (startHour > endHour || (endHour === 12 && endPm));
+    const startPm = crossesNoon ? !endPm : endPm;
     return toMinutes(startHour, range[2] ? Number(range[2]) : 0, startPm);
   }
   if (!single) return null;

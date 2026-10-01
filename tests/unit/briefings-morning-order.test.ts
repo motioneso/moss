@@ -87,4 +87,16 @@ describe("tidyMorningSections (#2775)", () => {
     expect(out.indexOf("## Get ready")).toBeLessThan(out.indexOf("## Cook dinner"));
     expect(out.indexOf("## Cook dinner")).toBeLessThan(out.indexOf("## Choose a time"));
   });
+
+  it("reads a range ending at noon as starting in the morning", () => {
+    const input = text(
+      "Headline.",
+      "## Prepare lunch",
+      "Lunch is at 11:30 AM.",
+      "## Attend the workshop",
+      "The workshop runs 11-12 PM."
+    );
+    const out = tidyMorningSections(input, TITLES);
+    expect(out.indexOf("## Attend the workshop")).toBeLessThan(out.indexOf("## Prepare lunch"));
+  });
 });

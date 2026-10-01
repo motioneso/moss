@@ -11,9 +11,12 @@ describe("resolveGoogleCalendarBase (#2775)", () => {
   });
 
   it("uses the test override outside production", () => {
-    expect(resolveGoogleCalendarBase({ MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: `${FAKE}/` })).toBe(
-      FAKE
-    );
+    expect(
+      resolveGoogleCalendarBase({
+        NODE_ENV: "test",
+        MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: `${FAKE}/`
+      })
+    ).toBe(FAKE);
     expect(
       resolveGoogleCalendarBase({
         NODE_ENV: "development",
@@ -37,13 +40,28 @@ describe("resolveGoogleCalendarBase (#2775)", () => {
     ).toBe(REAL);
   });
 
+  it("ignores the override when NODE_ENV is unset or not exactly test or development", () => {
+    expect(resolveGoogleCalendarBase({ MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: FAKE })).toBe(REAL);
+    for (const nodeEnv of ["Production", "staging", ""]) {
+      expect(
+        resolveGoogleCalendarBase({
+          NODE_ENV: nodeEnv,
+          MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: FAKE
+        })
+      ).toBe(REAL);
+    }
+  });
+
   it("ignores an empty or non-http value", () => {
-    expect(resolveGoogleCalendarBase({ MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: "" })).toBe(REAL);
-    expect(resolveGoogleCalendarBase({ MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: "file:///etc" })).toBe(
+    const base = { NODE_ENV: "test" };
+    expect(resolveGoogleCalendarBase({ ...base, MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: "" })).toBe(
       REAL
     );
-    expect(resolveGoogleCalendarBase({ MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: "nonsense" })).toBe(
-      REAL
-    );
+    expect(
+      resolveGoogleCalendarBase({ ...base, MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: "file:///etc" })
+    ).toBe(REAL);
+    expect(
+      resolveGoogleCalendarBase({ ...base, MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: "nonsense" })
+    ).toBe(REAL);
   });
 });

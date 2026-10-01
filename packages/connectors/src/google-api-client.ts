@@ -172,11 +172,12 @@ const CALENDAR_BASE = "https://www.googleapis.com/calendar/v3";
 
 /**
  * Base address for the calendar event-list read. Test stacks may point it at a fake server with
- * JARVIS_TEST_GOOGLE_CALENDAR_BASE_URL. The override is ignored when NODE_ENV is production and
- * when the value is not an http(s) URL. No deployment config sets it, and nothing requires it.
+ * JARVIS_TEST_GOOGLE_CALENDAR_BASE_URL. The override is honored only when NODE_ENV is exactly
+ * test or development, and only for an http(s) URL. No deployment config sets it, and nothing
+ * requires it.
  */
 export function resolveGoogleCalendarBase(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.NODE_ENV === "production") return CALENDAR_BASE;
+  if (env.NODE_ENV !== "test" && env.NODE_ENV !== "development") return CALENDAR_BASE;
   const override = resolveMossEnv(env, "JARVIS_TEST_GOOGLE_CALENDAR_BASE_URL")?.trim();
   if (!override) return CALENDAR_BASE;
   try {
