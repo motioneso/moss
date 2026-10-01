@@ -26,6 +26,8 @@ export * from "./external/install-draft.js";
 export * from "./distribution/index-schema.js";
 export * from "./distribution/ensure-list.js";
 export * from "./distribution/catalog-signing.js";
+export * from "./distribution/cli-tools-manifest.js";
+export * from "./distribution/cli-tools-fetch.js";
 export * from "./distribution/registry-source.js";
 export * from "./distribution/extract.js";
 export * from "./distribution/stage.js";
