@@ -16,7 +16,7 @@
  * real model reached a real tool. Nothing between a green build and a user noticing.
  *
  * WHAT IT ASSERTS. One thing, deterministically: a turn that can only be answered with a tool
- * produces at least one `mcp__jarvis__*` tool record on the live stream before the reply lands.
+ * produces at least one `mcp__moss__*` (or legacy `mcp__jarvis__*`) tool record on the live stream before the reply lands.
  * It deliberately does NOT assert anything about the reply's wording — model phrasing is not a
  * contract, and a test that greps prose goes red on a paraphrase and green on a hallucination.
  * The tool record is the ground truth: it exists only if the CLI advertised the tool, the model
@@ -43,8 +43,11 @@ const EXIT_PASS = 0;
 const EXIT_FAIL = 1;
 const EXIT_ERROR = 2;
 
-/** Records whose toolName starts with this came from the Jarv1s MCP server, not a built-in. */
-const JARVIS_TOOL_PREFIX = "mcp__jarvis__";
+/**
+ * Records whose toolName starts with one of these came from the Moss MCP server, not a built-in.
+ * The ACP engine names the server "moss"; the Claude CLI engine still registers it as "jarvis".
+ */
+const MOSS_TOOL_PREFIXES = ["mcp__moss__", "mcp__jarvis__"];
 
 /**
  * The default probe. Two properties matter more than the wording:
@@ -230,7 +233,9 @@ async function main() {
   // here, so read both or the check silently sees every tool as unnamed.
   const toolRecords = records.filter((record) => record.kind === "tool");
   const nameOf = (record) => record.toolName ?? record.text ?? "";
-  const jarvisTools = toolRecords.filter((record) => nameOf(record).startsWith(JARVIS_TOOL_PREFIX));
+  const jarvisTools = toolRecords.filter((record) =>
+    MOSS_TOOL_PREFIXES.some((prefix) => nameOf(record).startsWith(prefix))
+  );
 
   // Our own tool names are safe to print in full and are the only thing that makes a failure
   // diagnosable without opening the container. Everything else is summarised by count: a built-in
