@@ -6,6 +6,11 @@ services:
     cpus: 2.0
     mem_limit: 4g
     pids_limit: 512
+    environment:
+      # Test-only pair. Both default to the normal production values and are never set in a
+      # deployment config. The calendar override is honored only when NODE_ENV is test or development.
+      NODE_ENV: ${MOSS_UAT_NODE_ENV:-production}
+      MOSS_TEST_GOOGLE_CALENDAR_BASE_URL: ${MOSS_TEST_GOOGLE_CALENDAR_BASE_URL:-}
   postgres:
     cpus: 1.0
     mem_limit: 1g
