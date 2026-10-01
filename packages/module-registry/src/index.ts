@@ -133,6 +133,7 @@ import {
   type ChatEngineFactory,
   type ChatRoutesDependencies,
   type CheckTokenMinter,
+  setCliVersionTooOldListener,
   type RpcConnection
 } from "@moss/chat";
 // #1059 — terminal-rpc-client lives under chat's "./live" subpath (public.ts), not the package
@@ -3624,13 +3625,24 @@ export function registerBuiltInApiRoutes(
       });
       // Stage anything newer, then check whatever is staged. A failed check is not retried
       // until 24 hours have passed, so the six-hour timer is safe.
-      stopCliToolsRefresh = startCliToolsRefreshTimer(async () => {
-        await refresh();
-        await check("anthropic");
-        await check("openai-compatible");
-      });
+      let passRunning = false;
+      const pass = async () => {
+        if (passRunning) return;
+        passRunning = true;
+        try {
+          await refresh();
+          await check("anthropic");
+          await check("openai-compatible");
+        } finally {
+          passRunning = false;
+        }
+      };
+      stopCliToolsRefresh = startCliToolsRefreshTimer(pass);
+      // A chat turn refused for an old tool asks for a pass now instead of waiting for the timer.
+      setCliVersionTooOldListener(() => void pass().catch(() => undefined));
     });
     server.addHook("onClose", async () => {
+      setCliVersionTooOldListener(undefined);
       stopCliToolsRefresh?.();
       getRpcConnection()?.close();
     });

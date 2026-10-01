@@ -35,3 +35,22 @@ export function isCliVersionTooOldError(error: unknown): boolean {
   }
   return isCliVersionTooOldText(`${message}\n${detail}`);
 }
+
+let tooOldListener: (() => void) | undefined;
+
+/**
+ * Registers the one function that runs when a chat turn hits the too-old refusal. The composition
+ * root sets it to "refresh and check now". Pass `undefined` to clear it.
+ */
+export function setCliVersionTooOldListener(listener: (() => void) | undefined): void {
+  tooOldListener = listener;
+}
+
+/** Tells the listener a turn was refused for an old tool. Never throws. */
+export function notifyCliVersionTooOld(): void {
+  try {
+    tooOldListener?.();
+  } catch {
+    // The refusal is already on its way to the user; a failed refresh must not mask it.
+  }
+}

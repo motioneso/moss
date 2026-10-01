@@ -65,7 +65,7 @@ import {
   UnsupportedLegacyCliProviderError
 } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
-import { CLI_VERSION_TOO_OLD_MESSAGE } from "./live/cli-version-errors.js";
+import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-version-errors.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
 import type { ChatSessionRuntime } from "./live/runtime.js";
@@ -766,6 +766,7 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
       return reply.code(503).send({ error: authMessage });
     }
     if (error.message === CLI_VERSION_TOO_OLD_MESSAGE) {
+      notifyCliVersionTooOld();
       return reply.code(503).send({ error: CLI_VERSION_TOO_OLD_MESSAGE });
     }
     // Log the underlying cause server-side; send a fixed, sanitized message (the
