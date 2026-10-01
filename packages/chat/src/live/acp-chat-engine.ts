@@ -179,6 +179,20 @@ function capResultText(text: string): string {
   return text.length > MAX_RESULT_CHARS ? text.slice(0, MAX_RESULT_CHARS) + "…" : text;
 }
 
+/** Text blocks of a tool response shaped `{ result: { content: [{ type: "text", text }] } }`. */
+function nestedToolResponseText(raw: Record<string, unknown>): string | null {
+  const result = raw.result;
+  if (!result || typeof result !== "object") return null;
+  const content = (result as { content?: unknown }).content;
+  if (!Array.isArray(content)) return null;
+  const texts = content.flatMap((item) =>
+    item && typeof item === "object" && typeof (item as { text?: unknown }).text === "string"
+      ? [(item as { text: string }).text]
+      : []
+  );
+  return texts.length > 0 ? texts.join("\n").trim() : null;
+}
+
 function extractResultText(update: {
   rawOutput?: unknown;
   content?: unknown;
@@ -192,7 +206,7 @@ function extractResultText(update: {
     if (typeof raw.text === "string") text = raw.text.trim();
     else if (typeof raw.output === "string") text = raw.output.trim();
     else if (typeof raw.message === "string") text = raw.message.trim();
-    else text = JSON.stringify(update.rawOutput);
+    else text = nestedToolResponseText(raw) ?? JSON.stringify(update.rawOutput);
   } else if (Array.isArray(update.content)) {
     const parts: string[] = [];
     for (const item of update.content) {

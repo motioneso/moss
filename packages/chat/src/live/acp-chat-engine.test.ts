@@ -617,6 +617,19 @@ describe("AcpChatEngine", () => {
       expect(text).toBe("<script>alert(1)</script> &lt;b&gt;");
     });
 
+    it("reads the wrapped text out of a nested tool response, as the live chat sends it (#2816)", () => {
+      const text =
+        '<tool_result source="briefings.getRunStatus">\n{\n  &quot;state&quot;: &quot;not_found&quot;\n}\n</tool_result>';
+      const record = formatResultRecord({
+        toolCallId: "call-n",
+        rawOutput: {
+          result: { content: [{ type: "text", text }], structuredContent: null },
+          error: null
+        }
+      });
+      expect(record?.text).toBe('{\n  "state": "not_found"\n}');
+    });
+
     it("peels the envelope before the display cap, so long results are still plain (#2816)", () => {
       const body = "&quot;".repeat(300);
       const wrapped = `<tool_result source="t.tool">\n${body}\n</tool_result>`;
