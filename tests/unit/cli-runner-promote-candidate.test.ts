@@ -195,4 +195,18 @@ describe("promoteCandidate", () => {
     await svc.stageCandidate("anthropic", [{ ...toolset[0], version: "9.9.10" }], 8);
     expect((await svc.toolsState()).lastCheck.anthropic).toBeNull();
   });
+
+  it("keeps a promoted release newer than the image pin when the runner restarts", async () => {
+    const first = service();
+    await first.installProvider("anthropic");
+    await first.stageCandidate("anthropic", toolset, 7);
+    await first.promoteCandidate("anthropic");
+    const live = await currentOf("anthropic");
+
+    // A fresh service is a restarted runner: boot reconcile asks for the image pin again.
+    const result = await service().installProvider("anthropic");
+
+    expect(result).toMatchObject({ state: "installed", version: NEW_CLI, alreadyInstalled: true });
+    expect(await currentOf("anthropic")).toBe(live);
+  });
 });

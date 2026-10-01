@@ -958,7 +958,14 @@ export class InstallService {
     }
 
     const probe = await this.deps.io.run(liveBin, ["--version"], { env: this.installerEnv });
-    if (probe.code !== 0 || !probe.stdout.includes(recipe.version)) return null;
+    if (probe.code !== 0) return null;
+    if (!probe.stdout.includes(recipe.version)) {
+      // Image floor (spec 6.2): a live release that an update promoted is newer than the image
+      // pin. Keep it instead of reinstalling the older pin over it.
+      const newer = await this.promotedNewerThan(provider, recipe, probe.stdout);
+      if (newer === null) return null;
+      return { state: "installed", version: newer, alreadyInstalled: true, binaryChanged: false };
+    }
 
     // Re-compute the live on-disk hash and compare to the expectation.
     let expected: string | undefined;
@@ -982,6 +989,27 @@ export class InstallService {
       alreadyInstalled: true,
       binaryChanged: false
     };
+  }
+
+  /**
+   * The live version when this provider was promoted by an update (state records a prior release)
+   * and the live version is newer than the image pin. Otherwise null.
+   */
+  private async promotedNewerThan(
+    provider: RpcProviderKind,
+    recipe: InstallRecipe,
+    versionOutput: string
+  ): Promise<string | null> {
+    if (recipe.kind !== "npm") return null;
+    const live = /(\d+\.\d+\.\d+)/.exec(versionOutput)?.[1];
+    const pin = /^(\d+)\.(\d+)\.(\d+)/.exec(recipe.version);
+    if (!live || !pin) return null;
+    const a = live.split(".").map(Number);
+    const b = pin.slice(1, 4).map(Number);
+    const newer = [0, 1, 2].reduce((r, i) => (r !== 0 ? r : Math.sign(a[i]! - b[i]!)), 0) > 0;
+    if (!newer) return null;
+    const state = await readToolsState(this.toolsPrefix, provider);
+    return state.prior.length > 0 ? live : null;
   }
 
   // ─── §A.3.7 kind:"config" self-update-disable (file write at install) ────────
