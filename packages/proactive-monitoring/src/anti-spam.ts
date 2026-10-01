@@ -70,17 +70,11 @@ export class AntiSpamPolicy {
 
 function localMidnight(nowIso: string, timeZone: string): string {
   try {
-    const now = new Date(nowIso);
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).formatToParts(now);
-    const year = parts.find((p) => p.type === "year")?.value ?? "2000";
-    const month = parts.find((p) => p.type === "month")?.value ?? "01";
-    const day = parts.find((p) => p.type === "day")?.value ?? "01";
-    return new Date(`${year}-${month}-${day}T00:00:00`).toISOString();
+    return wallTimeToInstant(
+      localDateString(new Date(nowIso), timeZone),
+      "00:00",
+      timeZone
+    ).toISOString();
   } catch {
     const d = new Date(nowIso);
     d.setUTCHours(0, 0, 0, 0);
@@ -103,14 +97,14 @@ function quietHoursDeferral(
     });
     if (!isInQuietHours(localTimeStr, qh.startLocalTime, qh.endLocalTime)) return null;
     // Defer to quiet-hours end today (or tomorrow if end < start and we're before midnight).
-    const localDateStr = now.toLocaleDateString("en-CA", { timeZone });
-    const endLocal = parseLocalTime(localDateStr, qh.endLocalTime, timeZone);
+    const localDateStr = localDateString(now, timeZone);
+    const endLocal = wallTimeToInstant(localDateStr, qh.endLocalTime, timeZone);
     // If end is before now (e.g. end=08:00 and now=23:00), defer to tomorrow's end.
     if (endLocal <= now) {
-      const tomorrow = new Date(localDateStr);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toLocaleDateString("en-CA");
-      return parseLocalTime(tomorrowStr, qh.endLocalTime, timeZone).toISOString();
+      const tomorrow = new Date(`${localDateStr}T00:00:00Z`);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+      return wallTimeToInstant(tomorrowStr, qh.endLocalTime, timeZone).toISOString();
     }
     return endLocal.toISOString();
   } catch {
@@ -126,22 +120,42 @@ function isInQuietHours(localTime: string, start: string, end: string): boolean 
   return localTime >= start || localTime < end;
 }
 
-function parseLocalTime(localDateStr: string, localTimeStr: string, timeZone: string): Date {
-  const [h = 0, m = 0] = localTimeStr.split(":").map(Number);
-  const dt = new Date(
-    `${localDateStr}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`
-  );
-  // Adjust for timezone offset (naive approach: use the offset from Intl).
-  const offset = getTimezoneOffsetMinutes(dt, timeZone);
-  return new Date(dt.getTime() - offset * 60 * 1000);
+function localDateString(date: Date, timeZone: string): string {
+  return date.toLocaleDateString("en-CA", { timeZone });
 }
 
-function getTimezoneOffsetMinutes(date: Date, timeZone: string): number {
-  try {
-    const utcStr = date.toLocaleString("en-US", { timeZone: "UTC" });
-    const localStr = date.toLocaleString("en-US", { timeZone });
-    return (new Date(localStr).getTime() - new Date(utcStr).getTime()) / 60000;
-  } catch {
-    return 0;
-  }
+// Converts a wall-clock date and time in `timeZone` to the instant it names.
+// Never reads the host zone: all arithmetic is in UTC.
+function wallTimeToInstant(localDateStr: string, localTimeStr: string, timeZone: string): Date {
+  const [y = 1970, mo = 1, d = 1] = localDateStr.split("-").map(Number);
+  const [h = 0, mi = 0] = localTimeStr.split(":").map(Number);
+  const wallAsUtc = Date.UTC(y, mo - 1, d, h, mi);
+  // Two passes settle the offset when the guess lands across a DST change.
+  let instant = wallAsUtc - zoneOffsetMs(wallAsUtc, timeZone);
+  instant = wallAsUtc - zoneOffsetMs(instant, timeZone);
+  return new Date(instant);
+}
+
+// Offset of `timeZone` from UTC, in milliseconds, at the given instant.
+function zoneOffsetMs(instantMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric"
+  }).formatToParts(new Date(instantMs));
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second")
+  );
+  return asUtc - Math.floor(instantMs / 1000) * 1000;
 }
