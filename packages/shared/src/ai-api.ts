@@ -73,7 +73,20 @@ const aiCliToolsSchema = {
   required: ["version", "state"],
   properties: {
     version: { type: ["string", "null"] },
-    state: { type: "string", enum: ["current", "not_installed"] }
+    state: {
+      type: "string",
+      enum: [
+        "current",
+        "not_installed",
+        "checking",
+        "held_back",
+        "needs_newer_moss",
+        "cannot_check"
+      ]
+    },
+    candidateVersion: { type: "string" },
+    lastCheckedAt: { type: "string" },
+    reason: { type: "string" }
   }
 } as const;
 
@@ -700,6 +713,18 @@ export const revokeAiProviderConfigRouteSchema = {
   params: idParamsSchema,
   response: {
     200: revokeAiProviderConfigResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
+// #2689 slice 4: admin presses Retry on a held back or unchecked tool update.
+export const retryAiCliToolsCheckRouteSchema = {
+  params: idParamsSchema,
+  response: {
+    200: revokeAiProviderConfigResponseSchema,
+    400: errorResponseSchema,
     401: errorResponseSchema,
     403: errorResponseSchema,
     404: errorResponseSchema

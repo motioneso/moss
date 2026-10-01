@@ -25,6 +25,7 @@ import {
   putAdminChatModelOverrideEnabled,
   putChatSettings,
   putAiServiceBinding,
+  retryAiCliToolsCheck,
   revokeAiProvider,
   setInstanceDefaultProvider,
   testAiProvider,
@@ -34,6 +35,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
+import { CliUpdateStatus } from "./cli-update-status";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
@@ -141,6 +143,12 @@ function ProviderCard(props: {
     provider.providerKind === "google"
       ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
       : undefined;
+  const queryClient = useQueryClient();
+  const retryMutation = useMutation({
+    mutationFn: () => retryAiCliToolsCheck(provider.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.ai.providers }),
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   const testMutation = useMutation({
     mutationFn: () => testAiProvider(provider.id),
     onSuccess: ({ result }) =>
@@ -189,6 +197,16 @@ function ProviderCard(props: {
           {provider.authMethod === "cli" ? (
             <div className="prov__auth">
               Chat checks this sign-in when the ACP adapter initializes.
+            </div>
+          ) : null}
+          {provider.authMethod === "cli" && provider.cliTools ? (
+            <div className="prov__auth">
+              <CliUpdateStatus
+                tools={provider.cliTools}
+                name={provider.displayName}
+                retrying={retryMutation.isPending}
+                onRetry={() => retryMutation.mutate()}
+              />
             </div>
           ) : null}
         </div>
@@ -585,7 +603,10 @@ export function AiProvidersPane() {
   const providersQuery = useQuery({
     queryKey: queryKeys.ai.providers,
     queryFn: listAiProviders,
-    retry: false
+    retry: false,
+    // A tool update check takes a minute or two; keep the card fresh until it finishes.
+    refetchInterval: (query) =>
+      query.state.data?.providers.some((row) => row.cliTools?.state === "checking") ? 4000 : false
   });
   const modelsQuery = useQuery({
     queryKey: queryKeys.ai.models,

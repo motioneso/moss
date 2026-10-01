@@ -1201,7 +1201,9 @@ export class InstallService {
 
   /** #2689 slice 4: highest accepted manifest sequence and the staged candidates, versions only. */
   async toolsState(): Promise<RpcGetCliToolsStateResult> {
-    const candidates: Record<RpcProviderKind, { pkg: string; version: string }[]> = {
+    const candidates: {
+      -readonly [K in RpcProviderKind]: RpcGetCliToolsStateResult["candidates"][K][number][];
+    } = {
       anthropic: [],
       "openai-compatible": [],
       google: []
@@ -1216,7 +1218,11 @@ export class InstallService {
       const state = await readToolsState(this.toolsPrefix, provider);
       lastCheck[provider] = state.lastCheck ?? null;
       manifestSequence = Math.max(manifestSequence, state.manifestSequence);
-      candidates[provider] = state.candidate.map((c) => ({ pkg: c.pkg, version: c.version }));
+      candidates[provider] = state.candidate.map((c) => ({
+        pkg: c.pkg,
+        version: c.version,
+        role: c.role
+      }));
     }
     return { manifestSequence, candidates, lastCheck };
   }

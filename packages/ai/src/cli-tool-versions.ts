@@ -1,11 +1,14 @@
 import type { AiCliToolsDto } from "@moss/shared";
 
 import type { ProviderKind } from "./cli-availability.js";
+import type { CliToolsRunnerUpdate } from "./cli-tools-status.js";
 
 /** #2689: installed command-line tool versions, as the cli-runner reports them. */
 export interface CliToolVersions {
   readonly providers: Readonly<Record<ProviderKind, string | null>>;
   readonly opencode: string | null;
+  /** Staged candidate and last check per provider, when the runner reports them. */
+  readonly updates?: Readonly<Partial<Record<ProviderKind, CliToolsRunnerUpdate>>>;
 }
 
 /**

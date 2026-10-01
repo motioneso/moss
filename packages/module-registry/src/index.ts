@@ -64,6 +64,7 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
+import { buildCliToolAlertRaiser } from "./cli-tools-alerts.js";
 import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
 import {
   GraphMemoryRecallService,
@@ -176,7 +177,13 @@ import {
   type GoogleApiClient,
   type GoogleConnectionService
 } from "@moss/connectors";
-import type { ActiveModulesResolver, AiSecretCipher, CliToolVersionReader } from "@moss/ai";
+import {
+  cliToolsStatus,
+  setCliToolsRetry,
+  type ActiveModulesResolver,
+  type AiSecretCipher,
+  type CliToolVersionReader
+} from "@moss/ai";
 import {
   resolveMossEnv,
   type AccessContext,
@@ -3610,19 +3617,47 @@ export function registerBuiltInApiRoutes(
         versionReader: deps.aiCliToolVersionReader,
         ...(dependencies.fetchFn ? { fetchFn: dependencies.fetchFn } : {})
       });
+      const listAdminIds = async () =>
+        (
+          await sql<{ id: string }>`
+            SELECT id FROM app.list_all_users()
+            WHERE is_instance_admin = true AND status = 'active'
+            ORDER BY is_bootstrap_owner DESC, id
+          `.execute(dependencies.rootDb)
+        ).rows.map((row) => row.id);
+      const raiseAlert = buildCliToolAlertRaiser({
+        dataContext: dependencies.dataContext,
+        listAdminIds
+      });
       const check = buildCliVersionCheck({
         getConnection: getRpcConnection,
         getMinter: () => checkTokenMinter,
         versionReader: deps.aiCliToolVersionReader,
-        listAdminIds: async () =>
-          (
-            await sql<{ id: string }>`
-              SELECT id FROM app.list_all_users()
-              WHERE is_instance_admin = true AND status = 'active'
-              ORDER BY is_bootstrap_owner DESC, id
-            `.execute(dependencies.rootDb)
-          ).rows.map((row) => row.id)
+        listAdminIds,
+        raiseFailure: async (provider, versions, reason) =>
+          raiseAlert({
+            kind: "held_back",
+            provider,
+            ...(versions[0] ? { version: versions[0] } : {}),
+            reason
+          })
       });
+      const checkTracked = async (provider: ProviderKind, opts?: { force?: boolean }) => {
+        cliToolsStatus.setChecking(provider, true);
+        try {
+          return await check(provider, opts);
+        } finally {
+          cliToolsStatus.setChecking(provider, false);
+        }
+      };
+      const refreshTracked = async () => {
+        const outcome = await refresh();
+        cliToolsStatus.recordRefresh(outcome);
+        if (cliToolsStatus.snapshot().cannotCheck) {
+          await raiseAlert({ kind: "cannot_check", provider: "anthropic" }).catch(() => undefined);
+        }
+        return outcome;
+      };
       // Stage anything newer, then check whatever is staged. A failed check is not retried
       // until 24 hours have passed, so the six-hour timer is safe.
       let passRunning = false;
@@ -3630,19 +3665,28 @@ export function registerBuiltInApiRoutes(
         if (passRunning) return;
         passRunning = true;
         try {
-          await refresh();
-          await check("anthropic");
-          await check("openai-compatible");
+          await refreshTracked();
+          await checkTracked("anthropic");
+          await checkTracked("openai-compatible");
         } finally {
           passRunning = false;
         }
       };
       stopCliToolsRefresh = startCliToolsRefreshTimer(pass);
       // A chat turn refused for an old tool asks for a pass now instead of waiting for the timer.
-      setCliVersionTooOldListener(() => void pass().catch(() => undefined));
+      setCliVersionTooOldListener(() => {
+        void raiseAlert({ kind: "too_old", provider: "anthropic" }).catch(() => undefined);
+        void pass().catch(() => undefined);
+      });
+      // Retry is an admin pressing the button, so the 24-hour wait does not apply.
+      setCliToolsRetry(async (provider) => {
+        await refreshTracked();
+        await checkTracked(provider, { force: true });
+      });
     });
     server.addHook("onClose", async () => {
       setCliVersionTooOldListener(undefined);
+      setCliToolsRetry(undefined);
       stopCliToolsRefresh?.();
       getRpcConnection()?.close();
     });

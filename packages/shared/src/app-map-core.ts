@@ -274,7 +274,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "same way. Installing Claude or Codex also installs the small chat helper that connects it " +
       "to Moss chat; if that step fails the install reports an error naming the chat helper, the " +
       "tool itself stays installed, and installing again retries the helper. Until the helper is " +
-      "installed, chat uses the copy that shipped with Moss.",
+      "installed, chat uses the copy that shipped with Moss. Moss checks every six hours for a " +
+      "newer signed version of Claude and Codex and tests it in a throwaway chat before using " +
+      "it. While that runs the card shows 'Updating to X'. If the test fails the card shows " +
+      "'Version X held back' (hover for the reason) with a Retry button, and admins get a " +
+      "notification. 'Version X needs a newer Moss' means the update waits for a Moss upgrade. " +
+      "'Can't check for updates' appears after three days without reaching the update list, " +
+      "also with Retry. Retry checks again right away.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
@@ -328,8 +334,31 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "prerequisite",
     remediationRef: "core.ai.check_cli_version",
     description:
-      "The installed AI tool is too old for this model. Moss updates it automatically; an admin " +
-      "can check Settings > AI providers."
+      "The installed AI tool is too old for this model. Moss looks for a newer version " +
+      "automatically; an admin can press Retry in Settings > AI providers."
+  },
+  {
+    code: "core.ai.cli_update_held_back",
+    class: "prerequisite",
+    remediationRef: "core.ai.retry_cli_update",
+    description:
+      "A newer Claude or Codex version failed Moss's test chat, so Moss kept the current one. " +
+      "Nothing is broken."
+  },
+  {
+    code: "core.ai.cli_update_needs_newer_moss",
+    class: "prerequisite",
+    remediationRef: "core.ai.retry_cli_update",
+    description:
+      "A newer Claude or Codex version needs a newer Moss than the one installed, so it waits."
+  },
+  {
+    code: "core.ai.cli_update_cannot_check",
+    class: "prerequisite",
+    remediationRef: "core.ai.retry_cli_update",
+    description:
+      "Moss has not reached the list of Claude and Codex updates for three days. The current " +
+      "versions keep working."
   },
   {
     code: "core.ai.api_key_live_chat_unavailable",
@@ -382,8 +411,16 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
   {
     id: "core.ai.check_cli_version",
     description:
-      "Open Settings > AI providers and read the tool version under the provider's name. A Moss " +
-      "update brings a newer tool; until then, choose a model the installed tool supports.",
+      "Open Settings > AI providers and press Retry beside the provider's update notice. If no " +
+      "newer version is available, choose a model the installed tool supports.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
+  },
+  {
+    id: "core.ai.retry_cli_update",
+    description:
+      "Open Settings > AI providers and press Retry beside the provider's update notice. If it " +
+      "is held back again, it stays on the current version until a later release passes.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

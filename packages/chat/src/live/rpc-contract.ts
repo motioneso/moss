@@ -581,7 +581,14 @@ export interface RpcGetCliToolsStateResult {
   /** Highest manifest sequence accepted by any provider on this runner. 0 when none. */
   readonly manifestSequence: number;
   readonly candidates: Readonly<
-    Record<RpcProviderKind, readonly { readonly pkg: string; readonly version: string }[]>
+    Record<
+      RpcProviderKind,
+      readonly {
+        readonly pkg: string;
+        readonly version: string;
+        readonly role: "cli" | "chat-adapter";
+      }[]
+    >
   >;
   /** Last live-check outcome per provider; null when none is recorded. */
   readonly lastCheck: Readonly<Record<RpcProviderKind, RpcCliLastCheck | null>>;

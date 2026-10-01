@@ -87,7 +87,9 @@ describe("runCliToolsRefresh", () => {
       const { p, stage } = ports({ mossVersion: () => moss });
       const out = await runCliToolsRefresh(p);
       expect(out.skipped).toEqual({ anthropic: "needs-newer-moss" });
-      expect(stage.mock.calls.every((c) => c[0].packages.length === 0)).toBe(true);
+      expect(out.needsNewerMoss).toEqual({ anthropic: "2.0.0" });
+      // The manifest sequence stays unrecorded, so the next pass sees it again after an upgrade.
+      expect(stage).not.toHaveBeenCalled();
     }
   });
 

@@ -69,6 +69,8 @@ export interface CliToolsRefreshOutcome {
   readonly reason?: string;
   readonly staged: readonly string[];
   readonly skipped: Readonly<Record<string, SkipReason>>;
+  /** Toolsets held for a newer Moss, with the tool version that is waiting. */
+  readonly needsNewerMoss?: Readonly<Record<string, string>>;
   readonly failed: readonly string[];
 }
 
@@ -103,6 +105,7 @@ export async function runCliToolsRefresh(
     const staged: string[] = [];
     const failed: string[] = [];
     const skipped: Record<string, SkipReason> = {};
+    const needsNewerMoss: Record<string, string> = {};
     const decoder = new TextDecoder();
 
     for (const [name, toolset] of Object.entries(fetched.manifest.toolsets)) {
@@ -112,6 +115,7 @@ export async function runCliToolsRefresh(
 
       if (moss === undefined || ports.compareVersions(toolset.minMossVersion, moss) > 0) {
         skipped[name] = "needs-newer-moss";
+        needsNewerMoss[name] = cli.version;
         continue;
       }
       const live = versions?.providers[name] ?? null;
@@ -152,7 +156,9 @@ export async function runCliToolsRefresh(
       else failed.push(name);
     }
 
-    if (failed.length === 0) {
+    // A toolset held for a newer Moss keeps the manifest unrecorded, so it is looked at again
+    // after Moss is upgraded instead of waiting for the next published sequence.
+    if (failed.length === 0 && Object.keys(needsNewerMoss).length === 0) {
       const recorded = await ports.stage({
         provider: "anthropic",
         manifestSequence: fetched.manifest.sequence,
@@ -160,7 +166,7 @@ export async function runCliToolsRefresh(
       });
       if (recorded.state !== "staged") failed.push("sequence");
     }
-    return { status: "ok", staged, skipped, failed };
+    return { status: "ok", staged, skipped, needsNewerMoss, failed };
   } catch (err) {
     return {
       status: "fetch-failed",
