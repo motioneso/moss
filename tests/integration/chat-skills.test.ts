@@ -156,6 +156,31 @@ describe("ChatSkillsRepository", () => {
     });
   });
 
+  it("update stamps updated_at from the app clock", async () => {
+    // Negative guard for the bump above (#2462): if update ever stops
+    // stamping updated_at from the app clock, the row keeps the created
+    // value, which differs from the pinned time below deterministically —
+    // this fails for the intended defect instead of relying on a clock tick.
+    await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
+      const created = await repo.create(scopedDb, {
+        name: "Stamped",
+        body: "original body",
+        source: "authored"
+      });
+
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        const pinned = new Date(created.updated_at.getTime() + 1_000);
+        vi.setSystemTime(pinned);
+
+        const updated = await repo.update(scopedDb, created.id, { body: "new body" });
+        expect(updated?.updated_at.getTime()).toBe(pinned.getTime());
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it("update returns undefined for a non-existent id", async () => {
     await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
       const result = await repo.update(scopedDb, "00000000-0000-4000-8000-000000009999", {
