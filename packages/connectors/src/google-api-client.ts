@@ -1,3 +1,5 @@
+import { resolveMossEnv } from "@moss/db";
+
 // Minimal logger — avoids a pino/fastify dependency in the connectors package (mirrors oauth.ts).
 interface GoogleApiLogger {
   error(data: Record<string, unknown>, message: string): void;
@@ -15,6 +17,7 @@ export interface GoogleApiClientDeps {
   readonly fetchFn?: typeof fetch;
   readonly logger?: GoogleApiLogger;
   readonly requestTimeoutMs?: number;
+  readonly calendarBaseUrl?: string;
 }
 
 export const GOOGLE_API_REQUEST_TIMEOUT_MS = 10_000;
@@ -166,14 +169,34 @@ export interface GmailPayloadPart {
 }
 
 const CALENDAR_BASE = "https://www.googleapis.com/calendar/v3";
+
+/**
+ * Base address for the calendar event-list read. Test stacks may point it at a fake server with
+ * JARVIS_TEST_GOOGLE_CALENDAR_BASE_URL. The override is ignored when NODE_ENV is production and
+ * when the value is not an http(s) URL. No deployment config sets it, and nothing requires it.
+ */
+export function resolveGoogleCalendarBase(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.NODE_ENV === "production") return CALENDAR_BASE;
+  const override = resolveMossEnv(env, "JARVIS_TEST_GOOGLE_CALENDAR_BASE_URL")?.trim();
+  if (!override) return CALENDAR_BASE;
+  try {
+    const url = new URL(override);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return CALENDAR_BASE;
+    return override.replace(/\/+$/, "");
+  } catch {
+    return CALENDAR_BASE;
+  }
+}
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
 export class GoogleApiClient {
   private readonly fetchFn: typeof fetch;
   private readonly logger: GoogleApiLogger;
   private readonly requestTimeoutMs: number;
+  private readonly calendarEventsBase: string;
 
   constructor(deps: GoogleApiClientDeps = {}) {
+    this.calendarEventsBase = deps.calendarBaseUrl ?? resolveGoogleCalendarBase();
     this.fetchFn = deps.fetchFn ?? globalThis.fetch;
     this.logger = deps.logger ?? NOOP_GOOGLE_API_LOGGER;
     this.requestTimeoutMs = deps.requestTimeoutMs ?? GOOGLE_API_REQUEST_TIMEOUT_MS;
@@ -207,7 +230,9 @@ export class GoogleApiClient {
     maxResults?: number;
   }): Promise<GoogleCalendarEventsPage> {
     const calendarId = input.calendarId ?? "primary";
-    const url = new URL(`${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
+    const url = new URL(
+      `${this.calendarEventsBase}/calendars/${encodeURIComponent(calendarId)}/events`
+    );
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("orderBy", "startTime");
     url.searchParams.set("timeMin", input.timeMin);
