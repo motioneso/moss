@@ -228,6 +228,15 @@ describe("seedLevel", () => {
         expect(chatModel?.capabilities).toContain("chat");
       });
     } finally {
+      // The scripted provider would otherwise leak into later files that share this gate DB
+      // and the fixed admin id (chunks/ai.test.ts expects no chat-capable model).
+      await runner.withDataContext({ actorUserId: adminId }, async (scopedDb) => {
+        await scopedDb.db
+          .updateTable("app.ai_provider_configs")
+          .set({ status: "disabled" })
+          .where("purpose", "=", "assistant")
+          .execute();
+      });
       await runner.destroy();
     }
   });
