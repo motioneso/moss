@@ -5,14 +5,15 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // freshly-logged-in owner at this level lands directly on AppShell/Today — no wizard to dismiss.
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
-// #1112: on the Today page masthead, the greeting ("Good morning/afternoon/evening, {name}",
-// .cmd-eyebrow) and the dateline (.cmd-dateline) must read across the SAME top line — greeting
-// left, date right. Before the fix, .cmd-eyebrow was a <p> carrying the UA default top margin,
-// pushing the greeting ~1 line below the dateline despite .cmd-masthead__row's
-// align-items: stretch top-aligning both columns. Proof: compare each element's bounding-box
-// top against a real dev instance (no mocked layout/CSS — this is exactly the kind of visual
-// regression unit tests/typecheck can't catch).
-test("greeting and dateline share the same top line on the Today masthead", async ({ page }) => {
+// #1112: the Today greeting (.today-hero__eyebrow) must sit flush at the top of the hero band,
+// directly above the headline. Originally the eyebrow was a <p> carrying the UA default top
+// margin, pushing the greeting a full line below where the masthead placed the date. The masthead
+// and its side-by-side dateline were replaced by the hero band (the date now heads the "Your day"
+// section), so the same bug class shows up as a stray gap above or below the eyebrow. Proof:
+// bounding boxes on a real instance, no mocked layout/CSS.
+test("greeting sits flush at the top of the Today hero, right above the headline", async ({
+  page
+}) => {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
   if (!baseURL) {
     throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
@@ -26,33 +27,39 @@ test("greeting and dateline share the same top line on the Today masthead", asyn
   // with the same accessible name as the submit button (apps/web/src/auth/auth-screen.tsx).
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
 
-  // admin+data lands on Today (app.tsx's index route), the greeting/dateline live there.
-  const greeting = page.locator(".jds-masthead__eyebrow");
-  const dateline = page.locator(".jds-masthead__dateline");
+  // admin+data lands on Today (app.tsx's index route), the hero lives there.
+  const hero = page.locator(".today-hero");
+  const greeting = hero.locator(".today-hero__eyebrow");
+  const title = hero.locator(".today-hero__title");
   await expect(greeting).toBeVisible();
-  await expect(dateline).toBeVisible();
+  await expect(title).toBeVisible();
 
-  const [greetingBox, datelineBox] = await Promise.all([
+  const [heroBox, greetingBox, titleBox] = await Promise.all([
+    hero.boundingBox(),
     greeting.boundingBox(),
-    dateline.boundingBox()
+    title.boundingBox()
   ]);
-  if (!greetingBox || !datelineBox) {
-    throw new Error(
-      "could not read bounding boxes for .jds-masthead__eyebrow / .jds-masthead__dateline"
-    );
+  if (!heroBox || !greetingBox || !titleBox) {
+    throw new Error("could not read bounding boxes for .today-hero / eyebrow / title");
   }
 
-  // Same top line: allow a small tolerance for sub-pixel/line-height rounding between the two
-  // elements' distinct type (13px/700/0.18em uppercase on both, but a <p> vs a flush <div>).
-  // Playwright's boundingBox() exposes the top edge as `.y` (not `.top`, which is a DOM
-  // getBoundingClientRect() field) — reading `.top` here would be undefined -> NaN.
-  expect(Math.abs(greetingBox.y - datelineBox.y)).toBeLessThanOrEqual(2);
+  // kit-today-hero.css gives the hero 29px top padding and the eyebrow a 23px bottom margin in
+  // day and evening mode (10px otherwise).
+  // A stray UA <p> margin (~12px+) would break either bound; the slack covers sub-pixel rounding.
+  const topGap = greetingBox.y - heroBox.y;
+  expect(topGap).toBeGreaterThanOrEqual(0);
+  expect(topGap).toBeLessThanOrEqual(36);
 
-  // Guard against a false pass where both boxes collapse to the same degenerate (0,0) origin.
+  const gapToTitle = titleBox.y - (greetingBox.y + greetingBox.height);
+  expect(gapToTitle).toBeGreaterThanOrEqual(0);
+  expect(gapToTitle).toBeLessThanOrEqual(26);
+
+  // Guard against a false pass where every box collapses to the same degenerate origin.
+  expect(greetingBox.height).toBeGreaterThan(0);
   expect(greetingBox.y).toBeGreaterThan(0);
 });
 
-// #1412: packages/ui/src/masthead.tsx joined the title and accent spans with no whitespace
+// #1412: the headline (formerly the masthead component) joined the title and accent spans with no whitespace
 // node, so real headline text (e.g. "ONE" + "ON THE BOOKS") rendered as "ONEON THE BOOKS" in
 // DOM text content — broken for copy/paste and screen readers, not just visually.
 //
@@ -63,7 +70,7 @@ test("greeting and dateline share the same top line on the Today masthead", asyn
 // at admin+data — every path (evening/needsYou/eventsLeft/default) sets a non-empty accent
 // string. A missing accent element here means the fix regressed or the seed data changed
 // underneath this test, not a legitimate "no accent" state — fail loudly instead of skipping.
-test("masthead title and accent are separated by a real space", async ({ page }) => {
+test("hero title and accent are separated by a real space", async ({ page }) => {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
   if (!baseURL) {
     throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
@@ -74,10 +81,10 @@ test("masthead title and accent are separated by a real space", async ({ page })
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
 
-  const titleEl = page.locator(".jds-masthead__title");
+  const titleEl = page.locator(".today-hero__title");
   await expect(titleEl).toBeVisible();
 
-  const accentEl = titleEl.locator(".jds-masthead__accent");
+  const accentEl = titleEl.locator(".today-hero__accent");
   await expect(accentEl).toHaveCount(1);
 
   // Read all three strings from a single DOM snapshot via one evaluate() round-trip, not three
@@ -88,8 +95,8 @@ test("masthead title and accent are separated by a real space", async ({ page })
   // bug this test guards. A single evaluate() reads top/accent/full from the same frame, so the
   // comparison always reflects one consistent render.
   const { topText, accentText, fullText } = await titleEl.evaluate((titleNode) => {
-    const topSpan = titleNode.querySelector(":scope > span:not(.jds-masthead__accent)");
-    const accentSpan = titleNode.querySelector(":scope > span.jds-masthead__accent");
+    const topSpan = titleNode.querySelector(":scope > span:not(.today-hero__accent)");
+    const accentSpan = titleNode.querySelector(":scope > span.today-hero__accent");
     return {
       topText: (topSpan?.textContent ?? "").trim(),
       accentText: (accentSpan?.textContent ?? "").trim(),
