@@ -1,7 +1,7 @@
 // Offline contract check (spec 5.1). Runs the candidate tools, so it only ever runs in the
 // no-secrets job. Needs no provider sign-in.
 import { spawn } from "node:child_process";
-import { copyFile, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -12,6 +12,12 @@ import { checkAgentCapabilities } from "@moss/acp";
 
 import { InstallService } from "../../packages/cli-runner/src/install-service.js";
 import { PROVIDER_CATALOG } from "../../packages/cli-runner/src/catalog.js";
+import {
+  TOOLS_VOLUME_ADAPTERS,
+  applyToolsVolumeCli,
+  resolveToolsVolumeAdapterEntry,
+  type AdapterChatKind
+} from "../../packages/cli-runner/src/tools-volume-adapters.js";
 import { createSanitizedTmuxIo } from "../../packages/cli-runner/src/runner-io.js";
 import {
   extractLongFlags,
@@ -103,21 +109,43 @@ export function checkHandshakeResult(result: unknown): string | null {
   }
 }
 
-async function binaryPath(pkgDir: string, pkgName: string): Promise<string> {
-  const pj = JSON.parse(await readFile(path.join(pkgDir, "package.json"), "utf8")) as {
-    bin?: string | Record<string, string>;
-  };
-  const rel = typeof pj.bin === "string" ? pj.bin : Object.values(pj.bin ?? {})[0];
-  if (rel === undefined) throw new Error(`${pkgName} exposes no command`);
-  return path.join(pkgDir, rel);
+/**
+ * Starts the chat adapter the way Moss launches it: the resolver picks the adapter entry and the
+ * CLI override from the tools volume at `toolsPrefix`. No resolved adapter is a failure.
+ */
+export async function acpInitializeViaResolver(
+  toolsPrefix: string,
+  kind: AdapterChatKind,
+  timeoutMs = HANDSHAKE_TIMEOUT_MS
+): Promise<unknown> {
+  const entry = resolveToolsVolumeAdapterEntry(toolsPrefix, kind);
+  if (entry === null) throw new Error("resolver found no adapter on the tools volume");
+  const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: path.join(toolsPrefix, "home") };
+  applyToolsVolumeCli(env, toolsPrefix, kind);
+  return acpInitialize(process.execPath, [entry], env, timeoutMs);
 }
 
-/** Installs the adapter's own lockfile into a scratch folder (no scripts) and starts it. */
+/** Chat adapter kind for a toolset, or undefined when the toolset has no chat adapter. */
+function adapterKind(toolset: string): AdapterChatKind | undefined {
+  if (toolset === "anthropic") return "anthropic";
+  if (toolset === "openai-compatible") return "openai";
+  return undefined;
+}
+
+/**
+ * Installs the adapter's own lockfile (no scripts) into the tools volume slot the runner uses,
+ * then runs the handshake through the real resolver.
+ */
 async function checkAdapter(
   pkg: CandidatePackage,
-  toolsetBin: string | undefined
+  toolset: string,
+  toolsPrefix: string
 ): Promise<string[]> {
-  const dir = await mkdtemp(path.join(tmpdir(), "cli-tools-adapter-"));
+  const kind = adapterKind(toolset);
+  if (kind === undefined) return [`${pkg.pkg}: toolset ${toolset} has no chat adapter slot`];
+  const slot = path.join(toolsPrefix, "providers", TOOLS_VOLUME_ADAPTERS[kind].adapterSlot);
+  const dir = path.join(slot, "releases", "candidate");
+  await mkdir(dir, { recursive: true });
   await writeFile(
     path.join(dir, "package.json"),
     JSON.stringify({
@@ -128,16 +156,11 @@ async function checkAdapter(
   );
   await copyFile(pkg.lockfilePath, path.join(dir, "package-lock.json"));
   await execFileAsync("npm", ["ci", "--ignore-scripts"], { cwd: dir, timeout: 180_000 });
-  const bin = await binaryPath(path.join(dir, "node_modules", pkg.pkg), pkg.pkg);
-  const env: NodeJS.ProcessEnv = {
-    PATH: process.env.PATH,
-    HOME: dir,
-    ...(toolsetBin === undefined
-      ? {}
-      : { CLAUDE_CODE_EXECUTABLE: toolsetBin, CODEX_PATH: toolsetBin })
-  };
+  // The CLI install already put the catalog adapter here; the candidate takes its place.
+  await rm(path.join(slot, "current"), { force: true });
+  await symlink(dir, path.join(slot, "current"));
   try {
-    const answer = await acpInitialize(process.execPath, [bin], env);
+    const answer = await acpInitializeViaResolver(toolsPrefix, kind);
     const problem = checkHandshakeResult(answer);
     return problem === null ? [] : [`${pkg.pkg}: ${problem}`];
   } catch (err) {
@@ -226,7 +249,7 @@ export async function runContractCheck(
   }
 
   for (const adapter of candidate.packages.filter((p) => p.role === "chat-adapter")) {
-    failures.push(...(await checkAdapter(adapter, bin)));
+    failures.push(...(await checkAdapter(adapter, candidate.toolset, prefix)));
   }
   return { toolset: candidate.toolset, pass: failures.length === 0, failures };
 }
