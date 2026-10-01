@@ -132,3 +132,5 @@ blocking	apps/web/src/settings/cli-update-status.tsx	tests/uat/specs/2689-cli-up
 blocking	packages/ai/src/cli-tools-status.ts	tests/uat/specs/2689-cli-update-card.uat.spec.ts
 blocking	packages/ai/src/serialize-model.ts	tests/uat/specs/2842-admin-provider-view.uat.spec.ts
 blocking	packages/chat/src/live/acp-chat-engine.ts	tests/uat/specs/2816-chat-tool-step-quotes.uat.spec.ts
+blocking	apps/web/src/today/today-labels.ts	tests/uat/specs/2503-allday-event-date.uat.spec.ts
+blocking	packages/shared/src/time.ts	tests/uat/specs/2503-allday-event-date.uat.spec.ts
