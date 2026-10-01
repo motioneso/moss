@@ -47,7 +47,8 @@ export class HttpApiAdapter implements ChatProviderAdapter {
     const response = await this._fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      ...(input.signal ? { signal: input.signal } : {})
     });
 
     if (!response.ok) {

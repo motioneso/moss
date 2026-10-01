@@ -25,6 +25,8 @@ export interface GenerateChatInput {
   /** #2228: ask the provider to use its own built-in web search tool for this turn. */
   readonly nativeSearch?: boolean;
   readonly onActivity?: (event: ChatActivityEvent) => void;
+  /** Cancels the in-flight provider request when aborted. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ChatProviderAdapter {

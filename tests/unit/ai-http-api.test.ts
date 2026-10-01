@@ -440,3 +440,25 @@ describe("HttpApiAdapter — transcribeAudio (#738)", () => {
     ).rejects.toThrow(/No text field/);
   });
 });
+
+describe("HttpApiAdapter - cancellation (#2671)", () => {
+  it("passes the caller's abort signal to the web request so the request is cancelled", async () => {
+    let seen: AbortSignal | null | undefined;
+    const fakeFetch = async (_url: string | URL | Request, init?: RequestInit) => {
+      seen = init?.signal;
+      return new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] }), {
+        status: 200
+      });
+    };
+    const adapter = new HttpApiAdapter("anthropic", "sk-test", {
+      fetch: fakeFetch as typeof fetch
+    });
+    const controller = new AbortController();
+    await adapter.generateChat({
+      model: anthropicModel,
+      messages: [{ role: "user", content: "yo" }],
+      signal: controller.signal
+    });
+    expect(seen).toBe(controller.signal);
+  });
+});

@@ -120,7 +120,8 @@ export async function generateText(
         await adapter.generateChat({
           model,
           messages: input.messages,
-          maxOutputTokens: input.maxOutputTokens
+          maxOutputTokens: input.maxOutputTokens,
+          ...(input.signal ? { signal: input.signal } : {})
         })
       ).text;
   }
