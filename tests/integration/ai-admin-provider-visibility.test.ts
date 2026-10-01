@@ -37,6 +37,24 @@ describe("AI provider visibility after the owning admin is demoted", () => {
     }
   };
 
+  const setAdmin = (userId: string, isAdmin: boolean) =>
+    withBootstrap(async (client) => {
+      await client.query(`UPDATE app.users SET is_instance_admin = $2 WHERE id = $1`, [
+        userId,
+        isAdmin
+      ]);
+    });
+
+  // Demotes the admin for the duration of the callback and always restores them.
+  const whileDemoted = async (userId: string, run: () => Promise<void>) => {
+    await setAdmin(userId, false);
+    try {
+      await run();
+    } finally {
+      await setAdmin(userId, true);
+    }
+  };
+
   const createProviderAndModel = async (actorUserId: string, name: string) =>
     dataContext.withDataContext(ctx(actorUserId), async (scopedDb) => {
       const provider = await repository.createProvider(scopedDb, {
@@ -91,18 +109,29 @@ describe("AI provider visibility after the owning admin is demoted", () => {
 
   it("keeps admin-created providers and models visible to other admins after demotion", async () => {
     const adminCreated = await createProviderAndModel(adminOne, `admin-${randomUUID()}`);
-    await withBootstrap(async (client) => {
-      await client.query(`UPDATE app.users SET is_instance_admin = false WHERE id = $1`, [
-        adminOne
-      ]);
+
+    await whileDemoted(adminOne, async () => {
+      const adminTwoSees = await visibleIds(adminTwo);
+      expect(adminTwoSees.providers).toContain(adminCreated.providerId);
+      expect(adminTwoSees.models).toContain(adminCreated.modelId);
     });
+  });
 
-    const adminTwoSees = await visibleIds(adminTwo);
-    expect(adminTwoSees.providers).toContain(adminCreated.providerId);
-    expect(adminTwoSees.models).toContain(adminCreated.modelId);
+  it("lets another admin update a demoted admin's provider row", async () => {
+    const created = await createProviderAndModel(adminOne, `admin-edit-${randomUUID()}`);
 
-    await withBootstrap(async (client) => {
-      await client.query(`UPDATE app.users SET is_instance_admin = true WHERE id = $1`, [adminOne]);
+    await whileDemoted(adminOne, async () => {
+      const updated = await dataContext.withDataContext(ctx(adminTwo), (scopedDb) =>
+        scopedDb.db
+          .updateTable("app.ai_provider_configs")
+          .set({ display_name: "Renamed by admin two" })
+          .where("id", "=", created.providerId)
+          .returning(["id", "owner_user_id", "display_name"])
+          .execute()
+      );
+      expect(updated).toEqual([
+        { id: created.providerId, owner_user_id: adminOne, display_name: "Renamed by admin two" }
+      ]);
     });
   });
 
@@ -142,18 +171,11 @@ describe("AI provider visibility after the owning admin is demoted", () => {
 
   it("does not let a non-admin see another demoted admin's rows", async () => {
     const created = await createProviderAndModel(adminOne, `admin-demote-${randomUUID()}`);
-    await withBootstrap(async (client) => {
-      await client.query(`UPDATE app.users SET is_instance_admin = false WHERE id = $1`, [
-        adminOne
-      ]);
-    });
 
-    const memberSees = await visibleIds(memberOne);
-    expect(memberSees.providers).not.toContain(created.providerId);
-    expect(memberSees.models).not.toContain(created.modelId);
-
-    await withBootstrap(async (client) => {
-      await client.query(`UPDATE app.users SET is_instance_admin = true WHERE id = $1`, [adminOne]);
+    await whileDemoted(adminOne, async () => {
+      const memberSees = await visibleIds(memberOne);
+      expect(memberSees.providers).not.toContain(created.providerId);
+      expect(memberSees.models).not.toContain(created.modelId);
     });
   });
 
@@ -176,12 +198,12 @@ describe("AI provider visibility after the owning admin is demoted", () => {
         client.query(`UPDATE app.ai_provider_configs SET created_by_admin = false WHERE id = $1`, [
           created.providerId
         ])
-      ).rejects.toThrow(/created_by_admin/);
+      ).rejects.toThrow(/cannot be changed/);
       await expect(
         client.query(`UPDATE app.ai_configured_models SET created_by_admin = false WHERE id = $1`, [
           created.modelId
         ])
-      ).rejects.toThrow(/created_by_admin/);
+      ).rejects.toThrow(/cannot be changed/);
     });
   });
 });
