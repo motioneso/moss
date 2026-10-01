@@ -216,4 +216,15 @@ describe("generateText", () => {
     );
     expect(result).toEqual({ ok: false, error: "aborted" });
   });
+  it("hands the caller's abort signal to an API-key provider so its request can be cancelled (#2671)", async () => {
+    const capture: Capture = {};
+    const controller = new AbortController();
+    const result = await generateText(
+      scopedDb,
+      { model, messages, maxOutputTokens: 512, signal: controller.signal },
+      deps(provider({}), capture)
+    );
+    expect(result).toEqual({ ok: true, text: "api reply" });
+    expect(capture.chat?.signal).toBe(controller.signal);
+  });
 });

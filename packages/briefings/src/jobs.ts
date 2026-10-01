@@ -16,6 +16,11 @@ import type { NotificationsRepository } from "@moss/notifications";
 import type { BriefingRunKind, BriefingType } from "@moss/shared";
 
 import type { ComposeDeps } from "./compose.js";
+import {
+  BRIEFING_RUN_DEADLINE_LABEL,
+  BriefingRunDeadlineError,
+  withRunDeadline
+} from "./run-deadline.js";
 import type { BriefingDayPlanAutoPort } from "./repository.js";
 import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import { BriefingsRepository } from "./repository.js";
@@ -189,14 +194,29 @@ export async function registerBriefingsJobWorkers(
       // the handler boundary. Manual runs always carry one from the route.
       const briefingRunId = job.data.briefingRunId ?? randomUUID();
 
-      const outcome = await repository.generateRun(scopedDb, job.data.definitionId, {
-        moduleManifests: options.moduleManifests,
-        runKind: job.data.runKind,
-        runId: briefingRunId,
-        jobId: job.id,
-        composeDeps,
-        ...(options.dayPlanAuto ? { dayPlanAuto: options.dayPlanAuto } : {})
-      });
+      // A run that outlives its deadline throws, which rolls back the transaction and frees its
+      // locks. Only the fixed label is logged.
+      let outcome: Awaited<ReturnType<typeof repository.generateRun>>;
+      try {
+        outcome = await withRunDeadline(() =>
+          repository.generateRun(scopedDb, job.data.definitionId, {
+            moduleManifests: options.moduleManifests,
+            runKind: job.data.runKind,
+            runId: briefingRunId,
+            jobId: job.id,
+            composeDeps,
+            ...(options.dayPlanAuto ? { dayPlanAuto: options.dayPlanAuto } : {})
+          })
+        );
+      } catch (error) {
+        if (error instanceof BriefingRunDeadlineError) {
+          options.logger?.error(
+            { event: BRIEFING_RUN_DEADLINE_LABEL, definitionId: job.data.definitionId },
+            "briefing run exceeded its time limit"
+          );
+        }
+        throw error;
+      }
 
       // Notify ONLY for a NEWLY-created scheduled run that succeeded: an idempotent
       // same-local-day skip returns created:false and must not re-notify. Degraded runs
