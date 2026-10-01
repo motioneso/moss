@@ -2,8 +2,8 @@
 
 Status: draft for Ben's review, 2026-10-01. Builds on #2594 (the sorting model, closed) and the System
 One provider (#2586, closed). Approved by Ben in discussion on 2026-10-01 with the section 5 rulings
-recorded in the plan (`../plans/2026-10-01-classifier-gate-for-chat.md`, "Rulings"). Candidate privacy
-(3.3 against 3.4) and shadow retention are still open. No build issue exists yet.
+recorded in the plan (`../plans/2026-10-01-classifier-gate-for-chat.md`, "Rulings"), including the
+privacy ceiling, private-chat bypass and 7-day retention. No build issue exists yet.
 
 ## 1. The problem
 
@@ -38,6 +38,8 @@ The gate declines at once when any of these is true.
 - No classifier is set, or the gate is switched off.
 - The gate is cooling off after a failure (section 3.9).
 - The user has no tool that opted in (section 3.5).
+- The chat is private. Private chats bypass the gate entirely, with no classifier call and no shadow
+  record.
 
 ### 3.3 Question 1: which area, or none
 
@@ -51,8 +53,10 @@ least one opted-in tool, each with a one-line description, plus two fixed entrie
 The area is the module. Tools already carry a module id, so no new grouping field is needed. A very
 large module may later split into sub-areas; version one does not.
 
-The classifier sees only the one message and the area descriptions. It never sees chat history,
-memory, or any stored data.
+The classifier may see anything the default model would see for the same message (Ben, 2026-10-01).
+That is the ceiling, and credentials and secrets stay excluded as they are for the default model.
+Version one sends only the message and the menu descriptions, to keep calls fast and cheap. Recent
+turns, memory and candidate lists (such as device names) may be added within the ceiling.
 
 ### 3.4 Question 2: which tool, and its values
 
@@ -133,7 +137,8 @@ The setting has three states: off, shadow, on.
   The default model answers as today.
 - The record holds the module, tool, confidence, the decision, and whether the default model's first
   tool call matched. It is stored in an owner-only table under row-level security. The message text is
-  stored there too, because accuracy review needs it. It never goes to logs or job payloads.
+  stored there too, because accuracy review needs it. It never goes to logs or job payloads. Records
+  are deleted after 7 days (Ben, 2026-10-01); a purge job enforces it.
 - **Kill gate:** the gate does not go to "on" for any tool until shadow data shows its picks agree with
   the default model's at an acceptable rate. The rate and the review window are set by Ben when the
   data exists.

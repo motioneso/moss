@@ -773,8 +773,17 @@ These answers supersede the matching "Decisions still needed" entries below.
    default model shows the usual card. A per-tool "run without asking" setting for both paths is a
    later, separate spec.
 
-Still open: candidate and prepared-text privacy (spec 3.3 against 3.4), shadow retention and
-private-chat handling, and the external candidate-dispatch proof (module-platform implementer).
+8. **Classifier data ceiling: anything the default model would see.** This resolves the spec 3.3
+   against 3.4 conflict. Prepared descriptions and candidate lists (device names) are allowed.
+   Credentials and secrets stay excluded, as they are for the default model. Version one still sends
+   only the message and menu to keep calls cheap; adding recent turns or memory is a later choice
+   inside the ceiling. The setting help text must still say messages reach the classifier provider.
+9. **Private chats bypass the gate.** No classifier call and no shadow record. This replaces the
+   incognito open question in 3.4 and 3.5.
+10. **Shadow retention: 7 days.** Records, including message text, are purged after 7 days by a
+    scheduled job that 3.4 must include and test.
+
+Still open: the external candidate-dispatch proof (module-platform implementer).
 
 ## Decisions still needed from Ben
 
