@@ -30,6 +30,13 @@ export type GenerateChatFn = (input: GenerateChatInput) => Promise<{ readonly te
 
 export const SECTION_ITEM_CAP = 8;
 export const SECTION_CHAR_CAP = 1200;
+
+// Commitment statuses that are still live. Done, dismissed and renegotiated ones stay out.
+const OPEN_COMMITMENT_STATUSES = new Set(["open", "at_risk", "slipped"]);
+
+export function isOpenCommitment(item: Record<string, unknown>): boolean {
+  return typeof item.status === "string" && OPEN_COMMITMENT_STATUSES.has(item.status);
+}
 export const ECONOMY_MAX_OUTPUT_TOKENS = 1024;
 
 // The morning report walks the whole day with concrete details, so it gets a larger budget.

@@ -122,3 +122,51 @@ describe("composeBriefing: morning tasks since the last briefing (#2764)", () =>
     });
   });
 });
+
+const ALL_COMMITMENTS = [
+  { title: "Send the contract", status: "open", dueAt: null, counterparty: "Ana" },
+  { title: "Review the budget", status: "at_risk", dueAt: null, counterparty: "Bo" },
+  { title: "Reply to the vendor", status: "slipped", dueAt: null, counterparty: "Cy" },
+  { title: "Already delivered", status: "done", dueAt: null, counterparty: "Di" },
+  { title: "Dropped promise", status: "dismissed", dueAt: null, counterparty: "Ed" },
+  { title: "Replaced by new date", status: "renegotiated", dueAt: null, counterparty: "Flo" }
+];
+
+function commitmentsDeps(seen: string[]): ComposeDeps {
+  const deps = makeFakeDeps({
+    generateChat: async (g: GenerateChatInput) => {
+      seen.push(g.messages.map((m) => m.content).join("\n"));
+      return { text: "synth narrative" };
+    }
+  });
+  const execute: ToolExecute = async () => ({ data: { commitments: ALL_COMMITMENTS } });
+  return {
+    ...deps,
+    moduleManifests: deps.moduleManifests.map((m) => ({
+      ...m,
+      assistantTools: (m.assistantTools ?? []).map((t) =>
+        t.name === "commitments.listVisible" ? { ...t, execute } : t
+      )
+    }))
+  };
+}
+
+describe("composeBriefing: commitments still open only (#2757)", () => {
+  it("keeps finished, dismissed and renegotiated commitments out of the morning report", async () => {
+    const seen: string[] = [];
+    await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["commitments.listVisible"] }),
+      runInput,
+      commitmentsDeps(seen)
+    );
+    const prompt = seen.join("\n");
+
+    expect(prompt).toContain("Send the contract");
+    expect(prompt).toContain("Review the budget");
+    expect(prompt).toContain("Reply to the vendor");
+    expect(prompt).not.toContain("Already delivered");
+    expect(prompt).not.toContain("Dropped promise");
+    expect(prompt).not.toContain("Replaced by new date");
+  });
+});

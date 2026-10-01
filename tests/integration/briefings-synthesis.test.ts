@@ -14,6 +14,7 @@ import type { MemoryRetriever } from "@moss/memory";
 import type { NotificationsRepository } from "@moss/notifications";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { CommitmentsRepository, type CommitmentStatus } from "@moss/structured-state";
 import { ids } from "./test-database.js";
 import {
   handleNextBriefingJobWithNotifications,
@@ -136,6 +137,53 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
     expect(meta.aiModel?.tier).toBe("economy");
   });
 
+  it("sends only still-open commitments to the model, read from real commitment rows (#2757)", async () => {
+    const commitments = new CommitmentsRepository();
+    const seeded: Record<string, string> = {
+      open: "Send the contract",
+      at_risk: "Review the budget",
+      slipped: "Reply to the vendor",
+      done: "Already delivered",
+      dismissed: "Dropped promise",
+      renegotiated: "Replaced by new date"
+    };
+    await dataContext.withDataContext(userAContext(), async (scopedDb) => {
+      for (const [status, title] of Object.entries(seeded)) {
+        const row = await commitments.create(scopedDb, { title, provenance: "volunteered" });
+        await commitments.update(scopedDb, row.id, {
+          status: status as CommitmentStatus
+        });
+      }
+    });
+    const definition = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.createDefinition(scopedDb, {
+        title: "Open commitments only",
+        selectedToolNames: ["commitments.listVisible"]
+      })
+    );
+    const prompts: string[] = [];
+
+    const outcome = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.generateRun(scopedDb, definition.id, {
+        moduleManifests: getBuiltInModuleManifests(),
+        runKind: "manual",
+        composeDeps: makeComposeDeps(async (input) => {
+          prompts.push(input.messages.map((m) => m.content).join("\n"));
+          return { text: "synth narrative" };
+        })
+      })
+    );
+
+    expect(outcome?.run.status).toBe("succeeded");
+    const prompt = prompts.join("\n");
+    for (const title of [seeded.open, seeded.at_risk, seeded.slipped]) {
+      expect(prompt).toContain(title);
+    }
+    for (const title of [seeded.done, seeded.dismissed, seeded.renegotiated]) {
+      expect(prompt).not.toContain(title);
+    }
+  });
+
   it("briefing tool execute receives a non-empty actorUserId and requestId in ToolContext", async () => {
     // compose gathers from a FIXED set of read tools (commitments/tasks/calendar/email/
     // chats). To assert the ToolContext compose passes to a tool's execute, supply ONLY a
@@ -210,7 +258,7 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
                 "ignored primitive",
                 {
                   title: "Generic commitment",
-                  status: "blocked",
+                  status: "open",
                   secretNote: "undeclared field must never reach the prompt"
                 },
                 null
@@ -243,7 +291,7 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
     );
 
     expect(composed.summaryText).toContain("COMMITMENTS: 1 item");
-    expect(composed.summaryText).toContain("Generic commitment · blocked");
+    expect(composed.summaryText).toContain("Generic commitment · open");
     // The undeclared field is not in the per-source allow-list, so it never reaches the prompt.
     expect(composed.summaryText).not.toContain("undeclared field must never reach the prompt");
   });
