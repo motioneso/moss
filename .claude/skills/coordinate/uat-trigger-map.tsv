@@ -56,6 +56,7 @@ blocking	apps/web/src/today/evening-planning-frame.tsx	tests/uat/specs/2789-even
 blocking	apps/web/src/today/evening-mode.tsx	tests/uat/specs/2789-evening-details.uat.spec.ts
 blocking	apps/web/src/styles/kit-today-hero.css	tests/uat/specs/2788-today-header-ampm.uat.spec.ts
 blocking	apps/web/src/styles/kit-today.css	tests/uat/specs/1497-today-css-residue.uat.spec.ts
+blocking	apps/web/src/styles/kit-today.css	tests/uat/specs/2533-today-jump-link-offset.uat.spec.ts
 blocking	apps/web/src/styles/kit-today-feeds.css	tests/uat/specs/1497-today-css-residue.uat.spec.ts
 blocking	apps/web/src/styles/kit-today-misc.css	tests/uat/specs/1497-today-css-residue.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/1185-news-layout.uat.spec.ts
