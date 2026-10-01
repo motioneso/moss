@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 import {
@@ -453,22 +453,39 @@ describe("spam filter", () => {
     expect(verdict).toEqual({ allow: false, reason: "source_hourly_cap" });
   });
 
-  it("defers a card raised during quiet hours", async () => {
-    // Weak on purpose: the exact deferral time depends on the host time zone
-    // (#2608), so this only pins that a deferral happens. Do not assert the
-    // exact time here: it passes on UTC hosts and fails anywhere else.
-    const { policy } = spamHarness();
-    const verdict = await policy.check(
-      fakeScopedDb(),
-      OWNER_A,
-      "calendar",
-      "key-1",
-      pref(),
-      "2026-09-01T23:00:00.000Z",
-      "UTC"
-    );
-    expect(verdict.allow).toBe(true);
-    if (verdict.allow) expect(verdict.deferredUntil).not.toBeNull();
+  describe("quiet-hours deferral ignores the host time zone (#2608)", () => {
+    const originalTz = process.env.TZ;
+    afterEach(() => {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    });
+
+    const cases: ReadonlyArray<[string, string, string, string]> = [
+      // host zone, user zone, card raised at, expected deferral
+      ["UTC", "UTC", "2026-09-01T23:00:00.000Z", "2026-09-02T08:00:00.000Z"],
+      ["America/Los_Angeles", "UTC", "2026-09-01T23:00:00.000Z", "2026-09-02T08:00:00.000Z"],
+      ["Asia/Tokyo", "UTC", "2026-09-01T23:00:00.000Z", "2026-09-02T08:00:00.000Z"],
+      // Early-morning case: still inside quiet hours, ends the same local day.
+      ["America/Los_Angeles", "UTC", "2026-09-02T03:00:00.000Z", "2026-09-02T08:00:00.000Z"],
+      // User zone differs from the host: 23:00 New York is 03:00Z, ends 08:00 New York.
+      ["Asia/Tokyo", "America/New_York", "2026-09-02T03:00:00.000Z", "2026-09-02T12:00:00.000Z"],
+      ["America/Los_Angeles", "Asia/Tokyo", "2026-09-01T14:00:00.000Z", "2026-09-01T23:00:00.000Z"]
+    ];
+
+    it.each(cases)("host %s, user %s, raised %s defers to %s", async (host, user, now, want) => {
+      process.env.TZ = host;
+      const { policy } = spamHarness();
+      const verdict = await policy.check(
+        fakeScopedDb(),
+        OWNER_A,
+        "calendar",
+        "key-1",
+        pref(),
+        now,
+        user
+      );
+      expect(verdict).toEqual({ allow: true, deferredUntil: want });
+    });
   });
 
   it("lets a midday card straight through", async () => {
