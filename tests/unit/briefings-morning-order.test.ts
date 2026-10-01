@@ -72,4 +72,19 @@ describe("tidyMorningSections (#2775)", () => {
   it("leaves text without section headings alone", () => {
     expect(tidyMorningSections("synth narrative", TITLES)).toBe("synth narrative");
   });
+
+  it("reads the start of a time range, and the times a real model wrote", () => {
+    const input = text(
+      "Headline.",
+      "## Choose a time for the remaining tasks",
+      "Water the plants.",
+      "## Get ready for the review",
+      "The review runs 5:22-6:22 PM in Room 4.",
+      "## Cook dinner",
+      "Dinner is at 6:00 PM."
+    );
+    const out = tidyMorningSections(input, TITLES);
+    expect(out.indexOf("## Get ready")).toBeLessThan(out.indexOf("## Cook dinner"));
+    expect(out.indexOf("## Cook dinner")).toBeLessThan(out.indexOf("## Choose a time"));
+  });
 });

@@ -4,6 +4,8 @@
 // enforces them. It only acts when sure; anything unclear is left exactly as written.
 
 const TIME = /\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i;
+// A range such as "2:22-2:37 PM" or "11-1 PM" shares one AM/PM at the end.
+const RANGE = /\b(\d{1,2})(?::(\d{2}))?\s*[-\u2013\u2014]\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i;
 const TAIL_HEADING = /\b(news|sports?)\b/i;
 
 // Words that may surround a restated event title without adding information.
@@ -45,14 +47,30 @@ interface Section {
   readonly raw: string;
 }
 
-function minutesOf(section: Section): number | null {
-  const match = TIME.exec(`${section.heading}\n${section.body}`);
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = match[2] ? Number(match[2]) : 0;
+function toMinutes(hour: number, minute: number, pm: boolean): number | null {
   if (hour < 1 || hour > 12 || minute > 59) return null;
-  const pm = match[3]!.toUpperCase() === "PM";
   return ((hour % 12) + (pm ? 12 : 0)) * 60 + minute;
+}
+
+function minutesOf(section: Section): number | null {
+  const text = `${section.heading}\n${section.body}`;
+  const single = TIME.exec(text);
+  const range = RANGE.exec(text);
+  // Prefer a range that starts before the first single time, so its start time wins.
+  if (range && (!single || range.index <= single.index)) {
+    const startHour = Number(range[1]);
+    const endHour = Number(range[3]);
+    const endPm = range[5]!.toUpperCase() === "PM";
+    // "11-1 PM" starts before noon; otherwise the start shares the end's period.
+    const startPm = startHour !== 12 && startHour > endHour ? !endPm : endPm;
+    return toMinutes(startHour, range[2] ? Number(range[2]) : 0, startPm);
+  }
+  if (!single) return null;
+  return toMinutes(
+    Number(single[1]),
+    single[2] ? Number(single[2]) : 0,
+    single[3]!.toUpperCase() === "PM"
+  );
 }
 
 function onlyRestatesTitle(section: Section, titles: readonly string[]): boolean {
