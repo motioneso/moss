@@ -60,7 +60,7 @@ import type {
   RpcProviderKind
 } from "@moss/chat/live";
 
-import { findRepoRoot } from "./catalog.js";
+import { ADAPTER_CATALOG, findRepoRoot, type AdapterRecipe } from "./catalog.js";
 import { readOpenCodeVersion } from "./opencode-version.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { Mutex } from "./mutex.js";
@@ -131,6 +131,8 @@ export interface InstallServiceDeps {
   readonly installTimeoutMs?: number;
   /** Override host arch (tests). Default `os.arch()`. */
   readonly hostArch?: string;
+  /** Chat adapter recipes by provider (#2689). Default `ADAPTER_CATALOG`. */
+  readonly adapterCatalog?: Partial<Record<RpcProviderKind, AdapterRecipe>>;
 }
 
 const DEFAULT_HOME_BASE = "/data/cli-auth";
@@ -247,11 +249,69 @@ export class InstallService {
   ): Promise<RpcInstallProviderResult> {
     // §A.3.6 IDEMPOTENT: if the pinned version is already live AND the on-disk bytes
     // still match, no-op. A hash mismatch (drifted/tampered) falls through to REINSTALL.
-    const noop = await this.tryIdempotentNoop(provider, recipe);
-    if (noop) return noop;
+    const cli =
+      (await this.tryIdempotentNoop(provider, recipe)) ??
+      (recipe.kind === "npm"
+        ? await this.installNpm(provider, recipe)
+        : await this.installArtifact(provider, recipe));
+    if (cli.state !== "installed") return cli;
 
-    if (recipe.kind === "npm") return this.installNpm(provider, recipe);
-    return this.installArtifact(provider, recipe);
+    // #2689: the provider's chat adapter rides with its CLI. A failure here leaves the CLI in
+    // place and chat on the image adapter, but is reported so the admin sees it.
+    const adapterError = await this.ensureAdapter(provider);
+    return adapterError ? { state: "error", message: adapterError } : cli;
+  }
+
+  // ─── #2689 chat adapter install ─────────────────────────────────────────────
+
+  /** Install or confirm the provider's chat adapter. Returns an error message, or null. */
+  private async ensureAdapter(provider: RpcProviderKind): Promise<string | null> {
+    const adapter = (this.deps.adapterCatalog ?? ADAPTER_CATALOG)[provider];
+    if (!adapter) return null;
+    const fail = (why: string): string => `chat adapter ${adapter.pkg}: ${why}`;
+    const live = await this.resolveCurrent(adapter.slot);
+    if (
+      live &&
+      (await isPublishedNpmRelease(live)) &&
+      (await this.readInstalledVersion(live, adapter.pkg)) === adapter.version &&
+      (await pathExists(path.join(live, adapter.entry)))
+    ) {
+      return null;
+    }
+    const staging = await this.mkStaging(adapter.slot);
+    try {
+      await writeFile(
+        path.join(staging, "npm-shrinkwrap.json"),
+        await readFile(this.resolveRepoPath(adapter.lockfile), "utf8"),
+        "utf8"
+      );
+      await writeFile(
+        path.join(staging, "package.json"),
+        JSON.stringify({
+          name: "jarv1s-cli-install",
+          version: "0.0.0",
+          dependencies: { [adapter.pkg]: adapter.version }
+        }),
+        "utf8"
+      );
+      const ci = await this.deps.io.run(
+        "npm",
+        ["ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", staging],
+        { cwd: staging, env: this.installerEnv }
+      );
+      if (ci.code !== 0) return fail(redactNpm(`npm ci failed: ${ci.stderr ?? ""}`));
+      if ((await this.readInstalledVersion(staging, adapter.pkg)) !== adapter.version) {
+        return fail("installed version is not the pinned version");
+      }
+      if (!(await pathExists(path.join(staging, adapter.entry)))) return fail("entry file missing");
+      const release = await this.promoteNpm(adapter.slot, staging, null);
+      await this.gcOldReleases(adapter.slot, release.dir);
+      return null;
+    } catch (err) {
+      return fail(redactInstallMessage(err));
+    } finally {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   // ─── npm path (§A.3.3/§A.3.4/§A.3.5) ────────────────────────────────────────
@@ -331,7 +391,7 @@ export class InstallService {
 
       // (5) ATOMIC PROMOTE (§A.3.5): rename the verified tree into a DURABLE release lane,
       // then flip `current`; create the stable bin symlink once.
-      const release = await this.promoteNpm(provider, staging, recipe);
+      const release = await this.promoteNpm(provider, staging, recipe.binary);
 
       // §A.3.4 re-verify the post-promote hash (TOCTOU). The live bin resolves THROUGH
       // providers/<provider>/current → releases/<rand>.
@@ -451,9 +511,9 @@ export class InstallService {
    * `bin/<binary>` symlink (resolving THROUGH current) is created ONCE on first install.
    */
   private async promoteNpm(
-    provider: RpcProviderKind,
+    provider: string,
     staging: string,
-    recipe: NpmInstallRecipe
+    binary: string | null
   ): Promise<{ dir: string; prior: string | undefined }> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
     const releasesDir = path.join(providerDir, "releases");
@@ -479,7 +539,7 @@ export class InstallService {
     await rename(tmpLink, currentLink);
 
     // Stable PATH bin symlink, created ONCE: bin/<binary> → ../providers/<provider>/current/node_modules/.bin/<binary>.
-    await this.ensureBinSymlink(provider, recipe.binary);
+    if (binary) await this.ensureBinSymlink(provider, binary);
 
     return {
       dir: releaseDir,
@@ -489,7 +549,7 @@ export class InstallService {
 
   /** Flip `current` back to the prior release and remove the just-promoted bad release (§A.3.5). */
   private async rollbackNpmPromote(
-    provider: RpcProviderKind,
+    provider: string,
     release: { dir: string; prior: string | undefined }
   ): Promise<void> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
@@ -503,7 +563,7 @@ export class InstallService {
   }
 
   /** GC every `releases/<rand>` NOT the just-promoted dir AND not the live target (§A.3.2). */
-  private async gcOldReleases(provider: RpcProviderKind, keepDir: string): Promise<void> {
+  private async gcOldReleases(provider: string, keepDir: string): Promise<void> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
     const releasesDir = path.join(providerDir, "releases");
     const live = await this.resolveCurrent(provider);
@@ -663,9 +723,12 @@ export class InstallService {
     for (const provider of Object.keys(this.deps.catalog) as RpcProviderKind[]) {
       await this.sweepReleases(provider).catch(() => undefined);
     }
+    for (const adapter of Object.values(this.deps.adapterCatalog ?? ADAPTER_CATALOG)) {
+      await this.sweepReleases(adapter.slot).catch(() => undefined);
+    }
   }
 
-  private async sweepReleases(provider: RpcProviderKind): Promise<void> {
+  private async sweepReleases(provider: string): Promise<void> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
     const releasesDir = path.join(providerDir, "releases");
     if (!(await pathExists(releasesDir))) return;
@@ -724,7 +787,7 @@ export class InstallService {
   }
 
   /** Create the stable `bin/<binary>` symlink ONCE (idempotent on later installs). */
-  private async ensureBinSymlink(provider: RpcProviderKind, binary: string): Promise<void> {
+  private async ensureBinSymlink(provider: string, binary: string): Promise<void> {
     const binDir = path.join(this.toolsPrefix, "bin");
     await mkdir(binDir, { recursive: true });
     const linkPath = path.join(binDir, binary);
@@ -779,7 +842,7 @@ export class InstallService {
   }
 
   /** Resolve the absolute dir `providers/<provider>/current` points at, or undefined. */
-  private async resolveCurrent(provider: RpcProviderKind): Promise<string | undefined> {
+  private async resolveCurrent(provider: string): Promise<string | undefined> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
     const link = await readlink(path.join(providerDir, "current")).catch(() => undefined);
     return link ? path.resolve(providerDir, link) : undefined;
@@ -788,7 +851,7 @@ export class InstallService {
   // ─── staging + repo-path + timeout helpers ──────────────────────────────────
 
   /** §A.3.2 mk an ephemeral staging scratch UNDER the tools volume (same-fs as promote). */
-  private async mkStaging(provider: RpcProviderKind): Promise<string> {
+  private async mkStaging(provider: string): Promise<string> {
     const stagingRoot = path.join(this.toolsPrefix, ".staging");
     await mkdir(stagingRoot, { recursive: true, mode: 0o700 });
     return mkdtemp(path.join(stagingRoot, `${provider}-`));

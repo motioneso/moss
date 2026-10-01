@@ -11,9 +11,8 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createRequire } from "node:module";
 import { readFile, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   AcpExecManager,
   ACP_EXEC_OUTPUT_CAP_BYTES,
@@ -60,6 +59,8 @@ import { createOwnerIo } from "./per-user-structured.js";
 import { codexPeerHomesFor, runnerOwnIdentity, sweepIdentity } from "./shared-uid.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
+import { applyToolsVolumeCli } from "./tools-volume-adapters.js";
+import { defaultResolveAdapterTarget, type AcpAdapterTarget } from "./acp-adapter-target.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
 import {
@@ -95,6 +96,8 @@ export interface AcpHostDeps {
    * chown privileges. Prod default really calls chown; the failure-and-cleanup behavior
    * itself is proved separately in cli-runner-owned-fs.test.ts against an unreachable id. */
   readonly applyOwnership?: OwnershipApplier;
+  /** Tools volume prefix: an adapter and CLI installed there win over the image copy (#2689). */
+  readonly toolsPrefix?: string;
   /** Resolves the adapter spawn target; injected so tests never touch node_modules. */
   readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
@@ -259,33 +262,7 @@ interface AcpSession {
   stopPromise: Promise<void> | undefined;
 }
 
-/** What runs for one adapter spawn: node plus the row's pinned entry, or the provider binary. */
-export interface AcpAdapterTarget {
-  readonly command: string;
-  readonly args: string[];
-}
-
-/** Node-spawnable adapter entries by provider kind, from the pinned registry packages. */
-const ADAPTER_ENTRY_PACKAGES = {
-  anthropic: "@agentclientprotocol/claude-agent-acp/dist/index.js",
-  openai: "@agentclientprotocol/codex-acp/dist/index.js"
-} as const;
-
-/** Resolve the spawn target for a provider kind; unknown kinds are refused by the row lookup. */
-export function defaultResolveAdapterTarget(kind: AcpProviderKind): AcpAdapterTarget {
-  getAcpProviderRow(kind);
-  if (kind === "opencode") {
-    // Pinned package launcher (postinstall places the platform binary there).
-    const packageJson = createRequire(import.meta.url).resolve("opencode-ai/package.json");
-    return { command: join(dirname(packageJson), "bin", "opencode.exe"), args: ["acp"] };
-  }
-  const entry = ADAPTER_ENTRY_PACKAGES[kind as keyof typeof ADAPTER_ENTRY_PACKAGES];
-  if (!entry) throw new Error(`No adapter package installed for provider kind: ${kind}`);
-  return {
-    command: process.execPath,
-    args: [createRequire(import.meta.url).resolve(entry)]
-  };
-}
+export { defaultResolveAdapterTarget, type AcpAdapterTarget };
 
 /**
  * A process's actual start time in system ticks, read from the system process
@@ -397,6 +374,8 @@ export class AcpHost {
           ...buildSanitizedCliEnv(process.env),
           HOME: agentHome
         };
+        // One CLI copy: the adapter drives the tools volume CLI when one is installed.
+        applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind);
         if (providerKind === "anthropic") {
           const token = await this.readLoginToken(homeBase);
           if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
@@ -486,7 +465,8 @@ export class AcpHost {
     }
 
     const target =
-      this.deps.resolveAdapterTarget?.(providerKind) ?? defaultResolveAdapterTarget(providerKind);
+      this.deps.resolveAdapterTarget?.(providerKind) ??
+      defaultResolveAdapterTarget(providerKind, this.deps.toolsPrefix);
     const spawnChild =
       this.deps.spawnChild ??
       ((opts) => {

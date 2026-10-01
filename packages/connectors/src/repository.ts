@@ -335,6 +335,30 @@ export class ConnectorsRepository {
       .execute();
   }
 
+  /** The Gmail history position saved by the last clean backlog walk, or null (#2804). */
+  async getEmailHistoryId(scopedDb: DataContextDb, accountId: string): Promise<string | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.connector_accounts")
+      .select("email_history_id")
+      .where("id", "=", accountId)
+      .executeTakeFirst();
+    return row?.email_history_id ?? null;
+  }
+
+  async setEmailHistoryId(
+    scopedDb: DataContextDb,
+    accountId: string,
+    historyId: string | null
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.connector_accounts")
+      .set({ email_history_id: historyId })
+      .where("id", "=", accountId)
+      .execute();
+  }
+
   /**
    * Serializes sync work for one account until the caller's transaction ends. Each sync chunk
    * runs in one transaction, and two overlapping chunks can deadlock on row locks.

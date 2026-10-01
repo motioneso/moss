@@ -248,7 +248,8 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
       signals: { importance: "normal", confidence: 0.6, pendingJudgement: true },
       created_at: FIXED_NOW,
       updated_at: FIXED_NOW,
-      analysis_attempts: 0
+      analysis_attempts: 0,
+      judgement_requested_at: null
     } as EmailMessage;
     const { prompt } = await composeWith(liveEmailDeps([CONTRACT_MAIL], runChat, [stored]));
 
@@ -338,7 +339,8 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
         signals: { ...sorted.signals },
         created_at: FIXED_NOW,
         updated_at: FIXED_NOW,
-        analysis_attempts: 0
+        analysis_attempts: 0,
+        judgement_requested_at: null
       } as EmailMessage;
     };
     const runChat = fakeSorterModel({});

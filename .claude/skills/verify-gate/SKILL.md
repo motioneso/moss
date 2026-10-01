@@ -32,9 +32,25 @@ is gone). **Check the exit code, not the text.** (`status` and plain `wait` with
 still exist for a one-shot check or a bounded foreground wait, but `wait --follow` backgrounded is
 the one procedure to use here.)
 
-Every run log records which commit it tested (`### COMMIT`) and whether the tree was dirty
-(`### DIRTY`, with the changed files listed). `status` and `wait` repeat both in their output,
-so an old result can only be trusted when its commit matches and its tree was clean.
+Every run log records what it tested: the commit (`### COMMIT`), the dirty-tree file
+list (`### DIRTY`), an input fingerprint over commit plus status plus file contents
+(`### FINGERPRINT` — same files dirty with different bytes hash differently), toolchain
+versions (`### TOOLCHAIN`), the database-server version (`### POSTGRES`), the gate database
+(`### DB`, freshly provisioned per run), the exact command (`### GATE`), timing, outcome,
+and log path. File bytes never enter the log, only digests — no secrets. `status` and
+`wait` repeat commit, tree, fingerprint, and toolchain in one line.
+
+## Evidence reuse rule (#2462)
+
+An old result may be reused only when every compared input matches AND project rules
+permit it:
+
+- commit matches, fingerprint is known on both sides and equal, toolchain and
+  database identity match, and the command matches;
+- changed or unknown relevant inputs invalidate reuse — a dirty tree with different
+  bytes, a different fingerprint, or an `unknown` anywhere means re-run;
+- receipt reuse never replaces required CI, independent review, or live proof.
+  A matching receipt answers "what was tested", not "what may merge".
 
 ## Rules that still apply around the script
 

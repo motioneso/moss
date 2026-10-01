@@ -267,6 +267,12 @@ export class EmailRepository {
           body_excerpt: bodyExcerpt,
           received_at: input.receivedAt,
           external_metadata: input.externalMetadata ?? {},
+          // A new Gmail revision restarts the judgement request stamp too (#2804).
+          judgement_requested_at: sql<Date | null>`
+            case when (app.email_messages.external_metadata->>'historyId')
+              is distinct from ${incomingHistoryId}
+            then null
+            else app.email_messages.judgement_requested_at end`,
           // A new Gmail revision restarts the analysis-attempt count (#2804).
           analysis_attempts: sql<number>`
             case when (app.email_messages.external_metadata->>'historyId')
@@ -331,12 +337,20 @@ export class EmailRepository {
       hasFinishedVerdict: boolean;
       awaitingJudgement: boolean;
       analysisAttempts: number;
+      judgementRequestedAt: Date | null;
     }>
   > {
     assertDataContextDb(scopedDb);
     const rows = await scopedDb.db
       .selectFrom("app.email_messages")
-      .select(["external_id", "external_metadata", "summary", "signals", "analysis_attempts"])
+      .select([
+        "external_id",
+        "external_metadata",
+        "summary",
+        "signals",
+        "analysis_attempts",
+        "judgement_requested_at"
+      ])
       .where("connector_account_id", "=", connectorAccountId)
       .execute();
     return rows.map((r) => ({
@@ -345,8 +359,26 @@ export class EmailRepository {
       hasFinishedVerdict: hasFinishedVerdict(r.summary, r.signals),
       awaitingJudgement:
         (r.signals as { pendingJudgement?: unknown } | null)?.pendingJudgement === true,
-      analysisAttempts: Number(r.analysis_attempts ?? 0)
+      analysisAttempts: Number(r.analysis_attempts ?? 0),
+      judgementRequestedAt: r.judgement_requested_at ?? null
     }));
+  }
+
+  /** Stamp when the thread judgement was requested for these messages (#2804). Metadata only. */
+  async markJudgementRequested(
+    scopedDb: DataContextDb,
+    connectorAccountId: string,
+    externalIds: readonly string[],
+    at: Date
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    if (externalIds.length === 0) return;
+    await scopedDb.db
+      .updateTable("app.email_messages")
+      .set({ judgement_requested_at: at })
+      .where("connector_account_id", "=", connectorAccountId)
+      .where("external_id", "in", [...externalIds])
+      .execute();
   }
 
   /**

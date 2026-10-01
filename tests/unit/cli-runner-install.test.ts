@@ -17,6 +17,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 import type { TmuxIo } from "../../packages/ai/src/index.js";
 import type * as FsPromises from "node:fs/promises";
+import type * as Catalog from "../../packages/cli-runner/src/catalog.js";
 import {
   InstallService,
   InstallBadRequestError,
@@ -26,9 +27,13 @@ import { sourceSelfUpdateDisableEnv } from "../../packages/cli-runner/src/main.j
 import { buildSanitizedCliEnv } from "../../packages/cli-runner/src/sanitized-env.js";
 import { PROVIDER_CATALOG } from "../../packages/cli-runner/src/catalog.js";
 import { createSanitizedTmuxIo } from "../../packages/cli-runner/src/runner-io.js";
-import { resolveDefaultToolsPrefix } from "../../packages/cli-runner/src/tools-prefix.js";
 import type { RpcProviderKind } from "../../packages/chat/src/live/rpc-contract.js";
 
+// Adapter installs are covered in cli-runner-adapter-install.test.ts; this fake io only builds CLIs.
+vi.mock("../../packages/cli-runner/src/catalog.js", async (orig) => ({
+  ...(await orig<typeof Catalog>()),
+  ADAPTER_CATALOG: {}
+}));
 const chmodFailure = vi.hoisted(() => ({ enabled: false }));
 vi.mock("node:fs/promises", async () => {
   const actual = await vi.importActual<typeof FsPromises>("node:fs/promises");
@@ -986,15 +991,4 @@ describe("InstallService — GUARDED-LIVE real npm ci + §A.1.3 placement (netwo
     },
     600_000
   );
-});
-
-describe("InstallService — default toolsPrefix (#2340)", () => {
-  it("falls back to resolveDefaultToolsPrefix() when no override is given", () => {
-    const { io } = makeFakeIo({ installedVersion: PINNED });
-    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, homeBase });
-
-    expect((svc as unknown as { toolsPrefix: string }).toolsPrefix).toBe(
-      resolveDefaultToolsPrefix()
-    );
-  });
 });
