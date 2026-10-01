@@ -126,3 +126,14 @@ export function buildCliToolAlertRaiser(
     }
   };
 }
+
+/** What a chat turn refused for an old tool triggers: an alert, then an update pass right away. */
+export function buildCliVersionTooOldHandler(deps: {
+  readonly raiseAlert: (alert: CliToolAlert) => Promise<void>;
+  readonly pass: () => Promise<void>;
+}): () => void {
+  return () => {
+    void deps.raiseAlert({ kind: "too_old", provider: "anthropic" }).catch(() => undefined);
+    void deps.pass().catch(() => undefined);
+  };
+}

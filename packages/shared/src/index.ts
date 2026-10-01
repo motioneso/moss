@@ -6,6 +6,7 @@ export type { MossError, MossErrorClass } from "@moss/module-sdk/errors";
 
 export * from "./app-map-core.js";
 export * from "./schema-fragments.js";
+export * from "./ai-action-policy-api.js";
 export * from "./ai-api.js";
 export * from "./ai-service-binding-api.js";
 export * from "./ai-voice-api.js";

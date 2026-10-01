@@ -35,19 +35,35 @@ import {
   type LastCheck,
   type StagedPackage
 } from "./tools-state.js";
-import { hasLiveLease } from "./tools-leases.js";
-import { createHash, timingSafeEqual } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
+import {
+  ensureAdapter,
+  gcOldReleases,
+  promoteCandidateLocked,
+  stageCandidateLocked,
+  sweepReleases,
+  toolsStateSummary,
+  type CandidateOps
+} from "./install-candidate.js";
+import {
+  hashEq,
+  isExecutable,
+  isPublishedNpmRelease,
+  pathExists,
+  randToken,
+  redactInstallMessage,
+  redactNpm,
+  sha512OfFile,
+  sha512OfResolved
+} from "./install-helpers.js";
+import { createWriteStream } from "node:fs";
 import {
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   readFile,
   readlink,
   rename,
   rm,
-  stat,
   symlink,
   writeFile
 } from "node:fs/promises";
@@ -64,7 +80,6 @@ import type {
   ProviderCatalog,
   RpcInstallProviderResult,
   RpcListCliToolVersionsResult,
-  RpcCliLastCheck,
   RpcGetCliToolsStateResult,
   RpcProviderKind
 } from "@moss/chat/live";
@@ -133,7 +148,7 @@ export interface CandidatePackage {
   readonly lockfileText: string;
 }
 
-interface CandidateInstall {
+export interface CandidateInstall {
   readonly lockfileText: string;
   readonly onStaged: (releaseDir: string) => void;
 }
@@ -192,6 +207,7 @@ export class InstallService {
    * --version). (Artifact recipes compare directly against `recipe.sha512`.)
    */
   private readonly pinnedHash = new Map<RpcProviderKind, string>();
+  private readonly candidateOps: CandidateOps;
 
   constructor(private readonly deps: InstallServiceDeps) {
     this.toolsPrefix = deps.toolsPrefix ?? resolveDefaultToolsPrefix();
@@ -199,6 +215,24 @@ export class InstallService {
     this.installerEnv = buildSanitizedInstallerEnv(deps.env ?? process.env);
     this.installTimeoutMs = deps.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
     this.hostArch = deps.hostArch ?? osArch();
+    this.candidateOps = {
+      toolsPrefix: this.toolsPrefix,
+      catalog: deps.catalog,
+      io: deps.io,
+      installerEnv: this.installerEnv,
+      adapterFor: (provider) => (deps.adapterCatalog ?? ADAPTER_CATALOG)[provider],
+      resolveRecipe: (provider) => this.resolveRecipe(provider),
+      installNpm: (provider, recipe, candidate) => this.installNpm(provider, recipe, candidate),
+      mkStaging: (slot) => this.mkStaging(slot),
+      stageNpmRelease: (slot, staging) => this.stageNpmRelease(slot, staging),
+      promoteNpm: (slot, staging, binary) => this.promoteNpm(slot, staging, binary),
+      readInstalledVersion: (dir, pkg) => this.readInstalledVersion(dir, pkg),
+      resolveCurrent: (slot) => this.resolveCurrent(slot),
+      resolveRepoPath: (repoRel) => this.resolveRepoPath(repoRel),
+      ensureBinSymlink: (provider, binary) => this.ensureBinSymlink(provider, binary),
+      binPath: (binary) => this.binPath(binary),
+      pinHash: (provider, hash) => this.pinnedHash.set(provider, hash)
+    };
   }
 
   /**
@@ -288,60 +322,8 @@ export class InstallService {
 
     // #2689: the provider's chat adapter rides with its CLI. A failure here leaves the CLI in
     // place and chat on the image adapter, but is reported so the admin sees it.
-    const adapterError = await this.ensureAdapter(provider);
+    const adapterError = await ensureAdapter(this.candidateOps, provider);
     return adapterError ? { state: "error", message: adapterError } : cli;
-  }
-
-  // ─── #2689 chat adapter install ─────────────────────────────────────────────
-
-  /** Install or confirm the provider's chat adapter. Returns an error message, or null. */
-  private async ensureAdapter(provider: RpcProviderKind): Promise<string | null> {
-    const adapter = (this.deps.adapterCatalog ?? ADAPTER_CATALOG)[provider];
-    if (!adapter) return null;
-    const fail = (why: string): string => `chat adapter ${adapter.pkg}: ${why}`;
-    const live = await this.resolveCurrent(adapter.slot);
-    if (
-      live &&
-      (await isPublishedNpmRelease(live)) &&
-      (await this.readInstalledVersion(live, adapter.pkg)) === adapter.version &&
-      (await pathExists(path.join(live, adapter.entry)))
-    ) {
-      return null;
-    }
-    const staging = await this.mkStaging(adapter.slot);
-    try {
-      await writeFile(
-        path.join(staging, "npm-shrinkwrap.json"),
-        await readFile(this.resolveRepoPath(adapter.lockfile), "utf8"),
-        "utf8"
-      );
-      await writeFile(
-        path.join(staging, "package.json"),
-        JSON.stringify({
-          name: "jarv1s-cli-install",
-          version: "0.0.0",
-          dependencies: { [adapter.pkg]: adapter.version }
-        }),
-        "utf8"
-      );
-      const ci = await this.deps.io.run(
-        "npm",
-        ["ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", staging],
-        { cwd: staging, env: this.installerEnv }
-      );
-      if (ci.code !== 0) return fail(redactNpm(`npm ci failed: ${ci.stderr ?? ""}`));
-      if ((await this.readInstalledVersion(staging, adapter.pkg)) !== adapter.version) {
-        return fail("installed version is not the pinned version");
-      }
-      if (!(await pathExists(path.join(staging, adapter.entry)))) return fail("entry file missing");
-      const release = await this.promoteNpm(adapter.slot, staging, null);
-      await this.gcOldReleases(adapter.slot, release.dir);
-      return null;
-    } catch (err) {
-      return fail(redactInstallMessage(err));
-    } finally {
-      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
-    }
   }
 
   // ─── #2689 slice 4: stage a candidate toolset (current is never touched) ─────
@@ -359,91 +341,9 @@ export class InstallService {
   ): Promise<StageCandidateResult> {
     const release = await this.lockFor(provider).acquire();
     try {
-      return await this.stageCandidateLocked(provider, packages, manifestSequence);
+      return await stageCandidateLocked(this.candidateOps, provider, packages, manifestSequence);
     } finally {
       release();
-    }
-  }
-
-  private async stageCandidateLocked(
-    provider: RpcProviderKind,
-    packages: readonly CandidatePackage[],
-    manifestSequence: number
-  ): Promise<StageCandidateResult> {
-    {
-      if (packages.length === 0) {
-        // Nothing newer than live: only record that this manifest was seen. A staged candidate stays.
-        const prior = await readToolsState(this.toolsPrefix, provider);
-        await writeToolsState(this.toolsPrefix, provider, {
-          ...prior,
-          manifestSequence: Math.max(prior.manifestSequence, manifestSequence)
-        });
-        return { state: "staged", staged: prior.candidate };
-      }
-      const staged: StagedPackage[] = [];
-      const cleanup = async (): Promise<void> => {
-        for (const s of staged) {
-          await rm(path.join(this.toolsPrefix, "providers", s.slot, "releases", s.release), {
-            recursive: true,
-            force: true
-          }).catch(() => undefined);
-        }
-      };
-      try {
-        const adapter = (this.deps.adapterCatalog ?? ADAPTER_CATALOG)[provider];
-        for (const p of packages) {
-          let slot: string;
-          let error: string | null;
-          let release: string | undefined;
-          const onStaged = (dir: string): void => {
-            release = path.basename(dir);
-          };
-          if (p.role === "cli") {
-            const recipe = this.resolveRecipe(provider);
-            if (recipe.kind !== "npm" || recipe.pkg !== p.pkg) {
-              await cleanup();
-              return { state: "error", message: `package ${p.pkg} is not installable here` };
-            }
-            slot = provider;
-            const r = await this.installNpm(
-              provider,
-              { ...recipe, version: p.version },
-              { lockfileText: p.lockfileText, onStaged }
-            );
-            error = r.state === "installed" ? null : (r.message ?? "install failed");
-          } else {
-            if (!adapter || adapter.pkg !== p.pkg) {
-              await cleanup();
-              return { state: "error", message: `package ${p.pkg} is not installable here` };
-            }
-            slot = adapter.slot;
-            error = await this.stageAdapter(adapter, p, onStaged);
-          }
-          if (error !== null || release === undefined) {
-            await cleanup();
-            return { state: "error", message: error ?? "nothing was staged" };
-          }
-          staged.push({ role: p.role, slot, pkg: p.pkg, version: p.version, release });
-        }
-        const prior = await readToolsState(this.toolsPrefix, provider);
-        // Replacing an older candidate frees its releases for the next sweep.
-        // A new candidate has not been checked yet, so the last check is dropped.
-        const { lastCheck: _dropped, ...kept } = prior;
-        await writeToolsState(this.toolsPrefix, provider, {
-          ...kept,
-          manifestSequence: Math.max(prior.manifestSequence, manifestSequence),
-          candidate: staged
-        });
-        for (const old of prior.candidate) {
-          if (!staged.some((s) => s.slot === old.slot && s.release === old.release)) {
-            await this.removeReleaseIfFree(old.slot, old.release);
-          }
-        }
-        return { state: "staged", staged };
-      } catch (err) {
-        await cleanup();
-        return { state: "error", message: redactInstallMessage(err) };
-      }
     }
   }
 
@@ -455,84 +355,10 @@ export class InstallService {
   async promoteCandidate(provider: RpcProviderKind): Promise<PromoteCandidateResult> {
     const release = await this.lockFor(provider).acquire();
     try {
-      return await this.promoteCandidateLocked(provider);
+      return await promoteCandidateLocked(this.candidateOps, provider);
     } finally {
       release();
     }
-  }
-
-  private async promoteCandidateLocked(provider: RpcProviderKind): Promise<PromoteCandidateResult> {
-    const state = await readToolsState(this.toolsPrefix, provider);
-    if (state.candidate.length === 0) return { state: "error", message: "no staged candidate" };
-    const flipped: { slot: string; prior: string | undefined }[] = [];
-    const newPrior: StagedPackage[] = [];
-    const undo = async (): Promise<void> => {
-      for (const f of flipped.reverse()) {
-        if (!f.prior) continue;
-        const dir = path.join(this.toolsPrefix, "providers", f.slot);
-        const tmp = path.join(dir, `.current-${randToken()}`);
-        await symlink(f.prior, tmp).catch(() => undefined);
-        await rename(tmp, path.join(dir, "current")).catch(() => undefined);
-      }
-    };
-    try {
-      let expected: string | undefined;
-      let binary: string | undefined;
-      for (const c of state.candidate) {
-        const dir = path.join(this.toolsPrefix, "providers", c.slot);
-        const releaseDir = path.join(dir, "releases", c.release);
-        if (c.role === "cli") {
-          const recipe = this.resolveRecipe(provider);
-          if (recipe.kind !== "npm") return { state: "error", message: "not an npm toolset" };
-          binary = recipe.binary;
-          expected = await sha512OfResolved(
-            path.join(releaseDir, "node_modules", ".bin", recipe.binary)
-          );
-        }
-        const link = path.join(dir, "current");
-        const priorTarget = await readlink(link).catch(() => undefined);
-        const tmp = path.join(dir, `.current-${randToken()}`);
-        await symlink(path.join("releases", c.release), tmp);
-        await rename(tmp, link);
-        flipped.push({ slot: c.slot, prior: priorTarget });
-        if (priorTarget) {
-          const priorRelease = path.basename(priorTarget);
-          newPrior.push({
-            role: c.role,
-            slot: c.slot,
-            pkg: c.pkg,
-            version:
-              (await this.readInstalledVersion(path.join(dir, "releases", priorRelease), c.pkg)) ??
-              "unknown",
-            release: priorRelease
-          });
-        }
-      }
-      if (binary !== undefined && expected !== undefined) {
-        await this.ensureBinSymlink(provider, binary);
-        const actual = await sha512OfResolved(this.binPath(binary));
-        if (!hashEq(actual, expected)) {
-          await undo();
-          return { state: "error", message: "post-promote integrity check failed" };
-        }
-        this.pinnedHash.set(provider, expected);
-      }
-    } catch (err) {
-      await undo();
-      return { state: "error", message: redactInstallMessage(err) };
-    }
-    await writeToolsState(this.toolsPrefix, provider, {
-      ...state,
-      candidate: [],
-      prior: newPrior
-    });
-    // The previous generation of `prior` is no longer rollback material.
-    for (const old of state.prior) {
-      if (!newPrior.some((n) => n.slot === old.slot && n.release === old.release)) {
-        await this.removeReleaseIfFree(old.slot, old.release);
-      }
-    }
-    return { state: "promoted" };
   }
 
   /** Record the outcome of the last live check in `state.json`. */
@@ -543,44 +369,6 @@ export class InstallService {
       await writeToolsState(this.toolsPrefix, provider, { ...state, lastCheck: check });
     } finally {
       release();
-    }
-  }
-
-  /** Candidate form of the adapter install: same checks as `ensureAdapter`, no flip. */
-  private async stageAdapter(
-    adapter: AdapterRecipe,
-    p: CandidatePackage,
-    onStaged: (dir: string) => void
-  ): Promise<string | null> {
-    const fail = (why: string): string => `chat adapter ${adapter.pkg}: ${why}`;
-    const staging = await this.mkStaging(adapter.slot);
-    try {
-      await writeFile(path.join(staging, "npm-shrinkwrap.json"), p.lockfileText, "utf8");
-      await writeFile(
-        path.join(staging, "package.json"),
-        JSON.stringify({
-          name: "jarv1s-cli-install",
-          version: "0.0.0",
-          dependencies: { [adapter.pkg]: p.version }
-        }),
-        "utf8"
-      );
-      const ci = await this.deps.io.run(
-        "npm",
-        ["ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", staging],
-        { cwd: staging, env: this.installerEnv }
-      );
-      if (ci.code !== 0) return fail(redactNpm(`npm ci failed: ${ci.stderr ?? ""}`));
-      if ((await this.readInstalledVersion(staging, adapter.pkg)) !== p.version) {
-        return fail("installed version is not the requested version");
-      }
-      if (!(await pathExists(path.join(staging, adapter.entry)))) return fail("entry file missing");
-      onStaged(await this.stageNpmRelease(adapter.slot, staging));
-      return null;
-    } catch (err) {
-      return fail(redactInstallMessage(err));
-    } finally {
-      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
@@ -684,7 +472,7 @@ export class InstallService {
       this.pinnedHash.set(provider, verifyHash);
 
       // GC the SUPERSEDED prior release (never the just-promoted one, §A.3.2).
-      await this.gcOldReleases(provider, release.dir);
+      await gcOldReleases(this.candidateOps, provider, release.dir);
 
       // #1081 H2: this branch only runs when tryIdempotentNoop returned null (a real
       // reinstall) — binaryChanged:true tells callers the on-disk binary was replaced.
@@ -844,23 +632,6 @@ export class InstallService {
       await rename(tmpLink, currentLink).catch(() => undefined);
     }
     await rm(release.dir, { recursive: true, force: true }).catch(() => undefined);
-  }
-
-  /** GC every `releases/<rand>` NOT the just-promoted dir AND not the live target (§A.3.2). */
-  private async gcOldReleases(provider: string, keepDir: string): Promise<void> {
-    const providerDir = path.join(this.toolsPrefix, "providers", provider);
-    const releasesDir = path.join(providerDir, "releases");
-    const live = await this.resolveCurrent(provider);
-    const keep = await this.candidateReleaseDirs();
-    const listed = await this.deps.io
-      .run("ls", ["-A", releasesDir])
-      .catch(() => ({ code: 1, stdout: "" }));
-    if (listed.code !== 0) return;
-    for (const name of splitLines(listed.stdout)) {
-      const dir = path.join(releasesDir, name);
-      if (dir === keepDir || (await this.releaseIsKept(provider, name, live, keep))) continue;
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-    }
   }
 
   // ─── artifact path (§A.3.4/§A.3.5) ──────────────────────────────────────────
@@ -1034,72 +805,16 @@ export class InstallService {
 
     // (2) per-provider: GC releases not referenced by `current`.
     for (const provider of Object.keys(this.deps.catalog) as RpcProviderKind[]) {
-      await this.sweepReleases(provider).catch(() => undefined);
+      await sweepReleases(this.candidateOps, provider).catch(() => undefined);
     }
     for (const adapter of Object.values(this.deps.adapterCatalog ?? ADAPTER_CATALOG)) {
-      await this.sweepReleases(adapter.slot).catch(() => undefined);
+      await sweepReleases(this.candidateOps, adapter.slot).catch(() => undefined);
     }
-  }
-
-  /**
-   * The one cleanup rule. A release stays when it is live, a staged candidate, the previous
-   * release, or has a live lease. Anything in doubt stays.
-   */
-  private async releaseIsKept(
-    slot: string,
-    release: string,
-    live: string | undefined,
-    keep: ReadonlySet<string>
-  ): Promise<boolean> {
-    const dir = path.join(this.toolsPrefix, "providers", slot, "releases", release);
-    if (dir === live || keep.has(dir)) return true;
-    return hasLiveLease(this.toolsPrefix, { slot, release }).catch(() => true);
-  }
-
-  /** Deletes one release unless the shared rule keeps it. */
-  private async removeReleaseIfFree(slot: string, release: string): Promise<void> {
-    const live = await this.resolveCurrent(slot);
-    const keep = await this.candidateReleaseDirs();
-    if (await this.releaseIsKept(slot, release, live, keep)) return;
-    await rm(path.join(this.toolsPrefix, "providers", slot, "releases", release), {
-      recursive: true,
-      force: true
-    }).catch(() => undefined);
   }
 
   /** Runs the cleanup rule over one slot. Called when the last lease on a release is removed. */
   async sweepSlot(slot: string): Promise<void> {
-    await this.sweepReleases(slot).catch(() => undefined);
-  }
-
-  /** Absolute release folders that any provider's `state.json` lists as a staged candidate. */
-  private async candidateReleaseDirs(): Promise<Set<string>> {
-    const keep = new Set<string>();
-    for (const provider of Object.keys(this.deps.catalog)) {
-      const state = await readToolsState(this.toolsPrefix, provider);
-      for (const c of [...state.candidate, ...state.prior]) {
-        keep.add(path.join(this.toolsPrefix, "providers", c.slot, "releases", c.release));
-      }
-    }
-    return keep;
-  }
-
-  private async sweepReleases(provider: string): Promise<void> {
-    const providerDir = path.join(this.toolsPrefix, "providers", provider);
-    const releasesDir = path.join(providerDir, "releases");
-    if (!(await pathExists(releasesDir))) return;
-    const live = await this.resolveCurrent(provider);
-    // A staged candidate is not referenced by `current` yet but must survive the sweep.
-    const keep = await this.candidateReleaseDirs();
-    const listed = await this.deps.io
-      .run("ls", ["-A", releasesDir])
-      .catch(() => ({ code: 1, stdout: "" }));
-    if (listed.code !== 0) return;
-    for (const name of splitLines(listed.stdout)) {
-      const dir = path.join(releasesDir, name);
-      if (await this.releaseIsKept(provider, name, live, keep)) continue;
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-    }
+    await sweepReleases(this.candidateOps, slot).catch(() => undefined);
   }
 
   // ─── #1081 H1: boot-time drift reconcile (deploy-drift fix) ─────────────────
@@ -1201,30 +916,7 @@ export class InstallService {
 
   /** #2689 slice 4: highest accepted manifest sequence and the staged candidates, versions only. */
   async toolsState(): Promise<RpcGetCliToolsStateResult> {
-    const candidates: {
-      -readonly [K in RpcProviderKind]: RpcGetCliToolsStateResult["candidates"][K][number][];
-    } = {
-      anthropic: [],
-      "openai-compatible": [],
-      google: []
-    };
-    const lastCheck: Record<RpcProviderKind, RpcCliLastCheck | null> = {
-      anthropic: null,
-      "openai-compatible": null,
-      google: null
-    };
-    let manifestSequence = 0;
-    for (const provider of Object.keys(candidates) as RpcProviderKind[]) {
-      const state = await readToolsState(this.toolsPrefix, provider);
-      lastCheck[provider] = state.lastCheck ?? null;
-      manifestSequence = Math.max(manifestSequence, state.manifestSequence);
-      candidates[provider] = state.candidate.map((c) => ({
-        pkg: c.pkg,
-        version: c.version,
-        role: c.role
-      }));
-    }
-    return { manifestSequence, candidates, lastCheck };
+    return toolsStateSummary(this.toolsPrefix);
   }
 
   /** Resolve the absolute dir `providers/<provider>/current` points at, or undefined. */
@@ -1274,80 +966,4 @@ const REPO_ROOT = findRepoRoot(path.dirname(fileURLToPath(import.meta.url)));
 
 function createWriteStreamSafe(dest: string): ReturnType<typeof createWriteStream> {
   return createWriteStream(dest, { mode: 0o600 });
-}
-
-/** A short random token for staging dirs / release dirs / temp symlinks. */
-function randToken(): string {
-  return createHash("sha256")
-    .update(`${process.pid}:${Date.now()}:${Math.random()}`)
-    .digest("hex")
-    .slice(0, 16);
-}
-
-/** SHA512 (lowercase hex) of a file's exact bytes. */
-async function sha512OfFile(file: string): Promise<string> {
-  const h = createHash("sha512");
-  await pipeline(createReadStream(file), h);
-  return h.digest("hex");
-}
-
-/**
- * SHA512 of the binary the path resolves TO (dereferencing a `.bin` symlink / the
- * `current` symlink chain). Node stat/readStream already follow symlinks, so this hashes
- * the real target bytes — the §A.3.4 promote-target hash.
- */
-async function sha512OfResolved(file: string): Promise<string> {
-  return sha512OfFile(file);
-}
-
-function hashEq(a: string, b: string): boolean {
-  const ba = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ba.length !== bb.length) return false;
-  return timingSafeEqual(ba, bb);
-}
-
-async function isExecutable(file: string): Promise<boolean> {
-  try {
-    const st = await stat(file);
-    return st.isFile() && (st.mode & 0o111) !== 0;
-  } catch {
-    return false;
-  }
-}
-
-async function isPublishedNpmRelease(release: string): Promise<boolean> {
-  try {
-    const st = await lstat(release);
-    return st.isDirectory() && (st.mode & 0o777) === 0o755;
-  } catch {
-    return false;
-  }
-}
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function splitLines(s: string): string[] {
-  return s
-    .split("\n")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
-/** Redact an npm stderr blob (it can echo a registry URL with credentials). */
-function redactNpm(s: string): string {
-  return s.replace(/\/\/[^@\s/]+:[^@\s/]+@/g, "//<redacted>@").slice(0, 1500);
-}
-
-/** Convert any caught error to a short, non-secret message. */
-function redactInstallMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  return redactNpm(raw);
 }

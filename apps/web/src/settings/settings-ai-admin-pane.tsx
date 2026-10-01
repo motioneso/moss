@@ -16,14 +16,12 @@ import { useState } from "react";
 import { Button, IconButton } from "@moss/ui";
 import {
   createAiProvider,
-  getChatSettings,
   getChatModelOverrideSettings,
   listAiModels,
   listAiProviders,
   listAiServiceBindings,
   lookupAiCapabilityRoute,
   putAdminChatModelOverrideEnabled,
-  putChatSettings,
   putAiServiceBinding,
   retryAiCliToolsCheck,
   revokeAiProvider,
@@ -36,6 +34,7 @@ import {
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { CliUpdateStatus } from "./cli-update-status";
+import { OpenCodeAcpCard, cliVersionLine } from "./settings-ai-opencode-card";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
@@ -55,7 +54,6 @@ import { VoiceConfigGroup } from "./settings-voice-config-group";
 import { SortingModelRow } from "./settings-ai-sorting-row";
 import {
   type AiAuthMethod,
-  type AiCliToolsDto,
   type AiConfiguredModelDto,
   type AiModelCapability,
   type AiModelTier,
@@ -383,62 +381,6 @@ function ProviderCard(props: {
       {terminalOpen ? (
         <TerminalModal provider={provider} onClose={() => setTerminalOpen(false)} />
       ) : null}
-    </div>
-  );
-}
-
-/** #2689: "Claude CLI 2.1.282" when the runner reported a version, "Claude CLI" otherwise. */
-function cliVersionLine(name: string, tools: AiCliToolsDto | undefined): string {
-  return tools?.version ? `${name} CLI ${tools.version}` : `${name} CLI`;
-}
-
-function OpenCodeAcpCard(props: { readonly cli: AiCliToolsDto | undefined }) {
-  const queryClient = useQueryClient();
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.chat.settings,
-    queryFn: getChatSettings,
-    retry: false
-  });
-  const settingsMutation = useMutation({
-    mutationFn: putChatSettings,
-    onSuccess: (result) => queryClient.setQueryData(queryKeys.chat.settings, result)
-  });
-  const model = settingsQuery.data?.chat.openCodeModel ?? "default";
-
-  return (
-    <div className="prov" aria-label="OpenCode ACP provider">
-      <div className="prov__head">
-        <span className="prov__mark">O</span>
-        <div className="prov__id">
-          <div className="prov__name">OpenCode</div>
-          <div className="prov__auth">
-            <Terminal size={12} aria-hidden="true" />{" "}
-            {props.cli?.version ? cliVersionLine("OpenCode", props.cli) : "ACP chat provider"}
-          </div>
-        </div>
-      </div>
-      <div className="prov__edit">
-        <Field
-          label="Chat model"
-          hint="Saved for the next OpenCode ACP session; the agent applies it when it advertises a model choice."
-        >
-          <Select
-            value={model}
-            disabled={settingsQuery.isLoading || settingsMutation.isPending}
-            onChange={(event) =>
-              settingsMutation.mutate({
-                chat: {
-                  responseStyle: settingsQuery.data?.chat.responseStyle ?? "balanced",
-                  openCodeModel: event.target.value as "default" | "muse-spark-1.3-free"
-                }
-              })
-            }
-          >
-            <option value="default">Login default</option>
-            <option value="muse-spark-1.3-free">Muse Spark 1.3 free</option>
-          </Select>
-        </Field>
-      </div>
     </div>
   );
 }

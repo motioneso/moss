@@ -64,7 +64,7 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
-import { buildCliToolAlertRaiser } from "./cli-tools-alerts.js";
+import { buildCliToolAlertRaiser, buildCliVersionTooOldHandler } from "./cli-tools-alerts.js";
 import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
 import {
   GraphMemoryRecallService,
@@ -3674,10 +3674,7 @@ export function registerBuiltInApiRoutes(
       };
       stopCliToolsRefresh = startCliToolsRefreshTimer(pass);
       // A chat turn refused for an old tool asks for a pass now instead of waiting for the timer.
-      setCliVersionTooOldListener(() => {
-        void raiseAlert({ kind: "too_old", provider: "anthropic" }).catch(() => undefined);
-        void pass().catch(() => undefined);
-      });
+      setCliVersionTooOldListener(buildCliVersionTooOldHandler({ raiseAlert, pass }));
       // Retry is an admin pressing the button, so the 24-hour wait does not apply.
       setCliToolsRetry(async (provider) => {
         await refreshTracked();

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildCliToolAlertRaiser,
+  buildCliVersionTooOldHandler,
   cliToolAlertCopy,
   cliToolAlertKey
 } from "../../packages/module-registry/src/cli-tools-alerts.js";
@@ -90,5 +91,28 @@ describe("buildCliToolAlertRaiser", () => {
     });
     await expect(raise({ kind: "cannot_check", provider: "anthropic" })).resolves.toBeUndefined();
     expect(withDataContext).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("buildCliVersionTooOldHandler", () => {
+  it("raises a too-old alert and starts an update pass right away", () => {
+    const raise = vi.fn(async () => undefined);
+    const pass = vi.fn(async () => undefined);
+    buildCliVersionTooOldHandler({ raiseAlert: raise, pass })();
+    expect(raise).toHaveBeenCalledWith({ kind: "too_old", provider: "anthropic" });
+    expect(pass).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not throw when the alert or the pass fails", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    const handler = buildCliVersionTooOldHandler({
+      raiseAlert: async () => Promise.reject(new Error("db down")),
+      pass: async () => Promise.reject(new Error("runner down"))
+    });
+    expect(() => handler()).not.toThrow();
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
   });
 });

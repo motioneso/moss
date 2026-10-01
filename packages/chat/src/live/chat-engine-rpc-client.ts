@@ -21,7 +21,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { connect, type Socket } from "node:net";
+import type { Socket } from "node:net";
 import { realpath } from "node:fs/promises";
 import { resolve as resolvePath, sep } from "node:path";
 
@@ -44,6 +44,7 @@ import type {
 } from "./login-contract.js";
 // #1059 — the §3.6 client hello now lives in ./rpc-handshake.ts (shared with TerminalRpcClient);
 // this module delegates to it rather than owning the handshake body.
+import { backoffDelay, describeError, openSocket, sleep } from "./rpc-socket-util.js";
 import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
@@ -981,39 +982,4 @@ export class ChatEngineRpcClient implements CliChatEngine {
   resetActivityDeadline(): void {
     this.conn.resetActivityDeadline(this.sessionKey);
   }
-}
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-// hmacHex/constantTimeHexEqual/isHelloChallenge moved into ./rpc-handshake.ts (#1059 extraction) —
-// they now live with performClientHello, their only caller.
-
-/** §3.5 backoff: 250ms → 2s, exponential with full jitter. */
-function backoffDelay(attempt: number, minMs: number, maxMs: number): number {
-  const ceiling = Math.min(maxMs, minMs * 2 ** (attempt - 1));
-  return Math.floor(minMs + Math.random() * Math.max(0, ceiling - minMs));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function openSocket(path: string): Promise<Socket> {
-  return new Promise((resolve, reject) => {
-    const socket = connect({ path });
-    const onError = (err: Error): void => {
-      socket.off("connect", onConnect);
-      reject(err);
-    };
-    const onConnect = (): void => {
-      socket.off("error", onError);
-      resolve(socket);
-    };
-    socket.once("error", onError);
-    socket.once("connect", onConnect);
-  });
-}
-
-function describeError(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
 }
