@@ -124,7 +124,8 @@ export const aiModuleManifest = {
       description:
         "Refresh models: ask a provider for its current model list and store it. Discovered rows " +
         "that vanished from the list are removed; rows added by hand and the provider's default " +
-        "entry are kept. A failed refresh changes nothing.",
+        "entry are kept. A failed refresh changes nothing. Any admin sees the model list of a provider " +
+        "owned by an active admin; an admin never sees another user's personal provider.",
       remediations: [
         {
           id: "ai.refresh_provider_models.log_in",

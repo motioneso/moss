@@ -8,6 +8,7 @@ import {
   ModelDiscoveryService,
   createAiSecretCipher,
   registerAiRoutes,
+  serializeModel,
   type AiSecretCipher
 } from "@moss/ai";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
@@ -392,6 +393,67 @@ describe("AI provider model refresh (#2208)", () => {
     });
   });
 
+  describe("what a second admin sees on an admin-owned provider (#2842)", () => {
+    beforeEach(async () => {
+      await setInstanceAdmin(ids.userB);
+      await setInstanceAdmin(ids.userA);
+    });
+
+    afterAll(async () => {
+      await setInstanceAdmin(ids.userA);
+      await setInstanceAdmin(ids.userB, false);
+    });
+
+    it("lists the model ids, with no credential fields in the answer", async () => {
+      const providerId = await createCliProvider();
+      listerAnswer = { status: "ok", models: [{ id: "claude-fable-5-1" }] };
+
+      const response = await refresh(providerId, ids.sessionB);
+
+      expect(response.statusCode).toBe(200);
+      const { models } = response.json() as { models: Array<Record<string, unknown>> };
+      const found = models.find((m) => m.providerModelId === "claude-fable-5-1");
+      expect(found).toMatchObject({ providerConfigId: providerId, providerKind: "anthropic" });
+      expect(response.body).not.toMatch(/credential|apiKey|secret/i);
+    });
+
+    it("keeps ids hidden from a regular user who reads the same model", async () => {
+      const providerId = await createCliProvider();
+      const models = await dataContext.withDataContext(userContext(ids.userC), (db) =>
+        repository.listModels(db)
+      );
+      const mine = models.filter((m) => m.provider_config_id === providerId);
+      expect(mine.length).toBeGreaterThan(0);
+      for (const model of mine) {
+        const dto = serializeModel(model, ids.userC);
+        expect(dto.providerConfigId).toBeNull();
+        expect(dto.providerModelId).toBeNull();
+      }
+    });
+
+    it("does not show a regular user's personal provider to an admin", async () => {
+      const providerId = await createCliProvider();
+      await setInstanceAdmin(ids.userA, false);
+
+      const seenByAdmin = await dataContext.withDataContext(userContext(ids.userB), (db) =>
+        repository.listProviders(db)
+      );
+      expect(seenByAdmin.map((p) => p.id)).not.toContain(providerId);
+    });
+
+    it("refreshing a provider the admin cannot see saves nothing and does not leak", async () => {
+      const providerId = await createCliProvider();
+      await setInstanceAdmin(ids.userA, false);
+      listerAnswer = { status: "ok", models: [{ id: "claude-fable-5-1" }] };
+
+      const response = await refresh(providerId, ids.sessionB);
+
+      expect(response.statusCode).toBe(404);
+      await setInstanceAdmin(ids.userA);
+      expect(await storedModelIds(providerId)).toEqual(["default"]);
+    });
+  });
+
   it("tells an API-key provider's admin the key was rejected, then lists models once it is right", async () => {
     const providerId = await createSystemOneProvider();
     const realFetch = globalThis.fetch;
@@ -423,11 +485,14 @@ function userContext(actorUserId: string): AccessContext {
   return { actorUserId, requestId: `request:${actorUserId}-model-refresh` };
 }
 
-async function setInstanceAdmin(userId: string): Promise<void> {
+async function setInstanceAdmin(userId: string, value = true): Promise<void> {
   const client = new Client({ connectionString: connectionStrings.bootstrap });
   await client.connect();
   try {
-    await client.query(`UPDATE app.users SET is_instance_admin = true WHERE id = $1`, [userId]);
+    await client.query(`UPDATE app.users SET is_instance_admin = $2 WHERE id = $1`, [
+      userId,
+      value
+    ]);
   } finally {
     await client.end();
   }

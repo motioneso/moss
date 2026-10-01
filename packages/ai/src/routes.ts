@@ -511,7 +511,9 @@ export function registerAiRoutes(
         );
 
         modelDiscovery.invalidate(accessContext.actorUserId, body.providerConfigId);
-        return reply.code(201).send({ model: serializeModel(model, accessContext.actorUserId) });
+        return reply
+          .code(201)
+          .send({ model: serializeModel(model, accessContext.actorUserId, true) });
       } catch (error) {
         // #886 MED-2: attaching a model to the hidden voice provider is refused. The voice row is not
         // a *generic* provider, so a 404 (it doesn't exist on this surface) is the right answer.
@@ -549,7 +551,7 @@ export function registerAiRoutes(
           return reply.code(404).send({ error: "AI model config not found" });
         }
 
-        return { model: serializeModel(model, accessContext.actorUserId) };
+        return { model: serializeModel(model, accessContext.actorUserId, true) };
       } catch (error) {
         return handleRouteError(error, reply);
       }

@@ -13,7 +13,14 @@ stays hidden from admins. Supersedes "owner must be an active admin" in the issu
   `provider-visibility-routes.ts:111`, `capability-route-routes.ts:61`.
 - `admin-ai-pin-routes.ts:168` passes the TARGET user id on purpose. Untouched.
 
-## Fork needing a decision
+## Decision (coordinator, after Opus review)
+
+Build C in this PR. Option A is rejected: triggers in `packages/ai/sql/0013_ai_module.sql` forbid
+changing a provider's owner, and A would make the demoting admin look like the owner of another
+person's key. Demoted owners go to follow-up #2844 (new column marking admin-created rows, new
+trigger, new read rule for admins on marked rows).
+
+## Fork (resolved above)
 
 Two layers hide the list today. (1) The serializer hides ids from non-owners. (2) The database
 hides rows whose owner is no longer an active admin, from everyone including admins.
@@ -37,14 +44,12 @@ their owner; the new arm shows a row to an admin when the owner is NOT the actor
 
 Recommendation: A for new demotions plus C now. Coordinator or Ben to pick; B adds state.
 
-## Changes (assuming A + C)
+## Changes (C)
 
 1. `serialize-model.ts`: take a viewer object `{ actorUserId, isAdmin }`. Owner view when
    actor owns the row, OR viewer is admin (RLS already limits what an admin can read to own rows
    and active-admin-owned rows). Update all five call sites; the pin screen keeps target-user view.
-2. Demotion path: reassign the demoted admin's provider and model rows (owner_user_id) to the
-   acting admin in the same transaction. File located during build.
-3. No secret fields added to any DTO (credential fields are never selected by the safe row).
+2. No secret fields added to any DTO (credential fields are never selected by the safe row).
 
 ## Tests (observe each failing with the protection removed)
 
