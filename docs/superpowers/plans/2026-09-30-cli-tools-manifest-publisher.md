@@ -6,15 +6,15 @@ Slice 3 is independent of slices 2 and 4. It publishes; it reads nothing from in
 
 ## 1. Seams check (verified on this branch)
 
-| Assumption                                                                          | Evidence                                                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signing and verify code exists and is exported from module-registry                 | `packages/module-registry/src/distribution/catalog-signing.ts:34,55,97` (`signCatalogBytes`, `verifyCatalogBytes`, `resolveCatalogSigningKey`); re-exported by `packages/module-registry/src/node.ts`, used by `scripts/publish-module-registry.ts:16-27` |
-| Signing secrets already exist in the repo settings                                  | `.github/workflows/modules-registry.yml` uses `MOSS_MODULE_CATALOG_SIGNING_KEY_ID` / `_PRIVATE_KEY`                                                                                                                                                       |
-| Rolling release + failure-issue pattern exists to copy                              | `.github/workflows/modules-registry.yml` (release `modules`, prune step, "File an issue" step)                                                                                                                                                            |
-| Install code takes an injectable catalog, so the check can point it at new versions | `packages/cli-runner/src/install-service.ts:123,225,279-289` (`deps.catalog`, lockfile copied to staging)                                                                                                                                                 |
-| Catalog holds only the three CLIs today; adapters are NOT recipes yet               | `packages/cli-runner/src/catalog.ts:75-200`; adapters pinned in `packages/cli-runner/package.json:15-16` (slice 2 moves them)                                                                                                                             |
-| Per-arch native package names live in the catalog                                   | `catalog.ts` `archBinaryPackage` per recipe                                                                                                                                                                                                               |
-| ACP `initialize` handshake helper exists for live use                               | `scripts/acp-handshake-check.ts` (needs a running runner, so it cannot be reused offline)                                                                                                                                                                 |
+| Assumption                                                                                  | Evidence                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing and verify code exists and is exported from module-registry                         | `packages/module-registry/src/distribution/catalog-signing.ts:34,55,97` (`signCatalogBytes`, `verifyCatalogBytes`, `resolveCatalogSigningKey`); re-exported by `packages/module-registry/src/node.ts`, used by `scripts/publish-module-registry.ts:16-27` |
+| Signing secrets already exist (now in protected environments, see the key replacement plan) | `.github/workflows/modules-registry.yml` uses `MOSS_MODULE_CATALOG_SIGNING_KEY_ID` / `_PRIVATE_KEY`                                                                                                                                                       |
+| Rolling release + failure-issue pattern exists to copy                                      | `.github/workflows/modules-registry.yml` (release `modules`, prune step, "File an issue" step)                                                                                                                                                            |
+| Install code takes an injectable catalog, so the check can point it at new versions         | `packages/cli-runner/src/install-service.ts:123,225,279-289` (`deps.catalog`, lockfile copied to staging)                                                                                                                                                 |
+| Catalog holds only the three CLIs today; adapters are NOT recipes yet                       | `packages/cli-runner/src/catalog.ts:75-200`; adapters pinned in `packages/cli-runner/package.json:15-16` (slice 2 moves them)                                                                                                                             |
+| Per-arch native package names live in the catalog                                           | `catalog.ts` `archBinaryPackage` per recipe                                                                                                                                                                                                               |
+| ACP `initialize` handshake helper exists for live use                                       | `scripts/acp-handshake-check.ts` (needs a running runner, so it cannot be reused offline)                                                                                                                                                                 |
 
 Open questions (owner in brackets):
 
@@ -88,11 +88,11 @@ Open questions (owner in brackets):
    contract check anyway.
 2. **Signing key must live only as a secret of the `cli-tools-signing` environment** (restricted to
    `main`, owner as required reviewer). The `sign` job names that environment on main and
-   `cli-tools-proof` elsewhere. A repository-wide secret of the same name is handed to every job of
-   every branch, so the environment gate protects the key only if no repository-wide copy exists.
-   Deleting that copy is a repo-settings step for Ben (`modules-registry.yml` reads it too, so it
-   needs its own environment first). Until then the code refuses to let a pinned production key
-   sign in a proof run, but a workflow edited on a branch could still read the repository secret.
+   `cli-tools-proof` elsewhere. A repository-wide secret of the same name would be handed to every
+   job of every branch, so the environment gate protects the key only if no repository-wide copy
+   exists. The repository-wide copies were deleted in slice D of the key replacement plan
+   (`2026-09-30-signing-key-replacement.md`); `modules-registry.yml` now reads its own
+   `module-registry` environment.
    The exact setup steps go in the PR body; this PR changes no repo settings.
 3. **No rollback by manual run.** Any `workflow_dispatch` naming a version older than the one already
    published for that package is refused before any work (compared by semver against the published
