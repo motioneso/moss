@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   acpInitialize,
+  acpInitializeViaResolver,
   checkHandshakeResult
 } from "../../scripts/cli-tools-manifest/contract-check.js";
 import {
@@ -98,5 +99,52 @@ describe("adapter handshake", () => {
     await expect(
       acpInitialize(process.execPath, [file], { PATH: process.env.PATH }, 500)
     ).rejects.toThrow(/did not answer/);
+  });
+});
+
+describe("adapter handshake through the real resolver", () => {
+  /** A tools volume laid out the way the runner installs the CLI and, optionally, the adapter. */
+  async function toolsVolume(withAdapter: boolean): Promise<{ prefix: string; cli: string }> {
+    const prefix = await mkdtemp(path.join(tmpdir(), "tools-volume-"));
+    const providers = path.join(prefix, "providers");
+    const cliRelease = path.join(providers, "anthropic", "releases", "r1");
+    await mkdir(path.join(cliRelease, "node_modules", ".bin"), { recursive: true });
+    const cli = path.join(cliRelease, "node_modules", ".bin", "claude");
+    await writeFile(cli, "#!/bin/sh\n");
+    await chmod(cli, 0o755);
+    await symlink(cliRelease, path.join(providers, "anthropic", "current"));
+    if (withAdapter) {
+      const release = path.join(providers, "anthropic-adapter", "releases", "r1");
+      const dist = path.join(
+        release,
+        "node_modules",
+        "@agentclientprotocol",
+        "claude-agent-acp",
+        "dist"
+      );
+      await mkdir(dist, { recursive: true });
+      await writeFile(
+        path.join(dist, "index.js"),
+        `process.stdin.once("data", () => { process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { protocolVersion: 1, agentCapabilities: { mcpCapabilities: { http: true } }, seenCli: process.env.CLAUDE_CODE_EXECUTABLE } }) + "\\n"); });\nsetTimeout(() => {}, 60000);\n`
+      );
+      await symlink(release, path.join(providers, "anthropic-adapter", "current"));
+    }
+    return { prefix, cli };
+  }
+
+  it("starts the adapter the resolver picks, with the CLI the resolver picks", async () => {
+    const { prefix, cli } = await toolsVolume(true);
+    const answer = (await acpInitializeViaResolver(prefix, "anthropic", 10_000)) as {
+      seenCli?: string;
+    };
+    expect(checkHandshakeResult(answer)).toBeNull();
+    expect(answer.seenCli).toBe(cli);
+  });
+
+  it("fails when the resolver finds no adapter instead of starting some other copy", async () => {
+    const { prefix } = await toolsVolume(false);
+    await expect(acpInitializeViaResolver(prefix, "anthropic", 2_000)).rejects.toThrow(
+      /resolver found no adapter/
+    );
   });
 });
