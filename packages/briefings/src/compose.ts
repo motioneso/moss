@@ -12,6 +12,7 @@ import {
   ctxFor,
   withinLocalDay,
   MORNING_MAX_OUTPUT_TOKENS,
+  isOpenCommitment,
   type ComposeDeps,
   type ComposeRunInput,
   type ComposeResult,
@@ -114,6 +115,7 @@ export async function composeBriefing(
       label: "COMMITMENTS",
       toolName: "commitments.listVisible",
       arrayKey: "commitments",
+      include: isOpenCommitment,
       format: (c) =>
         [
           sanitizeExternal(c.title),

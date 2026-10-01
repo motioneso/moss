@@ -18,6 +18,7 @@ import {
   sourceIncludedInBriefings,
   synthesizeWithConfiguredModel,
   SECTION_CHAR_CAP,
+  isOpenCommitment,
   SECTION_ITEM_CAP,
   type BriefingGap,
   type ComposeDeps,
@@ -226,6 +227,7 @@ export async function composeEveningBriefing(
       label: "COMMITMENTS",
       toolName: "commitments.listVisible",
       arrayKey: "commitments",
+      include: isOpenCommitment,
       format: (c) =>
         [
           sanitizeExternal(c.title),
