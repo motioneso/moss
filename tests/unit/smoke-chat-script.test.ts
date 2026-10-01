@@ -115,6 +115,19 @@ describe("scripts/smoke-chat.mjs", () => {
     expect(code).toBe(0);
   });
 
+  it("passes when the tool carries the current mcp__moss__ prefix", async () => {
+    chat = await startFakeChat({
+      records: [
+        { kind: "user", text: "..." },
+        { kind: "tool", text: "mcp__moss__notes_search" },
+        { kind: "reply", text: "..." }
+      ]
+    });
+    const { code, output } = await runScript(chat.url);
+    expect(output).toContain("mcp__moss__notes_search");
+    expect(code).toBe(0);
+  });
+
   it("fails when the reply came without one, which is what an outage looks like", async () => {
     chat = await startFakeChat({
       records: [
