@@ -110,7 +110,10 @@ export function committedDayPlanBlock(startsAt: string): DayPlanDto["blocks"][nu
 
 export const TODAY_ISO = "2026-06-13T09:00:00.000Z";
 
-export function cannedToolData(toolName: string): Record<string, unknown> {
+export function cannedToolData(
+  toolName: string,
+  calendarEvents?: readonly Record<string, unknown>[]
+): Record<string, unknown> {
   switch (toolName) {
     case "commitments.listVisible":
       return { commitments: [{ title: "Pay invoice", status: "open", dueAt: null }] };
@@ -118,7 +121,7 @@ export function cannedToolData(toolName: string): Record<string, unknown> {
       return { items: [{ title: "Write report", status: "todo" }] };
     case "calendar.listVisibleEvents":
       return {
-        events: [
+        events: calendarEvents ?? [
           {
             id: "evt-1",
             startsAt: TODAY_ISO,
@@ -235,6 +238,8 @@ export interface FakeOptions {
   readonly credentialPayload?: Record<string, unknown>;
   /** Tool name whose execute throws, to exercise the gaps path. */
   readonly failTool?: string;
+  /** Replaces the canned calendar events. */
+  readonly calendarEvents?: readonly Record<string, unknown>[];
   /** Omit a model so compose takes the degraded "no_model" fallback. */
   readonly noModel?: boolean;
   readonly personaPreference?: unknown;
@@ -254,7 +259,10 @@ export interface FakeOptions {
   };
 }
 
-export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
+export function makeFakeManifests(
+  failTool?: string,
+  calendarEvents?: readonly Record<string, unknown>[]
+): MossModuleManifest[] {
   const toolNames = [
     "commitments.listVisible",
     "tasks.list",
@@ -270,7 +278,7 @@ export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
       if (name === failTool) {
         throw new Error("boom");
       }
-      return { data: cannedToolData(name) };
+      return { data: cannedToolData(name, calendarEvents) };
     };
     return {
       name,
@@ -371,7 +379,7 @@ export function makeFakeDeps(options: FakeOptions = {}): ComposeDeps {
   } as unknown as MemoryRetriever;
 
   return {
-    moduleManifests: makeFakeManifests(options.failTool),
+    moduleManifests: makeFakeManifests(options.failTool, options.calendarEvents),
     aiRepository,
     cipher,
     memoryRetriever,
@@ -385,7 +393,7 @@ export function makeFakeDeps(options: FakeOptions = {}): ComposeDeps {
     focusReadiness: async () => options.focusReadiness ?? [],
     resolveUserName: async () => options.userName ?? "Ben",
     sourceBehaviorPolicy: {
-      manifests: makeFakeManifests(options.failTool),
+      manifests: makeFakeManifests(options.failTool, options.calendarEvents),
       preferencesRepository: {
         get: async (_scopedDb, key) => {
           if (key === "sourceBehaviors" && options.disabledBehaviors) {

@@ -10,7 +10,6 @@ import {
   recordSourceAuthGap,
   buildExternalModulesSection,
   ctxFor,
-  withinLocalDay,
   MORNING_MAX_OUTPUT_TOKENS,
   isOpenCommitment,
   type ComposeDeps,
@@ -27,6 +26,8 @@ import type { BriefingDefinition, DataContextDb } from "@moss/db";
 import { composeEveningBriefing } from "./compose-evening.js";
 
 import {
+  eventCoversDay,
+  localDay,
   isNewsBriefingEvidence,
   isSportsBriefingEvidence,
   type NewsBriefingEvidenceV1,
@@ -418,7 +419,15 @@ export async function composeBriefing(
   // row counts only the raw events landing on the report's local day, never
   // the signal notes derived from them.
   const calendarTodayCount = (rawCalendar.rawItems ?? []).filter((item) =>
-    withinLocalDay(item.startsAt, now, timeZone)
+    eventCoversDay(
+      {
+        startsAt: String(item.startsAt ?? ""),
+        endsAt: typeof item.endsAt === "string" ? item.endsAt : null,
+        allDay: item.allDay === true
+      },
+      localDay(now, timeZone),
+      timeZone
+    )
   ).length;
   const email: Section = {
     key: rawEmail.key,
