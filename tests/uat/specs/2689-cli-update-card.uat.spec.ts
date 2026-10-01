@@ -51,6 +51,9 @@ test("held back tool update shows a notice and Retry asks for a new check", asyn
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
 
+  // Wait for the signed-in screen so the sign-in request finishes before moving on.
+  await expect(page.locator(".jds-masthead__eyebrow")).toBeVisible();
+
   await page.goto(`${baseURL}/settings?section=aiproviders`);
   await expect(page.getByText("Version 2.1.290 held back")).toBeVisible();
   await page.getByRole("button", { name: "Retry" }).click();
