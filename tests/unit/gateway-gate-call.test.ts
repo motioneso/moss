@@ -67,6 +67,7 @@ const build = (initial: Setup) => {
     compatibility: { jarv1s: "*" },
     assistantTools: [tool]
   };
+  const audits = vi.fn(async (_db: unknown, _record: Record<string, unknown>) => undefined);
   const emitted: Array<{ kind: string }> = [];
   const created: unknown[] = [];
   const tokens = new SessionTokenRegistry();
@@ -77,7 +78,7 @@ const build = (initial: Setup) => {
         created.push(input);
         return { id: "action-1" };
       },
-      insertAuditLog: vi.fn(async () => undefined)
+      insertActionAuditLog: audits
     } as never,
     runner: {
       withDataContext: async (_a: unknown, work: (db: unknown) => Promise<unknown>) => work({})
@@ -98,7 +99,7 @@ const build = (initial: Setup) => {
     chatSessionId: "s1",
     allowedToolNames: setup.allowlist === undefined ? null : new Set(setup.allowlist ?? [])
   });
-  return { gateway, token, handler, emitted, created, tokens, state: setup };
+  return { gateway, token, handler, emitted, created, audits, tokens, state: setup };
 };
 
 const risks: Risk[] = ["read", "write", "outbound", "destructive"];
@@ -210,6 +211,53 @@ describe("callToolForGate: dispatch checks", () => {
       kind: "declined",
       reason: "rate_limited"
     });
+  });
+
+  it("dry run writes no audit record, while a real run writes exactly one", async () => {
+    const { gateway, token, audits } = build(trustedWrite);
+    for (let i = 0; i < 5; i += 1) {
+      await gateway.callToolForGate(token, "mock.tool", { name: "x" }, "dry-run");
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(audits).not.toHaveBeenCalled();
+
+    await gateway.callToolForGate(token, "mock.tool", { name: "x" }, "execute");
+    await vi.waitFor(() => expect(audits).toHaveBeenCalledTimes(1));
+    expect(audits.mock.calls[0]![1]).toMatchObject({
+      ownerUserId: "u1",
+      toolName: "mock.tool",
+      actionKind: "write",
+      approvalMode: "yolo",
+      outcome: "success",
+      sourceSurface: "chat"
+    });
+  });
+
+  it("normal mode at the rate limit declines with no card and no run, while callTool asks", async () => {
+    const normalWrite: Setup = { risk: "write", yolo: false, tier: "trusted_auto" };
+    const { gateway, token, handler, emitted, created } = build(normalWrite);
+    let executed = 0;
+    for (let i = 0; i < 30; i += 1) {
+      const outcome = await gateway.callToolForGate(token, "mock.tool", { name: "x" }, "execute");
+      if (outcome.kind === "executed") executed += 1;
+      else expect(outcome).toEqual({ kind: "declined", reason: "rate_limited" });
+    }
+    expect(executed).toBeGreaterThan(0);
+    expect(executed).toBeLessThan(30);
+    expect(handler).toHaveBeenCalledTimes(executed);
+    expect(await gateway.callToolForGate(token, "mock.tool", { name: "x" }, "dry-run")).toEqual({
+      kind: "declined",
+      reason: "rate_limited"
+    });
+    expect(handler).toHaveBeenCalledTimes(executed);
+    expect(emitted.filter((r) => r.kind === "action_request")).toHaveLength(0);
+    expect(created).toHaveLength(0);
+
+    // The ordinary call at the same limit still asks for approval.
+    void gateway.callTool(token, "mock.tool", { name: "x" });
+    await vi.waitFor(() => expect(emitted.some((r) => r.kind === "action_request")).toBe(true));
+    expect(created).toHaveLength(1);
+    expect(handler).toHaveBeenCalledTimes(executed);
   });
 
   it("re-checks policy at dispatch: a prior dry run is not authorization", async () => {
