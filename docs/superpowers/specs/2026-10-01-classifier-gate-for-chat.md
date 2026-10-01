@@ -1,7 +1,9 @@
 # Classifier gate for chat
 
 Status: draft for Ben's review, 2026-10-01. Builds on #2594 (the sorting model, closed) and the System
-One provider (#2586, closed). Not approved. No build issue exists yet.
+One provider (#2586, closed). Approved by Ben in discussion on 2026-10-01 with the section 5 rulings
+recorded in the plan (`../plans/2026-10-01-classifier-gate-for-chat.md`, "Rulings"). Candidate privacy
+(3.3 against 3.4) and shadow retention are still open. No build issue exists yet.
 
 ## 1. The problem
 

@@ -751,6 +751,31 @@ the slice's UI path exists; they do not count as delivered user behavior alone.
 Security negative controls intentionally exit nonzero with the guard removed; restore
 the guard, rerun to exit 0 and retain both observations. Do not commit weakened guards.
 
+## Rulings (Ben, 2026-10-01)
+
+These answers supersede the matching "Decisions still needed" entries below.
+
+1. **Gate state scope: admin-wide.** One switch (off, shadow, on) for the instance, set beside the
+   Classifier binding through the existing admin configuration boundary. Not per user. The setting
+   help text must say every user's eligible messages go to the classifier provider when it is on.
+   Unblocks 1.2.
+2. **First built-in tool: calendar only.** `calendar.listVisibleEvents` opts in. `tasks.create`
+   waits for a classifier that can extract typed values. Lights and timers arrive through
+   user-connected integrations (slice 2b). Unblocks 2.3 for calendar only.
+3. **Gate-raised approval card: not in version one.** Revisit after shadow data.
+4. **Shadow agreement rate and window: set when data exists.** No number is chosen now.
+5. **Connected-tool risk: user reviews each tool.** The server hint is a suggestion only, and a tool
+   without a confirmed label stays out of the gate. Unblocks 2b.2.
+6. **Setup draft: the default model may read discovered tool definitions once at setup.** The user
+   reviews and edits the draft before it is stored. Unblocks real definition uploads in 2b.3.
+7. **Connected tools and approval: YOLO only first.** The gate acts on connected tools only when the
+   existing gateway rules would run them without a card (today, YOLO). Otherwise it declines and the
+   default model shows the usual card. A per-tool "run without asking" setting for both paths is a
+   later, separate spec.
+
+Still open: candidate and prepared-text privacy (spec 3.3 against 3.4), shadow retention and
+private-chat handling, and the external candidate-dispatch proof (module-platform implementer).
+
 ## Decisions still needed from Ben
 
 The original four questions are unchanged:
