@@ -189,6 +189,15 @@
      Moving it here makes the rail lock flush under the bar right as the masthead rule scrolls off. */
   top: calc(var(--topbar-h) + 1rem);
 }
+/* Jump-link targets stop below the sticky .topbar instead of flush under it. */
+#start-here,
+#needs-you,
+#widgets,
+#goals,
+#news,
+#sports {
+  scroll-margin-top: calc(var(--topbar-h) + 1rem);
+}
 /* ===== Walking the day (meetings) ===== */
 .day-list {
   display: flex;
