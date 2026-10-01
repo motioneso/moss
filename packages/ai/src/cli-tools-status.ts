@@ -22,6 +22,9 @@ export function cliToolReasonText(code: string): string {
   return REASON_TEXT[code] ?? "failed its check";
 }
 
+/** Providers whose staged candidate gets a live check. Others never leave "staged". */
+const CHECKED_PROVIDERS: ReadonlySet<string> = new Set(["anthropic", "openai-compatible"]);
+
 /** Days without a reachable manifest before the card says it cannot check. */
 export const CANNOT_CHECK_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -111,7 +114,8 @@ export function deriveCliToolsDto(input: {
   const last = update?.lastCheck ?? null;
   const lastCheckedAt = last ? { lastCheckedAt: last.at } : {};
 
-  if (status.checking.has(provider) || (candidate && !last)) {
+  const awaitingCheck = candidate && !last && CHECKED_PROVIDERS.has(provider);
+  if (status.checking.has(provider) || awaitingCheck) {
     return { ...base, state: "checking", ...(candidate ? { candidateVersion: candidate } : {}) };
   }
   if (candidate && last?.result === "failed") {

@@ -37,6 +37,13 @@ describe("deriveCliToolsDto", () => {
     });
   });
 
+  it("does not say checking for a staged candidate on a provider that is never checked", () => {
+    const staged = { candidateVersion: "0.62.0", lastCheck: null };
+    expect(
+      deriveCliToolsDto({ provider: "google", version: null, update: staged, status: quiet })
+    ).toEqual({ version: null, state: "not_installed" });
+  });
+
   it("says not installed with no version", () => {
     expect(derive(undefined, quiet, null)).toEqual({ version: null, state: "not_installed" });
   });
