@@ -52,7 +52,7 @@ import { readRouteSurface } from "./live/chat-surface.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { CliChatUnavailableError } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
-import { CLI_VERSION_TOO_OLD_MESSAGE } from "./live/cli-version-errors.js";
+import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-version-errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
 import { PageContextStore } from "./live/page-context-store.js";
 import type { PassiveMemoryGraphRecallPort } from "./live/passive-retrieval.js";
@@ -91,6 +91,39 @@ export {
 } from "./gateway-services.js";
 
 const STALE_ACTION_GRACE_MS = 5 * 60_000;
+
+export interface CheckTokenMinter {
+  readonly mint: (
+    actorUserId: string,
+    chatSessionId: string,
+    toolNames: readonly string[]
+  ) => { readonly token: string; readonly mcpServerUrl: string };
+  readonly revoke: (chatSessionId: string) => void;
+}
+
+/**
+ * Builds the minter for check sessions. A token it mints carries an allowlist of exactly the
+ * named tools, and the gateway refuses a call to any other tool at call time.
+ */
+export function buildCheckTokenMinter(
+  tokens: {
+    mint: (identity: {
+      actorUserId: string;
+      chatSessionId: string;
+      allowedToolNames: Set<string>;
+    }) => string;
+    revokeBySessionId: (chatSessionId: string) => void;
+  },
+  mcpServerUrl: string
+): CheckTokenMinter {
+  return {
+    mint: (actorUserId, chatSessionId, toolNames) => ({
+      token: tokens.mint({ actorUserId, chatSessionId, allowedToolNames: new Set(toolNames) }),
+      mcpServerUrl
+    }),
+    revoke: (chatSessionId) => tokens.revokeBySessionId(chatSessionId)
+  };
+}
 
 export interface ChatRoutesDependencies {
   readonly rootDb: Kysely<MossDatabase>;
@@ -181,6 +214,11 @@ export interface ChatRoutesDependencies {
    * is wired (`wiring === null`, i.e. no `resolveActiveModules`/`mcpServerUrl` supplied).
    */
   readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
+  /**
+   * #2689: publishes a minter for a token that may call only the named tools, and a way to drop it.
+   * The version check uses it so its throwaway session is refused any call to another tool.
+   */
+  readonly adoptCheckTokenMinter?: (minter: CheckTokenMinter) => void;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -393,6 +431,7 @@ export function registerChatRoutes(
     dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
       wiring.tokens.revokeBySessionId(chatSessionId)
     );
+    dependencies.adoptCheckTokenMinter?.(buildCheckTokenMinter(wiring.tokens, wiring.mcpServerUrl));
   }
 
   // Wire real notifier now that manager is available.
@@ -760,6 +799,7 @@ function handleRouteError(error: unknown, reply: FastifyReply) {
       return reply.code(503).send({ error: authMessage });
     }
     if (error.message === CLI_VERSION_TOO_OLD_MESSAGE) {
+      notifyCliVersionTooOld();
       return reply.code(503).send({ error: CLI_VERSION_TOO_OLD_MESSAGE });
     }
     reply.log?.warn?.({ err: error }, "live chat unavailable");

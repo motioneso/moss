@@ -29,6 +29,9 @@ import {
   type RpcFrame,
   type RpcHandshakeFrame,
   type RpcInstallProviderParams,
+  type RpcPromoteCliCandidateParams,
+  type RpcRecordCliCheckParams,
+  type RpcStageCliCandidateParams,
   type RpcKillParams,
   type RpcKillTerminalParams,
   type RpcLaunchParams,
@@ -492,6 +495,50 @@ async function invoke(
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
       return host.installProvider(provider);
     }
+    case "stageCliCandidate": {
+      const p = req.params as RpcStageCliCandidateParams;
+      if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
+      if (!Number.isInteger(p.manifestSequence) || p.manifestSequence < 0) {
+        throw new BadRequestError("manifestSequence must be a non-negative integer");
+      }
+      if (!Array.isArray(p.packages) || p.packages.length > 8) {
+        throw new BadRequestError("packages must be a short list");
+      }
+      for (const pkg of p.packages) {
+        if (
+          (pkg?.role !== "cli" && pkg?.role !== "chat-adapter") ||
+          typeof pkg.pkg !== "string" ||
+          typeof pkg.version !== "string" ||
+          typeof pkg.lockfileText !== "string"
+        ) {
+          throw new BadRequestError("invalid candidate package");
+        }
+      }
+      return host.stageCliCandidate(p);
+    }
+    case "promoteCliCandidate": {
+      const p = req.params as RpcPromoteCliCandidateParams;
+      if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
+      return host.promoteCliCandidate(p);
+    }
+    case "recordCliCheck": {
+      const p = req.params as RpcRecordCliCheckParams;
+      if (!isProviderKind(p.provider)) throw new BadRequestError("unknown provider");
+      if (
+        typeof p.at !== "string" ||
+        (p.result !== "passed" && p.result !== "failed") ||
+        typeof p.reason !== "string" ||
+        p.reason.length > 64 ||
+        !Array.isArray(p.versions) ||
+        p.versions.length > 8 ||
+        !p.versions.every((v) => typeof v === "string" && v.length <= 64)
+      ) {
+        throw new BadRequestError("invalid check record");
+      }
+      return host.recordCliCheck(p);
+    }
+    case "getCliToolsState":
+      return host.getCliToolsState();
     case "listProviderModels": {
       // #2208: non-session; kind and persisted ACP identity guards ⇒ bad_request. Every other outcome (not logged in,
       // unsupported, vendor failure) is a normal RpcOk result, never an RpcErr.
@@ -599,7 +646,8 @@ async function invoke(
         params.projectId,
         params.providerKind as AcpProviderKind,
         params.userId,
-        params.profile
+        params.profile,
+        params.useCandidate === true
       );
       if (!recordAcpSpawn(key, spawned.generation)) {
         await host.acpKill(key, { generation: spawned.generation });

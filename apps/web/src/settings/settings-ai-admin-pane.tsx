@@ -16,15 +16,14 @@ import { useState } from "react";
 import { Button, IconButton } from "@moss/ui";
 import {
   createAiProvider,
-  getChatSettings,
   getChatModelOverrideSettings,
   listAiModels,
   listAiProviders,
   listAiServiceBindings,
   lookupAiCapabilityRoute,
   putAdminChatModelOverrideEnabled,
-  putChatSettings,
   putAiServiceBinding,
+  retryAiCliToolsCheck,
   revokeAiProvider,
   setInstanceDefaultProvider,
   testAiProvider,
@@ -34,6 +33,8 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
+import { CliUpdateStatus } from "./cli-update-status";
+import { OpenCodeAcpCard, cliVersionLine } from "./settings-ai-opencode-card";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
@@ -53,7 +54,6 @@ import { VoiceConfigGroup } from "./settings-voice-config-group";
 import { SortingModelRow } from "./settings-ai-sorting-row";
 import {
   type AiAuthMethod,
-  type AiCliToolsDto,
   type AiConfiguredModelDto,
   type AiModelCapability,
   type AiModelTier,
@@ -141,6 +141,12 @@ function ProviderCard(props: {
     provider.providerKind === "google"
       ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
       : undefined;
+  const queryClient = useQueryClient();
+  const retryMutation = useMutation({
+    mutationFn: () => retryAiCliToolsCheck(provider.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.ai.providers }),
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   const testMutation = useMutation({
     mutationFn: () => testAiProvider(provider.id),
     onSuccess: ({ result }) =>
@@ -189,6 +195,16 @@ function ProviderCard(props: {
           {provider.authMethod === "cli" ? (
             <div className="prov__auth">
               Chat checks this sign-in when the ACP adapter initializes.
+            </div>
+          ) : null}
+          {provider.authMethod === "cli" && provider.cliTools ? (
+            <div className="prov__auth">
+              <CliUpdateStatus
+                tools={provider.cliTools}
+                name={provider.displayName}
+                retrying={retryMutation.isPending}
+                onRetry={() => retryMutation.mutate()}
+              />
             </div>
           ) : null}
         </div>
@@ -369,62 +385,6 @@ function ProviderCard(props: {
   );
 }
 
-/** #2689: "Claude CLI 2.1.282" when the runner reported a version, "Claude CLI" otherwise. */
-function cliVersionLine(name: string, tools: AiCliToolsDto | undefined): string {
-  return tools?.version ? `${name} CLI ${tools.version}` : `${name} CLI`;
-}
-
-function OpenCodeAcpCard(props: { readonly cli: AiCliToolsDto | undefined }) {
-  const queryClient = useQueryClient();
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.chat.settings,
-    queryFn: getChatSettings,
-    retry: false
-  });
-  const settingsMutation = useMutation({
-    mutationFn: putChatSettings,
-    onSuccess: (result) => queryClient.setQueryData(queryKeys.chat.settings, result)
-  });
-  const model = settingsQuery.data?.chat.openCodeModel ?? "default";
-
-  return (
-    <div className="prov" aria-label="OpenCode ACP provider">
-      <div className="prov__head">
-        <span className="prov__mark">O</span>
-        <div className="prov__id">
-          <div className="prov__name">OpenCode</div>
-          <div className="prov__auth">
-            <Terminal size={12} aria-hidden="true" />{" "}
-            {props.cli?.version ? cliVersionLine("OpenCode", props.cli) : "ACP chat provider"}
-          </div>
-        </div>
-      </div>
-      <div className="prov__edit">
-        <Field
-          label="Chat model"
-          hint="Saved for the next OpenCode ACP session; the agent applies it when it advertises a model choice."
-        >
-          <Select
-            value={model}
-            disabled={settingsQuery.isLoading || settingsMutation.isPending}
-            onChange={(event) =>
-              settingsMutation.mutate({
-                chat: {
-                  responseStyle: settingsQuery.data?.chat.responseStyle ?? "balanced",
-                  openCodeModel: event.target.value as "default" | "muse-spark-1.3-free"
-                }
-              })
-            }
-          >
-            <option value="default">Login default</option>
-            <option value="muse-spark-1.3-free">Muse Spark 1.3 free</option>
-          </Select>
-        </Field>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------------------------------------------------- Service bindings */
 
 // A binding is either a mode or a specific capable model. Strict background services start with an
@@ -585,7 +545,10 @@ export function AiProvidersPane() {
   const providersQuery = useQuery({
     queryKey: queryKeys.ai.providers,
     queryFn: listAiProviders,
-    retry: false
+    retry: false,
+    // A tool update check takes a minute or two; keep the card fresh until it finishes.
+    refetchInterval: (query) =>
+      query.state.data?.providers.some((row) => row.cliTools?.state === "checking") ? 4000 : false
   });
   const modelsQuery = useQuery({
     queryKey: queryKeys.ai.models,

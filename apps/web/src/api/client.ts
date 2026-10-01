@@ -1237,6 +1237,14 @@ export async function testAiProvider(id: string): Promise<TestAiProviderConfigRe
   );
 }
 
+/** #2689 slice 4: an admin asks for a fresh tool update check on one CLI provider. */
+export async function retryAiCliToolsCheck(id: string): Promise<UpdateAiProviderConfigResponse> {
+  return requestJson<UpdateAiProviderConfigResponse>(
+    `/api/ai/providers/${encodeURIComponent(id)}/cli-check`,
+    { method: "POST" }
+  );
+}
+
 export async function discoverAiProviderModels(
   id: string
 ): Promise<DiscoverAiProviderModelsResponse> {

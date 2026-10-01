@@ -26,13 +26,15 @@ import {
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
-  // #1350: type-only now — the host builds its engine through `createStructuredEngine`, never by
-  // naming an implementation. Kept solely for the `hasVerifiedSubmit` capability narrow.
-  type CliChatEngineImpl,
   type ProbeProviderResult,
   type RpcBeginLoginResult,
   type RpcCancelLoginResult,
   type RpcInstallProviderResult,
+  type RpcPromoteCliCandidateParams,
+  type RpcPromoteCliCandidateResult,
+  type RpcRecordCliCheckParams,
+  type RpcStageCliCandidateParams,
+  type RpcStageCliCandidateResult,
   type RpcLaunchParams,
   type RpcLaunchResult,
   type RpcKillParams,
@@ -56,6 +58,14 @@ import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
+import {
+  BadSubmitAttemptError,
+  NotLaunchedError,
+  hasStructuredMethods,
+  hasVerifiedSubmit
+} from "./engine-host-guards.js";
+
+export { BadSubmitAttemptError, NotLaunchedError };
 import { LoginBadRequestError, type LoginService, type LoginUserRuntime } from "./login-service.js";
 import {
   createCodexVersionReader,
@@ -70,24 +80,15 @@ import {
   preparePerUserStructuredLaunch,
   type PerUserStructuredLaunch
 } from "./per-user-structured.js";
-export type {
-  EngineHostDeps,
-  PersistentRuntimeLiveConfig,
-  SessionReapedListener,
-  SubmitAttempt,
-  ReplayLaunchAttempt
-} from "./engine-host-types.js";
-export { VERIFIED_SUBMIT_DEADLINE_MS } from "./engine-host-types.js";
+export * from "./engine-host-types.js";
 import {
   DEFAULT_LAUNCH_TIMEOUT_MS,
   VERIFIED_SUBMIT_DEADLINE_MS,
-  positiveIntOr
-} from "./engine-host-types.js";
-import type {
-  EngineHostDeps,
-  ReplayLaunchAttempt,
-  SessionReapedListener,
-  SubmitAttempt
+  positiveIntOr,
+  type EngineHostDeps,
+  type ReplayLaunchAttempt,
+  type SessionReapedListener,
+  type SubmitAttempt
 } from "./engine-host-types.js";
 
 export class CliChatEngineHost {
@@ -126,7 +127,8 @@ export class CliChatEngineHost {
       homeBase: deps.homeBase,
       perUserUid: deps.perUserUid,
       allowSharedUid: deps.allowSharedUid,
-      toolsPrefix: deps.toolsPrefix
+      toolsPrefix: deps.toolsPrefix,
+      onToolsLeaseIdle: (slot) => deps.installService?.sweepSlot(slot)
     });
   }
 
@@ -142,7 +144,8 @@ export class CliChatEngineHost {
     projectId: string,
     providerKind: AcpProviderKind,
     userId: string,
-    profile: AcpProfile
+    profile: AcpProfile,
+    useCandidate = false
   ): Promise<{
     cwd: string;
     generation: number;
@@ -151,7 +154,7 @@ export class CliChatEngineHost {
     uid: number;
     gid: number;
   }> {
-    return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile);
+    return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile, useCandidate);
   }
 
   acpSend(sessionKey: string, line: string): void {
@@ -760,6 +763,45 @@ export class CliChatEngineHost {
     }
     return this.deps.installService.installProvider(provider);
   }
+  /** #2689 slice 4: stage a candidate toolset. Errors carry redacted text only. */
+  async stageCliCandidate(params: RpcStageCliCandidateParams): Promise<RpcStageCliCandidateResult> {
+    if (!this.deps.installService) {
+      return { state: "error", message: "install service unavailable on this build" };
+    }
+    const r = await this.deps.installService.stageCandidate(
+      params.provider,
+      params.packages,
+      params.manifestSequence
+    );
+    return r.state === "staged" ? { state: "staged" } : { state: "error", message: r.message };
+  }
+
+  /** #2689 slice 4: flip a staged candidate live. */
+  async promoteCliCandidate(
+    params: RpcPromoteCliCandidateParams
+  ): Promise<RpcPromoteCliCandidateResult> {
+    if (!this.deps.installService) {
+      return { state: "error", message: "install service unavailable on this build" };
+    }
+    return this.deps.installService.promoteCandidate(params.provider);
+  }
+
+  /** #2689 slice 4: store the last live-check result. */
+  async recordCliCheck(params: RpcRecordCliCheckParams): Promise<{ ok: true }> {
+    await this.deps.installService?.recordCheck(params.provider, {
+      at: params.at,
+      result: params.result,
+      reason: params.reason,
+      versions: params.versions
+    });
+    return { ok: true };
+  }
+
+  /** #2689 slice 4: updater state; undefined on a build without an installer. */
+  async getCliToolsState() {
+    return this.deps.installService?.toolsState();
+  }
+
   /** #2689: installed tool versions; undefined on a build without an installer. */
   async listCliToolVersions() {
     return this.deps.installService?.toolVersions();
@@ -950,51 +992,5 @@ export class CliChatEngineHost {
   /** Test/introspection helper: how many engines are registered. */
   liveEngineCount(): number {
     return this.engines.size;
-  }
-}
-
-/**
- * #1350 — does this engine drive a multiplexer pane it can echo-verify a submit against?
- * Only `CliChatEngineImpl` does; the one-shot print engines spawn a fresh process per turn and
- * have no pane to read back, so they take the plain `submit` path.
- */
-function hasVerifiedSubmit(engine: CliChatEngine): engine is CliChatEngineImpl {
-  return typeof (engine as Partial<CliChatEngineImpl>).verifiedSubmit === "function";
-}
-
-/**
- * Review B4 follow-up — mirrors `hasVerifiedSubmit`'s feature-detect pattern. Only the bounded
- * print engine (`ClaudePrintChatEngine`, built by `createStructuredEngine` whenever
- * `needsStructuredOutput` is set) implements these three methods.
- */
-type StructuredCapableEngine = CliChatEngine & {
-  launchStructured(
-    opts: Parameters<CliChatEngine["launch"]>[0] & { readonly schema: Record<string, unknown> }
-  ): Promise<{ readonly offset: number }>;
-  submitStructured(text: string): Promise<void>;
-  readStructured(afterOffset: number): Promise<RpcReadStructuredResult>;
-};
-
-function hasStructuredMethods(engine: CliChatEngine): engine is StructuredCapableEngine {
-  const e = engine as Partial<StructuredCapableEngine>;
-  return (
-    typeof e.launchStructured === "function" &&
-    typeof e.submitStructured === "function" &&
-    typeof e.readStructured === "function"
-  );
-}
-
-/** Internal marker mapped to RpcErr code "not_launched" by the dispatcher. */
-export class NotLaunchedError extends Error {
-  constructor() {
-    super("no live session for this sessionKey");
-    this.name = "NotLaunchedError";
-  }
-}
-
-export class BadSubmitAttemptError extends Error {
-  constructor() {
-    super("attemptId was already used with a different payload");
-    this.name = "BadSubmitAttemptError";
   }
 }

@@ -59,7 +59,12 @@ import { createOwnerIo } from "./per-user-structured.js";
 import { codexPeerHomesFor, runnerOwnIdentity, sweepIdentity } from "./shared-uid.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
-import { applyToolsVolumeCli } from "./tools-volume-adapters.js";
+import {
+  applyToolsVolumeCli,
+  candidateReleasesFor,
+  type ReleaseOverrides
+} from "./tools-volume-adapters.js";
+import { acquireLeases, leaseTargetsForPaths } from "./tools-leases.js";
 import { defaultResolveAdapterTarget, type AcpAdapterTarget } from "./acp-adapter-target.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
@@ -98,6 +103,8 @@ export interface AcpHostDeps {
   readonly applyOwnership?: OwnershipApplier;
   /** Tools volume prefix: an adapter and CLI installed there win over the image copy (#2689). */
   readonly toolsPrefix?: string;
+  /** Called when the last lease on a tools volume release is removed, so cleanup can run. */
+  readonly onToolsLeaseIdle?: (slot: string) => void | Promise<void>;
   /** Resolves the adapter spawn target; injected so tests never touch node_modules. */
   readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
@@ -169,30 +176,8 @@ export interface AcpHostDeps {
 
 export type { AgentHomePrepareRequest, AgentHomeSecretFile } from "./agent-home-prepare-run.js";
 
-export interface AcpSpawnResult {
-  readonly cwd: string;
-  readonly generation: number;
-  /** The HOME handed to the agent process, or null when it names none. */
-  readonly home: string | null;
-  /** The spawned agent's own process id (setpriv execs into it, so it's the real process). */
-  readonly pid: number | null;
-  /** The slot account the agent runs as — the expected identity to check /proc/<pid>/status against. */
-  readonly uid: number;
-  readonly gid: number;
-}
-
-export interface AcpReadResult {
-  readonly lines: readonly string[];
-  readonly firstSeq: number;
-  readonly nextSeq: number;
-  readonly exited: boolean;
-  readonly exitCode: number | null;
-  /**
-   * True when this reply — or an earlier one — was cut: the reply exceeded the
-   * total cap, or the buffer dropped lines the reader had not seen yet.
-   */
-  readonly truncated: boolean;
-}
+export type { AcpReadResult, AcpSpawnResult } from "./acp-host-results.js";
+import type { AcpReadResult, AcpSpawnResult } from "./acp-host-results.js";
 
 /** Buffered stdout lines per session; the API drains them with a sequence cursor. */
 const MAX_BUFFERED_LINES = 500;
@@ -303,7 +288,8 @@ export class AcpHost {
     projectId: string,
     providerKind: AcpProviderKind,
     userId: string,
-    profile: AcpProfile
+    profile: AcpProfile,
+    useCandidate = false
   ): Promise<AcpSpawnResult> {
     if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
@@ -323,6 +309,17 @@ export class AcpHost {
       if (!row.chatReady) {
         throw new Error(`Not logged in (${row.chatBlockReason ?? "provider not ready"})`);
       }
+    }
+    // A check session runs the staged candidate instead of `current`. The folders come from the
+    // runner's own state file, and a missing candidate refuses the spawn.
+    let overrides: ReleaseOverrides | undefined;
+    if (useCandidate) {
+      if ((providerKind !== "anthropic" && providerKind !== "openai") || !this.deps.toolsPrefix) {
+        throw new Error("acpSpawn: no staged candidate for this provider");
+      }
+      const staged = await candidateReleasesFor(this.deps.toolsPrefix, providerKind);
+      if (!staged) throw new Error("acpSpawn: no staged candidate for this provider");
+      overrides = staged;
     }
     const key = sanitizeSessionKey(sessionKey);
     await this.killRecord(key);
@@ -375,7 +372,7 @@ export class AcpHost {
           HOME: agentHome
         };
         // One CLI copy: the adapter drives the tools volume CLI when one is installed.
-        applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind);
+        applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind, overrides);
         if (providerKind === "anthropic") {
           const token = await this.readLoginToken(homeBase);
           if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
@@ -466,7 +463,7 @@ export class AcpHost {
 
     const target =
       this.deps.resolveAdapterTarget?.(providerKind) ??
-      defaultResolveAdapterTarget(providerKind, this.deps.toolsPrefix);
+      defaultResolveAdapterTarget(providerKind, this.deps.toolsPrefix, overrides);
     const spawnChild =
       this.deps.spawnChild ??
       ((opts) => {
@@ -510,14 +507,34 @@ export class AcpHost {
           detached: true
         }) as ChildProcessWithoutNullStreams;
       });
-    const child = spawnChild({
-      command: target.command,
-      args: target.args,
-      cwd: sessionDir,
-      env,
-      uid: switchTo?.uid,
-      gid: switchTo?.gid
-    });
+    // The session runs from these concrete release folders until it exits, so cleanup must keep
+    // them. The lease starts under the runner's pid and moves to the child once it exists.
+    const lease = this.deps.toolsPrefix
+      ? await acquireLeases(
+          this.deps.toolsPrefix,
+          leaseTargetsForPaths(this.deps.toolsPrefix, [
+            ...target.args,
+            env.CLAUDE_CODE_EXECUTABLE,
+            env.CODEX_PATH
+          ]),
+          (t) => this.deps.onToolsLeaseIdle?.(t.slot)
+        )
+      : null;
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnChild({
+        command: target.command,
+        args: target.args,
+        cwd: sessionDir,
+        env,
+        uid: switchTo?.uid,
+        gid: switchTo?.gid
+      });
+      if (typeof child.pid === "number") await lease?.adopt(child.pid);
+    } catch (error) {
+      await lease?.release().catch(() => undefined);
+      throw error;
+    }
 
     // Records the process a boot sweep must confirm has stopped before purging.
     if (chatMarkerRecord && typeof child.pid === "number") {
@@ -572,10 +589,12 @@ export class AcpHost {
       session.exited = true;
       session.exitCode = code;
       session.lastActivity = Date.now();
+      void lease?.release().catch(() => undefined);
     });
     child.on("error", () => {
       session.exited = true;
       session.lastActivity = Date.now();
+      void lease?.release().catch(() => undefined);
     });
     this.sessions.set(key, session);
     // The agent's home travels with the spawn result so the permission policy

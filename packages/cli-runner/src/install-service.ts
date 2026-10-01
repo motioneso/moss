@@ -29,18 +29,41 @@
  * bad_request by the dispatcher) and would surface an unexpected fault as `internal`.
  */
 
-import { createHash, timingSafeEqual } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
+import {
+  readToolsState,
+  writeToolsState,
+  type LastCheck,
+  type StagedPackage
+} from "./tools-state.js";
+import {
+  ensureAdapter,
+  gcOldReleases,
+  promoteCandidateLocked,
+  stageCandidateLocked,
+  sweepReleases,
+  toolsStateSummary,
+  type CandidateOps
+} from "./install-candidate.js";
+import {
+  hashEq,
+  isExecutable,
+  isPublishedNpmRelease,
+  pathExists,
+  randToken,
+  redactInstallMessage,
+  redactNpm,
+  sha512OfFile,
+  sha512OfResolved
+} from "./install-helpers.js";
+import { createWriteStream } from "node:fs";
 import {
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   readFile,
   readlink,
   rename,
   rm,
-  stat,
   symlink,
   writeFile
 } from "node:fs/promises";
@@ -57,6 +80,7 @@ import type {
   ProviderCatalog,
   RpcInstallProviderResult,
   RpcListCliToolVersionsResult,
+  RpcGetCliToolsStateResult,
   RpcProviderKind
 } from "@moss/chat/live";
 
@@ -116,6 +140,27 @@ export function buildSanitizedInstallerEnv(
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
+/** One package of a toolset the manifest wants staged. The lockfile text is already hash-checked. */
+export interface CandidatePackage {
+  readonly role: "cli" | "chat-adapter";
+  readonly pkg: string;
+  readonly version: string;
+  readonly lockfileText: string;
+}
+
+export interface CandidateInstall {
+  readonly lockfileText: string;
+  readonly onStaged: (releaseDir: string) => void;
+}
+
+export type PromoteCandidateResult =
+  | { readonly state: "promoted" }
+  | { readonly state: "error"; readonly message: string };
+
+export type StageCandidateResult =
+  | { readonly state: "staged"; readonly staged: readonly StagedPackage[] }
+  | { readonly state: "error"; readonly message: string };
+
 export interface InstallServiceDeps {
   /** The execFile-style runner (NOT a shell); reuses the cli-runner discipline. */
   readonly io: TmuxIo;
@@ -162,6 +207,7 @@ export class InstallService {
    * --version). (Artifact recipes compare directly against `recipe.sha512`.)
    */
   private readonly pinnedHash = new Map<RpcProviderKind, string>();
+  private readonly candidateOps: CandidateOps;
 
   constructor(private readonly deps: InstallServiceDeps) {
     this.toolsPrefix = deps.toolsPrefix ?? resolveDefaultToolsPrefix();
@@ -169,6 +215,24 @@ export class InstallService {
     this.installerEnv = buildSanitizedInstallerEnv(deps.env ?? process.env);
     this.installTimeoutMs = deps.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
     this.hostArch = deps.hostArch ?? osArch();
+    this.candidateOps = {
+      toolsPrefix: this.toolsPrefix,
+      catalog: deps.catalog,
+      io: deps.io,
+      installerEnv: this.installerEnv,
+      adapterFor: (provider) => (deps.adapterCatalog ?? ADAPTER_CATALOG)[provider],
+      resolveRecipe: (provider) => this.resolveRecipe(provider),
+      installNpm: (provider, recipe, candidate) => this.installNpm(provider, recipe, candidate),
+      mkStaging: (slot) => this.mkStaging(slot),
+      stageNpmRelease: (slot, staging) => this.stageNpmRelease(slot, staging),
+      promoteNpm: (slot, staging, binary) => this.promoteNpm(slot, staging, binary),
+      readInstalledVersion: (dir, pkg) => this.readInstalledVersion(dir, pkg),
+      resolveCurrent: (slot) => this.resolveCurrent(slot),
+      resolveRepoPath: (repoRel) => this.resolveRepoPath(repoRel),
+      ensureBinSymlink: (provider, binary) => this.ensureBinSymlink(provider, binary),
+      binPath: (binary) => this.binPath(binary),
+      pinHash: (provider, hash) => this.pinnedHash.set(provider, hash)
+    };
   }
 
   /**
@@ -258,59 +322,53 @@ export class InstallService {
 
     // #2689: the provider's chat adapter rides with its CLI. A failure here leaves the CLI in
     // place and chat on the image adapter, but is reported so the admin sees it.
-    const adapterError = await this.ensureAdapter(provider);
+    const adapterError = await ensureAdapter(this.candidateOps, provider);
     return adapterError ? { state: "error", message: adapterError } : cli;
   }
 
-  // ─── #2689 chat adapter install ─────────────────────────────────────────────
+  // ─── #2689 slice 4: stage a candidate toolset (current is never touched) ─────
 
-  /** Install or confirm the provider's chat adapter. Returns an error message, or null. */
-  private async ensureAdapter(provider: RpcProviderKind): Promise<string | null> {
-    const adapter = (this.deps.adapterCatalog ?? ADAPTER_CATALOG)[provider];
-    if (!adapter) return null;
-    const fail = (why: string): string => `chat adapter ${adapter.pkg}: ${why}`;
-    const live = await this.resolveCurrent(adapter.slot);
-    if (
-      live &&
-      (await isPublishedNpmRelease(live)) &&
-      (await this.readInstalledVersion(live, adapter.pkg)) === adapter.version &&
-      (await pathExists(path.join(live, adapter.entry)))
-    ) {
-      return null;
-    }
-    const staging = await this.mkStaging(adapter.slot);
+  /**
+   * Install each package of a candidate toolset into a new release folder, leaving `current`
+   * where it is. Only packages named in this image's catalog are accepted, so a manifest can
+   * move versions but never introduce a package. Candidates are recorded in `state.json` so the
+   * boot sweep keeps them. Any failure removes what this call staged.
+   */
+  async stageCandidate(
+    provider: RpcProviderKind,
+    packages: readonly CandidatePackage[],
+    manifestSequence: number
+  ): Promise<StageCandidateResult> {
+    const release = await this.lockFor(provider).acquire();
     try {
-      await writeFile(
-        path.join(staging, "npm-shrinkwrap.json"),
-        await readFile(this.resolveRepoPath(adapter.lockfile), "utf8"),
-        "utf8"
-      );
-      await writeFile(
-        path.join(staging, "package.json"),
-        JSON.stringify({
-          name: "jarv1s-cli-install",
-          version: "0.0.0",
-          dependencies: { [adapter.pkg]: adapter.version }
-        }),
-        "utf8"
-      );
-      const ci = await this.deps.io.run(
-        "npm",
-        ["ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", staging],
-        { cwd: staging, env: this.installerEnv }
-      );
-      if (ci.code !== 0) return fail(redactNpm(`npm ci failed: ${ci.stderr ?? ""}`));
-      if ((await this.readInstalledVersion(staging, adapter.pkg)) !== adapter.version) {
-        return fail("installed version is not the pinned version");
-      }
-      if (!(await pathExists(path.join(staging, adapter.entry)))) return fail("entry file missing");
-      const release = await this.promoteNpm(adapter.slot, staging, null);
-      await this.gcOldReleases(adapter.slot, release.dir);
-      return null;
-    } catch (err) {
-      return fail(redactInstallMessage(err));
+      return await stageCandidateLocked(this.candidateOps, provider, packages, manifestSequence);
     } finally {
-      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      release();
+    }
+  }
+
+  /**
+   * Make the staged candidate the live toolset: flip `current` for every package, re-hash the
+   * live binary, and keep the releases that were live as `prior` until the next promote. A hash
+   * mismatch flips everything back. Only a toolset with a staged candidate can be promoted.
+   */
+  async promoteCandidate(provider: RpcProviderKind): Promise<PromoteCandidateResult> {
+    const release = await this.lockFor(provider).acquire();
+    try {
+      return await promoteCandidateLocked(this.candidateOps, provider);
+    } finally {
+      release();
+    }
+  }
+
+  /** Record the outcome of the last live check in `state.json`. */
+  async recordCheck(provider: RpcProviderKind, check: LastCheck): Promise<void> {
+    const release = await this.lockFor(provider).acquire();
+    try {
+      const state = await readToolsState(this.toolsPrefix, provider);
+      await writeToolsState(this.toolsPrefix, provider, { ...state, lastCheck: check });
+    } finally {
+      release();
     }
   }
 
@@ -318,7 +376,8 @@ export class InstallService {
 
   private async installNpm(
     provider: RpcProviderKind,
-    recipe: NpmInstallRecipe
+    recipe: NpmInstallRecipe,
+    candidate?: CandidateInstall
   ): Promise<RpcInstallProviderResult> {
     // §A.1.3: resolve the host-arch key BEFORE staging — a missing entry is a DEFINED
     // verify failure, never an undefined deref.
@@ -337,8 +396,10 @@ export class InstallService {
     const staging = await this.mkStaging(provider);
     try {
       // (1) Stage: copy the COMMITTED lockfile + a minimal package.json into staging.
-      const lockSrc = this.resolveRepoPath(recipe.lockfile);
-      const lockRaw = await readFile(lockSrc, "utf8");
+      // A candidate install takes the lockfile from the signed manifest instead.
+      const lockRaw = candidate
+        ? candidate.lockfileText
+        : await readFile(this.resolveRepoPath(recipe.lockfile), "utf8");
       await writeFile(path.join(staging, "npm-shrinkwrap.json"), lockRaw, "utf8");
       await writeFile(
         path.join(staging, "package.json"),
@@ -389,6 +450,12 @@ export class InstallService {
       // (kind:"env" is wired in main.ts; nothing to write here).
       await this.writeSelfUpdateConfig(recipe);
 
+      // A candidate stops here: it is renamed into a release folder and `current` stays put.
+      if (candidate) {
+        candidate.onStaged(await this.stageNpmRelease(provider, staging));
+        return { state: "installed", version: recipe.version, binaryChanged: false };
+      }
+
       // (5) ATOMIC PROMOTE (§A.3.5): rename the verified tree into a DURABLE release lane,
       // then flip `current`; create the stable bin symlink once.
       const release = await this.promoteNpm(provider, staging, recipe.binary);
@@ -405,7 +472,7 @@ export class InstallService {
       this.pinnedHash.set(provider, verifyHash);
 
       // GC the SUPERSEDED prior release (never the just-promoted one, §A.3.2).
-      await this.gcOldReleases(provider, release.dir);
+      await gcOldReleases(this.candidateOps, provider, release.dir);
 
       // #1081 H2: this branch only runs when tryIdempotentNoop returned null (a real
       // reinstall) — binaryChanged:true tells callers the on-disk binary was replaced.
@@ -505,6 +572,23 @@ export class InstallService {
   }
 
   /**
+   * Rename a verified staging tree into a durable `providers/<provider>/releases/<rand>` lane
+   * without touching `current`. A candidate toolset stops here; a promote continues to the flip.
+   */
+  private async stageNpmRelease(provider: string, staging: string): Promise<string> {
+    const providerDir = path.join(this.toolsPrefix, "providers", provider);
+    const releasesDir = path.join(providerDir, "releases");
+    await mkdir(releasesDir, { recursive: true });
+    const releaseDir = path.join(releasesDir, randToken());
+    // Keep the staging tree private until verification is complete, then make only the
+    // published release root traversable by isolated accounts. A chmod failure aborts
+    // before the atomic same-filesystem rename.
+    await chmod(staging, 0o755);
+    await rename(staging, releaseDir);
+    return releaseDir;
+  }
+
+  /**
    * §A.3.5 npm promote: rename the verified staged tree into a DURABLE
    * `providers/<provider>/releases/<rand>` lane (same-fs, atomic), then flip
    * `providers/<provider>/current → releases/<rand>` via temp-symlink-rename. The stable
@@ -516,19 +600,7 @@ export class InstallService {
     binary: string | null
   ): Promise<{ dir: string; prior: string | undefined }> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
-    const releasesDir = path.join(providerDir, "releases");
-    await mkdir(releasesDir, { recursive: true });
-    const releaseDir = path.join(releasesDir, randToken());
-
-    // Keep the staging tree private until verification is complete, then make only the
-    // published release root traversable by isolated accounts. The contents retain npm's
-    // normal non-writable modes, and a chmod failure aborts before the atomic rename.
-    await chmod(staging, 0o755);
-
-    // The verified tree IS the staging dir's node_modules + .bin layout; rename the whole
-    // staging scratch contents into the release lane by renaming staging → releaseDir.
-    // (Same-fs under the tools volume ⇒ atomic. The `finally` rm of `staging` then no-ops.)
-    await rename(staging, releaseDir);
+    const releaseDir = await this.stageNpmRelease(provider, staging);
 
     const currentLink = path.join(providerDir, "current");
     const prior = await readlink(currentLink).catch(() => undefined);
@@ -560,22 +632,6 @@ export class InstallService {
       await rename(tmpLink, currentLink).catch(() => undefined);
     }
     await rm(release.dir, { recursive: true, force: true }).catch(() => undefined);
-  }
-
-  /** GC every `releases/<rand>` NOT the just-promoted dir AND not the live target (§A.3.2). */
-  private async gcOldReleases(provider: string, keepDir: string): Promise<void> {
-    const providerDir = path.join(this.toolsPrefix, "providers", provider);
-    const releasesDir = path.join(providerDir, "releases");
-    const live = await this.resolveCurrent(provider);
-    const listed = await this.deps.io
-      .run("ls", ["-A", releasesDir])
-      .catch(() => ({ code: 1, stdout: "" }));
-    if (listed.code !== 0) return;
-    for (const name of splitLines(listed.stdout)) {
-      const dir = path.join(releasesDir, name);
-      if (dir === keepDir || dir === live) continue;
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-    }
   }
 
   // ─── artifact path (§A.3.4/§A.3.5) ──────────────────────────────────────────
@@ -668,7 +724,14 @@ export class InstallService {
     }
 
     const probe = await this.deps.io.run(liveBin, ["--version"], { env: this.installerEnv });
-    if (probe.code !== 0 || !probe.stdout.includes(recipe.version)) return null;
+    if (probe.code !== 0) return null;
+    if (!probe.stdout.includes(recipe.version)) {
+      // Image floor (spec 6.2): a live release that an update promoted is newer than the image
+      // pin. Keep it instead of reinstalling the older pin over it.
+      const newer = await this.promotedNewerThan(provider, recipe, probe.stdout);
+      if (newer === null) return null;
+      return { state: "installed", version: newer, alreadyInstalled: true, binaryChanged: false };
+    }
 
     // Re-compute the live on-disk hash and compare to the expectation.
     let expected: string | undefined;
@@ -692,6 +755,27 @@ export class InstallService {
       alreadyInstalled: true,
       binaryChanged: false
     };
+  }
+
+  /**
+   * The live version when this provider was promoted by an update (state records a prior release)
+   * and the live version is newer than the image pin. Otherwise null.
+   */
+  private async promotedNewerThan(
+    provider: RpcProviderKind,
+    recipe: InstallRecipe,
+    versionOutput: string
+  ): Promise<string | null> {
+    if (recipe.kind !== "npm") return null;
+    const live = /(\d+\.\d+\.\d+)/.exec(versionOutput)?.[1];
+    const pin = /^(\d+)\.(\d+)\.(\d+)/.exec(recipe.version);
+    if (!live || !pin) return null;
+    const a = live.split(".").map(Number);
+    const b = pin.slice(1, 4).map(Number);
+    const newer = [0, 1, 2].reduce((r, i) => (r !== 0 ? r : Math.sign(a[i]! - b[i]!)), 0) > 0;
+    if (!newer) return null;
+    const state = await readToolsState(this.toolsPrefix, provider);
+    return state.prior.length > 0 ? live : null;
   }
 
   // ─── §A.3.7 kind:"config" self-update-disable (file write at install) ────────
@@ -721,27 +805,16 @@ export class InstallService {
 
     // (2) per-provider: GC releases not referenced by `current`.
     for (const provider of Object.keys(this.deps.catalog) as RpcProviderKind[]) {
-      await this.sweepReleases(provider).catch(() => undefined);
+      await sweepReleases(this.candidateOps, provider).catch(() => undefined);
     }
     for (const adapter of Object.values(this.deps.adapterCatalog ?? ADAPTER_CATALOG)) {
-      await this.sweepReleases(adapter.slot).catch(() => undefined);
+      await sweepReleases(this.candidateOps, adapter.slot).catch(() => undefined);
     }
   }
 
-  private async sweepReleases(provider: string): Promise<void> {
-    const providerDir = path.join(this.toolsPrefix, "providers", provider);
-    const releasesDir = path.join(providerDir, "releases");
-    if (!(await pathExists(releasesDir))) return;
-    const live = await this.resolveCurrent(provider);
-    const listed = await this.deps.io
-      .run("ls", ["-A", releasesDir])
-      .catch(() => ({ code: 1, stdout: "" }));
-    if (listed.code !== 0) return;
-    for (const name of splitLines(listed.stdout)) {
-      const dir = path.join(releasesDir, name);
-      if (dir === live) continue; // keep the one `current` points at
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-    }
+  /** Runs the cleanup rule over one slot. Called when the last lease on a release is removed. */
+  async sweepSlot(slot: string): Promise<void> {
+    await sweepReleases(this.candidateOps, slot).catch(() => undefined);
   }
 
   // ─── #1081 H1: boot-time drift reconcile (deploy-drift fix) ─────────────────
@@ -841,6 +914,11 @@ export class InstallService {
     return { providers: versions, opencode: await readOpenCodeVersion() };
   }
 
+  /** #2689 slice 4: highest accepted manifest sequence and the staged candidates, versions only. */
+  async toolsState(): Promise<RpcGetCliToolsStateResult> {
+    return toolsStateSummary(this.toolsPrefix);
+  }
+
   /** Resolve the absolute dir `providers/<provider>/current` points at, or undefined. */
   private async resolveCurrent(provider: string): Promise<string | undefined> {
     const providerDir = path.join(this.toolsPrefix, "providers", provider);
@@ -888,80 +966,4 @@ const REPO_ROOT = findRepoRoot(path.dirname(fileURLToPath(import.meta.url)));
 
 function createWriteStreamSafe(dest: string): ReturnType<typeof createWriteStream> {
   return createWriteStream(dest, { mode: 0o600 });
-}
-
-/** A short random token for staging dirs / release dirs / temp symlinks. */
-function randToken(): string {
-  return createHash("sha256")
-    .update(`${process.pid}:${Date.now()}:${Math.random()}`)
-    .digest("hex")
-    .slice(0, 16);
-}
-
-/** SHA512 (lowercase hex) of a file's exact bytes. */
-async function sha512OfFile(file: string): Promise<string> {
-  const h = createHash("sha512");
-  await pipeline(createReadStream(file), h);
-  return h.digest("hex");
-}
-
-/**
- * SHA512 of the binary the path resolves TO (dereferencing a `.bin` symlink / the
- * `current` symlink chain). Node stat/readStream already follow symlinks, so this hashes
- * the real target bytes — the §A.3.4 promote-target hash.
- */
-async function sha512OfResolved(file: string): Promise<string> {
-  return sha512OfFile(file);
-}
-
-function hashEq(a: string, b: string): boolean {
-  const ba = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ba.length !== bb.length) return false;
-  return timingSafeEqual(ba, bb);
-}
-
-async function isExecutable(file: string): Promise<boolean> {
-  try {
-    const st = await stat(file);
-    return st.isFile() && (st.mode & 0o111) !== 0;
-  } catch {
-    return false;
-  }
-}
-
-async function isPublishedNpmRelease(release: string): Promise<boolean> {
-  try {
-    const st = await lstat(release);
-    return st.isDirectory() && (st.mode & 0o777) === 0o755;
-  } catch {
-    return false;
-  }
-}
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function splitLines(s: string): string[] {
-  return s
-    .split("\n")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
-/** Redact an npm stderr blob (it can echo a registry URL with credentials). */
-function redactNpm(s: string): string {
-  return s.replace(/\/\/[^@\s/]+:[^@\s/]+@/g, "//<redacted>@").slice(0, 1500);
-}
-
-/** Convert any caught error to a short, non-secret message. */
-function redactInstallMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  return redactNpm(raw);
 }

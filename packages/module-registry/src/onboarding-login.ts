@@ -18,7 +18,13 @@
  * CLIs live in the cli-runner container); absent ⇒ the login routes fail closed (500).
  */
 
-import type { AiAutoRegisterPort, CliModelLister, CliToolVersionReader } from "@moss/ai";
+import type {
+  AiAutoRegisterPort,
+  CliModelLister,
+  CliToolVersionReader,
+  CliToolsRunnerUpdate,
+  ProviderKind
+} from "@moss/ai";
 import { CliChatUnavailableError, type RpcConnection } from "@moss/chat";
 import { LOGIN_ADAPTERS } from "@moss/cli-runner";
 import type { AiProviderKind } from "@moss/db";
@@ -78,7 +84,20 @@ export function buildCliToolVersionReader(deps: {
     if (!conn) throw new HttpError(503, UNAVAILABLE_MESSAGE);
     const versions = await conn.listCliToolVersions();
     if (!versions) throw new HttpError(503, UNAVAILABLE_MESSAGE);
-    return versions;
+    // The staged candidate and last check are best effort: a card still shows its version
+    // when the updater state cannot be read.
+    const state = await conn.getCliToolsState().catch(() => null);
+    if (!state) return versions;
+    const updates: Partial<Record<ProviderKind, CliToolsRunnerUpdate>> = {};
+    for (const provider of Object.keys(state.candidates) as ProviderKind[]) {
+      const cli = state.candidates[provider]?.find((c) => c.role === "cli");
+      const last = state.lastCheck[provider];
+      updates[provider] = {
+        candidateVersion: cli?.version ?? null,
+        lastCheck: last ? { at: last.at, result: last.result, reason: last.reason } : null
+      };
+    }
+    return { ...versions, updates };
   };
 }
 

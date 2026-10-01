@@ -172,6 +172,10 @@ export type RpcMethod =
   | "cancelLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "listProviderModels" // non-session (#2208 live model list from the provider's vendor — ADDITIVE)
   | "listCliToolVersions" // non-session (#2689 installed tool versions — ADDITIVE)
+  | "promoteCliCandidate" // non-session (#2689 slice 4: flip a staged candidate live)
+  | "recordCliCheck" // non-session (#2689 slice 4: store the last live-check result)
+  | "stageCliCandidate" // non-session (#2689 slice 4: install a candidate toolset, never flips current)
+  | "getCliToolsState" // non-session (#2689 slice 4: last accepted manifest sequence and staged candidates)
   // #1059 owner terminal — additive, never used by the chat runtime
   | "openTerminal"
   | "writeTerminal"
@@ -535,6 +539,61 @@ export interface RpcListCliToolVersionsResult {
   readonly opencode: string | null;
 }
 
+/** One package of a candidate toolset. `lockfileText` was already checked against the manifest hash. */
+export interface RpcCliCandidatePackage {
+  readonly role: "cli" | "chat-adapter";
+  readonly pkg: string;
+  readonly version: string;
+  readonly lockfileText: string;
+}
+/** params for method "stageCliCandidate" (#2689 slice 4). An empty list only records the sequence. */
+export interface RpcStageCliCandidateParams {
+  readonly provider: RpcProviderKind;
+  readonly manifestSequence: number;
+  readonly packages: readonly RpcCliCandidatePackage[];
+}
+/** result for method "stageCliCandidate". `message` is a redacted install error. */
+export type RpcStageCliCandidateResult =
+  | { readonly state: "staged" }
+  | { readonly state: "error"; readonly message: string };
+/** result for method "getCliToolsState" (#2689 slice 4). Versions only; no paths cross the socket. */
+export interface RpcPromoteCliCandidateParams {
+  readonly provider: RpcProviderKind;
+}
+export type RpcPromoteCliCandidateResult =
+  | { readonly state: "promoted" }
+  | { readonly state: "error"; readonly message: string };
+/** params for method "recordCliCheck". `reason` is a fixed code, never tool output. */
+export interface RpcRecordCliCheckParams {
+  readonly provider: RpcProviderKind;
+  readonly at: string;
+  readonly result: "passed" | "failed";
+  readonly reason: string;
+  readonly versions: readonly string[];
+}
+export interface RpcCliLastCheck {
+  readonly at: string;
+  readonly result: "passed" | "failed";
+  readonly reason: string;
+  readonly versions: readonly string[];
+}
+export interface RpcGetCliToolsStateResult {
+  /** Highest manifest sequence accepted by any provider on this runner. 0 when none. */
+  readonly manifestSequence: number;
+  readonly candidates: Readonly<
+    Record<
+      RpcProviderKind,
+      readonly {
+        readonly pkg: string;
+        readonly version: string;
+        readonly role: "cli" | "chat-adapter";
+      }[]
+    >
+  >;
+  /** Last live-check outcome per provider; null when none is recorded. */
+  readonly lastCheck: Readonly<Record<RpcProviderKind, RpcCliLastCheck | null>>;
+}
+
 // #1059 terminal method params/results (interface-pair pattern, mirrors RpcSubmit*). Additive
 // only — no existing method's request/response shape changes.
 /** params for method "openTerminal": requested initial PTY size. */
@@ -582,6 +641,8 @@ export interface RpcAcpSpawnParams {
   readonly userId: string;
   /** Which surface the session serves. The host applies that profile's launch rules. */
   readonly profile: string;
+  /** Run the staged candidate tools instead of the live ones. Only the version check sets this. */
+  readonly useCandidate?: boolean;
 }
 /** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
 export interface RpcAcpSpawnResult {

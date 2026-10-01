@@ -48,11 +48,23 @@ export type AiCapabilityRouteReason =
  * #2689: the command-line tool a CLI provider runs. `version` is what the installed tool reports;
  * `null` when it is not installed. Slice 4 of the auto-update spec widens `state`.
  */
-export type AiCliToolsState = "current" | "not_installed";
+export type AiCliToolsState =
+  | "current"
+  | "not_installed"
+  | "checking"
+  | "held_back"
+  | "needs_newer_moss"
+  | "cannot_check";
 
 export interface AiCliToolsDto {
   readonly version: string | null;
   readonly state: AiCliToolsState;
+  /** The newer version that is being checked, held back, or waiting for a newer Moss. */
+  readonly candidateVersion?: string;
+  /** ISO time of the last live check of the candidate. */
+  readonly lastCheckedAt?: string;
+  /** Plain-words reason from a fixed list, never raw tool output. */
+  readonly reason?: string;
 }
 
 export interface AiProviderConfigDto {
