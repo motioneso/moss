@@ -92,6 +92,15 @@ export {
 
 const STALE_ACTION_GRACE_MS = 5 * 60_000;
 
+export interface CheckTokenMinter {
+  readonly mint: (
+    actorUserId: string,
+    chatSessionId: string,
+    toolNames: readonly string[]
+  ) => { readonly token: string; readonly mcpServerUrl: string };
+  readonly revoke: (chatSessionId: string) => void;
+}
+
 export interface ChatRoutesDependencies {
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -181,6 +190,11 @@ export interface ChatRoutesDependencies {
    * is wired (`wiring === null`, i.e. no `resolveActiveModules`/`mcpServerUrl` supplied).
    */
   readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
+  /**
+   * #2689: publishes a minter for a token that may call only the named tools, and a way to drop it.
+   * The version check uses it so its throwaway session can reach nothing but one read-only tool.
+   */
+  readonly adoptCheckTokenMinter?: (minter: CheckTokenMinter) => void;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -393,6 +407,17 @@ export function registerChatRoutes(
     dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
       wiring.tokens.revokeBySessionId(chatSessionId)
     );
+    dependencies.adoptCheckTokenMinter?.({
+      mint: (actorUserId, chatSessionId, toolNames) => ({
+        token: wiring.tokens.mint({
+          actorUserId,
+          chatSessionId,
+          allowedToolNames: new Set(toolNames)
+        }),
+        mcpServerUrl: wiring.mcpServerUrl
+      }),
+      revoke: (chatSessionId) => wiring.tokens.revokeBySessionId(chatSessionId)
+    });
   }
 
   // Wire real notifier now that manager is available.

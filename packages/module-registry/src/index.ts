@@ -630,6 +630,7 @@ export interface BuiltInRouteDependencies {
    * `onPersistentReap` (closes task #5's documented gap — see `chat-multiplexer.ts`).
    */
   readonly adoptMcpTokenRevoke?: ChatRoutesDependencies["adoptMcpTokenRevoke"];
+  readonly adoptCheckTokenMinter?: ChatRoutesDependencies["adoptCheckTokenMinter"];
   readonly resolveEveningInterviewSeed?: ChatRoutesDependencies["resolveEveningInterviewSeed"];
   readonly revokeUserSessions?: (userId: string) => Promise<number>;
   /** Auth-owned current-user session list/revoke service (#237). */
@@ -2145,6 +2146,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // SessionTokenRegistry.revokeBySessionId so onReady's resolveChatEngineFactory call
         // below can thread it into the persistent-runtime pool's onPersistentReap.
         adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
+        adoptCheckTokenMinter: deps.adoptCheckTokenMinter,
         resolveActiveModules: deps.resolveActiveModules,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,

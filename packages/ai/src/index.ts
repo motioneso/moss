@@ -13,6 +13,7 @@ export * from "./cli-availability.js";
 export * from "./cli-tool-versions.js";
 export * from "./cli-tools-refresh.js";
 export * from "./cli-version-check.js";
+export * from "./cli-live-check.js";
 export * from "./crypto.js";
 export * from "./credentials.js";
 export * from "./manifest.js";

@@ -38,13 +38,13 @@ describe("runCheckTurn", () => {
     const engine = fakeEngine({
       batches: [
         {
-          records: [{ kind: "tool", toolName: "mcp__jarvis__app.getMapSlice", text: "x" }],
+          records: [{ kind: "tool", toolName: "mcp__jarvis__app_getMapSlice", text: "x" }],
           complete: false
         } as never,
         { records: [], complete: true } as never
       ]
     });
-    expect(await runCheckTurn({ ...base, engine })).toEqual({ ok: true });
+    expect(await runCheckTurn({ ...base, engine })).toMatchObject({ ok: true });
     expect(engine.kill).toHaveBeenCalledOnce();
   });
 
@@ -59,6 +59,14 @@ describe("runCheckTurn", () => {
       ok: false,
       reason: "tool_call_missing"
     });
+  });
+
+  it("returns the reply text, and needs no tool call when none is named", async () => {
+    const engine = fakeEngine({
+      batches: [{ records: [{ kind: "reply", text: '{"sum":4}' }], complete: true } as never]
+    });
+    const { toolName: _unused, ...noTool } = base;
+    expect(await runCheckTurn({ ...noTool, engine })).toEqual({ ok: true, replyText: '{"sum":4}' });
   });
 
   it("ignores a different tool", async () => {

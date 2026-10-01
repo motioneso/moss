@@ -12,20 +12,23 @@ import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
 export type CheckTurnFailure = "tool_call_missing" | "timeout" | "check_unavailable";
 
 export type CheckTurnResult =
-  | { readonly ok: true }
+  | { readonly ok: true; readonly replyText: string }
   | { readonly ok: false; readonly reason: CheckTurnFailure };
 
 export interface CheckTurnOptions {
   readonly engine: CliChatEngine;
   readonly launch: EngineLaunchOpts;
   readonly prompt: string;
-  /** The tool the turn must call. Matched against the end of the reported name. */
-  readonly toolName: string;
+  /** The tool the turn must call, matched against the end of the reported name. Omit for none. */
+  readonly toolName?: string;
   readonly timeoutMs: number;
   readonly pollMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly now?: () => number;
 }
+
+/** The program shows "app.getMapSlice" as "mcp__jarvis__app_getMapSlice". */
+const normalize = (name: string) => name.replace(/\./g, "_");
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -36,13 +39,20 @@ export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurn
   const now = options.now ?? Date.now;
   const deadline = now() + timeoutMs;
   let called = false;
+  let replyText = "";
   try {
     await engine.launch(launch);
     await engine.submit(prompt);
     for (;;) {
       const batch = await engine.readNew(0);
       for (const record of batch.records) {
-        if (record.kind === "tool" && record.toolName.endsWith(toolName)) called = true;
+        if (
+          toolName &&
+          record.kind === "tool" &&
+          normalize(record.toolName).endsWith(normalize(toolName))
+        )
+          called = true;
+        if (record.kind === "reply") replyText += record.text;
       }
       if (batch.complete) break;
       if (now() >= deadline) {
@@ -51,7 +61,9 @@ export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurn
       }
       await sleep(pollMs);
     }
-    return called ? { ok: true } : { ok: false, reason: "tool_call_missing" };
+    return called || !toolName
+      ? { ok: true, replyText }
+      : { ok: false, reason: "tool_call_missing" };
   } catch (error) {
     // A refusal for an old tool version is a real failure of the candidate; anything else
     // (no login, runner down) says nothing about the candidate.
