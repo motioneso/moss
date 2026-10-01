@@ -64,6 +64,7 @@ import {
   candidateReleasesFor,
   type ReleaseOverrides
 } from "./tools-volume-adapters.js";
+import { acquireLeases, leaseTargetsForPaths } from "./tools-leases.js";
 import { defaultResolveAdapterTarget, type AcpAdapterTarget } from "./acp-adapter-target.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
@@ -102,6 +103,8 @@ export interface AcpHostDeps {
   readonly applyOwnership?: OwnershipApplier;
   /** Tools volume prefix: an adapter and CLI installed there win over the image copy (#2689). */
   readonly toolsPrefix?: string;
+  /** Called when the last lease on a tools volume release is removed, so cleanup can run. */
+  readonly onToolsLeaseIdle?: (slot: string) => void | Promise<void>;
   /** Resolves the adapter spawn target; injected so tests never touch node_modules. */
   readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
@@ -526,14 +529,34 @@ export class AcpHost {
           detached: true
         }) as ChildProcessWithoutNullStreams;
       });
-    const child = spawnChild({
-      command: target.command,
-      args: target.args,
-      cwd: sessionDir,
-      env,
-      uid: switchTo?.uid,
-      gid: switchTo?.gid
-    });
+    // The session runs from these concrete release folders until it exits, so cleanup must keep
+    // them. The lease starts under the runner's pid and moves to the child once it exists.
+    const lease = this.deps.toolsPrefix
+      ? await acquireLeases(
+          this.deps.toolsPrefix,
+          leaseTargetsForPaths(this.deps.toolsPrefix, [
+            ...target.args,
+            env.CLAUDE_CODE_EXECUTABLE,
+            env.CODEX_PATH
+          ]),
+          (t) => this.deps.onToolsLeaseIdle?.(t.slot)
+        )
+      : null;
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnChild({
+        command: target.command,
+        args: target.args,
+        cwd: sessionDir,
+        env,
+        uid: switchTo?.uid,
+        gid: switchTo?.gid
+      });
+      if (typeof child.pid === "number") await lease?.adopt(child.pid);
+    } catch (error) {
+      await lease?.release().catch(() => undefined);
+      throw error;
+    }
 
     // Records the process a boot sweep must confirm has stopped before purging.
     if (chatMarkerRecord && typeof child.pid === "number") {
@@ -588,10 +611,12 @@ export class AcpHost {
       session.exited = true;
       session.exitCode = code;
       session.lastActivity = Date.now();
+      void lease?.release().catch(() => undefined);
     });
     child.on("error", () => {
       session.exited = true;
       session.lastActivity = Date.now();
+      void lease?.release().catch(() => undefined);
     });
     this.sessions.set(key, session);
     // The agent's home travels with the spawn result so the permission policy

@@ -131,7 +131,8 @@ export class CliChatEngineHost {
       homeBase: deps.homeBase,
       perUserUid: deps.perUserUid,
       allowSharedUid: deps.allowSharedUid,
-      toolsPrefix: deps.toolsPrefix
+      toolsPrefix: deps.toolsPrefix,
+      onToolsLeaseIdle: (slot) => deps.installService?.sweepSlot(slot)
     });
   }
 

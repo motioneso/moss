@@ -35,6 +35,7 @@ import {
   type LastCheck,
   type StagedPackage
 } from "./tools-state.js";
+import { hasLiveLease } from "./tools-leases.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
@@ -435,10 +436,7 @@ export class InstallService {
         });
         for (const old of prior.candidate) {
           if (!staged.some((s) => s.slot === old.slot && s.release === old.release)) {
-            await rm(path.join(this.toolsPrefix, "providers", old.slot, "releases", old.release), {
-              recursive: true,
-              force: true
-            }).catch(() => undefined);
+            await this.removeReleaseIfFree(old.slot, old.release);
           }
         }
         return { state: "staged", staged };
@@ -531,10 +529,7 @@ export class InstallService {
     // The previous generation of `prior` is no longer rollback material.
     for (const old of state.prior) {
       if (!newPrior.some((n) => n.slot === old.slot && n.release === old.release)) {
-        await rm(path.join(this.toolsPrefix, "providers", old.slot, "releases", old.release), {
-          recursive: true,
-          force: true
-        }).catch(() => undefined);
+        await this.removeReleaseIfFree(old.slot, old.release);
       }
     }
     return { state: "promoted" };
@@ -863,7 +858,7 @@ export class InstallService {
     if (listed.code !== 0) return;
     for (const name of splitLines(listed.stdout)) {
       const dir = path.join(releasesDir, name);
-      if (dir === keepDir || dir === live || keep.has(dir)) continue;
+      if (dir === keepDir || (await this.releaseIsKept(provider, name, live, keep))) continue;
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
@@ -1046,6 +1041,37 @@ export class InstallService {
     }
   }
 
+  /**
+   * The one cleanup rule. A release stays when it is live, a staged candidate, the previous
+   * release, or has a live lease. Anything in doubt stays.
+   */
+  private async releaseIsKept(
+    slot: string,
+    release: string,
+    live: string | undefined,
+    keep: ReadonlySet<string>
+  ): Promise<boolean> {
+    const dir = path.join(this.toolsPrefix, "providers", slot, "releases", release);
+    if (dir === live || keep.has(dir)) return true;
+    return hasLiveLease(this.toolsPrefix, { slot, release }).catch(() => true);
+  }
+
+  /** Deletes one release unless the shared rule keeps it. */
+  private async removeReleaseIfFree(slot: string, release: string): Promise<void> {
+    const live = await this.resolveCurrent(slot);
+    const keep = await this.candidateReleaseDirs();
+    if (await this.releaseIsKept(slot, release, live, keep)) return;
+    await rm(path.join(this.toolsPrefix, "providers", slot, "releases", release), {
+      recursive: true,
+      force: true
+    }).catch(() => undefined);
+  }
+
+  /** Runs the cleanup rule over one slot. Called when the last lease on a release is removed. */
+  async sweepSlot(slot: string): Promise<void> {
+    await this.sweepReleases(slot).catch(() => undefined);
+  }
+
   /** Absolute release folders that any provider's `state.json` lists as a staged candidate. */
   private async candidateReleaseDirs(): Promise<Set<string>> {
     const keep = new Set<string>();
@@ -1071,8 +1097,7 @@ export class InstallService {
     if (listed.code !== 0) return;
     for (const name of splitLines(listed.stdout)) {
       const dir = path.join(releasesDir, name);
-      if (dir === live) continue; // keep the one `current` points at
-      if (keep.has(dir)) continue;
+      if (await this.releaseIsKept(provider, name, live, keep)) continue;
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }

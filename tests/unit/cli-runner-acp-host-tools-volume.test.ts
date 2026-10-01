@@ -3,10 +3,10 @@
  * volume when installed, and from the image otherwise.
  */
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AcpHost, defaultResolveAdapterTarget } from "../../packages/cli-runner/src/acp-host.js";
 import { applyToolsVolumeCli } from "../../packages/cli-runner/src/tools-volume-adapters.js";
@@ -83,5 +83,40 @@ describe("launch environment", () => {
     const preset: NodeJS.ProcessEnv = { CODEX_PATH: "/custom/codex" };
     applyToolsVolumeCli(preset, join(root, "tools"), "openai");
     expect(preset.CODEX_PATH).toBe("/custom/codex");
+  });
+});
+
+describe("release leases", () => {
+  it("holds a lease on the adapter and CLI releases until the session exits", async () => {
+    mkdirSync(join(root, "homes"), { recursive: true });
+    mkdirSync(join(root, "neutral"), { recursive: true });
+    const entry = "node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js";
+    release("anthropic-adapter", { [entry]: "//" });
+    release("anthropic", { "node_modules/.bin/claude": "#!/bin/sh\n" }, 0o755);
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      stdin: { write: () => undefined },
+      kill: () => true
+    });
+    const onIdle = vi.fn();
+    const host = new AcpHost({
+      neutralBase: join(root, "neutral"),
+      homeBase: join(root, "homes"),
+      allowSharedUid: true,
+      toolsPrefix: join(root, "tools"),
+      onToolsLeaseIdle: onIdle,
+      spawnChild: () => child as never
+    });
+    const leases = (slot: string) => join(root, "tools", "providers", slot, "leases", "r1");
+
+    await host.spawn("chat:u:a", "proj", "anthropic", "u", "workshop");
+    expect(existsSync(leases("anthropic"))).toBe(true);
+    expect(existsSync(leases("anthropic-adapter"))).toBe(true);
+
+    child.emit("exit", 0);
+    await vi.waitFor(() => expect(onIdle).toHaveBeenCalledWith("anthropic"));
+    expect(existsSync(leases("anthropic"))).toBe(false);
+    expect(existsSync(leases("anthropic-adapter"))).toBe(false);
   });
 });

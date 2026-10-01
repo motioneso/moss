@@ -19,6 +19,7 @@ import type { TmuxIo } from "../../packages/ai/src/index.js";
 import { ADAPTER_CATALOG, PROVIDER_CATALOG } from "../../packages/cli-runner/src/catalog.js";
 import { InstallService } from "../../packages/cli-runner/src/install-service.js";
 import { readToolsState } from "../../packages/cli-runner/src/tools-state.js";
+import { acquireLeases } from "../../packages/cli-runner/src/tools-leases.js";
 
 const CLI_PKG = "@anthropic-ai/claude-code";
 const ADAPTER_PKG = "@agentclientprotocol/claude-agent-acp";
@@ -208,5 +209,66 @@ describe("promoteCandidate", () => {
 
     expect(result).toMatchObject({ state: "installed", version: NEW_CLI, alreadyInstalled: true });
     expect(await currentOf("anthropic")).toBe(live);
+  });
+
+  describe("release leases", () => {
+    const secondPromote = async (svc: InstallService) => {
+      await svc.stageCandidate("anthropic", [{ ...toolset[0], version: "9.9.10" }, toolset[1]], 8);
+      await svc.promoteCandidate("anthropic");
+    };
+
+    it("keeps a leased release through the promote that would free it", async () => {
+      const svc = service();
+      await svc.installProvider("anthropic");
+      const [first] = await releases("anthropic");
+      await svc.stageCandidate("anthropic", toolset, 7);
+      await svc.promoteCandidate("anthropic");
+      const lease = await acquireLeases(toolsPrefix, [{ slot: "anthropic", release: first! }]);
+
+      await secondPromote(svc);
+
+      expect(await releases("anthropic")).toContain(first);
+      await lease.release();
+    });
+
+    it("keeps a leased release through the boot sweep and removes a stale one", async () => {
+      const svc = service();
+      await svc.installProvider("anthropic");
+      const dir = (name: string) => path.join(providers(), "anthropic", "releases", name);
+      await mkdir(dir("leased"), { recursive: true });
+      await mkdir(dir("stale"), { recursive: true });
+      await mkdir(dir("bare"), { recursive: true });
+      const lease = await acquireLeases(toolsPrefix, [{ slot: "anthropic", release: "leased" }]);
+      const staleDir = path.join(providers(), "anthropic", "leases", "stale");
+      await mkdir(staleDir, { recursive: true });
+      await writeFile(path.join(staleDir, `${2 ** 22 + 7}-1`), "");
+
+      await svc.startupSweep();
+
+      const left = await releases("anthropic");
+      expect(left).toContain("leased");
+      expect(left).not.toContain("stale");
+      expect(left).not.toContain("bare");
+      await lease.release();
+    });
+
+    it("frees a kept release once its last lease is removed", async () => {
+      const svc = service();
+      await svc.installProvider("anthropic");
+      const [first] = await releases("anthropic");
+      await svc.stageCandidate("anthropic", toolset, 7);
+      await svc.promoteCandidate("anthropic");
+      const lease = await acquireLeases(
+        toolsPrefix,
+        [{ slot: "anthropic", release: first! }],
+        (t) => svc.sweepSlot(t.slot)
+      );
+      await secondPromote(svc);
+      expect(await releases("anthropic")).toContain(first);
+
+      await lease.release();
+
+      expect(await releases("anthropic")).not.toContain(first);
+    });
   });
 });
