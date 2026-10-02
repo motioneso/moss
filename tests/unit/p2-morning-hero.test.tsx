@@ -6,6 +6,7 @@ import type { BriefingRunDto, LocaleSettingsDto, SourceFreshnessV1 } from "@moss
 
 import {
   buildTodayHeroContent,
+  morningNotReadyReason,
   splitHeadline,
   TodayHero
 } from "../../apps/web/src/today/today-hero.js";
@@ -123,10 +124,7 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
     );
     expect(markup).not.toContain('class="today-hero__rule"');
     expect(labels.morningHeroKicker("Ben")).toMatch(
-      /^(Good morning|Good afternoon|Good evening), Ben \/ Morning briefing$/
-    );
-    expect(labels.morningHeroKicker(null)).toMatch(
-      /^(Good morning|Good afternoon|Good evening) \/ Morning briefing$/
+      /^(Good morning|Good afternoon|Good evening), Ben \/ (Morning|Today's) briefing$/
     );
   });
 
@@ -355,5 +353,67 @@ describe("morning hero vertical rhythm (day mode only)", () => {
 
     expect(closingSectionIndex).toBeGreaterThan(-1);
     expect(navIndex).toBeGreaterThan(closingSectionIndex);
+  });
+});
+
+describe("hero label by time of day", () => {
+  it("says morning only before noon", () => {
+    expect(labels.morningHeroKicker("Ben", new Date(2026, 9, 2, 9, 0))).toBe(
+      "Good morning, Ben / Morning briefing"
+    );
+    expect(labels.morningHeroKicker("Ben", new Date(2026, 9, 2, 14, 0))).toBe(
+      "Good afternoon, Ben / Today's briefing"
+    );
+    expect(labels.morningHeroKicker(null, new Date(2026, 9, 2, 19, 0))).toBe(
+      "Good evening / Today's briefing"
+    );
+  });
+});
+
+describe("not-ready reason", () => {
+  const schedule = { enabled: true, targetTime: "07:00", pastTarget: false };
+  const failedRun = (status: "failed" | "blocked") => ({ ...morningRun(), status });
+
+  it.each([
+    [null, { ...schedule, enabled: false }, "Your morning briefing is switched off."],
+    [failedRun("failed"), schedule, "Today's briefing failed to run."],
+    [failedRun("blocked"), schedule, "Today's briefing was blocked."],
+    [null, schedule, "It runs at 7:00 AM."],
+    [null, { ...schedule, pastTarget: true }, "It should have run at 7:00 AM."]
+  ])("explains run %#", (run, sched, reason) => {
+    expect(morningNotReadyReason(run, sched)).toBe(reason);
+    const content = buildTodayHeroContent({
+      ...baseInput,
+      morningRun: run ? { ...run, summaryText: "" } : null,
+      morningSchedule: sched,
+      morningSplit: null,
+      morningFreshness: null
+    });
+    expect(content.notReadyReason).toBe(reason);
+    const markup = renderToStaticMarkup(
+      <TodayHero
+        mode="day"
+        eyebrow="x"
+        headline="h"
+        summary="s"
+        preparedAt={content.preparedAt}
+        readerControl={content.readerControl}
+        notReadyReason={content.notReadyReason}
+        weather={<div />}
+      />
+    );
+    expect(markup).toContain(`Briefing not ready yet. ${reason.replace("'", "&#x27;")}`);
+  });
+
+  it("shows no reason when a readable report exists", () => {
+    const run = morningRun();
+    const content = buildTodayHeroContent({
+      ...baseInput,
+      morningRun: run,
+      morningSchedule: schedule,
+      morningSplit: splitHeadline(run.summaryText),
+      morningFreshness: null
+    });
+    expect(content.notReadyReason).toBeNull();
   });
 });

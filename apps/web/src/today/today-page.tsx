@@ -28,7 +28,7 @@ import {
   updateTask
 } from "../api/client";
 import { findDefinition, targetTimeFor } from "../briefings/briefing-settings-model";
-import { formatDate, useUserLocale } from "../locale/locale-format";
+import { formatDate, useUserLocale, zonedClockMinutes } from "../locale/locale-format";
 import { localTimeToIso } from "./day-plan-review-model.js";
 import { hasConnectedProvider } from "../onboarding/chat-availability";
 import { useChatControls } from "../shell/chat-controls-context";
@@ -39,6 +39,7 @@ import {
   addDaysToKey,
   buildEveningLede,
   deriveTodayMode,
+  parseTargetMinutes,
   effectiveEveningTimeZone,
   effectiveBriefingTimeZone,
   EveningReviewSection,
@@ -413,12 +414,19 @@ export function TodayPage(props: {
     setReader({ definitionId: eveningDefinition.id, runId, kind: "evening", section });
   };
   const eveningTargetTime = eveningDefinition ? targetTimeFor(eveningDefinition, "evening") : "";
+  const morningTargetTime = targetTimeFor(morningDefinition, "morning");
+  const morningTargetMinutes = parseTargetMinutes(morningTargetTime) ?? 7 * 60;
   const heroContent = buildTodayHeroContent({
     mode: todayMode,
     assessmentShown,
     morningLoading,
     morningRun: latestMorningRun,
     morningDefinitionId: morningDefinition?.id ?? null,
+    morningSchedule: {
+      enabled: morningDefinition?.enabled === true,
+      targetTime: morningTargetTime,
+      pastTarget: (zonedClockMinutes(now, morningTimeZone) ?? 0) >= morningTargetMinutes
+    },
     morningSplit,
     morningFreshness,
     eveningRun: latestEveningRun,
@@ -548,7 +556,7 @@ export function TodayPage(props: {
           todayMode === "evening"
             ? eveningHeroKicker(userFirstName)
             : morningDefinition?.enabled === true
-              ? morningHeroKicker(userFirstName)
+              ? morningHeroKicker(userFirstName, now)
               : userFirstName
                 ? `${greeting()}, ${userFirstName}`
                 : greeting()
@@ -556,6 +564,7 @@ export function TodayPage(props: {
         headline={heroContent.headline}
         summary={heroContent.summary}
         preparedAt={heroContent.preparedAt}
+        notReadyReason={heroContent.notReadyReason}
         readerControl={
           heroContent.readerControl ||
           (todayMode === "day" &&
