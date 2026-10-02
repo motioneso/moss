@@ -46,7 +46,7 @@ export const listModelActivityRouteSchema = {
       /** ISO timestamp cursor: only rows strictly before this time (older page). */
       before: { type: "string" },
       /** Tiebreak cursor id for rows at exactly `before`. */
-      beforeId: { type: "string", maxLength: 64 },
+      beforeId: { type: "string", format: "uuid", maxLength: 64 },
       limit: { type: "integer", minimum: 1, maximum: 200 }
     }
   },

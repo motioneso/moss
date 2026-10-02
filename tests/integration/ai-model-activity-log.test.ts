@@ -141,6 +141,15 @@ describe("model activity log (#2889)", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("returns 400 for a malformed beforeId cursor instead of a server error", async () => {
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/ai/model-activity?before=2026-01-01T00:00:00.000Z&beforeId=not-a-uuid",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("returns entries to an admin, newest first, including a 400-day-old row", async () => {
     const res = await server.inject({
       method: "GET",

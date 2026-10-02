@@ -166,7 +166,8 @@ export function ModelActivityPane(_props: PaneProps) {
       <header className="settings-section__header">
         <h2 className="settings-section__title">Model activity</h2>
         <p className="settings-section__desc">
-          Chat, structured and transcription calls made through the configured providers.
+          API-key providers: chat, structured and transcription calls. CLI providers: structured
+          calls only; CLI chat turns are not recorded yet.
         </p>
       </header>
 
