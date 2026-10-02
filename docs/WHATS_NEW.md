@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Today header shows the right time of day and why a briefing is missing.** The Today header no longer says "Morning briefing" in the afternoon, and when your briefing is not ready it now tells you why or when it will run. [PR #2929](https://github.com/motioneso/moss/pull/2929)
 - **Your own sent emails no longer show as needing you.** Emails you sent yourself no longer appear in your briefings as waiting for your decision. [PR #2880](https://github.com/motioneso/moss/pull/2880)
 
 #### Changed
