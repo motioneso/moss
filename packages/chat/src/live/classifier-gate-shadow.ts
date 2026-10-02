@@ -71,7 +71,12 @@ export interface ClassifierGateShadowRunnerDeps {
 
 interface PendingTurn {
   readonly actorUserId: string;
+  /** The 3.4 record exists, so observations can be written directly. */
   opened: boolean;
+  /** The shadow attempt finished (whether or not it opened a record). */
+  settled: boolean;
+  /** The chat turn ended; the pending entry may be reclaimed once the attempt settles too. */
+  ended: boolean;
   observation?: ModelToolObservation;
 }
 
@@ -129,16 +134,34 @@ export function createClassifierGateShadowRunner(
     ).catch(() => fail("observe"));
   };
 
+  const maybeReclaim = (turnId: string): void => {
+    const turn = pending.get(turnId);
+    if (turn?.settled && turn.ended) pending.delete(turnId);
+  };
+
+  const markEnded = (turnId: string): void => {
+    const turn = pending.get(turnId);
+    if (turn) turn.ended = true;
+  };
+
+  /**
+   * Records one observation for a turn that is still tracked. A tracked record that exists takes it
+   * directly; one whose attempt is still running buffers it (with priority) until the attempt opens
+   * the row; a tracked turn with no row and no running attempt drops it. An untracked turn means no
+   * record exists, so nothing is written — this is why gate `off` costs the default turn no writes.
+   */
   const recordObservation = (
     actorUserId: string,
     turnId: string,
     observation: ModelToolObservation
   ): void => {
     const turn = pending.get(turnId);
-    if (!turn) {
+    if (!turn) return;
+    if (turn.opened) {
       writeObservation(actorUserId, turnId, observation);
       return;
     }
+    if (turn.settled) return;
     if (
       !turn.observation ||
       OBSERVATION_PRIORITY[observation.kind] > OBSERVATION_PRIORITY[turn.observation.kind]
@@ -195,6 +218,7 @@ export function createClassifierGateShadowRunner(
             writeObservation(actorUserId, turnId, turn.observation);
             turn.observation = undefined;
           }
+          maybeReclaim(turnId);
         }
 
         // A cooled-off turn makes no classifier request; the record still shows why.
@@ -237,7 +261,11 @@ export function createClassifierGateShadowRunner(
     } catch {
       // A mode read, classifier, port or storage failure never reaches chat.
     } finally {
-      pending.delete(turnId);
+      const turn = pending.get(turnId);
+      if (turn) {
+        turn.settled = true;
+        maybeReclaim(turnId);
+      }
     }
   };
 
@@ -245,7 +273,12 @@ export function createClassifierGateShadowRunner(
     start(input) {
       const existing = pending.get(input.turnId);
       if (existing) return;
-      pending.set(input.turnId, { actorUserId: input.actorUserId, opened: false });
+      pending.set(input.turnId, {
+        actorUserId: input.actorUserId,
+        opened: false,
+        settled: false,
+        ended: false
+      });
       if (pending.size > SHADOW_OBSERVATION_BUFFER_LIMIT) {
         const oldest = pending.keys().next().value;
         if (oldest !== undefined) pending.delete(oldest);
@@ -259,10 +292,14 @@ export function createClassifierGateShadowRunner(
       });
     },
     noModelTool(actorUserId, turnId) {
+      markEnded(turnId);
       recordObservation(actorUserId, turnId, { kind: "no_model_tool" });
+      maybeReclaim(turnId);
     },
     cancelTurn(actorUserId, turnId) {
+      markEnded(turnId);
       recordObservation(actorUserId, turnId, { kind: "cancelled" });
+      maybeReclaim(turnId);
     }
   };
 }
@@ -345,6 +382,7 @@ export function beginClassifierGateShadowTurn(
       runner?.observeModelTool(actorUserId, turnId, rawToolName);
     },
     cancel() {
+      observed = true;
       runner?.cancelTurn(actorUserId, turnId);
     },
     finish() {
