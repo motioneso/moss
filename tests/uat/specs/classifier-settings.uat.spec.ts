@@ -89,12 +89,15 @@ test("the Classifier settings row picks and clears a classifier and gates `on` (
 
   // The row is renamed and shows the approved disclosure control.
   await expect(classifierHeading(page)).toBeVisible();
-  await expect(page.getByText("Sorting model")).toHaveCount(0);
+  await expect(page.locator(".rt__name").filter({ hasText: "Sorting model" })).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
   await expect(gateButton(page, "Off")).toHaveAttribute("aria-pressed", "true");
+  // No classifier chosen yet: the mockup keeps the gate unusable.
+  await expect(gateButton(page, "Shadow")).toBeDisabled();
 
   // Pick a classifier, reload, confirm it stuck from the saved record.
   await selectClassifier(page);
+  await expect(gateButton(page, "Shadow")).toBeEnabled();
   await page.reload();
   await openAssistantAndAiSettings(page);
   await expect(classifierSelect(page)).toHaveValue(/^model:/);
@@ -115,6 +118,8 @@ test("the Classifier settings row picks and clears a classifier and gates `on` (
     "title",
     "Available after shadow results are reviewed"
   );
+  // Ruling 1: the row states the admin-wide reach of the gate.
+  await expect(page.getByText(/every user's eligible messages/)).toBeVisible();
   await page.reload();
   await openAssistantAndAiSettings(page);
   await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");

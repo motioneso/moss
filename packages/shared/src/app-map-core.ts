@@ -261,7 +261,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "email sorting questions with a yes or no, that each email's subject, sender, dates and " +
       "text go there too, and that the main model still handles other sorting work. When a " +
       "hosted model is chosen and the Chat gate is Shadow or On, the row also says eligible " +
-      "chat messages go to its provider. The classifier " +
+      "chat messages go to its provider, and that when the gate is on every user's eligible " +
+      "messages go to that provider. The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +
       "confirmations and account or policy notices stay kept and searchable but are left out of " +

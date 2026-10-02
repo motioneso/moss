@@ -37,8 +37,15 @@ export const SYSTEM_ONE_SORTING_NOTE =
   "too. Your main model still handles other sorting work.";
 
 // Task 1.3 (#2892), approving mockup docs/superpowers/mockups/classifier-gate/settings-row.html.
+// Ruling 1 (Ben, 2026-10-01): the admin-wide switch must say plainly that when the gate is on,
+// every user's eligible messages reach the classifier provider.
 export const CLASSIFIER_API_DISCLOSURE =
-  "API model: eligible chat messages also go to its provider.";
+  "API model: eligible chat messages also go to its provider. When the gate is on, every " +
+  "user's eligible messages go to that provider.";
+
+// The same ruling, shown in the Chat gate help and asserted by the unit test.
+export const CLASSIFIER_GATE_ON_NOTE =
+  "When the gate is on, every user's eligible messages go to the classifier's provider.";
 
 export const CLASSIFIER_HEADING = "Classifier";
 export const CLASSIFIER_HELP = "Optional model to handle classification requests.";
@@ -61,6 +68,7 @@ const GATE_TIP = (
         <b>On</b>: it answers requests it is sure about.
       </li>
     </ul>
+    <p style={{ margin: "var(--space-2) 0 0" }}>{CLASSIFIER_GATE_ON_NOTE}</p>
   </>
 );
 
@@ -155,6 +163,9 @@ export function SortingModelRow(props: {
   // bindable classifier kind is a hosted provider, so it shows whenever a model is bound and the
   // gate is Shadow or On (the mockup's `api` pattern).
   const showApiDisclosure = bound != null && savedGateMode !== "off";
+  // The mockup keeps the gate unusable until a classifier is chosen (chdis/gdis on the no-model
+  // and unavailable views).
+  const gateDisabled = bound == null;
 
   return (
     <div className="rt">
@@ -220,7 +231,7 @@ export function SortingModelRow(props: {
             options={CLASSIFIER_GATE_MODES.map((mode) => ({
               value: mode,
               label: GATE_LABELS[mode],
-              disabled: gateMutation.isPending || (mode === "on" && !canChooseOn),
+              disabled: gateMutation.isPending || gateDisabled || (mode === "on" && !canChooseOn),
               title:
                 mode === "on" && !canChooseOn
                   ? "Available after shadow results are reviewed"
@@ -228,7 +239,9 @@ export function SortingModelRow(props: {
             }))}
           />
         </Field>
-        {!canChooseOn ? <div className="rt__desc">On opens after shadow review.</div> : null}
+        {!gateDisabled && !canChooseOn ? (
+          <div className="rt__desc">On opens after shadow review.</div>
+        ) : null}
       </div>
     </div>
   );

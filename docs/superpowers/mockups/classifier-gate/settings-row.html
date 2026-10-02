@@ -46,9 +46,9 @@ function render(k){
  document.getElementById('notes').innerHTML=v.notes.map(function(n){return '<p class="mk-note '+(n[0]==='warn'?'warn':n[0]==='err'?'err':'')+'" role="'+(n[0]==='err'?'alert':'status')+'">'+n[1]+'</p>'}).join('');
  document.getElementById('actions').innerHTML=(v.actions||[]).map(function(a){return '<button class="jds-btn jds-btn--secondary jds-btn--sm">'+a+'</button>'}).join('');
  document.getElementById('gh').textContent=k==='onpending'?'On opens after shadow review.':'';
- document.getElementById('apinote').textContent=v.api?'API model: eligible chat messages also go to its provider.':'';
+ document.getElementById('apinote').textContent=v.api?"API model: eligible chat messages also go to its provider. When the gate is on, every user's eligible messages go to that provider.":'';
  document.getElementById('t0').innerHTML=tip('Picks a tool and fills in simple values for quick chat requests, so they skip your default model. Also used for yes/no and pick-one questions in the background.');
- document.getElementById('t2').innerHTML=tip('Lets the classifier answer quick chat requests before your default model sees them.<ul style="margin:var(--space-2) 0 0;padding-left:var(--space-4)"><li><b>Off</b>: not used.</li><li><b>Shadow</b>: it guesses and logs, but your default model still answers.</li><li><b>On</b>: it answers requests it is sure about.</li></ul>');
+ document.getElementById('t2').innerHTML=tip('Lets the classifier answer quick chat requests before your default model sees them.<ul style="margin:var(--space-2) 0 0;padding-left:var(--space-4)"><li><b>Off</b>: not used.</li><li><b>Shadow</b>: it guesses and logs, but your default model still answers.</li><li><b>On</b>: it answers requests it is sure about. When the gate is on, every user&rsquo;s eligible messages go to the classifier&rsquo;s provider.</li></ul>');
 }
 vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
 render(location.hash.slice(1)||'none');

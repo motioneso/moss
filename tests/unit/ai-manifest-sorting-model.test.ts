@@ -31,5 +31,6 @@ describe("app map: sorting model (#2594)", () => {
     const page = CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders");
     expect(page?.description).toMatch(/Classifier row/);
     expect(page?.description).toMatch(/Use main model/);
+    expect(page?.description).toMatch(/every user's eligible/);
   });
 });

@@ -99,7 +99,7 @@ const SERVICE_ROWS: readonly {
     k: "module.connectors.email-extract",
     capability: "json",
     name: "Email reading",
-    desc: "Reads the emails the sorting model cannot settle and writes their summaries and suggested actions.",
+    desc: "Reads the emails the classifier cannot settle and writes their summaries and suggested actions.",
     requireExplicitBinding: true
   }
 ];
