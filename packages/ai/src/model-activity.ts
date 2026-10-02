@@ -80,6 +80,27 @@ export function modelActivityAction(service: string | undefined): string {
   return label.length > 0 ? label : "structured";
 }
 
+/** DB CHECK limits for the short fields; a value over the limit is truncated, never dropped. */
+const KIND_LIMIT = 64;
+const ACTION_LIMIT = 200;
+const RESULT_LIMIT = 500;
+
+function truncate(value: string, max: number): string {
+  const codePoints = Array.from(value);
+  return codePoints.length <= max ? value : codePoints.slice(0, max).join("");
+}
+
+/** Clamp every field to the column CHECK limits so an over-long value can never drop its row. */
+export function boundModelActivityEntry(entry: ModelActivityEntry): ModelActivityEntry {
+  return {
+    ...entry,
+    kind: truncate(entry.kind, KIND_LIMIT),
+    action: truncate(entry.action, ACTION_LIMIT),
+    modelName: truncate(entry.modelName, ACTION_LIMIT),
+    result: truncate(entry.result, RESULT_LIMIT)
+  };
+}
+
 /**
  * Build the database-backed recorder. A failed insert is swallowed to the logger, never surfaced to
  * the model call.
@@ -89,7 +110,7 @@ export function createDbModelActivityRecorder(
   logger?: Pick<FastifyBaseLogger, "warn">
 ): ModelActivityRecorder {
   return (entry) => {
-    void write(entry).catch((error: unknown) => {
+    void write(boundModelActivityEntry(entry)).catch((error: unknown) => {
       logger?.warn(
         {
           event: "model_activity_write_failed",

@@ -79,6 +79,7 @@ export function ModelActivityPane(_props: PaneProps) {
   const locale = useUserLocale();
   const [entries, setEntries] = useState<readonly ModelActivityEntryDto[]>([]);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
+  const [nextBeforeId, setNextBeforeId] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [range, setRange] = useState<TimeRange>("all");
@@ -92,6 +93,7 @@ export function ModelActivityPane(_props: PaneProps) {
       const response = await listModelActivity({ limit: PAGE_SIZE });
       setEntries(response.entries);
       setNextBefore(response.nextBefore);
+      setNextBeforeId(response.nextBeforeId);
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -106,15 +108,20 @@ export function ModelActivityPane(_props: PaneProps) {
     if (!nextBefore) return;
     setLoadingOlder(true);
     try {
-      const response = await listModelActivity({ limit: PAGE_SIZE, before: nextBefore });
+      const response = await listModelActivity({
+        limit: PAGE_SIZE,
+        before: nextBefore,
+        ...(nextBeforeId ? { beforeId: nextBeforeId } : {})
+      });
       setEntries((previous) => [...previous, ...response.entries]);
       setNextBefore(response.nextBefore);
+      setNextBeforeId(response.nextBeforeId);
     } catch {
       // Keep what is already on screen; the button simply stays available.
     } finally {
       setLoadingOlder(false);
     }
-  }, [nextBefore]);
+  }, [nextBefore, nextBeforeId]);
 
   const kinds = useMemo(() => optionValues(entries, (entry) => entry.kind), [entries]);
   const models = useMemo(() => optionValues(entries, (entry) => entry.modelName), [entries]);
@@ -158,7 +165,9 @@ export function ModelActivityPane(_props: PaneProps) {
     <div className="settings-section">
       <header className="settings-section__header">
         <h2 className="settings-section__title">Model activity</h2>
-        <p className="settings-section__desc">Every time Moss called a model, on this instance.</p>
+        <p className="settings-section__desc">
+          Chat, structured and transcription calls made through the configured providers.
+        </p>
       </header>
 
       {status !== "error" && (

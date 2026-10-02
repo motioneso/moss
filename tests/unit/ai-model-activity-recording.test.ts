@@ -155,4 +155,24 @@ describe("model activity recording (plan 3.6a, #2889)", () => {
     });
     expect(out.text).toBe("still fine");
   });
+
+  it("truncates over-long fields to the column limits instead of dropping the row", () => {
+    const written: ModelActivityEntry[] = [];
+    const recorder = createDbModelActivityRecorder(async (entry) => {
+      written.push(entry);
+    });
+
+    recorder({
+      kind: "chat",
+      action: "a".repeat(300),
+      outcome: "ok",
+      modelName: "m".repeat(300),
+      result: "r".repeat(600)
+    });
+
+    expect(written).toHaveLength(1);
+    expect(written[0]!.action.length).toBe(200);
+    expect(written[0]!.modelName.length).toBe(200);
+    expect(written[0]!.result.length).toBe(500);
+  });
 });

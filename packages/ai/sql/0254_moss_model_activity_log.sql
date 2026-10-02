@@ -13,7 +13,9 @@
 
 CREATE TABLE IF NOT EXISTS app.moss_model_activity_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  occurred_at timestamptz NOT NULL DEFAULT now(),
+  -- Millisecond precision on purpose: the read endpoint pages by (occurred_at, id), and a JS Date
+  -- round-trip is exact to the millisecond. Microseconds would make a page cursor lossy.
+  occurred_at timestamptz(3) NOT NULL DEFAULT now(),
   kind text NOT NULL CHECK (length(btrim(kind)) > 0 AND length(kind) <= 64),
   action text NOT NULL CHECK (length(btrim(action)) > 0 AND length(action) <= 200),
   outcome text NOT NULL CHECK (length(btrim(outcome)) > 0 AND length(outcome) <= 64),

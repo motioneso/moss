@@ -1511,6 +1511,7 @@ export async function listModelActivity(params?: {
   result?: string;
   since?: string;
   before?: string;
+  beforeId?: string;
   limit?: number;
 }): Promise<ListModelActivityResponse> {
   const controller = new AbortController();
@@ -1521,6 +1522,7 @@ export async function listModelActivity(params?: {
   if (params?.result) search.set("result", params.result);
   if (params?.since) search.set("since", params.since);
   if (params?.before) search.set("before", params.before);
+  if (params?.beforeId) search.set("beforeId", params.beforeId);
   if (params?.limit !== undefined) search.set("limit", String(params.limit));
   const qs = search.toString();
   try {

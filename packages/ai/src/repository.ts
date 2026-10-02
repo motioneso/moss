@@ -270,6 +270,8 @@ export interface ListModelActivityOptions {
   readonly outcome?: string;
   readonly since?: Date;
   readonly before?: Date;
+  /** Tiebreak for `before`: only rows with an id below this value at the same instant. */
+  readonly beforeId?: string;
   readonly limit: number;
 }
 
@@ -2389,7 +2391,22 @@ export class AiRepository {
     if (opts.modelName) query = query.where("model_name", "=", opts.modelName);
     if (opts.outcome) query = query.where("outcome", "=", opts.outcome);
     if (opts.since) query = query.where("occurred_at", ">=", opts.since);
-    if (opts.before) query = query.where("occurred_at", "<", opts.before);
+    if (opts.before) {
+      // Keyset page in (occurred_at DESC, id DESC) order. The id tiebreak means rows sharing the
+      // boundary millisecond are not skipped when a page ends inside a tie.
+      const before = opts.before;
+      const beforeId = opts.beforeId;
+      if (beforeId) {
+        query = query.where((eb) =>
+          eb.or([
+            eb("occurred_at", "<", before),
+            eb.and([eb("occurred_at", "=", before), eb("id", "<", beforeId)])
+          ])
+        );
+      } else {
+        query = query.where("occurred_at", "<", before);
+      }
+    }
 
     return query.execute();
   }

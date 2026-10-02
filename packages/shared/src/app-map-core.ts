@@ -315,10 +315,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "modelactivity",
     label: "Model activity",
     description:
-      "Review every model call on this instance: a day-grouped feed with the time, the kind of " +
-      "call (chat answer, classifier or background task), what it did, the model that ran it, " +
-      "whether it succeeded, and the result. Filter by kind, model, result and time. The log never " +
-      "shows chat text and is kept indefinitely.",
+      "Review model calls made through the configured providers: a day-grouped feed of chat, " +
+      "structured and transcription calls with the time, what it did, the model that ran it, " +
+      "whether it succeeded, and a short result. Filter by kind, model, result and time. The log " +
+      "never shows chat text and is kept indefinitely; more call types are added in a later step.",
     path: "/settings?section=modelactivity",
     scope: "admin"
   },

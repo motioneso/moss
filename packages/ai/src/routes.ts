@@ -839,6 +839,7 @@ export function registerAiRoutes(
       result?: string;
       since?: string;
       before?: string;
+      beforeId?: string;
       limit?: number;
     };
   }>("/api/ai/model-activity", { schema: listModelActivityRouteSchema }, async (request, reply) => {
@@ -860,6 +861,7 @@ export function registerAiRoutes(
           ...(request.query.result ? { outcome: request.query.result } : {}),
           ...(since ? { since } : {}),
           ...(before ? { before } : {}),
+          ...(before && request.query.beforeId ? { beforeId: request.query.beforeId } : {}),
           limit
         });
 
@@ -867,7 +869,8 @@ export function registerAiRoutes(
         const last = entries.at(-1);
         const response: ListModelActivityResponse = {
           entries,
-          nextBefore: entries.length === limit && last ? last.occurredAt : null
+          nextBefore: entries.length === limit && last ? last.occurredAt : null,
+          nextBeforeId: entries.length === limit && last ? last.id : null
         };
         return response;
       });

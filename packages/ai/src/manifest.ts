@@ -262,9 +262,9 @@ export const aiModuleManifest = {
     {
       id: "ai.model_activity_log",
       description:
-        "Admin-only log of every model call: time, kind, action, outcome, model name and a short " +
-        "result. Never chat text, prompts, tool arguments or secrets; a failed write is dropped " +
-        "and never affects the call."
+        "Admin-only log of model calls made through the configured providers: time, kind, action, " +
+        "outcome, model name and a short result. Never chat text, prompts, tool arguments or " +
+        "secrets; a failed write is dropped and never affects the call."
     }
   ],
   permissions: [

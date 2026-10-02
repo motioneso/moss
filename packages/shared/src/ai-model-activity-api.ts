@@ -23,11 +23,13 @@ const modelActivityEntrySchema = {
 export const listModelActivityResponseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["entries", "nextBefore"],
+  required: ["entries", "nextBefore", "nextBeforeId"],
   properties: {
     entries: { type: "array", items: modelActivityEntrySchema },
     /** Cursor for the next, older page; null when there is no further page. */
-    nextBefore: { type: ["string", "null"] }
+    nextBefore: { type: ["string", "null"] },
+    /** Tiebreak cursor id for rows sharing the boundary millisecond; null with nextBefore. */
+    nextBeforeId: { type: ["string", "null"] }
   }
 } as const;
 
@@ -43,6 +45,8 @@ export const listModelActivityRouteSchema = {
       since: { type: "string" },
       /** ISO timestamp cursor: only rows strictly before this time (older page). */
       before: { type: "string" },
+      /** Tiebreak cursor id for rows at exactly `before`. */
+      beforeId: { type: "string", maxLength: 64 },
       limit: { type: "integer", minimum: 1, maximum: 200 }
     }
   },
@@ -64,4 +68,5 @@ export type ModelActivityEntryDto = {
 export type ListModelActivityResponse = {
   readonly entries: readonly ModelActivityEntryDto[];
   readonly nextBefore: string | null;
+  readonly nextBeforeId: string | null;
 };

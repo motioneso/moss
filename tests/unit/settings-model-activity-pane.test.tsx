@@ -49,7 +49,7 @@ function entry(overrides: Partial<ModelActivityEntryDto> = {}): ModelActivityEnt
 
 describe("ModelActivityPane", () => {
   it("renders the empty state when there are no recorded calls", async () => {
-    listModelActivity.mockResolvedValueOnce({ entries: [], nextBefore: null });
+    listModelActivity.mockResolvedValueOnce({ entries: [], nextBefore: null, nextBeforeId: null });
 
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
@@ -67,7 +67,8 @@ describe("ModelActivityPane", () => {
   it("renders a recorded call with its model name and a day heading", async () => {
     listModelActivity.mockResolvedValueOnce({
       entries: [entry()],
-      nextBefore: null
+      nextBefore: null,
+      nextBeforeId: null
     });
 
     let renderer!: ReturnType<typeof create>;
@@ -87,7 +88,8 @@ describe("ModelActivityPane", () => {
   it("offers Load older only when the endpoint returns a cursor", async () => {
     listModelActivity.mockResolvedValueOnce({
       entries: [entry()],
-      nextBefore: new Date(Date.now() - 1000).toISOString()
+      nextBefore: new Date(Date.now() - 1000).toISOString(),
+      nextBeforeId: "activity-1"
     });
 
     let renderer!: ReturnType<typeof create>;
