@@ -3,7 +3,7 @@ import { Link } from "react-router";
 
 import { useAssistantName } from "../api/use-assistant-name";
 
-/** Deep-link to the Assistant & AI settings pane (the post-onboarding provider-connect surface).
+/** Deep-link to the Your assistant settings pane (the post-onboarding provider-connect surface).
  *  settings-page reads `?section=` to open the right pane instead of the default Profile pane. */
 export const CONNECT_PROVIDER_HREF = "/settings?section=assistant";
 
@@ -13,7 +13,7 @@ export const CONNECT_PROVIDER_HREF = "/settings?section=assistant";
  * direct path to connect a provider. Provider-agnostic: it names no specific provider/model.
  *
  * `isFounder` tailors the copy (the founder set the instance up) but both roles get a working
- * link to Settings → Assistant & AI, which is the connect surface available after onboarding.
+ * link to Settings → Your assistant, which is the connect surface available after onboarding.
  */
 export function ConnectProviderEmpty(props: { readonly isFounder: boolean }) {
   const assistantName = useAssistantName("");

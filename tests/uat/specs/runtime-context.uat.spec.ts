@@ -112,7 +112,7 @@ test.fixme("chat refuses to take a screenshot and explains why instead (#1121)",
 
 // #1121: this needs a real chat model to (a) call chat.getCurrentView + app.getMapSlice to ground
 // its answer in the actual News error, and (b) produce prose citing the "JSON-capable economy
-// model" remediation and a working Assistant & AI settings link. The UAT harness cannot drive this
+// model" remediation and a working Your assistant settings link. The UAT harness cannot drive this
 // (see file header). The News error's own deterministic rendering (no chat involved) is already
 // proven by app-map-grounding.uat.spec.ts's "declared prerequisite surfaces the News no-json-model
 // error" — not duplicated here. The tool-calling and grounding logic this test would exercise is

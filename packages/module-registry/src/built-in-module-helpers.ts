@@ -115,7 +115,7 @@ export function createDefaultPersonaPreview(
           if (!provider.acp_agent_id) {
             throw new HttpError(
               503,
-              "The selected CLI provider has no ACP agent; add a supported provider in Admin > Assistant & AI"
+              "The selected CLI provider has no ACP agent; add a supported provider in Admin > AI providers"
             );
           }
           const createAdapter = deps.createCliStructuredAdapter;

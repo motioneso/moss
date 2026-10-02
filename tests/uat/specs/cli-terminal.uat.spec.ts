@@ -42,14 +42,14 @@ test("owner opens the CLI terminal, runs a command, sees output, closes clean", 
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
 
   // Nav path mirrors job-search-install.uat.spec.ts: usermenu -> Settings ->
-  // Admin / Setup (segmented control) -> the "Assistant & AI" admin section. Personal mode has
-  // a section of the SAME label ("Assistant & AI" -> AssistantPane), but settings-page.tsx only
+  // Admin / Setup (segmented control) -> the "AI providers" admin section. Personal mode has
+  // a different section ("Your assistant"), but settings-page.tsx only
   // ever mounts one mode's nav group at a time, so this button reference is unambiguous once
   // Admin / Setup has been selected.
   await page.locator(".jds-usermenu__trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
   await expect(page.getByText("No providers yet")).toBeVisible();
 
   // A CLI-auth provider has no API key to test, so this instance needs one added before the

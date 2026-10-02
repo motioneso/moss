@@ -462,7 +462,7 @@ describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
     class RejectingReadEngine extends FakeEngine {
       override async readNew(): Promise<never> {
         throw new CliChatUnavailableError(
-          "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
+          "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers"
         );
       }
     }
@@ -472,7 +472,7 @@ describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
     await expect(manager.submitTurn("u1", "Ben", "first")).rejects.toMatchObject({
       name: "CliChatUnavailableError",
       message:
-        "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
+        "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers"
     });
   });
 

@@ -19,13 +19,14 @@ export function moduleDescriptions(assistantName: string): Record<string, string
     wellness: "Private capacity signals — mood, energy, meds.",
     notifications: "What's worth surfacing. Sensitivity lives in here.",
     finance: "Planning context, kept out of your briefings.",
-    email: "Back-end context and task capture — never a nav destination.",
+    email: "Lets the assistant read your mail for context and turn messages into tasks.",
+    news: "Follow the sources you pick and read their latest stories in one place.",
     chat: "The assistant you talk to, inside the product."
   };
 }
 
 export function moduleDescription(id: string, assistantName: string): string {
-  return moduleDescriptions(assistantName)[id] ?? "A Moss module.";
+  return moduleDescriptions(assistantName)[id] ?? "An add-on module.";
 }
 
 export function readError(error: unknown): string {

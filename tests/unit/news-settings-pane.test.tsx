@@ -229,7 +229,7 @@ describe("NewsSettings personalization sections (#953)", () => {
   });
 
   // #2228 fix round 1, finding 7: the described-topics gate names the fix for each reason and
-  // links where that fix actually lives, not always at Assistant settings.
+  // links where that fix actually lives, not always at Your assistant.
   it("gate: a chat model without built-in search points at the Chat model picker", () => {
     const html = render(
       personalization({
@@ -238,7 +238,7 @@ describe("NewsSettings personalization sections (#953)", () => {
     );
     expect(html).toContain("Your chat model has no built-in search.");
     expect(html).toContain('href="/settings?section=assistant"');
-    expect(html).toContain("Pick a model under Assistant settings");
+    expect(html).toContain("Pick a model under Your assistant");
   });
 
   it("gate: built-in search switched off points an admin at AI providers", () => {

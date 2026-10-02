@@ -4,7 +4,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // #1441 (Moss rename, PR1 phase 2 — docs/superpowers/plans/2026-08-06-moss-1441-display-strings.md
 // §5 Phase 2, §6 exit criterion 3): proves BOTH halves of the rename together, in one live run,
 // against the real running server — not mocks:
-//   1. The assistant name is a per-user, runtime-configured value (Settings -> Assistant & AI ->
+//   1. The assistant name is a per-user, runtime-configured value (Settings -> Your assistant ->
 //      Persona -> "Assistant name", apps/web/src/settings/settings-ai-pane.tsx) that threads
 //      through every surface that names the assistant: the chat composer, the chat drawer, the
 //      shell's chat-affordance button and calendar hold copy.
@@ -78,7 +78,7 @@ test.describe
   .serial("assistant name renders per-user while product name stays fixed (#1441)", () => {
   let originalAssistantName = "";
 
-  test("Settings -> Assistant & AI accepts and persists a custom assistant name", async ({
+  test("Settings -> Your assistant accepts and persists a custom assistant name", async ({
     page
   }) => {
     await signIn(page);

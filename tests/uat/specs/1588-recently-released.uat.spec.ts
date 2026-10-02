@@ -33,10 +33,10 @@ test("a non-admin can navigate to the bundled release history", async ({ page })
 
   const settingsNav = page.getByRole("navigation", { name: "Settings categories" });
   await expect(settingsNav.getByText("Moss", { exact: true })).toBeVisible();
-  await settingsNav.getByRole("button", { name: "Recently Released" }).click();
+  await settingsNav.getByRole("button", { name: "What's new" }).click();
 
   await expect(page).toHaveURL(/\/settings\?section=released$/);
-  await expect(page.getByRole("heading", { name: "Recently Released" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What's new" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: /^v\d+\.\d+\.\d+ — \d{4}-\d{2}-\d{2}$/ })
   ).toBeVisible();

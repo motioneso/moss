@@ -178,7 +178,7 @@ describe("settings setup link crosses from personal to admin sections (PR 2220)"
     await flush();
 
     // The destination screen really drew itself: its own heading, and its own controls.
-    expect(paneHeadings(renderer)).toEqual(["Assistant & AI"]);
+    expect(paneHeadings(renderer)).toEqual(["AI providers"]);
     expect(paneText(renderer)).toContain("The AI providers this instance runs on");
     expect(buttonsWithText(renderer, "Add provider").length).toBeGreaterThan(0);
     expect(

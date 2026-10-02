@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Ben, 2026-09-04 (Assistant & AI notes): the per-model "available for user chat override"
+// Ben, 2026-09-04 (Your assistant notes): the per-model "available for user chat override"
 // switch is gone; the Chat tag on the row is the toggle, and it dims when chat is off.
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";

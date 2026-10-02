@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // Classifier gate plan 1.3 (#2892). Proves the shipped Classifier settings row on the real
-// Settings > Assistant & AI screen: pick and clear a classifier, change the allowed gate state,
+// Settings > AI providers screen: pick and clear a classifier, change the allowed gate state,
 // confirm `on` is refused before the release gate, and that the row reads in light, dark and one
 // park theme. The "default chat is unchanged" half needs a real chat turn; the UAT harness has no
 // chat-capable AI provider at any seed level (#1121), so it is test.fixme'd with that citation.
@@ -37,7 +37,7 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
 }
 
 async function json(

@@ -193,7 +193,7 @@ const PERSONAL_GROUPS = [
       {
         id: "assistant",
         icon: GitCommitHorizontal,
-        label: "Assistant & AI",
+        label: "Your assistant",
         description: coreSettingDescription("assistant"),
         Pane: AssistantPane
       },
@@ -221,7 +221,7 @@ const PERSONAL_GROUPS = [
       {
         id: "released",
         icon: ScrollText,
-        label: "Recently Released",
+        label: "What's new",
         description: coreSettingDescription("released"),
         Pane: ReleasedPane
       }
@@ -295,7 +295,7 @@ const ADMIN_GROUPS = [
       {
         id: "aiproviders",
         icon: GitCommitHorizontal,
-        label: "Assistant & AI",
+        label: "AI providers",
         description: coreSettingDescription("aiproviders"),
         Pane: AiProvidersPane
       },

@@ -70,7 +70,7 @@ describe("deriveNotWorking", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.ability).toBe("Tasks are not being created from email");
     expect(entries[0]?.reason).toBe("the assistant's sign-in has expired");
-    expect(entries[0]?.fix.path).toBe("/settings?section=assistant");
+    expect(entries[0]?.fix.path).toBe("/settings?section=aiproviders");
   });
 
   it("an expired sign-in flags every ability with the same reason", () => {

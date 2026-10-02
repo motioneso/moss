@@ -109,9 +109,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   },
   {
     id: "assistant",
-    label: "Assistant & AI",
+    label: "Your assistant",
     description:
-      "Change the AI model for chat: choose which model answers, change model routing and response behavior. When YOLO is active for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as YOLO in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning YOLO off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > Assistant & AI. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
+      "Change the AI model for chat: choose which model answers, change model routing and response behavior. When YOLO is active for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as YOLO in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning YOLO off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > AI providers. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > AI providers) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
@@ -136,15 +136,17 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "activity",
     label: "Activity",
     description:
-      "Review assistant activity visible to this user, including how long each action took to " +
-      "run and, for repeated integration requests, whether a call was skipped because it was " +
-      "already covered or refused for asking too fast.",
+      "Review assistant activity visible to this user. Each call reads as a plain action " +
+      "(for example, Checked your calendar) under its module name, with how long it took to " +
+      "run. A call that did not work, was not allowed, or was held back " +
+      "carries one plain line saying whether the user needs to do anything. A module filter " +
+      "narrows the list.",
     path: "/settings?section=activity",
     scope: "user"
   },
   {
     id: "released",
-    label: "Recently Released",
+    label: "What's new",
     description: "See what was added, fixed, and changed in recent Moss releases.",
     path: "/settings?section=released",
     scope: "user"
@@ -183,7 +185,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "opts a tool in. Every unusable tool names why (connection switch off, off for ordinary " +
       "chat, not reviewed, risk not chosen, changed since reviewed, or not allowed), and a saved " +
       "tool with no risk shows Risk needed rather than Approved. A missing or unsupported default " +
-      "chat model is named and links to Assistant & AI to choose one; any other preparation error " +
+      "chat model is named and links to Your assistant to choose one; any other preparation error " +
       "shows the server's own message. Nothing is stored by a cancelled or failed prepare.",
     path: "/settings?section=integrations",
     scope: "user"
@@ -211,7 +213,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   },
   {
     id: "aiproviders",
-    label: "Assistant & AI",
+    label: "AI providers",
     description:
       "Configure instance AI providers, models, and bindings. Each provider card lists its models " +
       "with a Refresh models button (asks the provider for its current list; the line under the " +
@@ -253,7 +255,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "supported CLI provider. If the active provider changes while a message is being prepared, " +
       "the message is left unsent and the user is asked to retry. " +
       "Codex is connected once for the whole instance: an administrator signs in under Settings, " +
-      "Assistant & AI, and every user's chat and background work then use that connection while " +
+      "AI providers, and every user's chat and background work then use that connection while " +
       "running in their own isolated runner home, as their own account. When Codex refreshes the " +
       "connection for one user, the refreshed connection is shared with everyone. If Codex has never " +
       "been connected, users see 'Codex is not connected yet' rather than a provider failure. If a " +
