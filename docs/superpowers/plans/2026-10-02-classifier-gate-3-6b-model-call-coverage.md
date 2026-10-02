@@ -85,16 +85,14 @@ Out of scope: the admin terminal (a human running a CLI by hand), the four colli
    keyed `{ kind: "structured", action: "choices", modelName: model.provider_model_id }`. A
    `needs_config`/`not_supported` result records nothing (no call was made); a real fetch records
    `ok`/`error`. `aborted` when `input.signal` aborted.
-2. **Live chat records one row per turn from a wrapped engine.** Add an
-   `onModelCall`-independent turn recorder in `runtime.ts` that wraps the engine factory it builds:
-   on a successful `submit` the wrapper marks a turn pending; on the turn's terminal `readNew`
-   (`complete`) it records one `{ kind: "chat", action: "chat", outcome, modelName }` row. The
-   per-turn row uses the session's actual model (`session.model`), never a hardcoded name. Stopped
-   turns record `aborted`; engine launch/submit failure records `error`. Inner tool-loop calls are
-   not visible, so the row is per turn (matching the plan and 3.6a's note). Implementation lives in
-   `runtime.ts` (a new small engine wrapper module in `packages/chat/src/live/`), never in the four
-   collision files. If the wrapper cannot see the terminal event without editing a collision file,
-   **stop and report**.
+2. **Live chat records one row per turn from a wrapped engine.** Add a small engine wrapper in
+   `packages/chat/src/live/turn-activity-engine.ts` and install it around the session engine factory
+   in `runtime.ts`: `launch` captures the session model, `submit` marks a turn pending, a completed
+   `readNew` records `ok`, a failed `readNew`/`submit` records `error`, and `interrupt` on a pending
+   turn records `aborted`. The wrapper proxies every optional engine method unchanged. The row uses
+   the session's actual model (from the launch options), never a hardcoded name. This lives entirely
+   outside the four collision files, and avoids growing `chat-session-manager.ts`, which sits at the
+   1000-line source limit. Inner tool-loop calls are not visible, so the row is per turn.
 3. **Module-build records one row per step turn.** `createModuleBuildLiveAgent` gains an optional
    `recordTurn` dep (defaulting to `recordModelActivity`); it records one row on marker-complete
    (`ok`), step timeout/death (`error`). `worker.ts` passes the resolved `model` so `modelName` is
