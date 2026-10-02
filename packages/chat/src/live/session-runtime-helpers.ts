@@ -11,6 +11,8 @@ import {
   type ChatSurface
 } from "./chat-surface.js";
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
+import type { GateLifecycleHost } from "./classifier-gate-lifecycle.js";
+import type { UserSession } from "./chat-session-provider-identity.js";
 import { formatApprovalRecord, formatRefusalRecord } from "./acp-chat-engine.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 
@@ -338,4 +340,44 @@ export async function sweepOrphanedPrivateThreads(
       clearDetachTimer
     );
   }
+}
+
+/** The host slice {@link healAndRelaunchSession} needs: the shared turn-lifecycle host plus the
+ *  manager's serialized launcher. */
+export interface SessionRecoveryHost extends GateLifecycleHost {
+  ensureSession(
+    actorUserId: string,
+    userName: string,
+    opts?: { readonly forceReplay?: boolean },
+    surface?: string
+  ): Promise<UserSession>;
+}
+
+/**
+ * #1157 self-heal: the engine behind this session is gone (the daemon killed it after a
+ * VerifiedSubmitError, the cli-runner restarted, or the tmux server died with the container). Evict
+ * the stale entry, revoke the per-session MCP token (a fresh one is minted on relaunch), force a
+ * conversation replay so the fresh engine has context, and relaunch. The caller retries the submit
+ * exactly once — a second failure surfaces.
+ */
+export async function healAndRelaunchSession(
+  host: SessionRecoveryHost,
+  actorUserId: string,
+  userName: string,
+  dead: UserSession
+): Promise<UserSession> {
+  const sessionKey = surfaceSessionKey(actorUserId, dead.surface);
+  if (host.sessions.get(sessionKey) === dead) host.sessions.delete(sessionKey);
+  host.deps.revokeMcpToken?.(sessionKey);
+  try {
+    await dead.engine.kill();
+  } catch {
+    // Already dead — kill is best-effort teardown of a stale handle.
+  }
+  host.pendingForcedReplay.add(sessionKey);
+  host.emit(actorUserId, dead.surface, {
+    kind: "status",
+    text: "Chat session was lost — reconnecting…"
+  });
+  return host.ensureSession(actorUserId, userName, undefined, dead.surface);
 }

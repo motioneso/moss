@@ -35,6 +35,7 @@ import type { PgBoss } from "pg-boss";
 import type { NotesRecallPort } from "@moss/notes";
 
 import type { RecallPort } from "../recall-port.js";
+import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
 import { NotesContextRetriever } from "./notes-retrieval.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
@@ -477,6 +478,11 @@ export interface CreateChatSessionRuntimeDeps {
   readonly localePreferences?: PreferencesPort;
   /** Priority preferences port — reads `priority.model.v1` to rank cross-tool chat context (#721). */
   readonly priorityPreferences?: PreferencesPort;
+  /**
+   * Task 4.1 (#2901) — the classifier gate seam. Wired by the composition root when a gateway
+   * exists; absent ⇒ every turn follows today's default-model path.
+   */
+  readonly classifierGate?: ClassifierGateRunner;
   /** Phase 2: MCP token lifecycle hooks — mint on engine launch, revoke on reap. */
   readonly mcpTokenLifecycle?: {
     readonly mint: (
@@ -726,7 +732,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
           dataContext: deps.dataContext,
           preferencesRepository: deps.priorityPreferences
         })
-      : undefined
+      : undefined,
+    classifierGate: deps.classifierGate
   });
 
   if (connection) {

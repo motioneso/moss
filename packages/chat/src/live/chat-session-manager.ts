@@ -40,8 +40,10 @@ import {
   drainEngine,
   createPendingActionResultFlusher,
   clearPrivateDetachTimer,
+  healAndRelaunchSession,
   injectActionResultRecord,
   type PendingActionResult,
+  type SessionRecoveryHost,
   schedulePrivateDetachTimer,
   sweepOrphanedPrivateThreads,
   upsertActivityRecord,
@@ -68,6 +70,7 @@ import type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
+import { tryGatedTurn } from "./classifier-gate-lifecycle.js";
 export type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
@@ -104,11 +107,19 @@ export class ChatSessionManager {
   private readonly serverOwnsDrain: boolean;
   /** #342: serializes reconciliation and idle reaping, which both mutate sessions/tokens. */
   private maintenanceMutex: Promise<void> = Promise.resolve();
+  private readonly lifecycleHost: SessionRecoveryHost;
 
   constructor(private readonly deps: ChatSessionManagerDeps) {
     this.pollMs = deps.pollMs ?? 25;
     this.idleWatchdogMs = deps.idleWatchdogMs ?? 180_000;
     this.serverOwnsDrain = deps.serverOwnsDrain ?? false;
+    this.lifecycleHost = {
+      deps,
+      sessions: this.sessions,
+      pendingForcedReplay: this.pendingForcedReplay,
+      emit: this.emit.bind(this),
+      ensureSession: this.ensureSession.bind(this)
+    };
   }
 
   /** Ensure one live engine per actor + surface; concurrent launches share a promise. */
@@ -267,34 +278,6 @@ export class ChatSessionManager {
   }
 
   /**
-   * #1157 self-heal: the engine behind this session is gone (the daemon killed it after a
-   * VerifiedSubmitError, the cli-runner restarted, or the tmux server died with the
-   * container). Evict the stale entry, revoke the per-session MCP token (a fresh one is
-   * minted on relaunch), force a conversation replay so the fresh engine has context, and
-   * relaunch. The caller retries the submit exactly once — a second failure surfaces.
-   */
-  private async healAndRelaunch(
-    actorUserId: string,
-    userName: string,
-    dead: UserSession
-  ): Promise<UserSession> {
-    const sessionKey = surfaceSessionKey(actorUserId, dead.surface);
-    if (this.sessions.get(sessionKey) === dead) this.sessions.delete(sessionKey);
-    this.deps.revokeMcpToken?.(sessionKey);
-    try {
-      await dead.engine.kill();
-    } catch {
-      // Already dead — kill is best-effort teardown of a stale handle.
-    }
-    this.pendingForcedReplay.add(sessionKey);
-    this.emit(actorUserId, dead.surface, {
-      kind: "status",
-      text: "Chat session was lost — reconnecting…"
-    });
-    return this.ensureSession(actorUserId, userName, undefined, dead.surface);
-  }
-
-  /**
    * Submit one user turn: echo it to subscribers, send it to the engine, fan out
    * every new transcript record until the engine reports complete, persist the
    * completed turn, and return the assistant reply.
@@ -393,6 +376,19 @@ export class ChatSessionManager {
     let turnUsage: ChatTurnUsageDto | undefined;
 
     try {
+      // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
+      // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
+      // turn returns without launching an engine; a decline returns undefined and the default
+      // model path below runs unchanged with the original text.
+      const gated = await tryGatedTurn(
+        this.lifecycleHost,
+        actorUserId,
+        surface,
+        text,
+        opts,
+        controller
+      );
+      if (gated) return gated;
       try {
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       } catch (err) {
@@ -451,7 +447,12 @@ export class ChatSessionManager {
             turnProviderIdentity,
             this.deps.persistence.resolveActiveProvider(actorUserId)
           );
-          session = await this.healAndRelaunch(actorUserId, userName, session);
+          session = await healAndRelaunchSession(
+            this.lifecycleHost,
+            actorUserId,
+            userName,
+            session
+          );
           await assertProviderIdentityForPendingTurn(
             turnProviderIdentity,
             session.providerIdentity

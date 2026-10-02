@@ -14,6 +14,7 @@ import type {
   ChatActivityEventDto,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
@@ -24,6 +25,18 @@ export interface CreateChatThreadInput {
   readonly title: string;
   readonly incognito?: boolean;
   readonly surface?: ChatSurface;
+}
+
+/** Options shared by the model-origin and gate-origin completed-turn writers. */
+export interface CompletedTurnOptions {
+  readonly sourceFreshness?: SourceFreshnessV1 | null;
+  readonly answerProvenance?: AnswerProvenanceMetadataV1;
+  /** #1133 — attachment display metadata (id/name/mime/size) — never bytes. */
+  readonly attachments?: readonly ChatAttachmentDto[];
+  readonly actionResults?: readonly ChatActivityEventDto[];
+  readonly activityRecords?: readonly unknown[];
+  readonly elapsedMs?: number;
+  readonly usage?: ChatTurnUsageDto;
 }
 
 /**
@@ -223,16 +236,57 @@ export class ChatRepository {
     userText: string,
     assistantReply: string,
     executed: { readonly provider: string; readonly model: string },
-    opts?: {
-      readonly sourceFreshness?: SourceFreshnessV1 | null;
-      readonly answerProvenance?: AnswerProvenanceMetadataV1;
-      /** #1133 — attachment display metadata (id/name/mime/size) — never bytes. */
-      readonly attachments?: readonly ChatAttachmentDto[];
-      readonly actionResults?: readonly ChatActivityEventDto[];
-      readonly activityRecords?: readonly unknown[];
-      readonly elapsedMs?: number;
-      readonly usage?: ChatTurnUsageDto;
-    },
+    opts?: CompletedTurnOptions,
+    surface?: ChatSurface
+  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
+    return this.writeCompletedTurn(
+      scopedDb,
+      threadId,
+      userText,
+      assistantReply,
+      {
+        executed: { provider: executed.provider, model: executed.model },
+        ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),
+        ...(opts?.usage !== undefined ? { usage: opts.usage } : {})
+      },
+      opts,
+      surface
+    );
+  }
+
+  /**
+   * Task 4.1 (#2901) — records a completed turn the classifier gate handled. The reply came from a
+   * validated tool result or a code-written failure, so the assistant message carries the
+   * gate-origin contract and NO `executed` provider/model and NO usage, which would be fiction.
+   * Everything else (user message, freshness, activity, title/summary) is the normal path.
+   */
+  async recordGateCompletedTurn(
+    scopedDb: DataContextDb,
+    threadId: string,
+    userText: string,
+    assistantReply: string,
+    origin: ChatTurnOriginV1,
+    opts?: CompletedTurnOptions,
+    surface?: ChatSurface
+  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
+    return this.writeCompletedTurn(
+      scopedDb,
+      threadId,
+      userText,
+      assistantReply,
+      { origin },
+      opts,
+      surface
+    );
+  }
+
+  private async writeCompletedTurn(
+    scopedDb: DataContextDb,
+    threadId: string,
+    userText: string,
+    assistantReply: string,
+    assistantModelMetadata: Record<string, unknown>,
+    opts: CompletedTurnOptions | undefined,
     surface?: ChatSurface
   ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
     assertDataContextDb(scopedDb);
@@ -265,11 +319,7 @@ export class ChatRepository {
       role: "assistant",
       status: "stored",
       body: assistantReply,
-      modelMetadata: {
-        executed: { provider: executed.provider, model: executed.model },
-        ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),
-        ...(opts?.usage !== undefined ? { usage: opts.usage } : {})
-      },
+      modelMetadata: assistantModelMetadata,
       toolMetadata: {
         selectedTools: [],
         ...(opts?.sourceFreshness ? { sourceFreshness: opts.sourceFreshness } : {}),

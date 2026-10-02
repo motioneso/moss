@@ -75,6 +75,12 @@ export type GateDeclineReason =
 export interface GateTrace {
   readonly moduleId?: string;
   readonly toolName?: string;
+  /**
+   * Task 4.1 (#2901) — the risk of the tool the attempt dispatched, when one was picked. The
+   * lifecycle seam uses it to decide whether a storage failure after a handled turn may fall back
+   * (a read is safe to repeat; a write/outbound/destructive attempt already ran).
+   */
+  readonly risk?: GateTool["risk"];
   readonly confidence?: number;
   readonly lead?: number;
   readonly latencyMs: number;
@@ -282,6 +288,7 @@ export class ClassifierGate {
 
     trace.moduleId = tool.tool.moduleId;
     trace.toolName = tool.tool.name;
+    trace.risk = tool.tool.risk;
     const bars = this.barCheck(tool.tool, area.answer, tool.answer);
     if (bars) return bars;
 

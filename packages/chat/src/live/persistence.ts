@@ -25,6 +25,7 @@ import type {
   AiAuthMethod,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessEntry,
   SourceFreshnessV1
@@ -46,6 +47,7 @@ import {
 } from "../jobs.js";
 import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
+import type { HandledTurnOptions } from "./chat-session-ports.js";
 import type { ChatRepository } from "../repository.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { estimateTokens } from "./recall-seed.js";
@@ -79,6 +81,21 @@ export interface DataContextChatPersistenceDeps {
   readonly localePreferences?: PreferencesPort;
   /** Reads the user's saved ACP model choice for the live launch. */
   readonly chatPreferences?: PreferencesPort;
+}
+
+/**
+ * Superset of both completed-turn option shapes. A model turn fills invokedToolNames/usage etc;
+ * a gate-handled turn supplies a precomputed sourceFreshness and its action/activity records.
+ */
+interface PersistTurnOptions {
+  readonly invokedToolNames?: ReadonlySet<string>;
+  readonly answerProvenance?: AnswerProvenanceMetadataV1;
+  readonly attachments?: readonly ChatAttachmentDto[];
+  readonly actionResults?: readonly ActionResultMetadata[];
+  readonly activityRecords?: readonly TranscriptRecord[];
+  readonly elapsedMs?: number;
+  readonly usage?: ChatTurnUsageDto;
+  readonly sourceFreshness?: SourceFreshnessV1 | null;
 }
 
 export function toolNameToSource(toolName: string): string | null {
@@ -261,8 +278,74 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     },
     surface?: ChatSurface
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string } | undefined> {
+    return this.persistCompletedTurn(
+      actorUserId,
+      "record-turn",
+      userText,
+      assistantReply,
+      opts,
+      surface,
+      { executed }
+    );
+  }
+
+  /**
+   * Task 4.1 (#2901) — persist a completed turn the classifier gate handled. Same thread/title/
+   * summary/background-job post-processing as a model turn, but the assistant message carries the
+   * gate-origin contract instead of an executed provider/model or usage (recording either would be
+   * fiction: no model ran).
+   */
+  async recordHandledTurn(
+    actorUserId: string,
+    userText: string,
+    assistantReply: string,
+    origin: ChatTurnOriginV1,
+    opts?: HandledTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly sourceFreshness?: SourceFreshnessV1 | null;
+      }
+    | undefined
+  > {
+    return this.persistCompletedTurn(
+      actorUserId,
+      "record-handled-turn",
+      userText,
+      assistantReply,
+      opts,
+      surface,
+      { origin }
+    );
+  }
+
+  /**
+   * The one completed-turn pipeline shared by model turns and gate-handled turns. `turn` is a
+   * discriminated union: either the executing provider/model or the gate origin, never both, so a
+   * handled turn can never accidentally write a fabricated `executed` or `usage`.
+   */
+  private async persistCompletedTurn(
+    actorUserId: string,
+    operation: string,
+    userText: string,
+    assistantReply: string,
+    opts: PersistTurnOptions | undefined,
+    surface: ChatSurface | undefined,
+    turn:
+      | { readonly executed: { provider: ProviderKind; model: string } }
+      | { readonly origin: ChatTurnOriginV1 }
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly sourceFreshness?: SourceFreshnessV1 | null;
+      }
+    | undefined
+  > {
     const chatSurface = normalizeChatSurface(surface);
-    return this.run(actorUserId, "record-turn", async (scopedDb) => {
+    return this.run(actorUserId, operation, async (scopedDb) => {
       const thread =
         (await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)) ??
         (await this.chat.openNewThread(scopedDb, {
@@ -275,27 +358,38 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         ? await resolveChatFreshness(scopedDb, opts.invokedToolNames, capturedAt, {
             connectorSyncAt: this.connectorSyncAt
           })
-        : null;
+        : (opts?.sourceFreshness ?? null);
 
+      const completedOpts = {
+        sourceFreshness,
+        answerProvenance: opts?.answerProvenance,
+        attachments: opts?.attachments,
+        actionResults: opts?.actionResults,
+        activityRecords: opts?.activityRecords,
+        elapsedMs: opts?.elapsedMs,
+        usage: opts?.usage
+      };
       const result = thread.incognito
         ? undefined
-        : await this.chat.recordCompletedTurn(
-            scopedDb,
-            thread.id,
-            userText,
-            assistantReply,
-            executed,
-            {
-              sourceFreshness,
-              answerProvenance: opts?.answerProvenance,
-              attachments: opts?.attachments,
-              actionResults: opts?.actionResults,
-              activityRecords: opts?.activityRecords,
-              elapsedMs: opts?.elapsedMs,
-              usage: opts?.usage
-            },
-            chatSurface
-          );
+        : "executed" in turn
+          ? await this.chat.recordCompletedTurn(
+              scopedDb,
+              thread.id,
+              userText,
+              assistantReply,
+              turn.executed,
+              completedOpts,
+              chatSurface
+            )
+          : await this.chat.recordGateCompletedTurn(
+              scopedDb,
+              thread.id,
+              userText,
+              assistantReply,
+              turn.origin,
+              completedOpts,
+              chatSurface
+            );
       await this.chat.touchThread(scopedDb, thread.id);
 
       if (thread.incognito) {
