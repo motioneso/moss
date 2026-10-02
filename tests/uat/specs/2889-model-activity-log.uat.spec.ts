@@ -7,23 +7,20 @@
 // activity and sees the row; the log shows the model name and the outcome, never the model's prose.
 //
 // The HTTP adapter path is deliberate: 3.6a records HTTP chat/structured/transcription calls and
-// CLI structured calls. Plan 3.6b (#2890) adds per-turn live chat recording and a scripted chat
-// turn, so this file also proves a live chat turn (which reaches no adapter) appears in the log.
+// CLI structured calls. CLI chat turns are 3.6b, so this proof does not depend on the scripted
+// chat provider.
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 export const uatLevel = {
   level: "admin+data",
   without: [],
-  chatScript: "phase1-smoke",
   withBriefingWriterFixture: true
 } as const;
 
 const WRITER_MODEL_NAME = "uat-briefing-writer-fixture-model";
 // A distinctive line from the fixture's fixed prose; it must never reach the activity log.
 const WRITER_HEADLINE = "A steady day with room for deep work.";
-// Plan 3.6b (#2890): the scripted chat provider's model, used by the live-chat-turn proof below.
-const SCRIPTED_CHAT_MODEL_NAME = "uat-scripted-chat-model";
 
 function requireBaseURL(): string {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -51,23 +48,6 @@ async function openModelActivity(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Model activity" }).click();
-}
-
-async function sendChatTurn(page: Page, message: string): Promise<void> {
-  await page.locator(".topbar-actions button").click();
-  const drawer = page.locator("aside.chatd");
-  await expect(drawer).toBeVisible({ timeout: 15_000 });
-  const turnResponse = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
-      response.request().method() === "POST",
-    { timeout: 180_000 }
-  );
-  const composer = drawer.getByLabel("Message Moss");
-  await composer.fill(message);
-  await composer.press("Enter");
-  const response = await turnResponse;
-  expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
 }
 
 interface ModelActivityEntry {
@@ -161,47 +141,5 @@ test("a real HTTP model call appears in the admin model activity log, without it
     });
     // The log is action/outcome only: the model's reply must not leak into it.
     await expect(page.locator(".aud").getByText(WRITER_HEADLINE)).toHaveCount(0);
-  });
-});
-
-// Plan 3.6b (#2890): a live chat turn reaches no provider adapter, so 3.6a could not record it.
-// This proves the new per-turn recording: one matrix row appears for the chat turn's real model,
-// on the real admin screen, without the message text.
-test("a live chat turn appears in the admin model activity log (#2890)", async ({ page }) => {
-  test.setTimeout(300_000);
-
-  await test.step("sign in as admin", async () => {
-    await signIn(page);
-  });
-
-  await test.step("send a real chat turn through the scripted provider", async () => {
-    await sendChatTurn(page, "UAT 3.6b chat turn for the model activity log");
-  });
-
-  await test.step("the endpoint records one chat row for the turn's model", async () => {
-    await expect
-      .poll(
-        async () => {
-          const entries = await fetchModelActivity(page);
-          return entries.find(
-            (entry) => entry.kind === "chat" && entry.modelName === SCRIPTED_CHAT_MODEL_NAME
-          )?.outcome;
-        },
-        {
-          timeout: 30_000,
-          message: `no chat model-activity row for ${SCRIPTED_CHAT_MODEL_NAME} appeared`
-        }
-      )
-      .toBe("ok");
-  });
-
-  await test.step("the admin screen shows the chat row, and never the message text", async () => {
-    await openModelActivity(page);
-    await expect(
-      page.locator(".aud__row").filter({ hasText: SCRIPTED_CHAT_MODEL_NAME }).first()
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.locator(".aud").getByText("UAT 3.6b chat turn for the model activity log")
-    ).toHaveCount(0);
   });
 });

@@ -222,9 +222,13 @@ The coverage guard was observed failing on a deliberately uncovered call, then g
 
 ## Live-path proof
 
-Extend the 3.6a UAT spec so a **newly recorded** path (a live chat turn, CLI or HTTP through the
-scripted provider, or a choices call) appears on the real admin Model activity screen. Run via
-`pnpm test:uat` on an isolated instance; post command, exit code, and assertions as a PR comment.
+A dedicated spec, `tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts`, sends a live chat
+turn (the newly recorded path, which reaches no adapter) against the scripted chat provider and
+asserts its `chat` row shows on the real admin Model activity screen without the message text. It
+is a separate spec because the scripted chat provider and the 3.6a briefing-writer HTTP provider
+cannot both be the active chat model on one instance (a single instance rejects the chat turn with
+"Live chat does not support API-key providers yet"). Run via `pnpm test:uat` on an isolated
+instance; post command, exit code, and assertions as a PR comment.
 
 If no working path is reachable on an isolated instance, report **code-complete, unverified** with
 the exact blocker and do not claim done.
