@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Your own sent emails no longer show as needing you.** Emails you sent yourself no longer appear in your briefings as waiting for your decision. [PR #2880](https://github.com/motioneso/moss/pull/2880)
 
+#### Changed
+
+- **The sorting model is now the classifier.** The assistant settings screen calls the sorting model the classifier and adds the new classifier gate choice, which stays off until a tool is approved. [PR #2897](https://github.com/motioneso/moss/pull/2897)
+
 ### 2026-10-01
 
 #### Changed
