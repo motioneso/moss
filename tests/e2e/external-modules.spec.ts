@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-import { mockApi } from "./mock-api.js";
+import { mockApi } from "./mock-chat-model.js";
 import { mockExternalModules, mockExternalWebModule } from "./mock-modules.js";
 
 // #917 (Open module system, Slice 1 — Task 10): the admin Settings → Instance modules

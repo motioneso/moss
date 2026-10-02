@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { mockApi } from "./mock-api.js";
+import { mockApi } from "./mock-chat-model.js";
 import { mockAssistantSurfaceWebModule } from "./mock-modules.js";
 
 test("embedded assistant owns chat presence and restores the drawer on unmount (#1196)", async ({

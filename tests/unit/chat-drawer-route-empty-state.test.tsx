@@ -40,6 +40,8 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     });
 
     expect(html).toContain("The locked chat model is unavailable");
+    expect(html).toContain("Model unavailable");
+    expect(html).not.toContain("Here when you need me");
     expect(html).not.toContain("Connect a provider to start chatting");
   });
 
@@ -49,5 +51,26 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     });
 
     expect(html).toContain("Connect a provider to start chatting");
+  });
+
+  it("says no model is connected and replaces the message box when none is available", () => {
+    const html = render({
+      route: { capability: "chat", available: false, reason: "no-active-model", model: null }
+    });
+
+    expect(html).toContain("Not connected");
+    expect(html).not.toContain("Here when you need me");
+    expect(html).not.toContain("<textarea");
+    expect(html).toContain("chatd-connect-cta");
+  });
+
+  it("keeps the ready status and message box when a model is available", () => {
+    const html = render({
+      route: { capability: "chat", available: true, reason: null, model: null } as never
+    });
+
+    expect(html).toContain("Here when you need me");
+    expect(html).toContain("<textarea");
+    expect(html).not.toContain("chatd-connect-cta");
   });
 });
