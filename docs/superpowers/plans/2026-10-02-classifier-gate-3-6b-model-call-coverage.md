@@ -213,6 +213,15 @@ and escalate to the coordinator before Task 3. Owner of the kill call: the coord
 the collision note forbids editing those files, and a turn row that silently never fires would make
 the app map dishonest.
 
+## Observed guard failure (Task 6, recorded)
+
+The coverage guard was observed failing on a deliberately uncovered call, then green after removal:
+
+- Added `packages/example/uncovered.ts` containing `new HttpApiAdapter(...)`.
+  `pnpm exec vitest run tests/unit/model-call-coverage.test.ts` exited **1**, naming
+  `packages/example/uncovered.ts:4` in the failure.
+- Removed the file; the same command exited **0**.
+
 ## Live-path proof
 
 Extend the 3.6a UAT spec so a **newly recorded** path (a live chat turn, CLI or HTTP through the
