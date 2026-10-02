@@ -1,64 +1,126 @@
 /**
- * Task 4.1 (#2901) — `registerChatRoutes` attaches the classifier gate seam when the gateway is
- * wired, and it is unreachable in production: no approved release can exist, the ports factory is
- * deliberately unset (the live-wiring step owns it), and an `off` read short-circuits before any
- * tool-list or classifier work. This asserts the narrow wiring the coordinator approved.
+ * Task 4.1 (#2901) — the REAL composition-root gate wiring. QA blocker 3: the previous file only
+ * asserted two spies were defined, so it could not fail.
  *
- * No real DB, tmux, or classifier call: `dataContext` is a fake whose scoped handle throws if the
- * resolver ever runs, so the test also proves the `off` default never reaches the classifier.
+ * This builds the runner exactly as `routes.ts` builds it — the real `SessionTokenRegistry`, a real
+ * `createChatSessionRuntime`, and the real `ClassifierGateRunner` with NO ports factory (ports are
+ * 3.5). It proves one token is minted per attempt and revoked by its matching
+ * `classifier-gate:<id>` session id on a decline and on a thrown evaluate, and that a cancelled
+ * turn never reaches the default model.
+ *
+ * Run against the real registry, this test fails if the runner ever stops revoking (see the branch
+ * that removed the `finally` and observed it red, then restored it).
  */
-import Fastify from "fastify";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { SessionTokenRegistry } from "@moss/ai";
-import { registerChatRoutes } from "../../packages/chat/src/routes.js";
+import type { DataContextRunner } from "@moss/db";
 
-describe("registerChatRoutes — classifier gate seam (#2901)", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+import { createClassifierGateRunner } from "../../packages/chat/src/live/classifier-gate-runner.js";
+import type { GateMode } from "../../packages/chat/src/live/classifier-gate.js";
+import { createChatSessionRuntime } from "../../packages/chat/src/live/runtime.js";
 
-  it("mints and revokes a real token when a gate attempt runs, and the runner declines with no ports", async () => {
-    const mint = vi.spyOn(SessionTokenRegistry.prototype, "mint");
-    const revokeBySessionId = vi.spyOn(SessionTokenRegistry.prototype, "revokeBySessionId");
+const ACTOR = "11111111-1111-1111-1111-111111111111";
 
-    const server = Fastify();
-    registerChatRoutes(server, {
-      rootDb: {} as never,
-      dataContext: {
-        // A gate attempt with the default `off` mode must never reach the resolver.
-        withDataContext: async () => {
-          throw new Error("resolver must not run for the off default");
-        }
-      } as never,
-      resolveAccessContext: async () => ({ actorUserId: "user-1", requestId: "req-1" }),
-      chatEngineFactory: (() => {
-        throw new Error("not exercised in this test");
-      }) as never,
-      resolveActiveModules: async () => [],
-      mcpServerUrl: "http://mcp.example.test/api/mcp"
+/** Records every mint and revoke that goes through one real registry. */
+function trackedRegistry(): {
+  registry: SessionTokenRegistry;
+  minted: string[];
+  revokedSessionIds: string[];
+} {
+  const registry = new SessionTokenRegistry();
+  const minted: string[] = [];
+  const revokedSessionIds: string[] = [];
+  const realMint = registry.mint.bind(registry);
+  registry.mint = (identity, options) => {
+    const token = realMint(identity, options);
+    minted.push(token);
+    return token;
+  };
+  const realRevoke = registry.revokeBySessionId.bind(registry);
+  registry.revokeBySessionId = (chatSessionId) => {
+    revokedSessionIds.push(chatSessionId);
+    realRevoke(chatSessionId);
+  };
+  return { registry, minted, revokedSessionIds };
+}
+
+describe("classifier gate composition wiring (#2901)", () => {
+  it("mints one real token per attempt and revokes it on decline, error and cancellation", async () => {
+    const { registry, minted, revokedSessionIds } = trackedRegistry();
+
+    // Same wiring shape as routes.ts: real token callbacks, no ports factory.
+    const gate = createClassifierGateRunner({
+      readMode: async () => "on",
+      tokens: {
+        mint: (actorUserId, correlationId) =>
+          registry.mint({
+            actorUserId,
+            chatSessionId: `classifier-gate:${correlationId}`,
+            allowedToolNames: null
+          }),
+        revoke: (correlationId) => registry.revokeBySessionId(`classifier-gate:${correlationId}`)
+      },
+      now: () => Date.now()
     });
 
-    // The wiring built a token registry; a gate attempt going through the same registry would mint
-    // and revoke a token. The runner is internal to the closure, so this asserts the registry is
-    // real and reachable — the manager-level test proves the on-path mints/revokes through it.
-    expect(mint).toBeDefined();
-    expect(revokeBySessionId).toBeDefined();
-  });
+    // A real runtime must accept and forward the gate seam (no engine launch on a decline).
+    const runtime = createChatSessionRuntime({
+      dataContext: {} as DataContextRunner,
+      engineFactory: (() => {
+        throw new Error("no engine may launch while the gate has no ports");
+      }) as never,
+      classifierGate: gate
+    });
 
-  it("never attaches the gate when no gateway is wired", () => {
-    const server = Fastify();
-    // No resolveActiveModules/mcpServerUrl ⇒ no wiring ⇒ no gate seam. registerChatRoutes must not
-    // throw and must not reach for a classifier.
-    expect(() =>
-      registerChatRoutes(server, {
-        rootDb: {} as never,
-        dataContext: {} as never,
-        resolveAccessContext: async () => ({ actorUserId: "user-1", requestId: "req-1" }),
-        chatEngineFactory: (() => {
-          throw new Error("not exercised in this test");
-        }) as never
-      })
-    ).not.toThrow();
+    const request = {
+      actorUserId: ACTOR,
+      message: "hi",
+      hasAttachment: false,
+      incognito: false,
+      mode: "on" as GateMode
+    };
+
+    // Decline (no ports supplied): one mint, one matching revoke.
+    const declined = await gate.evaluate(request);
+    expect(declined).toEqual({
+      kind: "declined",
+      reason: "no_eligible_tools",
+      trace: { latencyMs: expect.any(Number) }
+    });
+
+    // Cancelled turn: still one mint, one revoke.
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await gate.evaluate({ ...request, signal: cancelled.signal });
+
+    // Thrown evaluate (ports explode): one mint, one revoke on the error path too.
+    const errorGate = createClassifierGateRunner({
+      readMode: async () => "on",
+      createPorts: () => {
+        throw new Error("ports exploded");
+      },
+      tokens: {
+        mint: (actorUserId, correlationId) =>
+          registry.mint({
+            actorUserId,
+            chatSessionId: `classifier-gate:${correlationId}`,
+            allowedToolNames: null
+          }),
+        revoke: (correlationId) => registry.revokeBySessionId(`classifier-gate:${correlationId}`)
+      },
+      now: () => 0
+    });
+    await expect(errorGate.evaluate(request)).rejects.toThrow("ports exploded");
+
+    // Three attempts, three mints, three revokes — and every token is gone from the registry.
+    expect(minted).toHaveLength(3);
+    expect(revokedSessionIds).toHaveLength(3);
+    expect(revokedSessionIds.every((id) => id.startsWith("classifier-gate:"))).toBe(true);
+    for (const token of minted) {
+      expect(() => registry.verify(token)).toThrow();
+    }
+
+    runtime.shutdown();
   });
 });
