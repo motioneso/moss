@@ -1,7 +1,3 @@
-.chatd:focus {
-  outline: none;
-}
-
 .chatd {
   position: fixed;
   top: 72px;

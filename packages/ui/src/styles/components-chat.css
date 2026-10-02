@@ -1,3 +1,8 @@
+/* The panel takes programmatic focus on open; it is not a control, so no ring. */
+.chatd:focus {
+  outline: none;
+}
+
 /* Chat — visual declarations extracted from kit-chat.css, kit-chat-attach.css, kit-chat-skills.css, chat-model-pill.css. Layout stays in the section CSS; this file owns color/type/border/radius/shadow. */
 
 /* from apps/web/src/styles/kit-chat.css */
