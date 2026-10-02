@@ -41,3 +41,6 @@ docs/superpowers/specs/job-search-mockup/
 # byte-for-byte out of the running app so the design layer is provably the only change; the app's
 # own built markup does not parse as standalone HTML. Formatting them would destroy the proof.
 docs/superpowers/specs/assets/2026-09-05-park-press-finish/screens/
+
+# Classifier gate mockups: static pages plus a copy of the real stylesheet and fonts, frozen for review.
+docs/superpowers/mockups/classifier-gate/

@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reply marker - mockup</title><link rel="stylesheet" href="app.css"></head><body>
+<div class="mk-bar"><b>Mockup: reply marker</b>
+<span class="mk-group"><span class="mk-label">State</span><span class="jds-segmented" id="views"></span></span>
+<span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
+<div class="mk-page"><p class="mk-lede">Static mockup of a chat reply that Moss answered through the classifier, with a small marker so a wrong answer can be traced. Pick a state above.</p>
+<div id="stage"></div></div>
+<script>
+var MK='<span class="jds-badge jds-badge--neutral" tabindex="0" aria-describedby="why">Answered without the main model</span><span class="jds-infotip" style="display:inline-block"><button class="jds-btn jds-btn--quiet jds-btn--sm" aria-label="What does this mean?" aria-describedby="why">?</button></span>';
+var WHY='<p class="mk-help" id="why" role="note">A small, fast model picked the Calendar tool and Moss wrote this reply itself. Your main model was not used.</p>';
+function chat(inner,cls){return '<div class="mk-chat '+(cls||'')+'">'+inner+'</div>'}
+var U=function(t){return '<div class="mk-msg user">'+t+'</div>'};
+var B=function(t,meta){return '<div class="mk-msg bot"><div>'+t+'</div><div class="mk-meta">'+meta+'</div></div>'};
+var S={
+ normal:{l:'Normal reply',h:function(){return chat(U('What is on my calendar today?')+B('You have two events today. Standup at 9:30 and dentist at 3:00.',MK)+WHY)+'<div class="mk-sr">Screen reader text: "Reply. Answered without the main model. You have two events today..." The marker is text, not colour alone.</div>'}},
+ fail:{l:'Tool failure',h:function(){return chat(U('Turn off the kitchen lights')+B('The kitchen lights did not turn off. Home hub did not answer. Nothing was retried.','<span class="jds-badge jds-badge--red">Failed</span>'+MK)+'<p class="mk-help">After a change that failed, Moss stops and does not hand the message to the main model, because that could repeat an action that half ran.</p>')}},
+ declined:{l:'Declined, main model answered',h:function(){return chat(U('Draft a polite note to my landlord')+B('Here is a draft you can edit...','<span>No marker. The main model answered as usual.</span>'))}},
+ refresh:{l:'After refresh',h:function(){return chat('<div class="mk-meta" role="status">Conversation reloaded</div>'+U('What is on my calendar today?')+B('You have two events today. Standup at 9:30 and dentist at 3:00.',MK)+'<p class="mk-help">The marker comes from what Moss saved with the reply, so it is still there after a refresh or on another device.</p>')}},
+ phone:{l:'Small screen',h:function(){return chat(U('What is on my calendar today?')+B('You have two events today. Standup at 9:30 and dentist at 3:00.','<span class="jds-badge jds-badge--neutral" tabindex="0">Answered without the main model</span>')+'<p class="mk-help">The badge wraps under the reply and tapping the ? opens the same explanation.</p>','phone')}}
+};
+var vb=document.getElementById('views');
+Object.keys(S).forEach(function(k){var b=document.createElement('button');b.className='jds-segmented__opt';b.textContent=S[k].l;b.dataset.k=k;vb.appendChild(b)});
+function render(k){history.replaceState(null,'','#'+k);[].forEach.call(vb.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});document.getElementById('stage').innerHTML=S[k].h()}
+vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
+render(location.hash.slice(1)||'normal');
+</script>
+<script src="switcher.js"></script></body></html>

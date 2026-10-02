@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Classifier settings row - mockup</title><link rel="stylesheet" href="app.css"></head><body>
+<div class="mk-bar"><b>Mockup: Classifier settings row</b>
+<span class="mk-group"><span class="mk-label">State</span><span class="jds-segmented" id="views"></span></span>
+<span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
+<div class="mk-page">
+<h1 class="mk-h">Background models</h1>
+<p class="mk-lede">Static mockup. Pick a state above. The row sits in the existing admin settings, where the sorting model setting is today.</p>
+<div class="mk-sec"><div class="mk-row">
+ <div><span class="jds-eyebrow jds-eyebrow--muted">Admin setting</span>
+  <div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-bold)">Classifier <span id="badge"></span></div>
+  <p class="mk-help">A small, fast model that picks a tool and fills in simple values for quick requests, such as "what is on my calendar today". Moss also uses it for yes/no and pick-one questions in the background.</p></div>
+ <div>
+  <div class="jds-field"><label class="jds-label" for="clf">Classifier model</label>
+   <span class="jds-selectwrap"><select class="jds-select" id="clf"></select></span>
+   <p class="mk-help" id="clfhelp"></p></div>
+  <div class="jds-field" style="margin-top:var(--space-5)"><span class="jds-label">Use it on chat messages</span>
+   <div class="jds-segmented" role="group" aria-label="Gate state" id="gate">
+    <button class="jds-segmented__opt" data-g="off">Off</button>
+    <button class="jds-segmented__opt" data-g="shadow">Shadow</button>
+    <button class="jds-segmented__opt" data-g="on" title="Available once shadow results are reviewed">On</button></div>
+   <p class="mk-help" id="gatehelp"></p></div>
+  <div id="notes"></div>
+  <div class="mk-actions" id="actions"></div>
+ </div></div>
+ <div class="mk-note" id="disclosure"></div>
+</div>
+<div class="mk-sec"><h2 class="mk-h" style="font-size:var(--text-lg)">Words on screen</h2>
+<p class="mk-help">Renamed from "Sorting model". The existing background-use disclosure stays, and the data-sharing line below is added. Messages with attachments or over 2,000 bytes are declined at once and are never sent to the classifier.</p></div>
+</div>
+<script>
+var V={
+ none:{l:'No classifier',opts:['Choose a model...'],sel:0,chdis:true,gate:'off',gdis:true,ghelp:'Choose a classifier model first.',notes:[['info','Without a classifier every chat message goes to your default model, as today.']]},
+ unavail:{l:'Selected model unavailable',opts:['Choose a model...','Local model (offline)'],sel:1,gate:'off',gdis:true,ghelp:'The chosen model cannot be reached, so the gate stays off. Chat is not affected.',notes:[['warn','Moss cannot reach the model you chose. Pick another or check that it is running.']]},
+ loading:{l:'Loading',loading:true,opts:['Loading models...'],sel:0,chdis:true,gate:'off',gdis:true,ghelp:'',notes:[]},
+ off:{l:'Off',opts:['Choose a model...','Local model','API model'],sel:1,gate:'off',ghelp:'Off. Chat works exactly as today.',notes:[],api:false},
+ shadow:{l:'Shadow',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',ghelp:'Shadow. The classifier guesses on every eligible message and Moss records what it would have done. Your default model still answers everything.',notes:[],api:true},
+ onpending:{l:'On, not yet available',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',onblocked:true,ghelp:'On becomes available once shadow results have been reviewed and approved. Today it is greyed out.',notes:[['info','Shadow has run for 2 days. Review of its guesses has not happened yet.']],api:true},
+ on:{l:'On',opts:['Choose a model...','Local model','API model'],sel:2,gate:'on',ghelp:'On. The classifier answers quick requests it is confident about. Everything else goes to your default model.',notes:[],api:true},
+ fail:{l:'Save failed',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',ghelp:'Shadow.',notes:[['err','Could not save. Your change was not applied and the old setting is still active.']],actions:['Try again'],api:true},
+ ro:{l:'Read-only',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',ro:true,ghelp:'Shadow.',notes:[['info','Only an admin can change this. You can see the current setting.']],api:true}
+};
+var order=['none','unavail','loading','off','shadow','onpending','on','fail','ro'];
+var vb=document.getElementById('views');
+order.forEach(function(k){var b=document.createElement('button');b.className='jds-segmented__opt';b.textContent=V[k].l;b.dataset.k=k;vb.appendChild(b)});
+function render(k){
+ var v=V[k];history.replaceState(null,'','#'+k);
+ [].forEach.call(vb.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});
+ var s=document.getElementById('clf');s.innerHTML=v.opts.map(function(o,i){return '<option'+(i===v.sel?' selected':'')+'>'+o+'</option>'}).join('');
+ s.disabled=!!(v.ro||v.chdis);
+ document.getElementById('clfhelp').textContent=v.loading?'':'A local model keeps messages on this machine.';
+ [].forEach.call(document.querySelectorAll('#gate button'),function(b){
+  b.setAttribute('aria-pressed',b.dataset.g===v.gate);
+  b.disabled=!!(v.ro||v.gdis||(b.dataset.g==='on'&&k!=='on'&&k!=='fail'));});
+ document.getElementById('gatehelp').textContent=v.ghelp;
+ document.getElementById('badge').innerHTML=v.gate==='shadow'?'<span class="jds-badge jds-badge--amber">Shadow</span>':v.gate==='on'?'<span class="jds-badge jds-badge--forest">On</span>':'';
+ document.getElementById('notes').innerHTML=v.notes.map(function(n){return '<p class="mk-note '+(n[0]==='warn'?'warn':n[0]==='err'?'err':'')+'" role="'+(n[0]==='err'?'alert':'status')+'">'+n[1]+'</p>'}).join('');
+ document.getElementById('actions').innerHTML=(v.actions||[]).map(function(a){return '<button class="jds-btn jds-btn--secondary jds-btn--sm">'+a+'</button>'}).join('');
+ document.getElementById('disclosure').innerHTML=v.api?'<b>What leaves this machine.</b> When the classifier is an API model, each eligible chat message and the short descriptions of your tools are also sent to that model\'s provider, in addition to your default model\'s provider. Because this setting is for the whole instance, it applies to every user. Private chats are never sent. Passwords and keys are never sent.':(v.opts[v.sel]==='Local model'?'<b>What leaves this machine.</b> Nothing extra. A local model runs on this machine.':'<b>What leaves this machine.</b> Choose a model to see where eligible messages would go.');
+}
+vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
+render(location.hash.slice(1)||'none');
+</script>
+<script src="switcher.js"></script></body></html>
