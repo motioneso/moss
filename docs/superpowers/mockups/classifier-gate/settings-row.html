@@ -4,15 +4,15 @@
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
 <div class="mk-page">
 <div class="mk-sec"><div class="mk-row">
- <div><div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-bold)">Classifier <span id="badge"></span> <span id="t0"></span></div><p class="mk-help">Picks a tool for quick chat requests.</p></div>
+ <div><div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-bold)">Classifier <span id="badge"></span> <span id="t0"></span></div><p class="mk-help">Optional model to handle classification requests.</p></div>
  <div>
-  <div class="jds-field"><label class="jds-label" for="clf">Classifier model <span id="t1"></span></label>
+  <div class="jds-field"><label class="jds-label" for="clf">Classifier model</label>
    <span class="jds-selectwrap"><select class="jds-select" id="clf"></select></span></div>
   <div class="jds-field" style="margin-top:var(--space-5)"><span class="jds-label">Chat gate <span id="t2"></span></span>
-   <div class="jds-segmented" role="group" aria-label="Gate state" id="gate" style="align-self:flex-start;width:max-content">
+   <div><div class="jds-segmented" role="group" aria-label="Gate state" id="gate">
     <button class="jds-segmented__opt" data-g="off">Off</button>
     <button class="jds-segmented__opt" data-g="shadow">Shadow</button>
-    <button class="jds-segmented__opt" data-g="on" title="Available after shadow results are reviewed">On</button></div></div>
+    <button class="jds-segmented__opt" data-g="on" title="Available after shadow results are reviewed">On</button></div></div></div>
   <p class="mk-help" id="gh" style="margin-top:var(--space-2)"></p><p class="mk-help" id="apinote"></p><div id="notes"></div>
   <div class="mk-actions" id="actions"></div>
  </div></div>
@@ -45,11 +45,10 @@ function render(k){
  document.getElementById('badge').innerHTML=v.gate==='shadow'?'<span class="jds-badge jds-badge--amber">Shadow</span>':v.gate==='on'?'<span class="jds-badge jds-badge--forest">On</span>':'';
  document.getElementById('notes').innerHTML=v.notes.map(function(n){return '<p class="mk-note '+(n[0]==='warn'?'warn':n[0]==='err'?'err':'')+'" role="'+(n[0]==='err'?'alert':'status')+'">'+n[1]+'</p>'}).join('');
  document.getElementById('actions').innerHTML=(v.actions||[]).map(function(a){return '<button class="jds-btn jds-btn--secondary jds-btn--sm">'+a+'</button>'}).join('');
- document.getElementById('gh').textContent={off:'Chat works as usual.',shadow:'Records guesses. Your default model still answers.',on:'Answers quick requests it is sure about.'}[v.gate]+(k==='onpending'?' On opens after shadow review.':'');
+ document.getElementById('gh').textContent=k==='onpending'?'On opens after shadow review.':'';
  document.getElementById('apinote').textContent=v.api?'API model: eligible chat messages also go to its provider.':'';
- document.getElementById('t0').innerHTML=tip('Picks a tool for quick requests.');
- document.getElementById('t1').innerHTML=tip(v.api?'An API model also gets each eligible chat message.':'A local model stays on this machine.');
- document.getElementById('t2').innerHTML=tip('Shadow records guesses only. On answers for real.');
+ document.getElementById('t0').innerHTML=tip('Picks a tool and fills in simple values for quick chat requests, so they skip your default model. Also used for yes/no and pick-one questions in the background.');
+ document.getElementById('t2').innerHTML=tip('Lets the classifier answer quick chat requests before your default model sees them.<ul style="margin:var(--space-2) 0 0;padding-left:var(--space-4)"><li><b>Off</b>: not used.</li><li><b>Shadow</b>: it guesses and logs, but your default model still answers.</li><li><b>On</b>: it answers requests it is sure about.</li></ul>');
 }
 vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
 render(location.hash.slice(1)||'none');
