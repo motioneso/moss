@@ -5,6 +5,7 @@
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
 <div class="mk-page">
 <h1 class="mk-h">Classifier log <span id="t0"></span></h1>
+<p class="mk-help">One line per chat message the classifier looked at.</p>
 <div class="mk-filters" id="filters">
  <div class="jds-field"><label class="jds-label" for="f1">Decision</label><span class="jds-selectwrap"><select class="jds-select" id="f1"><option>All</option><option>Handled</option><option>Declined</option><option>Failed</option></select></span></div>
  <div class="jds-field"><label class="jds-label" for="f2">Area</label><span class="jds-selectwrap"><select class="jds-select" id="f2"><option>All</option><option>Calendar</option><option>Home hub</option></select></span></div>
@@ -27,7 +28,7 @@ var S={
  data:{l:'With lines',h:function(){return table(rows)},r:''},
  filtered:{l:'Filtered: failed',h:function(){return table([rows[1]])},r:'',f:1},
  nomatch:{l:'No matches',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines match these filters</div><button class="jds-btn jds-btn--secondary jds-btn--sm">Clear filters</button></div>'},r:'',f:1},
- empty:{l:'Empty',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines yet</div></div>'},r:'',nof:1},
+ empty:{l:'Empty',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines yet</div><div class="jds-empty__sub">Lines appear once the classifier is in use.</div></div>'},r:'',nof:1},
  retention:{l:'7-day retention',h:function(){return table(rows.slice(0,3))},r:'Oldest line: 6 days 22 hours ago.'}
 };
 var vb=document.getElementById('views');

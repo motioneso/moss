@@ -7,22 +7,22 @@
  <div style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:var(--weight-bold)">Home hub <span class="jds-badge jds-badge--forest" id="conn">Connected</span></div>
  <div style="color:var(--text-subtle);font-size:var(--text-xs);margin-top:var(--space-1)">14 tools</div></div>
  <div style="display:flex;justify-content:space-between;gap:var(--space-4);align-items:center">
-  <div style="font-weight:var(--weight-semibold)">Let the classifier use this connection <span id="t1"></span></div>
+  <div><div style="font-weight:var(--weight-semibold)">Let the classifier use this connection <span id="t1"></span></div><p class="mk-help">Quick requests can skip your default model. You review each tool first.</p></div>
   <label class="jds-switch"><input type="checkbox" aria-label="Let the classifier use this connection" id="sw"><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div></div></div>
 <div class="mk-sec" id="body"></div>
 </div>
 <script src="switcher.js"></script>
 <script>
 var S={
- unknown:{l:'Unknown risk',sw:true,body:function(){return head('Risk needed')+tool('Turn light on or off','Unknown',null,true)+tool('Lock or unlock door','Unknown',null,true)}},
- notprep:{l:'Not prepared',sw:false,body:function(){return head('Not prepared')+'<div class="mk-actions"><button class="jds-btn jds-btn--primary jds-btn--sm">Prepare 14 tools</button> '+tip('Your default model reads the tool list once.')+'</div>'}},
- preparing:{l:'Preparing',sw:true,body:function(){return head('Preparing...')+'<div class="mk-actions"><button class="jds-btn jds-btn--quiet jds-btn--sm">Cancel</button></div>'}},
+ unknown:{l:'Unknown risk',sw:true,body:function(){return head('Risk needed','<span class="mk-help">Pick a risk for each tool.</span>')+tool('Turn light on or off','Unknown',null,true)+tool('Lock or unlock door','Unknown',null,true)}},
+ notprep:{l:'Not prepared',sw:false,body:function(){return head('Not prepared','<span class="mk-help">Prepare to get a draft you can review.</span>')+'<div class="mk-actions"><button class="jds-btn jds-btn--primary jds-btn--sm">Prepare 14 tools</button> '+tip('Your default model reads the tool list once.')+'</div>'}},
+ preparing:{l:'Preparing',sw:true,body:function(){return head('Preparing...','<span class="mk-help">Usually under a minute.</span>')+'<div class="mk-actions"><button class="jds-btn jds-btn--quiet jds-btn--sm">Cancel</button></div>'}},
  review:{l:'Review required',sw:true,body:function(){return head('Review required','<span class="jds-badge jds-badge--amber">2 of 14 reviewed</span>')+tool('Turn light on or off','Changes a device',null,false,true)+tool('Lock or unlock door','Sensitive action',null,true)+'<div class="mk-actions"><button class="jds-btn jds-btn--primary jds-btn--sm" disabled>Approve reviewed tools</button><button class="jds-btn jds-btn--quiet jds-btn--sm">Discard draft</button></div>'}},
  approved:{l:'Approved',sw:true,body:function(){return head('Approved','<span class="jds-badge jds-badge--forest">Current</span>')+tool('Turn light on or off','Changes a device',true)+tool('Lock or unlock door','Sensitive action',false)}},
- stale:{l:'Stale',sw:true,body:function(){return head('Needs review','<span class="jds-badge jds-badge--amber">Changed</span>')+'<div class="mk-diff"><div><small>Before</small>Switches one light by name.</div><div class="new"><small>After</small>Switches a light or a group by name.</div></div><div class="mk-actions"><button class="jds-btn jds-btn--primary jds-btn--sm">Review changes</button><button class="jds-btn jds-btn--quiet jds-btn--sm">Keep it off</button> '+tip('Preparing again costs one more default model request.')+'</div>'}},
- failed:{l:'Failed',sw:true,body:function(){return head('Preparing failed','<span class="jds-badge jds-badge--red">Failed</span>')+'<div class="mk-actions"><button class="jds-btn jds-btn--secondary jds-btn--sm">Try again</button> '+tip('Trying again costs one more default model request.')+'</div>'}},
- notools:{l:'No tools',sw:true,body:function(){return head('No tools found')}},
- disc:{l:'Disconnected',sw:false,body:function(){return head('Disconnected')},conn:'Disconnected'}
+ stale:{l:'Stale',sw:true,body:function(){return head('Needs review','<span class="jds-badge jds-badge--amber">Changed</span>')+'<p class="mk-help">The hub changed its tools. The classifier is paused here.</p>'+'<div class="mk-diff"><div><small>Before</small>Switches one light by name.</div><div class="new"><small>After</small>Switches a light or a group by name.</div></div><div class="mk-actions"><button class="jds-btn jds-btn--primary jds-btn--sm">Review changes</button><button class="jds-btn jds-btn--quiet jds-btn--sm">Keep it off</button> '+tip('Preparing again costs one more default model request.')+'</div>'}},
+ failed:{l:'Failed',sw:true,body:function(){return head('Preparing failed','<span class="jds-badge jds-badge--red">Failed</span>')+'<p class="mk-help">Nothing changed.</p>'+'<div class="mk-actions"><button class="jds-btn jds-btn--secondary jds-btn--sm">Try again</button> '+tip('Trying again costs one more default model request.')+'</div>'}},
+ notools:{l:'No tools',sw:true,body:function(){return head('No tools found','<span class="mk-help">Nothing to prepare yet.</span>')}},
+ disc:{l:'Disconnected',sw:false,body:function(){return head('Disconnected','<span class="mk-help">Reconnect to change these settings.</span>')},conn:'Disconnected'}
 };
 function head(t,extra){return '<div style="display:flex;justify-content:space-between;gap:var(--space-4);align-items:baseline"><div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-bold)">'+t+'</div>'+(extra||'')+'</div>'}
 function tool(n,risk,on,unk,edit){
