@@ -246,6 +246,7 @@ export function ChatDrawer(props: {
   });
   const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
   const chatAvailable = chatAvailableFromRoute(chatRouteQuery.data);
+  const noModelAvailable = chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable;
   const threadsQuery = useQuery({
     queryKey: queryKeys.chat.threads(props.surface),
     queryFn: () => listChatThreads(props.surface),
@@ -540,7 +541,9 @@ export function ChatDrawer(props: {
         </span>
         <div className="chatd__id">
           <div className="chatd__name">{assistantName || "Chat"}</div>
-          <div className="chatd__status">Here when you need me</div>
+          <div className={`chatd__status${noModelAvailable ? " chatd__status--offline" : ""}`}>
+            {noModelAvailable ? "Not connected" : "Here when you need me"}
+          </div>
         </div>
         <button
           aria-label="New chat"
@@ -635,7 +638,7 @@ export function ChatDrawer(props: {
                 />
               )}
             />
-          ) : chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable ? (
+          ) : noModelAvailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
           ) : (
             <EmptyState
@@ -729,6 +732,7 @@ export function ChatDrawer(props: {
         isSending={isSending}
         sendError={privateEnded ? "Private chat ended. Start a new chat to continue." : sendError}
         needsProvider={needsProvider}
+        noModelAvailable={noModelAvailable}
         lockedModelUnavailable={lockedModelUnavailable}
         privateMode={privateMode}
         queuedText={queuedSendText?.surface === props.surface ? queuedSendText.text : null}
