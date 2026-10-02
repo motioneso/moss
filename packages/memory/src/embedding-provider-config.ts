@@ -11,6 +11,88 @@ export interface EmbeddingProviderConfig {
   readonly modelId?: string;
 }
 
+/**
+ * Plan 3.6b (#2890): the embedding-activity sink. It is structurally compatible with `@moss/ai`'s
+ * `ModelActivityEntry`/`ModelActivityRecorder`, but declared here so `@moss/memory` does not import
+ * `@moss/ai` (which would pull the AI package's node-only routes into the browser typecheck graph).
+ * The composition root installs a recorder that forwards to `@moss/ai`'s `recordModelActivity`.
+ */
+export type EmbeddingActivityOutcome = "ok" | "error" | "aborted";
+
+export interface EmbeddingActivityEntry {
+  readonly kind: string;
+  readonly action: string;
+  readonly outcome: EmbeddingActivityOutcome;
+  readonly modelName: string;
+  readonly result: string;
+}
+
+export type EmbeddingActivityRecorder = (entry: EmbeddingActivityEntry) => void;
+
+let installedEmbeddingRecorder: EmbeddingActivityRecorder | null = null;
+
+/** Install (or clear) the process-wide embedding activity recorder. Called at a composition root. */
+export function installEmbeddingActivityRecorder(recorder: EmbeddingActivityRecorder | null): void {
+  installedEmbeddingRecorder = recorder;
+}
+
+function defaultEmbeddingRecorder(entry: EmbeddingActivityEntry): void {
+  const recorder = installedEmbeddingRecorder;
+  if (!recorder) return;
+  try {
+    recorder(entry);
+  } catch {
+    // Recording is fire-and-forget; a recorder error must never fail the embedding call.
+  }
+}
+
+/**
+ * Wrap an embedding provider so it records ONE model activity row per job rather than per chunk.
+ * Embedding jobs create a provider per job and call it once per chunk, so the first terminal call
+ * on this instance records the job's row; later calls in the same instance do not add another.
+ * Only transport facts are recorded — the provider's own model name and the outcome. No text
+ * ever enters the row.
+ */
+export function withEmbeddingActivity(
+  provider: EmbeddingProvider,
+  recorder: EmbeddingActivityRecorder = defaultEmbeddingRecorder
+): EmbeddingProvider {
+  let recorded = false;
+  const recordOnce = (outcome: EmbeddingActivityOutcome): void => {
+    if (recorded) return;
+    recorded = true;
+    try {
+      recorder({
+        kind: "embedding",
+        action: "embedding",
+        outcome,
+        modelName: provider.modelName,
+        result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+      });
+    } catch {
+      // Never let recording fail the embedding call.
+    }
+  };
+  const run = async <T>(call: () => Promise<T>): Promise<T> => {
+    try {
+      const value = await call();
+      recordOnce("ok");
+      return value;
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
+      recordOnce(aborted ? "aborted" : "error");
+      throw error;
+    }
+  };
+  return {
+    dimensions: provider.dimensions,
+    modelName: provider.modelName,
+    modelVersion: provider.modelVersion,
+    embedDocument: (text) => run(() => provider.embedDocument(text)),
+    embedQuery: (text) => run(() => provider.embedQuery(text))
+  };
+}
+
 export interface EmbeddingRuntimeConfigResolver {
   resolveEnum(key: "ai.embed_provider"): Promise<EmbeddingProviderKind>;
   resolveString(key: "ai.embed_model"): Promise<string>;
@@ -39,7 +121,16 @@ function isStubEmbeddingAllowed(env: NodeJS.ProcessEnv): boolean {
 /** The only place that instantiates an embedding provider. Never hardcode a provider elsewhere. */
 export function createEmbeddingProvider(
   config: EmbeddingProviderConfig,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  onModelCall: EmbeddingActivityRecorder = defaultEmbeddingRecorder
+): EmbeddingProvider {
+  const provider = buildEmbeddingProvider(config, env);
+  return withEmbeddingActivity(provider, onModelCall);
+}
+
+function buildEmbeddingProvider(
+  config: EmbeddingProviderConfig,
+  env: NodeJS.ProcessEnv
 ): EmbeddingProvider {
   switch (config.kind) {
     case "local":
