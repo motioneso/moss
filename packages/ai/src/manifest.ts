@@ -121,7 +121,7 @@ export const aiModuleManifest = {
       permissionId: "ai.manage"
     }
   ],
-  // #2208: Moss's app map for the Providers card's model controls (Settings > Assistant & AI).
+  // #2208: Moss's app map for the Providers card's model controls (Settings > AI providers).
   features: [
     {
       id: "ai.refresh_provider_models",
@@ -214,7 +214,7 @@ export const aiModuleManifest = {
       id: "ai.classifier_gate_setting",
       description:
         "Classifier gate: the Chat gate choice (Off, Shadow, On) in the Classifier row on Settings > " +
-        "Assistant & AI, an instance-wide setting beside the Classifier binding. On is unavailable " +
+        "AI providers, an instance-wide setting beside the Classifier binding. On is unavailable " +
         "until a tool release is approved.",
       remediations: [
         {
@@ -238,7 +238,7 @@ export const aiModuleManifest = {
     {
       id: "ai.sorting_model",
       description:
-        "Classifier: a row under Services on Settings > Assistant & AI. An admin picks a small, " +
+        "Classifier: a row under Services on Settings > AI providers. An admin picks a small, " +
         "fast model for sorting, or Use main model. News and Sports ask it yes/no questions per " +
         "story and preference, falling back to the main model.",
       remediations: [

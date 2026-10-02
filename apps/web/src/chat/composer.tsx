@@ -372,7 +372,7 @@ export function Composer(props: {
   const micDisabled =
     props.readOnly || props.lockedModelUnavailable || !micAvailable || transcribing;
   const micTitle = !micAvailable
-    ? "Set up a transcription model in Settings → Assistant & AI to enable voice input"
+    ? "Set up a transcription model in Settings → AI providers to enable voice input"
     : recording
       ? "Stop recording"
       : transcribing

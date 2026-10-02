@@ -55,14 +55,14 @@ async function skipOnboarding(page: Page): Promise<void> {
 }
 
 // Nav path mirrors cli-terminal.uat.spec.ts:49-52: usermenu -> Settings -> Admin /
-// Setup (segmented control) -> the "Assistant & AI" admin section. Personal mode has a section of
+// Setup (segmented control) -> the "AI providers" admin section. Personal mode has a section named
 // the SAME label, but settings-page.tsx only ever mounts one mode's nav group at a time, so the
 // button reference is unambiguous once Admin / Setup has been selected.
 async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
 }
 
 // `exact` is required throughout the provider picker: getByRole's name match is substring-based by

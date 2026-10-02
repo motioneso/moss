@@ -27,7 +27,7 @@ describe("app map: sorting model (#2594)", () => {
     expect(feature?.errors?.[0]?.description).toMatch(/sorting model not answering/);
   });
 
-  it("describes the row on the Assistant & AI settings page", () => {
+  it("describes the row on the AI providers settings page", () => {
     const page = CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders");
     expect(page?.description).toMatch(/Classifier row/);
     expect(page?.description).toMatch(/Use main model/);

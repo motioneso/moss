@@ -23,7 +23,7 @@ export function ReleasedPane(_props: PaneProps) {
   return (
     <>
       <PaneHead
-        title="Recently Released"
+        title="What's new"
         desc="See what was added, fixed, and changed in recent Moss releases."
       />
       <MarkdownMessage text={edgeChannelFirst(releaseNotes)} />

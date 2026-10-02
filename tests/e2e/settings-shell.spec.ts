@@ -75,7 +75,7 @@ test("reaffirms a selected Codex model and clears the saved OpenCode choice", as
   });
 
   await page.goto("/settings?section=assistant");
-  await expect(page.getByRole("heading", { name: "Assistant & AI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your assistant" })).toBeVisible();
   await expect(page.getByLabel("Chat model")).toHaveValue("codex");
 
   const reaffirm = page.getByRole("button", { name: "Use Codex for chat" });
@@ -120,7 +120,7 @@ test("reaffirms the Codex admin default and clears the saved OpenCode choice", a
   });
 
   await page.goto("/settings?section=assistant");
-  await expect(page.getByRole("heading", { name: "Assistant & AI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your assistant" })).toBeVisible();
   await expect(page.getByLabel("Chat model")).toHaveValue("default");
 
   const reaffirm = page.getByRole("button", { name: "Use Codex for chat" });
@@ -142,7 +142,7 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
     await expect(nav.getByText(group, { exact: true })).toBeVisible();
   }
   await expect(nav.getByRole("button")).toHaveCount(12);
-  await expect(nav.getByRole("button", { name: "Recently Released" })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "What's new" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Integrations" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Profile & account" })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "General" })).toHaveCount(0);
