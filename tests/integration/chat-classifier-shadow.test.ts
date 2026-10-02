@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import { sql, type Kysely } from "kysely";
-import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ClassifierShadowRepository } from "@moss/chat";
@@ -11,9 +10,9 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 
 // #2868: shadow decision records are owner-only under row-level security (no admin, no
 // shared-thread recipient), correlate the model's first tool call by turn, survive storage
-// failures without throwing, skip private chats, and expire after a fixed 7 days.
-
-const { Client } = pg;
+// failures without throwing and skip private chats.
+// #2908: they are kept forever (no purge job or function) and the owner deletes their own on
+// request; another owner, and an admin, cannot.
 
 let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
@@ -44,7 +43,7 @@ afterAll(async () => {
 });
 
 describe("app.chat_classifier_shadow_records", () => {
-  it("forces row security and gives the app role no DELETE", async () => {
+  it("forces row security, lets the app role DELETE its own rows, and has no purge function", async () => {
     const table = await sql<{ relrowsecurity: boolean; relforcerowsecurity: boolean }>`
       SELECT relrowsecurity, relforcerowsecurity FROM pg_class
       WHERE oid = 'app.chat_classifier_shadow_records'::regclass
@@ -54,7 +53,16 @@ describe("app.chat_classifier_shadow_records", () => {
     const grant = await sql<{ can_delete: boolean }>`
       SELECT has_table_privilege('jarvis_app_runtime', 'app.chat_classifier_shadow_records', 'DELETE') AS can_delete
     `.execute(appDb);
-    expect(grant.rows[0]?.can_delete).toBe(false);
+    expect(grant.rows[0]?.can_delete).toBe(true);
+
+    // #2908 — the fixed 7-day purge is gone, function and all.
+    const fn = await sql<{ n: string }>`
+      SELECT count(*)::text AS n
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'app' AND p.proname = 'purge_expired_chat_classifier_shadow_records'
+    `.execute(appDb);
+    expect(fn.rows[0]?.n).toBe("0");
   });
 
   it("keeps one owner's records invisible to another owner, to an admin and to a shared-thread recipient", async () => {
@@ -252,58 +260,65 @@ describe("app.chat_classifier_shadow_records", () => {
     expect(JSON.stringify(failures)).not.toContain("xxxx");
   });
 
-  it("purges only records older than 7 days, for every owner, over the worker role", async () => {
-    const expiredA = `turn-${randomUUID()}`;
-    const recentA = `turn-${randomUUID()}`;
-    const expiredB = `turn-${randomUUID()}`;
-    const sixDaysA = `turn-${randomUUID()}`;
-    await asActor(ids.userA, async (db) => {
-      await repository.open(db, open(expiredA));
-      await repository.open(db, open(recentA));
-      await repository.open(db, open(sixDaysA));
+  it("keeps records forever and lets an owner delete only their own", async () => {
+    const turnC1 = `turn-${randomUUID()}`;
+    const turnC2 = `turn-${randomUUID()}`;
+    const turnD = `turn-${randomUUID()}`;
+    await asActor(ids.userC, async (db) => {
+      await repository.open(db, open(turnC1));
+      await repository.open(db, open(turnC2));
     });
-    await asActor(ids.userB, (db) => repository.open(db, open(expiredB)));
+    await asActor(ids.userD, (db) => repository.open(db, open(turnD)));
 
-    const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
-    await bootstrap.connect();
-    try {
-      await bootstrap.query(
-        `UPDATE app.chat_classifier_shadow_records
-         SET created_at = now() - interval '8 days' WHERE turn_id = ANY($1)`,
-        [[expiredA, expiredB]]
-      );
-      await bootstrap.query(
-        `UPDATE app.chat_classifier_shadow_records
-         SET created_at = now() - interval '6 days' WHERE turn_id = $1`,
-        [sixDaysA]
-      );
-    } finally {
-      await bootstrap.end();
-    }
+    // userC has exactly its two rows, so the count is its own rows and nobody else's.
+    const deleted = await asActor(ids.userC, (db) => repository.deleteForOwner(db));
+    expect(deleted).toBe(2);
 
-    const workerDb = createDatabase({
-      connectionString: connectionStrings.worker,
-      maxConnections: 1
-    });
-    try {
-      expect(await repository.purgeExpired(workerDb)).toBeGreaterThanOrEqual(2);
-      // The worker has no way to run a wider delete directly.
-      await expect(
-        sql`DELETE FROM app.chat_classifier_shadow_records`.execute(workerDb)
-      ).rejects.toThrow();
-    } finally {
-      await workerDb.destroy();
-    }
-
-    const remainingA = (await asActor(ids.userA, (db) => repository.listForOwner(db))).map(
+    const cTurns = (await asActor(ids.userC, (db) => repository.listForOwner(db))).map(
       (r) => r.turnId
     );
-    expect(remainingA).toContain(recentA);
-    expect(remainingA).toContain(sixDaysA);
-    expect(remainingA).not.toContain(expiredA);
-    const remainingB = (await asActor(ids.userB, (db) => repository.listForOwner(db))).map(
+    expect(cTurns).not.toContain(turnC1);
+    expect(cTurns).not.toContain(turnC2);
+    const dTurns = (await asActor(ids.userD, (db) => repository.listForOwner(db))).map(
       (r) => r.turnId
     );
-    expect(remainingB).not.toContain(expiredB);
+    expect(dTurns).toContain(turnD);
+
+    await asActor(ids.userD, (db) => repository.deleteForOwner(db));
+  });
+
+  it("stops another user from deleting an owner's records, including by raw SQL", async () => {
+    const turnD = `turn-${randomUUID()}`;
+    await asActor(ids.userD, (db) => repository.open(db, open(turnD)));
+
+    // The repository path returns only the caller's own count.
+    const bBefore = (await asActor(ids.userB, (db) => repository.listForOwner(db))).length;
+    expect(await asActor(ids.userB, (db) => repository.deleteForOwner(db))).toBe(bBefore);
+
+    // A raw DELETE from another actor is scoped by row-level security too.
+    await asActor(ids.userB, (db) =>
+      sql`DELETE FROM app.chat_classifier_shadow_records`.execute(db.db)
+    );
+
+    const dTurns = (await asActor(ids.userD, (db) => repository.listForOwner(db))).map(
+      (r) => r.turnId
+    );
+    expect(dTurns).toContain(turnD);
+    await asActor(ids.userD, (db) => repository.deleteForOwner(db));
+  });
+
+  it("stops an admin from deleting another owner's records", async () => {
+    const turnD = `turn-${randomUUID()}`;
+    await asActor(ids.userD, (db) => repository.open(db, open(turnD)));
+
+    const adminBefore = (await asActor(ids.adminUser, (db) => repository.listForOwner(db))).length;
+    // Admin power is configuration power only: an admin deletes only their own rows.
+    expect(await asActor(ids.adminUser, (db) => repository.deleteForOwner(db))).toBe(adminBefore);
+
+    const dTurns = (await asActor(ids.userD, (db) => repository.listForOwner(db))).map(
+      (r) => r.turnId
+    );
+    expect(dTurns).toContain(turnD);
+    await asActor(ids.userD, (db) => repository.deleteForOwner(db));
   });
 });

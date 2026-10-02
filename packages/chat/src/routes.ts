@@ -48,6 +48,7 @@ import {
   type MossModuleManifest
 } from "@moss/module-sdk";
 import { ChatGatewayNotifier } from "./gateway-notifier.js";
+import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { readRouteSurface } from "./live/chat-surface.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { CliChatUnavailableError } from "./live/errors.js";
@@ -82,6 +83,11 @@ import { asRecord, serializeMessage, serializeThread } from "./route-serializers
 import { registerChatSkillsRoutes } from "./skills/routes.js";
 import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
+import { RuntimeConfigResolver } from "@moss/settings";
+import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
+import { buildClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import type { GateMode } from "./live/classifier-gate.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 
 export {
@@ -131,6 +137,8 @@ export interface ChatRoutesDependencies {
   readonly dataContext: DataContextRunner;
   readonly repository?: ChatRepository;
   readonly skillsRepository?: ChatSkillsRepository;
+  /** Override the classifier shadow-record store (tests inject a fake). */
+  readonly classifierShadowRepository?: ClassifierShadowRepository;
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
   readonly resolveActiveModules?: ActiveModulesResolver;
@@ -215,6 +223,12 @@ export interface ChatRoutesDependencies {
    */
   readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
   /**
+   * #2901 — same late-bound "adopt" seam: publishes the classifier gate runner the wiring closure
+   * built, so a test can drive the REAL route setup (mint/revoke/allowlist) and assert it. No-op
+   * when no gateway is wired.
+   */
+  readonly adoptClassifierGate?: (runner: ClassifierGateRunner) => void;
+  /**
    * #2689: publishes a minter for a token that may call only the named tools, and a way to drop it.
    * The version check uses it so its throwaway session is refused any call to another tool.
    */
@@ -271,6 +285,8 @@ export function registerChatRoutes(
   const memorySettingsRepo = new ChatUserMemorySettingsRepository();
   const factsRepo = new ChatMemoryFactsRepository();
   const suppressionsRepo = new ChatMemorySuppressionsRepository();
+  const classifierShadowRepository =
+    dependencies.classifierShadowRepository ?? new ClassifierShadowRepository();
 
   // Phase 2: proxy notifier — created before gateway so the gateway has a notifier
   // reference; real target is set after the manager is created.
@@ -324,6 +340,27 @@ export function registerChatRoutes(
 
   if (wiring) dependencies.adoptChatGateway?.(wiring.gateway);
 
+  /**
+   * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting
+   * only. `buildClassifierGateRunner` owns the session-id shape, the empty allowlist and the short
+   * token lifetime; the ports factory is intentionally left unset, so today every gated message
+   * declines and falls through to the default model. Nothing here can become reachable until an
+   * approved release exists, which no code path writes yet.
+   */
+  const classifierGate = wiring
+    ? buildClassifierGateRunner({
+        readMode: (actorUserId) =>
+          dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
+            new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
+              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+            )
+          ),
+        tokens: wiring.tokens
+      })
+    : undefined;
+
+  if (classifierGate) dependencies.adoptClassifierGate?.(classifierGate);
+
   const runtime = createChatSessionRuntime({
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
@@ -344,6 +381,8 @@ export function registerChatRoutes(
     chatPreferences: dependencies.chatPreferences,
     localePreferences: dependencies.localePreferences,
     priorityPreferences: dependencies.priorityPreferences,
+    // Task 4.1 (#2901) — attach the classifier gate seam. Undefined when the gateway is not wired.
+    classifierGate,
     mcpTokenLifecycle: wiring
       ? {
           mint: async (actorUserId: string, chatSessionId: string) => {
@@ -622,6 +661,22 @@ export function registerChatRoutes(
         memorySettingsRepo.update(scopedDb, access.actorUserId, patch)
       );
       return serializeSettings(settings);
+    } catch (error) {
+      return handleRouteError(error, reply);
+    }
+  });
+
+  // ── Classifier shadow records ───────────────────────────────────────────────
+
+  // #2908 — the owner deletes their own shadow records on request. Row-level security scopes the
+  // delete to the caller; there is intentionally no admin or cross-user variant here.
+  server.delete("/api/chat/classifier/shadow-records", async (request, reply) => {
+    try {
+      const access = await dependencies.resolveAccessContext(request);
+      const deleted = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
+        classifierShadowRepository.deleteForOwner(scopedDb)
+      );
+      return { deleted };
     } catch (error) {
       return handleRouteError(error, reply);
     }

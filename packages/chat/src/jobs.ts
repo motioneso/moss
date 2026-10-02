@@ -10,8 +10,7 @@ import {
   parseAiApiKeyCredential
 } from "@moss/ai";
 import type { AiSecretCipher, GenerateChatInput, ProviderKind } from "@moss/ai";
-import type { DataContextDb, DataContextRunner, MossDatabase, PreferencesPort } from "@moss/db";
-import type { Kysely } from "kysely";
+import type { DataContextDb, DataContextRunner, PreferencesPort } from "@moss/db";
 import {
   createMemoryCandidateSignature,
   MemoryCandidatesRepository,
@@ -47,7 +46,6 @@ import { localDay, type ChatArchiveStatus } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
 import { extractTimezone } from "./locale-utils.js";
-import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { ChatRepository } from "./repository.js";
 import {
   buildDistillationPrompt,
@@ -65,16 +63,11 @@ import {
 export const CHAT_EMBED_TURN_QUEUE = "chat.embed-turn";
 export const CHAT_EXTRACT_FACTS_QUEUE = "chat.extract-facts";
 export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day";
-export const CHAT_PURGE_SHADOW_RECORDS_QUEUE = "chat.purge-classifier-shadow-records";
 
 export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_EMBED_TURN_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
-  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
-  {
-    name: CHAT_PURGE_SHADOW_RECORDS_QUEUE,
-    options: { retryLimit: 3, retryDelay: 300, retryBackoff: true }
-  }
+  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
 ];
 
 // ── Payloads ──────────────────────────────────────────────────────────────────
@@ -440,11 +433,6 @@ export interface RegisterChatJobWorkersOptions {
   readonly preferencesPort?: PreferencesPort;
   readonly workOptions?: WorkOptions;
   /**
-   * Worker connection for the classifier shadow-record purge, which sweeps every owner's expired
-   * rows through a fixed-window database function. Absent in callers that do not run maintenance.
-   */
-  readonly rootDb?: Kysely<MossDatabase>;
-  /**
    * Structured logger for worker-path diagnostics (chat_extract_facts_failed).
    * Optional for back-compat; production injects a module-tagged child of the
    * worker logger (observability spec: no console.* in prod).
@@ -524,28 +512,7 @@ export async function registerChatJobWorkers(
   );
 
   const workIds = [embedWorkId, extractWorkId, archiveWorkId];
-  if (options.rootDb) {
-    workIds.push(await registerShadowRecordPurge(boss, options.rootDb, options.logger));
-  }
   return workIds;
-}
-
-/**
- * Daily purge of classifier shadow records older than the fixed 7-day window. The job payload is
- * empty by design: shadow records hold private message text, so nothing about them is queued.
- */
-export async function registerShadowRecordPurge(
-  boss: PgBoss,
-  rootDb: Kysely<MossDatabase>,
-  logger?: Pick<FastifyBaseLogger, "info">
-): Promise<string> {
-  const repository = new ClassifierShadowRepository();
-  await boss.schedule(CHAT_PURGE_SHADOW_RECORDS_QUEUE, "30 3 * * *", {}, { tz: "UTC" });
-  return boss.work(CHAT_PURGE_SHADOW_RECORDS_QUEUE, async () => {
-    const purgedRows = await repository.purgeExpired(rootDb);
-    logger?.info({ purgedRows }, "chat_classifier_shadow_records_purged");
-    return { purgedRows };
-  });
 }
 
 async function maybePromoteCandidate(

@@ -1,7 +1,7 @@
-import { sql, type Kysely } from "kysely";
+import { sql } from "kysely";
 
 import { assertDataContextDb, withSavepoint } from "@moss/db";
-import type { DataContextDb, MossDatabase } from "@moss/db";
+import type { DataContextDb } from "@moss/db";
 
 /** Hard cap on one review read. Callers may ask for fewer. */
 export const SHADOW_RECORD_REVIEW_LIMIT = 200;
@@ -257,14 +257,16 @@ export class ClassifierShadowRepository {
   }
 
   /**
-   * Deletes every record older than the fixed 7-day window, for all owners. Takes a worker
-   * connection and no cutoff: the database computes its own, so no caller can widen it.
+   * Deletes the caller's own records on request (#2908). Row-level security supplies the owner
+   * filter from the actor data context — no owner id and no admin path — so the count is always
+   * the calling actor's own rows and cannot be widened by a caller.
    */
-  async purgeExpired(workerDb: Kysely<MossDatabase>): Promise<number> {
-    const result = await sql<{ count: number }>`
-      SELECT app.purge_expired_chat_classifier_shadow_records() AS count
-    `.execute(workerDb);
-    return Number(result.rows[0]?.count ?? 0);
+  async deleteForOwner(scopedDb: DataContextDb): Promise<number> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .deleteFrom("app.chat_classifier_shadow_records")
+      .executeTakeFirst();
+    return Number(result.numDeletedRows ?? 0);
   }
 
   async #lockTurn(

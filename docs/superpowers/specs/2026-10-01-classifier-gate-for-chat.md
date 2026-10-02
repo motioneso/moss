@@ -3,7 +3,8 @@
 Status: draft for Ben's review, 2026-10-01. Builds on #2594 (the sorting model, closed) and the System
 One provider (#2586, closed). Approved by Ben in discussion on 2026-10-01 with the section 5 rulings
 recorded in the plan (`../plans/2026-10-01-classifier-gate-for-chat.md`, "Rulings"), including the
-privacy ceiling, private-chat bypass and 7-day retention. No build issue exists yet.
+privacy ceiling and private-chat bypass; retention is settled by ruling 16 (kept until the owner
+deletes them, 2026-10-02). Build tasks are tracked on the board.
 
 ## 1. The problem
 
@@ -137,8 +138,9 @@ The setting has three states: off, shadow, on.
   The default model answers as today.
 - The record holds the module, tool, confidence, the decision, and whether the default model's first
   tool call matched. It is stored in an owner-only table under row-level security. The message text is
-  stored there too, because accuracy review needs it. It never goes to logs or job payloads. Records
-  are deleted after 7 days (Ben, 2026-10-01); a purge job enforces it.
+  stored there too, because accuracy review needs it. It never goes to logs or job payloads.
+  Records are kept indefinitely; the owner can delete their own on request, enforced by row-level
+  security with no admin bypass (Ben, ruling 16, 2026-10-02). Account deletion removes them too.
 - **Kill gate:** the gate does not go to "on" for any tool until shadow data shows its picks agree with
   the default model's at an acceptable rate. The rate and the review window are set by Ben when the
   data exists.

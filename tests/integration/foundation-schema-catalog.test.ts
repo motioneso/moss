@@ -529,6 +529,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0254",
           name: "0254_moss_model_activity_log.sql"
+        },
+        // #2908 — keep shadow records forever; owner-only delete on request, no admin bypass.
+        {
+          version: "0255",
+          name: "0255_chat_classifier_shadow_retention.sql"
         }
       ]);
     } finally {

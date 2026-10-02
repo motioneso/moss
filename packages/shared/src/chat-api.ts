@@ -102,6 +102,11 @@ export interface ChatMessageDto {
   readonly elapsedMs?: number;
   /** Token usage reported for this turn, when available. */
   readonly usage?: ChatTurnUsageDto;
+  /**
+   * Task 4.1 (#2901) — present only on a turn the classifier gate handled. Absent on model turns
+   * and on all history written before this contract existed.
+   */
+  readonly origin?: ChatTurnOriginV1;
 }
 
 export interface ListChatThreadsResponse {
@@ -226,6 +231,24 @@ export interface ClassifierToolReleaseRecord {
   readonly approvedAt: string;
   readonly approvedByUserId: string;
 }
+
+/**
+ * Task 4.1 (#2901) — where a completed assistant turn came from. A turn the classifier gate handled
+ * carries this instead of a model execution stamp: the reply was rendered by code from the validated
+ * tool result (or a fixed failure string), so no provider/model/usage may be recorded for it. Old
+ * and default-model turns have no origin and keep their `executed` metadata.
+ */
+export interface ChatClassifierGateOriginV1 {
+  readonly version: 1;
+  readonly kind: "classifier_gate";
+  /** Server turn correlation id for the gate decision that produced this turn. */
+  readonly decisionId: string;
+  readonly moduleId: string | null;
+  readonly toolName: string | null;
+  readonly outcome: "executed-success" | "executed-failure-or-unknown";
+}
+
+export type ChatTurnOriginV1 = ChatClassifierGateOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";
