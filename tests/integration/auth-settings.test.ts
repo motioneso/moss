@@ -380,6 +380,24 @@ describe("M3 auth, users, settings", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  // #2881: the classifier gate key must be written through its typed runtime-config route, which
+  // runs the enum validation and the release-eligibility check. The generic PATCH would otherwise
+  // let a forged request store `on` while skipping both guards.
+  it("rejects PATCH of the classifier gate setting on the generic route (400)", async () => {
+    const response = await server.inject({
+      method: "PATCH",
+      url: "/api/admin/settings/chat.classifier_gate_mode",
+      headers: {
+        cookie: ownerCookie
+      },
+      payload: {
+        value: { value: "on" }
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it("records audit events for bootstrap and settings actions", async () => {
     const auditResponse = await server.inject({
       method: "GET",
