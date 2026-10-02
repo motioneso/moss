@@ -9,6 +9,7 @@ import {
 } from "../../packages/db/src/index.js";
 import {
   BRAVE_API_KEY_CONFIG_KEY,
+  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
   EMBED_PROVIDER_CONFIG_KEY
 } from "../../packages/settings/src/runtime-config-keys.js";
@@ -38,6 +39,12 @@ function makeScopedDb(settings: Map<string, Record<string, unknown>>): DataConte
 function makeServer(options?: {
   readonly initialSettings?: readonly [string, Record<string, unknown>][];
   readonly env?: NodeJS.ProcessEnv;
+  readonly isAdmin?: boolean;
+  readonly hasEligibleRelease?: boolean;
+  /** When false, no activation port is wired (exercises the fail-closed default). */
+  readonly wireActivationPort?: boolean;
+  /** When true, the activation port's database read throws (exercises fail-closed on error). */
+  readonly activationPortThrows?: boolean;
 }): {
   readonly server: FastifyInstance;
   readonly upserts: unknown[];
@@ -62,7 +69,7 @@ function makeServer(options?: {
         name: "Admin",
         email_verified: true,
         image: null,
-        is_instance_admin: true,
+        is_instance_admin: options?.isAdmin ?? true,
         status: "active",
         is_bootstrap_owner: false,
         created_at: new Date("2026-01-01T00:00:00.000Z"),
@@ -86,7 +93,17 @@ function makeServer(options?: {
       SettingsRepository,
       "getUserById" | "upsertInstanceSetting" | "deleteInstanceSetting"
     > as unknown as SettingsRepository,
-    env: options?.env ?? {}
+    env: options?.env ?? {},
+    ...(options?.wireActivationPort === false
+      ? {}
+      : {
+          classifierActivation: {
+            hasEligibleRelease: async () => {
+              if (options?.activationPortThrows) throw new Error("release read failed");
+              return options?.hasEligibleRelease ?? false;
+            }
+          }
+        })
   });
 
   return { server, upserts };
@@ -240,5 +257,105 @@ describe("runtime config admin routes", () => {
     expect(body.config.value).toBeNull();
     expect(body.config.source).toBe("instance");
     expect(res.body).not.toContain("BSA-secret-key-123");
+  });
+
+  it("defaults the classifier gate to off and accepts off or shadow (#2881)", async () => {
+    const made = makeServer();
+    server = made.server;
+
+    const getRes = await server.inject({
+      method: "GET",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`
+    });
+    expect(getRes.json()).toEqual({ config: { value: "off", source: "default" } });
+
+    const shadowRes = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "shadow" }
+    });
+    expect(shadowRes.statusCode).toBe(200);
+    expect(shadowRes.json()).toEqual({ config: { value: "shadow", source: "instance" } });
+  });
+
+  it("rejects turning the classifier gate on without an approved tool release (#2881)", async () => {
+    const made = makeServer({ hasEligibleRelease: false });
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "on" }
+    });
+
+    expect(res.statusCode).toBe(409);
+    // No write and no audit row may happen on the rejection path.
+    expect(made.upserts).toEqual([]);
+  });
+
+  it("accepts the classifier gate on when an approved tool release exists (#2881)", async () => {
+    const made = makeServer({ hasEligibleRelease: true });
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "on" }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ config: { value: "on", source: "instance" } });
+    expect(made.upserts).toHaveLength(1);
+  });
+
+  it("fails closed when no activation port is wired (#2881)", async () => {
+    const made = makeServer({ wireActivationPort: false });
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "on" }
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(made.upserts).toEqual([]);
+  });
+
+  it("rejects a non-admin writing the classifier gate (#2881)", async () => {
+    const made = makeServer({ isAdmin: false, hasEligibleRelease: true });
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "shadow" }
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(made.upserts).toEqual([]);
+  });
+
+  // #2881: if the release read fails, the activation check must fail closed — the `on` write is
+  // never stored. This is the "database read errors" path the security review asked to cover.
+  it("fails closed when the release check's database read throws (#2881)", async () => {
+    const made = makeServer({ activationPortThrows: true });
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "on" }
+    });
+
+    expect(res.statusCode).toBeGreaterThanOrEqual(500);
+    expect(made.upserts).toEqual([]);
+
+    // The read status stays at the default; nothing was turned on.
+    const getRes = await server.inject({
+      method: "GET",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`
+    });
+    expect(getRes.json()).toEqual({ config: { value: "off", source: "default" } });
   });
 });

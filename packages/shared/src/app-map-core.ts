@@ -250,6 +250,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
       "The Services group has an Email reading row: it reads the emails the sorting model " +
       "cannot settle and writes their summaries and suggested actions. " +
+      "The classifier gate is an instance-wide setting that is not shown on any screen yet: it is " +
+      "Off by default, may be set to Shadow or On only through the admin configuration boundary, " +
+      "and cannot be turned On until an approved tool release exists. " +
       "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +

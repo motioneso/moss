@@ -514,6 +514,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0251",
           name: "0251_chat_classifier_shadow_records.sql"
+        },
+        // #2881 — approved tool release eligibility gating the classifier gate's `on` state.
+        {
+          version: "0252",
+          name: "0252_chat_classifier_release_eligibility.sql"
         }
       ]);
     } finally {

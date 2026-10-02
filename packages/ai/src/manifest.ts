@@ -207,6 +207,31 @@ export const aiModuleManifest = {
       ]
     },
     {
+      id: "ai.classifier_gate_setting",
+      description:
+        "Classifier gate: an instance-wide setting (Off, Shadow, On) held through the admin " +
+        "configuration boundary beside the Classifier binding. No screen shows it yet. On needs an " +
+        "approved tool release.",
+      remediations: [
+        {
+          id: "ai.classifier_gate_setting.not_released",
+          description:
+            "Leave the Classifier gate on Off or Shadow until a tool release has been approved; " +
+            "the gate cannot be turned On before then.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "ai.classifier_gate_setting.not_released",
+          class: "prerequisite",
+          remediationRef: "ai.classifier_gate_setting.not_released",
+          description:
+            "Setting the classifier gate to On was refused because no approved tool release exists."
+        }
+      ]
+    },
+    {
       id: "ai.sorting_model",
       description:
         "Sorting model: a row under Services on Settings > Assistant & AI. An admin picks a small, " +
