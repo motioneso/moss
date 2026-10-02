@@ -51,6 +51,8 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   putAdminChatModelOverrideEnabled: vi.fn(),
   putAiServiceBinding: vi.fn(),
   deleteAiServiceBinding: vi.fn(),
+  getAdminRuntimeConfig: vi.fn(async () => ({ config: { value: "off", source: "default" } })),
+  putAdminRuntimeConfig: vi.fn(),
   lookupAiCapabilityRoute: vi.fn(async () => ({ route: null })),
   getVoiceEndpoint: vi.fn(async () => ({ endpoint: null })),
   putVoiceEndpoint: vi.fn(),
@@ -201,7 +203,7 @@ describe("AiProvidersPane provider picker (#1325)", () => {
 });
 
 describe("AiProvidersPane services group (#2594)", () => {
-  it("shows the Sorting model row under the per-job rows", async () => {
+  it("shows the Classifier row under the per-job rows", async () => {
     const client = await import("../../apps/web/src/api/client.js");
     vi.mocked(client.listAiProviders).mockResolvedValueOnce({
       providers: [
@@ -220,7 +222,7 @@ describe("AiProvidersPane services group (#2594)", () => {
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
     expect(text.indexOf("Email reading")).toBeGreaterThan(-1);
-    expect(text.indexOf("Sorting model")).toBeGreaterThan(text.indexOf("Email reading"));
+    expect(text.indexOf("Classifier")).toBeGreaterThan(text.indexOf("Email reading"));
   });
 });
 
@@ -244,11 +246,11 @@ describe("AiProvidersPane", () => {
   });
 });
 
-// #2570: the Trail Marker focus judge is the Sorting model (Ben, 2026-09-22), so there is no
-// separate Trail Marker row. A System One model is offered only in the Sorting model row. The
+// #2570: the Trail Marker focus judge is the Classifier (Ben, 2026-09-22), so there is no
+// separate Trail Marker row. A System One model is offered only in the Classifier row. The
 // Services group only renders once a provider exists, so each test seeds one.
-describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () => {
-  const SORTING_LABEL = "Binding for Sorting model";
+describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
+  const SORTING_LABEL = "Classifier model";
 
   function seedSystemOne(): void {
     vi.mocked(apiClient.listAiProviders).mockResolvedValue({
@@ -301,18 +303,18 @@ describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () =
       .findAllByType("option")
       .map((option) => option.children.join(""));
 
-  it("has no separate Trail Marker row, and the Sorting model row says it judges Trail Marker focus", async () => {
+  it("has no separate Trail Marker row, and the Classifier row owns the Trail Marker judge", async () => {
     seedSystemOne();
     const renderer = await renderPane();
     expect(selects(renderer, "Binding for Trail Marker focus judgment")).toHaveLength(0);
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("It also judges Trail Marker focus.");
+    expect(text).toContain("Classifier");
     await act(async () => {
       renderer.unmount();
     });
   });
 
-  it("offers a System One model only in the Sorting model row and never as the default provider (fails without the provider-kind filters)", async () => {
+  it("offers a System One model only in the Classifier row and never as the default provider (fails without the provider-kind filters)", async () => {
     seedSystemOne();
     const renderer = await renderPane();
     expect(optionTexts(renderer, SORTING_LABEL)).toContain("Jev");

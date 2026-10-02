@@ -420,7 +420,7 @@ function ServiceRow(props: {
   });
 
   // Active models that can actually serve this service (a "model" binding must be capability-valid).
-  // System One models serve only the Trail Marker judgment, through the Sorting model row, as the
+  // System One models serve only the Trail Marker judgment, through the Classifier row, as the
   // server enforces.
   const capableModels = props.models.filter((model) => {
     const provider = props.providers.find((candidate) => candidate.id === model.providerConfigId);

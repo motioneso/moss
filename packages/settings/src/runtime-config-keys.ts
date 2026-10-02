@@ -1,3 +1,7 @@
+import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/shared";
+
+export { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY };
+
 export type RuntimeConfigType = "string" | "enum" | "int" | "secret";
 
 export interface RuntimeConfigKeyEntry {
@@ -19,7 +23,6 @@ export const EMBED_MODEL_CONFIG_KEY = "ai.embed_model";
 export const BRAVE_API_KEY_CONFIG_KEY = "ai.brave_api_key";
 export const CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY = "chat.persistent_pool_cap";
 export const CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY = "chat.persistent_idle_reap_minutes";
-export const CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY = "chat.classifier_gate_mode";
 
 export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
   {
