@@ -104,7 +104,10 @@ test("a live chat turn appears in the admin model activity log (#2890)", async (
         { timeout: 30_000, message: "expected exactly one chat model-activity row" }
       )
       .toBe(1);
+    // A duplicate would land just after the first row, so wait briefly and count once more.
+    await page.waitForTimeout(3_000);
     const chatRows = (await fetchModelActivity(page)).filter((entry) => entry.kind === "chat");
+    expect(chatRows.length, "a turn must leave exactly one chat row").toBe(1);
     expect(chatRows[0]?.outcome, "the chat row should be ok").toBe("ok");
   });
 

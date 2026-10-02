@@ -17,11 +17,12 @@ import { describe, expect, it } from "vitest";
  *    model host or path.
  *
  * It also runs two broader checks, per QA round 2:
- *  - EVERY bare process start (`spawn`/`spawnSync`/`exec`/`execSync`, not the regex `.exec(` or a
- *    method `obj.spawn(`) in the model-facing packages must appear in the process-start allow-list
- *    — whether or not a quoted `claude`/`codex`/`gemini` sits nearby. This catches a model program
- *    started from a variable command (the shape `spawn(launch.command, ...)`), which the
- *    quote-anchored check above cannot see.
+ *  - EVERY file that imports the Node child-process library (`node:child_process` or
+ *    `child_process`, by `import ... from`, `import()`, `require()` or `import x = require()`) must
+ *    be in the process-start allow-list or the model-spawn allow-list, with a reason. Anchoring on
+ *    the import covers every call form (`spawn`, `execFile`, promisified wrappers, `cp.spawn`,
+ *    renamed imports, `fork`), including a model program started from a variable command, which
+ *    the quote-anchored check above cannot see.
  *  - EVERY chat-engine construction (`new AcpChatEngine(`, `new CliChatEngineImpl(`,
  *    `new CodexExecSession(`, `createStructuredEngine(`, the persistent runtimes, and the CLI
  *    structured adapter factory) must appear in the chat-engine allow-list, so a new engine built
@@ -108,19 +109,23 @@ const MODEL_FETCH_ALLOWLIST = new Set([
 ]);
 
 /**
- * Files allowed to start a bare process (`spawn`/`spawnSync`/`exec`/`execSync`). A model-program
- * file is ALSO in MODEL_SPAWN_ALLOWLIST above; the entries here are the ones that are not model
- * calls, each with the reason it is safe. A new file that starts a process the same way must be
- * added here with a reason, or the guard fails with its `file:line`.
+ * Files allowed to import the Node child-process library. A model-program file is ALSO in
+ * MODEL_SPAWN_ALLOWLIST above; the entries here are the others, each with the reason it is safe.
+ * A new file that imports the library must be added here (or above) with a reason, or the guard
+ * fails with its `file:line`.
  */
 const PROCESS_START_ALLOWLIST = new Map<string, string>([
   [
-    "packages/acp/src/tunnel.ts",
-    "interface declaration of AcpTunnel.spawn — a type signature, no process start"
+    "apps/api/src/herdr-install-port.ts",
+    "runs the fixed install-herdr.sh script; no request supplies a command and no model is called"
   ],
   [
-    "packages/chat/src/live/acp-chat-engine.ts",
-    "RpcAcpTunnel.spawn method declaration; it forwards to the runner over RPC, no local spawn"
+    "packages/ai/src/adapters/tmux-bridge.ts",
+    "shared tmux runner that hosts the persistent Claude and Codex chat sessions; it launches the model CLI but each turn is recorded by the chat runtime wrapper (turn-activity-engine.ts), not here"
+  ],
+  [
+    "packages/ai/src/cli-availability.ts",
+    "runs `command -v <binary>` to see whether a CLI is installed; no model turn runs"
   ],
   [
     "packages/cli-runner/src/acp-execs.ts",
@@ -146,7 +151,10 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
     "packages/cli-runner/src/per-user-structured.ts",
     "bounded runner behind the owner-run tmux and file I/O helper (createOwnerIo); it moves files and drives tmux, and starts no model turn itself"
   ],
-  ["packages/cli-runner/src/setpriv.ts", "builds the setpriv privilege-drop wrapper command"],
+  [
+    "packages/cli-runner/src/runner-io.ts",
+    "sanitized-env tmux and file I/O for the engine host; hosts the persistent chat sessions whose turns the chat runtime wrapper records"
+  ],
   [
     "packages/module-registry/src/external/worker-runtime.ts",
     "spawns an external module's own child process, not a model program"
@@ -320,12 +328,12 @@ function findModelFetches(files: readonly SourceFile[]): Hit[] {
 }
 
 /**
- * Every bare process start, however the command is formed. The lookbehind excludes the regex
- * `.exec(` and method calls like `tunnel.spawn(`, so this is precisely a module-level
- * `spawn(`/`spawnSync(`/`exec(`/`execSync(`. This is what catches a program started from a variable
- * (`spawn(launch.command, ...)`) that the quote-anchored check cannot see.
+ * Any import of the Node child-process library: static import/export-from, dynamic `import()`,
+ * `require()` and `import x = require()`. A mention in a comment or string without that syntax does
+ * not match. This is the anchor for every way of starting a process.
  */
-const PROCESS_START_RE = /(?<![.\w])(?:spawn|spawnSync|execSync|exec)\s*\(/g;
+const CHILD_PROCESS_IMPORT_RE =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)["'`](?:node:)?child_process["'`]/g;
 
 /** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
 const CHAT_ENGINE_RE =
@@ -334,11 +342,11 @@ const CHAT_ENGINE_RE =
 function findProcessStarts(files: readonly SourceFile[]): Hit[] {
   const hits: Hit[] = [];
   for (const { file, text } of files) {
-    for (const match of text.matchAll(PROCESS_START_RE)) {
+    for (const match of text.matchAll(CHILD_PROCESS_IMPORT_RE)) {
       hits.push({
         file,
         line: lineOf(text, match.index ?? 0),
-        detail: `process start ${match[0]}`
+        detail: "imports the child-process library"
       });
     }
   }
@@ -494,8 +502,8 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     expect(off.map(describeHit)).toEqual(["packages/example/new.ts:1 — adapter construction"]);
   });
 
-  it("every bare process start is in a recorded or explicitly allowed file", () => {
-    // A model-program file is allow-listed on either list; a utility process-start file only on
+  it("every child-process import is in a recorded or explicitly allowed file", () => {
+    // A model-program file is allow-listed on either list; a utility file only on
     // PROCESS_START_ALLOWLIST. So the covered set is the union of both.
     const covered = new Set<string>([...MODEL_SPAWN_ALLOWLIST, ...PROCESS_START_ALLOWLIST.keys()]);
     const off = uncovered(findProcessStarts(files), covered);
@@ -513,21 +521,44 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     ).toEqual([]);
   });
 
-  it("catches a model program started from a variable command", () => {
-    const source = [
-      "packages/example/variable.ts",
-      "const launch = buildSetprivDropCommand('sh', ['-c', opts.command]);",
-      "return spawn(launch.command, launch.args, { stdio: 'ignore' });"
+  const COVERED_FOR_PROCESS_STARTS = new Set<string>([
+    ...MODEL_SPAWN_ALLOWLIST,
+    ...PROCESS_START_ALLOWLIST.keys()
+  ]);
+
+  it.each([
+    ["a variable-command spawn", `import { spawn } from "node:child_process";\nspawn(cmd, args);`],
+    ["a plain execFile", `import { execFile } from "node:child_process";\nexecFile(cmd, args);`],
+    [
+      "a promisified execFile",
+      `import { execFile } from "child_process";\nconst run = promisify(execFile);`
+    ],
+    ["a namespace import", `import * as cp from "node:child_process";\ncp.spawn(cmd, args);`],
+    ["a renamed import", `import { spawn as start } from "node:child_process";\nstart(cmd, args);`],
+    ["fork", `import { fork } from "node:child_process";\nfork(modulePath);`],
+    ["a require call", `const { spawn } = require("node:child_process");`],
+    ["a dynamic import", `const cp = await import("node:child_process");`],
+    ["an import-equals require", `import cp = require("child_process");`]
+  ])("flags %s in an unlisted file", (_name, body) => {
+    const file = "packages/example/unlisted.ts";
+    const hits = findProcessStarts([{ file, text: body }]);
+    expect(hits.length).toBe(1);
+    expect(uncovered(hits, COVERED_FOR_PROCESS_STARTS).map((hit) => hit.file)).toEqual([file]);
+  });
+
+  it("does not flag a comment that only mentions the child-process library", () => {
+    const text = [
+      "// rather than in worker-runtime.ts (which needs `node:child_process`)",
+      "const m = /^172\\.(\\d+)/.exec(hostname);",
+      "await this.tunnel.spawn(sessionKey, projectId, kind, userId, profile);"
     ].join("\n");
-    const hits = findProcessStarts([{ file: "packages/example/variable.ts", text: source }]);
-    expect(hits.map(describeHit)).toEqual([
-      "packages/example/variable.ts:3 — process start spawn("
-    ]);
-    // And the guard fails on it because that file is on neither allow-list.
-    const covered = new Set<string>([...MODEL_SPAWN_ALLOWLIST, ...PROCESS_START_ALLOWLIST.keys()]);
-    expect(uncovered(hits, covered).map(describeHit)).toEqual([
-      "packages/example/variable.ts:3 — process start spawn("
-    ]);
+    expect(findProcessStarts([{ file: "packages/example/benign.ts", text }])).toEqual([]);
+  });
+
+  it("every process-start allow-list entry still imports the child-process library", () => {
+    const importing = new Set(findProcessStarts(files).map((hit) => hit.file));
+    const stale = [...PROCESS_START_ALLOWLIST.keys()].filter((file) => !importing.has(file));
+    expect(stale, `Stale allow-list entries:\n${stale.join("\n")}`).toEqual([]);
   });
 
   it("catches a new chat engine built outside the recorded places", () => {
@@ -541,14 +572,5 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     expect(uncovered(hits, CHAT_ENGINE_ALLOWLIST).map(describeHit)).toEqual([
       "packages/example/new-engine.ts:1 — chat engine new AcpChatEngine("
     ]);
-  });
-
-  it("does not flag a regex .exec() or a method obj.spawn() as a process start", () => {
-    const source = [
-      "const m = /^172\\.(\\d+)/.exec(hostname);",
-      "await this.tunnel.spawn(sessionKey, projectId, kind, userId, profile);"
-    ].join("\n");
-    const hits = findProcessStarts([{ file: "packages/example/benign.ts", text: source }]);
-    expect(hits).toEqual([]);
   });
 });
