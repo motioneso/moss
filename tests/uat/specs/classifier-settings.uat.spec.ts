@@ -55,6 +55,8 @@ async function json(
 }
 
 const classifierSelect = (page: Page) => page.getByLabel("Classifier model");
+const classifierHeading = (page: Page) =>
+  page.locator(".rt__name").filter({ hasText: "Classifier" }).first();
 const gateButton = (page: Page, name: string) =>
   page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
 
@@ -86,8 +88,8 @@ test("the Classifier settings row picks and clears a classifier and gates `on` (
   });
 
   // The row is renamed and shows the approved disclosure control.
-  await expect(page.getByText("Classifier", { exact: true })).toBeVisible();
-  await expect(page.getByText("Sorting model", { exact: true })).toHaveCount(0);
+  await expect(classifierHeading(page)).toBeVisible();
+  await expect(page.getByText("Sorting model")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
   await expect(gateButton(page, "Off")).toHaveAttribute("aria-pressed", "true");
 
@@ -139,7 +141,7 @@ test("the Classifier settings row picks and clears a classifier and gates `on` (
       if (t.park) document.documentElement.setAttribute("data-theme", t.park);
       else document.documentElement.removeAttribute("data-theme");
     }, theme);
-    await expect(page.getByText("Classifier", { exact: true })).toBeVisible();
+    await expect(classifierHeading(page)).toBeVisible();
     await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
     await page.screenshot({
       path: test.info().outputPath(`classifier-row-${theme.name}.png`),
