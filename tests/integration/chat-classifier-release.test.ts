@@ -15,7 +15,7 @@ let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
 const repository = new ClassifierReleaseRepository();
 
-/** Postgres invalid_table_definition / insufficient_privilege. RLS WITH CHECK refusals are 42501. */
+/** Postgres insufficient_privilege (42501) — what a row-security WITH CHECK refusal on INSERT raises. */
 const RLS_REFUSAL = "42501";
 
 const asActor = <T>(
@@ -23,8 +23,24 @@ const asActor = <T>(
   work: (db: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]) => Promise<T>
 ) => dataContext.withDataContext({ actorUserId, requestId: "release-test" }, work);
 
-/** Run a statement as a non-admin actor and return the Postgres error code, or null on success. */
-async function nonAdminWriteErrorCode(
+/**
+ * Run a mutating statement as a non-admin actor and return how many rows it reported changed.
+ * A blocked UPDATE or DELETE raises no error — Postgres silently skips the rows the policy hides
+ * and reports zero rows changed (only INSERT raises 42501).
+ */
+async function nonAdminWriteAffectedRows(
+  statement: (
+    db: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]
+  ) => Promise<{ numAffectedRows?: bigint }>
+): Promise<bigint> {
+  return asActor(ids.userA, async (db) => {
+    const result = await statement(db);
+    return result.numAffectedRows ?? 0n;
+  });
+}
+
+/** Run an INSERT as a non-admin actor and return the Postgres error code, or null on success. */
+async function nonAdminInsertErrorCode(
   statement: (
     db: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]
   ) => Promise<unknown>
@@ -109,7 +125,7 @@ describe("app.chat_classifier_release_eligibility", () => {
   });
 
   it("refuses a non-admin INSERT with a row-security error", async () => {
-    const code = await nonAdminWriteErrorCode((db) =>
+    const code = await nonAdminInsertErrorCode((db) =>
       sql`
         INSERT INTO app.chat_classifier_release_eligibility
           (module_id, tool_name, classifier_config_version, approved_by_user_id)
@@ -119,28 +135,29 @@ describe("app.chat_classifier_release_eligibility", () => {
     expect(code).toBe(RLS_REFUSAL);
   });
 
-  it("refuses a non-admin UPDATE with a row-security error and changes no row", async () => {
-    const code = await nonAdminWriteErrorCode((db) =>
+  it("skips a non-admin UPDATE (zero rows changed) and leaves the row unchanged", async () => {
+    const changed = await nonAdminWriteAffectedRows((db) =>
       sql`
         UPDATE app.chat_classifier_release_eligibility
         SET tool_name = 'hijacked'
         WHERE module_id = 'tasks'
       `.execute(db.db)
     );
-    expect(code).toBe(RLS_REFUSAL);
+    expect(changed).toBe(0n);
 
     // The row the admin wrote is untouched.
     const rows = await asActor(ids.adminUser, (db) => repository.listEligibleReleases(db));
+    expect(rows.some((r) => r.toolName === "tasks.create")).toBe(true);
     expect(rows.some((r) => r.toolName === "hijacked")).toBe(false);
   });
 
-  it("refuses a non-admin DELETE with a row-security error and removes no row", async () => {
-    const code = await nonAdminWriteErrorCode((db) =>
+  it("skips a non-admin DELETE (zero rows changed) and removes no row", async () => {
+    const changed = await nonAdminWriteAffectedRows((db) =>
       sql`
         DELETE FROM app.chat_classifier_release_eligibility WHERE module_id = 'tasks'
       `.execute(db.db)
     );
-    expect(code).toBe(RLS_REFUSAL);
+    expect(changed).toBe(0n);
 
     const rows = await asActor(ids.adminUser, (db) => repository.listEligibleReleases(db));
     expect(rows.some((r) => r.toolName === "tasks.create")).toBe(true);
