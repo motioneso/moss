@@ -18,9 +18,10 @@ import {
  * revoked in `finally` on every path. It is passed only to the gateway call, never logged, and never
  * placed in a job payload, prompt, response or persisted record.
  *
- * Runtime wiring is deliberately NOT attached in this task (activation is hard-blocked): the ports
- * factory is supplied when the classifier and tool-menu wiring lands, and until then the manager
- * receives no runner and every turn follows today's path unchanged.
+ * Runtime wiring is deliberately narrow in this task (activation is hard-blocked): the composition
+ * root attaches the runner with the real token callbacks and the admin settings read, but leaves the
+ * ports factory unset because assembling the tool list and classifier calls belongs to the later
+ * live-wiring step. Until it lands, every gated message declines to the default model.
  */
 
 export interface ClassifierGateRunner {
@@ -48,16 +49,23 @@ export interface ClassifierGateRunnerDeps {
   readMode(actorUserId: string): Promise<GateMode>;
   /**
    * Builds the attempt ports. The gateway must already be bound to `token`; the runner never exposes
-   * the token anywhere else.
+   * the token anywhere else. ABSENT until the later live-wiring step assembles the tool list and
+   * classifier calls: without it the runner still mints and revokes a real token per attempt, then
+   * declines, so every message falls through to the default model.
    */
-  createPorts(
+  createPorts?: (
     actorUserId: string,
     token: string
-  ): ClassifierGateAttemptPorts & { readonly gateway: ClassifierGatePorts["gateway"] };
+  ) => ClassifierGateAttemptPorts & { readonly gateway: ClassifierGatePorts["gateway"] };
   readonly tokens: GateTokenCallbacks;
   now(): number;
   /** Test seam: deterministic correlation ids. */
   newCorrelationId?: () => string;
+}
+
+/** Declines without picking a tool. Returned until the tool-list/classifier wiring lands. */
+function declineWithoutPorts(): GateOutcome {
+  return { kind: "declined", reason: "no_eligible_tools", trace: { latencyMs: 0 } };
 }
 
 export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): ClassifierGateRunner {
@@ -68,6 +76,7 @@ export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): Clas
       const correlationId = newCorrelationId();
       const token = deps.tokens.mint(request.actorUserId, correlationId);
       try {
+        if (!deps.createPorts) return declineWithoutPorts();
         const attempt = deps.createPorts(request.actorUserId, token);
         const gate = new ClassifierGate({ ...attempt, now: deps.now });
         return await gate.evaluate(request);

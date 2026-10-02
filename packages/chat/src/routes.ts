@@ -82,6 +82,10 @@ import { asRecord, serializeMessage, serializeThread } from "./route-serializers
 import { registerChatSkillsRoutes } from "./skills/routes.js";
 import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
+import { RuntimeConfigResolver } from "@moss/settings";
+import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
+import { createClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import type { GateMode } from "./live/classifier-gate.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 
 export {
@@ -324,6 +328,41 @@ export function registerChatRoutes(
 
   if (wiring) dependencies.adoptChatGateway?.(wiring.gateway);
 
+  /**
+   * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting
+   * only. The token is minted through the same registry every model session uses, scoped to a fresh
+   * correlation id, and revoked on every path. The ports factory is intentionally left unset: the
+   * tool list and classifier calls are the later live-wiring step, so today every gated message
+   * declines and falls through to the default model. Nothing here can become reachable until an
+   * approved release exists, which no code path writes yet.
+   */
+  const classifierGate = wiring
+    ? createClassifierGateRunner({
+        readMode: (actorUserId) =>
+          dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
+            new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
+              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+            )
+          ),
+        tokens: {
+          mint: (actorUserId, correlationId) => {
+            const token = wiring.tokens.mint({
+              actorUserId,
+              chatSessionId: `classifier-gate:${correlationId}`,
+              // Reserved-tool-name seam: the gate token is minted unrestricted here, but nothing
+              // can call through it until the live-wiring step supplies the gateway ports, and
+              // those will only ever name release-approved tools. No release writer exists yet.
+              allowedToolNames: null
+            });
+            return token;
+          },
+          revoke: (correlationId) =>
+            wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`)
+        },
+        now: () => Date.now()
+      })
+    : undefined;
+
   const runtime = createChatSessionRuntime({
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
@@ -344,6 +383,8 @@ export function registerChatRoutes(
     chatPreferences: dependencies.chatPreferences,
     localePreferences: dependencies.localePreferences,
     priorityPreferences: dependencies.priorityPreferences,
+    // Task 4.1 (#2901) — attach the classifier gate seam. Undefined when the gateway is not wired.
+    classifierGate,
     mcpTokenLifecycle: wiring
       ? {
           mint: async (actorUserId: string, chatSessionId: string) => {

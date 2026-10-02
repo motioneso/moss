@@ -467,6 +467,40 @@ describe("classifier gate runner — token lifecycle", () => {
     expect(minted).toEqual(["corr-1"]);
     expect(revoked).toEqual(["corr-1"]);
   });
+
+  it("declines after minting and revoking when no ports factory is wired yet", async () => {
+    const minted: string[] = [];
+    const revoked: string[] = [];
+    const runner = createClassifierGateRunner({
+      readMode: async () => "on",
+      // No createPorts: the live-wiring step has not assembled the tool list/classifier yet.
+      tokens: {
+        mint: (_actorUserId, correlationId) => {
+          minted.push(correlationId);
+          return `tok:${correlationId}`;
+        },
+        revoke: (correlationId) => revoked.push(correlationId)
+      },
+      now: () => 0,
+      newCorrelationId: () => "corr-2"
+    });
+
+    const outcome = await runner.evaluate({
+      actorUserId: "user-1",
+      message: "hi",
+      hasAttachment: false,
+      incognito: false,
+      mode: "on"
+    });
+
+    expect(outcome).toEqual({
+      kind: "declined",
+      reason: "no_eligible_tools",
+      trace: { latencyMs: 0 }
+    });
+    expect(minted).toEqual(["corr-2"]);
+    expect(revoked).toEqual(["corr-2"]);
+  });
 });
 
 describe("classifier gate origin — serialization", () => {
