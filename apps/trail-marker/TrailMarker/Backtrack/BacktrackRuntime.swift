@@ -93,8 +93,9 @@ final class BacktrackRuntime: ObservableObject {
     static let consentVersion = 1
     /// Secure fields must be found within this, or the capture is skipped (plan §4.3).
     static let secureFieldBudget: TimeInterval = 0.05
-    /// Recognition wants more pixels than a vision description does, for small text.
-    static let captureMaxDimension: CGFloat = 2048
+    /// Recognition wants more pixels than a vision description does, for small text. Past about
+    /// 1600 px Vision costs more without reading better (plan §7, retry 2, task 1).
+    static let captureMaxDimension: CGFloat = 1600
     static let thumbnailMaxDimension: CGFloat = 32
     static let idleThreshold: TimeInterval = 300
 

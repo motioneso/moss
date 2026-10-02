@@ -19,21 +19,7 @@ protocol TextRecognizing {
 struct VisionTextRecognizer: TextRecognizing {
     func recognize(_ image: CGImage) async throws -> [String] {
         try await withCheckedThrowingContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
-                let sorted = observations.sorted {
-                    abs($0.boundingBox.midY - $1.boundingBox.midY) > 0.01
-                        ? $0.boundingBox.midY > $1.boundingBox.midY
-                        : $0.boundingBox.minX < $1.boundingBox.minX
-                }
-                continuation.resume(returning: sorted.compactMap { $0.topCandidates(1).first?.string })
-            }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
+            let request = Self.makeRequest { result in continuation.resume(with: result) }
             DispatchQueue.global(qos: .utility).async {
                 do {
                     try VNImageRequestHandler(cgImage: image).perform([request])
@@ -42,6 +28,27 @@ struct VisionTextRecognizer: TextRecognizing {
                 }
             }
         }
+    }
+
+    /// `.accurate` without language correction: about 1.7x cheaper with no accuracy loss on screen
+    /// text (plan §7, retry 2, task 1; omi's `ocr-quality.md` §3).
+    static func makeRequest(completion: @escaping (Result<[String], Error>) -> Void) -> VNRecognizeTextRequest {
+        let request = VNRecognizeTextRequest { request, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+            let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
+            let sorted = observations.sorted {
+                abs($0.boundingBox.midY - $1.boundingBox.midY) > 0.01
+                    ? $0.boundingBox.midY > $1.boundingBox.midY
+                    : $0.boundingBox.minX < $1.boundingBox.minX
+            }
+            completion(.success(sorted.compactMap { $0.topCandidates(1).first?.string }))
+        }
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        return request
     }
 }
 
