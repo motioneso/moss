@@ -6,6 +6,12 @@
 
 import type { ChatSource, GenerateChatInput, ChatProviderAdapter } from "../chat-adapter.js";
 import {
+  modelActivityAction,
+  recordModelActivity,
+  withModelActivityRecording,
+  type ModelActivityRecorder
+} from "../model-activity.js";
+import {
   buildStructuredRequest,
   extractStructuredResult,
   type GenerateStructuredProviderInput,
@@ -22,11 +28,17 @@ export interface HttpApiAdapterOpts {
   readonly fetch?: typeof fetch;
   /** Override the base URL for openai-compatible providers. */
   readonly baseUrl?: string;
+  /**
+   * Plan 3.6a (#2889): receives one entry per call. Defaults to the process-wide recorder. Tests
+   * inject a fake here to observe recordings without touching the global.
+   */
+  readonly onModelCall?: ModelActivityRecorder;
 }
 
 export class HttpApiAdapter implements ChatProviderAdapter {
   private readonly _fetch: typeof fetch;
   private readonly _baseUrl: string | undefined;
+  private readonly _onModelCall: ModelActivityRecorder | undefined;
 
   constructor(
     private readonly providerKind: ProviderKind,
@@ -35,50 +47,71 @@ export class HttpApiAdapter implements ChatProviderAdapter {
   ) {
     this._fetch = opts.fetch ?? globalThis.fetch;
     this._baseUrl = opts.baseUrl;
+    this._onModelCall = opts.onModelCall;
+  }
+
+  private recorder(): ModelActivityRecorder {
+    return this._onModelCall ?? recordModelActivity;
   }
 
   async generateChat(
     input: GenerateChatInput
   ): Promise<{ readonly text: string; readonly sources?: readonly ChatSource[] }> {
-    input.onActivity?.({ kind: "status", text: "calling api..." });
+    return withModelActivityRecording(
+      this.recorder(),
+      { kind: "chat", action: "chat", modelName: input.model.provider_model_id },
+      async () => {
+        input.onActivity?.({ kind: "status", text: "calling api..." });
 
-    const { url, headers, body } = this.buildRequest(input);
+        const { url, headers, body } = this.buildRequest(input);
 
-    const response = await this._fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      ...(input.signal ? { signal: input.signal } : {})
-    });
+        const response = await this._fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          ...(input.signal ? { signal: input.signal } : {})
+        });
 
-    if (!response.ok) {
-      // Never include the API key in error messages (security invariant)
-      throw new Error(`HTTP ${response.status}`);
-    }
+        if (!response.ok) {
+          // Never include the API key in error messages (security invariant)
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-    const json: unknown = await response.json();
-    return this.extractResult(json, Boolean(input.nativeSearch));
+        const json: unknown = await response.json();
+        return this.extractResult(json, Boolean(input.nativeSearch));
+      }
+    );
   }
 
   async generateStructured(
     input: GenerateStructuredProviderInput
   ): Promise<StructuredProviderResult> {
-    const request = buildStructuredRequest(
-      this.providerKind,
-      this.apiKey,
-      this._baseUrl ?? null,
-      input
+    return withModelActivityRecording(
+      this.recorder(),
+      {
+        kind: "structured",
+        action: modelActivityAction(input.service),
+        modelName: input.model.provider_model_id
+      },
+      async () => {
+        const request = buildStructuredRequest(
+          this.providerKind,
+          this.apiKey,
+          this._baseUrl ?? null,
+          input
+        );
+        const response = await this._fetch(request.url, {
+          method: "POST",
+          headers: request.headers,
+          body: JSON.stringify(request.body),
+          signal: input.signal
+        });
+        if (!response.ok) {
+          throw new Error(`AI provider request failed: HTTP ${response.status}`);
+        }
+        return extractStructuredResult(this.providerKind, await response.json());
+      }
     );
-    const response = await this._fetch(request.url, {
-      method: "POST",
-      headers: request.headers,
-      body: JSON.stringify(request.body),
-      signal: input.signal
-    });
-    if (!response.ok) {
-      throw new Error(`AI provider request failed: HTTP ${response.status}`);
-    }
-    return extractStructuredResult(this.providerKind, await response.json());
   }
 
   /**
@@ -95,32 +128,38 @@ export class HttpApiAdapter implements ChatProviderAdapter {
     readonly model: { readonly provider_model_id: string };
     readonly audio: Blob;
   }): Promise<{ readonly text: string }> {
-    if (this.providerKind !== "openai-compatible") {
-      throw new Error(`Transcription is not supported for provider kind: ${this.providerKind}`);
-    }
+    return withModelActivityRecording(
+      this.recorder(),
+      { kind: "transcription", action: "transcription", modelName: input.model.provider_model_id },
+      async () => {
+        if (this.providerKind !== "openai-compatible") {
+          throw new Error(`Transcription is not supported for provider kind: ${this.providerKind}`);
+        }
 
-    const base = this._baseUrl ?? "https://api.openai.com";
-    const form = new FormData();
-    form.set("model", input.model.provider_model_id);
-    form.set("file", input.audio, "audio");
+        const base = this._baseUrl ?? "https://api.openai.com";
+        const form = new FormData();
+        form.set("model", input.model.provider_model_id);
+        form.set("file", input.audio, "audio");
 
-    const response = await this._fetch(`${base}/v1/audio/transcriptions`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${this.apiKey}` },
-      body: form
-    });
+        const response = await this._fetch(`${base}/v1/audio/transcriptions`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${this.apiKey}` },
+          body: form
+        });
 
-    if (!response.ok) {
-      // Never include the API key in error messages (security invariant)
-      throw new Error(`HTTP ${response.status}`);
-    }
+        if (!response.ok) {
+          // Never include the API key in error messages (security invariant)
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-    const json = (await response.json()) as { text?: unknown };
-    if (typeof json.text !== "string") {
-      throw new Error("No text field in transcription response");
-    }
+        const json = (await response.json()) as { text?: unknown };
+        if (typeof json.text !== "string") {
+          throw new Error("No text field in transcription response");
+        }
 
-    return { text: json.text };
+        return { text: json.text };
+      }
+    );
   }
 
   private buildRequest(input: GenerateChatInput): {

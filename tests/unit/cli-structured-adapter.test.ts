@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CliStructuredAdapter } from "../../packages/chat/src/live/cli-structured-adapter.js";
 import type { ChatEngineFactory } from "../../packages/chat/src/live/runtime.js";
+import type { ModelActivityEntry } from "@moss/ai";
 
 describe("CliStructuredAdapter (#982/#869/#981)", () => {
   it("runs the existing one-shot engine and returns raw reply text", async () => {
@@ -425,5 +426,60 @@ describe("CliStructuredAdapter — nativeSearch and sources (#2228)", () => {
         nativeSearch: true
       })
     ).rejects.toThrow("CLI structured generation timed out");
+  });
+});
+
+describe("CliStructuredAdapter — model activity recording (#2889)", () => {
+  function okFactory(): ChatEngineFactory {
+    return () => ({
+      provider: "anthropic",
+      launch: vi.fn(async () => ({ offset: 0 })),
+      submit: vi.fn(async () => undefined),
+      readNew: vi.fn(async () => ({
+        records: [{ kind: "reply" as const, text: '{"ok":true}' }],
+        offset: 12,
+        complete: true
+      })),
+      interrupt: vi.fn(async () => undefined),
+      isAlive: vi.fn(async () => false),
+      kill: vi.fn(async () => undefined)
+    });
+  }
+
+  it("records a structured CLI call with its service action and model name", async () => {
+    const entries: ModelActivityEntry[] = [];
+    const adapter = new CliStructuredAdapter("anthropic", okFactory(), 1_000, 0, (entry) =>
+      entries.push(entry)
+    );
+
+    await adapter.generateStructured({
+      service: "module.classifier",
+      model: { provider_kind: "anthropic", provider_model_id: "cli-model" },
+      messages: [{ role: "user", content: "pick" }],
+      schema: { type: "object" },
+      maxOutputTokens: 100
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: "structured",
+      action: "classifier",
+      outcome: "ok",
+      modelName: "cli-model"
+    });
+  });
+
+  it("does not fail the call when the recorder throws", async () => {
+    const adapter = new CliStructuredAdapter("anthropic", okFactory(), 1_000, 0, () => {
+      throw new Error("recorder exploded");
+    });
+
+    const result = await adapter.generateStructured({
+      model: { provider_kind: "anthropic", provider_model_id: "cli-model" },
+      messages: [{ role: "user", content: "pick" }],
+      schema: { type: "object" },
+      maxOutputTokens: 100
+    });
+    expect(result).toEqual({ rawText: '{"ok":true}', usage: { inputTokens: 0, outputTokens: 0 } });
   });
 });

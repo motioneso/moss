@@ -80,7 +80,15 @@ export const queryKeys = {
     // dead — the settings-UI control that used them was already removed (PR #1205 → batch PR
     // #1224). Deleted rather than left orphaned.
     actionAuditLog: (params?: { since?: string; family?: string; limit?: number }) =>
-      ["ai", "action-audit-log", params] as const
+      ["ai", "action-audit-log", params] as const,
+    modelActivity: (params?: {
+      kind?: string;
+      model?: string;
+      result?: string;
+      since?: string;
+      before?: string;
+      limit?: number;
+    }) => ["ai", "model-activity", params] as const
   },
   briefings: {
     definitions: ["briefings", "definitions"] as const,

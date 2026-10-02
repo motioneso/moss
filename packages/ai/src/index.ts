@@ -19,6 +19,7 @@ export * from "./crypto.js";
 export * from "./credentials.js";
 export * from "./manifest.js";
 export * from "./model-discovery.js";
+export * from "./model-activity.js";
 export * from "./provider-validation-routes.js";
 export * from "./provider-validation.js";
 export * from "./provider-identity.js";
