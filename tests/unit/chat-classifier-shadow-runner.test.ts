@@ -94,6 +94,7 @@ interface Harness {
   readonly mint: ReturnType<typeof vi.fn>;
   readonly revoke: ReturnType<typeof vi.fn>;
   readonly resolve: ReturnType<typeof vi.fn>;
+  readonly readIncognito: ReturnType<typeof vi.fn>;
   readonly onFailure: ReturnType<typeof vi.fn>;
 }
 
@@ -137,9 +138,10 @@ function harness(
   const revoke = vi.fn();
   const onFailure = vi.fn();
 
+  const readIncognito = vi.fn(async () => overrides.incognito ?? false);
   const deps: ClassifierGateShadowRunnerDeps = {
     readMode: vi.fn(async () => (overrides.mode ?? "shadow") as never),
-    readIncognito: vi.fn(async () => overrides.incognito ?? false),
+    readIncognito,
     createPorts,
     repository,
     dataContext,
@@ -158,6 +160,7 @@ function harness(
     mint,
     revoke,
     resolve,
+    readIncognito,
     onFailure
   };
 }
@@ -171,6 +174,15 @@ function input(turnId = "turn-1") {
     hasAttachment: false,
     signal: new AbortController().signal
   };
+}
+
+/**
+ * Lets every pending microtask in a fire-and-forget attempt drain, so a "did nothing" assertion is
+ * not just winning a race on the first await. With the private-chat guard removed this is what makes
+ * the test fail on `open`/`resolve` rather than pass by timing.
+ */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 afterEach(() => {
@@ -191,7 +203,8 @@ describe("no-shadow cases make no classifier request", () => {
   it("off makes no classifier call and opens no record", async () => {
     const h = harness({ mode: "off" });
     h.runner.start(input());
-    await Promise.resolve();
+    await settle();
+    expect(h.readIncognito).not.toHaveBeenCalled();
     expect(h.resolve).not.toHaveBeenCalled();
     expect(h.mint).not.toHaveBeenCalled();
     expect(h.open).not.toHaveBeenCalled();
@@ -200,7 +213,7 @@ describe("no-shadow cases make no classifier request", () => {
   it("on is not the shadow runner's job", async () => {
     const h = harness({ mode: "on" });
     h.runner.start(input());
-    await Promise.resolve();
+    await settle();
     expect(h.resolve).not.toHaveBeenCalled();
     expect(h.open).not.toHaveBeenCalled();
   });
@@ -208,9 +221,13 @@ describe("no-shadow cases make no classifier request", () => {
   it("a private chat is never classified and gets no record", async () => {
     const h = harness({ incognito: true });
     h.runner.start(input());
-    await Promise.resolve();
+    await settle();
+    // The guard is the privacy boundary: with it removed the attempt reaches `resolve`/`open`.
+    expect(h.readIncognito).toHaveBeenCalledWith("user-1", normalizeChatSurface("drawer"));
     expect(h.resolve).not.toHaveBeenCalled();
+    expect(h.mint).not.toHaveBeenCalled();
     expect(h.open).not.toHaveBeenCalled();
+    expect(h.complete).not.toHaveBeenCalled();
   });
 
   it("an already-aborted turn does nothing", async () => {
@@ -218,14 +235,14 @@ describe("no-shadow cases make no classifier request", () => {
     const controller = new AbortController();
     controller.abort();
     h.runner.start({ ...input(), signal: controller.signal });
-    await Promise.resolve();
+    await settle();
     expect(h.open).not.toHaveBeenCalled();
   });
 
   it("an oversize multibyte message never opens a record or reaches the classifier", async () => {
     const h = harness();
     h.runner.start({ ...input(), message: "é".repeat(1_001) });
-    await Promise.resolve();
+    await settle();
     expect(h.open).not.toHaveBeenCalled();
     expect(h.resolve).not.toHaveBeenCalled();
     expect(h.mint).not.toHaveBeenCalled();

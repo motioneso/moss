@@ -177,6 +177,8 @@ export function createClassifierGateShadowRunner(
       const mode = await deps.readMode(actorUserId);
       if (mode !== "shadow") return;
       if (input.signal.aborted) return;
+      // Ruling 9 / Ben's 2026-10-02 ruling: a private chat takes part in nothing. This is the
+      // privacy boundary — without it the attempt would resolve a classifier and open a record.
       if (await deps.readIncognito(actorUserId, input.surface)) return;
       if (input.signal.aborted) return;
       // Match the gate's own bound so an oversize message is never written to the 3.4 record (its
