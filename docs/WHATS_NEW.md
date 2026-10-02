@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-02
+
+#### Fixed
+
+- **Your own sent emails no longer show as needing you.** Emails you sent yourself no longer appear in your briefings as waiting for your decision. [PR #2880](https://github.com/motioneso/moss/pull/2880)
+
 ### 2026-10-01
 
 #### Changed
