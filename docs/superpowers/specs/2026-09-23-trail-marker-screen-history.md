@@ -69,19 +69,26 @@ enough to be worth what it costs in privacy and battery?
 - **When it reads:** on an app switch, a window-title change, and otherwise at most every 10
   seconds while the frontmost window's pixels have changed. Every trigger, including a switch,
   checks a tiny downscaled frame against up to eight recently recognized screens per window.
-  Similar screens are skipped for up to 60 seconds since that screen's last successful recognition,
-  then read again so small text changes cannot be hidden indefinitely. The cache holds fingerprints,
-  not pictures, for at most 32 windows. Failed or cancelled recognition never marks a screen read.
-  After five minutes without keyboard or mouse input, capture and recognition pause; input resumes
-  them within five seconds, subject to the same global recognition budget. This also pauses during
-  passive viewing or screen sharing without input. The existing remembered text is kept.
+  Similar screens are skipped for up to five minutes since that screen's last successful
+  recognition, then read again so small text changes cannot be hidden indefinitely. The cache holds
+  fingerprints, not pictures, for at most 32 windows. Failed or cancelled recognition never marks a
+  screen read. A window whose reads keep finding nothing new is read less often, down to once a
+  minute; new text or a switch back restores the normal pace. Periodic reads wait while the person
+  is typing (at most 30 seconds). After five minutes without keyboard or mouse input, capture and
+  recognition pause; input resumes them within five seconds, subject to the same global
+  recognition budget. This also pauses during passive viewing or screen sharing without input. The
+  existing remembered text is kept. (Amended 2026-10-02, Ben: performance retry 2.)
 - **What it reads:** only the focused window of an allowed app, never the whole display. The
   capture is bound to that window's identity: its process and frame, matched to exactly one on-screen window, read fresh just before and just after the picture, which is the same window
   the never-watch check looked at. If the identity can't be established, for example because
   Accessibility is off, nothing is read. (Amended 2026-09-23 after review: today's Focus capture
   picks an app's largest window, a defect fixed first, #2643.)
-- **Text recognition:** Apple Vision `VNRecognizeTextRequest`, on-device. The frame lives in memory
-  for the length of one recognition call and is never written to disk.
+- **Text source:** the window's visible text is read through Accessibility first, from the same
+  bound window, skipping every secure text field without reading its value. When that gives too
+  little (under 100 characters, mostly buttons and menus, a known canvas app, or a terminal that
+  exposes no text), Apple Vision `VNRecognizeTextRequest` reads the picture on-device instead. The
+  frame lives in memory for the length of one recognition call and is never written to disk. No
+  accessibility setting is changed in any app. (Amended 2026-10-02, Ben: performance retry 2.)
 - **Web addresses:** read through Accessibility from the focused browser's web area (Safari, Chrome,
   Arc, Firefox where exposed). Query strings are dropped before anything else happens.
 - **Dedupe:** the Mac keeps the previous capture's lines for each window and sends only a _segment_
@@ -101,7 +108,8 @@ enough to be worth what it costs in privacy and battery?
   **kept** in screen history, because "who sent that?" is often the point (Ben, 2026-09-23); focus
   judgment text still strips them.
 - **Budget:** at most one recognition every 10 seconds; similar screens are skipped between the
-  one-minute freshness reads described above. If the Mac
+  five-minute freshness reads described above, and Accessibility reads count against the same
+  budget. If the Mac
   reports low power or thermal pressure, it backs off to one every 60 seconds. The target is under
   3% average CPU on an M1 Air across a working day. The live proof measures it (§10).
 
