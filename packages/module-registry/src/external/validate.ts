@@ -18,6 +18,7 @@ import type {
   ModuleStorageDeclaration,
   ModuleWebDeclaration
 } from "@moss/module-sdk";
+import { validateClassifierDeclaration } from "./validate-classifier.js";
 import { validateModuleNavigation, validateModulePreferences } from "./validate-declarations.js";
 import { assertValidFetchHosts } from "@moss/host-fetch/policy";
 import {
@@ -679,6 +680,9 @@ export function validateExternalModuleManifest(
         if (!isNonEmptyString(tool.handler)) errors.push("assistant tool handler is required");
         else handlers.push(tool.handler);
         if (tool.inputSchema !== undefined) lintAssistantToolInputSchema(tool, errors);
+        // Plan 2.2 (#2882): the classifier opt-in rides the existing wholesale assistantTools
+        // copy below; validate its external-only shape and defer the shared rules to the SDK gate.
+        validateClassifierDeclaration(tool, errors);
       }
       if (new Set(names).size !== names.length) errors.push("assistant tool names must be unique");
       if (new Set(permissions).size !== permissions.length) {
