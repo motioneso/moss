@@ -54,15 +54,23 @@ test("the calendar tool's module is installed and its read surface is reachable"
   test.setTimeout(120_000);
   await signIn(page);
 
-  // 1. The bundled module is installed and enabled for this actor.
+  // 1. The bundled module is installed and enabled for this actor. /api/modules returns the real
+  // ModuleDto (id, name, version, lifecycle, navigation, settings, external) — there is no `active`
+  // or `required` field, so assert on what the response actually carries.
   const modules = await json(page, "/api/modules");
   expect(modules.status).toBe(200);
   const calendar = (
-    modules.body.modules as Array<{ id: string; active: boolean; required: boolean }>
+    modules.body.modules as Array<{
+      id: string;
+      lifecycle: string;
+      external?: boolean;
+      navigation: Array<{ path: string }>;
+    }>
   ).find((module) => module.id === "calendar");
   expect(calendar, "Calendar is a bundled module").toBeTruthy();
-  expect(calendar!.active).toBe(true);
-  expect(calendar!.required).toBe(true);
+  expect(calendar!.lifecycle).toBe("required");
+  expect(calendar!.external).toBe(false);
+  expect(calendar!.navigation.map((entry) => entry.path)).toContain("/calendar");
 
   // 2. The real Calendar surface loads through the app's own navigation (no goto shortcut).
   await page.getByRole("link", { name: "Calendar" }).click();

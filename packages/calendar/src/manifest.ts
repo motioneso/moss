@@ -807,8 +807,8 @@ export const calendarModuleManifest = {
       id: "calendar.list_visible_events_classifier",
       description:
         "Today's or tomorrow's calendar can be answered by the classifier gate instead of the main " +
-        "model, with a bounded event list and a note when an account used cached or unavailable data. " +
-        "Not released for live use yet.",
+        "model, with a bounded event list. It declines when the list is cut short or any account used " +
+        "cached or unavailable data. Not released for live use.",
       errors: [
         {
           code: "classifier_gate_not_released",

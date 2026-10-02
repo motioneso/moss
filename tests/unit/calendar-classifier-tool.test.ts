@@ -149,7 +149,9 @@ describe("calendarListVisibleEventsExecute with a classifier window", () => {
     expect(renderReplyTemplate("{summary}", result.data)).toBeNull();
   });
 
-  it("says when accounts used cached or unavailable data", async () => {
+  it("omits the summary when any account used cached data or could not be read", async () => {
+    // QA on PR 2887: a partial list must decline, not answer with a caveat. Cached data is the
+    // same as unread data here — the reply would be stated as a complete answer either way.
     const cached = services({
       items: [contextItem()],
       accounts: [{ ...liveAccount, source: "cache", degradedReason: "network_error" }]
@@ -160,9 +162,11 @@ describe("calendarListVisibleEventsExecute with a classifier window", () => {
       ctx(LA),
       cached.services
     );
-    expect(cachedResult.data?.summary).toContain("used cached or unavailable data");
+    expect(cachedResult.data).not.toHaveProperty("summary");
+    expect(renderReplyTemplate("{summary}", cachedResult.data)).toBeNull();
 
     const gap = services({
+      items: [contextItem()],
       gaps: [{ account: null, reason: "auth_error" }]
     });
     const gapResult = await calendarListVisibleEventsExecute(
@@ -171,9 +175,19 @@ describe("calendarListVisibleEventsExecute with a classifier window", () => {
       ctx(LA),
       gap.services
     );
-    expect(gapResult.data?.summary).toBe(
-      "No events today. Some calendar accounts could not be read, so there may be more."
+    expect(gapResult.data).not.toHaveProperty("summary");
+    expect(renderReplyTemplate("{summary}", gapResult.data)).toBeNull();
+  });
+
+  it("answers a fully live, empty day truthfully", async () => {
+    const result = await calendarListVisibleEventsExecute(
+      scopedDb,
+      { window: "today" },
+      ctx(LA),
+      services({ items: [] }).services
     );
+    expect(result.data?.summary).toBe("No events today.");
+    expect(renderReplyTemplate("{summary}", result.data)).toBe("No events today.");
   });
 
   it("keeps the reply bounded to a few titles and a fixed length", async () => {

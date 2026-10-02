@@ -56,19 +56,23 @@ function boundedTitles(events: readonly { readonly title: string }[]): string[] 
 
 export interface CalendarSummaryOptions {
   readonly label: string;
+  /** True when any account used cached data or could not be read at all. */
   readonly degraded: boolean;
+  /** True when the source cut the list short. */
   readonly truncated: boolean;
 }
 
 /**
- * One code-written sentence about a day's events. Returns `null` when the source cut the list short,
- * so the classifier gate declines rather than reporting an undercount as the whole truth.
+ * One code-written sentence about a day's events. Returns `null` when the result is not a complete,
+ * live picture — the source cut the list short, or any account used cached data or could not be read
+ * — so the classifier gate declines and the message goes to the main model. A partial list is never
+ * stated as a full answer, not even with a caveat.
  */
 export function summarizeCalendarEvents(
   events: readonly { readonly title: string }[],
   options: CalendarSummaryOptions
 ): string | null {
-  if (options.truncated) return null;
+  if (options.truncated || options.degraded) return null;
 
   const count = events.length;
   const head =
@@ -80,11 +84,5 @@ export function summarizeCalendarEvents(
 
   const titles = boundedTitles(events);
   const preview = titles.length > 0 ? ` Next: ${titles.join("; ")}.` : "";
-  const stale = options.degraded
-    ? count === 0
-      ? " Some calendar accounts could not be read, so there may be more."
-      : " Some calendar accounts used cached or unavailable data."
-    : "";
-
-  return `${head}${preview}${stale}`;
+  return `${head}${preview}`;
 }

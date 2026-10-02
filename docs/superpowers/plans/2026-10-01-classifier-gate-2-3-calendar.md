@@ -67,12 +67,14 @@ Gaps I could not cite and therefore did not assume:
    `summary`; `renderReplyTemplate` then returns null and the gate declines (`read_failed`,
    `classifier-gate.ts:515`). An optional property keeps the existing default-model path valid
    (all current calls lack it) while the gate needs it present.
-5. **The summary is bounded and truthful.** It states the count and the day; it lists at most three
-   event titles, each capped in length, and appends one sentence when any account used cached or
-   unavailable data. No arbitrary result detail is dumped.
+5. **The summary is bounded and truthful.** It states the count and the day and lists at most three
+   event titles, each capped in length. No arbitrary result detail is dumped. It returns null when
+   any account used cached data or could not be read at all, so the gate declines instead of stating
+   a partial list as a full answer. (QA on PR 2887 tightened this: a caveat sentence is still a
+   partial list stated as an answer.)
 6. **No authority widening.** Risk stays `read`, no `executionPolicy` is added, no services change.
 7. **Truthful app map.** The calendar manifest gains one feature describing the capability and
-   naming its current unavailability; the core map's Classifier help line gains the same sentence.
+   naming its current unavailability.
    No claim of live availability or releases.
 
 ## Phase 1: bounded today reply (`packages/calendar`)
@@ -134,8 +136,8 @@ Gaps I could not cite and therefore did not assume:
    day — fails if the label is the raw ISO instant or always "today".
 3. `truncated: true` from the source omits `summary` (and `renderReplyTemplate("{summary}", data)`
    returns null) — fails if summary is unconditional.
-4. a cache-sourced account and a non-empty `gaps` each make the summary mention cached/unavailable
-   data; a fully live read does not — fails if `degraded` is hardcoded false.
+4. a cache-sourced account and a non-empty `gaps` each omit `summary` (and `renderReplyTemplate`
+   returns null); a fully live read sets it — fails if `degraded` is ignored.
 5. a zero-event day yields a truthful "No events today." summary and the `{summary}` template
    renders — fails if a placeholder is required-absent.
 6. at most three titles appear, each length-capped, for a 10-event day — fails if the summary dumps
@@ -208,10 +210,9 @@ Expected exit 0.
 
 - Add to the calendar manifest `features` array (`manifest.ts:493`) one entry:
   - `id: "calendar.list_visible_events_classifier"`
-  - `description`: reads as — Today's calendar can be answered by the classifier gate instead of the
-    main model, for a short "today"/"tomorrow" window only; it reports how many events and a bounded
-    preview, declines when there are too many to state, and says when any account used cached or
-    unavailable data; it is not released for live use yet, so messages still go to the main model.
+  - `description`: reads as — Today's or tomorrow's calendar can be answered by the classifier gate
+    instead of the main model, with a bounded event list. It declines when the list is cut short or
+    any account used cached or unavailable data. Not released for live use.
   - `errors`: `classifier_gate_not_released` (`prerequisite`) with `remediationRef`.
   - `remediations`: `calendar.classifier_gate_unavailable` → "Nothing to do yet; the classifier gate
     is not switched on for any tool. Messages are answered by the main model." path
