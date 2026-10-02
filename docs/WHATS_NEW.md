@@ -37,6 +37,8 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Morning briefing keeps the day in time order.** The morning briefing now lists timed items in clock order and no longer adds a section that only repeats an event's name. [PR #2859](https://github.com/motioneso/moss/pull/2859)
+- **Admins keep access to shared AI providers.** When an admin who set up a shared AI provider is later demoted, the remaining admins can still see and manage it. [PR #2855](https://github.com/motioneso/moss/pull/2855)
 - **All-day events stay on the right day.** All-day calendar events now show on their own date in Today and in your briefings, instead of one day early when you are west of UTC. [PR #2852](https://github.com/motioneso/moss/pull/2852)
 - **Today page jump links.** Jumping to a section on the Today page now leaves a gap below the top bar instead of tucking the section underneath it. [PR #2851](https://github.com/motioneso/moss/pull/2851)
 - **Quote marks in chat tool steps.** Expanding a step in the chat now shows quote marks and ampersands as normal characters instead of strange codes. [PR #2848](https://github.com/motioneso/moss/pull/2848)
