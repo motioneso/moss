@@ -7,6 +7,7 @@ import { seedActivityOutcomeFixture, seedAiProviderChunk } from "./chunks/ai.js"
 import { seedScriptedChatProviderChunk } from "./chunks/chat-script.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
 import { seedBriefingWriterAiProviderChunk } from "./chunks/briefing-writer-ai.js";
+import { seedClassifierAiProviderChunk } from "./chunks/classifier-ai.js";
 import { seedNewsChunk } from "./chunks/news.js";
 import { seedSportsChunk, seedSportsPublicSourceFixtures } from "./chunks/sports.js";
 import { seedTasksChunk } from "./chunks/tasks.js";
@@ -153,6 +154,14 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
         runner,
         adminUserId,
         options.briefingWriterAiProviderBaseUrl
+      );
+    }
+    // #2907 (plan 3.5): opt-in test-only classifiers for the shadow live proof.
+    if (options.classifierFixtureAiProviderBaseUrl) {
+      await seedClassifierAiProviderChunk(
+        runner,
+        adminUserId,
+        options.classifierFixtureAiProviderBaseUrl
       );
     }
     await seedDataChunks(runner, adminUserId, exclude);

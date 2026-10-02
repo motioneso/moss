@@ -52,7 +52,8 @@ export type UatChatScript =
   | "1987-archive-backfill"
   | "1992-chat-archive-status"
   | "1883-vault-search-dependency-failure"
-  | "2911-shadow-delete";
+  | "2911-shadow-delete"
+  | "classifier-shadow";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
@@ -62,7 +63,8 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "1987-archive-backfill",
   "1992-chat-archive-status",
   "1883-vault-search-dependency-failure",
-  "2911-shadow-delete"
+  "2911-shadow-delete",
+  "classifier-shadow"
 ];
 
 export interface SeedOptions {
@@ -86,6 +88,13 @@ export interface SeedOptions {
    * UatSeedChunk/ADMIN_DATA_CHUNKS entry — see ./chunks/briefing-writer-ai.ts's header.
    */
   readonly briefingWriterAiProviderBaseUrl?: string;
+  /**
+   * #2907 (plan 3.5): absent by default (no-op — see seedClassifierAiProviderChunk). When set,
+   * seeds a test-only `openai-compatible` JSON classifier pointed at the classifier fixture origin
+   * plus an unreachable one, so the shadow UAT can record a real `would_handle` decision and a
+   * decline. Deliberately NOT a UatSeedChunk/ADMIN_DATA_CHUNKS entry.
+   */
+  readonly classifierFixtureAiProviderBaseUrl?: string;
   /** #1909: opt-in legacy public-source recovery fixtures for its dedicated live-path spec. */
   readonly sportsPublicSourceFixtures?: boolean;
   /** #2015: seed one owner-scoped pending approval for the live card path. */

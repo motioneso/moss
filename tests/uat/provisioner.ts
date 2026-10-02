@@ -9,6 +9,11 @@ import { resolveMossEnv } from "@moss/db";
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
 import { BRIEFING_WRITER_FIXTURE_CONTAINER_PORT } from "./fixtures/briefing-writer-fixture-server.js";
 import {
+  classifierFixtureBaseUrlFor,
+  removeClassifierFixtureContainer,
+  startClassifierFixtureContainer
+} from "./fixtures/classifier-fixture-container.js";
+import {
   REAL_CHAT_CONFIGURED_ENV,
   installUatRealChatCodexAuth,
   type UatRealChatCodexAuth
@@ -279,6 +284,7 @@ export type SeedHook = (ctx: {
   readonly jobSearchAiProviderBaseUrl?: string;
   /** [task:p8-briefing-writer-unreachable]: docker-reachable writer-fixture base URL. Absent unless withBriefingWriterFixture is set. */
   readonly briefingWriterAiProviderBaseUrl?: string;
+  readonly classifierFixtureAiProviderBaseUrl?: string;
   readonly sportsPublicSourceFixtures?: boolean;
   readonly workflowApprovalFixture?: boolean;
   /** #2175: three seeded audit-log rows (suppressed / refused / success+duration). */
@@ -310,6 +316,7 @@ export const composeSeedHook: SeedHook = async ({
   withoutNewsJsonBinding,
   jobSearchAiProviderBaseUrl,
   briefingWriterAiProviderBaseUrl,
+  classifierFixtureAiProviderBaseUrl,
   sportsPublicSourceFixtures,
   workflowApprovalFixture,
   activityOutcomeFixture,
@@ -338,6 +345,8 @@ export const composeSeedHook: SeedHook = async ({
       // [task:p8-briefing-writer-unreachable]: empty string reads as absent in cli.ts
       // (`|| undefined`) — same "always pass, empty means off" shape as the job-search var.
       `MOSS_UAT_BRIEFING_WRITER_AI_BASE_URL=${briefingWriterAiProviderBaseUrl ?? ""}`,
+      "-e",
+      `MOSS_UAT_CLASSIFIER_FIXTURE_AI_BASE_URL=${classifierFixtureAiProviderBaseUrl ?? ""}`,
       "-e",
       `JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=${sportsPublicSourceFixtures === true ? "1" : "0"}`,
       "-e",
@@ -660,6 +669,7 @@ export interface UatProvisionOptions {
   // [task:p8-briefing-writer-unreachable]: opt-in, absent by default. Enables the writer
   // fixture origin and its synthesis provider, so briefing cards render fixed prose.
   readonly withBriefingWriterFixture?: boolean;
+  readonly withClassifierFixture?: boolean;
   /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
   readonly withSportsPublicSourceFixtures?: boolean;
   /** #2015: opt-in pending workflow approval used only by its live-path spec. */
@@ -685,7 +695,8 @@ export function buildSeedHookInput(
   // threads jobSearchFixtureBaseUrl into writeUatEnvFile below, rather than asking every caller of
   // UatProvisionOptions to compute a Docker bridge gateway address by hand.
   jobSearchAiProviderBaseUrl?: string,
-  briefingWriterAiProviderBaseUrl?: string
+  briefingWriterAiProviderBaseUrl?: string,
+  classifierFixtureAiProviderBaseUrl?: string
 ): {
   projectName: string;
   level: UatSeedLevel;
@@ -693,6 +704,7 @@ export function buildSeedHookInput(
   withoutNewsJsonBinding?: boolean;
   jobSearchAiProviderBaseUrl?: string;
   briefingWriterAiProviderBaseUrl?: string;
+  classifierFixtureAiProviderBaseUrl?: string;
   sportsPublicSourceFixtures?: boolean;
   workflowApprovalFixture?: boolean;
   activityOutcomeFixture?: boolean;
@@ -706,6 +718,7 @@ export function buildSeedHookInput(
     withoutNewsJsonBinding: opts?.withoutNewsJsonBinding,
     jobSearchAiProviderBaseUrl,
     briefingWriterAiProviderBaseUrl,
+    classifierFixtureAiProviderBaseUrl,
     sportsPublicSourceFixtures: opts?.withSportsPublicSourceFixtures,
     workflowApprovalFixture: opts?.withWorkflowApprovalFixture,
     activityOutcomeFixture: opts?.withActivityOutcomeFixture,
@@ -787,6 +800,9 @@ export async function provisionForUat(
     const briefingWriterFixtureBaseUrl = opts?.withBriefingWriterFixture
       ? briefingWriterFixtureBaseUrlFor(projectName)
       : undefined;
+    const classifierFixtureBaseUrl = opts?.withClassifierFixture
+      ? classifierFixtureBaseUrlFor(projectName)
+      : undefined;
     const envFile: UatEnvFile = writeUatEnvFile({
       webPort,
       subnet: subnet.subnet,
@@ -825,6 +841,9 @@ export async function provisionForUat(
       // Only fixtures this attempt started. The ESPN fixture shares the job-search container.
       if (briefingWriterFixtureBaseUrl !== undefined) {
         await removeBriefingWriterFixtureContainer(projectName);
+      }
+      if (classifierFixtureBaseUrl !== undefined) {
+        await removeClassifierFixtureContainer(projectName, { runCommand, runCapture });
       }
       if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
@@ -901,13 +920,18 @@ export async function provisionForUat(
         );
         await startBriefingWriterFixtureContainer(projectName);
       }
+      if (classifierFixtureBaseUrl !== undefined) {
+        console.log(`[uat] starting classifier fixture origin at ${classifierFixtureBaseUrl}`);
+        await startClassifierFixtureContainer(projectName, { runCommand, runCapture });
+      }
       await composeSeedHook(
         buildSeedHookInput(
           projectName,
           level,
           opts,
           opts?.withJobSearchFixture ? jobSearchFixtureBaseUrl : undefined,
-          opts?.withBriefingWriterFixture ? briefingWriterFixtureBaseUrl : undefined
+          opts?.withBriefingWriterFixture ? briefingWriterFixtureBaseUrl : undefined,
+          opts?.withClassifierFixture ? classifierFixtureBaseUrl : undefined
         )
       );
       const baseURL = `http://127.0.0.1:${webPort}`;
