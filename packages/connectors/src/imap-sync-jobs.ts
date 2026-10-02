@@ -10,8 +10,9 @@ import { EmailRepository } from "@moss/email";
 
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
+import { loadOwnAddressesAndSettle, ownSentResult } from "./own-sent.js";
 import { extractEmailSignals, looksLikeOneTimeCodeEmail, senderAddress } from "./email-extract.js";
-import { ownAddressSet, userSentLastInThread } from "./email-sorting.js";
+import { userSentLastInThread } from "./email-sorting.js";
 import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
 import type { EmailReadProvider } from "./email-read-provider.js";
@@ -168,25 +169,25 @@ export async function runImapSync(
       try {
         const parsed = await provider.getMessage(secret, key);
         const knownSender = knownSenders?.has(senderAddress(parsed.from)) ?? false;
+        // #2878: mail the user sent is settled here, before any model sees it.
+        ownAddresses ??= await loadOwnAddressesAndSettle({ emailRepo, scopedDb, deps });
+        const sentByUser = ownAddresses?.has(senderAddress(parsed.from)) ?? false;
         const pass = await runSortingModelPass({
-          pending: [parsed],
+          pending: sentByUser ? [] : [parsed],
           sorting,
-          userSentLast: async (message) => {
-            if (!deps.actorUserId) return false;
-            ownAddresses ??= ownAddressSet(
-              await emailRepo.listFrequentRecipientAddresses(scopedDb, deps.actorUserId)
-            );
-            return userSentLastInThread(
+          userSentLast: async (message) =>
+            userSentLastInThread(
               [{ sender: message.from, receivedAt: message.receivedAt }],
-              ownAddresses
-            );
-          },
+              ownAddresses ?? new Set()
+            ),
           knownSender: () => knownSender,
           now,
           guard: (work) => withSavepoint(scopedDb, () => work())
         });
-        const sorted = pass.sorted[0]?.result;
-        const outcome = Object.keys(pass.counts.sorted)[0] ?? Object.keys(pass.counts.general)[0];
+        const sorted = sentByUser ? ownSentResult() : pass.sorted[0]?.result;
+        const outcome = sentByUser
+          ? "own_sent"
+          : (Object.keys(pass.counts.sorted)[0] ?? Object.keys(pass.counts.general)[0]);
         if (outcome) sortingCounts[outcome] = (sortingCounts[outcome] ?? 0) + 1;
         const extracted =
           sorted ?? (await extractEmailSignals(parsed, deps.emailExtractDeps, { knownSender }));

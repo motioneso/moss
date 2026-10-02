@@ -44,6 +44,7 @@ export function hasFinishedVerdict(summary: string | null, signals: unknown): bo
   if (!signals || typeof signals !== "object" || Array.isArray(signals)) return false;
   const fields = signals as Record<string, unknown>;
   if (fields.pendingJudgement === true) return true;
+  if (fields.skipped === "own_sent") return true;
   const actionability = fields.actionability as Record<string, unknown> | undefined;
   return (
     typeof actionability === "object" &&
@@ -214,8 +215,8 @@ export class EmailRepository {
         : null;
     // A one-time-code skip is a deliberate replacement, not a partial/missing analysis — it
     // must always overwrite whatever was stored before, even a complete prior triage.
-    const isExplicitOtpSkip =
-      (input.signals as { skipped?: unknown } | undefined)?.skipped === "otp";
+    const skipMarker = (input.signals as { skipped?: unknown } | undefined)?.skipped;
+    const isExplicitOtpSkip = skipMarker === "otp" || skipMarker === "own_sent";
     const preserveSameRevisionTriage =
       !isExplicitOtpSkip &&
       incomingHistoryId !== null &&
@@ -448,6 +449,35 @@ export class EmailRepository {
     }
     const floor = rows.length * EmailRepository.OWN_ADDRESS_MIN_SHARE;
     return [...counts.entries()].filter(([, n]) => n >= floor).map(([address]) => address);
+  }
+
+  /**
+   * Settles messages the user sent from one of their own addresses that an earlier sync left
+   * marked as waiting for a decision (#2878). The mark is replaced with the own-sent marker, so
+   * the message stops reaching briefings. Returns how many rows were settled.
+   */
+  async settleOwnSentAwaiting(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    ownAddresses: ReadonlySet<string>
+  ): Promise<number> {
+    assertDataContextDb(scopedDb);
+    if (ownAddresses.size === 0) return 0;
+    const rows = await scopedDb.db
+      .selectFrom("app.email_messages")
+      .select(["id", "sender"])
+      .where("owner_user_id", "=", ownerUserId)
+      .where(sql<boolean>`signals->>'pendingJudgement' = 'true'`)
+      .execute();
+    const ids = rows.filter((row) => ownAddresses.has(bareAddress(row.sender))).map((r) => r.id);
+    if (ids.length === 0) return 0;
+    await scopedDb.db
+      .updateTable("app.email_messages")
+      .set({ signals: JSON.stringify({ skipped: "own_sent", confidence: 1 }) as never })
+      .where("owner_user_id", "=", ownerUserId)
+      .where("id", "in", ids)
+      .execute();
+    return ids.length;
   }
 
   /**

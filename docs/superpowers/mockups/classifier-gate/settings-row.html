@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Classifier settings row - mockup</title><link rel="stylesheet" href="app.css"></head><body>
+<div class="mk-bar"><b>Mockup: Classifier settings row</b>
+<span class="mk-group"><span class="mk-label">State</span><span class="jds-segmented" id="views"></span></span>
+<span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
+<div class="mk-page">
+<div class="mk-sec"><div class="mk-row">
+ <div><div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-bold)">Classifier <span id="badge"></span> <span id="t0"></span></div><p class="mk-help">Optional model to handle classification requests.</p></div>
+ <div>
+  <div class="jds-field"><label class="jds-label" for="clf">Classifier model</label>
+   <span class="jds-selectwrap"><select class="jds-select" id="clf"></select></span></div>
+  <div class="jds-field" style="margin-top:var(--space-5)"><span class="jds-label">Chat gate <span id="t2"></span></span>
+   <div><div class="jds-segmented" role="group" aria-label="Gate state" id="gate">
+    <button class="jds-segmented__opt" data-g="off">Off</button>
+    <button class="jds-segmented__opt" data-g="shadow">Shadow</button>
+    <button class="jds-segmented__opt" data-g="on" title="Available after shadow results are reviewed">On</button></div></div></div>
+  <p class="mk-help" id="gh" style="margin-top:var(--space-2)"></p><p class="mk-help" id="apinote"></p><div id="notes"></div>
+  <div class="mk-actions" id="actions"></div>
+ </div></div>
+</div>
+</div>
+<script src="switcher.js"></script>
+<script>
+var V={
+ none:{l:'No classifier',opts:['Choose a model...'],sel:0,chdis:true,gate:'off',gdis:true,notes:[]},
+ unavail:{l:'Selected model unavailable',opts:['Choose a model...','Local model (offline)'],sel:1,gate:'off',gdis:true,notes:[['warn','Model unreachable.']]},
+ loading:{l:'Loading',loading:true,opts:['Loading models...'],sel:0,chdis:true,gate:'off',gdis:true,notes:[]},
+ off:{l:'Off',opts:['Choose a model...','Local model','API model'],sel:1,gate:'off',notes:[],api:false},
+ shadow:{l:'Shadow',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',notes:[],api:true},
+ onpending:{l:'On, not yet available',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',onblocked:true,notes:[],api:true},
+ on:{l:'On',opts:['Choose a model...','Local model','API model'],sel:2,gate:'on',notes:[],api:true},
+ fail:{l:'Save failed',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',notes:[['err','Could not save.']],actions:['Try again'],api:true},
+ ro:{l:'Read-only',opts:['Choose a model...','Local model','API model'],sel:2,gate:'shadow',ro:true,notes:[],api:true}
+};
+var order=['none','unavail','loading','off','shadow','onpending','on','fail','ro'];
+var vb=document.getElementById('views');
+order.forEach(function(k){var b=document.createElement('button');b.className='jds-segmented__opt';b.textContent=V[k].l;b.dataset.k=k;vb.appendChild(b)});
+function render(k){
+ var v=V[k];history.replaceState(null,'','#'+k);
+ [].forEach.call(vb.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});
+ var s=document.getElementById('clf');s.innerHTML=v.opts.map(function(o,i){return '<option'+(i===v.sel?' selected':'')+'>'+o+'</option>'}).join('');
+ s.disabled=!!(v.ro||v.chdis);
+  [].forEach.call(document.querySelectorAll('#gate button'),function(b){
+  b.setAttribute('aria-pressed',b.dataset.g===v.gate);
+  b.disabled=!!(v.ro||v.gdis||(b.dataset.g==='on'&&k!=='on'&&k!=='fail'));});
+ document.getElementById('badge').innerHTML=v.gate==='shadow'?'<span class="jds-badge jds-badge--amber">Shadow</span>':v.gate==='on'?'<span class="jds-badge jds-badge--forest">On</span>':'';
+ document.getElementById('notes').innerHTML=v.notes.map(function(n){return '<p class="mk-note '+(n[0]==='warn'?'warn':n[0]==='err'?'err':'')+'" role="'+(n[0]==='err'?'alert':'status')+'">'+n[1]+'</p>'}).join('');
+ document.getElementById('actions').innerHTML=(v.actions||[]).map(function(a){return '<button class="jds-btn jds-btn--secondary jds-btn--sm">'+a+'</button>'}).join('');
+ document.getElementById('gh').textContent=k==='onpending'?'On opens after shadow review.':'';
+ document.getElementById('apinote').textContent=v.api?'API model: eligible chat messages also go to its provider.':'';
+ document.getElementById('t0').innerHTML=tip('Picks a tool and fills in simple values for quick chat requests, so they skip your default model. Also used for yes/no and pick-one questions in the background.');
+ document.getElementById('t2').innerHTML=tip('Lets the classifier answer quick chat requests before your default model sees them.<ul style="margin:var(--space-2) 0 0;padding-left:var(--space-4)"><li><b>Off</b>: not used.</li><li><b>Shadow</b>: it guesses and logs, but your default model still answers.</li><li><b>On</b>: it answers requests it is sure about.</li></ul>');
+}
+vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
+render(location.hash.slice(1)||'none');
+</script>
+</body></html>
