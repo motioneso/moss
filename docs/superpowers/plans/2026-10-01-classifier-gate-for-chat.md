@@ -626,6 +626,19 @@ turn. Show normal and YOLO behavior. Update chat features/errors/remediations an
 core app map in this PR. Exit: live proof linked on the future product PR with exit
 code and redacted assertions; collect shadow data only after privacy decisions clear.
 
+2b.5 wiring notes. This lane also wires the pieces 2b.5 left as injected ports:
+
+- the explicit user-requested candidate refresh uses the gateway's no-card
+  `callToolForGate` path through `CandidateListingPort`; shadow makes no
+  candidate-tool call and no listing call happens on a message turn;
+- the connected-tool reply renderer may return null after a mutating attempt;
+  treat that as a terminal code-written failure and never run the tool again;
+- the empty-success performed/read fallback currently keys off the server's
+  read-only hint, not the owner-reviewed risk; resolve it when wiring the menu;
+- two preserved `INTEGRATION_SUMMARY` strings ("answer with what you have" and
+  "ask for a narrower query") are model-facing and would reach the user as
+  written; decide their user-facing wording here.
+
 ### 3.6 Model activity log screen (one UI session)
 
 Owner: UI implementer. Depends on 3.4 (shadow records). Build the admin-only screen agreed in

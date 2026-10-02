@@ -143,10 +143,13 @@ export function loadCachedCandidates(input: {
   error, the named tool still discovered and ordinary-chat enabled, a saved entry with
   `optIn === true`, `reviewedRisk === "read"`, and a current fingerprint. A server `readOnly` hint
   alone never qualifies (ruling 5).
-- `extractCandidatesFromListing` accepts only an `ok` envelope (or a bare array) whose entries are a
-  non-empty string, or an object with `id` plus one of `label`/`name`, or `entity_id` plus
-  `friendly_name`. Everything else returns null. Cap 50, id/label non-empty and ≤ 80, unique ids and
-  unique labels (a duplicate is ambiguous, so the whole list is rejected), no truncation.
+- `extractCandidatesFromListing` accepts the **real** integration reply shapes: a bare array, the
+  outcome envelope, MCP `{ result: "<joined text>" }` (JSON array or one name per line) or
+  `{ content, structuredContent }` (structured content preferred), and OpenAPI
+  `{ status, result }`. Entries are a non-empty string, or an object with `id`/`entity_id` plus one
+  of `label`/`name`/`friendly_name`. Everything else returns null, including a non-`ok` envelope.
+  Cap 50, id/label non-empty and ≤ 80, unique ids and unique labels (a duplicate is ambiguous, so
+  the whole list is rejected), no truncation. Nesting is depth-bounded.
 - Cache key is `ownerUserId|connectionId|sourceName`; a stored value also carries the listing tool's
   `sourceFingerprint`. `loadCachedCandidates` returns null on owner mismatch, key miss, expiry, or
   fingerprint mismatch. `refreshConnectionCandidates` drops the key on any non-`ok` outcome so a
@@ -195,17 +198,20 @@ Compute `effectiveClassifierTools(connState)` once per connection in the resolve
 (`:109-135`) and pass a `Map<toolName, EligibleClassifierTool>` into `buildToolManifest`. For an
 eligible tool:
 
-- add `outputSchema: INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA` =
-  `{ type: "object", additionalProperties: false, properties: { status: {type:"string"},
-action: {type:"string"}, summary: {type:"string"} } }` — so a reviewed template using
-  `{status}/{action}/{summary}` passes `checkClassifierEligibility` and the gateway's
-  `sanitizeAssistantToolResult` hands the gate exactly those fields (no `detail`);
+- add `outputSchema: INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA`, which **keeps** the real envelope fields
+  (`status`, `action`, `summary` typed as strings and `detail: {}` unknown). Keeping `detail`
+  leaves the model-visible result for ordinary chat unchanged; because `detail` is unknown-typed,
+  the SDK's `checkClassifierEligibility` still rejects any reviewed template that names `{detail}`.
+  No `additionalProperties` is set — the host sanitizer drops undeclared keys regardless;
 - add `classifier: { description, arguments, replyTemplate }` from the eligible entry, mapping
   `IntegrationClassifierArgument` to the SDK's `{ kind }` declarations;
 - when an argument is `candidates`, add `candidates: ClassifierCandidateProvider` that reads
   `loadCachedCandidates` with the listing tool's current fingerprint and throws on a miss (the gate
   turns a throw into `candidates_unavailable`). At most one `candidates` argument is allowed by the
-  gate; the provider captures that argument's `candidateSource`.
+  gate; the provider captures that argument's `candidateSource`;
+- attach the declaration only when the reviewed risk is **not `read`**. A connected read reply can
+  only be the fixed envelope summary with no content ("Read succeeded."), so it cannot count as
+  handled and stays off the menu; it can still serve as a candidate source.
 
 Preserve the ordinary manifest fields and curation exactly; only add `classifier` and the
 `outputSchema` needed by the declaration. A tool with no current reviewed entry is unchanged.
@@ -247,21 +253,27 @@ UI, route or gateway construction is added here. This is recorded in the PR body
 
 `tests/unit/integrations-classifier-runtime.test.ts` (expected exit 0):
 
-- **Menu carries reviewed preparation only.** A tool with a current opted-in read review yields a
-  `classifier` declaration whose description/template/arguments match the stored entry; a tool with
-  no entry, `optIn:false`, `reviewedRisk:null`, a stale fingerprint, or a muted/hidden tool yields
-  none. (Catches a menu built from discovery alone.)
+- **Menu carries reviewed preparation only.** A write-reviewed tool with a current opted-in review
+  yields a `classifier` declaration whose description/template/arguments match the stored entry; a
+  tool with no entry, `optIn:false`, `reviewedRisk:null`, a stale fingerprint, or a muted/hidden
+  tool yields none. (Catches a menu built from discovery alone.)
+- **Read-reviewed tools stay off the menu.** A tool reviewed as read has no `classifier`
+  declaration and fails `checkClassifierEligibility`, including the device-listing tool, while it
+  can still resolve as another tool's candidate source. (Catches a read tool handled on the fixed
+  "Read succeeded." reply; this assertion fails if one returns to the menu.)
 - **Server hints are not authority.** A discovered tool with `readOnly:true` but no saved read
   review is not a valid candidate source and is not in the menu. (Catches a false hint becoming
   eligibility; negative control below.)
 - **Declaration passes the SDK check.** `checkClassifierEligibility(builtTool)` is `eligible:true`
   for a template using `{status}/{action}/{summary}` and `eligible:false` with a problem for
   `{detail}`. (Catches a declaration the gate would silently drop.)
-- **Candidate extraction is bounded and projection-only.** A service list of `{id,name}` or
-  `{entity_id,friendly_name}` maps to `{id,label}`; a string list maps id=label; over 50 entries,
-  over-length id/label, non-object/array, an `error` envelope, duplicate ids or duplicate labels,
-  and a missing id all return null. The returned candidates never contain any other source field.
-  (Catches an unbounded list and a leaked remote field.)
+- **Candidate extraction reads the real reply shapes.** Fixtures shaped exactly like real tool
+  results map to `{id,label}`: the MCP flattened `{ result: "<joined text>" }` (JSON array and one
+  name per line), the MCP `{ content, structuredContent }` envelope, the OpenAPI
+  `{ status, result }` reply, and a bare array. Over 50 entries, over-length id/label, a non-list
+  string, an `error` envelope, duplicate ids or duplicate labels, and a missing id all return null.
+  The returned candidates never contain any other source field. (Catches a reader that only accepts
+  a bare list and would fail on every real reply; also catches a leaked remote field.)
 - **Candidate cache is owner-scoped, fingerprinted and expiring.** Get after set returns the list
   for the same owner; a different owner, a changed listing fingerprint, or `now` past the TTL
   returns null; `dropConnection` clears only that connection. (Catches a cross-user or stale list.)
@@ -278,8 +290,9 @@ UI, route or gateway construction is added here. This is recorded in the PR body
   (Catches an error rendered as success, a paraphrased suppression, or a leaked remote detail.)
 - **Negative control (observed failing):** with the `reviewedRisk === "read"` guard removed from
   `resolveCandidateListingTool`, the false-hint test fails; with the extraction projection replaced
-  by returning the raw entries, the projection-only test fails. Restore both, rerun green, and
-  record both observations in the PR.
+  by returning the raw entries, the projection-only test fails; and with the pre-fix parser (bare
+  `detail` array only) restored, the real-reply-shape tests fail. Restore all, rerun green, and
+  record every observation in the PR.
 - **No secret/example leak:** the declaration and candidates contain only reviewed/code-authored
   fields; a schema `default`/`example` or a credential header parameter appearing in a listing
   result is never projected into a candidate label. Observe the projection-only test fail with the

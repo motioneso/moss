@@ -236,6 +236,11 @@ function buildToolManifest(
     tool.readOnly === true ? "read" : "performed";
   const skipSuppression = tool.idempotent === true || conn.unsuppressedTools.includes(tool.name);
   const classifierEntry = classifierByTool.get(tool.name);
+  // Plan 2b.5: a connected read tool's reply can only be the fixed envelope summary with no
+  // content ("Read succeeded."), so it cannot count as handled and stays off the menu. It can
+  // still serve as a candidate source for another tool (resolved through `classifierByTool`).
+  const menuEntry =
+    classifierEntry !== undefined && classifierEntry.risk !== "read" ? classifierEntry : undefined;
 
   const execute: ToolExecute = async (scopedDb, input, ctx: ToolContext): Promise<ToolResult> => {
     const scope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
@@ -336,10 +341,10 @@ function buildToolManifest(
     isExternal: true,
     externalContent: true,
     inputSchema: tool.inputSchema ?? { type: "object", properties: {} },
-    ...(classifierEntry
+    ...(menuEntry
       ? {
           outputSchema: INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA,
-          classifier: buildClassifierDeclaration(classifierEntry, conn, classifierByTool, deps)
+          classifier: buildClassifierDeclaration(menuEntry, conn, classifierByTool, deps)
         }
       : {}),
     execute

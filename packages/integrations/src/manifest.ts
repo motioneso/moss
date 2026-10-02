@@ -90,15 +90,15 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_classifier_candidates",
       description:
-        "A tool that needs a device or area name can pick it from the connection's list. It is " +
-        "read once through the reviewed read-only listing tool, cached briefly per owner, and " +
-        "never mixed across accounts. A missing list keeps the tool out.",
+        "When the gate is active, a tool that needs a device or area name can pick from the " +
+        "connection's list, read through the reviewed read-only listing tool and cached briefly " +
+        "for its owner. A missing or expired list keeps the tool out.",
       remediations: [
         {
           id: "integrations.connection_classifier_candidates.refresh",
           description:
-            "Review the connection's device-listing tool as Only reads, switch it on for the " +
-            "classifier, and prepare the connection again.",
+            "Review the connection's device-listing tool as Only reads and switch it on for the " +
+            "classifier.",
           path: "/settings?section=integrations"
         }
       ],

@@ -194,25 +194,89 @@ function normalizeListingEntry(entry: unknown): ClassifierCandidate | null {
   return { id, label };
 }
 
+/** The joined text of an MCP `content` block array (`callMcpTool` flattens it into `detail.result`). */
+function mcpContentText(value: Record<string, unknown>): string | null {
+  if (!Array.isArray(value.content)) return null;
+  const parts: string[] = [];
+  for (const block of value.content) {
+    if (isRecord(block) && block.type === "text" && typeof block.text === "string") {
+      parts.push(block.text);
+    }
+  }
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
 /**
- * The code-authored extraction mapping. Accepts an `ok` integration envelope whose `detail` is an
- * array, or a bare array, and projects each entry to `{id,label}`. The list is rejected whole —
- * never truncated — when it is empty, over the candidate cap, has a missing/malformed entry, or has
- * a duplicate id or label (an ambiguous name must not be offered). Returns null on any violation.
+ * A listing returned as text. MCP flattens its `content` blocks into one string, so a JSON array
+ * is parsed, and otherwise one non-empty line is read as one candidate name (a text block per
+ * device). A long prose line is rejected later by the per-entry bound, never truncated.
+ */
+function parseListingText(text: string): unknown[] | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+    if (isRecord(parsed)) {
+      const inner = findListingArray(parsed, 1);
+      if (inner) return inner;
+    }
+  } catch {
+    // Not JSON: fall through to line splitting.
+  }
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  return lines.length > 0 ? lines : null;
+}
+
+/**
+ * Finds the list inside the real reply shapes: a bare array, the integration outcome envelope, an
+ * MCP standard result (`{ content, structuredContent }`, preferring structured content), an MCP
+ * flattened `{ result: "<text>" }`, or an OpenAPI `{ status, result }`. Depth-bounded.
+ */
+function findListingArray(value: unknown, depth = 0): unknown[] | null {
+  if (depth > 5) return null;
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") return parseListingText(value);
+  if (!isRecord(value)) return null;
+  if (value.structuredContent !== undefined) {
+    const inner = findListingArray(value.structuredContent, depth + 1);
+    if (inner) return inner;
+  }
+  const contentText = mcpContentText(value);
+  if (contentText !== null) {
+    const inner = parseListingText(contentText);
+    if (inner) return inner;
+  }
+  if ("result" in value) {
+    const inner = findListingArray(value.result, depth + 1);
+    if (inner) return inner;
+  }
+  if ("detail" in value) {
+    const inner = findListingArray(value.detail, depth + 1);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+/**
+ * The code-authored extraction mapping. Accepts the real integration reply shapes — a bare array,
+ * the outcome envelope, MCP `{ result: "<joined text>" }` / `{ content, structuredContent }`, or
+ * OpenAPI `{ status, result }` — and projects each entry to `{id,label}`. The list is rejected
+ * whole — never truncated — when it is empty, over the candidate cap, has a missing/malformed
+ * entry, or has a duplicate id or label (an ambiguous name must not be offered). Returns null on
+ * any violation, including a non-`ok` outcome envelope.
  */
 export function extractCandidatesFromListing(
   result: unknown
 ): readonly ClassifierCandidate[] | null {
-  let list: unknown;
-  if (Array.isArray(result)) {
-    list = result;
-  } else if (isRecord(result)) {
-    if ("status" in result && result.status !== "ok") return null;
-    list = result.detail;
-  } else {
+  if (isRecord(result) && typeof result.status === "string" && result.status !== "ok") {
     return null;
   }
-  if (!Array.isArray(list)) return null;
+  const list = findListingArray(result);
+  if (!list) return null;
   if (list.length === 0 || list.length > CLASSIFIER_LIMITS.candidates) return null;
 
   const candidates: ClassifierCandidate[] = [];

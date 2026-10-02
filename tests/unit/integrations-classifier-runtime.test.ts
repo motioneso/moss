@@ -163,21 +163,58 @@ describe("candidate source resolution", () => {
 // ---------------------------------------------------------------------------
 
 describe("candidate extraction mapping", () => {
-  it("projects only id and label from a bounded listing", () => {
+  /** The exact outer shape `buildToolManifest` wraps every integration reply in. */
+  const envelope = (detail: unknown) => ({
+    status: "ok",
+    action: "read",
+    summary: "Read succeeded.",
+    detail
+  });
+
+  it("reads a real MCP tool reply (flattened text into detail.result)", () => {
+    // Shape produced by `callMcpTool` (mcp-client.ts:94): content text blocks joined into `result`.
+    const payload = [
+      { entity_id: "light.a", friendly_name: "Kitchen" },
+      { entity_id: "light.b", friendly_name: "Desk" }
+    ];
+    expect(extractCandidatesFromListing(envelope({ result: JSON.stringify(payload) }))).toEqual([
+      { id: "light.a", label: "Kitchen" },
+      { id: "light.b", label: "Desk" }
+    ]);
+    // One text block per device, joined with newlines.
+    expect(extractCandidatesFromListing(envelope({ result: "Kitchen\nDesk" }))).toEqual([
+      { id: "Kitchen", label: "Kitchen" },
+      { id: "Desk", label: "Desk" }
+    ]);
+  });
+
+  it("reads a real MCP standard result envelope (content blocks and structured content)", () => {
+    const structured = [{ id: "light.a", name: "Kitchen" }];
     expect(
       extractCandidatesFromListing({
-        status: "ok",
-        detail: [
-          { entity_id: "light.a", friendly_name: "Kitchen" },
-          { id: "d1", name: "Desk" },
-          "Floor lamp"
-        ]
+        content: [{ type: "text", text: "text is ignored when structured content is present" }],
+        structuredContent: structured
       })
+    ).toEqual([{ id: "light.a", label: "Kitchen" }]);
+    expect(
+      extractCandidatesFromListing({
+        content: [{ type: "text", text: JSON.stringify(structured) }]
+      })
+    ).toEqual([{ id: "light.a", label: "Kitchen" }]);
+  });
+
+  it("reads a real OpenAPI tool reply (detail { status, result })", () => {
+    expect(
+      extractCandidatesFromListing(
+        envelope({ status: 200, result: [{ id: "d1", name: "Desk" }, "Floor lamp"] })
+      )
     ).toEqual([
-      { id: "light.a", label: "Kitchen" },
       { id: "d1", label: "Desk" },
       { id: "Floor lamp", label: "Floor lamp" }
     ]);
+  });
+
+  it("still accepts a bare array", () => {
     expect(extractCandidatesFromListing([{ id: "a", label: "A" }])).toEqual([
       { id: "a", label: "A" }
     ]);
@@ -185,37 +222,64 @@ describe("candidate extraction mapping", () => {
 
   it("rejects a malformed, failed, oversized or ambiguous listing whole", () => {
     expect(
-      extractCandidatesFromListing({ status: "error", detail: [{ id: "a", name: "A" }] })
+      extractCandidatesFromListing({
+        status: "error",
+        action: "read",
+        summary: "Call failed; see detail for the service's error.",
+        detail: { result: JSON.stringify([{ id: "a", name: "A" }]) }
+      })
     ).toBeNull();
-    expect(extractCandidatesFromListing({ status: "ok", detail: [] })).toBeNull();
-    expect(extractCandidatesFromListing({ status: "ok" })).toBeNull();
-    expect(extractCandidatesFromListing("not a list")).toBeNull();
-    expect(extractCandidatesFromListing([{ id: "a" }])).toBeNull();
+    expect(extractCandidatesFromListing(envelope({ result: "[]" }))).toBeNull();
+    expect(extractCandidatesFromListing(envelope({ result: "" }))).toBeNull();
     expect(
-      extractCandidatesFromListing([
-        { id: "a", name: "A" },
-        { id: "a", name: "B" }
-      ])
+      extractCandidatesFromListing(envelope({ result: JSON.stringify([{ id: "a" }]) }))
     ).toBeNull();
+    expect(extractCandidatesFromListing(envelope({ result: "x".repeat(81) }))).toBeNull();
     expect(
-      extractCandidatesFromListing([
-        { id: "a", name: "A" },
-        { id: "b", name: "A" }
-      ])
+      extractCandidatesFromListing(
+        envelope({
+          result: JSON.stringify([
+            { id: "a", name: "A" },
+            { id: "a", name: "B" }
+          ])
+        })
+      )
     ).toBeNull();
     expect(
       extractCandidatesFromListing(
-        Array.from({ length: 51 }, (_, i) => ({ id: `i${i}`, name: `n${i}` }))
+        envelope({
+          result: JSON.stringify([
+            { id: "a", name: "A" },
+            { id: "b", name: "A" }
+          ])
+        })
       )
     ).toBeNull();
-    expect(extractCandidatesFromListing([{ id: "a", name: "x".repeat(81) }])).toBeNull();
-    expect(extractCandidatesFromListing([{ id: "x".repeat(81), name: "A" }])).toBeNull();
+    expect(
+      extractCandidatesFromListing(
+        envelope({
+          result: JSON.stringify(
+            Array.from({ length: 51 }, (_, i) => ({ id: `i${i}`, name: `n${i}` }))
+          )
+        })
+      )
+    ).toBeNull();
+    expect(
+      extractCandidatesFromListing(
+        envelope({ result: JSON.stringify([{ id: "a", name: "x".repeat(81) }]) })
+      )
+    ).toBeNull();
   });
 
   it("never copies a secret or a sample value into a candidate label", () => {
-    const out = extractCandidatesFromListing([
-      { entity_id: "light.a", friendly_name: "Kitchen", token: "SECRET", example: "SECRET2" }
-    ]);
+    const out = extractCandidatesFromListing(
+      envelope({
+        status: 200,
+        result: [
+          { entity_id: "light.a", friendly_name: "Kitchen", token: "SECRET", example: "SECRET2" }
+        ]
+      })
+    );
     expect(out).toEqual([{ id: "light.a", label: "Kitchen" }]);
     expect(JSON.stringify(out)).not.toContain("SECRET");
   });
@@ -549,7 +613,7 @@ describe("runtime classifier menu on synthetic tools", () => {
           list_lights: entry(listingFingerprint),
           turn_on: entry(switchFingerprint, {
             description: "Turn one light on.",
-            reviewedRisk: "read",
+            reviewedRisk: "write",
             arguments: { target: { kind: "candidates", candidateSource: "list_lights" } },
             replyTemplate
           })
@@ -583,12 +647,45 @@ describe("runtime classifier menu on synthetic tools", () => {
     expect(turnOn.outputSchema).toEqual(INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA);
     expect(checkClassifierEligibility(turnOn).eligible).toBe(true);
 
-    // The list tool itself carries its own reviewed declaration.
+    // The device-listing tool itself is read-reviewed, so it stays off the menu and only serves
+    // as a candidate source.
     const listingTool = (synthetic.assistantTools ?? []).find(
       (tool) => tool.name === "home.list_lights"
     )!;
-    expect(listingTool.classifier?.description).toBe("List the lights");
-    expect(listingTool.outputSchema).toEqual(INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA);
+    expect(listingTool.classifier).toBeUndefined();
+    expect(listingTool.outputSchema).toBeUndefined();
+  });
+
+  it("keeps a read-reviewed tool off the menu even though it stays a candidate source", async () => {
+    // The plan forbids handling an informational read on the fixed "Read succeeded." reply. The
+    // listing tool is reviewed read and opted in, so it is a valid candidate source, but it must
+    // never gain a classifier declaration. This assertion fails if a read tool returns to the menu.
+    const modules = await build([reviewedConnection()], createCandidateCache())("actor-1");
+    const synthetic = modules.find((module) => module.id === "integration-home")!;
+    const listingTool = (synthetic.assistantTools ?? []).find(
+      (tool) => tool.name === "home.list_lights"
+    )!;
+    expect(listingTool.classifier).toBeUndefined();
+    expect(checkClassifierEligibility(listingTool).eligible).toBe(false);
+
+    // A tool reviewed as read loses the declaration even with arguments and a template.
+    const switchFingerprint = toolDefinitionFingerprint(switchTool as IntegrationToolDescriptor);
+    const readSwitch = connection({
+      discoveredTools: [listing, switchTool],
+      classifierPreparation: {
+        version: 1,
+        entries: {
+          list_lights: entry(toolDefinitionFingerprint(listing as IntegrationToolDescriptor)),
+          turn_on: entry(switchFingerprint, { reviewedRisk: "read" })
+        }
+      }
+    });
+    const readModules = await build([readSwitch], createCandidateCache())("actor-1");
+    const readSynthetic = readModules.find((module) => module.id === "integration-home")!;
+    const readTurnOn = (readSynthetic.assistantTools ?? []).find(
+      (tool) => tool.name === "home.turn_on"
+    )!;
+    expect(readTurnOn.classifier).toBeUndefined();
   });
 
   it("omits the declaration for a tool with no current review", async () => {
