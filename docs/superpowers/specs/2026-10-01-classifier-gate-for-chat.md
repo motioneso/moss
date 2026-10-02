@@ -153,9 +153,21 @@ The setting has three states: off, shadow, on.
 
 ### 3.12 What the user sees
 
-A reply from the gate appears as a normal chat message with a small marker that it was answered without
-the default model, so a wrong answer can be traced. The marker, and the Classifier settings row, need
-mockups agreed with Ben before that part is built (Design System Guardrails).
+Ben agreed three mockups on 2026-10-01, in `docs/superpowers/mockups/classifier-gate/` (PR 2875).
+
+- **Settings row** (`settings-row.html`). Renamed "Classifier", with an Off / Shadow / On control in
+  the app's standard segmented style. Short help line plus brief "?" pop-ups, no long paragraphs. An
+  API model shows one line saying eligible chat messages also go to its provider. On stays greyed out
+  until shadow results are reviewed.
+- **Connection setup** (`connection-setup.html`). A switch on the connection detail screen, then a
+  per-tool review of description, reply and risk, with the states unknown risk, not prepared,
+  preparing, review required, approved, stale, failed, no tools and disconnected.
+- **Model activity log** (`audit-log.html`). An admin-only feed of every model call, grouped by day:
+  action, one-line outcome, time, kind (chat answer, classifier, background task), the actual model
+  name and a result. It shows the action taken, not the chat text. Filters: kind, model, result, time.
+
+There is no marker on chat replies (Ben, 2026-10-01). The log replaces it as the way to trace a wrong
+answer.
 
 ## 4. Out of scope for version one
 

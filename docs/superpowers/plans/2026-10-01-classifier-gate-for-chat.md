@@ -783,6 +783,13 @@ These answers supersede the matching "Decisions still needed" entries below.
 10. **Shadow retention: 7 days.** Records, including message text, are purged after 7 days by a
     scheduled job that 3.4 must include and test.
 
+11. **No reply marker.** Slice 5 (5.1, 5.2) is superseded. Replies from the gate carry no marker.
+12. **Model activity log replaces it.** An admin-only log of every model call (classifier, chat answer,
+    background task) showing the action, outcome, model name and result, not the chat text, with
+    filters. Mockup agreed 2026-10-01. Its build slice and retention (7 days proposed) still need a
+    plan entry and Ben's confirmation, because it widens logging beyond the gate.
+13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
+
 Still open: the external candidate-dispatch proof (module-platform implementer).
 
 ## Decisions still needed from Ben
