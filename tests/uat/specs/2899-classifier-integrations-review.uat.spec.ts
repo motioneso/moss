@@ -118,8 +118,8 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   await page.getByLabel("Name", { exact: true }).fill("Home hub");
   await page.getByLabel("URL", { exact: true }).fill("http://home.local");
   await page.getByRole("button", { name: "Paste the spec" }).click();
-  await page.getByLabel("Spec").fill(JSON.stringify(SPEC));
-  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByLabel("Spec", { exact: true }).fill(JSON.stringify(SPEC));
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
 
   await expect(page.getByText("list_lights").first()).toBeVisible();
   const url = new URL(page.url());
