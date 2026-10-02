@@ -41,6 +41,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Choose which connected tools the classifier may use.** The connected-service screen now lets you review each tool before the classifier may use it, with a clear risk choice, a preview of what is sent, and a switch that never turns tools on by itself. [PR #2902](https://github.com/motioneso/moss/pull/2902)
 - **Model activity log.** Administrators can review the model calls the assistant makes, with the time, kind, model and result, without exposing any chat content. [PR #2900](https://github.com/motioneso/moss/pull/2900)
 
 ### 2026-10-01
