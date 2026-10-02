@@ -15,6 +15,7 @@ import {
   createBinaryProbe,
   decideMultiplexer,
   isRootWorkspaceConfigured,
+  recordModelActivity,
   resolveMultiplexer,
   type MultiplexerKind,
   type MultiplexerSource,
@@ -232,7 +233,7 @@ export function makeProviderConnectionCheckProbe(deps: {
         return await checkOpenAiCompatibleProviderWithCodexLoginStatus(commandIo);
       }
       if (kind === "google") {
-        return await checkGoogleProviderWithOneShotPrompt(commandIo);
+        return await checkGoogleProviderWithOneShotPrompt(commandIo, kind);
       }
 
       engine = await deps.engineFactory(kind, `onboarding-check-${kind}`);
@@ -242,6 +243,15 @@ export function makeProviderConnectionCheckProbe(deps: {
       await withTimeout(engine.submit(PROVIDER_CHECK_PROMPT), PROVIDER_CHECK_TIMEOUT_MS);
 
       const ready = await waitForProviderReply(engine, kind, PROVIDER_CHECK_TIMEOUT_MS);
+      // Plan 3.6b (#2890): the generic check submitted a real prompt to the provider's engine,
+      // so record one probe row. A readiness check that cannot answer is a failed model call.
+      recordModelActivity({
+        kind: "probe",
+        action: "probe",
+        outcome: ready ? "ok" : "error",
+        modelName: kind,
+        result: ready ? "completed" : "failed"
+      });
       return ready ? { status: "ready" } : { status: "needs_login" };
     } catch (error) {
       if (error instanceof CliChatUnavailableError) {
@@ -295,13 +305,31 @@ async function checkOpenAiCompatibleProviderWithCodexLoginStatus(
  * the readiness signal, because answering at all requires working credentials.
  */
 async function checkGoogleProviderWithOneShotPrompt(
-  io: Pick<TmuxIo, "run">
+  io: Pick<TmuxIo, "run">,
+  providerLabel: string
 ): Promise<OnboardingProviderCheckResponse> {
+  // Plan 3.6b (#2890): this readiness check makes a real one-shot model call, so record one row.
   const result = await withTimeout(
     io.run("gemini", ["--prompt", "Reply with exactly OK."]),
     PROVIDER_CHECK_TIMEOUT_MS
   );
-  if (result.code === 0 && GEMINI_READY_ANSWER_RE.test(result.stdout)) return { status: "ready" };
+  if (result.code === 0 && GEMINI_READY_ANSWER_RE.test(result.stdout)) {
+    recordModelActivity({
+      kind: "probe",
+      action: "probe",
+      outcome: "ok",
+      modelName: providerLabel,
+      result: "completed"
+    });
+    return { status: "ready" };
+  }
+  recordModelActivity({
+    kind: "probe",
+    action: "probe",
+    outcome: "error",
+    modelName: providerLabel,
+    result: "failed"
+  });
   // Same split as the Claude check above: only output that actually talks about signing in counts
   // as "needs login". Anything else that fails is a fault, and calling it a login problem would
   // send the founder round a sign-in loop that cannot fix it.
