@@ -218,7 +218,8 @@ final class ThumbnailChangeDetector: ThumbnailComparing {
     static let side = 32
     static let maxWindows = 32
     static let maxScreens = 8
-    static let refreshInterval: TimeInterval = 60
+    /// A read screen is read again after this, so a small text change is never hidden longer.
+    static let refreshInterval: TimeInterval = 300
     private struct Fingerprint {
         let hash: UInt64
         let brightness: Double

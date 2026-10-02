@@ -44,6 +44,8 @@ struct BacktrackServices {
     var clock: () -> Date
     var scheduler: BacktrackScheduling
     var idleSeconds: () -> TimeInterval = { 0 }
+    /// Seconds since a key last went down; periodic reads wait while the person types.
+    var keyboardIdleSeconds: () -> TimeInterval = { .infinity }
 
     static func live() -> BacktrackServices {
         BacktrackServices(
@@ -57,7 +59,8 @@ struct BacktrackServices {
             scheduler: RunLoopScheduler(),
             idleSeconds: {
                 CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
-            }
+            },
+            keyboardIdleSeconds: { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) }
         )
     }
     /// For the UI test harness: every capture fails, so nothing is ever read from the screen.
@@ -317,7 +320,8 @@ final class BacktrackRuntime: ObservableObject {
                 timer = services.scheduler.schedule(after: delay) { [weak self] in
                     guard let self else { return }
                     self.inputsMayHaveChanged()
-                    self.send(.tick(generation: generation, at: self.services.clock()))
+                    let typingRecently = self.services.keyboardIdleSeconds() < BacktrackMachine.typingQuiet
+                    self.send(.tick(generation: generation, at: self.services.clock(), typingRecently: typingRecently))
                 }
             case .checkThumbnail(let observation, let generation):
                 run { [weak self] in await self?.checkThumbnail(observation, generation: generation) }

@@ -36,8 +36,8 @@ final class ThumbnailChangeDetectorTests: XCTestCase {
         XCTAssertTrue(detector.changed(key, thumbnail: b, at: t0.addingTimeInterval(10)))
         detector.recognized(key, thumbnail: b, at: t0.addingTimeInterval(10))
         XCTAssertFalse(detector.changed(key, thumbnail: a, at: t0.addingTimeInterval(20)))
-        XCTAssertFalse(detector.changed(key, thumbnail: a, at: t0.addingTimeInterval(59)))
-        XCTAssertTrue(detector.changed(key, thumbnail: a, at: t0.addingTimeInterval(60)))
+        XCTAssertFalse(detector.changed(key, thumbnail: a, at: t0.addingTimeInterval(299)))
+        XCTAssertTrue(detector.changed(key, thumbnail: a, at: t0.addingTimeInterval(300)))
         XCTAssertTrue(detector.changed(key, thumbnail: a, at: t0.addingTimeInterval(-1)))
     }
 

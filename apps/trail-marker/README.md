@@ -68,8 +68,11 @@ quitting or restarting the app clears that text. Run the new build only after fi
 history you want to consult in the current instance.
 
 The retry checks recent screen fingerprints after switches as well as periodically, refreshes
-each screen after a minute, and pauses capture after five minutes without input. Keyboard or mouse
-input resumes capture within five seconds. This means passive reading or screen sharing without
+each screen after five minutes, and pauses capture after five minutes without input. Keyboard or
+mouse input resumes capture within five seconds. A window whose reads keep finding nothing new is
+read less often, down to once a minute, and periodic reads wait while you type (at most 30
+seconds); switching windows is never delayed. Recognition runs without language correction on
+captures of at most 1600 px. This means passive reading or screen sharing without
 input pauses too; include those cases when judging usefulness.
 
 After launching the trial build and turning Backtrack on through its existing consent flow, sample

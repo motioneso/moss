@@ -254,6 +254,123 @@ final class BacktrackMachineTests: XCTestCase {
         XCTAssertTrue(machine.isRecording)
     }
 
+    // MARK: - Backoff and typing (plan §7, retry 2, task 2)
+
+    private func delay(_ effects: [BacktrackEffect]) -> TimeInterval? {
+        effects.lazy.compactMap { if case .schedule(let after, _) = $0 { return after } else { return nil } }.first
+    }
+
+    /// One periodic read of whatever is in front, run to the end; returns `recognized`'s effects.
+    private func periodicRead(_ machine: inout BacktrackMachine, at second: TimeInterval, lines: [String]) -> [BacktrackEffect] {
+        let start = machine.handle(.tick(generation: machine.generation, at: Self.t(second)))
+        guard case .checkThumbnail = start.first else {
+            XCTFail("expected a check at \(second), got \(start)")
+            return []
+        }
+        let generation = machine.generation
+        _ = machine.handle(.thumbnailChecked(generation: generation, changed: true, at: Self.t(second)))
+        _ = machine.handle(.captured(generation: generation, at: Self.t(second + 0.1)))
+        return machine.handle(.recognized(generation: generation, lines: lines, address: nil, at: Self.t(second + 1)))
+    }
+
+    /// Docs read once with new text, at 1 s.
+    private func readOnce(_ inputs: BacktrackInputs = allOn) -> BacktrackMachine {
+        var machine = startedAtCapture(inputs)
+        _ = machine.handle(.captured(generation: machine.generation, at: Self.t(1.1)))
+        _ = machine.handle(.recognized(generation: machine.generation, lines: Self.lines, address: nil, at: Self.t(2)))
+        return machine
+    }
+
+    func testReadsThatFindNothingNewBackOffAndNewTextResets() {
+        var machine = readOnce()
+        // A build that ignores the result schedules 10 s every time.
+        XCTAssertEqual(delay(periodicRead(&machine, at: 100, lines: Self.lines)), 20)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 200, lines: Self.lines)), 40)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 300, lines: Self.lines)), 60)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 400, lines: Self.lines)), 60)
+        let fresh = ["A new paragraph arrives", "with three lines", "of fresh text"]
+        let effects = periodicRead(&machine, at: 500, lines: Self.lines + fresh)
+        XCTAssertEqual(emits(effects).count, 1)
+        XCTAssertEqual(delay(effects), 10)
+    }
+
+    func testBackoffIsPerWindowAndNeverSlowsASwitch() {
+        var machine = readOnce()
+        _ = periodicRead(&machine, at: 100, lines: Self.lines)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 200, lines: Self.lines)), 40)
+        let other = Self.window("Other", x: 900)
+        XCTAssertEqual(delay(machine.handle(.frontmostChanged(other, at: Self.t(300)))), BacktrackMachine.switchSettle)
+        _ = periodicRead(&machine, at: 301, lines: ["Other window text", "has its own lines", "and its own pace"])
+        // A global gap would schedule 80 here.
+        XCTAssertEqual(delay(periodicRead(&machine, at: 400, lines: ["Other window text", "has its own lines", "and its own pace"])), 20)
+        XCTAssertEqual(delay(machine.handle(.frontmostChanged(Self.docs, at: Self.t(500)))), BacktrackMachine.switchSettle)
+    }
+
+    func testBackoffNeverShortensTheReducedBudget() {
+        var inputs = Self.allOn
+        inputs.budget = .reduced
+        var machine = readOnce(inputs)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 100, lines: Self.lines)), 60)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 200, lines: Self.lines)), 60)
+    }
+
+    func testDiscardingForgetsBackoff() {
+        var machine = readOnce()
+        _ = periodicRead(&machine, at: 100, lines: Self.lines)
+        XCTAssertEqual(delay(periodicRead(&machine, at: 200, lines: Self.lines)), 40)
+        var off = Self.allOn
+        off.enabled = false
+        XCTAssertTrue(machine.handle(.inputsChanged(off, at: Self.t(250))).contains(.discardAll))
+        _ = machine.handle(.inputsChanged(Self.allOn, at: Self.t(260)))
+        XCTAssertEqual(delay(periodicRead(&machine, at: 300, lines: Self.lines)), 10, "the deduper forgot too, so it's new")
+        XCTAssertEqual(delay(periodicRead(&machine, at: 400, lines: Self.lines)), 20, "not 80")
+    }
+
+    func testWindowBackoffIsBounded() {
+        var backoff = WindowBackoff()
+        let first = DedupeKey(bundleId: "first", frame: .zero)
+        backoff.record(first, foundNew: false, base: 10)
+        XCTAssertEqual(backoff.gap(for: first), 20)
+        for index in 0..<WindowBackoff.maxWindows {
+            backoff.record(DedupeKey(bundleId: "w\(index)", frame: .zero), foundNew: false, base: 10)
+        }
+        XCTAssertNil(backoff.gap(for: first), "the 33rd window evicts the oldest")
+    }
+
+    func testPeriodicReadsWaitWhileTypingButSwitchesDoNot() {
+        var machine = readOnce()
+        XCTAssertEqual(
+            machine.handle(.tick(generation: machine.generation, at: Self.t(100), typingRecently: true)),
+            [.schedule(after: BacktrackMachine.typingQuiet, generation: machine.generation)]
+        )
+        XCTAssertEqual(
+            machine.handle(.tick(generation: machine.generation, at: Self.t(129), typingRecently: true)),
+            [.schedule(after: BacktrackMachine.typingQuiet, generation: machine.generation)]
+        )
+        // Thirty seconds of continuous typing: read anyway.
+        XCTAssertEqual(
+            machine.handle(.tick(generation: machine.generation, at: Self.t(130), typingRecently: true)),
+            [.checkThumbnail(Self.docs, generation: machine.generation)]
+        )
+        _ = machine.handle(.failed(generation: machine.generation, at: Self.t(130)))
+
+        let other = Self.window("Other", x: 900)
+        _ = machine.handle(.frontmostChanged(other, at: Self.t(200)))
+        XCTAssertEqual(
+            machine.handle(.tick(generation: machine.generation, at: Self.t(201), typingRecently: true)),
+            [.checkThumbnail(other, generation: machine.generation)]
+        )
+    }
+
+    func testTypingStopsAndThePeriodicReadStarts() {
+        var machine = readOnce()
+        _ = machine.handle(.tick(generation: machine.generation, at: Self.t(100), typingRecently: true))
+        XCTAssertEqual(
+            machine.handle(.tick(generation: machine.generation, at: Self.t(102))),
+            [.checkThumbnail(Self.docs, generation: machine.generation)]
+        )
+    }
+
     // MARK: - Budget (one global deadline)
 
     /// A tiny discrete-event run of the machine: effects become future events, one timer at a time.

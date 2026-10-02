@@ -215,7 +215,7 @@ final class BacktrackBoundaryTests: XCTestCase {
         await settle()
     }
 
-    func testUnchangedScreenIsSkippedAfterASwitchAndRefreshedAfterAMinute() async {
+    func testUnchangedScreenIsSkippedAfterASwitchAndRefreshedAfterFiveMinutes() async {
         let h = await harness()
         await runChain(h)
         XCTAssertEqual(h.recognizer.images.count, 1)
@@ -225,6 +225,9 @@ final class BacktrackBoundaryTests: XCTestCase {
         await runChain(h)
         XCTAssertEqual(h.recognizer.images.count, 1, "a switch still checks the already recognized image")
         h.activity.now = h.activity.now.addingTimeInterval(60)
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 1, "a minute is no longer enough to re-read a known screen")
+        h.activity.now = h.activity.now.addingTimeInterval(ThumbnailChangeDetector.refreshInterval)
         await runChain(h)
         XCTAssertEqual(h.recognizer.images.count, 2, "similarity cannot hide changed text indefinitely")
     }
