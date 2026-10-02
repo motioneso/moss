@@ -783,6 +783,7 @@ describe("AssistantToolGateway self-operation", () => {
     // risk "read" instead (it never confirms now, so it is no longer a confirm_always tool).
     expect(confirmAlwaysTools.sort()).toEqual(
       [
+        "chat.deleteClassifierShadowRecords",
         "email.sendReply",
         "memory.forget",
         "people.merge",
