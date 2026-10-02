@@ -195,6 +195,8 @@ export class ClassifierShadowRepository {
     return this.#guarded("observe", scopedDb, async () => {
       const current = await this.#lockTurn(scopedDb, turnId);
       if (!current) return;
+      // Only the model's first tool call counts; the row lock makes this check race-free.
+      if (observation.kind === "tool" && current.model_tool_id !== null) return;
       const gateToolId =
         current.module_id !== null && current.tool_name !== null
           ? normalizeToolIdentity(current.module_id, current.tool_name)

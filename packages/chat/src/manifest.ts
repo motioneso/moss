@@ -179,9 +179,9 @@ export const chatModuleManifest = {
     {
       id: "chat.classifier_shadow_records",
       description:
-        "In shadow mode the classifier gate keeps a private 7-day record of each message and its " +
-        "trial decision. Only you can see it, never an admin or a thread recipient. Private chats " +
-        "leave none.",
+        "Groundwork for the classifier gate's trial mode: private 7-day storage only you can read. " +
+        "Nothing saves messages there yet and no screen shows it. A failed save will leave your " +
+        "normal reply unchanged.",
       featureFlagId: "chat.module"
     },
     {

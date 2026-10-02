@@ -175,6 +175,32 @@ describe("app.chat_classifier_shadow_records", () => {
     });
   });
 
+  it("keeps the first observed model tool when a later tool call arrives", async () => {
+    const turnId = `turn-${randomUUID()}`;
+    await asActor(ids.userA, async (db) => {
+      await repository.open(db, open(turnId));
+      await repository.complete(db, {
+        turnId,
+        decision: "would_handle",
+        moduleId: "calendar",
+        toolName: "listVisibleEvents"
+      });
+      // First tool differs from the prediction, a later one would match it.
+      await repository.observeModelTool(db, turnId, { kind: "tool", toolId: "tasks.create" });
+      await repository.observeModelTool(db, turnId, {
+        kind: "tool",
+        toolId: "calendar.listVisibleEvents",
+        argumentAgreement: "match"
+      });
+    });
+    const rows = await asActor(ids.userA, (db) => repository.listForOwner(db));
+    expect(rows.find((r) => r.turnId === turnId)).toMatchObject({
+      comparisonStatus: "mismatch",
+      modelToolId: "tasks.create",
+      argumentAgreement: null
+    });
+  });
+
   it("keeps none, failed, cancelled and a missing model tool distinct from a mismatch", async () => {
     const turns = {
       none: `turn-${randomUUID()}`,
