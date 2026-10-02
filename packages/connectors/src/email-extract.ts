@@ -246,11 +246,6 @@ export function otpSkippedResult(): EmailExtractResult {
   return { summary: null, signals: { skipped: "otp", confidence: 0 } };
 }
 
-/** Mail the user sent: settled with no summary and no judgement, never shown as owed. */
-export function ownSentResult(): EmailExtractResult {
-  return { summary: null, signals: { skipped: "own_sent", confidence: 1 } };
-}
-
 export interface EmailExtractResult {
   readonly summary: string | null;
   readonly signals: EmailSignals;

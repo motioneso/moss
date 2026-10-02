@@ -10,13 +10,9 @@ import { EmailRepository } from "@moss/email";
 
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
-import {
-  extractEmailSignals,
-  looksLikeOneTimeCodeEmail,
-  ownSentResult,
-  senderAddress
-} from "./email-extract.js";
-import { ownAddressSet, userSentLastInThread } from "./email-sorting.js";
+import { loadOwnAddressesAndSettle, ownSentResult } from "./own-sent.js";
+import { extractEmailSignals, looksLikeOneTimeCodeEmail, senderAddress } from "./email-extract.js";
+import { userSentLastInThread } from "./email-sorting.js";
 import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
 import type { EmailReadProvider } from "./email-read-provider.js";
@@ -174,11 +170,7 @@ export async function runImapSync(
         const parsed = await provider.getMessage(secret, key);
         const knownSender = knownSenders?.has(senderAddress(parsed.from)) ?? false;
         // #2878: mail the user sent is settled here, before any model sees it.
-        if (deps.actorUserId) {
-          ownAddresses ??= ownAddressSet(
-            await emailRepo.listFrequentRecipientAddresses(scopedDb, deps.actorUserId)
-          );
-        }
+        ownAddresses ??= await loadOwnAddressesAndSettle({ emailRepo, scopedDb, deps });
         const sentByUser = ownAddresses?.has(senderAddress(parsed.from)) ?? false;
         const pass = await runSortingModelPass({
           pending: sentByUser ? [] : [parsed],

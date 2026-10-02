@@ -15,7 +15,6 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
-  ownSentResult,
   senderAddress,
   type EmailExtractOptions,
   type EmailExtractResult,
@@ -28,6 +27,7 @@ import {
   type MailMessageKey
 } from "./email-read-provider.js";
 import { ownAddressSet } from "./email-sorting.js";
+import { loadOwnAddressesAndSettle, settleOwnSent } from "./own-sent.js";
 import { runSortingModelPass, threadUserSentLast } from "./email-sorting-live.js";
 import { projectEmailActions } from "./monitor-jobs.js";
 import { listSavedEmailContext } from "./source-context/email.js";
@@ -467,22 +467,9 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
       }
       continue;
     }
-    // Mail the user sent is never owed a reply by the user. It is settled here, before any
-    // model sees it, and a row an earlier sync marked as waiting is settled the same way.
-    if (input.ownAddresses?.has(senderAddress(parsed.from))) {
-      if (unchanged && !prior?.awaitingJudgement) {
-        unchangedKeys.push(parsed.externalId);
-        continue;
-      }
-      try {
-        await input.persistEmail(parsed, ownSentResult());
-        if (!unchanged) input.progress.emailUpserted += 1;
-        ownSentKeys.push(parsed.externalId);
-      } catch (error) {
-        fail(error);
-      }
-      continue;
-    }
+    const awaiting = Boolean(prior?.awaitingJudgement);
+    const keys = { settled: ownSentKeys, unchanged: unchangedKeys };
+    if (await settleOwnSent(input, parsed, { unchanged, awaiting }, keys, fail)) continue;
     if (unchanged) {
       unchangedKeys.push(parsed.externalId);
       const askedAt = prior?.judgementRequestedAt?.getTime();
@@ -843,15 +830,7 @@ export async function runGoogleEmailPhase(
         "google-sync email message failed"
       );
     };
-    const ownAddresses =
-      parsedMessages.length > 0 && context.deps.actorUserId
-        ? ownAddressSet(
-            await context.emailRepo.listFrequentRecipientAddresses(
-              context.scopedDb,
-              context.deps.actorUserId
-            )
-          )
-        : undefined;
+    const ownAddresses = await loadOwnAddressesAndSettle(context);
     const { pending, unchangedKeys, otpKeys, ownSentKeys, rejudgeThreadRefs, rejudgeKeys } =
       await sortFetchedEmails({
         parsedMessages,
