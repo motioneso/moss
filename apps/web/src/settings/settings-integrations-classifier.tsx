@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
 import {
   INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
@@ -465,8 +465,11 @@ export function IntegrationClassifierSection(props: {
     setDrafts((prev) => ({ ...prev, [toolName]: { ...prev[toolName]!, ...patch } }));
   };
 
-  const updateEdit = (toolName: string, patch: Partial<DraftRow>) => {
-    setEdits((prev) => ({ ...prev, [toolName]: { ...prev[toolName]!, ...patch } }));
+  // `base` seeds the row the first time it is edited. A Risk needed row is shown without an entry
+  // in `edits`, so without this fallback the first change would spread `undefined` and wipe the
+  // saved tool name, description, reply and fingerprint.
+  const updateEdit = (toolName: string, base: DraftRow, patch: Partial<DraftRow>) => {
+    setEdits((prev) => ({ ...prev, [toolName]: { ...(prev[toolName] ?? base), ...patch } }));
   };
 
   const headTitle =
@@ -618,14 +621,12 @@ export function IntegrationClassifierSection(props: {
     if (editRow || pendingRisk) {
       const row = editRow ?? entryToRow(entry);
       return (
-        <>
-          {eligibility.reasons.length > 0 ? (
-            <Note key={`${entry.toolName}-why`}>{eligibility.reasons.join(" ")}</Note>
-          ) : null}
+        <Fragment key={entry.toolName}>
+          {eligibility.reasons.length > 0 ? <Note>{eligibility.reasons.join(" ")}</Note> : null}
           {renderEditor(
             row,
             tool,
-            (patch) => updateEdit(entry.toolName, patch),
+            (patch) => updateEdit(entry.toolName, entryToRow(entry), patch),
             <>
               <Button
                 size="sm"
@@ -653,7 +654,7 @@ export function IntegrationClassifierSection(props: {
             </>,
             false
           )}
-        </>
+        </Fragment>
       );
     }
     return (

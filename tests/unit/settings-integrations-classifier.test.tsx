@@ -589,6 +589,38 @@ describe("IntegrationClassifierSection", () => {
     expect(selectByLabel("Risk for ToolA")).toBeTruthy();
   });
 
+  it("picking a risk on a Risk needed row keeps the saved fields and saves (r2 blocker)", async () => {
+    await render(
+      baseDetail({
+        classifierEnabled: true,
+        classifierPreparation: [savedEntry({ reviewedRisk: null, optIn: false })]
+      })
+    );
+    expect(text()).toContain("Risk needed");
+    await act(async () => {
+      selectByLabel("Risk for ToolA").props.onChange({ target: { value: "read" } });
+    });
+    // The row must still be the saved tool, with its saved description and reply, not a blank
+    // editor keyed on an undefined tool name.
+    expect(inputByLabel("Description the classifier sees for ToolA")).toBeTruthy();
+    expect(inputByLabel("Reply for ToolA").props.value).toBe("Turned the light on.");
+    expect(selectByLabel("Risk for ToolA").props.value).toBe("read");
+    await act(async () => {
+      hostButton("Save").props.onClick();
+    });
+    await flush();
+    expect(h.save).toHaveBeenCalledWith(
+      "conn-1",
+      "ToolA",
+      expect.objectContaining({
+        reviewedRisk: "read",
+        description: "Turn one light on.",
+        replyTemplate: "Turned the light on.",
+        reviewedFingerprint: "fp-A"
+      })
+    );
+  });
+
   it("hides 'Prepare N more' while a review is open (item 3)", async () => {
     h.prepare.mockResolvedValue(approvedPrepare([draft()], { remaining: 3 }));
     await render(baseDetail());
