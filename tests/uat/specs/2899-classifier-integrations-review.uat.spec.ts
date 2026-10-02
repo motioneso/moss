@@ -127,11 +127,12 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   expect(id, "the connection detail opens at ?integration=<id>").toBeTruthy();
   const connectionId = id as string;
 
-  // 2. The ordinary controls are present and untouched before any classifier interaction.
-  await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeVisible();
+  // 2. The ordinary controls are present and untouched before any classifier interaction. The
+  //    switch input is visually hidden inside its track, so assert state, not visibility.
+  await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeChecked();
   await expect(
     page.getByRole("checkbox", { name: "Allow repeated identical calls to list_lights" })
-  ).toBeVisible();
+  ).not.toBeChecked();
 
   // 3. The classifier section starts off, with its disclosure visible before any model request.
   const classifierSwitch = page.getByRole("checkbox", {
@@ -215,8 +216,10 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   );
   expect(staleStatus).toBe(409);
 
-  // 8. Opt out through the real screen switch, and prove it persisted on reload.
-  await toolSwitch.uncheck();
+  // 8. Opt out through the real screen switch, and prove it persisted on reload. The switch input
+  //    is visually hidden, so toggle it by keyboard (focus + Space), which is also the access path.
+  await toolSwitch.focus();
+  await page.keyboard.press("Space");
   await expect(toolSwitch).not.toBeChecked();
   await page.reload();
   await expect(
@@ -232,8 +235,8 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   expect(detail.classifierPreparation).toHaveLength(0);
 
   // 10. The ordinary controls are still exactly as they were.
-  await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeChecked();
   await expect(
     page.getByRole("checkbox", { name: "Allow repeated identical calls to list_lights" })
-  ).toBeVisible();
+  ).not.toBeChecked();
 });
