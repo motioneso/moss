@@ -3,6 +3,17 @@ import { sql } from "kysely";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { CredentialPlacement, IntegrationKind } from "@moss/shared";
 
+import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import {
+  emptyPreparationMap,
+  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
+  parsePreparationMap,
+  withPreparationEntry,
+  withoutPreparationEntry,
+  type ClassifierPreparationEntry,
+  type ClassifierPreparationMap,
+  type ReviewedEntryInput
+} from "./classifier-settings.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 
 export interface ConnectionRow {
@@ -21,6 +32,8 @@ export interface ConnectionRow {
   readonly enabledTools: readonly string[];
   readonly mutedTools: readonly string[];
   readonly unsuppressedTools: readonly string[];
+  readonly classifierEnabled: boolean;
+  readonly classifierPreparation: ClassifierPreparationMap;
   readonly discoveredTools: readonly DiscoveredTool[];
   readonly lastDiscoveryAt: Date | null;
   readonly lastError: string | null;
@@ -51,7 +64,18 @@ export interface UpdateConnectionInput {
   readonly enabledTools?: readonly string[];
   readonly mutedTools?: readonly string[];
   readonly unsuppressedTools?: readonly string[];
+  /** Per-connection classifier opt-in (#2884). */
+  readonly classifierEnabled?: boolean;
 }
+
+/** Outcome of saving one reviewed classifier tool entry (#2884). */
+export type SaveClassifierToolReviewResult =
+  | { readonly status: "saved"; readonly connection: ConnectionRow }
+  /** The tool is gone or its definition moved on since the tab loaded it. */
+  | { readonly status: "conflict"; readonly reason: "unknown_tool" | "stale" }
+  | { readonly status: "not_found" }
+  /** The stored map is at its bounded size. */
+  | { readonly status: "too_many" };
 
 interface ConnectionSqlRow {
   id: string;
@@ -69,6 +93,8 @@ interface ConnectionSqlRow {
   enabled_tools: string[];
   muted_tools: string[];
   unsuppressed_tools: string[];
+  classifier_enabled: boolean;
+  classifier_preparation: unknown;
   discovered_tools: DiscoveredTool[];
   last_discovery_at: Date | null;
   last_error: string | null;
@@ -79,8 +105,8 @@ interface ConnectionSqlRow {
 const SELECT_COLUMNS = `
   id, owner_user_id, name, kind, transport, url, credential_placement,
   (credential IS NOT NULL) AS has_credential, enabled, base_url, spec_pasted,
-  enabled_groups, enabled_tools, muted_tools, unsuppressed_tools, discovered_tools,
-  last_discovery_at, last_error, created_at, updated_at
+  enabled_groups, enabled_tools, muted_tools, unsuppressed_tools, classifier_enabled,
+  classifier_preparation, discovered_tools, last_discovery_at, last_error, created_at, updated_at
 `;
 
 export class IntegrationsRepository {
@@ -167,6 +193,9 @@ export class IntegrationsRepository {
     if ("unsuppressedTools" in patch) {
       sets.push(sql`unsuppressed_tools = ${[...(patch.unsuppressedTools ?? [])]}::text[]`);
     }
+    if ("classifierEnabled" in patch) {
+      sets.push(sql`classifier_enabled = ${patch.classifierEnabled}`);
+    }
     sets.push(sql`updated_at = now()`);
 
     const result = await sql<ConnectionSqlRow>`
@@ -227,6 +256,85 @@ export class IntegrationsRepository {
     `.execute(scopedDb.db);
   }
 
+  /**
+   * Save one owner-reviewed classifier preparation, keyed by the discovered tool name (#2884).
+   *
+   * `reviewedFingerprint` is compared against the tool's current definition before anything is
+   * written. A missing tool or a moved-on definition is a conflict, so a stale tab cannot approve
+   * a superseded review. The per-tool `preparationVersion` only ever grows.
+   */
+  async saveClassifierToolReview(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string,
+    input: ReviewedEntryInput
+  ): Promise<SaveClassifierToolReviewResult> {
+    assertDataContextDb(scopedDb);
+
+    const row = await this.getConnection(scopedDb, id);
+    if (!row) return { status: "not_found" };
+    const tool = row.discoveredTools.find((candidate) => candidate.name === toolName);
+    if (!tool) return { status: "conflict", reason: "unknown_tool" };
+    if (toolDefinitionFingerprint(tool) !== input.reviewedFingerprint) {
+      return { status: "conflict", reason: "stale" };
+    }
+
+    const map = row.classifierPreparation;
+    const isNewEntry = !(toolName in map.entries);
+    if (isNewEntry && Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES) {
+      return { status: "too_many" };
+    }
+    const priorVersion = map.entries[toolName]?.preparationVersion ?? 0;
+    const entry: ClassifierPreparationEntry = {
+      optIn: input.optIn,
+      reviewedRisk: input.reviewedRisk,
+      description: input.description,
+      arguments: input.arguments,
+      replyTemplate: input.replyTemplate,
+      ...(input.candidateSource !== undefined ? { candidateSource: input.candidateSource } : {}),
+      definitionFingerprint: input.reviewedFingerprint,
+      reviewedAt: new Date().toISOString(),
+      preparationVersion: priorVersion + 1
+    };
+    const next = withPreparationEntry(map, toolName, entry);
+
+    const updated = await this.writePreparationMap(scopedDb, id, next);
+    return updated ? { status: "saved", connection: updated } : { status: "not_found" };
+  }
+
+  /** Remove one saved classifier preparation entry (opt-out / discard a stale review). */
+  async removeClassifierToolReview(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string
+  ): Promise<ConnectionRow | null> {
+    assertDataContextDb(scopedDb);
+
+    const row = await this.getConnection(scopedDb, id);
+    if (!row) return null;
+    return this.writePreparationMap(
+      scopedDb,
+      id,
+      withoutPreparationEntry(row.classifierPreparation, toolName)
+    );
+  }
+
+  private async writePreparationMap(
+    scopedDb: DataContextDb,
+    id: string,
+    map: ClassifierPreparationMap
+  ): Promise<ConnectionRow | null> {
+    const result = await sql<ConnectionSqlRow>`
+      UPDATE app.integration_connections
+      SET classifier_preparation = ${JSON.stringify(map)}::jsonb,
+          updated_at = now()
+      WHERE id = ${id}::uuid
+      RETURNING ${sql.raw(SELECT_COLUMNS)}
+    `.execute(scopedDb.db);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
   private mapRow(row: ConnectionSqlRow): ConnectionRow {
     return {
       id: row.id,
@@ -244,6 +352,10 @@ export class IntegrationsRepository {
       enabledTools: row.enabled_tools,
       mutedTools: row.muted_tools,
       unsuppressedTools: row.unsuppressed_tools,
+      classifierEnabled: row.classifier_enabled,
+      classifierPreparation: parsePreparationMap(
+        row.classifier_preparation ?? emptyPreparationMap()
+      ),
       discoveredTools: row.discovered_tools,
       lastDiscoveryAt: row.last_discovery_at,
       lastError: row.last_error,

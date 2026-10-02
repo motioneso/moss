@@ -19,6 +19,7 @@ import type {
 } from "@moss/shared";
 
 import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
+import { parseReviewedEntry } from "./classifier-settings.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
 import { IntegrationUserError } from "./errors.js";
@@ -49,6 +50,10 @@ export interface IntegrationsRouteDependencies {
 
 interface IdParams {
   readonly id: string;
+}
+
+interface ClassifierToolParams extends IdParams {
+  readonly toolName: string;
 }
 
 export function registerIntegrationsRoutes(
@@ -254,6 +259,73 @@ export function registerIntegrationsRoutes(
       return handleRouteError(error, reply);
     }
   });
+
+  /**
+   * Save one owner-reviewed classifier tool preparation (#2884). The body is validated whole; a
+   * stale `reviewedFingerprint` (the definition changed since the tab loaded) is a 409, so an old
+   * tab can never approve a superseded review. Nothing is stored until this is called, so a
+   * cancelled review leaves no draft behind.
+   */
+  server.put<{ Params: ClassifierToolParams }>(
+    "/api/integrations/:id/classifier/tools/:toolName",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const parsed = parseReviewedEntry(request.body);
+        if (!parsed.ok) {
+          return reply.code(400).send({ error: parsed.problems.join("; ") });
+        }
+        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.saveClassifierToolReview(
+            scopedDb,
+            request.params.id,
+            request.params.toolName,
+            parsed.value
+          )
+        );
+        if (result.status === "not_found") {
+          return reply.code(404).send({ error: "Integration not found" });
+        }
+        if (result.status === "conflict") {
+          return reply.code(409).send({
+            error:
+              result.reason === "unknown_tool"
+                ? "That tool is no longer available."
+                : "That tool changed since you opened it. Reload and review it again."
+          });
+        }
+        if (result.status === "too_many") {
+          return reply.code(400).send({ error: "This connection has too many reviews saved." });
+        }
+        cache.drop(accessContext.actorUserId);
+        return toDetail(result.connection, result.connection.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /** Remove one saved classifier preparation entry (opt-out). */
+  server.delete<{ Params: ClassifierToolParams }>(
+    "/api/integrations/:id/classifier/tools/:toolName",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const updated = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.removeClassifierToolReview(
+            scopedDb,
+            request.params.id,
+            request.params.toolName
+          )
+        );
+        if (!updated) return reply.code(404).send({ error: "Integration not found" });
+        cache.drop(accessContext.actorUserId);
+        return toDetail(updated, updated.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
 }
 
 function toSummary(row: ConnectionRow): IntegrationSummary {
@@ -339,6 +411,12 @@ function buildUpdatePatch(
       ...patch,
       unsuppressedTools: requiredStringArray(value.unsuppressedTools, "unsuppressedTools")
     };
+  }
+  if ("classifierEnabled" in value) {
+    if (typeof value.classifierEnabled !== "boolean") {
+      throw new HttpError(400, "classifierEnabled must be a boolean");
+    }
+    patch = { ...patch, classifierEnabled: value.classifierEnabled };
   }
   return patch;
 }
