@@ -16,29 +16,39 @@ import { describe, expect, it } from "vitest";
  *  - raw web calls to a model endpoint (the System One shape): `fetch`/`fetchImpl` against a known
  *    model host or path.
  *
- * It also runs two broader checks, per QA round 2:
+ * It also runs three broader checks, per QA rounds 2 to 4:
  *  - EVERY file that imports the Node child-process library (`node:child_process` or
  *    `child_process`, by `import ... from`, `import()`, `require()` or `import x = require()`) must
  *    be in the process-start allow-list or the model-spawn allow-list, with a reason. Anchoring on
  *    the import covers every call form (`spawn`, `execFile`, promisified wrappers, `cp.spawn`,
  *    renamed imports, `fork`), including a model program started from a variable command, which
  *    the quote-anchored check above cannot see.
+ *  - EVERY call to a shared command-runner factory (`createRealTmuxIo(`, `createSanitizedTmuxIo(`,
+ *    `createOwnerIo(`) or the shell-command manager (`new AcpExecManager(`) must be in the
+ *    runner-call allow-list, with a reason. These hand out a run-any-command function, so a new
+ *    file can start a program through them without importing the child-process library.
  *  - EVERY chat-engine construction (`new AcpChatEngine(`, `new CliChatEngineImpl(`,
  *    `new CodexExecSession(`, `createStructuredEngine(`, the persistent runtimes, and the CLI
  *    structured adapter factory) must appear in the chat-engine allow-list, so a new engine built
  *    outside the recorded places fails.
  *
+ * Source files scanned are `.ts`, `.tsx`, `.mjs`, `.cjs` and `.js` under `packages` and `apps`.
+ *
  * Known limitations, stated so nobody trusts it further than it goes:
  *  - The allow-lists are per FILE. A second, unlogged model call added INSIDE an allow-listed file
  *    passes silently. Adding a call site means adding its file here (and recording it) or the guard
- *    fails with the offending `file:line`. This applies to all four checks.
+ *    fails with the offending `file:line`. This applies to every check.
  *  - A model endpoint reached through a configurable base URL (not a literal host in source) is not
  *    detectable statically; the adapter allow-list covers those callers instead.
- *  - The process-start check cannot tell a model program from a plain utility process (tmux, rm,
- *    setpriv, an external module child). It flags both; a file that merely runs utilities is
- *    allow-listed with a reason, and a reviewer weighing that reason is the safety net. A model
- *    program started from a variable command in a NEW file still fails closed until someone adds
- *    that file with a reason.
+ *  - The process checks cannot tell a model program from a plain utility process (tmux, rm,
+ *    setpriv, an external module child). They flag both; a file that merely runs utilities is
+ *    allow-listed with a reason, and a reviewer weighing that reason is the safety net.
+ *  - The process-start check is anchored on import syntax. These routes to the library are NOT
+ *    caught: `createRequire(...)` followed by a require, and `process.getBuiltinModule(...)`.
+ *  - The runner-call check knows the three runner factories and the exec manager by name. A new
+ *    runner factory, or io handed in through a parameter (for example a `createSlotIo` dependency)
+ *    is not caught until it is added to the pattern. Calls reached only through such a
+ *    parameter are covered only by the file that supplies it.
  *  - The chat-engine check matches the known constructors by name; a brand-new engine class whose
  *    constructor is not listed here is not caught until this list grows. Keeping the list here
  *    beside the recorder seam is the deliberate cost.
@@ -162,6 +172,42 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
 ]);
 
 /**
+ * Files allowed to call a shared command-runner factory or build the shell-command manager. Each
+ * entry says why the program that can start through it is safe. A new calling file fails until it
+ * is added here with a reason.
+ */
+const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
+  [
+    "apps/worker/src/worker.ts",
+    "builds the sanitized runner for module-build CLI turns, which the module-build engine records"
+  ],
+  [
+    "packages/chat/src/live/runtime.ts",
+    "chat composition root; the engines built over this runner run inside the per-turn recording wrapper"
+  ],
+  [
+    "packages/cli-runner/src/acp-host.ts",
+    "builds owner-run login reads and the shell-command manager for module builds; the ACP model adapter's turns are recorded by the chat wrapper"
+  ],
+  [
+    "packages/cli-runner/src/main.ts",
+    "cli-runner entrypoint; builds the runner for the persistent and structured engines, whose turns the callers record"
+  ],
+  [
+    "packages/cli-runner/src/per-user-slot.ts",
+    "builds the per-user runner for the persistent runtime, whose turns the chat wrapper records"
+  ],
+  [
+    "packages/cli-runner/src/per-user-structured.ts",
+    "builds owner-run runners for login reads and agent-home file I/O; no model turn starts here"
+  ],
+  [
+    "packages/module-registry/src/chat-multiplexer.ts",
+    "builds the runner for CLI probes, provider checks and persistent engines; probes and checks are recorded, engine turns go through the chat wrapper"
+  ]
+]);
+
+/**
  * Files allowed to build a chat engine. Every one is a recorded composition seam: the engine it
  * builds is wrapped for per-turn recording (turn-activity-engine.ts) or is itself the recording
  * adapter. A new engine built anywhere else fails until its file is added here with a reason.
@@ -244,8 +290,8 @@ function walkSourceFiles(dir: string): string[] {
       continue;
     }
     if (!entry.isFile()) continue;
-    if (!/\.tsx?$/.test(entry.name)) continue;
-    if (/\.test\.tsx?$/.test(entry.name)) continue;
+    if (!/\.(?:tsx?|mjs|cjs|js)$/.test(entry.name)) continue;
+    if (/\.test\.(?:tsx?|mjs|cjs|js)$/.test(entry.name)) continue;
     out.push(full);
   }
   return out;
@@ -335,6 +381,13 @@ function findModelFetches(files: readonly SourceFile[]): Hit[] {
 const CHILD_PROCESS_IMPORT_RE =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)["'`](?:node:)?child_process["'`]/g;
 
+/**
+ * A call to a shared command-runner factory, or construction of the shell-command manager. The
+ * lookbehind skips the function's own definition, and the finder skips comment lines.
+ */
+const RUNNER_CALL_RE =
+  /(?<!function\s)(?:\b(?:createRealTmuxIo|createSanitizedTmuxIo|createOwnerIo)|\bnew\s+AcpExecManager)\s*\(/g;
+
 /** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
 const CHAT_ENGINE_RE =
   /(?:new\s+(?:AcpChatEngine|CliChatEngineImpl|CodexExecSession|ClaudePersistentRuntime|CodexPersistentRuntime|ModuleBuildCliEngine)|createStructuredEngine|createRpcAcpEngine|createCliStructuredAdapterFactory)\s*\(/g;
@@ -348,6 +401,19 @@ function findProcessStarts(files: readonly SourceFile[]): Hit[] {
         line: lineOf(text, match.index ?? 0),
         detail: "imports the child-process library"
       });
+    }
+  }
+  return dedupeByFileAndLine(hits);
+}
+
+function findRunnerCalls(files: readonly SourceFile[]): Hit[] {
+  const hits: Hit[] = [];
+  for (const { file, text } of files) {
+    for (const match of text.matchAll(RUNNER_CALL_RE)) {
+      const index = match.index ?? 0;
+      const lineStart = text.lastIndexOf("\n", index) + 1;
+      if (/^\s*(?:\/\/|\*|\/\*)/.test(text.slice(lineStart, index))) continue;
+      hits.push({ file, line: lineOf(text, index), detail: `runner call ${match[0].trim()}` });
     }
   }
   return dedupeByFileAndLine(hits);
@@ -519,6 +585,50 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
       off,
       `New chat-engine construction outside the recorded places:\n${off.map(describeHit).join("\n")}`
     ).toEqual([]);
+  });
+
+  it("every shared command-runner call is in an allowed file", () => {
+    const off = uncovered(findRunnerCalls(files), RUNNER_CALL_ALLOWLIST);
+    expect(
+      off,
+      `New runner call outside the allowed files:\n${off.map(describeHit).join("\n")}`
+    ).toEqual([]);
+  });
+
+  it("every runner-call allow-list entry still calls a runner", () => {
+    const calling = new Set(findRunnerCalls(files).map((hit) => hit.file));
+    const stale = [...RUNNER_CALL_ALLOWLIST.keys()].filter((file) => !calling.has(file));
+    expect(stale, `Stale runner-call entries:\n${stale.join("\n")}`).toEqual([]);
+  });
+
+  it.each([
+    [
+      "the tmux runner with a variable command",
+      `import { createRealTmuxIo } from "./adapters/tmux-bridge.js";\nexport const go = (bin: string, p: string) => createRealTmuxIo().run(bin, ["--print", p]);`
+    ],
+    ["the sanitized runner", `const io = createSanitizedTmuxIo(env);\nawait io.run(bin, []);`],
+    ["the owner runner", `const io = createOwnerIo(identity);`],
+    ["the shell-command manager", `const m = new AcpExecManager(deps);`]
+  ])("flags %s in an unlisted file", (_name, body) => {
+    const file = "packages/example/runner.ts";
+    const hits = findRunnerCalls([{ file, text: body }]);
+    expect(hits.length).toBe(1);
+    expect(uncovered(hits, RUNNER_CALL_ALLOWLIST).map((hit) => hit.file)).toEqual([file]);
+  });
+
+  it("scans .mjs, .cjs and .js files, not only TypeScript", () => {
+    const scanned = new Set(files.map((entry) => entry.file));
+    expect(scanned.has("packages/ai/src/gateway/pattern-worker.mjs")).toBe(true);
+  });
+
+  it("does not flag a runner factory's own definition or a comment mentioning it", () => {
+    const text = [
+      "export function createRealTmuxIo(baseEnv = process.env) {",
+      "  // createSanitizedTmuxIo() sources the env before this runs",
+      "  * createOwnerIo() is documented here",
+      "}"
+    ].join("\n");
+    expect(findRunnerCalls([{ file: "packages/example/def.ts", text }])).toEqual([]);
   });
 
   const COVERED_FOR_PROCESS_STARTS = new Set<string>([
