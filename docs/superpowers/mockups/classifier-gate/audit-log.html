@@ -1,15 +1,16 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Classifier log - mockup</title><link rel="stylesheet" href="app.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Model activity log - mockup</title><link rel="stylesheet" href="app.css">
 <style>.al{width:100%;border-collapse:collapse}.al th{text-align:left;font-size:var(--text-2xs);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-subtle);font-weight:var(--weight-semibold);padding:var(--space-2) var(--space-3);border-bottom:2px solid var(--border-strong)}.al td{padding:var(--space-3);border-bottom:1px solid var(--border);vertical-align:top}.al td.num{font-variant-numeric:tabular-nums}.al-wrap{overflow-x:auto}.mk-filters{display:flex;gap:var(--space-4);flex-wrap:wrap;margin:var(--space-4) 0}.mk-filters .jds-field{min-width:150px}</style></head><body>
-<div class="mk-bar"><b>Mockup: classifier log</b>
+<div class="mk-bar"><b>Mockup: model activity log</b>
 <span class="mk-group"><span class="mk-label">State</span><span class="jds-segmented" id="views"></span></span>
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
 <div class="mk-page">
-<h1 class="mk-h">Classifier log <span id="t0"></span></h1>
-<p class="mk-help">One line per chat message the classifier looked at.</p>
+<h1 class="mk-h">Model activity <span id="t0"></span></h1>
+<p class="mk-help">Every time Moss called a model.</p>
 <div class="mk-filters" id="filters">
- <div class="jds-field"><label class="jds-label" for="f1">Decision</label><span class="jds-selectwrap"><select class="jds-select" id="f1"><option>All</option><option>Handled</option><option>Declined</option><option>Failed</option></select></span></div>
- <div class="jds-field"><label class="jds-label" for="f2">Area</label><span class="jds-selectwrap"><select class="jds-select" id="f2"><option>All</option><option>Calendar</option><option>Home hub</option></select></span></div>
- <div class="jds-field"><label class="jds-label" for="f3">Time</label><span class="jds-selectwrap"><select class="jds-select" id="f3"><option>Last 7 days</option><option>Last 24 hours</option></select></span></div>
+ <div class="jds-field"><label class="jds-label" for="f1">Kind</label><span class="jds-selectwrap"><select class="jds-select" id="f1"><option>All</option><option>Chat answer</option><option>Classifier</option><option>Background task</option></select></span></div>
+ <div class="jds-field"><label class="jds-label" for="f2">Model</label><span class="jds-selectwrap"><select class="jds-select" id="f2"><option>All</option><option>Default model</option><option>Classifier model</option></select></span></div>
+ <div class="jds-field"><label class="jds-label" for="f3">Result</label><span class="jds-selectwrap"><select class="jds-select" id="f3"><option>All</option><option>Answered</option><option>Handled</option><option>Declined</option><option>Failed</option></select></span></div>
+ <div class="jds-field"><label class="jds-label" for="f4">Time</label><span class="jds-selectwrap"><select class="jds-select" id="f4"><option>Last 7 days</option><option>Last 24 hours</option></select></span></div>
 </div>
 <div id="stage"></div>
 <p class="mk-note" id="ret"></p>
@@ -17,25 +18,40 @@
 <script src="switcher.js"></script>
 <script>
 var rows=[
-['Today 9:41','What is on my calendar today?','Calendar','List visible events','0.97','Handled','Classifier'],
-['Today 9:12','Turn off the kitchen lights','Home hub','Turn light on or off','0.99','Failed','Classifier (stopped, not retried)'],
-['Today 8:50','Draft a polite note to my landlord','None','No tool','0.93','Declined','Default model'],
-['Yesterday 21:07','Make it brighter','Earlier conversation needed','No tool','0.88','Declined','Default model'],
-['Yesterday 18:30','Remind me to call mum at 5','Tasks','No tool','0.71','Declined','Default model']];
-var badge={Handled:'forest',Declined:'neutral',Failed:'red'};
-function table(rs){return '<div class="al-wrap"><table class="al"><thead><tr><th>Time</th><th>Message (admin only)</th><th>Area</th><th>Tool</th><th>Confidence</th><th>Decision</th><th>Answered by</th></tr></thead><tbody>'+rs.map(function(r){return '<tr><td class="num">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td class="num">'+r[4]+'</td><td><span class="jds-badge jds-badge--'+badge[r[5]]+'">'+r[5]+'</span></td><td>'+r[6]+'</td></tr>'}).join('')+'</tbody></table></div>'}
+['Today 9:41','Classifier','What is on my calendar today?','Classifier model','Calendar, list visible events, 0.97','Handled'],
+['Today 9:41','Chat answer','Remind me what is on my plate this week','Default model','','Answered'],
+['Today 9:30','Background task','(morning briefing)','Default model','Briefing','Answered'],
+['Today 9:12','Classifier','Turn off the kitchen lights','Classifier model','Home hub, turn light on or off, 0.99','Failed'],
+['Today 8:50','Classifier','Draft a polite note to my landlord','Classifier model','No tool, 0.93','Declined'],
+['Today 8:50','Chat answer','Draft a polite note to my landlord','Default model','','Answered'],
+['Yesterday 21:07','Classifier','Make it brighter','Classifier model','Earlier conversation needed, 0.88','Declined'],
+['Yesterday 21:07','Chat answer','Make it brighter','Default model','','Failed'],
+['Yesterday 18:30','Background task','(sort new email)','Classifier model','Mail, pick one','Answered']];
+var badge={Handled:'forest',Declined:'neutral',Failed:'red',Answered:'neutral'};
+function table(rs){return '<div class="al-wrap"><table class="al"><thead><tr><th>Time</th><th>Kind</th><th>Message (admin only)</th><th>Model</th><th>Detail</th><th>Result</th></tr></thead><tbody>'+rs.map(function(r){return '<tr><td class="num">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+(r[4]||'-')+'</td><td><span class="jds-badge jds-badge--'+badge[r[5]]+'">'+r[5]+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
+var empty='<div class="jds-empty"><div class="jds-empty__title">No activity yet</div><div class="jds-empty__sub">Lines appear once Moss calls a model.</div></div>';
+var none='<div class="jds-empty"><div class="jds-empty__title">No lines match these filters</div><div class="jds-empty__sub">Try a wider range.</div><button class="jds-btn jds-btn--secondary jds-btn--sm" id="clr">Clear filters</button></div>';
+var fs=['f1','f2','f3','f4'];
+function show(k){var v=fs.map(function(i){return document.getElementById(i).value});
+ var rs=k==='empty'?[]:rows.filter(function(r){return (v[0]==='All'||r[1]===v[0])&&(v[1]==='All'||r[3]===v[1])&&(v[2]==='All'||r[5]===v[2])});
+ if(k==='retention')rs=rs.slice(0,6);
+ document.getElementById('stage').innerHTML=k==='empty'?empty:rs.length?table(rs):none;
+ var c=document.getElementById('clr');if(c)c.onclick=function(){fs.forEach(function(i){document.getElementById(i).selectedIndex=0});show(k)}}
 var S={
- data:{l:'With lines',h:function(){return table(rows)},r:''},
- filtered:{l:'Filtered: failed',h:function(){return table([rows[1]])},r:'',f:1},
- nomatch:{l:'No matches',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines match these filters</div><button class="jds-btn jds-btn--secondary jds-btn--sm">Clear filters</button></div>'},r:'',f:1},
- empty:{l:'Empty',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines yet</div><div class="jds-empty__sub">Lines appear once the classifier is in use.</div></div>'},r:'',nof:1},
- retention:{l:'7-day retention',h:function(){return table(rows.slice(0,3))},r:'Oldest line: 6 days 22 hours ago.'}
+ data:{l:'With lines'},
+ filtered:{l:'Filtered: classifier, failed',pre:['Classifier','All','Failed']},
+ nomatch:{l:'No matches',pre:['Background task','Default model','Failed']},
+ empty:{l:'Empty',nof:1},
+ retention:{l:'7-day retention',r:'Oldest line: 6 days 22 hours ago.'}
 };
 var vb=document.getElementById('views');
 Object.keys(S).forEach(function(k){var b=document.createElement('button');b.className='jds-segmented__opt';b.textContent=S[k].l;b.dataset.k=k;vb.appendChild(b)});
 function render(k){var s=S[k];history.replaceState(null,'','#'+k);[].forEach.call(vb.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});
- document.getElementById('t0').innerHTML=tip('Admins only. Lines are deleted after 7 days.');document.getElementById('stage').innerHTML=s.h();document.getElementById('filters').style.display=s.nof?'none':'flex';
- document.getElementById('f1').value=k==='filtered'?'Failed':'All';document.getElementById('ret').textContent=s.r;document.getElementById('ret').style.display=s.r?'block':'none'}
+ document.getElementById('t0').innerHTML=tip('Admins only. Lines are deleted after 7 days.');
+ fs.forEach(function(i,n){document.getElementById(i).selectedIndex=0;if(s.pre&&n<3){var o=document.getElementById(i);[].forEach.call(o.options,function(x,y){if(x.text===s.pre[n])o.selectedIndex=y})}});
+ document.getElementById('filters').style.display=s.nof?'none':'flex';
+ document.getElementById('ret').textContent=s.r||'';document.getElementById('ret').style.display=s.r?'block':'none';show(k)}
+fs.forEach(function(i){document.getElementById(i).onchange=function(){show(location.hash.slice(1)||'data')}});
 vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
 render(location.hash.slice(1)||'data');
 </script></body></html>
