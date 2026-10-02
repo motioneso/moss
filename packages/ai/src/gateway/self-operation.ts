@@ -208,7 +208,11 @@ const PLANNED_CONFIRM_ALWAYS_TOOLS: readonly string[] = [
   "sports.confirmSourceAssignments",
   "sports.confirmSourceRecipe",
   "sports.retrySource",
-  "sports.removeSource"
+  "sports.removeSource",
+  // #2911 — deleting the caller's own classifier shadow records is destructive self-operation on
+  // private data, so it always asks first. No action family and no executionPolicy: it must never
+  // be promotable to auto-run.
+  "chat.deleteClassifierShadowRecords"
 ];
 
 const GENERIC_INPUT_KEY_NAMES = new Set(["key", "preferenceKey", "settingKey"]);

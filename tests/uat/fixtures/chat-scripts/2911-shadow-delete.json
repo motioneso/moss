@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["2911-shadow-delete"],
+      "calls": [
+        {
+          "tool": "chat.deleteClassifierShadowRecords",
+          "arguments": {}
+        }
+      ],
+      "reply": "Deleted your classifier trial records."
+    }
+  ]
+}

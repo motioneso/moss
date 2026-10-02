@@ -135,6 +135,36 @@ describe("app.chat_classifier_shadow_records", () => {
     ).rejects.toThrow();
   });
 
+  it("refuses a delete with no signed-in user", async () => {
+    const turnId = `turn-${randomUUID()}`;
+    await asActor(ids.userA, (db) => repository.open(db, open(turnId)));
+
+    // The un-scoped app connection has no actor, so row-level security matches no rows.
+    const result = await sql`DELETE FROM app.chat_classifier_shadow_records`.execute(appDb);
+    expect(Number(result.numAffectedRows ?? 0)).toBe(0);
+
+    const survivors = (await asActor(ids.userA, (db) => repository.listForOwner(db))).map(
+      (r) => r.turnId
+    );
+    expect(survivors).toContain(turnId);
+    await asActor(ids.userA, (db) => repository.deleteForOwner(db));
+  });
+
+  it("the background worker role still cannot delete shadow records", async () => {
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      // The worker was never granted DELETE, so RLS is not even reached.
+      await expect(
+        sql`DELETE FROM app.chat_classifier_shadow_records`.execute(workerDb)
+      ).rejects.toThrow();
+    } finally {
+      await workerDb.destroy();
+    }
+  });
+
   it("never writes a record for a private chat", async () => {
     const turnId = `turn-${randomUUID()}`;
     const written = await asActor(ids.userA, (db) =>
