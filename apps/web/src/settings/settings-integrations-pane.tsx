@@ -22,6 +22,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useFeedback } from "./settings-feedback";
+import { IntegrationClassifierSection } from "./settings-integrations-classifier";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Switch } from "./settings-ui";
 
@@ -362,6 +363,7 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
             ))}
           </Group>
         )}
+        <IntegrationClassifierSection detail={detail} onChanged={invalidateList} />
         {predatesHints ? (
           <Note>
             Refresh tools rereads what {detail.name} says about each tool — press it to pick up read

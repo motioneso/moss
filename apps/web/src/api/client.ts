@@ -109,6 +109,8 @@ import type {
   CreateIntegrationRequest,
   IntegrationDetail,
   ListIntegrationsResponse,
+  PrepareIntegrationClassifierResponse,
+  SaveIntegrationClassifierToolRequest,
   UpdateIntegrationRequest,
   InterpretTaskSearchRequest,
   InterpretTaskSearchResponse,
@@ -1691,6 +1693,41 @@ export async function refreshIntegration(id: string): Promise<IntegrationDetail>
 
 export async function deleteIntegration(id: string): Promise<void> {
   return requestJson<void>(`/api/integrations/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// Classifier gate plan 2b.4 (#2899): the reviewed-switches screen calls 2b.3's transient prepare
+// endpoint and 2b.2's per-tool review save/remove endpoints. `toolName` comes from the connection's
+// discovered list, so it is encoded like the connection id.
+export async function prepareIntegrationClassifierTools(
+  id: string,
+  input: { readonly force?: boolean },
+  signal?: AbortSignal
+): Promise<PrepareIntegrationClassifierResponse> {
+  return requestJson<PrepareIntegrationClassifierResponse>(
+    `/api/integrations/${encodeURIComponent(id)}/classifier/prepare`,
+    { method: "POST", body: input, ...(signal ? { signal } : {}) }
+  );
+}
+
+export async function saveIntegrationClassifierTool(
+  id: string,
+  toolName: string,
+  body: SaveIntegrationClassifierToolRequest
+): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(
+    `/api/integrations/${encodeURIComponent(id)}/classifier/tools/${encodeURIComponent(toolName)}`,
+    { method: "PUT", body }
+  );
+}
+
+export async function removeIntegrationClassifierTool(
+  id: string,
+  toolName: string
+): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(
+    `/api/integrations/${encodeURIComponent(id)}/classifier/tools/${encodeURIComponent(toolName)}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function markNotificationRead(id: string): Promise<MarkNotificationReadResponse> {
