@@ -1,15 +1,15 @@
 import type { AcpProviderKind } from "@moss/acp";
 
 export const CODEX_SIGN_IN_REQUIRED_MESSAGE =
-  "Codex is not connected yet. An administrator connects it once for everyone under Settings, Assistant & AI.";
+  "Codex is not connected yet. An administrator connects it once for everyone under Settings, AI providers.";
 
 const SIGN_IN_EXPIRED_MESSAGES = {
   anthropic:
-    "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI",
+    "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers",
   google:
-    "The Google sign-in has expired; an admin can log it in again under Settings, Assistant & AI",
+    "The Google sign-in has expired; an admin can log it in again under Settings, AI providers",
   opencode:
-    "The OpenCode sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
+    "The OpenCode sign-in has expired; an admin can log it in again under Settings, AI providers"
 } as const;
 
 const AUTH_FAILURE_MESSAGES = new Set([

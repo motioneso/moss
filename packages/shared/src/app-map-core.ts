@@ -138,7 +138,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     description:
       "Review assistant activity visible to this user. Each call reads as a plain action " +
       "(for example, Checked your calendar) under its module name, with how long it took to " +
-      "run. A call that did not work, was not allowed, or was held back for asking too fast " +
+      "run. A call that did not work, was not allowed, or was held back " +
       "carries one plain line saying whether the user needs to do anything. A module filter " +
       "narrows the list.",
     path: "/settings?section=activity",

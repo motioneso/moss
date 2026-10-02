@@ -20,7 +20,7 @@ import {
 
 const ACTOR_ID = "11111111-1111-4111-8111-111111111111";
 const CLAUDE_SIGN_IN_EXPIRED_MESSAGE =
-  "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI";
+  "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers";
 
 const AUTH_MESSAGES = [CODEX_SIGN_IN_REQUIRED_MESSAGE, CLAUDE_SIGN_IN_EXPIRED_MESSAGE] as const;
 type InjectRequest = { method: string; url: string; payload?: unknown };

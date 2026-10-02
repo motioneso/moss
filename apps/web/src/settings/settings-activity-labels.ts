@@ -80,7 +80,7 @@ export function outcomeNote(outcome: ActionAuditLogEntryDto["outcome"]): string 
     case "failed":
       return "This did not work. Nothing needed from you unless you still want it done; ask again to retry.";
     case "refused":
-      return "Held back because too many requests came in at once. Nothing for you to do; it will run again later.";
+      return "This was held back and did not run. Nothing is needed from you unless it keeps happening.";
     case "denied":
       return "You or your settings said no, so it did not run. Nothing for you to do unless you change your mind.";
     case "invalid":

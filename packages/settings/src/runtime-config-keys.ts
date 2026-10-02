@@ -84,7 +84,7 @@ export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
     moduleOwner: "chat"
   },
   // Classifier gate, task 1.2 (#2881, Ben's ruling 1, 2026-10-01). One ADMIN-WIDE switch for the
-  // whole instance, sitting beside the Classifier (sorting) binding under Settings > Assistant & AI.
+  // whole instance, sitting beside the Classifier (sorting) binding under Settings > AI providers.
   // "off" is the default and the missing-value default. "on" may only be stored when an approved
   // tool release record exists; that check lives in runtime-config-routes.ts, not here (this
   // registry only validates the enum). Scope is intentionally instance-wide, not per user.

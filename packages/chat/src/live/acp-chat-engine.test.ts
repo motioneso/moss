@@ -360,7 +360,7 @@ describe("AcpChatEngine", () => {
       expect.objectContaining({
         name: "CliChatUnavailableError",
         message:
-          "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
+          "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers"
       })
     );
     expect(loginRejected).toHaveBeenCalledOnce();
@@ -374,7 +374,7 @@ describe("AcpChatEngine", () => {
 
   it("uses the truthful Codex remediation for launch and prompt auth failures", async () => {
     const expected =
-      "Codex is not connected yet. An administrator connects it once for everyone under Settings, Assistant & AI.";
+      "Codex is not connected yet. An administrator connects it once for everyone under Settings, AI providers.";
 
     const launchFailure = new AcpChatEngine("openai-compatible", "chat:u1:launch", {
       tunnel: new PromptErrorTunnel(true),

@@ -136,7 +136,7 @@ export class CliChatUnavailableError extends Error {
 }
 
 export const API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE =
-  "Live chat does not support API-key providers yet. Choose a CLI provider in Admin → Assistant & AI.";
+  "Live chat does not support API-key providers yet. Choose a CLI provider in Admin → AI providers.";
 
 export class ApiKeyLiveChatUnavailableError extends CliChatUnavailableError {
   constructor() {
@@ -146,7 +146,7 @@ export class ApiKeyLiveChatUnavailableError extends CliChatUnavailableError {
 }
 
 export const UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE =
-  "This legacy CLI provider has no supported ACP agent. In Admin → Assistant & AI, add or switch to an Anthropic, OpenAI-compatible (Codex or OpenCode), or Google CLI provider for chat.";
+  "This legacy CLI provider has no supported ACP agent. In Admin → AI providers, add or switch to an Anthropic, OpenAI-compatible (Codex or OpenCode), or Google CLI provider for chat.";
 
 export class UnsupportedLegacyCliProviderError extends CliChatUnavailableError {
   constructor() {

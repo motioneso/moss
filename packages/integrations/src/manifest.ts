@@ -67,7 +67,7 @@ export const integrationsModuleManifest = {
         {
           id: "integrations.connection_classifier_preparation.choose_chat_model",
           description:
-            "Choose a chat model that supports structured output in Settings, Assistant & AI, " +
+            "Choose a chat model that supports structured output in Settings, Your assistant, " +
             "then prepare again.",
           path: "/settings?section=assistant"
         }

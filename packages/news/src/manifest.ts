@@ -522,7 +522,7 @@ export const newsModuleManifest = {
       remediations: [
         {
           id: "news.add_source.configure_json_model",
-          description: "Bind a JSON-capable economy model for News in Assistant & AI settings.",
+          description: "Bind a JSON-capable economy model for News in AI providers settings.",
           path: "/settings?section=assistant"
         }
       ],
