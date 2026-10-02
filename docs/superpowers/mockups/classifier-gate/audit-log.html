@@ -55,7 +55,7 @@ var S={
 var vb=document.getElementById('views');
 Object.keys(S).forEach(function(k){var b=document.createElement('button');b.className='jds-segmented__opt';b.textContent=S[k].l;b.dataset.k=k;vb.appendChild(b)});
 function render(k){var s=S[k];history.replaceState(null,'','#'+k);[].forEach.call(vb.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});
- document.getElementById('t0').innerHTML=tip('Admins only. Lines are deleted after 7 days.');
+ document.getElementById('t0').innerHTML=tip('Admins only. Keeping lines for 7 days is proposed, not decided.');
  fs.forEach(function(i,n){document.getElementById(i).selectedIndex=0;if(s.pre&&n<3){var o=document.getElementById(i);[].forEach.call(o.options,function(x,y){if(x.text===s.pre[n])o.selectedIndex=y})}});
  document.getElementById('filters').style.display=s.nof?'none':'flex';
  document.getElementById('ret').textContent=s.r||'';document.getElementById('ret').style.display=s.r?'block':'none';show(k)}

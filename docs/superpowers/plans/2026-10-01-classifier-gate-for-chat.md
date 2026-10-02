@@ -633,7 +633,7 @@ Owner: UI implementer. Depends on 3.4 (shadow records). Build the admin-only scr
 (classifier, chat answer, background task) with action, one-line outcome, time, kind, actual model name
 and result, and filters for kind, model, result and time. It shows the action taken, never the chat
 text. Reads through an admin-gated endpoint; empty, no-match and retention states as mocked. Retention
-is 7 days. Recording chat answers and background tasks widens logging beyond the gate, so the recording
+is undecided (7 days proposed, awaiting Ben). Recording chat answers and background tasks widens logging beyond the gate, so the recording
 side needs its own spec note and Ben's confirmation before this task starts. Add the screen to the app
 map. Tests: a non-admin cannot read it, and a line older than 7 days is gone. Exit: live-path proof on a
 dev instance through the real screen.
@@ -798,8 +798,8 @@ These answers supersede the matching "Decisions still needed" entries below.
 11. **No reply marker.** Slice 5 (5.1, 5.2) is superseded. Replies from the gate carry no marker.
 12. **Model activity log replaces it.** An admin-only log of every model call (classifier, chat answer,
     background task) showing the action, outcome, model name and result, not the chat text, with
-    filters. Mockup agreed 2026-10-01. Its build slice and retention (7 days proposed) still need a
-    plan entry and Ben's confirmation, because it widens logging beyond the gate.
+    filters. Ben ruled on 2026-10-01 that it covers all model calls, not only the classifier. Mockup
+    agreed. Build task 3.6. **Retention is not decided**: 7 days is proposed and awaits Ben.
 13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
 
 Still open: the external candidate-dispatch proof (module-platform implementer).
