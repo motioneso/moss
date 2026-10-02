@@ -159,5 +159,4 @@ blocking	packages/chat/src/live/chat-session-manager.ts	tests/uat/specs/2890-mod
 blocking	packages/chat/src/live/provider-probe.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/chat/src/live/cli-check-turn.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/memory/src/embedding-provider-config.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
-blocking	tests/uat/seed/chunks/chat-script.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts

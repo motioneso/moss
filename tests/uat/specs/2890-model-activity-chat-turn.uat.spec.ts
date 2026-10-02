@@ -2,70 +2,26 @@
 //
 // Plan 3.6b (#2890) live-path proof for a live chat turn. 3.6a recorded only the provider-adapter
 // boundary, which a live chat turn never reaches — chat runs a whole CLI session. This spec proves
-// the new per-turn recording through the real app: an admin sends a chat message (a real turn
-// against the scripted chat provider), then opens Settings > Model activity and sees a chat row for
-// the turn's real model, without the message text.
+// the new per-turn recording through the real app: an admin sends a real chat turn through the
+// drawer (a real model reply), then opens Settings > Model activity and sees a `chat` row for the
+// turn, without the message text.
 //
-// Kept as its own spec (rather than folded into 2889-model-activity-log.uat.spec.ts) because the
-// scripted chat provider and the 3.6a briefing-writer HTTP provider cannot both be the active chat
-// model on one instance; each proof runs on its own instance.
+// This uses the operator's own signed-in Codex login (tests/uat/real-chat-env.ts, #2732) rather
+// than the scripted provider fixture: the ACP chat engine spawns @agentclientprotocol/
+// claude-agent-acp, whose protocol the scripted fixture no longer satisfies, so a scripted turn
+// fails ("Failed to fetch") before it completes. The real-chat path is the one working provider
+// reachable in a UAT stack. The spec SKIPS when no real login is configured, so CI and the gate
+// stay credential-free — matching real-chat-onboarding.uat.spec.ts.
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
 
-export const uatLevel = {
-  level: "admin+data",
-  without: [],
-  withoutNewsJsonBinding: true,
-  chatScript: "phase1-smoke"
-} as const;
+export const uatLevel = { level: "admin+data", without: [] } as const;
 
-// The scripted chat provider's model, seeded by tests/uat/seed/chunks/chat-script.ts.
-const SCRIPTED_CHAT_MODEL_NAME = "uat-scripted-chat-model";
-// The message must contain the "phase1-smoke" fixture's expected substring ("goals") so the
-// scripted provider's single turn is eligible; otherwise it fails ambiguous-or-zero-eligible-turns.
-// The reply is the fixture's fixed prose.
-const MESSAGE = "UAT 3.6b coverage check: what are my goals?";
-const SCRIPTED_REPLY = "Here are your goals.";
+// #2732: the provisioner sets this ONLY after copying a real Codex login into the stack. Absent on
+// every default/CI run, so the whole spec skips rather than failing.
+const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  return baseURL;
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skip = page.getByRole("button", { name: "Skip setup" });
-  const menu = page.locator(".jds-usermenu__trigger");
-  await expect(skip.or(menu).first()).toBeVisible({ timeout: 30_000 });
-  if (await skip.isVisible()) {
-    await skip.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(menu).toBeVisible({ timeout: 30_000 });
-}
-
-async function sendMessage(page: Page): Promise<void> {
-  await page.locator(".topbar-actions button").click();
-  const drawer: Locator = page.locator("aside.chatd");
-  await expect(drawer).toBeVisible({ timeout: 15_000 });
-  const turnResponse = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
-      response.request().method() === "POST",
-    { timeout: 180_000 }
-  );
-  const composer = drawer.getByLabel("Message Moss");
-  await composer.fill(MESSAGE);
-  await composer.press("Enter");
-  const response = await turnResponse;
-  expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
-  // The scripted provider returned its fixed reply; proves a real turn completed end to end.
-  await expect(drawer.getByText(SCRIPTED_REPLY)).toBeVisible({ timeout: 60_000 });
-}
+const MESSAGE = "UAT 3.6b coverage check: reply with a short greeting.";
 
 async function openModelActivity(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
@@ -86,37 +42,63 @@ async function fetchModelActivity(page: Page): Promise<readonly ModelActivityEnt
   return ((await response.json()) as { entries: readonly ModelActivityEntry[] }).entries;
 }
 
+/** Send the message through the real drawer, waiting for the turn route, and assert a reply. */
+async function sendThroughDrawer(page: Page): Promise<void> {
+  await page.locator(".topbar-actions button").click();
+  const drawer: Locator = page.locator("aside.chatd");
+  await expect(drawer).toBeVisible({ timeout: 15_000 });
+  const composer = drawer.getByLabel("Message Moss");
+  await composer.fill(MESSAGE);
+  const turnResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
+      response.request().method() === "POST",
+    { timeout: 180_000 }
+  );
+  await composer.press("Enter");
+  const response = await turnResponse;
+  expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
+  // The real model answered; the reply is non-deterministic so we only require it to render.
+  await expect(drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").first()).toBeVisible({
+    timeout: 120_000
+  });
+}
+
 test("a live chat turn appears in the admin model activity log (#2890)", async ({ page }) => {
+  test.skip(
+    !REAL_CHAT_CONFIGURED,
+    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #2732"
+  );
   test.setTimeout(300_000);
 
   await test.step("sign in as admin", async () => {
-    await signIn(page);
+    await signInUatAdmin(page);
   });
 
-  await test.step("send a real chat turn through the scripted provider", async () => {
-    await sendMessage(page);
+  await test.step("install + log in the real Codex CLI and bind the cheapest chat model", async () => {
+    const model = await bringUpRealChatModel(page);
+    expect(model.id, "no chat model id returned").toBeTruthy();
   });
 
-  await test.step("the endpoint records one chat row for the turn's model", async () => {
+  await test.step("send a real chat turn through the drawer", async () => {
+    await sendThroughDrawer(page);
+  });
+
+  await test.step("the endpoint records a chat row for the turn", async () => {
     await expect
       .poll(
         async () => {
           const entries = await fetchModelActivity(page);
-          return entries.find(
-            (entry) => entry.kind === "chat" && entry.modelName === SCRIPTED_CHAT_MODEL_NAME
-          )?.outcome;
+          return entries.find((entry) => entry.kind === "chat")?.outcome;
         },
-        {
-          timeout: 30_000,
-          message: `no chat model-activity row for ${SCRIPTED_CHAT_MODEL_NAME} appeared`
-        }
+        { timeout: 30_000, message: "no chat model-activity row appeared" }
       )
       .toBe("ok");
   });
 
   await test.step("the admin screen shows the chat row, and never the message text", async () => {
     await openModelActivity(page);
-    const chatRow = page.locator(".aud__row").filter({ hasText: SCRIPTED_CHAT_MODEL_NAME }).first();
+    const chatRow = page.locator(".aud__row").filter({ hasText: "Answered" }).first();
     await expect(chatRow).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(".aud").getByText(MESSAGE)).toHaveCount(0);
   });
