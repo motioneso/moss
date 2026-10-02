@@ -349,10 +349,10 @@ export function registerChatRoutes(
             const token = wiring.tokens.mint({
               actorUserId,
               chatSessionId: `classifier-gate:${correlationId}`,
-              // Reserved-tool-name seam: the gate token is minted unrestricted here, but nothing
-              // can call through it until the live-wiring step supplies the gateway ports, and
-              // those will only ever name release-approved tools. No release writer exists yet.
-              allowedToolNames: null
+              // Tool limit: the gate token always carries an allowlist, never unrestricted. It is
+              // empty until the 3.5 ports factory supplies the turn's menu — every tool this token
+              // may call must be in the release-approved menu, and no release writer exists yet.
+              allowedToolNames: new Set<string>()
             });
             return token;
           },

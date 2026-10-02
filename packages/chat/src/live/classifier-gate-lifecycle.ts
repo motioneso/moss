@@ -151,9 +151,9 @@ async function persistGateOutcome(
         : undefined
   };
 
-  // Same order as the default path: the user's message is emitted before the reply.
-  host.emit(actorUserId, surface, { kind: "user", text });
-
+  // Emit the user's message only once this turn is committed to the gate path. On a read storage
+  // failure that falls back, the default path below emits the user message itself — emitting it
+  // here first would show it twice on the live stream (QA should-fix 6).
   let stored:
     | Awaited<ReturnType<NonNullable<ChatPersistencePort["recordHandledTurn"]>>>
     | undefined;
@@ -177,16 +177,22 @@ async function persistGateOutcome(
 
   if (storageFailed || stored === undefined) {
     // D4: only a read may be repeated by the default model. A handled non-read already ran, and a
-    // terminal failure is by definition a non-read attempt — both keep a code-written reply.
-    const mutating = !handled || (trace.risk !== undefined && trace.risk !== "read");
+    // terminal failure is by definition a non-read attempt. Unknown risk counts as mutating: an
+    // unrecognized trace must fail safe (never replay) rather than assume the safe case.
+    const mutating = !handled || trace.risk !== "read";
+    // A read falls back: emit nothing here, so the default path is the single source of the user's
+    // message and its reply.
     if (!mutating) return undefined;
+    // The turn is committed to the gate path: emit the user message now, then the code-written reply.
+    host.emit(actorUserId, surface, { kind: "user", text });
     const fallback = handled ? GATE_STORAGE_FAILURE_MESSAGE : reply;
     host.emit(actorUserId, surface, { kind: "reply", text: fallback, origin });
     return { reply: fallback };
   }
 
-  // Post-store: re-emit the reply with its id (and freshness) so the live UI reconciles with
-  // history, mirroring the default-model path.
+  // Post-store: the user message and the reply, with the reply carrying its id (and freshness) so
+  // the live UI reconciles with history, mirroring the default-model path.
+  host.emit(actorUserId, surface, { kind: "user", text });
   host.emit(actorUserId, surface, {
     kind: "reply",
     text: reply,

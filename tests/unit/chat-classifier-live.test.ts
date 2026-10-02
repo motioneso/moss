@@ -379,6 +379,41 @@ describe("classifier gate — handled-turn lifecycle", () => {
     expect(writeResult.reply).toContain("could not be saved");
   });
 
+  it("a read storage-failure fallback emits the user message exactly once", async () => {
+    // The gate must not echo the user's message before it knows the turn falls back; otherwise the
+    // default path emits it again and the live stream shows it twice.
+    const harness = makeManager();
+    harness.gate.modeValue = "on";
+    harness.gate.outcome = READ_HANDLED;
+    harness.persistence.failHandledWrite = true;
+    const records: TranscriptRecord[] = [];
+    harness.manager.subscribe("user-14", (record) => records.push(record));
+
+    await harness.manager.submitTurn("user-14", "Ben", "what's on today?");
+
+    const userRecords = records.filter((record) => record.kind === "user");
+    expect(userRecords).toHaveLength(1);
+    expect(harness.engines).toHaveLength(1);
+  });
+
+  it("treats a handled turn with unknown risk on the trace as mutating (no fallback)", async () => {
+    // Fail safe: an unrecognized trace must never be repeated by the default model, because it may
+    // have run a mutating tool.
+    const { manager, gate, persistence, engines } = makeManager();
+    gate.modeValue = "on";
+    gate.outcome = {
+      kind: "handled",
+      reply: "Done.",
+      trace: { moduleId: "mystery", toolName: "mystery.do", latencyMs: 5 }
+    };
+    persistence.failHandledWrite = true;
+
+    const result = await manager.submitTurn("user-13", "Ben", "do the mystery thing");
+
+    expect(engines).toHaveLength(0);
+    expect(result.reply).toContain("could not be saved");
+  });
+
   it("a terminal failure whose storage write fails still returns the failure text", async () => {
     const { manager, gate, persistence, engines } = makeManager();
     gate.modeValue = "on";

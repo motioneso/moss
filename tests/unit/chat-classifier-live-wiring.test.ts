@@ -57,7 +57,8 @@ describe("classifier gate composition wiring (#2901)", () => {
           registry.mint({
             actorUserId,
             chatSessionId: `classifier-gate:${correlationId}`,
-            allowedToolNames: null
+            // Tool limit: empty until the 3.5 ports factory supplies the turn's menu.
+            allowedToolNames: new Set<string>()
           }),
         revoke: (correlationId) => registry.revokeBySessionId(`classifier-gate:${correlationId}`)
       },
@@ -105,7 +106,8 @@ describe("classifier gate composition wiring (#2901)", () => {
           registry.mint({
             actorUserId,
             chatSessionId: `classifier-gate:${correlationId}`,
-            allowedToolNames: null
+            // Tool limit: empty until the 3.5 ports factory supplies the turn's menu.
+            allowedToolNames: new Set<string>()
           }),
         revoke: (correlationId) => registry.revokeBySessionId(`classifier-gate:${correlationId}`)
       },
@@ -122,5 +124,21 @@ describe("classifier gate composition wiring (#2901)", () => {
     }
 
     runtime.shutdown();
+  });
+
+  it("gives the production gate token a tool limit (empty allowlist), never unrestricted", () => {
+    // Mirrors routes.ts's mint: the gate token is minted with an allowlist, not `null`. An empty
+    // allowlist means the gateway refuses every tool (`not_in_allowlist`) until 3.5 fills the menu.
+    const registry = new SessionTokenRegistry();
+    const token = registry.mint({
+      actorUserId: ACTOR,
+      chatSessionId: "classifier-gate:corr-1",
+      allowedToolNames: new Set<string>()
+    });
+
+    const identity = registry.verify(token);
+    expect(identity.allowedToolNames).not.toBeNull();
+    expect(identity.allowedToolNames?.size).toBe(0);
+    expect(identity.allowedToolNames?.has("calendar.listVisibleEvents")).toBe(false);
   });
 });
