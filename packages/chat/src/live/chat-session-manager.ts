@@ -1,6 +1,12 @@
 import type { ProviderKind } from "@moss/ai";
+import { randomUUID } from "node:crypto";
 import { resolveMossEnv } from "@moss/db";
-import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
+import type {
+  AnswerProvenanceMetadataV1,
+  ChatTurnOriginV1,
+  ChatTurnUsageDto,
+  SourceFreshnessV1
+} from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
@@ -65,9 +71,11 @@ import type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
   Clock,
+  HandledTurnOptions,
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
+import type { GateMode, GateOutcome, GateRequest } from "./classifier-gate.js";
 export type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
@@ -77,6 +85,21 @@ export type {
 };
 
 type Subscriber = (record: TranscriptRecord) => void;
+
+/** The shape every completed live turn returns to its caller (default model path or gate path). */
+interface TurnResult {
+  reply: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  sourceFreshness?: SourceFreshnessV1 | null;
+}
+
+/**
+ * Task 4.1 (#2901) — the live reply when a mutating gate action ran but its turn could not be
+ * saved. Never replay: the default model would repeat an action that already happened.
+ */
+const GATE_STORAGE_FAILURE_MESSAGE =
+  "That action ran, but its result could not be saved. Check before trying again.";
 
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
 const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
@@ -393,6 +416,12 @@ export class ChatSessionManager {
     let turnUsage: ChatTurnUsageDto | undefined;
 
     try {
+      // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
+      // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
+      // turn returns without launching an engine; a decline returns undefined and the default
+      // model path below runs unchanged with the original text.
+      const gated = await this.tryGatedTurn(actorUserId, surface, text, opts, controller);
+      if (gated) return gated;
       try {
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       } catch (err) {
@@ -668,6 +697,176 @@ export class ChatSessionManager {
       this.sequenceBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
+  }
+
+  /**
+   * Task 4.1 (#2901) — one gate attempt before any engine launch. Returns a completed turn when the
+   * gate handled it, hit a terminal failure, or the user stopped it; returns undefined for every
+   * decline (so the default model path runs) and for `off`/`shadow`/incognito/read-storage-failure.
+   *
+   * This is deliberately the only place the manager talks to the gate, and it runs under the turn's
+   * own controller, so a Stop aborts the attempt without a fallback model turn.
+   */
+  private async tryGatedTurn(
+    actorUserId: string,
+    surface: ChatSurface,
+    text: string,
+    opts:
+      | { readonly attachments?: readonly StoredAttachmentMeta[]; readonly moduleControl?: string }
+      | undefined,
+    controller: AbortController
+  ): Promise<TurnResult | undefined> {
+    const gate = this.deps.classifierGate;
+    if (!gate) return undefined;
+
+    let mode: GateMode;
+    try {
+      mode = await gate.mode(actorUserId);
+    } catch {
+      // A settings read failure behaves as `off`: chat must never break because the gate did.
+      return undefined;
+    }
+    if (mode !== "on") return undefined;
+
+    // Ruling 9: private chats bypass the gate entirely — no classifier call and no record.
+    const incognito =
+      (await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface))?.incognito ??
+      false;
+    if (incognito) return undefined;
+
+    const request: GateRequest = {
+      actorUserId,
+      message: text,
+      hasAttachment: (opts?.attachments?.length ?? 0) > 0,
+      incognito: false,
+      mode,
+      signal: controller.signal
+    };
+    let outcome: GateOutcome;
+    try {
+      outcome = await gate.evaluate(request);
+    } catch {
+      // Gate infrastructure failure is a decline: the default model still answers once.
+      return undefined;
+    }
+
+    if (outcome.kind === "declined" || outcome.kind === "would_handle") return undefined;
+    if (outcome.kind === "cancelled") {
+      this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
+      return { reply: "" };
+    }
+    return this.persistGateOutcome(actorUserId, surface, text, opts, outcome);
+  }
+
+  /**
+   * Persists and emits exactly one ordinary chat turn for a gate outcome that ran (handled or
+   * terminal failure). No engine is launched, no classifier prose reaches the user, and no
+   * fabricated provider/model/usage is recorded — the assistant message carries the gate origin.
+   */
+  private async persistGateOutcome(
+    actorUserId: string,
+    surface: ChatSurface,
+    text: string,
+    opts: { readonly attachments?: readonly StoredAttachmentMeta[] } | undefined,
+    outcome: Extract<GateOutcome, { kind: "handled" | "terminal_failure" }>
+  ): Promise<TurnResult | undefined> {
+    const handled = outcome.kind === "handled";
+    const reply = handled ? outcome.reply : outcome.message;
+    const trace = outcome.trace;
+    const attachments = opts?.attachments ?? [];
+    const origin: ChatTurnOriginV1 = {
+      version: 1,
+      kind: "classifier_gate",
+      decisionId: randomUUID(),
+      moduleId: trace.moduleId ?? null,
+      toolName: trace.toolName ?? null,
+      outcome: handled ? "executed-success" : "executed-failure-or-unknown"
+    };
+    const handledOpts: HandledTurnOptions = {
+      attachments:
+        attachments.length > 0
+          ? attachments.map((meta) => ({
+              id: meta.id,
+              fileName: meta.fileName,
+              mimeType: meta.mimeType,
+              sizeBytes: meta.sizeBytes
+            }))
+          : undefined
+    };
+
+    // Same order as the default path: the user's message is emitted before the reply.
+    this.emit(actorUserId, surface, { kind: "user", text });
+
+    let stored:
+      | Awaited<ReturnType<NonNullable<ChatPersistencePort["recordHandledTurn"]>>>
+      | undefined;
+    let storageFailed = false;
+    if (!this.deps.persistence.recordHandledTurn) {
+      storageFailed = true;
+    } else {
+      try {
+        stored = await this.deps.persistence.recordHandledTurn(
+          actorUserId,
+          text,
+          reply,
+          origin,
+          handledOpts,
+          surface
+        );
+      } catch {
+        storageFailed = true;
+      }
+    }
+
+    if (storageFailed || stored === undefined) {
+      // D4: only a read may be repeated by the default model. A handled non-read already ran, and
+      // a terminal failure is by definition a non-read attempt — both keep a code-written reply.
+      const mutating = !handled || (trace.risk !== undefined && trace.risk !== "read");
+      if (!mutating) return undefined;
+      const fallback = handled ? GATE_STORAGE_FAILURE_MESSAGE : reply;
+      this.emit(actorUserId, surface, { kind: "reply", text: fallback, origin });
+      return { reply: fallback };
+    }
+
+    // Post-store: re-emit the reply with its id (and freshness) so the live UI reconciles with
+    // history, mirroring the default-model path.
+    this.emit(actorUserId, surface, {
+      kind: "reply",
+      text: reply,
+      messageId: stored.assistantMessageId,
+      ...(stored.sourceFreshness !== undefined ? { sourceFreshness: stored.sourceFreshness } : {}),
+      origin
+    });
+
+    // D5: a warm model session never received this turn. Drop it and force a normal-history replay
+    // on the next default turn, without submitting a synthetic turn during this reply.
+    await this.dropWarmSessionForGate(actorUserId, surface);
+
+    return {
+      reply,
+      userMessageId: stored.userMessageId,
+      assistantMessageId: stored.assistantMessageId,
+      sourceFreshness: stored.sourceFreshness
+    };
+  }
+
+  /**
+   * Drops any live session for this actor + surface after a gate-handled turn and marks the key for
+   * a forced replay, so the next default turn relaunches with the handled turn in normal history.
+   */
+  private async dropWarmSessionForGate(actorUserId: string, surface: ChatSurface): Promise<void> {
+    const sessionKey = surfaceSessionKey(actorUserId, surface);
+    const session = this.sessions.get(sessionKey);
+    if (session) {
+      if (this.sessions.get(sessionKey) === session) this.sessions.delete(sessionKey);
+      this.deps.revokeMcpToken?.(sessionKey);
+      try {
+        await session.engine.kill();
+      } catch {
+        // Best-effort teardown of a session the next default turn will relaunch anyway.
+      }
+    }
+    this.pendingForcedReplay.add(sessionKey);
   }
 
   /** #456 — stop one in-flight turn for this actor + surface. */
