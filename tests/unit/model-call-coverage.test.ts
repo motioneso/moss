@@ -23,10 +23,14 @@ import { describe, expect, it } from "vitest";
  *    the import covers every call form (`spawn`, `execFile`, promisified wrappers, `cp.spawn`,
  *    renamed imports, `fork`), including a model program started from a variable command, which
  *    the quote-anchored check above cannot see.
- *  - EVERY call to a shared command-runner factory (`createRealTmuxIo(`, `createSanitizedTmuxIo(`,
- *    `createOwnerIo(`) or the shell-command manager (`new AcpExecManager(`) must be in the
- *    runner-call allow-list, with a reason. These hand out a run-any-command function, so a new
- *    file can start a program through them without importing the child-process library.
+ *  - EVERY file that names a shared command-runner helper (`createRealTmuxIo`,
+ *    `createSanitizedTmuxIo`, `createOwnerIo`, `runBounded`, `perUserSessionIo`,
+ *    `createModuleBuildIo`, `AcpExecManager`) must be in the runner allow-list, with a reason. The
+ *    names match as bare identifiers, so a call, an import, a renamed import, a dynamic-import
+ *    destructure and a variable that stores the helper all match. The finder skips a helper's own
+ *    definition (`function X`, `class X`), comment lines and `export { ... } from` re-export
+ *    lines. These helpers hand out a run-any-command function, so a file can start a program
+ *    through them without importing the child-process library.
  *  - EVERY chat-engine construction (`new AcpChatEngine(`, `new CliChatEngineImpl(`,
  *    `new CodexExecSession(`, `createStructuredEngine(`, the persistent runtimes, and the CLI
  *    structured adapter factory) must appear in the chat-engine allow-list, so a new engine built
@@ -45,10 +49,13 @@ import { describe, expect, it } from "vitest";
  *    allow-listed with a reason, and a reviewer weighing that reason is the safety net.
  *  - The process-start check is anchored on import syntax. These routes to the library are NOT
  *    caught: `createRequire(...)` followed by a require, and `process.getBuiltinModule(...)`.
- *  - The runner-call check knows the three runner factories and the exec manager by name. A new
- *    runner factory, or io handed in through a parameter (for example a `createSlotIo` dependency)
- *    is not caught until it is added to the pattern. Calls reached only through such a
- *    parameter are covered only by the file that supplies it.
+ *  - The runner check matches only the seven names above. A new runner helper is not caught until
+ *    its name is added to the pattern.
+ *  - A runner passed in as a parameter or a dependency (for example a `createSlotIo` dependency)
+ *    is not caught in the file that receives it. Only the file that names the helper is checked.
+ *  - A runner reached through a string-built or computed property name is not caught.
+ *  - A name used only inside a string, a template literal or a block comment line that does not
+ *    start with `*` still matches, so those can raise a false alarm. Such a file needs an entry.
  *  - The chat-engine check matches the known constructors by name; a brand-new engine class whose
  *    constructor is not listed here is not caught until this list grows. Keeping the list here
  *    beside the recorder seam is the deliberate cost.
@@ -200,6 +207,10 @@ const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
   [
     "packages/cli-runner/src/per-user-structured.ts",
     "builds owner-run runners for login reads and agent-home file I/O; no model turn starts here"
+  ],
+  [
+    "packages/cli-runner/src/engine-host.ts",
+    "picks the per-user runner for each persistent or structured launch; the launched turns run inside the per-turn recording wrapper"
   ],
   [
     "packages/module-registry/src/chat-multiplexer.ts",
@@ -382,11 +393,13 @@ const CHILD_PROCESS_IMPORT_RE =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)["'`](?:node:)?child_process["'`]/g;
 
 /**
- * A call to a shared command-runner factory, or construction of the shell-command manager. The
- * lookbehind skips the function's own definition, and the finder skips comment lines.
+ * Any mention of a shared command-runner helper by name, with no call bracket required, so a
+ * renamed import, a dynamic-import destructure or a variable that stores the helper still matches.
+ * The lookbehinds skip the helper's own definition. The finder also skips comment lines and
+ * `export { ... } from` re-export lines.
  */
-const RUNNER_CALL_RE =
-  /(?<!function\s)(?:\b(?:createRealTmuxIo|createSanitizedTmuxIo|createOwnerIo)|\bnew\s+AcpExecManager)\s*\(/g;
+const RUNNER_NAME_RE =
+  /(?<!function\s)(?<!class\s)\b(?:createRealTmuxIo|createSanitizedTmuxIo|createOwnerIo|runBounded|perUserSessionIo|createModuleBuildIo|AcpExecManager)\b/g;
 
 /** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
 const CHAT_ENGINE_RE =
@@ -409,11 +422,14 @@ function findProcessStarts(files: readonly SourceFile[]): Hit[] {
 function findRunnerCalls(files: readonly SourceFile[]): Hit[] {
   const hits: Hit[] = [];
   for (const { file, text } of files) {
-    for (const match of text.matchAll(RUNNER_CALL_RE)) {
+    for (const match of text.matchAll(RUNNER_NAME_RE)) {
       const index = match.index ?? 0;
       const lineStart = text.lastIndexOf("\n", index) + 1;
+      const lineEnd = text.indexOf("\n", index);
+      const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
       if (/^\s*(?:\/\/|\*|\/\*)/.test(text.slice(lineStart, index))) continue;
-      hits.push({ file, line: lineOf(text, index), detail: `runner call ${match[0].trim()}` });
+      if (/^\s*export\s*(?:type\s*)?\{[^}]*\}\s*from\b/.test(line)) continue;
+      hits.push({ file, line: lineOf(text, index), detail: `runner use ${match[0]}` });
     }
   }
   return dedupeByFileAndLine(hits);
@@ -608,12 +624,29 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     ],
     ["the sanitized runner", `const io = createSanitizedTmuxIo(env);\nawait io.run(bin, []);`],
     ["the owner runner", `const io = createOwnerIo(identity);`],
-    ["the shell-command manager", `const m = new AcpExecManager(deps);`]
+    ["the shell-command manager", `const m = new AcpExecManager(deps);`],
+    [
+      "the bounded runner",
+      `import { runBounded } from "./per-user-structured.js";\nexport const go = (bin: string, p: string) => runBounded(bin, ["--print", p], process.env, "");`
+    ],
+    ["the per-user session runner", `const io = slot.perUserSessionIo(deps, key, params);`],
+    ["the module-build runner", `const io = createModuleBuildIo(deps);`],
+    [
+      "a renamed import",
+      `import { runBounded as go } from "./per-user-structured.js";\ngo(bin, []);`
+    ],
+    [
+      "a dynamic-import destructure",
+      `const { createOwnerIo: make } = await import("./runner-io.js");`
+    ],
+    ["a runner stored in a variable", `const make = createSanitizedTmuxIo;\nmake(env);`]
   ])("flags %s in an unlisted file", (_name, body) => {
     const file = "packages/example/runner.ts";
     const hits = findRunnerCalls([{ file, text: body }]);
-    expect(hits.length).toBe(1);
-    expect(uncovered(hits, RUNNER_CALL_ALLOWLIST).map((hit) => hit.file)).toEqual([file]);
+    expect(hits.length).toBeGreaterThan(0);
+    expect([...new Set(uncovered(hits, RUNNER_CALL_ALLOWLIST).map((hit) => hit.file))]).toEqual([
+      file
+    ]);
   });
 
   it("scans .mjs, .cjs and .js files, not only TypeScript", () => {
@@ -621,11 +654,12 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     expect(scanned.has("packages/ai/src/gateway/pattern-worker.mjs")).toBe(true);
   });
 
-  it("does not flag a runner factory's own definition or a comment mentioning it", () => {
+  it("does not flag a runner definition, a comment mentioning it or a re-export", () => {
     const text = [
       "export function createRealTmuxIo(baseEnv = process.env) {",
       "  // createSanitizedTmuxIo() sources the env before this runs",
       "  * createOwnerIo() is documented here",
+      'export { createSanitizedTmuxIo } from "./runner-io.js";',
       "}"
     ].join("\n");
     expect(findRunnerCalls([{ file: "packages/example/def.ts", text }])).toEqual([]);
