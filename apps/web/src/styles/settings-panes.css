@@ -421,7 +421,7 @@
   line-height: 1.5;
 }
 .aud__note {
-  margin: 4px 0 0;
+  margin: var(--space-2) 0 0;
   max-width: 64ch;
 }
 @media (max-width: 560px) {

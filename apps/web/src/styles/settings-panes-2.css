@@ -593,8 +593,8 @@
 .aud__badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 .aud__cat {
   letter-spacing: 0.05em;
@@ -620,9 +620,16 @@
 @media (max-width: 560px) {
   .aud__row {
     grid-template-columns: 1fr auto;
-    gap: 4px 10px;
+    gap: var(--space-1) var(--space-3);
   }
   .aud__when {
+    grid-column: 1;
+  }
+  .aud__cat {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .aud__what {
     grid-column: 1 / -1;
   }
 }
