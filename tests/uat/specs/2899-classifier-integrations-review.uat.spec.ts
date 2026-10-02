@@ -115,13 +115,13 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   // 1. Add a connection through the real screen, pasting a spec so no network is needed.
   await page.getByRole("button", { name: "Add connection" }).click();
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "API" }).click();
-  await page.getByLabel("Name").fill("Home hub");
-  await page.getByLabel("URL").fill("http://home.local");
+  await page.getByLabel("Name", { exact: true }).fill("Home hub");
+  await page.getByLabel("URL", { exact: true }).fill("http://home.local");
   await page.getByRole("button", { name: "Paste the spec" }).click();
   await page.getByLabel("Spec").fill(JSON.stringify(SPEC));
   await page.getByRole("button", { name: "Connect" }).click();
 
-  await expect(page.getByText("list_lights")).toBeVisible();
+  await expect(page.getByText("list_lights").first()).toBeVisible();
   const url = new URL(page.url());
   const id = url.searchParams.get("integration");
   expect(id, "the connection detail opens at ?integration=<id>").toBeTruthy();
