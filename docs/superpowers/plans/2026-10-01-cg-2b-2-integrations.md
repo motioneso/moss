@@ -43,9 +43,9 @@ No gate/DB command will run except through `scripts/run-gate.sh` (verify-gate sk
 
 ## Decisions
 
-### D1 — New migration number: **0252** (next free on `origin/main`)
+### D1 — New migration number: **0253** (next free on `origin/main`)
 
-`packages/integrations/sql/0252_integration_classifier_settings.sql`. Tell the coordinator the
+`packages/integrations/sql/0253_integration_classifier_settings.sql`. Tell the coordinator the
 number taken. Add two columns to the existing owner-only `app.integration_connections`; RLS stays
 owner-only and untouched, including for admins; deletion already cascades with the row.
 
@@ -57,7 +57,7 @@ ALTER TABLE app.integration_connections
     CHECK (jsonb_typeof(classifier_preparation) = 'object');
 ```
 
-Catalog: append `{ version: "0252", name: "0252_integration_classifier_settings.sql" }`.
+Catalog: append `{ version: "0253", name: "0253_integration_classifier_settings.sql" }`.
 
 ### D2 — One JSONB map, versioned at the top and per entry
 
@@ -174,7 +174,7 @@ Reject over-limit input with 400 rather than truncating.
 
 ## Tasks (each commits green; explicit `git add` paths)
 
-1. **Migration + catalog.** Add `0252_integration_classifier_settings.sql`; append to
+1. **Migration + catalog.** Add `0253_integration_classifier_settings.sql`; append to
    `foundation-schema-catalog.test.ts`. Verify: `scripts/run-gate.sh` integration later.
 2. **Pure module.** `classifier-fingerprint.ts`, `classifier-settings.ts` (map parse/validate,
    bounds, `effectiveClassifierTools`), export from `index.ts`. Unit tests

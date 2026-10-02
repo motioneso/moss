@@ -522,8 +522,8 @@ describe("MVP foundation schema catalog", () => {
         },
         // #2884 classifier gate 2b.2 — owner storage for connected-tool classifier opt-in.
         {
-          version: "0252",
-          name: "0252_integration_classifier_settings.sql"
+          version: "0253",
+          name: "0253_integration_classifier_settings.sql"
         }
       ]);
     } finally {
