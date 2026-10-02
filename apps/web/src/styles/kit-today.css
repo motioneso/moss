@@ -274,10 +274,6 @@
 .today-quiet-line {
   margin: var(--space-5) 0 var(--space-7);
 }
-.today-quiet-line__text {
+.today-quiet-line .today-quiet-line__text {
   margin: 0;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text-subtle);
 }

@@ -4,7 +4,7 @@
 export function TodayQuietLine() {
   return (
     <section className="today-quiet-line" id="start-here" aria-label="Your day so far">
-      <p className="today-quiet-line__text" role="status">
+      <p className="cmd-empty today-quiet-line__text" role="status">
         Nothing else yet today: no briefing, nothing pressing, and no evening review.
       </p>
     </section>
