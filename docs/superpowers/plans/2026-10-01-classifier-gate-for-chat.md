@@ -592,8 +592,8 @@ classifier configuration identity/version, module/tool, confidence and margin,
 connection ID and reviewed preparation/risk version for integrations,
 threshold version, decision/reason, timing, and first-model-tool comparison status.
 Avoid storing raw argument/result payloads merely for convenience. Use owner-only
-RLS for reads and writes with no admin or thread-sharing exception. Bound retention
-and review reads according to the open decision below. No text in logs, job payloads
+RLS for reads and writes with no admin or thread-sharing exception. Retention is settled by
+ruling 16 (kept forever; owner deletes on request); bound review reads. No text in logs, job payloads
 or public PR evidence. A record-write failure must not prevent the default turn.
 
 Check two owners, shared-thread recipient, admin, missing actor, correlation before/
@@ -789,7 +789,7 @@ the slice's UI path exists; they do not count as delivered user behavior alone.
 Security negative controls intentionally exit nonzero with the guard removed; restore
 the guard, rerun to exit 0 and retain both observations. Do not commit weakened guards.
 
-## Rulings (Ben, 2026-10-01)
+## Rulings (Ben, 2026-10-01; ruling 16 added 2026-10-02)
 
 These answers supersede the matching "Decisions still needed" entries below.
 
@@ -819,7 +819,7 @@ These answers supersede the matching "Decisions still needed" entries below.
 9. **Private chats bypass the gate.** No classifier call and no shadow record. This replaces the
    incognito open question in 3.4 and 3.5.
 10. **Shadow retention: 7 days.** Records, including message text, are purged after 7 days by a
-    scheduled job that 3.4 must include and test.
+    scheduled job that 3.4 must include and test. **Superseded 2026-10-02 by ruling 16.**
 
 11. **No reply marker.** Slice 5 (5.1, 5.2) is superseded. Replies from the gate carry no marker.
 12. **Model activity log replaces it.** An admin-only log of every model call (classifier, chat answer,
@@ -829,13 +829,20 @@ These answers supersede the matching "Decisions still needed" entries below.
 13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
 14. **Model activity log is kept indefinitely.** No purge. Store it in a simple format that renders
     well on the web and stays auditable for as long as possible (Ben, 2026-10-01). Shadow records
-    (ruling 10) still purge after 7 days because they hold message text; the activity log never
-    holds chat text.
+    (ruling 16) are also kept indefinitely and deleted only when the owner asks; the activity log
+    never holds chat text.
 15. **The activity log records every model call.** Automated jobs, scraping, sorting, briefings,
     embeddings and probes all appear, not only chat (Ben, 2026-10-01). No single seam covers this
     today, so task 3.6 owns the coverage work described there.
+16. **Shadow retention: kept forever, deleted on request (Ben, 2026-10-02).** Ruling 10 is
+    superseded. The fixed 7-day purge job and its database function are removed. An owner can
+    delete their own shadow records on request, enforced by row-level security, with no admin
+    bypass; the rows also go with account deletion through the existing `ON DELETE CASCADE`.
+    Private chats never take part: no classifier call and no record. Build task #2908; lane plan
+    `2026-10-02-classifier-shadow-retention.md`.
 
-Still open: the external candidate-dispatch proof (module-platform implementer).
+Still open: the external candidate-dispatch proof (module-platform implementer). Closed:
+shadow retention and private chat, resolved by ruling 16 (2026-10-02).
 
 ## Decisions still needed from Ben
 
@@ -870,9 +877,9 @@ Additional seams requiring a ruling, not an invented implementation assumption:
   Keep real definition sharing, prepared text sharing and device inventories
   distinct; none is implicitly approved by the others. Until ruled, use static
   enums/synthetic fixtures. Reconcile spec 3.3/3.4 after the ruling.
-- **Shadow retention/private chat (Ben, before 3.5 collection):** set retention and
-  how private-chat attempts participate in review without storing their text. Existing
-  incognito non-persistence wins until clarified. No new private-content sink by default.
+- ~~**Shadow retention/private chat (Ben, before 3.5 collection)**~~ — **resolved by ruling 16
+  (Ben, 2026-10-02):** records are kept forever and deleted on the owner's request; private
+  chats never take part. Task #2908.
 - **External candidate dispatch (module-platform implementer, before 2.2 completion):**
   prove the bounded actor-scoped runtime hook with a source citation and fixture.
   This plan verified declaration loading, not a preexisting candidate-hook protocol.

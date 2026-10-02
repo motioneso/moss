@@ -2209,7 +2209,6 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       }),
     registerWorkers: (boss, deps) =>
       registerChatJobWorkers(boss, deps.dataContext, {
-        rootDb: deps.rootDb,
         embeddingProviderFactory: createRuntimeEmbeddingProvider,
         extractFactsDeps: {
           aiRepository: new AiRepository(),

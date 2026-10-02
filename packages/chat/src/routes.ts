@@ -48,6 +48,7 @@ import {
   type MossModuleManifest
 } from "@moss/module-sdk";
 import { ChatGatewayNotifier } from "./gateway-notifier.js";
+import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { readRouteSurface } from "./live/chat-surface.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { CliChatUnavailableError } from "./live/errors.js";
@@ -131,6 +132,8 @@ export interface ChatRoutesDependencies {
   readonly dataContext: DataContextRunner;
   readonly repository?: ChatRepository;
   readonly skillsRepository?: ChatSkillsRepository;
+  /** Override the classifier shadow-record store (tests inject a fake). */
+  readonly classifierShadowRepository?: ClassifierShadowRepository;
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
   readonly resolveActiveModules?: ActiveModulesResolver;
@@ -271,6 +274,8 @@ export function registerChatRoutes(
   const memorySettingsRepo = new ChatUserMemorySettingsRepository();
   const factsRepo = new ChatMemoryFactsRepository();
   const suppressionsRepo = new ChatMemorySuppressionsRepository();
+  const classifierShadowRepository =
+    dependencies.classifierShadowRepository ?? new ClassifierShadowRepository();
 
   // Phase 2: proxy notifier — created before gateway so the gateway has a notifier
   // reference; real target is set after the manager is created.
@@ -622,6 +627,22 @@ export function registerChatRoutes(
         memorySettingsRepo.update(scopedDb, access.actorUserId, patch)
       );
       return serializeSettings(settings);
+    } catch (error) {
+      return handleRouteError(error, reply);
+    }
+  });
+
+  // ── Classifier shadow records ───────────────────────────────────────────────
+
+  // #2908 — the owner deletes their own shadow records on request. Row-level security scopes the
+  // delete to the caller; there is intentionally no admin or cross-user variant here.
+  server.delete("/api/chat/classifier/shadow-records", async (request, reply) => {
+    try {
+      const access = await dependencies.resolveAccessContext(request);
+      const deleted = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
+        classifierShadowRepository.deleteForOwner(scopedDb)
+      );
+      return { deleted };
     } catch (error) {
       return handleRouteError(error, reply);
     }
