@@ -71,7 +71,7 @@ export function describedTopicsGate(reason: NewsWebSearchUnavailableReason | nul
       return {
         requirement: "Your chat model has no built-in search.",
         href: "/settings?section=assistant",
-        linkLabel: "Pick a model under Assistant settings, or ask an admin to add a Brave key"
+        linkLabel: "Pick a model under Your assistant, or ask an admin to add a Brave key"
       };
     case "native-disabled":
       return {

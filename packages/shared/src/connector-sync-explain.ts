@@ -488,7 +488,7 @@ export interface ConnectorNotWorkingFacts {
 
 const ASSISTANT_FIX: ConnectorNotWorkingFix = {
   label: "Log the assistant in",
-  path: "/settings?section=assistant"
+  path: "/settings?section=aiproviders"
 };
 
 const SYNC_NOW_FIX: ConnectorNotWorkingFix = {
