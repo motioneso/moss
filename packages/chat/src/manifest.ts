@@ -51,7 +51,8 @@ export const chatModuleManifest = {
       "sql/0149_chat_skills.sql",
       "sql/0174_chat_surface.sql",
       "sql/0251_chat_classifier_shadow_records.sql",
-      "sql/0252_chat_classifier_release_eligibility.sql"
+      "sql/0252_chat_classifier_release_eligibility.sql",
+      "sql/0255_chat_classifier_shadow_retention.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -189,9 +190,9 @@ export const chatModuleManifest = {
     {
       id: "chat.classifier_shadow_records",
       description:
-        "Groundwork for the classifier gate's trial mode: private 7-day storage only you can read. " +
-        "Nothing saves messages there yet and no screen shows it. A failed save will leave your " +
-        "normal reply unchanged.",
+        "Groundwork for the classifier gate's trial mode: private records only you can read, kept " +
+        "until you delete them. Nothing saves messages there yet and no screen shows it. A failed " +
+        "save will leave your normal reply unchanged.",
       featureFlagId: "chat.module"
     },
     {
@@ -251,6 +252,9 @@ export const chatModuleManifest = {
       permissionId: "chat.view"
     },
     { method: "DELETE", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
+    // #2908 — the owner deletes their own classifier shadow records on request. RLS scopes the
+    // delete; there is no admin path and no separate verb for another actor.
+    { method: "DELETE", path: "/api/chat/classifier/shadow-records", permissionId: "chat.message" },
     { method: "PATCH", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
     { method: "POST", path: "/api/chat/memory/facts/:id/confirm", permissionId: "chat.message" },
     { method: "POST", path: "/api/chat/memory/facts/:id/reject", permissionId: "chat.message" },
