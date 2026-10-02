@@ -420,6 +420,11 @@
 .aud__what {
   line-height: 1.5;
 }
+.aud__note {
+  margin: 4px 0 0;
+  max-width: 64ch;
+  color: var(--text-muted);
+}
 @media (max-width: 560px) {
   .aud__row {
     grid-template-columns: 1fr;

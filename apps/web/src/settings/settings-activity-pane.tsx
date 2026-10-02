@@ -6,6 +6,7 @@ import { listActionAuditLog } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { formatDateTime, useUserLocale } from "../locale/locale-format.js";
+import { actionLabel, moduleLabel, outcomeNote, sourceLabel } from "./settings-activity-labels.js";
 import type { PaneProps } from "./settings-types.js";
 import { Badge, Select } from "./settings-ui.js";
 import type { ActionAuditLogEntryDto } from "@moss/shared";
@@ -49,13 +50,13 @@ function approvalLabel(mode: ActionAuditLogEntryDto["approvalMode"]): string {
 function outcomeLabel(outcome: ActionAuditLogEntryDto["outcome"]): string {
   const labels: Record<typeof outcome, string> = {
     success: "Done",
-    failed: "Failed",
-    denied: "Declined",
+    failed: "Did not work",
+    denied: "Not allowed",
     cancelled: "Cancelled",
-    invalid: "Invalid",
-    conflict: "Conflict",
+    invalid: "Did not run",
+    conflict: "Out of date",
     suppressed: "Skipped (already covered)",
-    refused: "Refused (too many requests)"
+    refused: "Held back"
   };
   return labels[outcome];
 }
@@ -108,15 +109,9 @@ export function ActivityPane(_props: PaneProps) {
 
   const entries = data?.entries ?? [];
 
-  const families = Array.from(
-    new Set(
-      entries.filter((e) => e.actionFamilyId).map((e) => `${e.toolModuleId}/${e.actionFamilyId}`)
-    )
-  );
+  const families = Array.from(new Set(entries.map((e) => e.toolModuleId)));
 
-  const filtered = familyFilter
-    ? entries.filter((e) => `${e.toolModuleId}/${e.actionFamilyId}` === familyFilter)
-    : entries;
+  const filtered = familyFilter ? entries.filter((e) => e.toolModuleId === familyFilter) : entries;
 
   return (
     <div className="settings-section">
@@ -141,14 +136,14 @@ export function ActivityPane(_props: PaneProps) {
         ))}
         {families.length > 0 && (
           <Select
-            aria-label="Filter by action family"
+            aria-label="Filter by module"
             value={familyFilter}
             onChange={(e) => setFamilyFilter(e.target.value)}
           >
-            <option value="">All actions</option>
+            <option value="">All modules</option>
             {families.map((f) => (
               <option key={f} value={f}>
-                {f}
+                {moduleLabel(f)}
               </option>
             ))}
           </Select>
@@ -184,13 +179,7 @@ export function ActivityPane(_props: PaneProps) {
                 {relativeTime(entry.occurredAt)}
               </div>
               <div className="aud__what">
-                <b>{entry.toolName}</b>
-                {entry.actionFamilyId && (
-                  <>
-                    {" "}
-                    <span>{entry.actionFamilyId}</span>
-                  </>
-                )}
+                <b>{actionLabel(entry)}</b>
                 <div className="aud__badges">
                   <Badge tone="neutral">{approvalLabel(entry.approvalMode)}</Badge>
                   <Badge tone={isDistinct(entry.outcome) ? "red" : "neutral"}>
@@ -200,11 +189,14 @@ export function ActivityPane(_props: PaneProps) {
                     <Badge tone="neutral">{durationLabel(entry.durationMs)}</Badge>
                   )}
                   {entry.sourceSurface !== "chat" && (
-                    <Badge tone="steel">{entry.sourceSurface}</Badge>
+                    <Badge tone="steel">{sourceLabel(entry.sourceSurface)}</Badge>
                   )}
                 </div>
+                {outcomeNote(entry.outcome) && (
+                  <p className="aud__note">{outcomeNote(entry.outcome)}</p>
+                )}
               </div>
-              <div className="aud__cat">{entry.toolModuleId}</div>
+              <div className="aud__cat">{moduleLabel(entry.toolModuleId)}</div>
             </div>
           ))}
         </div>
