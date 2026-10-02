@@ -40,6 +40,8 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     });
 
     expect(html).toContain("The locked chat model is unavailable");
+    expect(html).toContain("Model unavailable");
+    expect(html).not.toContain("Here when you need me");
     expect(html).not.toContain("Connect a provider to start chatting");
   });
 

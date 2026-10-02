@@ -246,7 +246,8 @@ export function ChatDrawer(props: {
   });
   const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
   const chatAvailable = chatAvailableFromRoute(chatRouteQuery.data);
-  const noModelAvailable = chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable;
+  const chatUnavailable = chatRouteQuery.isSuccess && !chatAvailable;
+  const noModelAvailable = chatUnavailable && !lockedModelUnavailable;
   const threadsQuery = useQuery({
     queryKey: queryKeys.chat.threads(props.surface),
     queryFn: () => listChatThreads(props.surface),
@@ -541,8 +542,12 @@ export function ChatDrawer(props: {
         </span>
         <div className="chatd__id">
           <div className="chatd__name">{assistantName || "Chat"}</div>
-          <div className={`chatd__status${noModelAvailable ? " chatd__status--offline" : ""}`}>
-            {noModelAvailable ? "Not connected" : "Here when you need me"}
+          <div className={`chatd__status${chatUnavailable ? " chatd__status--offline" : ""}`}>
+            {lockedModelUnavailable && chatUnavailable
+              ? "Model unavailable"
+              : noModelAvailable
+                ? "Not connected"
+                : "Here when you need me"}
           </div>
         </div>
         <button

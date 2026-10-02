@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { createMockAiModel } from "./mock-ai-api.js";
 import { createMockChatMessage, createMockChatThread } from "./mock-chat-api.js";
-import { createMockConnectorProviders, mockApi } from "./mock-api.js";
+import { createMockConnectorProviders } from "./mock-api.js";
+import { mockApi } from "./mock-chat-model.js";
 
 /**
  * Live chat drawer E2E.
