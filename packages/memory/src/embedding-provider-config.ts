@@ -47,20 +47,27 @@ function defaultEmbeddingRecorder(entry: EmbeddingActivityEntry): void {
 }
 
 /**
- * Wrap an embedding provider so it records ONE model activity row per job rather than per chunk.
- * Embedding jobs create a provider per job and call it once per chunk, so the first terminal call
- * on this instance records the job's row; later calls in the same instance do not add another.
- * Only transport facts are recorded — the provider's own model name and the outcome. No text
- * ever enters the row.
+ * Wrap an embedding provider so every embedding call records one model activity row. Ruling 15
+ * requires every model call to appear, and the recall/search paths hold one provider for the life
+ * of the process, so a per-provider-object latch would log only the first call ever. One row per
+ * `embedDocument`/`embedQuery` call is the truthful projection; ingest jobs run one call per chunk
+ * and so show one row per chunk. Only transport facts are recorded — the provider's own model name
+ * and the outcome. No text ever enters the row.
+ *
+ * `aggregatePerInstance: true` restores the earlier one-row-per-provider behavior for callers that
+ * deliberately want job-level aggregation and pass a provider created per job.
  */
 export function withEmbeddingActivity(
   provider: EmbeddingProvider,
-  recorder: EmbeddingActivityRecorder = defaultEmbeddingRecorder
+  recorder: EmbeddingActivityRecorder = defaultEmbeddingRecorder,
+  options: { readonly aggregatePerInstance?: boolean } = {}
 ): EmbeddingProvider {
   let recorded = false;
-  const recordOnce = (outcome: EmbeddingActivityOutcome): void => {
-    if (recorded) return;
-    recorded = true;
+  const record = (outcome: EmbeddingActivityOutcome): void => {
+    if (options.aggregatePerInstance) {
+      if (recorded) return;
+      recorded = true;
+    }
     try {
       recorder({
         kind: "embedding",
@@ -76,11 +83,11 @@ export function withEmbeddingActivity(
   const run = async <T>(call: () => Promise<T>): Promise<T> => {
     try {
       const value = await call();
-      recordOnce("ok");
+      record("ok");
       return value;
     } catch (error) {
       const aborted = error instanceof Error && error.name === "AbortError";
-      recordOnce(aborted ? "aborted" : "error");
+      record(aborted ? "aborted" : "error");
       throw error;
     }
   };

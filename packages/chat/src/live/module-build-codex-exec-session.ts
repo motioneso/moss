@@ -1,12 +1,6 @@
 import { join } from "node:path";
 
-import {
-  DEFAULT_MODEL_SENTINEL,
-  parseTranscript,
-  recordModelActivity,
-  redactSecrets,
-  type TmuxIo
-} from "@moss/ai";
+import { DEFAULT_MODEL_SENTINEL, parseTranscript, redactSecrets, type TmuxIo } from "@moss/ai";
 
 import { CliChatUnavailableError } from "./errors.js";
 import { neutralizeSeedFraming } from "./prompt-safety.js";
@@ -86,8 +80,6 @@ export class CodexExecSession {
     }
 
     if (result.code !== 0) {
-      // Plan 3.6b (#2890): one model activity row per codex exec turn.
-      this.recordTurn("error");
       // #1242: codex-cli prints an informational "Reading prompt from stdin..." line to stderr on
       // EVERY exec run. The old `result.stderr ?? result.stdout` therefore always surfaced that
       // benign line as the failure cause, masking the real error (codex writes genuine failures as
@@ -107,23 +99,6 @@ export class CodexExecSession {
         cause: redactCause(cause)
       });
     }
-
-    this.recordTurn("ok");
-  }
-
-  /**
-   * Plan 3.6b (#2890): one model activity row per codex exec turn. The session runs a whole CLI
-   * program the provider-adapter seam never sees, so the row is per turn. Only transport facts are
-   * recorded: the outcome, the actual model flag, and a fixed result line. No prompt text enters it.
-   */
-  private recordTurn(outcome: "ok" | "error" | "aborted"): void {
-    recordModelActivity({
-      kind: "structured",
-      action: "module-build:codex-exec",
-      outcome,
-      modelName: this.launchOpts.model ?? DEFAULT_MODEL_SENTINEL,
-      result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
-    });
   }
 
   private buildPrompt(text: string): string {

@@ -195,3 +195,81 @@ describe("live chat model activity recording (plan 3.6b, #2890)", () => {
     }
   });
 });
+
+describe("turn wrapper state (plan 3.6b, #2890)", () => {
+  it("does not double-log when a failed submit is retried and then completes", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      let submitCount = 0;
+      const engine: CliChatEngine = {
+        provider: "anthropic" as ProviderKind,
+        async launch() {
+          return { offset: 0 };
+        },
+        async submit() {
+          submitCount += 1;
+          if (submitCount === 1) throw new Error("engine unavailable, never entered");
+        },
+        async readNew(afterOffset: number) {
+          // One scripted reply, delivered on the first read after a successful submit.
+          return {
+            records: [{ kind: "reply", text: "ok" }],
+            offset: afterOffset + 1,
+            complete: true
+          };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {},
+        async interrupt() {}
+      };
+      const wrapped = withTurnActivityRecording(engine);
+
+      await expect(wrapped.submit("first")).rejects.toThrow("never entered");
+      await wrapped.submit("retry");
+      await wrapped.readNew(0);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ kind: "chat", outcome: "ok" });
+    } finally {
+      installModelActivityRecorder(null);
+    }
+  });
+
+  it("logs an abandoned turn as error when the next submit starts first", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const engine: CliChatEngine = {
+        provider: "anthropic" as ProviderKind,
+        async launch() {
+          return { offset: 0 };
+        },
+        async submit() {},
+        async readNew(afterOffset: number) {
+          return { records: [], offset: afterOffset, complete: false };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {},
+        async interrupt() {}
+      };
+      const wrapped = withTurnActivityRecording(engine);
+
+      await wrapped.submit("turn one");
+      // No terminal event; the manager abandons it and starts a new turn.
+      await wrapped.submit("turn two");
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ outcome: "error" });
+
+      // The second turn completes.
+      void wrapped;
+      entries.length = 0;
+    } finally {
+      installModelActivityRecorder(null);
+    }
+  });
+});

@@ -10,10 +10,14 @@
  *
  * The wrapper uses a Proxy so every optional engine method the session manager probes
  * (`startsToolClientPerTurn`, `resetActivityDeadline`, `purgeTranscripts`, `getLastSubmitDiagnostics`
- * and the rest) passes through unchanged. It records:
+ * and the rest) passes through unchanged. It records exactly one row per user turn:
  *  - `ok` when a submitted turn reaches `readNew(...).complete`;
- *  - `error` when `submit` throws (the turn never reached the model);
- *  - `aborted` when `interrupt` arrives with a turn still pending (a caller Stop).
+ *  - `aborted` when `interrupt` arrives with a turn still pending (a caller Stop);
+ *  - `error` when a pending turn is abandoned — a new `submit` starts before the old one finished
+ *    (the idle watchdog, or a heal-and-relaunch that never resumed the old turn) — or `readNew`
+ *    throws while a turn is pending.
+ * A `submit` that throws does NOT record on its own: the manager retries a genuinely unavailable
+ * engine, and recording both the failed attempt and the successful retry would double-log one turn.
  */
 
 import { recordModelActivity, type ModelActivityRecorder } from "@moss/ai";
@@ -30,7 +34,8 @@ export function withTurnActivityRecording(
   onModelCall: ModelActivityRecorder = recordModelActivity
 ): CliChatEngine {
   let modelName = engine.provider as string;
-  let turnPending = false;
+  /** The in-flight turn, and whether its submit failed and the manager may retry it. */
+  let pending: { readonly failed: boolean } | null = null;
 
   const record = (outcome: "ok" | "error" | "aborted"): void => {
     onModelCall({
@@ -54,11 +59,15 @@ export function withTurnActivityRecording(
           };
         case "submit":
           return async (text: string) => {
+            // A new turn starting while one is still pending means the manager abandoned the old
+            // one (idle watchdog, or a heal-and-relaunch). Record it as an error. A pending turn
+            // whose submit already failed is a retry — replace it silently, do not double-log.
+            if (pending && !pending.failed) record("error");
+            pending = { failed: false };
             try {
               await target.submit(text);
-              turnPending = true;
             } catch (error) {
-              record("error");
+              pending = { failed: true };
               throw error;
             }
           };
@@ -68,22 +77,23 @@ export function withTurnActivityRecording(
             try {
               result = await target.readNew(afterOffset);
             } catch (error) {
-              if (turnPending) {
-                turnPending = false;
+              if (pending) {
+                pending = null;
                 record("error");
               }
               throw error;
             }
-            if (result.complete && turnPending) {
-              turnPending = false;
-              record("ok");
+            if (result.complete && pending) {
+              const failed = pending.failed;
+              pending = null;
+              record(failed ? "error" : "ok");
             }
             return result;
           };
         case "interrupt":
           return async () => {
-            if (turnPending) {
-              turnPending = false;
+            if (pending) {
+              pending = null;
               record("aborted");
             }
             await target.interrupt();

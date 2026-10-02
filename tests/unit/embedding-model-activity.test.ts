@@ -23,7 +23,7 @@ function fakeProvider(overrides: Partial<EmbeddingProvider> = {}): EmbeddingProv
 }
 
 describe("embedding model activity recording (plan 3.6b, #2890)", () => {
-  it("records exactly one row for many chunks in one job", async () => {
+  it("records one row for EVERY embedding call, so a long-lived provider keeps logging", async () => {
     const entries: EmbeddingActivityEntry[] = [];
     const provider = withEmbeddingActivity(fakeProvider(), (entry) => entries.push(entry));
 
@@ -31,7 +31,7 @@ describe("embedding model activity recording (plan 3.6b, #2890)", () => {
     await provider.embedDocument("chunk two");
     await provider.embedQuery("a query");
 
-    expect(entries).toHaveLength(1);
+    expect(entries).toHaveLength(3);
     expect(entries[0]).toMatchObject({
       kind: "embedding",
       action: "embedding",
@@ -39,6 +39,18 @@ describe("embedding model activity recording (plan 3.6b, #2890)", () => {
       modelName: "embed-test-model",
       result: "completed"
     });
+  });
+
+  it("aggregates to one row per provider instance only when asked", async () => {
+    const entries: EmbeddingActivityEntry[] = [];
+    const provider = withEmbeddingActivity(fakeProvider(), (entry) => entries.push(entry), {
+      aggregatePerInstance: true
+    });
+
+    await provider.embedDocument("chunk one");
+    await provider.embedDocument("chunk two");
+
+    expect(entries).toHaveLength(1);
   });
 
   it("records an error row when the embedding call fails, and never the text", async () => {

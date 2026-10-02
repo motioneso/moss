@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  installModelActivityRecorder,
-  type ModelActivityEntry
-} from "../../packages/ai/src/model-activity.js";
 import { CodexExecSession } from "../../packages/chat/src/live/module-build-codex-exec-session.js";
 
 const NEUTRAL_DIR = "/tmp/neutral-codex";
@@ -147,41 +143,5 @@ describe("CodexExecSession.buildCommand — nativeSearch (#2228)", () => {
     await session.initialize();
     await session.submit("hello");
     expect(lastCommand(io)).not.toContain("web_search");
-  });
-});
-
-describe("CodexExecSession model activity recording (plan 3.6b, #2890)", () => {
-  it("records one row per codex exec turn, never the prompt text", async () => {
-    const entries: ModelActivityEntry[] = [];
-    installModelActivityRecorder((entry) => entries.push(entry));
-    try {
-      const io = makeIo();
-      const session = new CodexExecSession({
-        io,
-        launchOpts: {
-          neutralDir: NEUTRAL_DIR,
-          personaPath: `${NEUTRAL_DIR}/persona.md`,
-          model: "gpt-codex-test"
-        },
-        transcriptPath: `${NEUTRAL_DIR}/transcript.jsonl`,
-        tokenEnvPath: null,
-        ownsDrain: true
-      });
-
-      const SENTINEL = "SENTINEL-codex-prompt-do-not-record";
-      await session.submit(SENTINEL);
-
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({
-        kind: "structured",
-        action: "module-build:codex-exec",
-        outcome: "ok",
-        modelName: "gpt-codex-test",
-        result: "completed"
-      });
-      expect(JSON.stringify(entries)).not.toContain(SENTINEL);
-    } finally {
-      installModelActivityRecorder(null);
-    }
   });
 });
