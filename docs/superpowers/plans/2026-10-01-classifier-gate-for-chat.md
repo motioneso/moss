@@ -641,6 +641,29 @@ prompts, tool arguments or secrets. Add the screen to the app map. Tests: a non-
 a row carries no message text, and old rows remain readable. Exit: live-path proof on a dev instance
 through the real screen.
 
+Coverage (ruling 15). There is no single model router today. Calls go through three central
+functions (`generate-structured.ts`, `generate-text.ts`, `generate-choices.ts`), but several features
+build provider adapters directly and two paths run whole CLI sessions. Close the gaps in this order:
+
+- Record at the provider-adapter boundary (HTTP adapter generate, structured and transcribe; CLI
+  structured adapter generate) so the three central functions and most direct callers are covered.
+- Record the system-one `fetch` in `generate-choices.ts` separately; it skips the adapters.
+- Record one row per turn for live chat (`chat-session-manager.ts` submit) and module-build sessions
+  (`module-build-live-agent.ts`, `module-build-codex-exec-session.ts`). Inner tool-loop calls are not
+  visible, so the row is per turn.
+- Record embeddings at the embedding provider factory (`embedding-provider-config.ts`), aggregated
+  per job rather than per chunk.
+- Record provider probes and CLI check turns (`provider-probe.ts`, `cli-tools-refresh-wiring.ts`).
+- Prefer moving direct adapter callers (commitments, chat distillation, task search, transcription,
+  persona preview, Workshop reply) onto the central functions where that is a small change.
+
+Add a guard test that scans the source for adapter construction and CLI spawns of model binaries and
+fails when a new call site appears outside the recorded seams. The admin terminal is out of scope; it
+is a human running a CLI by hand.
+
+This is too much for one session. Split it into 3.6a (log table, endpoint, screen, adapter-boundary
+recording) and 3.6b (choices, sessions, embeddings, probes and the guard test) when filing issues.
+
 ## Slice 4: prepare and turn on
 
 ### 4.1 Handled-turn lifecycle, initially unreachable live (one chat session)
@@ -803,11 +826,14 @@ These answers supersede the matching "Decisions still needed" entries below.
     background task) showing the action, outcome, model name and result, not the chat text, with
     filters. Ben ruled on 2026-10-01 that it covers all model calls, not only the classifier. Mockup
     agreed. Build task 3.6.
+13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
 14. **Model activity log is kept indefinitely.** No purge. Store it in a simple format that renders
     well on the web and stays auditable for as long as possible (Ben, 2026-10-01). Shadow records
     (ruling 10) still purge after 7 days because they hold message text; the activity log never
     holds chat text.
-13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
+15. **The activity log records every model call.** Automated jobs, scraping, sorting, briefings,
+    embeddings and probes all appear, not only chat (Ben, 2026-10-01). No single seam covers this
+    today, so task 3.6 owns the coverage work described there.
 
 Still open: the external candidate-dispatch proof (module-platform implementer).
 
