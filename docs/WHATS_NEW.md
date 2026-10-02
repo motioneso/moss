@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Evening review stays on your day.** The evening review no longer adds made-up remarks about your email or account setup. [PR #2877](https://github.com/motioneso/moss/pull/2877)
 - **Morning briefing keeps the day in time order.** The morning briefing now lists timed items in clock order and no longer adds a section that only repeats an event's name. [PR #2859](https://github.com/motioneso/moss/pull/2859)
 - **Admins keep access to shared AI providers.** When an admin who set up a shared AI provider is later demoted, the remaining admins can still see and manage it. [PR #2855](https://github.com/motioneso/moss/pull/2855)
 - **All-day events stay on the right day.** All-day calendar events now show on their own date in Today and in your briefings, instead of one day early when you are west of UTC. [PR #2852](https://github.com/motioneso/moss/pull/2852)
