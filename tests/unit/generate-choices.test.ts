@@ -461,6 +461,22 @@ describe("generateChoices", () => {
       }
     });
 
+    it("records an error outcome when a 200 response body is unusable", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const { deps } = okFetch("not-json-object");
+        expect(await generateChoices(scopedDb, makeInput(), deps)).toEqual({
+          ok: false,
+          error: "invalid_response"
+        });
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ outcome: "error", result: "failed" });
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
     it("records an aborted outcome when the caller's signal fires", async () => {
       const entries: ModelActivityEntry[] = [];
       installModelActivityRecorder((entry) => entries.push(entry));

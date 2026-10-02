@@ -227,8 +227,7 @@ async function postSystemOne(
   const fetchImpl = deps.fetch ?? globalThis.fetch;
   // Plan 3.6b (#2890): System One is reached by a raw fetch, not through the provider adapters
   // 3.6a records. Log one row per real post attempt at the same transport-facts-only standard.
-  // The helper returns error values rather than throwing, so the outcome is derived from the
-  // returned error instead of the wrapper's throw signal.
+  // The outcome reflects the whole call: an unusable body is a failed call, like the adapters.
   let posted: Awaited<ReturnType<typeof postSystemOneRequest>>;
   try {
     posted = await postSystemOneRequest(
@@ -243,27 +242,21 @@ async function postSystemOne(
       logPrefix
     );
   } catch (error) {
-    recordModelActivity({
-      kind: "structured",
-      action: "choices",
-      outcome: "error",
-      modelName: model.provider_model_id,
-      result: "failed"
-    });
+    recordSystemOneActivity(model.provider_model_id, "error");
     throw error;
   }
-  recordModelActivity({
-    kind: "structured",
-    action: "choices",
-    outcome: posted.ok ? "ok" : posted.error === "aborted" ? "aborted" : "error",
-    modelName: model.provider_model_id,
-    result: posted.ok ? "completed" : posted.error === "aborted" ? "stopped" : "failed"
-  });
 
-  if (!posted.ok) return posted;
+  if (!posted.ok) {
+    recordSystemOneActivity(
+      model.provider_model_id,
+      posted.error === "aborted" ? "aborted" : "error"
+    );
+    return posted;
+  }
 
   const payload = posted.payload;
   if (!isRecord(payload)) {
+    recordSystemOneActivity(model.provider_model_id, "error");
     deps.logger?.warn(
       { service: input.service, code: "invalid_response" },
       `${logPrefix} invalid response`
@@ -271,6 +264,7 @@ async function postSystemOne(
     return { ok: false, error: "invalid_response" };
   }
 
+  recordSystemOneActivity(model.provider_model_id, "ok");
   const usage = isRecord(payload.usage) ? payload.usage : {};
   return {
     ok: true,
@@ -280,6 +274,17 @@ async function postSystemOne(
       outputTokens: readTokenCount(usage["output_tokens"])
     }
   };
+}
+
+/** Record one System One post attempt. Transport facts only; never the state, questions or key. */
+function recordSystemOneActivity(modelName: string, outcome: "ok" | "error" | "aborted"): void {
+  recordModelActivity({
+    kind: "structured",
+    action: "choices",
+    outcome,
+    modelName,
+    result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+  });
 }
 
 /** The raw System One round: post the serialized body and read the JSON payload. */
