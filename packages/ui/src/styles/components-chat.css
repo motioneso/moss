@@ -42,23 +42,6 @@
   text-decoration: none;
 }
 
-.chatd__hbtn {
-  border-radius: var(--radius-md);
-  border: 0;
-  background: transparent;
-  color: var(--text-subtle);
-}
-
-.chatd__hbtn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.chatd__hbtn.is-on {
-  background: var(--forest-soft);
-  color: var(--accent-fg);
-}
-
 .chatd-private {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -272,23 +255,6 @@
 
 .chatd-send:disabled {
   background: var(--border-strong);
-}
-
-.chatd-mic {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-subtle);
-}
-
-.chatd-mic:hover:not(:disabled) {
-  border-color: var(--accent-fg);
-  color: var(--accent-fg);
-}
-
-.chatd-mic.is-recording {
-  border-color: var(--danger);
-  color: var(--danger);
 }
 
 .chatd-next {
