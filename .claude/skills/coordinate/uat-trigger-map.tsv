@@ -149,3 +149,14 @@ blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2889-m
 # #2899 classifier gate 2b.4: reviewed switches and preparation editor on a connection detail.
 blocking	apps/web/src/settings/settings-integrations-classifier.tsx	tests/uat/specs/2899-classifier-integrations-review.uat.spec.ts
 blocking	apps/web/src/settings/settings-integrations-pane.tsx	tests/uat/specs/2899-classifier-integrations-review.uat.spec.ts
+# #2890 classifier gate 3.6b: the remaining recorded call paths (choices, live chat turns,
+# module builds, embeddings, probes and checks) and the coverage guard. A live chat turn (which
+# reaches no adapter) is proven on the admin Model activity screen by the dedicated chat-turn spec.
+blocking	packages/ai/src/structured/generate-choices.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/chat/src/live/runtime.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/chat/src/live/turn-activity-engine.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/chat/src/live/chat-session-manager.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/chat/src/live/provider-probe.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/chat/src/live/cli-check-turn.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/memory/src/embedding-provider-config.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
+blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
