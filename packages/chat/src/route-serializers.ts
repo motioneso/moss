@@ -4,6 +4,7 @@ import type {
   ChatMessageDto,
   ChatSelectedToolMetadataDto,
   ChatThreadDto,
+  ChatTurnOriginV1,
   ChatTurnUsageDto,
   FreshnessKind,
   SourceFreshnessEntry,
@@ -59,6 +60,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
         ? modelMetadata.elapsedMs
         : undefined;
   const usage = (toolMetadata.usage ?? modelMetadata.usage) as ChatTurnUsageDto | undefined;
+  const origin = readOrigin(modelMetadata.origin);
   return {
     id: message.id,
     threadId: message.thread_id,
@@ -76,7 +78,31 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     answerProvenance,
     answerProvenanceCitedIds,
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
-    ...(usage !== undefined ? { usage } : {})
+    ...(usage !== undefined ? { usage } : {}),
+    ...(origin !== undefined ? { origin } : {})
+  };
+}
+
+/**
+ * Task 4.1 (#2901) — reads the gate-origin stamp off an assistant message. Unknown shapes and all
+ * pre-existing messages (which have no origin) return undefined, so old model history stays readable.
+ */
+export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
+  const record = asRecord(value);
+  if (record.kind !== "classifier_gate" || record.version !== 1) return undefined;
+  const outcome =
+    record.outcome === "executed-success" || record.outcome === "executed-failure-or-unknown"
+      ? record.outcome
+      : undefined;
+  if (!outcome) return undefined;
+  if (typeof record.decisionId !== "string" || record.decisionId.length === 0) return undefined;
+  return {
+    version: 1,
+    kind: "classifier_gate",
+    decisionId: record.decisionId,
+    moduleId: typeof record.moduleId === "string" ? record.moduleId : null,
+    toolName: typeof record.toolName === "string" ? record.toolName : null,
+    outcome
   };
 }
 

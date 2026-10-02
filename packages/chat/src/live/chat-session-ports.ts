@@ -10,6 +10,7 @@ import type {
   AnswerProvenanceMetadataV1,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
@@ -20,6 +21,7 @@ import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
 import type { AcpPermissionDecider } from "@moss/acp";
+import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
 import type {
   ActionResultMetadata,
   CliChatEngine,
@@ -78,6 +80,26 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
+  /**
+   * Task 4.1 (#2901) — persist one completed gate-handled turn. The assistant message carries the
+   * gate-origin contract instead of an executed provider/model or usage. Optional: embedders that
+   * never wire the gate omit it.
+   */
+  recordHandledTurn?(
+    actorUserId: string,
+    userText: string,
+    assistantReply: string,
+    origin: ChatTurnOriginV1,
+    opts?: HandledTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly sourceFreshness?: SourceFreshnessV1 | null;
+      }
+    | undefined
+  >;
   /** Close the current conversation and open a fresh one (for /clear). */
   openNewConversation(
     actorUserId: string,
@@ -125,6 +147,19 @@ export interface Clock {
   now(): number;
 }
 
+/**
+ * Task 4.1 (#2901) — extras carried by a gate-handled completed turn. Deliberately narrower than the
+ * model-turn options: a handled turn has no model, no usage and no engine transcript, so there is no
+ * elapsedMs/usage/invokedToolNames to pass. Source freshness and activity/action records still ride
+ * along, because a handled read/write is a real module action with a real result.
+ */
+export interface HandledTurnOptions {
+  readonly sourceFreshness?: SourceFreshnessV1 | null;
+  readonly attachments?: readonly ChatAttachmentDto[];
+  readonly actionResults?: readonly ActionResultMetadata[];
+  readonly activityRecords?: readonly TranscriptRecord[];
+}
+
 export interface ChatSessionManagerDeps {
   readonly engineFactory: (
     provider: ProviderKind,
@@ -139,6 +174,12 @@ export interface ChatSessionManagerDeps {
     }
   ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
+  /**
+   * Task 4.1 (#2901) — the classifier gate lifecycle seam. When present, `runTurn` reads its admin
+   * mode first; `off`/`shadow` do nothing (shadow wiring is 3.5), and `on` may handle the turn
+   * without launching an engine. Absent ⇒ every turn follows today's default-model path unchanged.
+   */
+  readonly classifierGate?: ClassifierGateRunner;
   readonly personaFs: PersonaFs;
   readonly clock: Clock;
   readonly idleMs: number;
