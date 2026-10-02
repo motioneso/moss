@@ -1,0 +1,272 @@
+{
+  "issue": 40,
+  "slug": "2026-10-02",
+  "weekOf": "September 28, 2026",
+  "summary": "The morning and evening briefings grow into proper reports, Today learns to plan your evening, email sorting gets sharper, and a long list of fixes.",
+  "intro": "This was the week Today grew up. Most of the work went into the morning and evening briefings, which now read like something a thoughtful assistant wrote rather than a pile of notes. Email got quieter and smarter, the chat model picker got favorites, and the fixes list is long enough that we gave it room to breathe.",
+  "headline": {
+    "title": "A real morning report",
+    "body": [
+      "The full morning briefing is now its own report, separate from Today. Today stays focused on what you need to do, while the report walks you through the day: events in clock order with their times and places, today's forecast, and a plain note on what to prepare.",
+      "At the bottom, the report lists every source it drew on, with a plain name, the time it was checked, and what it added. If you ever wonder why Moss said something, you can see where it came from."
+    ],
+    "prs": [
+      2726,
+      2773,
+      2756,
+      2791
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Evening wrap-up with choices",
+          "body": "In the evening, each open item says why it is still open and lets you move it to tomorrow, pick another day, or let it go. Finished tasks get a short note, and the plan for tomorrow points out real free time.",
+          "prs": [
+            2800,
+            2802
+          ]
+        },
+        {
+          "title": "Open time and breaks in your schedule",
+          "body": "The Today schedule shows the gaps between blocks, from a short break to open time, and tells you when the day's commitments are done. Task blocks are tagged Flexible or Proposed, and a preparation block says which meeting it is for.",
+          "prs": [
+            2751,
+            2799
+          ]
+        },
+        {
+          "title": "Smarter first-meeting and errand notes",
+          "body": "The first-meeting card mentions a real preparation block when you have one and links straight to the meeting. The morning view also names your next event with a place, so you know where you're headed later.",
+          "prs": [
+            2758,
+            2801
+          ]
+        },
+        {
+          "title": "Re-run a briefing from chat",
+          "body": "Ask Moss in chat to re-run one of your briefings, and it tells you when the fresh one is ready.",
+          "prs": [
+            2811
+          ]
+        },
+        {
+          "title": "Refresh stale email before your briefing",
+          "body": "If your email hasn't synced in over a day, you can refresh it and get a new morning briefing once it catches up.",
+          "prs": [
+            2715
+          ]
+        },
+        {
+          "title": "Favorite models in chat",
+          "body": "The chat model picker groups models by provider, and you can star the ones you use most to keep them at the top.",
+          "prs": [
+            2812
+          ]
+        },
+        {
+          "title": "AI helper tools that update safely",
+          "body": "Each AI provider card shows which version of its helper tool is installed and says clearly when it's too old for the chosen model. When a newer version arrives, Moss tries it first and keeps the current one if the test fails.",
+          "prs": [
+            2818,
+            2836
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Email sorting that keeps the noise out",
+          "body": "Moss can sort email with your chosen sorting model, and keeps receipts, confirmations and account notices out of your briefings while leaving them in your mail and search. New mail also turns up sooner during long catch-ups, and failed syncs explain themselves in plain words.",
+          "prs": [
+            2808,
+            2806,
+            2819
+          ]
+        },
+        {
+          "title": "Needs You shows what's actually at risk",
+          "body": "Today groups overdue and at-risk tasks and visible loose ends under Needs You, and counts them all.",
+          "prs": [
+            2719,
+            2710
+          ]
+        },
+        {
+          "title": "More control over tomorrow",
+          "body": "Moss previews changes to tomorrow's plan before you save them, and plans more or fewer task blocks depending on how full you say your day is.",
+          "prs": [
+            2712
+          ]
+        },
+        {
+          "title": "Tidier morning side column",
+          "body": "The morning view tells you when a block in your plan moved since the report was written, and stops repeating counts and agenda you can already see.",
+          "prs": [
+            2797
+          ]
+        },
+        {
+          "title": "A steadier briefing order",
+          "body": "Timed events come first in clock order, quiet events fold into the opening, sports always gets its own heading, and sections that only repeat an event's name are gone.",
+          "prs": [
+            2849,
+            2859
+          ]
+        },
+        {
+          "title": "Today's news reads cleaner",
+          "body": "The same story from several outlets now shows once, and a short \"Your news, in context\" note sits under the smaller stories.",
+          "prs": [
+            2750,
+            2798
+          ]
+        },
+        {
+          "title": "Live scores show the game clock",
+          "body": "A live score on a followed team's card now shows the quarter, period or inning, and the card keeps the same height either way.",
+          "prs": [
+            2755
+          ]
+        },
+        {
+          "title": "The sorting model is now the classifier",
+          "body": "Assistant settings call the sorting model the classifier, and add a new classifier switch that stays off for now.",
+          "prs": [
+            2897
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "The morning briefing stays open with a clear message when today's plan is unavailable, and explains when email may be behind or a retry needs attention.",
+      "prs": [
+        2704,
+        2711
+      ]
+    },
+    {
+      "text": "Briefings display headings and lists properly, without stray symbols or \"Headline:\" labels.",
+      "prs": [
+        2741,
+        2769,
+        2815
+      ]
+    },
+    {
+      "text": "Briefings mention the email that actually arrived, only the tasks you finished since last time, and only commitments still open.",
+      "prs": [
+        2768,
+        2772,
+        2846
+      ]
+    },
+    {
+      "text": "Emails you sent yourself no longer show up as waiting on you, and the evening review stops making up remarks about your account.",
+      "prs": [
+        2880,
+        2877
+      ]
+    },
+    {
+      "text": "Evening Today shows each part of the briefing once and no longer repeats your schedule.",
+      "prs": [
+        2762,
+        2794
+      ]
+    },
+    {
+      "text": "The evening links to the full report and what informed it now open the report instead of doing nothing.",
+      "prs": [
+        2813
+      ]
+    },
+    {
+      "text": "All-day events stay on their own date instead of showing a day early in western time zones.",
+      "prs": [
+        2852
+      ]
+    },
+    {
+      "text": "The Today header loses its faint line pattern, \"Prepared at\" shows am or pm, and jump links no longer tuck sections under the top bar.",
+      "prs": [
+        2795,
+        2851
+      ]
+    },
+    {
+      "text": "Sports scores and headlines on Today load reliably, and Sports can use its live browser helper again.",
+      "prs": [
+        2780,
+        2778
+      ]
+    },
+    {
+      "text": "Standings say when they couldn't be updated, and the first game on a wrapped Tonight row lines up properly.",
+      "prs": [
+        2722,
+        2754
+      ]
+    },
+    {
+      "text": "Chat uses the AI provider your admin selected, and Codex chat can use newer models without signing in again.",
+      "prs": [
+        2727,
+        2716,
+        2721
+      ]
+    },
+    {
+      "text": "Codex follows your skip-approval setting for commands, while still blocking protected folders.",
+      "prs": [
+        2718
+      ]
+    },
+    {
+      "text": "Chat shows what it did and asks for approvals even after a slow start, and tool steps show quote marks as quote marks.",
+      "prs": [
+        2740,
+        2848
+      ]
+    },
+    {
+      "text": "The assistant preview gives a real answer with connected command-line agents, and invites you to press Preview for a free-written persona.",
+      "prs": [
+        2739,
+        2725
+      ]
+    },
+    {
+      "text": "Admins can see, refresh and manage AI providers another admin set up, even after that admin is demoted.",
+      "prs": [
+        2840,
+        2845,
+        2855
+      ]
+    },
+    {
+      "text": "Removing this device from notifications fully turns off its push alerts.",
+      "prs": [
+        2723
+      ]
+    },
+    {
+      "text": "Old assistant activity history is cleared on schedule again.",
+      "prs": [
+        2724
+      ]
+    },
+    {
+      "text": "Moss stays up when its database restarts.",
+      "prs": [
+        2803
+      ]
+    }
+  ]
+}
