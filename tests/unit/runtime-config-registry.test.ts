@@ -14,6 +14,7 @@ import {
   KNOWN_INSTANCE_SETTING_KEYS,
   SECRET_INSTANCE_SETTING_KEYS
 } from "../../packages/settings/src/instance-settings-keys.js";
+import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY as SHARED_GATE_KEY } from "../../packages/shared/src/chat-api.js";
 
 describe("runtime config registry", () => {
   it("registers embedding keys as non-secret instance settings", () => {
@@ -86,5 +87,7 @@ describe("runtime config registry", () => {
     // The switch is an instance/admin setting, never a per-user preference, and carries no secret.
     expect(KNOWN_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(true);
     expect(SECRET_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(false);
+    // Task 1.3 (#2892): the web settings row and this registry share one literal.
+    expect(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY).toBe(SHARED_GATE_KEY);
   });
 });

@@ -26,6 +26,8 @@ export const queryKeys = {
     themes: ["settings", "themes"] as const,
     sourceBehaviors: ["settings", "source-behaviors"] as const,
     registrationSettings: ["settings", "admin", "registration"] as const,
+    // Task 1.3 (#2892): admin runtime-config switch (classifier gate).
+    adminRuntimeConfig: (key: string) => ["settings", "admin", "runtime-config", key] as const,
     chatMultiplexer: ["settings", "chat-multiplexer"] as const,
     yolo: ["settings", "yolo"] as const,
     chatArchive: ["settings", "chat-archive"] as const,

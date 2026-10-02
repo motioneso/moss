@@ -207,6 +207,12 @@ export const CLASSIFIER_GATE_MODES: readonly ClassifierGateMode[] = ["off", "sha
 export const CLASSIFIER_GATE_MODE_DEFAULT: ClassifierGateMode = "off";
 
 /**
+ * The runtime-config key that stores the admin-wide gate switch. Defined here so the settings
+ * registry and the web settings row share one literal (task 1.3, #2892).
+ */
+export const CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY = "chat.classifier_gate_mode";
+
+/**
  * One approved tool release record. The gate may only be turned `on` when at least one of these
  * exists; the review step (plan task 4.2) is the writer. Empty by default. `classifierConfigVersion`
  * records the reviewed classifier/configuration version. Task 1.2 counts rows only; the match that

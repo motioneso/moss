@@ -62,6 +62,8 @@ import type {
   GetVoiceEndpointResponse,
   PutVoiceEndpointRequest,
   PutVoiceEndpointResponse,
+  GetRuntimeConfigResponse,
+  PutRuntimeConfigResponse,
   GetModuleRegistryResponse,
   ModuleRegistryRowDto,
   PreviewPersonaResponse,
@@ -1360,6 +1362,24 @@ export async function deleteAiServiceBinding(service: AiServiceKey): Promise<{ s
   return requestJson<{ service: string }>(
     `/api/ai/services/${encodeURIComponent(service)}/binding`,
     { method: "DELETE" }
+  );
+}
+
+// Task 1.3 (#2892): admin runtime-config read/write for the classifier gate switch. The typed
+// /api/admin/runtime-config/:key routes are admin-only and refuse `on` without an approved release.
+export async function getAdminRuntimeConfig(key: string): Promise<GetRuntimeConfigResponse> {
+  return requestJson<GetRuntimeConfigResponse>(
+    `/api/admin/runtime-config/${encodeURIComponent(key)}`
+  );
+}
+
+export async function putAdminRuntimeConfig(
+  key: string,
+  value: string
+): Promise<PutRuntimeConfigResponse> {
+  return requestJson<PutRuntimeConfigResponse>(
+    `/api/admin/runtime-config/${encodeURIComponent(key)}`,
+    { method: "PUT", body: { value } }
   );
 }
 

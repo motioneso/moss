@@ -207,8 +207,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "reads '* Manually added', and they survive refreshes and re-logins). System One (TypeSafe) " +
       "is offered as a provider type; it answers fixed named questions and is used only for the " +
       "Trail Marker focus judgment and the story and email sorting questions, not chat: its models are " +
-      "offered only in the Sorting model row and its card has no Set as default button. The " +
-      "Sorting model row also sets the model " +
+      "offered only in the Classifier row and its card has no Set as default button. The " +
+      "Classifier row also sets the model " +
       "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
       "one is chosen it says Trail Marker's app and window titles also go to that model, or for " +
       "a System One model that they go to TypeSafe, which also answers News, Sports and email " +
@@ -248,19 +248,22 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
-      "The Services group has an Email reading row: it reads the emails the sorting model " +
+      "The Services group has an Email reading row: it reads the emails the classifier " +
       "cannot settle and writes their summaries and suggested actions. " +
-      "The classifier gate is an instance-wide setting that is not shown on any screen yet: it is " +
-      "Off by default, may be set to Shadow or On only through the admin configuration boundary, " +
-      "and cannot be turned On until an approved tool release exists. " +
-      "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
-      "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
+      "The Services group ends with a Classifier row: a dropdown with Use main model and " +
+      "every active JSON-capable model, grouped by provider, plus a Chat gate choice of Off, " +
+      "Shadow or On. The Chat gate is an instance-wide setting held through the admin " +
+      "configuration boundary; On cannot be chosen until an approved tool release exists, so it " +
+      "stays unavailable in the row meanwhile. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +
       "sender, dates and text go to that model first and to the main model if it does not " +
       "answer. For a System One model the line instead says it answers the News, Sports and " +
       "email sorting questions with a yes or no, that each email's subject, sender, dates and " +
-      "text go there too, and that the main model still handles other sorting work. The sorting " +
-      "model sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
+      "text go there too, and that the main model still handles other sorting work. When a " +
+      "hosted model is chosen and the Chat gate is Shadow or On, the row also says eligible " +
+      "chat messages go to its provider, and that when the gate is on every user's eligible " +
+      "messages go to that provider. The classifier " +
+      "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +
       "confirmations and account or policy notices stay kept and searchable but are left out of " +
       "the morning briefing. Mail it is unsure about, or all mail when it fails or none is " +
