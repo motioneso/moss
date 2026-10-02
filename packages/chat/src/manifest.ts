@@ -187,17 +187,17 @@ export const chatModuleManifest = {
     {
       id: "chat.classifier_gate",
       description:
-        "The classifier gate switch: Off by default, with Shadow and On, shown as the Chat gate " +
-        "choice in Settings > AI providers's Classifier row. On needs an approved tool release. " +
-        "The tool-answering path is built but not runnable yet.",
+        "Classifier gate switch: Off, Shadow or On, in the Classifier row. In Shadow each eligible " +
+        "message is also classified to record what the gate would have done; no tool runs and the " +
+        "main model answers. On needs a release.",
       featureFlagId: "chat.module"
     },
     {
       id: "chat.classifier_shadow_records",
       description:
-        "Groundwork for the classifier gate's trial mode: private records only you can read, kept " +
-        "until you ask Moss in chat to delete them. Nothing saves messages there yet. Deletion is " +
-        "confirmed first; a failed save leaves your reply unchanged.",
+        "Shadow records for the classifier gate: private, only you can read. In Shadow the gate's " +
+        "hypothetical decision is compared with the main model's first tool call; private chats " +
+        "are never sent. Kept until you ask Moss in chat to delete them.",
       featureFlagId: "chat.module"
     },
     {

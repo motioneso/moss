@@ -271,7 +271,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "text go there too, and that the main model still handles other sorting work. When a " +
       "hosted model is chosen and the Chat gate is Shadow or On, the row also says eligible " +
       "chat messages go to its provider, and that when the gate is on every user's eligible " +
-      "messages go to that provider. The classifier " +
+      "messages go to that provider. While the Chat gate is in Shadow, each eligible, non-private " +
+      "message is also classified so the record shows whether the gate would have handled it; no " +
+      "tool runs, no approval card appears and the main model still answers, and private chats and " +
+      "oversized messages are never sent to the classifier. The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +
       "confirmations and account or policy notices stay kept and searchable but are left out of " +

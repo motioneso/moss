@@ -171,3 +171,9 @@ blocking	packages/chat/src/live/provider-probe.ts	tests/uat/specs/2890-model-act
 blocking	packages/chat/src/live/cli-check-turn.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/memory/src/embedding-provider-config.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
+# #2907 classifier gate 3.5: shadow runtime wiring and live proof (first-party calendar).
+blocking	packages/chat/src/live/classifier-gate-wiring.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
+blocking	packages/chat/src/live/classifier-gate-shadow.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
+blocking	packages/chat/src/routes.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
+blocking	tests/uat/seed/chunks/classifier-ai.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
+blocking	tests/uat/fixtures/classifier-fixture-server.ts	tests/uat/specs/classifier-shadow.uat.spec.ts

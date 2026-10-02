@@ -44,6 +44,12 @@ export interface ClassifierGateWiringDeps {
     ): string;
     revokeBySessionId(chatSessionId: string): void;
   };
+  /**
+   * #2907 (plan 3.5) — the production attempt ports: the actor's tool menu, the classifier calls,
+   * candidate hooks and the gateway call (already bound to `token`). Absent ⇒ every attempt declines
+   * without ports. `on` remains unreachable until an approved release exists.
+   */
+  readonly createPorts?: ClassifierGateRunnerDeps["createPorts"];
   now?(): number;
 }
 
@@ -79,6 +85,7 @@ export function classifierGateSessionId(correlationId: string): string {
 export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): ClassifierGateRunner {
   return createClassifierGateRunner({
     readMode: deps.readMode,
+    ...(deps.createPorts ? { createPorts: deps.createPorts } : {}),
     tokens: {
       mint: (actorUserId, correlationId, options) =>
         deps.tokens.mint(
