@@ -129,6 +129,19 @@ Page is bone paper, cards are warm white, one living accent (forest) plus decora
 
 - Space: `--space-1` 4px, `-2` 8, `-3` 12, `-4` 16, `-5` 20, `-6` 24, `-7` 32, `-8` 40,
   `-9` 48, `-10` 64, `-11` 80, `-12` 96 (`-0-5` 2px, `-14` 128).
+- Minimum gaps between neighbours. Nothing touches or crowds the next element, at any width:
+
+  | Neighbours                                                        | Minimum gap               |
+  | ----------------------------------------------------------------- | ------------------------- |
+  | Lines inside one text block (eyebrow over title, title over meta) | `--space-1` 4px           |
+  | Icon and its label; label and its control                         | `--space-2` 8px           |
+  | Button, link or chip beside another, including wrapped rows       | `--space-2` 8px both ways |
+  | Button or control and the text block above or below it            | `--space-3` 12px          |
+  | Separate blocks inside a section                                  | `--space-5` 20px          |
+  | Sections                                                          | `--space-7` 32px          |
+
+  Set the gap on the parent (`gap`) so wrapping rows keep it. Check desktop and phone width.
+
 - Radius: `--radius-xs` 4, `-sm` 6, `-md` 8, `-lg` 10, `--radius-card` 12, `-xl` 16,
   `-2xl` 22, `-pill`.
 - Surfaces separate by hairline rules, not shadow. `--shadow-xs` and `--shadow-sm` are keyline
@@ -199,14 +212,15 @@ and the contrast rules applied.
 
 These ship on Today today. They are not rules; follow the corrected rule.
 
-| Defect                                                        | Rule instead                                    | Issue    |
-| ------------------------------------------------------------- | ----------------------------------------------- | -------- |
-| Text at 8-10px (eyebrows, meta, numbers, phone section links) | 11px floor, `--text-2xs`                        | #2918    |
-| Raw pixel sizes and visual rules in the Today sheets          | Type role tokens; screen CSS does layout only   | #2918    |
-| 42 hand-built buttons                                         | `<Button>`, extended where a variant is missing | #2918    |
-| Notes in raw `--forest` text, 1.8:1 in dark mode              | `--accent-fg`                                   | #2914    |
-| Gold warning number in plain `--gold`, 2.7:1                  | `--gold-strong`                                 | #2914    |
-| Hero eyebrow and accent line in raw `--sage`, fixed per theme | `--hero-fg`; muted only for large text          | None yet |
+| Defect                                                                  | Rule instead                                    | Issue    |
+| ----------------------------------------------------------------------- | ----------------------------------------------- | -------- |
+| Wrapped link rows (hero links, section index) only 6px apart vertically | `--space-2` minimum gap                         | None yet |
+| Text at 8-10px (eyebrows, meta, numbers, phone section links)           | 11px floor, `--text-2xs`                        | #2918    |
+| Raw pixel sizes and visual rules in the Today sheets                    | Type role tokens; screen CSS does layout only   | #2918    |
+| 42 hand-built buttons                                                   | `<Button>`, extended where a variant is missing | #2918    |
+| Notes in raw `--forest` text, 1.8:1 in dark mode                        | `--accent-fg`                                   | #2914    |
+| Gold warning number in plain `--gold`, 2.7:1                            | `--gold-strong`                                 | #2914    |
+| Hero eyebrow and accent line in raw `--sage`, fixed per theme           | `--hero-fg`; muted only for large text          | None yet |
 
 ## Primitives
 

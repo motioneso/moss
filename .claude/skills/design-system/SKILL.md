@@ -27,6 +27,9 @@ disagree, Today wins, except for the known Today defects listed in the doc.
   the eyebrow-and-title head. No curved accent left border.
 - A pattern Today built locally (numbered head, eyebrow, note, link-style button) is added to
   `@moss/ui` before another screen uses it. Never copy Today's local version.
+- Nothing crowds its neighbour. Use the minimum gaps in the doc's spacing section: 8px
+  (`--space-2`) between buttons, links, labels and controls, 12px (`--space-3`) between a control
+  and the text above or below it. Check desktop and phone width.
 - No text below 11px. Every text colour clears 4.5:1 on every surface it sits on; accent text is
   `--accent-fg`, never raw `--forest`, and gold text is `--gold-strong` or `--gold-ink`.
 - Empty and loading states follow the patterns in `docs/design-system.md`. Don't render a section
