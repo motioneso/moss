@@ -235,7 +235,7 @@ export interface EmailSignals {
    * message, so it is
    * already invisible to the Today briefing filter and to suggested-task creation, both of
    * which require an inferred subject that a skipped message never gets. */
-  readonly skipped?: "otp";
+  readonly skipped?: "otp" | "own_sent";
   /** The gate said maybe_owed: no verdict yet, the thread's judgement worker decides. */
   readonly pendingJudgement?: boolean;
   /** #2805: the sorting model settled the first pass; the general model was not asked. */
@@ -244,6 +244,11 @@ export interface EmailSignals {
 
 export function otpSkippedResult(): EmailExtractResult {
   return { summary: null, signals: { skipped: "otp", confidence: 0 } };
+}
+
+/** Mail the user sent: settled with no summary and no judgement, never shown as owed. */
+export function ownSentResult(): EmailExtractResult {
+  return { summary: null, signals: { skipped: "own_sent", confidence: 1 } };
 }
 
 export interface EmailExtractResult {

@@ -44,6 +44,7 @@ export function hasFinishedVerdict(summary: string | null, signals: unknown): bo
   if (!signals || typeof signals !== "object" || Array.isArray(signals)) return false;
   const fields = signals as Record<string, unknown>;
   if (fields.pendingJudgement === true) return true;
+  if (fields.skipped === "own_sent") return true;
   const actionability = fields.actionability as Record<string, unknown> | undefined;
   return (
     typeof actionability === "object" &&
@@ -214,8 +215,8 @@ export class EmailRepository {
         : null;
     // A one-time-code skip is a deliberate replacement, not a partial/missing analysis — it
     // must always overwrite whatever was stored before, even a complete prior triage.
-    const isExplicitOtpSkip =
-      (input.signals as { skipped?: unknown } | undefined)?.skipped === "otp";
+    const skipMarker = (input.signals as { skipped?: unknown } | undefined)?.skipped;
+    const isExplicitOtpSkip = skipMarker === "otp" || skipMarker === "own_sent";
     const preserveSameRevisionTriage =
       !isExplicitOtpSkip &&
       incomingHistoryId !== null &&

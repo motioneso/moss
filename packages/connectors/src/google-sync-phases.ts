@@ -15,6 +15,7 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
+  ownSentResult,
   senderAddress,
   type EmailExtractOptions,
   type EmailExtractResult,
@@ -398,6 +399,8 @@ export interface SortFetchedEmailsInput {
   readonly onFailure: (error: unknown) => void;
   /** The clock for the judgement retry window. Defaults to the current time. */
   readonly now?: Date;
+  /** The user's own addresses. Mail sent from one is settled without any model. */
+  readonly ownAddresses?: ReadonlySet<string>;
 }
 
 /**
@@ -421,6 +424,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   readonly pending: ParsedEmail[];
   readonly unchangedKeys: string[];
   readonly otpKeys: string[];
+  readonly ownSentKeys: string[];
   readonly rejudgeThreadRefs: string[];
   readonly rejudgeKeys: ReadonlyMap<string, string[]>;
   readonly gaveUpKeys: string[];
@@ -431,6 +435,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   const rejudgeThreadRefs = new Set<string>();
   const unchangedKeys: string[] = [];
   const otpKeys: string[] = [];
+  const ownSentKeys: string[] = [];
   const gaveUpKeys: string[] = [];
   const fail = (error: unknown): void => {
     input.progress.emailFailures += 1;
@@ -457,6 +462,22 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
         await input.persistEmail(parsed, otpSkippedResult());
         if (!unchanged) input.progress.emailUpserted += 1;
         otpKeys.push(parsed.externalId);
+      } catch (error) {
+        fail(error);
+      }
+      continue;
+    }
+    // Mail the user sent is never owed a reply by the user. It is settled here, before any
+    // model sees it, and a row an earlier sync marked as waiting is settled the same way.
+    if (input.ownAddresses?.has(senderAddress(parsed.from))) {
+      if (unchanged && !prior?.awaitingJudgement) {
+        unchangedKeys.push(parsed.externalId);
+        continue;
+      }
+      try {
+        await input.persistEmail(parsed, ownSentResult());
+        if (!unchanged) input.progress.emailUpserted += 1;
+        ownSentKeys.push(parsed.externalId);
       } catch (error) {
         fail(error);
       }
@@ -492,6 +513,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
     pending,
     unchangedKeys,
     otpKeys,
+    ownSentKeys,
     rejudgeThreadRefs: [...rejudgeThreadRefs],
     rejudgeKeys,
     gaveUpKeys
@@ -821,11 +843,21 @@ export async function runGoogleEmailPhase(
         "google-sync email message failed"
       );
     };
-    const { pending, unchangedKeys, otpKeys, rejudgeThreadRefs, rejudgeKeys } =
+    const ownAddresses =
+      parsedMessages.length > 0 && context.deps.actorUserId
+        ? ownAddressSet(
+            await context.emailRepo.listFrequentRecipientAddresses(
+              context.scopedDb,
+              context.deps.actorUserId
+            )
+          )
+        : undefined;
+    const { pending, unchangedKeys, otpKeys, ownSentKeys, rejudgeThreadRefs, rejudgeKeys } =
       await sortFetchedEmails({
         parsedMessages,
         seen,
         now: context.now(),
+        ownAddresses,
         persistEmail,
         progress: context.progress,
         onFailure: recordMessageFailure
@@ -907,6 +939,7 @@ export async function runGoogleEmailPhase(
     }
     await projectKeys(unchangedKeys);
     await projectKeys(otpKeys);
+    await projectKeys(ownSentKeys);
     await requestRejudgements(context, rejudgeThreadRefs, rejudgeKeys);
   } catch (error) {
     if (error instanceof EmailExtractRetryableError) {
