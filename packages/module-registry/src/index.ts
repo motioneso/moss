@@ -181,6 +181,8 @@ import {
 } from "@moss/connectors";
 import {
   cliToolsStatus,
+  createDbModelActivityRecorder,
+  installModelActivityRecorder,
   setCliToolsRetry,
   type ActiveModulesResolver,
   type AiSecretCipher,
@@ -3293,6 +3295,19 @@ export function registerBuiltInApiRoutes(
   const env = process.env;
   const getChatMultiplexerStatus = makeChatMultiplexerStatusProbe(env);
 
+  // Plan 3.6a (#2889): install the process-wide model activity recorder. Provider adapters fall
+  // back to it, so every call records through one seam without editing each caller. A failed write
+  // is logged and dropped; it can never slow or fail the model call.
+  {
+    const modelActivityRepository = new AiRepository();
+    installModelActivityRecorder(
+      createDbModelActivityRecorder(
+        (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
+        server.log
+      )
+    );
+  }
+
   // #342 boot-time fork (§3.5): when JARVIS_CLI_RUNNER_SOCKET is set the api drives the cli-runner
   // sidecar over ONE shared socket (§3.4 — one connection per api process). That ONE connection is
   // owned by the chat runtime (it must be constructed WITH the §5.3 onReconcile hook, which needs the
@@ -3710,6 +3725,16 @@ export async function registerBuiltInModuleWorkers(
   boss: PgBoss,
   dependencies: BuiltInWorkerDependencies
 ): Promise<string[]> {
+  // Plan 3.6a (#2889): the worker process records its own model calls through the same seam.
+  {
+    const modelActivityRepository = new AiRepository();
+    installModelActivityRecorder(
+      createDbModelActivityRecorder(
+        (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
+        dependencies.logger
+      )
+    );
+  }
   const workerIds = await Promise.all(
     BUILT_IN_MODULES.map(
       (module) => module.registerWorkers?.(boss, dependencies) ?? Promise.resolve([])

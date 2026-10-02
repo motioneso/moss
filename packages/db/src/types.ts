@@ -762,6 +762,17 @@ export interface MossErrorLogTable {
   request_id: string | null;
 }
 
+/** Plan 3.6a (#2889): one flat row per model call. Instance-global, admin-readable, append-only. */
+export interface MossModelActivityLogTable {
+  id: string;
+  occurred_at: TimestampColumn;
+  kind: string;
+  action: string;
+  outcome: string;
+  model_name: string;
+  result: string;
+}
+
 export interface ChatThreadsTable {
   id: string;
   owner_user_id: string;
@@ -1750,6 +1761,7 @@ export interface MossDatabase {
   "app.ai_assistant_action_requests": AiAssistantActionRequestsTable;
   "app.moss_action_audit_log": MossActionAuditLogTable;
   "app.moss_error_log": MossErrorLogTable;
+  "app.moss_model_activity_log": MossModelActivityLogTable;
   "app.chat_threads": ChatThreadsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
@@ -1834,6 +1846,7 @@ export type EmailMessage = Selectable<EmailMessagesTable>;
 export type AiAssistantActionRequest = Selectable<AiAssistantActionRequestsTable>;
 export type MossActionAuditLog = Selectable<MossActionAuditLogTable>;
 export type MossErrorLog = Selectable<MossErrorLogTable>;
+export type MossModelActivityLog = Selectable<MossModelActivityLogTable>;
 export type ChatThread = Selectable<ChatThreadsTable>;
 export type ChatMessage = Selectable<ChatMessagesTable>;
 export type ChatSkill = Selectable<ChatSkillsTable>;

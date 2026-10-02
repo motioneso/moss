@@ -14,7 +14,13 @@ import type {
   StructuredSource,
   StructuredTelemetryEvent
 } from "@moss/ai";
-import { dedupeStructuredSources } from "@moss/ai";
+import {
+  dedupeStructuredSources,
+  modelActivityAction,
+  recordModelActivity,
+  withModelActivityRecording,
+  type ModelActivityRecorder
+} from "@moss/ai";
 
 import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import { selectEngineFactory, type ChatEngineFactory } from "./runtime.js";
@@ -97,14 +103,23 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     private readonly provider: ProviderKind,
     private readonly engineFactory: ChatEngineFactory,
     private readonly timeoutMs = CLI_STRUCTURED_TIMEOUT_MS,
-    private readonly pollMs = CLI_STRUCTURED_POLL_MS
+    private readonly pollMs = CLI_STRUCTURED_POLL_MS,
+    private readonly onModelCall?: ModelActivityRecorder
   ) {}
 
   async generateStructured(
     input: GenerateStructuredProviderInput
   ): Promise<StructuredProviderResult> {
-    if (input.scope) return this.generateScopedStructured(input);
-    return this.generateOneShotStructured(input);
+    return withModelActivityRecording(
+      this.onModelCall ?? recordModelActivity,
+      {
+        kind: "structured",
+        action: modelActivityAction(input.service),
+        modelName: input.model.provider_model_id
+      },
+      () =>
+        input.scope ? this.generateScopedStructured(input) : this.generateOneShotStructured(input)
+    );
   }
 
   private async generateOneShotStructured(
@@ -489,13 +504,20 @@ function structuredScopeKey(scope: NonNullable<GenerateStructuredProviderInput["
 
 /** #982 composition helper: resolve the transport once, then create provider-specific adapters. */
 export function createCliStructuredAdapterFactory(
-  engineFactory: ChatEngineFactory = selectEngineFactory().factory
+  engineFactory: ChatEngineFactory = selectEngineFactory().factory,
+  options: { readonly onModelCall?: ModelActivityRecorder } = {}
 ): (kind: ProviderKind) => CliStructuredAdapter {
   const adapters = new Map<ProviderKind, CliStructuredAdapter>();
   return (kind) => {
     const existing = adapters.get(kind);
     if (existing) return existing;
-    const adapter = new CliStructuredAdapter(kind, engineFactory);
+    const adapter = new CliStructuredAdapter(
+      kind,
+      engineFactory,
+      undefined,
+      undefined,
+      options.onModelCall
+    );
     adapters.set(kind, adapter);
     return adapter;
   };

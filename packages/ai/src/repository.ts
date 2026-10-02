@@ -18,6 +18,7 @@ import {
   type DataContextDb,
   type MossActionAuditLog,
   type MossErrorLog,
+  type MossModelActivityLog,
   type MossDatabase,
   withSavepoint
 } from "@moss/db";
@@ -250,6 +251,25 @@ export interface InsertAuditLogInput {
 export interface ListAuditLogOptions {
   readonly since: Date;
   readonly familyFilter?: { moduleId: string; familyId: string } | null;
+  readonly limit: number;
+}
+
+/** Plan 3.6a (#2889): one model-call row. Short plain-text fields only; no message text. */
+export interface InsertModelActivityInput {
+  readonly kind: string;
+  readonly action: string;
+  readonly outcome: string;
+  readonly modelName: string;
+  readonly result: string;
+  readonly occurredAt?: Date;
+}
+
+export interface ListModelActivityOptions {
+  readonly kind?: string;
+  readonly modelName?: string;
+  readonly outcome?: string;
+  readonly since?: Date;
+  readonly before?: Date;
   readonly limit: number;
 }
 
@@ -2322,6 +2342,54 @@ export class AiRepository {
         .where("tool_module_id", "=", opts.familyFilter.moduleId)
         .where("action_family_id", "=", opts.familyFilter.familyId);
     }
+
+    return query.execute();
+  }
+
+  /**
+   * Plan 3.6a (#2889): append one model-call row. Takes a root handle (no actor GUC) because the
+   * runtime writes the instance-global log on its own behalf; RLS INSERT is permissive for the
+   * runtime roles. Never called on the model-call path without a catch — a failed write is dropped.
+   */
+  async insertModelActivity(
+    db: Kysely<MossDatabase>,
+    input: InsertModelActivityInput
+  ): Promise<void> {
+    await db
+      .insertInto("app.moss_model_activity_log")
+      .values({
+        id: randomUUID(),
+        kind: input.kind,
+        action: input.action,
+        outcome: input.outcome,
+        model_name: input.modelName,
+        result: input.result,
+        ...(input.occurredAt ? { occurred_at: input.occurredAt } : {})
+      })
+      .execute();
+  }
+
+  /**
+   * Plan 3.6a (#2889): admin read with time paging and kind/model/result/time filters. Runs on the
+   * actor-scoped handle so the admin-only SELECT policy is a second lock behind the route's 403.
+   */
+  async listModelActivity(
+    scopedDb: DataContextDb,
+    opts: ListModelActivityOptions
+  ): Promise<MossModelActivityLog[]> {
+    assertDataContextDb(scopedDb);
+    let query = scopedDb.db
+      .selectFrom("app.moss_model_activity_log")
+      .selectAll()
+      .orderBy("occurred_at", "desc")
+      .orderBy("id", "desc")
+      .limit(opts.limit);
+
+    if (opts.kind) query = query.where("kind", "=", opts.kind);
+    if (opts.modelName) query = query.where("model_name", "=", opts.modelName);
+    if (opts.outcome) query = query.where("outcome", "=", opts.outcome);
+    if (opts.since) query = query.where("occurred_at", ">=", opts.since);
+    if (opts.before) query = query.where("occurred_at", "<", opts.before);
 
     return query.execute();
   }

@@ -44,6 +44,7 @@ import {
   patchAiActionPolicyRequestSchema,
   patchAiActionPolicyResponseSchema,
   listActionAuditLogRouteSchema,
+  listModelActivityRouteSchema,
   approveModuleBuildResponseSchema,
   listMyModuleBuildsResponseSchema
 } from "@moss/shared";
@@ -94,7 +95,9 @@ export const aiModuleManifest = {
       // #2716 — persist an ACP identity for CLI providers while retaining unsupported legacy rows.
       "sql/0246_ai_provider_acp_agent_id.sql",
       // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
-      "sql/0245_moss_action_audit_purge_worker_grant.sql"
+      "sql/0245_moss_action_audit_purge_worker_grant.sql",
+      // Plan 3.6a (#2889) — one flat, admin-readable, append-only row per model call.
+      "sql/0254_moss_model_activity_log.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -102,7 +105,8 @@ export const aiModuleManifest = {
       "app.ai_configured_models",
       "app.ai_assistant_action_requests",
       "app.moss_action_audit_log",
-      "app.moss_error_log"
+      "app.moss_error_log",
+      "app.moss_model_activity_log"
     ]
   },
   settings: [
@@ -254,6 +258,13 @@ export const aiModuleManifest = {
             "answer. It is logged, not shown; the main model answers instead."
         }
       ]
+    },
+    {
+      id: "ai.model_activity_log",
+      description:
+        "Admin-only log of every model call: time, kind, action, outcome, model name and a short " +
+        "result. Never chat text, prompts, tool arguments or secrets; a failed write is dropped " +
+        "and never affects the call."
     }
   ],
   permissions: [
@@ -561,6 +572,13 @@ export const aiModuleManifest = {
       path: "/api/ai/action-audit",
       responseSchema: listActionAuditLogRouteSchema.response[200],
       permissionId: "ai.assistant-actions"
+    },
+    {
+      // Plan 3.6a (#2889): the admin-only model activity log the Settings screen reads.
+      method: "GET",
+      path: "/api/ai/model-activity",
+      responseSchema: listModelActivityRouteSchema.response[200],
+      permissionId: "ai.manage"
     },
     {
       // #1888 — the "Build it" button on the plan card the workshop.buildModule tool returns.

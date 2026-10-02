@@ -7,7 +7,8 @@ import {
   type AccessContext,
   type DataContextDb,
   type DataContextRunner,
-  type MossActionAuditLog
+  type MossActionAuditLog,
+  type MossModelActivityLog
 } from "@moss/db";
 
 // Per-user rate-limit key for the assistant-tools invoke endpoint via the shared module-sdk
@@ -68,7 +69,10 @@ import {
   type UpdateAiProviderConfigRequest,
   listActionAuditLogRouteSchema,
   type ActionAuditLogEntryDto,
-  type ListActionAuditLogResponse
+  type ListActionAuditLogResponse,
+  listModelActivityRouteSchema,
+  type ModelActivityEntryDto,
+  type ListModelActivityResponse
 } from "@moss/shared";
 
 import {
@@ -822,6 +826,56 @@ export function registerAiRoutes(
     }
   );
 
+  const MODEL_ACTIVITY_MAX_LIMIT = 200;
+  const MODEL_ACTIVITY_DEFAULT_LIMIT = 100;
+
+  // Plan 3.6a (#2889): admin-only read of the model activity log. The explicit admin check gives
+  // a non-admin a 403; the admin-only SELECT policy is the second, database-level lock. There is
+  // no retention floor — the log is kept indefinitely (ruling 14).
+  server.get<{
+    Querystring: {
+      kind?: string;
+      model?: string;
+      result?: string;
+      since?: string;
+      before?: string;
+      limit?: number;
+    };
+  }>("/api/ai/model-activity", { schema: listModelActivityRouteSchema }, async (request, reply) => {
+    try {
+      const accessContext = await dependencies.resolveAccessContext(request);
+
+      return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+        await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
+
+        const limit = Math.min(
+          request.query.limit ?? MODEL_ACTIVITY_DEFAULT_LIMIT,
+          MODEL_ACTIVITY_MAX_LIMIT
+        );
+        const since = parseOptionalTimestamp(request.query.since);
+        const before = parseOptionalTimestamp(request.query.before);
+        const rows = await repository.listModelActivity(scopedDb, {
+          ...(request.query.kind ? { kind: request.query.kind } : {}),
+          ...(request.query.model ? { modelName: request.query.model } : {}),
+          ...(request.query.result ? { outcome: request.query.result } : {}),
+          ...(since ? { since } : {}),
+          ...(before ? { before } : {}),
+          limit
+        });
+
+        const entries = rows.map(serializeModelActivityEntry);
+        const last = entries.at(-1);
+        const response: ListModelActivityResponse = {
+          entries,
+          nextBefore: entries.length === limit && last ? last.occurredAt : null
+        };
+        return response;
+      });
+    } catch (error) {
+      return handleRouteError(error, reply);
+    }
+  });
+
   server.get(
     "/api/ai/assistant-tools",
     { schema: listAiAssistantToolsRouteSchema },
@@ -1398,6 +1452,26 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
     occurredAt:
       row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at)
   };
+}
+
+function serializeModelActivityEntry(row: MossModelActivityLog): ModelActivityEntryDto {
+  return {
+    id: row.id,
+    occurredAt:
+      row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at),
+    kind: row.kind,
+    action: row.action,
+    outcome: row.outcome,
+    modelName: row.model_name,
+    result: row.result
+  };
+}
+
+/** Parse an ISO timestamp query param; undefined for absent or unparseable values. */
+function parseOptionalTimestamp(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 export function handleRouteError(error: unknown, reply: FastifyReply) {
