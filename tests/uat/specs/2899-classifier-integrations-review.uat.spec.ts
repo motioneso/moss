@@ -122,10 +122,17 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   await page.getByRole("button", { name: "Connect", exact: true }).click();
 
   await expect(page.getByText("list_lights").first()).toBeVisible();
-  const url = new URL(page.url());
-  const id = url.searchParams.get("integration");
-  expect(id, "the connection detail opens at ?integration=<id>").toBeTruthy();
-  const connectionId = id as string;
+  // Resolve the connection id from the API rather than the address bar, so the spec does not
+  // depend on how the add-connection view updates the URL.
+  const connectionId = await page.evaluate(async () => {
+    const response = await fetch("/api/integrations", { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error(`list -> ${response.status}`);
+    const body = (await response.json()) as {
+      integrations: readonly { readonly id: string; readonly name: string }[];
+    };
+    return body.integrations.find((integration) => integration.name === "Home hub")?.id ?? null;
+  });
+  if (!connectionId) throw new Error("the connection was not created");
 
   // 2. The ordinary controls are present and untouched before any classifier interaction. The
   //    switch input is visually hidden inside its track, so assert state, not visibility.
