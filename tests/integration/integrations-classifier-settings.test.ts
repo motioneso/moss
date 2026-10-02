@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
@@ -267,21 +268,43 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
   });
 
-  it("saves reviews for two different tools without either erasing the other", async () => {
+  it("keeps both reviews when two saves start at the same moment", async () => {
     const turnOff: IntegrationToolDescriptor = { ...TURN_ON, name: "turn_off" };
-    const conn = await createConnection(ids.userA, "Owner A Two Tools", [TURN_ON, turnOff]);
-    for (const target of [TURN_ON, turnOff]) {
-      const saved = await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
-        repository.saveClassifierToolReview(scopedDb, conn.id, target.name, {
-          optIn: true,
-          reviewedRisk: "write",
-          description: "Reviewed",
-          arguments: {},
-          replyTemplate: "Done.",
-          reviewedFingerprint: toolDefinitionFingerprint(target)
-        })
-      );
-      expect(saved.status).toBe("saved");
+    const conn = await createConnection(ids.userA, "Owner A Concurrent Saves", [TURN_ON, turnOff]);
+
+    // Hold the row so both saves finish their read (and block on their write) before either can
+    // commit — the exact window two tabs hit. Without the per-key write, the later save would
+    // publish a whole map built from its own stale read and drop the other review.
+    const locker = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await locker.connect();
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT id FROM app.integration_connections WHERE id = $1 FOR UPDATE", [
+        conn.id
+      ]);
+
+      const save = (target: IntegrationToolDescriptor) =>
+        dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+          repository.saveClassifierToolReview(scopedDb, conn.id, target.name, {
+            optIn: true,
+            reviewedRisk: "write",
+            description: "Reviewed",
+            arguments: {},
+            replyTemplate: "Done.",
+            reviewedFingerprint: toolDefinitionFingerprint(target)
+          })
+        );
+      const pending = Promise.all([save(TURN_ON), save(turnOff)]);
+
+      // Let both saves read the map and reach their blocked write before releasing the row.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await locker.query("COMMIT");
+
+      const [first, second] = await pending;
+      expect(first.status).toBe("saved");
+      expect(second.status).toBe("saved");
+    } finally {
+      await locker.end();
     }
 
     const row = (await load(ids.userA, conn.id))!;
@@ -390,6 +413,39 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
         await otherOwner.close();
       } finally {
         await app.close();
+      }
+    });
+
+    it("does not let another user or an admin delete the owner's review", async () => {
+      const owner = buildApp(ids.userA, createResolverCache());
+      const other = buildApp(ids.userB, createResolverCache());
+      const admin = buildApp(ids.adminUser, createResolverCache());
+      try {
+        const conn = await createConnection(ids.userA, "Owner A Delete Route");
+        const saved = await owner.inject({
+          method: "PUT",
+          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
+          payload: reviewFor(TURN_ON)
+        });
+        expect(saved.statusCode).toBe(200);
+
+        for (const intruder of [other, admin]) {
+          const res = await intruder.inject({
+            method: "DELETE",
+            url: `/api/integrations/${conn.id}/classifier/tools/turn_on`
+          });
+          expect(res.statusCode).toBe(404);
+        }
+
+        const stillThere = await owner.inject({
+          method: "GET",
+          url: `/api/integrations/${conn.id}`
+        });
+        expect(stillThere.json().classifierPreparation).toHaveLength(1);
+      } finally {
+        await owner.close();
+        await other.close();
+        await admin.close();
       }
     });
   });
