@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Settings fills the screen and reads more plainly.** Settings now uses the full width of your screen, the Activity page describes what Moss did in plain words, and a few Settings pages have clearer names: Your assistant, AI providers and What's new. [PR #2930](https://github.com/motioneso/moss/pull/2930)
 - **The sorting model is now the classifier.** The assistant settings screen calls the sorting model the classifier and adds the new classifier gate choice, which stays off until a tool is approved. [PR #2897](https://github.com/motioneso/moss/pull/2897)
 
 #### Added
