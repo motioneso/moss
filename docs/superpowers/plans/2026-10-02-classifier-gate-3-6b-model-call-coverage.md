@@ -222,19 +222,21 @@ The coverage guard was observed failing on a deliberately uncovered call, then g
 
 ## Live-path proof
 
-A dedicated spec, `tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts`, sends a live chat
-turn (the newly recorded path, which reaches no adapter) against the scripted chat provider and
-asserts its `chat` row shows on the real admin Model activity screen without the message text. It
-is a separate spec because the scripted chat provider and the 3.6a briefing-writer HTTP provider
-cannot both be the active chat model on one instance (a single instance rejects the chat turn with
-"Live chat does not support API-key providers yet"). Run via `pnpm test:uat` on an isolated
-instance; post command, exit code, and assertions as a PR comment.
+A dedicated spec, `tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts`, sends a real chat
+turn (the newly recorded path, which reaches no adapter) through the drawer and asserts its `chat`
+row shows on the real admin Model activity screen without the message text. It uses the operator's
+own signed-in Codex login (the real-chat harness, #2732) and skips when none is configured, so CI
+and the gate stay credential-free. The scripted `phase1-smoke` provider could not be used: the ACP
+chat engine spawns `@agentclientprotocol/claude-agent-acp`, whose protocol the scripted fixture no
+longer satisfies, so a scripted turn opens the session but fails before completing. Run via
+`pnpm test:uat` on an isolated instance; the command, exit code, and assertions are posted as a PR
+comment.
 
 Issue #2906 (found while proving this): the scripted chat provider was seeded `api_key`, which the
 live chat route refuses, and a `cli` auth method with no ACP agent id trips the
 `ai_provider_configs_auth_agent_identity` constraint. `tests/uat/seed/chunks/chat-script.ts` now
-seeds an `anthropic` CLI provider with the `claude-acp` identity, and the spec's message includes
-the `phase1-smoke` fixture's expected substring ("goals") so its single scripted turn is eligible.
+seeds an `anthropic` CLI provider with the `claude-acp` identity so any scripted-chat spec gets a
+provider the live route accepts.
 
 If no working path is reachable on an isolated instance, report **code-complete, unverified** with
 the exact blocker and do not claim done.
