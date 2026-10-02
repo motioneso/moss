@@ -26,6 +26,7 @@ import {
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import { CALENDAR_CLASSIFIER_WINDOWS } from "./classifier-window.js";
 import { dayPlanDraftExecute, summarizeDayPlanDraft } from "./day-plan-chat-tool.js";
 import { resolveCalendarEventRef } from "./event-resolver.js";
 import { CalendarRepository } from "./repository.js";
@@ -313,6 +314,12 @@ export const calendarModuleManifest = {
       inputSchema: {
         type: "object",
         properties: {
+          window: {
+            type: "string",
+            enum: [...CALENDAR_CLASSIFIER_WINDOWS],
+            description:
+              "A named day resolved in the user's timezone; when set it wins over startsAfter/startsBefore"
+          },
           startsAfter: {
             type: "string",
             description: "ISO 8601 instant; window start (defaults to now)"
@@ -328,7 +335,16 @@ export const calendarModuleManifest = {
         }
       },
       outputSchema: calendarToolEventsOutputSchema,
-      execute: calendarListVisibleEventsExecute
+      execute: calendarListVisibleEventsExecute,
+      // Classifier opt-in (plan 2.3, #2883). The classifier picks only a named window; the handler
+      // resolves it to instants in the actor's timezone and writes the reply `summary` in code. No
+      // execution is activated here — the gate is unreleased and routes nothing live.
+      classifier: {
+        description:
+          "Read the user's calendar for today (or tomorrow) and answer with a short list.",
+        arguments: { window: { kind: "enum" } },
+        replyTemplate: "{summary}"
+      }
     },
     {
       name: "calendar.createEvent",
@@ -786,6 +802,30 @@ export const calendarModuleManifest = {
         "Holding focus time checks the primary Google Calendar for a free slot and proposes a " +
         "block for approval. All-day entries like reminders or holidays don't count as conflicts, " +
         "so they won't block a free day from getting a focus block."
+    },
+    {
+      id: "calendar.list_visible_events_classifier",
+      description:
+        "Today's or tomorrow's calendar can be answered by the classifier gate instead of the main " +
+        "model, with a bounded event list and a note when an account used cached or unavailable data. " +
+        "Not released for live use yet.",
+      errors: [
+        {
+          code: "classifier_gate_not_released",
+          class: "prerequisite",
+          description:
+            "The classifier gate is not switched on for any tool yet, so it never answers a message.",
+          remediationRef: "calendar.classifier_gate_unavailable"
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.classifier_gate_unavailable",
+          description:
+            "Nothing to do yet; the main model answers messages as usual until the gate is released.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
     }
   ],
   proactiveMonitor: calendarMonitorProvider
