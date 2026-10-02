@@ -114,6 +114,20 @@ function addDaysLocal(dateIso: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+/**
+ * The local civil day of `at` in `tz`: its yyyy-mm-dd plus the UTC instants bounding it
+ * ([start, end)). Shared by the classifier window resolver so day math stays in one place;
+ * `end` is exactly the start of the next local day.
+ */
+export function localDayBounds(at: Date, tz: string): { date: string; start: Date; end: Date } {
+  const date = localDateString(at, tz);
+  return {
+    date,
+    start: localWallClockToUtc(date, 0, tz),
+    end: localWallClockToUtc(addDaysLocal(date, 1), 0, tz)
+  };
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export class FocusBlockInputError extends Error {

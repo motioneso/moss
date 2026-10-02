@@ -135,3 +135,6 @@ blocking	packages/ai/src/serialize-model.ts	tests/uat/specs/2842-admin-provider-
 blocking	packages/chat/src/live/acp-chat-engine.ts	tests/uat/specs/2816-chat-tool-step-quotes.uat.spec.ts
 blocking	apps/web/src/today/today-labels.ts	tests/uat/specs/2503-allday-event-date.uat.spec.ts
 blocking	packages/shared/src/time.ts	tests/uat/specs/2503-allday-event-date.uat.spec.ts
+# #2883 classifier gate 2.3: calendar.listVisibleEvents opts in (declaration only, no activation).
+# Proves the real module and its read surface; the gated path's live proof is slice 3.5/4.3.
+blocking	packages/calendar/**	tests/uat/specs/classifier-tool-menu.uat.spec.ts

@@ -4,6 +4,11 @@ import { nullableStringSchema } from "@moss/shared";
 
 import type { CalendarWriteService } from "./calendar-write-service.js";
 import {
+  classifierWindowRange,
+  isCalendarClassifierWindow,
+  summarizeCalendarEvents
+} from "./classifier-window.js";
+import {
   DEFAULT_TIMEZONE,
   resolveWindow,
   type FocusBlockInput,
@@ -71,7 +76,14 @@ export const calendarToolEventsOutputSchema = {
           "Accounts that could not be read at all (auth_error, connector_revoked, " +
           "feature_grant_disabled, unsupported_provider, service_unavailable)"
       }
-    }
+    },
+    /**
+     * Classifier-gate reply text (plan 2.3, #2883). Optional: it is present only when the handler
+     * was called with a named `window` and the result is small enough to state truthfully. A
+     * truncated result omits it so the gate declines and the message goes to the main model. The
+     * default-model path never sets it, so its behavior is unchanged.
+     */
+    summary: { type: "string" }
   }
 } as const;
 
@@ -97,6 +109,12 @@ interface CalendarContextItemShape {
   readonly degradedReason: string | null;
 }
 
+interface SourceAccountResultShape {
+  readonly account: SourceAccountMetaShape;
+  readonly source: "live" | "cache";
+  readonly degradedReason: string | null;
+}
+
 interface SourceContextService {
   listEmailContext(scopedDb: DataContextDb, input: Record<string, unknown>): Promise<unknown>;
   listCalendarContext(
@@ -104,8 +122,10 @@ interface SourceContextService {
     input: { windowStart?: string; windowEnd?: string; limit?: number }
   ): Promise<{
     items: readonly CalendarContextItemShape[];
-    accounts: readonly unknown[];
+    accounts: readonly SourceAccountResultShape[];
     gaps: readonly unknown[];
+    /** True when more matching events existed than the source returned. */
+    truncated?: boolean;
   }>;
 }
 
@@ -146,20 +166,52 @@ function serializeCalendarContextItem(item: CalendarContextItemShape) {
 export const calendarListVisibleEventsExecute: ToolExecute = async (
   scopedDb,
   input,
-  _ctx,
+  ctx,
   services
 ): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
   const sourceContext = narrowSourceContext(services);
-  const windowStart = typeof input.startsAfter === "string" ? input.startsAfter : undefined;
-  const windowEnd = typeof input.startsBefore === "string" ? input.startsBefore : undefined;
+  // A named window (classifier path) is resolved in code from the actor's timezone; the model never
+  // supplies an instant. Without one, startsAfter/startsBefore keep their existing meaning.
+  const window = isCalendarClassifierWindow(input.window) ? input.window : undefined;
+  const range = window
+    ? classifierWindowRange(window, new Date(), ctx.localTimezone ?? DEFAULT_TIMEZONE)
+    : undefined;
+  const windowStart = range
+    ? range.startsAfter.toISOString()
+    : typeof input.startsAfter === "string"
+      ? input.startsAfter
+      : undefined;
+  const windowEnd = range
+    ? range.startsBefore.toISOString()
+    : typeof input.startsBefore === "string"
+      ? input.startsBefore
+      : undefined;
   const limit = typeof input.limit === "number" && input.limit > 0 ? input.limit : undefined;
-  const { items, accounts, gaps } = await sourceContext.listCalendarContext(scopedDb, {
+  const { items, accounts, gaps, truncated } = await sourceContext.listCalendarContext(scopedDb, {
     ...(windowStart ? { windowStart } : {}),
     ...(windowEnd ? { windowEnd } : {}),
     ...(limit ? { limit } : {})
   });
-  return { data: { events: items.map(serializeCalendarContextItem), accounts, gaps } };
+  const events = items.map(serializeCalendarContextItem);
+  const degraded =
+    accounts.some((account) => account.source === "cache" || account.degradedReason !== null) ||
+    gaps.length > 0;
+  const summary = range
+    ? summarizeCalendarEvents(events, {
+        label: range.label,
+        degraded,
+        truncated: truncated === true
+      })
+    : null;
+  return {
+    data: {
+      events,
+      accounts,
+      gaps,
+      ...(summary === null ? {} : { summary })
+    }
+  };
 };
 
 function narrowCalendarWrite(services: ToolServices | undefined): CalendarWriteService {
