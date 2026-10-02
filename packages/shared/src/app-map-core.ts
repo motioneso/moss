@@ -401,7 +401,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "prerequisite",
     remediationRef: "core.ai.connect_chat_provider",
     description:
-      "No chat model is available. The chat panel header reads Not connected, the message box is replaced by a Connect a provider link to Settings > Assistant & AI, and nothing can be sent."
+      "No chat model is available. The chat panel header reads Not connected, the message box is replaced by a Connect a provider link to Settings > Your assistant, and nothing can be sent."
   },
   {
     code: "core.ai.chat_locked_model_unavailable",
@@ -477,7 +477,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
   {
     id: "core.ai.connect_chat_provider",
     description:
-      "Press Connect a provider in the chat panel, or open Settings > Assistant & AI, and connect a provider that can chat.",
+      "Press Connect a provider in the chat panel, or open Settings > Your assistant, and connect a provider that can chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
