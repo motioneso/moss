@@ -1,0 +1,33 @@
+PASS 1440: no sideways scroll (scrollWidth 1440 <= 1440)
+PASS 1440: Settings frame fills width (1198px of 1440px window)
+PASS 1440: rows show plain actions
+PASS 1440: no raw tool names on screen
+PASS 1440: no rate-limit claim on refused rows
+PASS 1440: refused row says held back and did not run
+PASS 1440: failed row shows plain chip
+PASS 1440: every element in an Activity row has at least 4px clearance (0 too close)
+PASS 1440: module filter Calendar leaves 40 rows, all Calendar
+PASS 1440: no fixed button covers the filter row when scrolled (0 overlaps)
+PASS 1440: Modules wording is plain
+PASS 1920: no sideways scroll (scrollWidth 1920 <= 1920)
+PASS 1920: Settings frame fills width (1678px of 1920px window)
+PASS 1920: rows show plain actions
+PASS 1920: no raw tool names on screen
+PASS 1920: no rate-limit claim on refused rows
+PASS 1920: refused row says held back and did not run
+PASS 1920: failed row shows plain chip
+PASS 1920: every element in an Activity row has at least 4px clearance (0 too close)
+PASS 1920: module filter Calendar leaves 40 rows, all Calendar
+PASS 1920: no fixed button covers the filter row when scrolled (0 overlaps)
+PASS 1920: Modules wording is plain
+PASS 390: no sideways scroll (scrollWidth 390 <= 390)
+PASS 390: Settings frame fills phone width (366px)
+PASS 390: rows show plain actions
+PASS 390: no raw tool names on screen
+PASS 390: no rate-limit claim on refused rows
+PASS 390: refused row says held back and did not run
+PASS 390: failed row shows plain chip
+PASS 390: every element in an Activity row has at least 4px clearance (0 too close)
+PASS 390: module filter Calendar leaves 40 rows, all Calendar
+PASS 390: no fixed button covers the filter row when scrolled (0 overlaps)
+PASS 390: Modules wording is plain
