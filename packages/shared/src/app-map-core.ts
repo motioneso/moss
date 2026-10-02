@@ -186,7 +186,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "chat, not reviewed, risk not chosen, changed since reviewed, or not allowed), and a saved " +
       "tool with no risk shows Risk needed rather than Approved. A missing or unsupported default " +
       "chat model is named and links to Your assistant to choose one; any other preparation error " +
-      "shows the server's own message. Nothing is stored by a cancelled or failed prepare.",
+      "shows the server's own message. Nothing is stored by a cancelled or failed prepare. When " +
+      "the gate is active, a tool that needs a device or area name can pick it from the " +
+      "connection's own list, read once through a listing tool the owner reviewed as Only reads; " +
+      "the list is cached briefly for that owner only, and a missing or expired list keeps the " +
+      "tool out.",
     path: "/settings?section=integrations",
     scope: "user"
   },

@@ -88,6 +88,31 @@ export const integrationsModuleManifest = {
       ]
     },
     {
+      id: "integrations.connection_classifier_candidates",
+      description:
+        "A tool that needs a device or area name can pick it from the connection's list. It is " +
+        "read once through the reviewed read-only listing tool, cached briefly per owner, and " +
+        "never mixed across accounts. A missing list keeps the tool out.",
+      remediations: [
+        {
+          id: "integrations.connection_classifier_candidates.refresh",
+          description:
+            "Review the connection's device-listing tool as Only reads, switch it on for the " +
+            "classifier, and prepare the connection again.",
+          path: "/settings?section=integrations"
+        }
+      ],
+      errors: [
+        {
+          code: "integrations.connection_classifier_candidates.unavailable",
+          class: "prerequisite",
+          remediationRef: "integrations.connection_classifier_candidates.refresh",
+          description:
+            "A tool needs a device or area name, but the connection has no current list of them."
+        }
+      ]
+    },
+    {
       id: "integrations.credentials_paused",
       description:
         "Integration credentials pause when no encryption key is set up. Credentialed tools " +
