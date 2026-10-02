@@ -626,15 +626,17 @@ turn. Show normal and YOLO behavior. Update chat features/errors/remediations an
 core app map in this PR. Exit: live proof linked on the future product PR with exit
 code and redacted assertions; collect shadow data only after privacy decisions clear.
 
-### 3.6 Classifier log screen (one UI session)
+### 3.6 Model activity log screen (one UI session)
 
 Owner: UI implementer. Depends on 3.4 (shadow records). Build the admin-only screen agreed in
-`docs/superpowers/mockups/classifier-gate/audit-log.html`: a day-grouped feed of classifier calls with
-action, one-line outcome, time, model name and result, and filters for decision, model and time.
-Reads the owner-only records from 3.4 through an admin-gated endpoint; shows no chat text; empty,
-no-match and retention states as mocked. The 7-day purge from 3.4 is the only retention. Add the
-screen to the app map. Tests: a non-admin cannot read it, and a line older than 7 days is gone.
-Exit: live-path proof on a dev instance through the real screen.
+`docs/superpowers/mockups/classifier-gate/audit-log.html`: a day-grouped feed of every model call
+(classifier, chat answer, background task) with action, one-line outcome, time, kind, actual model name
+and result, and filters for kind, model, result and time. It shows the action taken, never the chat
+text. Reads through an admin-gated endpoint; empty, no-match and retention states as mocked. Retention
+is 7 days. Recording chat answers and background tasks widens logging beyond the gate, so the recording
+side needs its own spec note and Ben's confirmation before this task starts. Add the screen to the app
+map. Tests: a non-admin cannot read it, and a line older than 7 days is gone. Exit: live-path proof on a
+dev instance through the real screen.
 
 ## Slice 4: prepare and turn on
 
@@ -794,9 +796,10 @@ These answers supersede the matching "Decisions still needed" entries below.
     scheduled job that 3.4 must include and test.
 
 11. **No reply marker.** Slice 5 (5.1, 5.2) is superseded. Replies from the gate carry no marker.
-12. **Classifier log replaces it.** An admin-only log of classifier calls only (shadow or on, handled or
-    declined), showing the action, outcome, model name and result, not the chat text, with filters.
-    7-day retention, same as the shadow records. Coordinator ruling, 2026-10-01. Build task 3.6.
+12. **Model activity log replaces it.** An admin-only log of every model call (classifier, chat answer,
+    background task) showing the action, outcome, model name and result, not the chat text, with
+    filters. Mockup agreed 2026-10-01. Its build slice and retention (7 days proposed) still need a
+    plan entry and Ben's confirmation, because it widens logging beyond the gate.
 13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
 
 Still open: the external candidate-dispatch proof (module-platform implementer).

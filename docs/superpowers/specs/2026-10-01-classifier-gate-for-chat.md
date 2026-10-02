@@ -162,10 +162,9 @@ Ben agreed three mockups on 2026-10-01, in `docs/superpowers/mockups/classifier-
 - **Connection setup** (`connection-setup.html`). A switch on the connection detail screen, then a
   per-tool review of description, reply and risk, with the states unknown risk, not prepared,
   preparing, review required, approved, stale, failed, no tools and disconnected.
-- **Classifier log** (`audit-log.html`). An admin-only feed of every classifier call, in shadow or on,
-  handled or declined, grouped by day: action, one-line outcome, time, the actual model name and a
-  result. It shows the action taken, not the chat text. Filters: decision, model, time. It covers
-  classifier calls only and keeps 7 days, the same as the shadow records.
+- **Model activity log** (`audit-log.html`). An admin-only feed of every model call, grouped by day:
+  action, one-line outcome, time, kind (chat answer, classifier, background task), the actual model
+  name and a result. It shows the action taken, not the chat text. Filters: kind, model, result, time.
 
 There is no marker on chat replies (Ben, 2026-10-01). The log replaces it as the way to trace a wrong
 answer.
