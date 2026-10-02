@@ -7,18 +7,20 @@
  * wiring closure produced through the `adoptClassifierGate` seam, and drives it against the REAL
  * `SessionTokenRegistry` that `registerChatRoutes` creates (observed via prototype spies, the same
  * approach as `chat-routes-mcp-token-revoke-adopt.test.ts`). It asserts:
- *   - one mint and one matching revoke on decline, on cancellation and on a thrown evaluate;
- *   - the minted token has an empty allowlist and the gate's short TTL.
+ *   - one mint and one matching revoke on decline and on cancellation;
+ *   - the minted token has an empty allowlist, a one-minute TTL and a FIXED expiry.
  *
  * Observed red when the `routes.ts` revoke call is removed (see commit message), then restored.
+ * The thrown-evaluate revoke path is covered by the runner's own unit test.
  */
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
-import { SessionTokenRegistry } from "@moss/ai";
+import { SessionTokenRegistry, InvalidSessionTokenError } from "@moss/ai";
 import { registerChatRoutes } from "../../packages/chat/src/routes.js";
 import {
   GATE_TOKEN_TTL_MS,
+  buildClassifierGateRunner,
   type ClassifierGateRunner
 } from "../../packages/chat/src/live/classifier-gate-runner.js";
 import type { GateMode } from "../../packages/chat/src/live/classifier-gate.js";
@@ -91,7 +93,7 @@ describe("classifier gate wiring through registerChatRoutes (#2901)", () => {
     expect(mintedSessionIds.every((id) => id.startsWith("classifier-gate:"))).toBe(true);
   });
 
-  it("applies the tool limit (empty allowlist) and the gate's short token TTL", async () => {
+  it("applies the tool limit (empty allowlist), the short TTL and fixed expiry", async () => {
     const { runner, mint } = routedGate();
 
     await runner.evaluate(REQUEST);
@@ -101,5 +103,42 @@ describe("classifier gate wiring through registerChatRoutes (#2901)", () => {
     expect(identity.allowedToolNames).not.toBeNull();
     expect(identity.allowedToolNames?.size).toBe(0);
     expect(options?.ttlMs).toBe(GATE_TOKEN_TTL_MS);
+    expect(options?.fixedExpiry).toBe(true);
+  });
+
+  it("a used gate token still dies after one minute (fixed expiry, not sliding)", async () => {
+    // The production builder mints through a wrapped registry so we can hold the real token it made
+    // (its revoke is swallowed). Without `fixedExpiry`, the first `verify` slides the expiry out to
+    // the registry's 60-minute default and the lifetime assertion below goes red.
+    let now = 0;
+    const registry = new SessionTokenRegistry({ clock: { now: () => now } });
+    let mintedToken = "";
+    let mintedOptions: unknown;
+
+    const runner = buildClassifierGateRunner({
+      readMode: async () => "on",
+      tokens: {
+        mint: (identity, options) => {
+          mintedOptions = options;
+          mintedToken = registry.mint(identity, options);
+          return mintedToken;
+        },
+        // Swallow the revoke so the token's own expiry is what we observe.
+        revokeBySessionId: () => undefined
+      },
+      now: () => now
+    });
+
+    await runner.evaluate(REQUEST);
+    expect(mintedToken.startsWith("jst_")).toBe(true);
+    expect(mintedOptions).toMatchObject({ ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true });
+
+    // Use the real minted token once at 30 seconds: verify() must NOT extend a fixed-expiry token.
+    now = 30_000;
+    expect(registry.verify(mintedToken).chatSessionId).toMatch(/^classifier-gate:/);
+
+    // Past one minute, the token is dead even though it was used.
+    now = 61_000;
+    expect(() => registry.verify(mintedToken)).toThrow(InvalidSessionTokenError);
   });
 });

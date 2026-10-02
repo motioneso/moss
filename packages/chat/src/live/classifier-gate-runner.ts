@@ -40,7 +40,7 @@ export interface ClassifierGateWiringDeps {
         chatSessionId: string;
         allowedToolNames: Set<string> | null;
       },
-      options?: { readonly ttlMs?: number }
+      options?: GateTokenMintOptions
     ): string;
     revokeBySessionId(chatSessionId: string): void;
   };
@@ -48,8 +48,20 @@ export interface ClassifierGateWiringDeps {
 }
 
 /**
- * The gate token's own short lifetime (one minute). A skipped revoke can then leak a token for at
- * most a minute, instead of the registry's 60-minute default.
+ * Mint options for a gate token. `fixedExpiry` is REQUIRED to be true by the production wiring: a
+ * gate token must go stale on its own after `ttlMs`, even if something keeps using it, so a skipped
+ * revoke cannot keep it alive.
+ */
+export interface GateTokenMintOptions {
+  readonly ttlMs?: number;
+  readonly fixedExpiry?: boolean;
+}
+
+/**
+ * The gate token's own short lifetime (one minute), paired with `fixedExpiry: true` so use never
+ * slides it out. The registry's `verify` would otherwise push the expiry out to its 60-minute
+ * default on every use (see `SessionTokenRegistry.verify`), which is exactly the leak this cap is
+ * meant to close.
  */
 export const GATE_TOKEN_TTL_MS = 60_000;
 
@@ -61,8 +73,8 @@ export function classifierGateSessionId(correlationId: string): string {
 /**
  * Task 4.1 (#2901) — the real gate runner wiring. Mints one short-lived token per attempt through
  * the composition root's registry, scoped to a fresh correlation id, with an empty allowlist (never
- * unrestricted) and a one-minute TTL, and revokes it by the exact same session id. The ports factory
- * is left unset (that is 3.5), so every attempt declines.
+ * unrestricted) and a one-minute FIXED expiry (use never extends it), and revokes it by the exact
+ * same session id. The ports factory is left unset (that is 3.5), so every attempt declines.
  */
 export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): ClassifierGateRunner {
   return createClassifierGateRunner({
@@ -82,7 +94,7 @@ export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): Class
         ),
       revoke: (correlationId) =>
         deps.tokens.revokeBySessionId(classifierGateSessionId(correlationId)),
-      tokenOptions: { ttlMs: GATE_TOKEN_TTL_MS }
+      tokenOptions: { ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true }
     },
     now: deps.now ?? (() => Date.now())
   });
@@ -97,16 +109,17 @@ export interface ClassifierGateRunner {
 export interface GateTokenCallbacks {
   /**
    * Mints a short-lived gate token through the composition root's real token registry. `options`
-   * carries the gate token's own TTL when the wiring sets one.
+   * carries the gate token's own TTL and fixed-expiry flag when the wiring sets them.
    */
-  mint(actorUserId: string, correlationId: string, options?: { readonly ttlMs?: number }): string;
+  mint(actorUserId: string, correlationId: string, options?: GateTokenMintOptions): string;
   /** Revokes that token alone. Never revokes an existing model session's tokens. */
   revoke(correlationId: string): void;
   /**
-   * Mint options applied to every gate token. The production wiring sets a short `ttlMs`, so a
-   * skipped revoke can only leak a token for a minute.
+   * Mint options applied to every gate token. The production wiring sets a short `ttlMs` AND
+   * `fixedExpiry: true`, so use never slides the expiry out and a skipped revoke leaves the token
+   * stale after a minute, not an hour.
    */
-  readonly tokenOptions?: { readonly ttlMs?: number };
+  readonly tokenOptions?: GateTokenMintOptions;
 }
 
 /** Everything a `ClassifierGate` needs except the clock (supplied by the runner) and the gateway. */

@@ -160,8 +160,9 @@ describe the handled-turn path as present but unavailable pending review.
    `registerChatRoutes` itself, captures the runner the wiring closure built through the
    `adoptClassifierGate` seam, and drives it against the real `SessionTokenRegistry` that
    `registerChatRoutes` creates: one mint and one matching revoke on decline and cancellation,
-   plus the empty-allowlist token limit and the gate's short TTL. The thrown-evaluate revoke path
-   is covered by the runner's own unit test. Observed red when the production revoke is removed.
+   plus the empty-allowlist token limit and the gate's short FIXED-expiry lifetime (a used token
+   dies after one minute, proven against the real registry). The thrown-evaluate revoke path is
+   covered by the runner's own unit test. Observed red when the production revoke is removed.
 8. Token safety: observe the revoke assertion fail with the `finally` removed, restore it.
 
 ### Post-review fixes (QA, 2026-10-02)
