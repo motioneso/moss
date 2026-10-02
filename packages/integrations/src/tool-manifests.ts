@@ -378,7 +378,7 @@ function buildClassifierDeclaration(
   if (source === undefined) return declaration;
 
   const listingEntry = classifierByTool.get(source);
-  if (!listingEntry) return declaration;
+  if (!listingEntry || listingEntry.risk !== "read") return declaration;
   const sourceFingerprint = toolDefinitionFingerprint(listingEntry.tool);
 
   const candidates = async (

@@ -558,7 +558,7 @@ describe("runtime classifier menu on synthetic tools", () => {
     });
   }
 
-  function build(candidateCache: CandidateCache) {
+  function build(connections: readonly ConnectionRow[], candidateCache: CandidateCache) {
     return createIntegrationsActiveModulesResolver(async () => [], {
       dataContext: fakeDataContext(),
       cipher: createIntegrationsCipher(),
@@ -566,13 +566,13 @@ describe("runtime classifier menu on synthetic tools", () => {
       resolverCache: createResolverCache(),
       candidateCache,
       repository: {
-        listConnections: async () => [reviewedConnection()]
+        listConnections: async () => connections
       } as never
     });
   }
 
   it("attaches the reviewed declaration and passes the SDK eligibility check", async () => {
-    const modules = await build(createCandidateCache())("actor-1");
+    const modules = await build([reviewedConnection()], createCandidateCache())("actor-1");
     const synthetic = modules.find((module) => module.id === "integration-home")!;
     const turnOn = (synthetic.assistantTools ?? []).find((tool) => tool.name === "home.turn_on")!;
 
@@ -625,6 +625,31 @@ describe("runtime classifier menu on synthetic tools", () => {
     expect(eligibility.eligible).toBe(false);
   });
 
+  it("does not attach a candidates hook when the listing tool is not reviewed as read", async () => {
+    const listingFingerprint = toolDefinitionFingerprint(listing as IntegrationToolDescriptor);
+    const switchFingerprint = toolDefinitionFingerprint(switchTool as IntegrationToolDescriptor);
+    const writeListing = connection({
+      discoveredTools: [listing, switchTool],
+      classifierPreparation: {
+        version: 1,
+        entries: {
+          list_lights: entry(listingFingerprint, { reviewedRisk: "write" }),
+          turn_on: entry(switchFingerprint, {
+            description: "Turn one light on.",
+            arguments: { target: { kind: "candidates", candidateSource: "list_lights" } },
+            replyTemplate: "Turned {summary}"
+          })
+        }
+      }
+    });
+
+    const modules = await build([writeListing], createCandidateCache())("actor-1");
+    const synthetic = modules.find((module) => module.id === "integration-home")!;
+    const turnOn = (synthetic.assistantTools ?? []).find((tool) => tool.name === "home.turn_on")!;
+    expect(turnOn.classifier?.candidates).toBeUndefined();
+    expect(checkClassifierEligibility(turnOn).eligible).toBe(false);
+  });
+
   it("reads only the owner's cached candidates in the hook", async () => {
     const cache = createCandidateCache();
     const listingFingerprint = toolDefinitionFingerprint(listing as IntegrationToolDescriptor);
@@ -637,7 +662,7 @@ describe("runtime classifier menu on synthetic tools", () => {
       }
     );
 
-    const modules = await build(cache)("actor-1");
+    const modules = await build([reviewedConnection()], cache)("actor-1");
     const synthetic = modules.find((module) => module.id === "integration-home")!;
     const turnOn = (synthetic.assistantTools ?? []).find((tool) => tool.name === "home.turn_on")!;
     const signal = new AbortController().signal;

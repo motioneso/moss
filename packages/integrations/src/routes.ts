@@ -21,6 +21,7 @@ import {
 } from "@moss/shared";
 
 import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
+import { candidateCache } from "./classifier-candidates.js";
 import {
   prepareClassifierToolDrafts,
   type ClassifierPreparationPort
@@ -196,6 +197,7 @@ export function registerIntegrationsRoutes(
       );
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
+      candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
       return toDetail(updated, updated.discoveredTools);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -234,6 +236,7 @@ export function registerIntegrationsRoutes(
       );
 
       cache.drop(accessContext.actorUserId);
+      candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
       return detail;
     } catch (error) {
       return handleRouteError(error, reply);
@@ -266,6 +269,7 @@ export function registerIntegrationsRoutes(
       );
       if (!deleted) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
+      candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
       return reply.code(204).send();
     } catch (error) {
       return handleRouteError(error, reply);
@@ -310,6 +314,7 @@ export function registerIntegrationsRoutes(
           return reply.code(400).send({ error: "This connection has too many reviews saved." });
         }
         cache.drop(accessContext.actorUserId);
+        candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
         return toDetail(result.connection, result.connection.discoveredTools);
       } catch (error) {
         return handleRouteError(error, reply);
@@ -332,6 +337,7 @@ export function registerIntegrationsRoutes(
         );
         if (!updated) return reply.code(404).send({ error: "Integration not found" });
         cache.drop(accessContext.actorUserId);
+        candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
         return toDetail(updated, updated.discoveredTools);
       } catch (error) {
         return handleRouteError(error, reply);
