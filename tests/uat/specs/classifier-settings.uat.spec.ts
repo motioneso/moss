@@ -54,7 +54,7 @@ async function json(
   );
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model");
+const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
 const classifierHeading = (page: Page) =>
   page.locator(".rt__name").filter({ hasText: "Classifier" }).first();
 const gateButton = (page: Page, name: string) =>
