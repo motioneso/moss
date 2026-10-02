@@ -250,6 +250,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
       "The Services group has an Email reading row: it reads the emails the sorting model " +
       "cannot settle and writes their summaries and suggested actions. " +
+      "The Services group also has a Classifier gate switch beside the Sorting model row: Off by " +
+      "default, with Shadow and On choices. Off sends nothing to the classifier. Shadow records " +
+      "what the gate would have done without acting. On lets the gate act, and every user's " +
+      "eligible messages then reach the classifier provider; On cannot be chosen until an approved " +
+      "tool release exists, and the switch shows why when it cannot. " +
       "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +
@@ -398,6 +403,13 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     remediationRef: "core.today.retry_evening_loop",
     description:
       "An evening open-loop choice (Tomorrow, Choose a day or Let it go) could not be saved, so the task was not changed."
+  },
+  {
+    code: "core.ai.classifier_gate_not_released",
+    class: "prerequisite",
+    remediationRef: "core.ai.classifier_gate_not_released",
+    description:
+      "The classifier gate was left on Off because no tool release has been approved for it yet."
   }
 ];
 
@@ -435,6 +447,14 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.add_supported_cli_provider",
     description:
       "Ask an administrator to add an Anthropic, Codex, OpenCode, or Google CLI provider for live chat.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
+  },
+  {
+    id: "core.ai.classifier_gate_not_released",
+    description:
+      "Open Settings > Assistant & AI and leave the Classifier gate on Off or Shadow until a tool " +
+      "release has been approved. The gate cannot be turned On before then.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

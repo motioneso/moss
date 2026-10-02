@@ -126,6 +126,7 @@ import {
   buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
+  ClassifierReleaseRepository,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
@@ -1733,7 +1734,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerRuntimeConfigRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        repository: new SettingsRepository()
+        repository: new SettingsRepository(),
+        // Classifier gate activation (task 1.2, #2881): the settings boundary stays module-isolated
+        // and calls this injected port; the chat-owned reader supplies the answer.
+        classifierActivation: {
+          hasEligibleRelease: (scopedDb) =>
+            new ClassifierReleaseRepository().hasEligibleRelease(scopedDb)
+        }
       });
       installWebSearchResolvers({
         webSearchCipher,

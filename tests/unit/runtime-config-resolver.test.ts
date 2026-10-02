@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { dataContextBrand, type DataContextDb } from "../../packages/db/src/index.js";
 import {
   BRAVE_API_KEY_CONFIG_KEY,
+  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
   EMBED_MODEL_CONFIG_KEY,
   EMBED_PROVIDER_CONFIG_KEY
@@ -90,5 +91,36 @@ describe("RuntimeConfigResolver", () => {
 
     await expect(resolverA.resolveEnum(EMBED_PROVIDER_CONFIG_KEY)).resolves.toBe("stub");
     await expect(resolverB.resolveEnum(EMBED_PROVIDER_CONFIG_KEY)).resolves.toBe("local");
+  });
+
+  it("resolves the classifier gate to off when no value is stored (#2881)", async () => {
+    const resolver = new RuntimeConfigResolver(scopedDbWithSetting(undefined), {});
+
+    await expect(resolver.resolveEnum(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).resolves.toBe("off");
+    await expect(resolver.getStatus(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).resolves.toEqual({
+      value: "off",
+      source: "default"
+    });
+  });
+
+  it("resolves a stored shadow or on classifier gate value (#2881)", async () => {
+    await expect(
+      new RuntimeConfigResolver(scopedDbWithSetting({ value: "shadow" }), {}).resolveEnum(
+        CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+      )
+    ).resolves.toBe("shadow");
+    await expect(
+      new RuntimeConfigResolver(scopedDbWithSetting({ value: "on" }), {}).resolveEnum(
+        CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+      )
+    ).resolves.toBe("on");
+  });
+
+  it("rejects an invalid classifier gate value at the read boundary (#2881)", async () => {
+    const resolver = new RuntimeConfigResolver(scopedDbWithSetting({ value: "enabled" }), {});
+
+    await expect(resolver.resolveEnum(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).rejects.toThrow(
+      'Invalid runtime config "chat.classifier_gate_mode" value "enabled"'
+    );
   });
 });

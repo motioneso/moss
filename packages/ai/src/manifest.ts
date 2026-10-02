@@ -207,6 +207,31 @@ export const aiModuleManifest = {
       ]
     },
     {
+      id: "ai.classifier_gate_setting",
+      description:
+        "Classifier gate switch beside the Sorting model row in Settings > Assistant & AI: Off by " +
+        "default, Shadow records only, On acts. On needs an approved tool release; then every " +
+        "user's eligible messages reach the classifier.",
+      remediations: [
+        {
+          id: "ai.classifier_gate_setting.not_released",
+          description:
+            "Leave the Classifier gate on Off or Shadow until a tool release has been approved; " +
+            "the gate cannot be turned On before then.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "ai.classifier_gate_setting.not_released",
+          class: "prerequisite",
+          remediationRef: "ai.classifier_gate_setting.not_released",
+          description:
+            "Setting the classifier gate to On was refused because no approved tool release exists."
+        }
+      ]
+    },
+    {
       id: "ai.sorting_model",
       description:
         "Sorting model: a row under Services on Settings > Assistant & AI. An admin picks a small, " +
