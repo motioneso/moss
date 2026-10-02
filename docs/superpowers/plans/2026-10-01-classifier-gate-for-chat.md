@@ -869,14 +869,14 @@ Revision 1 adds two decisions:
 
 Additional seams requiring a ruling, not an invented implementation assumption:
 
-- **Prepared text and candidate privacy (Ben, before real 2b preparation/candidate
-  use and 2.3/3.5):** spec 3.3 says no stored data reaches the classifier, while 3.4
-  allows device names. Slice 2b also exposes reviewed prepared descriptions and
-  template metadata to the classifier. Agree the narrow allowance, whether the
-  read-only device-list preparation is permitted, and the corresponding disclosure.
-  Keep real definition sharing, prepared text sharing and device inventories
-  distinct; none is implicitly approved by the others. Until ruled, use static
-  enums/synthetic fixtures. Reconcile spec 3.3/3.4 after the ruling.
+- **Prepared text and candidate privacy — resolved by ruling 8 (Ben, 2026-10-01).**
+  Ruling 8 set the classifier's data ceiling to anything the default model would see:
+  prepared descriptions and candidate lists (device names) are allowed, while credentials,
+  secrets and example values stay excluded. The read-only device-list preparation in 2b.5
+  is permitted under that ceiling, and only when the reviewed record marks the listing tool
+  read-only and the existing gateway permits the call. This reconciles spec 3.3 and 3.4.
+  Keep real definition sharing, prepared text sharing and device inventories distinct, as
+  none is implicitly approved by the others.
 - ~~**Shadow retention/private chat (Ben, before 3.5 collection)**~~ — **resolved by ruling 16
   (Ben, 2026-10-02):** records are kept forever and deleted on the owner's request; private
   chats never take part. Task #2908.
