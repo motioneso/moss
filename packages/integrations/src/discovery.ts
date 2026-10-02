@@ -37,6 +37,9 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     classifierEnabled: row.classifierEnabled,
     lastError: row.lastError,
     discoveredTools: tools,
+    enabledGroups: row.enabledGroups,
+    enabledTools: row.enabledTools,
+    mutedTools: row.mutedTools,
     classifierPreparation: row.classifierPreparation
   };
   const groupNames = [...new Set(withGroups.map((t) => t.group))].sort((a, b) =>

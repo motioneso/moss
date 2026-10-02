@@ -8,8 +8,7 @@ import {
   emptyPreparationMap,
   INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   parsePreparationMap,
-  withPreparationEntry,
-  withoutPreparationEntry,
+  preparationEntry,
   type ClassifierPreparationEntry,
   type ClassifierPreparationMap,
   type ReviewedEntryInput
@@ -280,11 +279,13 @@ export class IntegrationsRepository {
     }
 
     const map = row.classifierPreparation;
-    const isNewEntry = !(toolName in map.entries);
-    if (isNewEntry && Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES) {
+    const existing = preparationEntry(map, toolName);
+    if (
+      existing === undefined &&
+      Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
+    ) {
       return { status: "too_many" };
     }
-    const priorVersion = map.entries[toolName]?.preparationVersion ?? 0;
     const entry: ClassifierPreparationEntry = {
       optIn: input.optIn,
       reviewedRisk: input.reviewedRisk,
@@ -294,11 +295,10 @@ export class IntegrationsRepository {
       ...(input.candidateSource !== undefined ? { candidateSource: input.candidateSource } : {}),
       definitionFingerprint: input.reviewedFingerprint,
       reviewedAt: new Date().toISOString(),
-      preparationVersion: priorVersion + 1
+      preparationVersion: (existing?.preparationVersion ?? 0) + 1
     };
-    const next = withPreparationEntry(map, toolName, entry);
 
-    const updated = await this.writePreparationMap(scopedDb, id, next);
+    const updated = await this.writePreparationEntry(scopedDb, id, toolName, entry);
     return updated ? { status: "saved", connection: updated } : { status: "not_found" };
   }
 
@@ -310,23 +310,53 @@ export class IntegrationsRepository {
   ): Promise<ConnectionRow | null> {
     assertDataContextDb(scopedDb);
 
-    const row = await this.getConnection(scopedDb, id);
-    if (!row) return null;
-    return this.writePreparationMap(
-      scopedDb,
-      id,
-      withoutPreparationEntry(row.classifierPreparation, toolName)
-    );
-  }
-
-  private async writePreparationMap(
-    scopedDb: DataContextDb,
-    id: string,
-    map: ClassifierPreparationMap
-  ): Promise<ConnectionRow | null> {
+    // One statement, one key: removing a tool cannot clobber a concurrent save of another tool.
     const result = await sql<ConnectionSqlRow>`
       UPDATE app.integration_connections
-      SET classifier_preparation = ${JSON.stringify(map)}::jsonb,
+      SET classifier_preparation = CASE
+            WHEN jsonb_typeof(classifier_preparation) = 'object'
+             AND jsonb_typeof(classifier_preparation->'entries') = 'object'
+            THEN classifier_preparation #- ARRAY['entries', ${toolName}]
+            ELSE classifier_preparation
+          END,
+          updated_at = now()
+      WHERE id = ${id}::uuid
+      RETURNING ${sql.raw(SELECT_COLUMNS)}
+    `.execute(scopedDb.db);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
+  /**
+   * Write a single reviewed entry with `jsonb_set`, touching only that tool's key. Two tabs saving
+   * different tools therefore merge instead of overwriting each other's map (the whole-map write
+   * this replaces could lose the other tab's review).
+   */
+  private async writePreparationEntry(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string,
+    entry: ClassifierPreparationEntry
+  ): Promise<ConnectionRow | null> {
+    const entryJson = JSON.stringify(entry);
+    const result = await sql<ConnectionSqlRow>`
+      UPDATE app.integration_connections
+      SET classifier_preparation = jsonb_set(
+            jsonb_set(
+              CASE
+                WHEN jsonb_typeof(classifier_preparation) = 'object'
+                 AND jsonb_typeof(classifier_preparation->'entries') = 'object'
+                THEN classifier_preparation
+                ELSE '{"version": 1, "entries": {}}'::jsonb
+              END,
+              '{entries}',
+              COALESCE(classifier_preparation->'entries', '{}'::jsonb),
+              true
+            ),
+            ARRAY['entries', ${toolName}],
+            ${entryJson}::jsonb,
+            true
+          ),
           updated_at = now()
       WHERE id = ${id}::uuid
       RETURNING ${sql.raw(SELECT_COLUMNS)}

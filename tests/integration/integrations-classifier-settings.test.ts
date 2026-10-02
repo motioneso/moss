@@ -239,6 +239,55 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     expect(effectiveClassifierTools(row)).toEqual([]);
   });
 
+  it("does not make a tool classifier-eligible while it is switched off for ordinary chat", async () => {
+    const conn = await createConnection(ids.userA, "Owner A Chat Off");
+    await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.saveClassifierToolReview(scopedDb, conn.id, "turn_on", {
+        optIn: true,
+        reviewedRisk: "write",
+        description: "Turn one light on",
+        arguments: {},
+        replyTemplate: "Turned it on.",
+        reviewedFingerprint: toolDefinitionFingerprint(TURN_ON)
+      })
+    );
+    await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.updateConnection(scopedDb, conn.id, { classifierEnabled: true })
+    );
+    expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
+
+    await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.updateConnection(scopedDb, conn.id, { mutedTools: ["turn_on"] })
+    );
+    expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toEqual([]);
+
+    await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.updateConnection(scopedDb, conn.id, { mutedTools: [] })
+    );
+    expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
+  });
+
+  it("saves reviews for two different tools without either erasing the other", async () => {
+    const turnOff: IntegrationToolDescriptor = { ...TURN_ON, name: "turn_off" };
+    const conn = await createConnection(ids.userA, "Owner A Two Tools", [TURN_ON, turnOff]);
+    for (const target of [TURN_ON, turnOff]) {
+      const saved = await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+        repository.saveClassifierToolReview(scopedDb, conn.id, target.name, {
+          optIn: true,
+          reviewedRisk: "write",
+          description: "Reviewed",
+          arguments: {},
+          replyTemplate: "Done.",
+          reviewedFingerprint: toolDefinitionFingerprint(target)
+        })
+      );
+      expect(saved.status).toBe("saved");
+    }
+
+    const row = (await load(ids.userA, conn.id))!;
+    expect(Object.keys(row.classifierPreparation.entries).sort()).toEqual(["turn_off", "turn_on"]);
+  });
+
   it("cascades prepared text away when the connection is deleted", async () => {
     const conn = await createConnection(ids.userA, "Owner A Cascade");
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>

@@ -8,6 +8,7 @@ import type {
 } from "@moss/shared";
 
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import { effectiveEnabledTools } from "./curation.js";
 
 /**
  * Owner storage, opt-in and invalidation for the connected-tool classifier (plan 2b.2, #2884).
@@ -53,8 +54,33 @@ export interface ClassifierPreparationMap {
   readonly entries: Readonly<Record<string, ClassifierPreparationEntry>>;
 }
 
+/**
+ * Tool names are attacker-influenced (a connected server chooses them), so they are looked up as
+ * own keys only. A plain `{}` map would answer `entries["toString"]` with Object.prototype's
+ * function and `"__proto__" in entries` with true; a null-prototype record plus
+ * `Object.prototype.hasOwnProperty` keeps a tool literally named `toString`, `constructor` or
+ * `__proto__` from manufacturing a fake review row or polluting a prototype.
+ */
+function entriesRecord(
+  source?: Readonly<Record<string, ClassifierPreparationEntry>>
+): Record<string, ClassifierPreparationEntry> {
+  const out = Object.create(null) as Record<string, ClassifierPreparationEntry>;
+  if (source) for (const key of Object.keys(source)) out[key] = source[key]!;
+  return out;
+}
+
+/** The stored entry for a tool name, only when it is an own key. */
+export function preparationEntry(
+  map: ClassifierPreparationMap,
+  toolName: string
+): ClassifierPreparationEntry | undefined {
+  return Object.prototype.hasOwnProperty.call(map.entries, toolName)
+    ? map.entries[toolName]
+    : undefined;
+}
+
 export function emptyPreparationMap(): ClassifierPreparationMap {
-  return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries: {} };
+  return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries: entriesRecord() };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -277,7 +303,7 @@ export function parsePreparationMap(raw: unknown): ClassifierPreparationMap {
   if (!isRecord(raw)) return emptyPreparationMap();
   if (raw.version !== INTEGRATION_CLASSIFIER_PREPARATION_VERSION) return emptyPreparationMap();
   if (!isRecord(raw.entries)) return emptyPreparationMap();
-  const entries: Record<string, ClassifierPreparationEntry> = {};
+  const entries = entriesRecord();
   for (const [toolName, value] of Object.entries(raw.entries)) {
     if (!isIdentifier(toolName)) continue;
     const parsed = parseStoredEntry(value);
@@ -292,7 +318,8 @@ export function withPreparationEntry(
   toolName: string,
   entry: ClassifierPreparationEntry
 ): ClassifierPreparationMap {
-  const entries: Record<string, ClassifierPreparationEntry> = { ...map.entries, [toolName]: entry };
+  const entries = entriesRecord(map.entries);
+  entries[toolName] = entry;
   const names = Object.keys(entries);
   if (names.length > INTEGRATION_CLASSIFIER_MAX_ENTRIES) return map;
   return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
@@ -302,8 +329,8 @@ export function withoutPreparationEntry(
   map: ClassifierPreparationMap,
   toolName: string
 ): ClassifierPreparationMap {
-  if (!(toolName in map.entries)) return map;
-  const entries = { ...map.entries };
+  if (!Object.prototype.hasOwnProperty.call(map.entries, toolName)) return map;
+  const entries = entriesRecord(map.entries);
   delete entries[toolName];
   return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
 }
@@ -313,6 +340,10 @@ export interface ClassifierConnectionState {
   readonly classifierEnabled: boolean;
   readonly lastError: string | null;
   readonly discoveredTools: readonly IntegrationToolDescriptor[];
+  /** Ordinary-chat curation: a tool the owner switched off for chat is not classifier-eligible. */
+  readonly enabledGroups: readonly string[];
+  readonly enabledTools: readonly string[];
+  readonly mutedTools: readonly string[];
   readonly classifierPreparation: ClassifierPreparationMap;
 }
 
@@ -329,18 +360,28 @@ export interface EligibleClassifierTool {
  * The tools the classifier may offer for this connection, in discovered order.
  *
  * Fail-closed everywhere: a disabled connection, the switch off, a failed discovery, a tool that
- * is no longer discovered, no saved opt-in, an unknown risk, or a definition that no longer
- * matches the reviewed fingerprint all remove the tool. A changed definition therefore reads as
- * stale immediately, and a discovery failure cannot preserve eligibility just because ordinary
- * chat keeps its old tool list.
+ * is no longer discovered, a tool the owner switched off for ordinary chat, no saved opt-in, an
+ * unknown risk, or a definition that no longer matches the reviewed fingerprint all remove the
+ * tool. A changed definition therefore reads as stale immediately, and a discovery failure cannot
+ * preserve eligibility just because ordinary chat keeps its old tool list.
  */
 export function effectiveClassifierTools(
   state: ClassifierConnectionState
 ): EligibleClassifierTool[] {
   if (!state.enabled || !state.classifierEnabled || state.lastError !== null) return [];
+  // A tool the owner muted (or, over the group-opt-in threshold, never enabled) is off for
+  // ordinary chat and must not become classifier-eligible behind that switch.
+  const ordinaryEnabled = new Set(
+    effectiveEnabledTools(state.discoveredTools, {
+      enabledGroups: state.enabledGroups,
+      enabledTools: state.enabledTools,
+      mutedTools: state.mutedTools
+    }).map((tool) => tool.name)
+  );
   const out: EligibleClassifierTool[] = [];
   for (const tool of state.discoveredTools) {
-    const entry = state.classifierPreparation.entries[tool.name];
+    if (!ordinaryEnabled.has(tool.name)) continue;
+    const entry = preparationEntry(state.classifierPreparation, tool.name);
     if (!entry || !entry.optIn || entry.reviewedRisk === null) continue;
     if (entry.definitionFingerprint !== toolDefinitionFingerprint(tool)) continue;
     out.push({
@@ -361,7 +402,7 @@ export function classifierPreparationView(
 ): IntegrationClassifierToolPreparation[] {
   const view: IntegrationClassifierToolPreparation[] = [];
   for (const tool of state.discoveredTools) {
-    const entry = state.classifierPreparation.entries[tool.name];
+    const entry = preparationEntry(state.classifierPreparation, tool.name);
     if (!entry) continue;
     const entryState: IntegrationClassifierPreparationState =
       entry.definitionFingerprint === toolDefinitionFingerprint(tool) ? "current" : "stale";

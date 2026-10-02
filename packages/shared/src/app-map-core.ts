@@ -170,10 +170,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "integrations",
     label: "Integrations",
-    description:
-      "Connect external tools and services. Each connection can also be opted into the chat " +
-      "classifier one tool at a time; a tool needs an owner-reviewed risk, and a tool with no " +
-      "confirmed label stays out.",
+    description: "Connect external tools and services.",
     path: "/settings?section=integrations",
     scope: "user"
   },

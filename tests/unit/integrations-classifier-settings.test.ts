@@ -51,6 +51,9 @@ function state(
     classifierEnabled?: boolean;
     lastError?: string | null;
     discoveredTools?: readonly IntegrationToolDescriptor[];
+    enabledGroups?: readonly string[];
+    enabledTools?: readonly string[];
+    mutedTools?: readonly string[];
     classifierPreparation?: ClassifierPreparationMap;
   } = {}
 ) {
@@ -59,6 +62,9 @@ function state(
     classifierEnabled: overrides.classifierEnabled ?? true,
     lastError: overrides.lastError ?? null,
     discoveredTools: overrides.discoveredTools ?? [tool()],
+    enabledGroups: overrides.enabledGroups ?? [],
+    enabledTools: overrides.enabledTools ?? [],
+    mutedTools: overrides.mutedTools ?? [],
     classifierPreparation: overrides.classifierPreparation ?? emptyPreparationMap()
   };
 }
@@ -218,6 +224,50 @@ describe("effectiveClassifierTools invalidation", () => {
     expect(
       effectiveClassifierTools(state({ lastError: "fetch failed", classifierPreparation: prep }))
     ).toEqual([]);
+  });
+
+  it("excludes a tool the owner switched off for ordinary chat", () => {
+    const current = tool();
+    const prep = mapWith("turn_on", entry(toolDefinitionFingerprint(current)));
+    // Under the group-opt-in threshold a muted tool is off for chat.
+    expect(
+      effectiveClassifierTools(state({ mutedTools: ["turn_on"], classifierPreparation: prep }))
+    ).toEqual([]);
+    // Over the threshold, a tool that is not explicitly enabled is likewise off.
+    const many = Array.from({ length: 31 }, (_, i) => tool({ name: `tool_${i}` }));
+    const bigState = state({
+      discoveredTools: many,
+      enabledGroups: [],
+      enabledTools: [],
+      classifierPreparation: mapWith("tool_0", entry(toolDefinitionFingerprint(many[0]!)))
+    });
+    expect(effectiveClassifierTools(bigState)).toEqual([]);
+  });
+});
+
+describe("prototype-safe tool names", () => {
+  it("does not invent a review row for a tool named after an Object.prototype member", () => {
+    const names = ["toString", "constructor", "hasOwnProperty", "__defineGetter__"];
+    const colliding = state({
+      discoveredTools: names.map((name) => tool({ name })),
+      classifierPreparation: emptyPreparationMap()
+    });
+    expect(classifierPreparationView(colliding)).toEqual([]);
+    expect(effectiveClassifierTools(colliding)).toEqual([]);
+  });
+
+  it("stores a tool literally named __proto__ as an own entry without polluting prototypes", () => {
+    const raw = JSON.parse(
+      '{"version":1,"entries":{"__proto__":{"optIn":true,"reviewedRisk":"read","description":"d",' +
+        '"arguments":{},"replyTemplate":"r","definitionFingerprint":"sha256:x",' +
+        '"reviewedAt":"2026-10-01T00:00:00.000Z","preparationVersion":1}}}'
+    ) as unknown;
+    const parsed = parsePreparationMap(raw);
+    expect(Object.prototype.hasOwnProperty.call(parsed.entries, "__proto__")).toBe(true);
+    expect(parsed.entries["__proto__"]?.reviewedRisk).toBe("read");
+    // No global prototype pollution: a fresh object has no spilled keys.
+    expect(({} as Record<string, unknown>)["optIn"]).toBeUndefined();
+    expect(({} as Record<string, unknown>)["reviewedRisk"]).toBeUndefined();
   });
 });
 
