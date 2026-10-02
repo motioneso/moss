@@ -9,16 +9,23 @@ import {
   type Keyring
 } from "@moss/db";
 import { HttpError, handleRouteError as handleModuleRouteError } from "@moss/module-sdk";
-import type {
-  CreateIntegrationRequest,
-  CredentialPlacement,
-  IntegrationDetail,
-  IntegrationKind,
-  IntegrationSummary,
-  ListIntegrationsResponse
+import {
+  INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
+  type CreateIntegrationRequest,
+  type CredentialPlacement,
+  type IntegrationDetail,
+  type IntegrationKind,
+  type IntegrationSummary,
+  type ListIntegrationsResponse,
+  type PrepareIntegrationClassifierResponse
 } from "@moss/shared";
 
 import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
+import {
+  prepareClassifierToolDrafts,
+  type ClassifierPreparationPort
+} from "./classifier-preparation.js";
+import { parseReviewedEntry } from "./classifier-settings.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
 import { IntegrationUserError } from "./errors.js";
@@ -45,10 +52,20 @@ export interface IntegrationsRouteDependencies {
   readonly resolveKeyring?: (scopedDb: DataContextDb) => Promise<Keyring | null>;
   /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
   readonly resolverCache?: ResolverCache;
+  /**
+   * Plan 2b.3 (#2894): the composition-layer port that drafts tool preparation on the owner's
+   * default chat model. Absent (older wiring/tests) means preparation reports unavailable and
+   * calls no model.
+   */
+  readonly preparationPort?: ClassifierPreparationPort;
 }
 
 interface IdParams {
   readonly id: string;
+}
+
+interface ClassifierToolParams extends IdParams {
+  readonly toolName: string;
 }
 
 export function registerIntegrationsRoutes(
@@ -254,6 +271,139 @@ export function registerIntegrationsRoutes(
       return handleRouteError(error, reply);
     }
   });
+
+  /**
+   * Save one owner-reviewed classifier tool preparation (#2884). The body is validated whole; a
+   * stale `reviewedFingerprint` (the definition changed since the tab loaded) is a 409, so an old
+   * tab can never approve a superseded review. Nothing is stored until this is called, so a
+   * cancelled review leaves no draft behind.
+   */
+  server.put<{ Params: ClassifierToolParams }>(
+    "/api/integrations/:id/classifier/tools/:toolName",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const parsed = parseReviewedEntry(request.body);
+        if (!parsed.ok) {
+          return reply.code(400).send({ error: parsed.problems.join("; ") });
+        }
+        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.saveClassifierToolReview(
+            scopedDb,
+            request.params.id,
+            request.params.toolName,
+            parsed.value
+          )
+        );
+        if (result.status === "not_found") {
+          return reply.code(404).send({ error: "Integration not found" });
+        }
+        if (result.status === "conflict") {
+          return reply.code(409).send({
+            error:
+              result.reason === "unknown_tool"
+                ? "That tool is no longer available."
+                : "That tool changed since you opened it. Reload and review it again."
+          });
+        }
+        if (result.status === "too_many") {
+          return reply.code(400).send({ error: "This connection has too many reviews saved." });
+        }
+        cache.drop(accessContext.actorUserId);
+        return toDetail(result.connection, result.connection.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /** Remove one saved classifier preparation entry (opt-out). */
+  server.delete<{ Params: ClassifierToolParams }>(
+    "/api/integrations/:id/classifier/tools/:toolName",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const updated = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.removeClassifierToolReview(
+            scopedDb,
+            request.params.id,
+            request.params.toolName
+          )
+        );
+        if (!updated) return reply.code(404).send({ error: "Integration not found" });
+        cache.drop(accessContext.actorUserId);
+        return toDetail(updated, updated.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /**
+   * Plan 2b.3 (#2894): draft the owner-reviewed classifier preparation for this connection on the
+   * owner's current default chat model. Transient — nothing is stored here; the owner saves each
+   * reviewed draft through PUT .../classifier/tools/:toolName. When there is no default chat model,
+   * or it cannot produce the structured draft, this reports a setup failure and calls no model;
+   * there is no fallback to the classifier or another model.
+   */
+  server.post<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/prepare",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const body = requireObject(request.body ?? {});
+        if ("force" in body && typeof body.force !== "boolean") {
+          throw new HttpError(400, "force must be a boolean");
+        }
+        const force = body.force === true;
+
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        request.raw.once("aborted", abort);
+        try {
+          return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+            const row = await repository.getConnection(scopedDb, request.params.id);
+            if (!row) throw new HttpError(404, "Integration not found");
+            if (!row.classifierEnabled) {
+              throw new HttpError(
+                409,
+                "Turn on the connection classifier before preparing its tools."
+              );
+            }
+            if (!dependencies.preparationPort) {
+              return {
+                disclosure: INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
+                status: "unavailable",
+                drafts: [],
+                reused: [],
+                failed: [],
+                remaining: 0
+              } satisfies PrepareIntegrationClassifierResponse;
+            }
+            return prepareClassifierToolDrafts(
+              scopedDb,
+              {
+                discoveredTools: row.discoveredTools,
+                preparation: row.classifierPreparation,
+                curation: {
+                  enabledGroups: row.enabledGroups,
+                  enabledTools: row.enabledTools,
+                  mutedTools: row.mutedTools
+                },
+                force,
+                signal: controller.signal
+              },
+              dependencies.preparationPort
+            );
+          });
+        } finally {
+          request.raw.off("aborted", abort);
+        }
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
 }
 
 function toSummary(row: ConnectionRow): IntegrationSummary {
@@ -339,6 +489,12 @@ function buildUpdatePatch(
       ...patch,
       unsuppressedTools: requiredStringArray(value.unsuppressedTools, "unsuppressedTools")
     };
+  }
+  if ("classifierEnabled" in value) {
+    if (typeof value.classifierEnabled !== "boolean") {
+      throw new HttpError(400, "classifierEnabled must be a boolean");
+    }
+    patch = { ...patch, classifierEnabled: value.classifierEnabled };
   }
   return patch;
 }

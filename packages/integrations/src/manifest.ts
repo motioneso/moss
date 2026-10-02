@@ -23,7 +23,10 @@ export const integrationsModuleManifest = {
     { method: "GET", path: "/api/integrations/:id" },
     { method: "PATCH", path: "/api/integrations/:id" },
     { method: "POST", path: "/api/integrations/:id/refresh" },
-    { method: "DELETE", path: "/api/integrations/:id" }
+    { method: "DELETE", path: "/api/integrations/:id" },
+    { method: "PUT", path: "/api/integrations/:id/classifier/tools/:toolName" },
+    { method: "DELETE", path: "/api/integrations/:id/classifier/tools/:toolName" },
+    { method: "POST", path: "/api/integrations/:id/classifier/prepare" }
   ],
   dataLifecycle: {
     exportSections: [],
@@ -39,6 +42,43 @@ export const integrationsModuleManifest = {
         "A connection's tool list is grouped, with each tool getting a per-tool switch to allow " +
         "repeated identical calls (off by default). Notes explain grandfathered connections and " +
         "point to Refresh tools when read/repeat hints are missing."
+    },
+    {
+      id: "integrations.connection_classifier_opt_in",
+      description:
+        "A connection can be opted into the chat classifier, one tool at a time. Each opt-in " +
+        "needs an owner-reviewed risk; a tool with no confirmed label stays out, and a changed " +
+        "tool definition marks the review stale until it is reviewed again."
+    },
+    {
+      id: "integrations.connection_classifier_preparation",
+      description:
+        "Prepares a connection's tools for the chat classifier: the owner's own model drafts " +
+        "each tool's description and reply from its definition once. Preparing costs model " +
+        "usage; a model that cannot draft shows a setup failure.",
+      remediations: [
+        {
+          id: "integrations.connection_classifier_preparation.choose_chat_model",
+          description:
+            "Choose a chat model that supports structured output in Settings, Assistant & AI, " +
+            "then prepare again.",
+          path: "/settings?section=assistant"
+        }
+      ],
+      errors: [
+        {
+          code: "integrations.connection_classifier_preparation.no_default_model",
+          class: "prerequisite",
+          remediationRef: "integrations.connection_classifier_preparation.choose_chat_model",
+          description: "No default chat model is set, so tool preparation cannot run."
+        },
+        {
+          code: "integrations.connection_classifier_preparation.model_cannot_draft",
+          class: "prerequisite",
+          remediationRef: "integrations.connection_classifier_preparation.choose_chat_model",
+          description: "The default chat model cannot produce the structured setup draft for tools."
+        }
+      ]
     },
     {
       id: "integrations.credentials_paused",

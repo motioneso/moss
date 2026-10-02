@@ -70,6 +70,8 @@ function baseDetail(overrides: Partial<IntegrationDetail> = {}): IntegrationDeta
     unsuppressedTools: [],
     groupOptIn: false,
     specPasted: false,
+    classifierEnabled: false,
+    classifierPreparation: [],
     ...overrides
   };
 }

@@ -9,13 +9,24 @@ const putAiServiceBinding = vi.fn(async (_service: string, input: unknown) => ({
   binding: (input as { binding: unknown }).binding
 }));
 const deleteAiServiceBinding = vi.fn(async (service: string) => ({ service }));
+const getAdminRuntimeConfig = vi.fn(async (key: string) => ({
+  config: { value: "off", source: "default" }
+}));
+const putAdminRuntimeConfig = vi.fn(async (key: string, value: string) => ({
+  config: { value, source: "instance" }
+}));
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
   putAiServiceBinding: (service: string, input: unknown) => putAiServiceBinding(service, input),
-  deleteAiServiceBinding: (service: string) => deleteAiServiceBinding(service)
+  deleteAiServiceBinding: (service: string) => deleteAiServiceBinding(service),
+  getAdminRuntimeConfig: (key: string) => getAdminRuntimeConfig(key),
+  putAdminRuntimeConfig: (key: string, value: string) => putAdminRuntimeConfig(key, value)
 }));
 
 import {
+  CLASSIFIER_API_DISCLOSURE,
+  CLASSIFIER_GATE_ON_NOTE,
+  CLASSIFIER_HEADING,
   SORTING_DISCLOSURE,
   SYSTEM_ONE_SORTING_NOTE,
   SortingModelRow
@@ -91,16 +102,42 @@ async function render(
       )
     );
   });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   return renderer;
 }
 
 const select = (renderer: ReactTestRenderer) => renderer.root.findByType("select");
 const text = (renderer: ReactTestRenderer) => JSON.stringify(renderer.toJSON());
+const gateGroup = (renderer: ReactTestRenderer) =>
+  renderer.root.find(
+    (node) => node.props.role === "group" && node.props["aria-label"] === "Gate state"
+  );
+const gateButton = (renderer: ReactTestRenderer, label: string) => {
+  const button = gateGroup(renderer)
+    .findAllByType("button")
+    .find((candidate) => candidate.children.join("") === label);
+  if (!button) throw new Error(`gate button ${label} not found`);
+  return button;
+};
 
-describe("SortingModelRow", () => {
+describe("SortingModelRow (Classifier)", () => {
   beforeEach(() => {
     putAiServiceBinding.mockClear();
     deleteAiServiceBinding.mockClear();
+    getAdminRuntimeConfig.mockClear();
+    putAdminRuntimeConfig.mockClear();
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "off", source: "default" }
+    } as never);
+  });
+
+  it("renames the user-facing row to Classifier", async () => {
+    const renderer = await render();
+    expect(text(renderer)).toContain(CLASSIFIER_HEADING);
+    expect(text(renderer)).not.toContain("Sorting model");
+    expect(text(renderer)).toContain("Optional model to handle classification requests.");
   });
 
   it("offers Use main model plus only eligible models, grouped by provider", async () => {
@@ -110,7 +147,6 @@ describe("SortingModelRow", () => {
     expect(groups).toEqual(["Local box", "Cloud"]);
     const values = renderer.root.findAllByType("option").map((option) => option.props.value);
     expect(values).toEqual(["", "model:small-json", "model:cloud-json"]);
-    expect(text(renderer)).toContain("Sorting model");
     expect(text(renderer)).toContain("Use main model");
     expect(text(renderer)).not.toContain(SORTING_DISCLOSURE);
   });
@@ -183,5 +219,71 @@ describe("SortingModelRow", () => {
     const renderer = await render(undefined, noCredentialModel, noCredentialProvider);
     const values = renderer.root.findAllByType("option").map((option) => option.props.value);
     expect(values).toEqual(["", "model:nocred-json"]);
+  });
+
+  it("reads the saved gate record and keeps the gate unusable until a classifier is chosen", async () => {
+    const renderer = await render();
+    expect(getAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode");
+    const on = gateButton(renderer, "On");
+    expect(on.props.disabled).toBe(true);
+    expect(on.props.title).toBe("Available after shadow results are reviewed");
+    expect(gateButton(renderer, "Off").props["aria-pressed"]).toBe(true);
+    // The mockup keeps the whole gate disabled while no classifier is chosen.
+    expect(gateButton(renderer, "Off").props.disabled).toBe(true);
+    expect(gateButton(renderer, "Shadow").props.disabled).toBe(true);
+    expect(text(renderer)).not.toContain("On opens after shadow review.");
+  });
+
+  it("enables the gate once a classifier is chosen but keeps On blocked", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    expect(gateButton(renderer, "Off").props.disabled).toBe(false);
+    expect(gateButton(renderer, "Shadow").props.disabled).toBe(false);
+    expect(gateButton(renderer, "On").props.disabled).toBe(true);
+    expect(text(renderer)).toContain("On opens after shadow review.");
+  });
+
+  it("states the admin-wide reach of the gate", () => {
+    expect(CLASSIFIER_GATE_ON_NOTE).toContain("every user's eligible messages");
+    expect(CLASSIFIER_API_DISCLOSURE).toContain("every user's eligible messages");
+  });
+
+  it("enables On when the saved record already reads on", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "on", source: "instance" }
+    } as never);
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    expect(gateButton(renderer, "On").props.disabled).toBe(false);
+    expect(gateButton(renderer, "On").props["aria-pressed"]).toBe(true);
+    expect(text(renderer)).not.toContain("On opens after shadow review.");
+  });
+
+  it("saves an allowed gate choice and reads feedback from the saved record", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await act(async () => {
+      gateButton(renderer, "Shadow").props.onClick();
+    });
+    expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "shadow");
+  });
+
+  it("shows the API disclosure for a hosted model only while the gate is shadow or on", async () => {
+    const off = await render({ kind: "model", modelId: "small-json" });
+    expect(text(off)).not.toContain(CLASSIFIER_API_DISCLOSURE);
+
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "shadow", source: "instance" }
+    } as never);
+    const shadow = await render({ kind: "model", modelId: "small-json" });
+    expect(text(shadow)).toContain(CLASSIFIER_API_DISCLOSURE);
+    expect(text(shadow)).toContain("every user's eligible messages");
+    expect(text(shadow)).toContain("Shadow");
+  });
+
+  it("does not show the API disclosure for an unavailable saved model", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "shadow", source: "instance" }
+    } as never);
+    const renderer = await render({ kind: "model", modelId: "ollama-json" }, models, providers);
+    expect(text(renderer)).toContain("Chosen model is unavailable. Using your main model.");
+    expect(text(renderer)).not.toContain(CLASSIFIER_API_DISCLOSURE);
   });
 });

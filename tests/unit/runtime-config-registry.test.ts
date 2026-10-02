@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BRAVE_API_KEY_CONFIG_KEY,
+  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
   CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
   EMBED_MODEL_CONFIG_KEY,
@@ -13,6 +14,7 @@ import {
   KNOWN_INSTANCE_SETTING_KEYS,
   SECRET_INSTANCE_SETTING_KEYS
 } from "../../packages/settings/src/instance-settings-keys.js";
+import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY as SHARED_GATE_KEY } from "../../packages/shared/src/chat-api.js";
 
 describe("runtime config registry", () => {
   it("registers embedding keys as non-secret instance settings", () => {
@@ -46,7 +48,7 @@ describe("runtime config registry", () => {
       moduleOwner: "ai"
     });
     expect(SECRET_INSTANCE_SETTING_KEYS.has(BRAVE_API_KEY_CONFIG_KEY)).toBe(true);
-    expect(RUNTIME_CONFIG_REGISTRY).toHaveLength(5);
+    expect(RUNTIME_CONFIG_REGISTRY).toHaveLength(6);
   });
 
   it("registers persistent-pool keys with minValue bounds (#1554)", () => {
@@ -70,5 +72,22 @@ describe("runtime config registry", () => {
     expect(KNOWN_INSTANCE_SETTING_KEYS.has(CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY)).toBe(
       true
     );
+  });
+
+  it("registers the admin-wide classifier gate switch, defaulting off (#2881)", () => {
+    const entry = getRuntimeConfigEntry(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY);
+    expect(entry).toMatchObject({
+      key: "chat.classifier_gate_mode",
+      type: "enum",
+      defaultValue: "off",
+      envVar: "MOSS_CHAT_CLASSIFIER_GATE_MODE",
+      enumValues: ["off", "shadow", "on"],
+      moduleOwner: "chat"
+    });
+    // The switch is an instance/admin setting, never a per-user preference, and carries no secret.
+    expect(KNOWN_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(true);
+    expect(SECRET_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(false);
+    // Task 1.3 (#2892): the web settings row and this registry share one literal.
+    expect(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY).toBe(SHARED_GATE_KEY);
   });
 });

@@ -37,6 +37,56 @@ export interface IntegrationGroupSummary {
   readonly enabled: boolean;
 }
 
+/** Owner-reviewed classifier risk for one connected tool. `null` (absent) means unknown and keeps the tool out. */
+export type IntegrationClassifierRisk = "read" | "write" | "outbound" | "destructive";
+
+/** How the classifier is allowed to supply one argument of a connected tool. */
+export type IntegrationClassifierArgumentKind = "enum" | "candidates" | "extract";
+
+export interface IntegrationClassifierArgument {
+  readonly kind: IntegrationClassifierArgumentKind;
+  /** kind "enum": the fixed values the classifier may pick from. */
+  readonly values?: readonly string[];
+  /** kind "candidates": name of the runtime source that produces the candidate list. */
+  readonly candidateSource?: string;
+}
+
+export type IntegrationClassifierPreparationState = "current" | "stale";
+
+/** One stored, owner-reviewed classifier preparation for a single connected tool. */
+export interface IntegrationClassifierToolPreparation {
+  readonly toolName: string;
+  /** Whether the owner opted this tool into the classifier. Default false. */
+  readonly optIn: boolean;
+  /** Reviewed risk; `null` when the owner has not classified it — the tool stays out of the menu. */
+  readonly reviewedRisk: IntegrationClassifierRisk | null;
+  readonly description: string;
+  readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
+  readonly replyTemplate: string;
+  readonly candidateSource?: string;
+  /** Fingerprint of the definition this review was saved against. */
+  readonly definitionFingerprint: string;
+  readonly reviewedAt: string;
+  /** "stale" when the discovered definition no longer matches the saved fingerprint. */
+  readonly state: IntegrationClassifierPreparationState;
+  readonly preparationVersion: number;
+}
+
+/**
+ * Body for saving one reviewed tool preparation. A cancelled review never calls this, so no draft
+ * is persisted. `reviewedFingerprint` is compared with the current discovered definition; a
+ * mismatch is rejected so an old tab cannot approve a superseded draft.
+ */
+export interface SaveIntegrationClassifierToolRequest {
+  readonly optIn: boolean;
+  readonly reviewedRisk: IntegrationClassifierRisk | null;
+  readonly description: string;
+  readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
+  readonly replyTemplate: string;
+  readonly candidateSource?: string;
+  readonly reviewedFingerprint: string;
+}
+
 export interface IntegrationDetail extends IntegrationSummary {
   readonly credentialPlacement: CredentialPlacement | null;
   readonly tools: readonly IntegrationToolDescriptor[];
@@ -50,6 +100,10 @@ export interface IntegrationDetail extends IntegrationSummary {
   readonly groupOptIn: boolean;
   /** OpenAPI only: true when the spec was pasted rather than fetched from a URL — refresh needs a new paste. */
   readonly specPasted: boolean;
+  /** Per-connection classifier opt-in (#2884). Default false. */
+  readonly classifierEnabled: boolean;
+  /** Owner-reviewed classifier preparation, one entry per reviewed discovered tool. */
+  readonly classifierPreparation: readonly IntegrationClassifierToolPreparation[];
 }
 
 export interface CreateIntegrationRequest {
@@ -73,6 +127,8 @@ export interface UpdateIntegrationRequest {
   readonly enabledTools?: readonly string[];
   readonly mutedTools?: readonly string[];
   readonly unsuppressedTools?: readonly string[];
+  /** Per-connection classifier opt-in (#2884). */
+  readonly classifierEnabled?: boolean;
 }
 
 export interface ListIntegrationsResponse {
@@ -80,3 +136,79 @@ export interface ListIntegrationsResponse {
 }
 
 export const INTEGRATION_LIVE_TOOL_THRESHOLD = 30;
+
+/**
+ * What the owner is told before their default chat model reads a connection's tool definitions
+ * (plan 2b.3, #2894; Ben's ruling 6). No price is quoted: only that preparing costs model usage.
+ * 2b.4 renders this before the prepare request; the prepare response echoes it.
+ */
+export interface IntegrationClassifierPreparationDisclosure {
+  /** The definition fields sent to the owner's model, in plain words. */
+  readonly sent: string;
+  /** That a hosted model sends them to its provider. */
+  readonly provider: string;
+  /** That preparing and re-preparing use model usage. */
+  readonly cost: string;
+  /** What the setup request never includes. */
+  readonly excluded: string;
+}
+
+export const INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE: IntegrationClassifierPreparationDisclosure =
+  {
+    sent:
+      "Each tool's name, description, group, input schema and read-only, repeatable and " +
+      "destructive hints. Credential header parameters and default or example values are " +
+      "removed from the schema first.",
+    provider:
+      "Your current default chat model reads these once; if it is a hosted model, they also go " +
+      "to that model's provider.",
+    cost: "Preparing, and preparing again after a change, uses model usage and may cost money.",
+    excluded:
+      "Transport addresses, sign-in details, secrets and raw tool results are never sent. A " +
+      "tool's own fixed choice list is part of its schema and is sent with it."
+  };
+
+/** Why one tool's draft could not be produced. Fixed codes; never raw provider text. */
+export type IntegrationClassifierDraftFailure =
+  | "provider_error"
+  | "invalid_draft"
+  | "aborted"
+  | "definition_too_large";
+
+/** A validated, transient preparation draft for one tool. Not stored until 2b.2's save. */
+export interface IntegrationClassifierToolDraft {
+  readonly toolName: string;
+  /** The definition fingerprint the draft is bound to; a later change makes it stale at save. */
+  readonly definitionFingerprint: string;
+  readonly description: string;
+  readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
+  readonly replyTemplate: string;
+}
+
+export interface IntegrationClassifierToolDraftFailure {
+  readonly toolName: string;
+  readonly reason: IntegrationClassifierDraftFailure;
+}
+
+/**
+ * Reply to `POST /api/integrations/:id/classifier/prepare`. `status` is the whole-run outcome:
+ * `unavailable` (no default chat model) and `unsupported_model` (the selected model cannot produce
+ * a structured draft) make zero model calls and force the screen to show a setup failure — the
+ * model is never silently switched. Nothing here is persisted.
+ */
+export interface PrepareIntegrationClassifierResponse {
+  readonly disclosure: IntegrationClassifierPreparationDisclosure;
+  readonly status: "ok" | "unavailable" | "unsupported_model";
+  readonly drafts: readonly IntegrationClassifierToolDraft[];
+  /** Tools whose unchanged reviewed definition was reused, so no model call was made. */
+  readonly reused: readonly string[];
+  readonly failed: readonly IntegrationClassifierToolDraftFailure[];
+  /** Eligible tools not drafted in this call because of the per-call bound. */
+  readonly remaining: number;
+}
+
+/** Body for the prepare request. */
+export interface PrepareIntegrationClassifierRequest {
+  /** Re-draft every target, even one whose reviewed definition is unchanged (explicit re-prepare). */
+  readonly force?: boolean;
+}

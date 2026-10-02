@@ -8,13 +8,13 @@ describe("app map: sorting model (#2594)", () => {
     (entry) => entry.id === "ai.sorting_model"
   );
 
-  it("declares the sorting model feature with its error and remediation", () => {
-    expect(feature?.description).toMatch(/Sorting model/);
+  it("declares the classifier feature with its error and remediation", () => {
+    expect(feature?.description).toMatch(/Classifier/);
     expect(feature?.remediations).toEqual([
       {
         id: "ai.sorting_model.use_main_model",
         description:
-          "Moss tries your main model instead when it can. To stop trying the sorting model, choose Use main model.",
+          "Moss tries your main model instead when it can. To stop trying the classifier, choose Use main model.",
         path: "/settings?section=aiproviders"
       }
     ]);
@@ -29,7 +29,8 @@ describe("app map: sorting model (#2594)", () => {
 
   it("describes the row on the Assistant & AI settings page", () => {
     const page = CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders");
-    expect(page?.description).toMatch(/Sorting model/);
+    expect(page?.description).toMatch(/Classifier row/);
     expect(page?.description).toMatch(/Use main model/);
+    expect(page?.description).toMatch(/every user's eligible/);
   });
 });

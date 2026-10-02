@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import {
   getRuntimeConfigRouteSchema,
@@ -11,6 +11,7 @@ import {
 
 import {
   getRuntimeConfigEntry,
+  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   type RuntimeConfigKeyEntry,
   type RuntimeConfigType
 } from "./runtime-config-keys.js";
@@ -25,6 +26,15 @@ export interface RuntimeConfigRoutesDependencies {
   readonly repository: SettingsRepository;
   readonly env?: NodeJS.ProcessEnv;
   readonly onConfigChanged?: (key: string) => void;
+  /**
+   * Classifier gate activation check (task 1.2, #2881). Injected so the settings boundary never
+   * imports chat module internals. Absent port fails CLOSED: `chat.classifier_gate_mode = "on"` is
+   * rejected — never accepted fail-open. The concrete implementation is supplied at the composition
+   * root and reads the chat-owned release-eligibility table under the caller's actor context.
+   */
+  readonly classifierActivation?: {
+    readonly hasEligibleRelease: (scopedDb: DataContextDb) => Promise<boolean>;
+  };
 }
 
 function requireRequestId(accessContext: AccessContext): string {
@@ -130,6 +140,19 @@ export function registerRuntimeConfigRoutes(
         const accessContext = await resolveAccessContext(request);
         const config = await dataContext.withDataContext(accessContext, async (scopedDb) => {
           await assertAdminUser(repository, scopedDb, accessContext.actorUserId);
+          // Classifier gate (task 1.2, #2881): turning the gate `on` requires an approved tool
+          // release. Checked under the actor's RLS context, before any write, so a forged PUT
+          // cannot bypass it. A missing port fails closed.
+          if (key === CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY && value === "on") {
+            const allowed =
+              (await dependencies.classifierActivation?.hasEligibleRelease(scopedDb)) ?? false;
+            if (!allowed) {
+              throw new HttpError(
+                409,
+                "The classifier gate cannot be turned on: no approved tool release exists yet."
+              );
+            }
+          }
           if (value.length === 0) {
             await repository.deleteInstanceSetting(scopedDb, {
               key,

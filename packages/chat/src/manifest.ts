@@ -50,7 +50,8 @@ export const chatModuleManifest = {
       "sql/0146_private_chat_cleanup.sql",
       "sql/0149_chat_skills.sql",
       "sql/0174_chat_surface.sql",
-      "sql/0251_chat_classifier_shadow_records.sql"
+      "sql/0251_chat_classifier_shadow_records.sql",
+      "sql/0252_chat_classifier_release_eligibility.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -58,7 +59,8 @@ export const chatModuleManifest = {
       "app.chat_messages",
       "app.chat_user_memory_settings",
       "app.chat_skills",
-      "app.chat_classifier_shadow_records"
+      "app.chat_classifier_shadow_records",
+      "app.chat_classifier_release_eligibility"
     ]
   },
   permissions: [
@@ -175,6 +177,14 @@ export const chatModuleManifest = {
       description:
         "Set how long answers should be (concise, balanced or detailed), in your own settings or " +
         "by asking during a conversation; the choice carries over to later chats."
+    },
+    {
+      id: "chat.classifier_gate",
+      description:
+        "The classifier gate's instance-wide switch: Off by default, with Shadow " +
+        "and On, shown as the Chat gate choice in the Classifier row on Settings > Assistant & AI. " +
+        "On is refused until an approved tool release exists.",
+      featureFlagId: "chat.module"
     },
     {
       id: "chat.classifier_shadow_records",

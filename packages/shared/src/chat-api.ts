@@ -196,6 +196,37 @@ export interface TranscriptRecord {
   readonly durationMs?: number;
 }
 
+// Classifier gate, task 1.2 (#2881). The gate is one ADMIN-WIDE switch for the instance, set beside
+// the Classifier binding through the existing admin configuration boundary (Ben's ruling 1,
+// 2026-10-01). "off" is the missing-value default. The switch is stored as the enum runtime-config
+// key `chat.classifier_gate_mode` (packages/settings/src/runtime-config-keys.ts), not per user.
+export type ClassifierGateMode = "off" | "shadow" | "on";
+
+export const CLASSIFIER_GATE_MODES: readonly ClassifierGateMode[] = ["off", "shadow", "on"];
+
+export const CLASSIFIER_GATE_MODE_DEFAULT: ClassifierGateMode = "off";
+
+/**
+ * The runtime-config key that stores the admin-wide gate switch. Defined here so the settings
+ * registry and the web settings row share one literal (task 1.3, #2892).
+ */
+export const CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY = "chat.classifier_gate_mode";
+
+/**
+ * One approved tool release record. The gate may only be turned `on` when at least one of these
+ * exists; the review step (plan task 4.2) is the writer. Empty by default. `classifierConfigVersion`
+ * records the reviewed classifier/configuration version. Task 1.2 counts rows only; the match that
+ * stops an old approval surviving a classifier change is enforced by task 4.2.
+ */
+export interface ClassifierToolReleaseRecord {
+  readonly moduleId: string;
+  readonly toolName: string;
+  readonly classifierConfigVersion: string;
+  /** ISO-8601 timestamp of approval. */
+  readonly approvedAt: string;
+  readonly approvedByUserId: string;
+}
+
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";
 

@@ -1,4 +1,7 @@
 export * from "./call-memory.js";
+export * from "./classifier-fingerprint.js";
+export * from "./classifier-preparation.js";
+export * from "./classifier-settings.js";
 export * from "./credentials.js";
 export * from "./curation.js";
 export * from "./derive-groups.js";

@@ -66,6 +66,7 @@ import {
 } from "@moss/ai";
 import { buildCliToolAlertRaiser, buildCliVersionTooOldHandler } from "./cli-tools-alerts.js";
 import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
+import { createClassifierPreparationPort } from "./classifier-preparation-port.js";
 import {
   GraphMemoryRecallService,
   ManualMemoryCandidateService,
@@ -126,6 +127,7 @@ import {
   buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
+  ClassifierReleaseRepository,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
@@ -1733,7 +1735,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerRuntimeConfigRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        repository: new SettingsRepository()
+        repository: new SettingsRepository(),
+        // Classifier gate activation (task 1.2, #2881): the settings boundary stays module-isolated
+        // and calls this injected port; the chat-owned reader supplies the answer.
+        classifierActivation: {
+          hasEligibleRelease: (scopedDb) =>
+            new ClassifierReleaseRepository().hasEligibleRelease(scopedDb)
+        }
       });
       installWebSearchResolvers({
         webSearchCipher,
@@ -1910,6 +1918,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
+        // Plan 2b.3 (#2894): composition-layer model port, so the integrations package keeps no
+        // @moss/ai dependency.
+        preparationPort: createClassifierPreparationPort({
+          ...(deps.createCliStructuredAdapter
+            ? { createCliStructuredAdapter: deps.createCliStructuredAdapter }
+            : {})
+        }),
         // Master key store (#2312): per-request family key, never eager at boot.
         resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
       })

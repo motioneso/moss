@@ -91,6 +91,17 @@ import {
   KNOWN_INSTANCE_SETTING_KEYS,
   SECRET_INSTANCE_SETTING_KEYS
 } from "./instance-settings-keys.js";
+import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "./runtime-config-keys.js";
+
+/**
+ * Instance setting keys that must be written through their dedicated typed runtime-config route
+ * (`PUT /api/admin/runtime-config/:key`), never the generic jsonb PATCH. That route runs the enum
+ * validation AND the classifier gate's release-eligibility check; the generic PATCH would let a
+ * forged request store `on` while skipping both. See task 1.2, #2881.
+ */
+const TYPED_INSTANCE_SETTING_KEYS: ReadonlySet<string> = new Set([
+  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+]);
 
 export type GetChatMultiplexerStatus = (configured: ChatMultiplexerChoice) => Promise<{
   readonly available: ChatMultiplexerAvailability;
@@ -479,6 +490,11 @@ export function registerSettingsRoutes(
         // generic jsonb upsert path.
         if (SECRET_INSTANCE_SETTING_KEYS.has(request.params.key)) {
           return reply.status(400).send({ error: "This setting is managed via a dedicated route" });
+        }
+        // Typed runtime-config keys (the classifier gate) carry enum validation and their own
+        // server-side guard on the runtime-config route; the generic PATCH must not bypass them.
+        if (TYPED_INSTANCE_SETTING_KEYS.has(request.params.key)) {
+          return reply.status(400).send({ error: "This setting is managed via its typed route" });
         }
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = parseInstanceSettingBody(request.body);

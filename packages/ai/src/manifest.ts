@@ -207,16 +207,41 @@ export const aiModuleManifest = {
       ]
     },
     {
+      id: "ai.classifier_gate_setting",
+      description:
+        "Classifier gate: the Chat gate choice (Off, Shadow, On) in the Classifier row on Settings > " +
+        "Assistant & AI, an instance-wide setting beside the Classifier binding. On is unavailable " +
+        "until a tool release is approved.",
+      remediations: [
+        {
+          id: "ai.classifier_gate_setting.not_released",
+          description:
+            "Leave the Classifier gate on Off or Shadow until a tool release has been approved; " +
+            "the gate cannot be turned On before then.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "ai.classifier_gate_setting.not_released",
+          class: "prerequisite",
+          remediationRef: "ai.classifier_gate_setting.not_released",
+          description:
+            "Setting the classifier gate to On was refused because no approved tool release exists."
+        }
+      ]
+    },
+    {
       id: "ai.sorting_model",
       description:
-        "Sorting model: a row under Services on Settings > Assistant & AI. An admin picks a small, " +
+        "Classifier: a row under Services on Settings > Assistant & AI. An admin picks a small, " +
         "fast model for sorting, or Use main model. News and Sports ask it yes/no questions per " +
         "story and preference, falling back to the main model.",
       remediations: [
         {
           id: "ai.sorting_model.use_main_model",
           description:
-            "Moss tries your main model instead when it can. To stop trying the sorting model, choose Use main model.",
+            "Moss tries your main model instead when it can. To stop trying the classifier, choose Use main model.",
           path: "/settings?section=aiproviders"
         }
       ],
@@ -225,7 +250,7 @@ export const aiModuleManifest = {
           code: "ai.sorting_model.not_answering",
           class: "transient",
           description:
-            "sorting model not answering: the chosen sorting model failed or gave an unusable " +
+            "sorting model not answering: the chosen classifier failed or gave an unusable " +
             "answer. It is logged, not shown; the main model answers instead."
         }
       ]
