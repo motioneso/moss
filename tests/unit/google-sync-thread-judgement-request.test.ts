@@ -132,7 +132,11 @@ describe("imap sync asks for a thread judgement", () => {
         listMessageKeys: vi.fn(async () => ["k1"]),
         getMessage: vi.fn(async () => parsed)
       },
-      emailRepository: { upsertCachedMessage },
+      emailRepository: {
+        upsertCachedMessage,
+        listFrequentRecipientAddresses: async () => [],
+        settleOwnSentAwaiting: async () => 0
+      },
       actorUserId: "u1",
       threadJudgementRequester: { requestThreadJudgement },
       knownSenderAddresses: vi.fn(async () => new Set(["sarah@kim.example"]))

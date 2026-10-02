@@ -66,7 +66,11 @@ describe("plain mail sync stores no preview for a sign-in code message", () => {
         listMessageKeys: vi.fn(async () => ["k1"]),
         getMessage: vi.fn(async () => parsed)
       },
-      emailRepository: { upsertCachedMessage },
+      emailRepository: {
+        upsertCachedMessage,
+        listFrequentRecipientAddresses: async () => [],
+        settleOwnSentAwaiting: async () => 0
+      },
       actorUserId: "u1"
     };
     await runImapSync(makeRecordingDb().scoped as never, "acct-1", deps as never);
