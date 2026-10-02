@@ -154,8 +154,22 @@ describe the handled-turn path as present but unavailable pending review.
    stops; subsequent reference has normal history; HTTP/SSE/history agree; origin serialization; the
    runner mints/revokes on every path and declines (still minting/revoking) with no ports supplied.
    Fakes for runner/gateway.
-7. Extend live-manager/persistence tests for the origin metadata and absent `executed`/`usage`.
+7. `tests/integration/chat-classifier-gate-origin.test.ts`: a real database write proves a gate
+   turn stores the origin with no `executed` and no `usage`, while a model turn keeps both. Unit
+   coverage stays in the live tests. Also `tests/unit/chat-classifier-live-wiring.test.ts` drives
+   the real composition root (real registry + real runtime, no ports) and proves one mint and one
+   matching revoke on decline, error and cancellation, plus the empty-allowlist token limit.
 8. Token safety: observe the revoke assertion fail with the `finally` removed, restore it.
+
+### Post-review fixes (QA, 2026-10-02)
+
+9. Stop during a gate decision must not fall through to the default model: after `evaluate`, an
+   aborted turn signal wins over a decline. Test fails without the check.
+10. Unknown tool risk on the trace counts as mutating, so a storage failure with an unrecognized
+    trace never replays.
+11. A read storage-failure fallback must emit the user message once, not twice: the gate emits it
+    only once the turn is committed to the gate path.
+12. The production gate token is minted with an empty allowlist (never unrestricted).
 
 ## Verification
 
