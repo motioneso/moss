@@ -442,6 +442,7 @@ as supported. Certain built-in fields are explicitly rejected.
 | Briefing contribution           | `briefing` with worker handler and supported sections                                                                                          |
 | Notifications                   | Worker `ctx.notify.post`; not a top-level `notifications` manifest field                                                                       |
 | Assistant onboarding            | `assistantOnboarding`                                                                                                                          |
+| Classifier opt-in               | `assistantTools[].classifier` with a `candidatesHandler` handler name (not a function), bounded like the built-in declaration                  |
 
 Do not copy built-in `availability`, `permissions`, `settings`, `routes`, `jobs`, `dataLifecycle`,
 `externalSources`, or executable provider fields into this JSON. The full forbidden-field list
@@ -452,6 +453,33 @@ and individual validation rules are in the validator; the public declaration typ
 `"<moduleId>."`. An `auto` tool must name a declared action family that allows `trusted_auto`;
 an undeclared family or missing `actionFamilyId` fails validation. Declare only the hosts the
 worker actually fetches through `fetchHosts`; each hostname is validated before installation.
+
+An installable tool opts into the chat classifier the same way a built-in tool does (§11.1),
+except that the candidate list is a worker handler name rather than a function:
+
+```json
+"assistantTools": [{
+  "name": "example-module.switchDevice", "permissionId": "example-module.switchDevice",
+  "description": "Switch a device.", "risk": "read", "handler": "switchDevice",
+  "inputSchema": { "type": "object", "properties": { "device": { "type": "string" } }, "required": ["device"] },
+  "outputSchema": { "type": "object", "properties": { "name": { "type": "string" } } },
+  "classifier": {
+    "description": "Switch an example device",
+    "arguments": { "device": { "kind": "candidates" } },
+    "candidatesHandler": "listDevices",
+    "replyTemplate": "Switched {name}."
+  }
+}]
+```
+
+Register `candidatesHandler` with `defineModuleWorker` beside the tool handler. The host invokes
+it through the same worker subprocess as the tool, always with `toolRisk: "read"`: a credential
+or KV write, a notification and a structured AI call are refused there, and `ctx.db.query` runs
+read-only. The hook is actor-scoped (`ctx.input.actorUserId`), bounded (a few seconds, tighter
+than a tool call), and stops when the chat turn is cancelled. It returns at most 50
+`{ "id", "label" }` entries; oversize or malformed output is rejected whole, never truncated.
+The same 200-character description and template bounds as §11.1 apply, and a `candidates`
+argument without a `candidatesHandler` (or a handler with no such argument) fails validation.
 
 ### 13.2 Worker access and authority
 

@@ -85,7 +85,7 @@ interface ProcessState {
 }
 
 export class ExternalModuleWorkerError extends Error {
-  constructor(readonly code: "protocol" | "timeout" | "crash" | "handler_failed") {
+  constructor(readonly code: "protocol" | "timeout" | "crash" | "handler_failed" | "aborted") {
     super(`External module worker ${code}`);
     this.name = "ExternalModuleWorkerError";
   }
@@ -130,6 +130,12 @@ export class ExternalModuleWorkerRuntime {
       readonly preferences?: Readonly<Record<string, ExternalModulePreferenceValue>>;
       /** #1789: the actor's IANA zone, surfaced to the module as ctx.localTimezone. */
       readonly localTimezone?: string;
+      /**
+       * Plan 2.2 (#2882): the caller's cancellation, for a classifier candidate hook that must
+       * stop when the chat turn is cancelled rather than run to the hard ceiling. Aborting kills
+       * this invocation's child. Never serialized; it is host-side only.
+       */
+      readonly signal?: AbortSignal;
     }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
@@ -165,6 +171,12 @@ export class ExternalModuleWorkerRuntime {
       readonly preferences?: Readonly<Record<string, ExternalModulePreferenceValue>>;
       /** #1789: the actor's IANA zone, surfaced to the module as ctx.localTimezone. */
       readonly localTimezone?: string;
+      /**
+       * Plan 2.2 (#2882): the caller's cancellation, for a classifier candidate hook that must
+       * stop when the chat turn is cancelled rather than run to the hard ceiling. Aborting kills
+       * this invocation's child. Never serialized; it is host-side only.
+       */
+      readonly signal?: AbortSignal;
     }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
@@ -203,6 +215,12 @@ export class ExternalModuleWorkerRuntime {
       () => kill(new ExternalModuleWorkerError("timeout")),
       hardTimeoutMs
     );
+    // Plan 2.2 (#2882): the caller's cancellation. Wiring it here means a cancelled chat turn
+    // stops the sandbox instead of waiting out the hard ceiling. A pre-aborted signal fails the
+    // ready gate below and never writes to the child.
+    const onAbort = (): void => kill(new ExternalModuleWorkerError("aborted"));
+    if (options.signal?.aborted) onAbort();
+    else options.signal?.addEventListener("abort", onAbort, { once: true });
     try {
       await state.ready;
       state.current = invocation;
@@ -239,6 +257,7 @@ export class ExternalModuleWorkerRuntime {
       );
       return await response;
     } finally {
+      options.signal?.removeEventListener("abort", onAbort);
       clearTimeout(hardTimer);
       clearTimeout(invocation.stallTimer);
       // stdout and stderr are independent pipes; let already-written child output

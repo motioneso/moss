@@ -720,6 +720,7 @@ export {
   type ExternalModuleAssistantToolDeclaration,
   type ExternalModuleBooleanPreference,
   type ExternalModuleBriefingDeclaration,
+  type ExternalModuleClassifierDeclaration,
   type ExternalModuleDatabaseDeclaration,
   type ExternalModuleIntegerPreference,
   type ExternalModuleNavigationEntry,

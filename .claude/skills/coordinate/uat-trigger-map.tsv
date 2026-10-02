@@ -140,3 +140,9 @@ blocking	packages/shared/src/time.ts	tests/uat/specs/2503-allday-event-date.uat.
 blocking	packages/calendar/**	tests/uat/specs/classifier-tool-menu.uat.spec.ts
 # #2892 classifier gate 1.3: the Classifier settings row (rename + Chat gate Off/Shadow/On control).
 blocking	apps/web/src/settings/settings-ai-sorting-row.tsx	tests/uat/specs/classifier-settings.uat.spec.ts
+# #2889 classifier gate 3.6a: the admin model activity log screen and the provider-adapter
+# recording seam. A real HTTP briefing synthesis records a row the admin then sees on the screen.
+blocking	apps/web/src/settings/settings-model-activity-pane.tsx	tests/uat/specs/2889-model-activity-log.uat.spec.ts
+blocking	packages/ai/src/model-activity.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
+blocking	packages/ai/src/adapters/http-api.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
+blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
