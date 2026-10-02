@@ -8,7 +8,7 @@
 <p class="mk-help">Every time Moss called a model.</p>
 <div class="mk-filters" id="filters">
  <div class="jds-field"><label class="jds-label" for="f1">Kind</label><span class="jds-selectwrap"><select class="jds-select" id="f1"><option>All</option><option>Chat answer</option><option>Classifier</option><option>Background task</option></select></span></div>
- <div class="jds-field"><label class="jds-label" for="f2">Model</label><span class="jds-selectwrap"><select class="jds-select" id="f2"><option>All</option><option>Default model</option><option>Classifier model</option></select></span></div>
+ <div class="jds-field"><label class="jds-label" for="f2">Model</label><span class="jds-selectwrap"><select class="jds-select" id="f2"><option>All</option><option>Sonnet 5.5</option><option>Opus 5.5</option><option>Haiku 4.5</option><option>Llama 3.2 (local)</option></select></span></div>
  <div class="jds-field"><label class="jds-label" for="f3">Result</label><span class="jds-selectwrap"><select class="jds-select" id="f3"><option>All</option><option>Answered</option><option>Handled</option><option>Declined</option><option>Failed</option></select></span></div>
  <div class="jds-field"><label class="jds-label" for="f4">Time</label><span class="jds-selectwrap"><select class="jds-select" id="f4"><option>Last 7 days</option><option>Last 24 hours</option></select></span></div>
 </div>
@@ -18,15 +18,15 @@
 <script src="switcher.js"></script>
 <script>
 var rows=[
-['Today 9:41','Classifier','What is on my calendar today?','Classifier model','Calendar, list visible events, 0.97','Handled'],
-['Today 9:41','Chat answer','Remind me what is on my plate this week','Default model','','Answered'],
-['Today 9:30','Background task','(morning briefing)','Default model','Briefing','Answered'],
-['Today 9:12','Classifier','Turn off the kitchen lights','Classifier model','Home hub, turn light on or off, 0.99','Failed'],
-['Today 8:50','Classifier','Draft a polite note to my landlord','Classifier model','No tool, 0.93','Declined'],
-['Today 8:50','Chat answer','Draft a polite note to my landlord','Default model','','Answered'],
-['Yesterday 21:07','Classifier','Make it brighter','Classifier model','Earlier conversation needed, 0.88','Declined'],
-['Yesterday 21:07','Chat answer','Make it brighter','Default model','','Failed'],
-['Yesterday 18:30','Background task','(sort new email)','Classifier model','Mail, pick one','Answered']];
+['Today 9:41','Classifier','What is on my calendar today?','Haiku 4.5','Calendar, list visible events, 0.97','Handled'],
+['Today 9:41','Chat answer','Remind me what is on my plate this week','Sonnet 5.5','','Answered'],
+['Today 9:30','Background task','(morning briefing)','Opus 5.5','Briefing','Answered'],
+['Today 9:12','Classifier','Turn off the kitchen lights','Haiku 4.5','Home hub, turn light on or off, 0.99','Failed'],
+['Today 8:50','Classifier','Draft a polite note to my landlord','Llama 3.2 (local)','No tool, 0.93','Declined'],
+['Today 8:50','Chat answer','Draft a polite note to my landlord','Sonnet 5.5','','Answered'],
+['Yesterday 21:07','Classifier','Make it brighter','Llama 3.2 (local)','Earlier conversation needed, 0.88','Declined'],
+['Yesterday 21:07','Chat answer','Make it brighter','Sonnet 5.5','','Failed'],
+['Yesterday 18:30','Background task','(sort new email)','Haiku 4.5','Mail, pick one','Answered']];
 var badge={Handled:'forest',Declined:'neutral',Failed:'red',Answered:'neutral'};
 function table(rs){return '<div class="al-wrap"><table class="al"><thead><tr><th>Time</th><th>Kind</th><th>Message (admin only)</th><th>Model</th><th>Detail</th><th>Result</th></tr></thead><tbody>'+rs.map(function(r){return '<tr><td class="num">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+(r[4]||'-')+'</td><td><span class="jds-badge jds-badge--'+badge[r[5]]+'">'+r[5]+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
 var empty='<div class="jds-empty"><div class="jds-empty__title">No activity yet</div><div class="jds-empty__sub">Lines appear once Moss calls a model.</div></div>';
@@ -40,7 +40,7 @@ function show(k){var v=fs.map(function(i){return document.getElementById(i).valu
 var S={
  data:{l:'With lines'},
  filtered:{l:'Filtered: classifier, failed',pre:['Classifier','All','Failed']},
- nomatch:{l:'No matches',pre:['Background task','Default model','Failed']},
+ nomatch:{l:'No matches',pre:['Background task','Opus 5.5','Failed']},
  empty:{l:'Empty',nof:1},
  retention:{l:'7-day retention',r:'Oldest line: 6 days 22 hours ago.'}
 };
