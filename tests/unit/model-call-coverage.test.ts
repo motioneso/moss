@@ -16,12 +16,31 @@ import { describe, expect, it } from "vitest";
  *  - raw web calls to a model endpoint (the System One shape): `fetch`/`fetchImpl` against a known
  *    model host or path.
  *
+ * It also runs two broader checks, per QA round 2:
+ *  - EVERY bare process start (`spawn`/`spawnSync`/`exec`/`execSync`, not the regex `.exec(` or a
+ *    method `obj.spawn(`) in the model-facing packages must appear in the process-start allow-list
+ *    — whether or not a quoted `claude`/`codex`/`gemini` sits nearby. This catches a model program
+ *    started from a variable command (the shape `spawn(launch.command, ...)`), which the
+ *    quote-anchored check above cannot see.
+ *  - EVERY chat-engine construction (`new AcpChatEngine(`, `new CliChatEngineImpl(`,
+ *    `new CodexExecSession(`, `createStructuredEngine(`, the persistent runtimes, and the CLI
+ *    structured adapter factory) must appear in the chat-engine allow-list, so a new engine built
+ *    outside the recorded places fails.
+ *
  * Known limitations, stated so nobody trusts it further than it goes:
  *  - The allow-lists are per FILE. A second, unlogged model call added INSIDE an allow-listed file
  *    passes silently. Adding a call site means adding its file here (and recording it) or the guard
- *    fails with the offending `file:line`.
+ *    fails with the offending `file:line`. This applies to all four checks.
  *  - A model endpoint reached through a configurable base URL (not a literal host in source) is not
  *    detectable statically; the adapter allow-list covers those callers instead.
+ *  - The process-start check cannot tell a model program from a plain utility process (tmux, rm,
+ *    setpriv, an external module child). It flags both; a file that merely runs utilities is
+ *    allow-listed with a reason, and a reviewer weighing that reason is the safety net. A model
+ *    program started from a variable command in a NEW file still fails closed until someone adds
+ *    that file with a reason.
+ *  - The chat-engine check matches the known constructors by name; a brand-new engine class whose
+ *    constructor is not listed here is not caught until this list grows. Keeping the list here
+ *    beside the recorder seam is the deliberate cost.
  *  - Test files and `__tests__` are excluded: they do not ship.
  */
 
@@ -86,6 +105,109 @@ const MODEL_FETCH_ALLOWLIST = new Set([
   "packages/ai/src/adapters/http-api-structured.ts",
   // Structured/model transport builders that compose request URLs (no raw call here).
   "packages/ai/src/auto-register.ts"
+]);
+
+/**
+ * Files allowed to start a bare process (`spawn`/`spawnSync`/`exec`/`execSync`). A model-program
+ * file is ALSO in MODEL_SPAWN_ALLOWLIST above; the entries here are the ones that are not model
+ * calls, each with the reason it is safe. A new file that starts a process the same way must be
+ * added here with a reason, or the guard fails with its `file:line`.
+ */
+const PROCESS_START_ALLOWLIST = new Map<string, string>([
+  [
+    "packages/acp/src/tunnel.ts",
+    "interface declaration of AcpTunnel.spawn — a type signature, no process start"
+  ],
+  [
+    "packages/chat/src/live/acp-chat-engine.ts",
+    "RpcAcpTunnel.spawn method declaration; it forwards to the runner over RPC, no local spawn"
+  ],
+  [
+    "packages/cli-runner/src/acp-execs.ts",
+    "runs a module-build shell command (sh -c), not a model program"
+  ],
+  [
+    "packages/cli-runner/src/acp-host.ts",
+    "spawns the ACP model adapter and the process-kill stoppers; the adapter's turns are recorded by the chat engine wrapper (turn-activity-engine.ts)"
+  ],
+  [
+    "packages/cli-runner/src/acp-transcript-purge.ts",
+    "runs filesystem purge commands, not a model program"
+  ],
+  [
+    "packages/cli-runner/src/agent-home-prepare-run.ts",
+    "runs agent-home prepare commands, not a model program"
+  ],
+  [
+    "packages/cli-runner/src/owned-fs.ts",
+    "runs owner-scoped filesystem commands, not a model program"
+  ],
+  [
+    "packages/cli-runner/src/per-user-structured.ts",
+    "bounded runner behind the owner-run tmux and file I/O helper (createOwnerIo); it moves files and drives tmux, and starts no model turn itself"
+  ],
+  ["packages/cli-runner/src/setpriv.ts", "builds the setpriv privilege-drop wrapper command"],
+  [
+    "packages/module-registry/src/external/worker-runtime.ts",
+    "spawns an external module's own child process, not a model program"
+  ]
+]);
+
+/**
+ * Files allowed to build a chat engine. Every one is a recorded composition seam: the engine it
+ * builds is wrapped for per-turn recording (turn-activity-engine.ts) or is itself the recording
+ * adapter. A new engine built anywhere else fails until its file is added here with a reason.
+ */
+const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
+  [
+    "apps/api/src/focus-service.ts",
+    "builds the structured adapter factory for the server; recorded"
+  ],
+  ["apps/api/src/server.ts", "builds the structured adapter factory for the server; recorded"],
+  [
+    "apps/worker/src/external-module-ai-bridge.ts",
+    "builds the structured adapter factory for the worker; recorded"
+  ],
+  [
+    "packages/chat/src/live/acp-chat-engine.ts",
+    "defines the ACP engine and its factory; wrapped by the chat runtime for per-turn recording"
+  ],
+  [
+    "packages/chat/src/live/cli-check-turn.ts",
+    "builds an ACP engine for a recorded CLI check turn (kind: check)"
+  ],
+  [
+    "packages/chat/src/live/cli-structured-adapter.ts",
+    "defines the recording CLI structured adapter"
+  ],
+  [
+    "packages/chat/src/live/module-build-cli-engine.ts",
+    "builds the Codex one-shot session for a recorded module-build turn"
+  ],
+  [
+    "packages/chat/src/live/persistent-runtime-engine.ts",
+    "builds the persistent runtime engines; wrapped by the chat runtime for per-turn recording"
+  ],
+  [
+    "packages/chat/src/live/runtime.ts",
+    "the chat composition root: builds the engine factory and installs the per-turn recording wrapper"
+  ],
+  [
+    "packages/chat/src/live/structured-engine-selection.ts",
+    "selects and constructs the structured engine; callers record it"
+  ],
+  [
+    "packages/cli-runner/src/engine-host.ts",
+    "cli-runner engine host; builds the structured engine whose calls the adapter records"
+  ],
+  [
+    "packages/cli-runner/src/main.ts",
+    "cli-runner entrypoint: builds the persistent runtime whose turns are recorded"
+  ],
+  [
+    "packages/module-registry/src/index.ts",
+    "composition root: builds the structured adapter factories whose calls are recorded"
+  ]
 ]);
 
 const ADAPTER_CONSTRUCTION_RE =
@@ -197,6 +319,46 @@ function findModelFetches(files: readonly SourceFile[]): Hit[] {
   return hits;
 }
 
+/**
+ * Every bare process start, however the command is formed. The lookbehind excludes the regex
+ * `.exec(` and method calls like `tunnel.spawn(`, so this is precisely a module-level
+ * `spawn(`/`spawnSync(`/`exec(`/`execSync(`. This is what catches a program started from a variable
+ * (`spawn(launch.command, ...)`) that the quote-anchored check cannot see.
+ */
+const PROCESS_START_RE = /(?<![.\w])(?:spawn|spawnSync|execSync|exec)\s*\(/g;
+
+/** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
+const CHAT_ENGINE_RE =
+  /(?:new\s+(?:AcpChatEngine|CliChatEngineImpl|CodexExecSession|ClaudePersistentRuntime|CodexPersistentRuntime|ModuleBuildCliEngine)|createStructuredEngine|createRpcAcpEngine|createCliStructuredAdapterFactory)\s*\(/g;
+
+function findProcessStarts(files: readonly SourceFile[]): Hit[] {
+  const hits: Hit[] = [];
+  for (const { file, text } of files) {
+    for (const match of text.matchAll(PROCESS_START_RE)) {
+      hits.push({
+        file,
+        line: lineOf(text, match.index ?? 0),
+        detail: `process start ${match[0]}`
+      });
+    }
+  }
+  return dedupeByFileAndLine(hits);
+}
+
+function findChatEngineConstructions(files: readonly SourceFile[]): Hit[] {
+  const hits: Hit[] = [];
+  for (const { file, text } of files) {
+    for (const match of text.matchAll(CHAT_ENGINE_RE)) {
+      hits.push({
+        file,
+        line: lineOf(text, match.index ?? 0),
+        detail: `chat engine ${match[0].trim()}`
+      });
+    }
+  }
+  return dedupeByFileAndLine(hits);
+}
+
 function dedupeByFileAndLine(hits: readonly Hit[]): Hit[] {
   const seen = new Set<string>();
   const out: Hit[] = [];
@@ -213,7 +375,10 @@ function describeHit(hit: Hit): string {
   return `${hit.file}:${hit.line} — ${hit.detail}`;
 }
 
-function uncovered(hits: readonly Hit[], allow: ReadonlySet<string>): Hit[] {
+function uncovered(
+  hits: readonly Hit[],
+  allow: ReadonlySet<string> | ReadonlyMap<string, string>
+): Hit[] {
   return hits.filter((hit) => !allow.has(hit.file));
 }
 
@@ -257,6 +422,8 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     expect(findAdapterConstructions(files).length).toBeGreaterThan(0);
     expect(findModelSpawns(files).length).toBeGreaterThan(0);
     expect(findModelFetches(files).length).toBeGreaterThan(0);
+    expect(findProcessStarts(files).length).toBeGreaterThan(0);
+    expect(findChatEngineConstructions(files).length).toBeGreaterThan(0);
   });
 
   it("every provider-adapter construction is in a recorded seam", () => {
@@ -325,5 +492,63 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     ]);
     const off = uncovered(simulated, ADAPTER_CONSTRUCTION_ALLOWLIST);
     expect(off.map(describeHit)).toEqual(["packages/example/new.ts:1 — adapter construction"]);
+  });
+
+  it("every bare process start is in a recorded or explicitly allowed file", () => {
+    // A model-program file is allow-listed on either list; a utility process-start file only on
+    // PROCESS_START_ALLOWLIST. So the covered set is the union of both.
+    const covered = new Set<string>([...MODEL_SPAWN_ALLOWLIST, ...PROCESS_START_ALLOWLIST.keys()]);
+    const off = uncovered(findProcessStarts(files), covered);
+    expect(
+      off,
+      `New process start outside the recorded/allowed files:\n${off.map(describeHit).join("\n")}`
+    ).toEqual([]);
+  });
+
+  it("every chat-engine construction is in an allowed composition file", () => {
+    const off = uncovered(findChatEngineConstructions(files), CHAT_ENGINE_ALLOWLIST);
+    expect(
+      off,
+      `New chat-engine construction outside the recorded places:\n${off.map(describeHit).join("\n")}`
+    ).toEqual([]);
+  });
+
+  it("catches a model program started from a variable command", () => {
+    const source = [
+      "packages/example/variable.ts",
+      "const launch = buildSetprivDropCommand('sh', ['-c', opts.command]);",
+      "return spawn(launch.command, launch.args, { stdio: 'ignore' });"
+    ].join("\n");
+    const hits = findProcessStarts([{ file: "packages/example/variable.ts", text: source }]);
+    expect(hits.map(describeHit)).toEqual([
+      "packages/example/variable.ts:3 — process start spawn("
+    ]);
+    // And the guard fails on it because that file is on neither allow-list.
+    const covered = new Set<string>([...MODEL_SPAWN_ALLOWLIST, ...PROCESS_START_ALLOWLIST.keys()]);
+    expect(uncovered(hits, covered).map(describeHit)).toEqual([
+      "packages/example/variable.ts:3 — process start spawn("
+    ]);
+  });
+
+  it("catches a new chat engine built outside the recorded places", () => {
+    const source = "const engine = new AcpChatEngine(provider, key, opts);";
+    const hits = findChatEngineConstructions([
+      { file: "packages/example/new-engine.ts", text: source }
+    ]);
+    expect(hits.map(describeHit)).toEqual([
+      "packages/example/new-engine.ts:1 — chat engine new AcpChatEngine("
+    ]);
+    expect(uncovered(hits, CHAT_ENGINE_ALLOWLIST).map(describeHit)).toEqual([
+      "packages/example/new-engine.ts:1 — chat engine new AcpChatEngine("
+    ]);
+  });
+
+  it("does not flag a regex .exec() or a method obj.spawn() as a process start", () => {
+    const source = [
+      "const m = /^172\\.(\\d+)/.exec(hostname);",
+      "await this.tunnel.spawn(sessionKey, projectId, kind, userId, profile);"
+    ].join("\n");
+    const hits = findProcessStarts([{ file: "packages/example/benign.ts", text: source }]);
+    expect(hits).toEqual([]);
   });
 });

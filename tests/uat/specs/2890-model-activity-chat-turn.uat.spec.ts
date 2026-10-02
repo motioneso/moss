@@ -18,8 +18,11 @@ import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
 // #2732: the provisioner sets this ONLY after copying a real Codex login into the stack. Absent on
-// every default/CI run, so the whole spec skips rather than failing.
+// every default/CI run, so the whole spec skips rather than failing there.
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
+// A live-proof run sets this so a missing real login is a LOUD failure, not a silent skip that
+// reads as a pass. CI and default runs leave it unset and keep the skip.
+const REQUIRE_REAL_CHAT = Boolean(process.env.JARVIS_UAT_REQUIRE_REAL_CHAT);
 
 const MESSAGE = "UAT 3.6b coverage check: reply with a short greeting.";
 
@@ -65,9 +68,16 @@ async function sendThroughDrawer(page: Page): Promise<void> {
 }
 
 test("a live chat turn appears in the admin model activity log (#2890)", async ({ page }) => {
+  if (REQUIRE_REAL_CHAT && !REAL_CHAT_CONFIGURED) {
+    throw new Error(
+      "JARVIS_UAT_REQUIRE_REAL_CHAT is set but no real Codex login was copied into this stack " +
+        "(JARVIS_UAT_REAL_CHAT_CONFIGURED unset), so the live proof did not actually run. " +
+        "Provide ~/.codex/auth.json or unset the strict flag."
+    );
+  }
   test.skip(
     !REAL_CHAT_CONFIGURED,
-    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset) — #2732"
+    "no real-chat login configured for this run (JARVIS_UAT_REAL_CHAT_CONFIGURED unset), see #2732"
   );
   test.setTimeout(300_000);
 
@@ -84,16 +94,18 @@ test("a live chat turn appears in the admin model activity log (#2890)", async (
     await sendThroughDrawer(page);
   });
 
-  await test.step("the endpoint records a chat row for the turn", async () => {
+  await test.step("the endpoint records exactly one chat row for the turn", async () => {
     await expect
       .poll(
         async () => {
           const entries = await fetchModelActivity(page);
-          return entries.find((entry) => entry.kind === "chat")?.outcome;
+          return entries.filter((entry) => entry.kind === "chat").length;
         },
-        { timeout: 30_000, message: "no chat model-activity row appeared" }
+        { timeout: 30_000, message: "expected exactly one chat model-activity row" }
       )
-      .toBe("ok");
+      .toBe(1);
+    const chatRows = (await fetchModelActivity(page)).filter((entry) => entry.kind === "chat");
+    expect(chatRows[0]?.outcome, "the chat row should be ok").toBe("ok");
   });
 
   await test.step("the admin screen shows the chat row, and never the message text", async () => {

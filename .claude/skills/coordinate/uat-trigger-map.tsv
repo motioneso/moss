@@ -152,6 +152,9 @@ blocking	apps/web/src/settings/settings-integrations-pane.tsx	tests/uat/specs/28
 # #2890 classifier gate 3.6b: the remaining recorded call paths (choices, live chat turns,
 # module builds, embeddings, probes and checks) and the coverage guard. A live chat turn (which
 # reaches no adapter) is proven on the admin Model activity screen by the dedicated chat-turn spec.
+# NOTE: that spec needs a real Codex login copied into the stack (JARVIS_UAT_REAL_CHAT_CONFIGURED);
+# it SKIPS without one, which is not a pass. A live-proof run must set JARVIS_UAT_REQUIRE_REAL_CHAT=1
+# so a missing login fails loudly, or the run proves nothing about chat-turn recording.
 blocking	packages/ai/src/structured/generate-choices.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/chat/src/live/runtime.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
 blocking	packages/chat/src/live/turn-activity-engine.ts	tests/uat/specs/2890-model-activity-chat-turn.uat.spec.ts
