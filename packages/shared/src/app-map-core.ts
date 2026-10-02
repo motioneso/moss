@@ -170,7 +170,14 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "integrations",
     label: "Integrations",
-    description: "Connect external tools and services.",
+    description:
+      "Connect external tools and services. A connection's tools can be prepared for the chat " +
+      "classifier: the owner's own chat model reads each tool's definition once and drafts a " +
+      "short description and reply to review and save, after a disclosure that the definitions " +
+      "go to that model's provider, that preparing uses model usage, and that transport " +
+      "addresses, sign-in details, headers, secrets and device lists are not sent. A model " +
+      "that cannot draft shows a setup failure instead of switching models; nothing is stored " +
+      "until the owner saves, and unchanged reviews are reused.",
     path: "/settings?section=integrations",
     scope: "user"
   },
