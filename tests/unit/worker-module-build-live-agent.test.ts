@@ -194,4 +194,60 @@ describe("module build live-agent composition", () => {
       await launch({ workingDir: "/build/b1", step: "writing_spec", plan: {} });
     }
   );
+
+  it("records one build turn row on completion and one on failure, never the prompt", async () => {
+    const outcomes: string[] = [];
+    const io = {
+      run: vi.fn(async (command: string) => ({
+        code: command === "find" ? 0 : 0,
+        stdout: "",
+        stderr: ""
+      })),
+      writeFile: vi.fn(async () => {}),
+      sleep: vi.fn(async () => {})
+    };
+    const mux = {
+      open: vi.fn(async () => "module-build-session"),
+      submit: vi.fn(async () => {}),
+      capturePane: vi.fn(async () => "❯\n"),
+      isAlive: vi.fn(async () => true),
+      kill: vi.fn(async () => {})
+    };
+    const launch = createModuleBuildLiveAgent({
+      io: io as never,
+      mux: mux as never,
+      provider: "anthropic",
+      ensureProviderLaunchReady: vi.fn(async () => {}),
+      recordTurn: (outcome) => outcomes.push(outcome)
+    });
+
+    await launch({ workingDir: "/build/b1", step: "writing_spec", plan: null });
+    expect(outcomes).toEqual(["ok"]);
+
+    // Now drive a failure: the completion marker never appears and the agent is dead.
+    const failingIo = {
+      run: vi.fn(async (command: string) => ({
+        code: command === "test" ? 1 : 0,
+        stdout: "",
+        stderr: ""
+      })),
+      writeFile: vi.fn(async () => {}),
+      sleep: vi.fn(async () => {})
+    };
+    const deadMux = {
+      ...mux,
+      isAlive: vi.fn(async () => false)
+    };
+    const failLaunch = createModuleBuildLiveAgent({
+      io: failingIo as never,
+      mux: deadMux as never,
+      provider: "anthropic",
+      ensureProviderLaunchReady: vi.fn(async () => {}),
+      recordTurn: (outcome) => outcomes.push(outcome)
+    });
+    await expect(
+      failLaunch({ workingDir: "/build/b1", step: "writing_spec", plan: null })
+    ).rejects.toThrow();
+    expect(outcomes).toEqual(["ok", "error"]);
+  });
 });

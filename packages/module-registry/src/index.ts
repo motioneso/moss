@@ -76,6 +76,7 @@ import {
   type MemoryRetriever,
   memoryModuleManifest,
   memorySqlMigrationDirectory,
+  installEmbeddingActivityRecorder,
   registerMemoryDashboardRoutes,
   registerMemoryGraphRoutes,
   registerVaultIngestRootProvider,
@@ -3299,12 +3300,14 @@ export function registerBuiltInApiRoutes(
   // is logged and dropped; it can never slow or fail the model call.
   {
     const modelActivityRepository = new AiRepository();
-    installModelActivityRecorder(
-      createDbModelActivityRecorder(
-        (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
-        server.log
-      )
+    const recorder = createDbModelActivityRecorder(
+      (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
+      server.log
     );
+    installModelActivityRecorder(recorder);
+    // Plan 3.6b (#2890): embedding calls record through the same seam. Memory declares the sink
+    // structurally so it need not import @moss/ai; forward its entries to the DB recorder.
+    installEmbeddingActivityRecorder((entry) => recorder(entry));
   }
 
   // #342 boot-time fork (§3.5): when JARVIS_CLI_RUNNER_SOCKET is set the api drives the cli-runner
@@ -3727,12 +3730,13 @@ export async function registerBuiltInModuleWorkers(
   // Plan 3.6a (#2889): the worker process records its own model calls through the same seam.
   {
     const modelActivityRepository = new AiRepository();
-    installModelActivityRecorder(
-      createDbModelActivityRecorder(
-        (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
-        dependencies.logger
-      )
+    const recorder = createDbModelActivityRecorder(
+      (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
+      dependencies.logger
     );
+    installModelActivityRecorder(recorder);
+    // Plan 3.6b (#2890): forward embedding activity to the same DB recorder.
+    installEmbeddingActivityRecorder((entry) => recorder(entry));
   }
   const workerIds = await Promise.all(
     BUILT_IN_MODULES.map(

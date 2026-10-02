@@ -16,7 +16,14 @@ export type {
 } from "./embedding-provider-config.js";
 export {
   createEmbeddingProvider,
-  getEmbeddingProviderConfig
+  getEmbeddingProviderConfig,
+  installEmbeddingActivityRecorder,
+  withEmbeddingActivity
+} from "./embedding-provider-config.js";
+export type {
+  EmbeddingActivityEntry,
+  EmbeddingActivityOutcome,
+  EmbeddingActivityRecorder
 } from "./embedding-provider-config.js";
 export { MemoryIngestPipeline } from "./ingest.js";
 export type { IngestFileOptions, IngestFileResult, IngestStatus } from "./ingest.js";

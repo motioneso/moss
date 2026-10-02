@@ -1,3 +1,4 @@
+import { recordModelActivity } from "@moss/ai";
 import type { ProviderKind, TmuxIo } from "@moss/ai";
 
 export type ProbeProviderStatus =
@@ -141,6 +142,37 @@ export function looksLikeLoginRejection(text: string): boolean {
   return CLAUDE_AUTH_FAILURE_RE.test(text);
 }
 
+/**
+ * Plan 3.6b (#2890): record one model activity row for a readiness probe that makes a real model
+ * call. A ready answer is `ok`; a refusal or any other failure is `error`. Probes carry no saved
+ * model id, so the provider kind is the honest, non-hardcoded label.
+ */
+async function recordProbeCall(
+  provider: ProviderKind,
+  run: () => Promise<ProbeProviderResult>
+): Promise<ProbeProviderResult> {
+  try {
+    const result = await run();
+    recordModelActivity({
+      kind: "probe",
+      action: "probe",
+      outcome: result.status === "ready" ? "ok" : "error",
+      modelName: provider,
+      result: result.status === "ready" ? "completed" : "failed"
+    });
+    return result;
+  } catch (error) {
+    recordModelActivity({
+      kind: "probe",
+      action: "probe",
+      outcome: "error",
+      modelName: provider,
+      result: "failed"
+    });
+    throw error;
+  }
+}
+
 export async function probeProvider(
   provider: ProviderKind,
   deps: {
@@ -191,10 +223,12 @@ export async function probeProvider(
       }
     }
     if (provider !== "anthropic") {
+      // Plan 3.6b (#2890): gemini's readiness check is a real one-shot model prompt; codex's is a
+      // local `login status` that makes no model call, so only gemini is recorded.
       const result =
         provider === "openai-compatible"
           ? await probeCodexAuth(deps.io)
-          : await probeGeminiAuth(deps.io);
+          : await recordProbeCall(provider, () => probeGeminiAuth(deps.io));
       // A check that really proves the credential and comes back ready retires the old refusal.
       if (result.status === "ready" && checkProvesCredential(provider)) {
         loginRejections.delete(`${provider}:${deps.cacheScope ?? "shared"}`);
@@ -205,7 +239,10 @@ export async function probeProvider(
       const cached = probeCache.get(key);
       if (cached && cached.expiresAt > now) return cached.result;
     }
-    const result = await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
+    // A real one-shot `claude --print` call: record it. A cached answer above returned already.
+    const result = await recordProbeCall(provider, () =>
+      probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase)
+    );
     if (result.status === "ready") {
       loginRejections.delete(`${provider}:${deps.cacheScope ?? "shared"}`);
     }

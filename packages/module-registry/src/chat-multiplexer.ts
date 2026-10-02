@@ -15,6 +15,7 @@ import {
   createBinaryProbe,
   decideMultiplexer,
   isRootWorkspaceConfigured,
+  recordModelActivity,
   resolveMultiplexer,
   type MultiplexerKind,
   type MultiplexerSource,
@@ -217,6 +218,10 @@ export function makeProviderConnectionCheckProbe(deps: {
 
     let neutralDir: string | null = null;
     let engine: CliChatEngine | null = null;
+    // Plan 3.6b (#2890): track whether the generic check submitted a prompt and already recorded,
+    // so a timeout/exception after the prompt is sent records one error row instead of none.
+    let promptSubmitted = false;
+    let recorded = false;
     try {
       neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-provider-check-"));
       const personaPath = join(neutralDir, "persona.md");
@@ -232,7 +237,7 @@ export function makeProviderConnectionCheckProbe(deps: {
         return await checkOpenAiCompatibleProviderWithCodexLoginStatus(commandIo);
       }
       if (kind === "google") {
-        return await checkGoogleProviderWithOneShotPrompt(commandIo);
+        return await checkGoogleProviderWithOneShotPrompt(commandIo, kind);
       }
 
       engine = await deps.engineFactory(kind, `onboarding-check-${kind}`);
@@ -240,10 +245,32 @@ export function makeProviderConnectionCheckProbe(deps: {
       await acknowledgeProviderPromptIfNeeded(engine, kind);
       await waitForProviderTranscriptIfNeeded(engine, kind, PROVIDER_CHECK_TIMEOUT_MS);
       await withTimeout(engine.submit(PROVIDER_CHECK_PROMPT), PROVIDER_CHECK_TIMEOUT_MS);
+      promptSubmitted = true;
 
       const ready = await waitForProviderReply(engine, kind, PROVIDER_CHECK_TIMEOUT_MS);
+      // Plan 3.6b (#2890): the generic check submitted a real prompt to the provider's engine,
+      // so record one probe row. A readiness check that cannot answer is a failed model call.
+      recordModelActivity({
+        kind: "probe",
+        action: "probe",
+        outcome: ready ? "ok" : "error",
+        modelName: kind,
+        result: ready ? "completed" : "failed"
+      });
+      recorded = true;
       return ready ? { status: "ready" } : { status: "needs_login" };
     } catch (error) {
+      // #2890/QA: a timeout or exception after the prompt was sent is a failed model call, not a
+      // silent no-op. Record it once (the success path above already recorded and set the flag).
+      if (promptSubmitted && !recorded) {
+        recordModelActivity({
+          kind: "probe",
+          action: "probe",
+          outcome: "error",
+          modelName: kind,
+          result: "failed"
+        });
+      }
       if (error instanceof CliChatUnavailableError) {
         return { status: "multiplexer_unavailable" };
       }
@@ -295,13 +322,44 @@ async function checkOpenAiCompatibleProviderWithCodexLoginStatus(
  * the readiness signal, because answering at all requires working credentials.
  */
 async function checkGoogleProviderWithOneShotPrompt(
-  io: Pick<TmuxIo, "run">
+  io: Pick<TmuxIo, "run">,
+  providerLabel: string
 ): Promise<OnboardingProviderCheckResponse> {
-  const result = await withTimeout(
-    io.run("gemini", ["--prompt", "Reply with exactly OK."]),
-    PROVIDER_CHECK_TIMEOUT_MS
-  );
-  if (result.code === 0 && GEMINI_READY_ANSWER_RE.test(result.stdout)) return { status: "ready" };
+  // Plan 3.6b (#2890): this readiness check makes a real one-shot model call, so record one row.
+  // A timeout or thrown error is a failed model call, not a silent no-op.
+  let result: { code: number; stdout: string; stderr?: string };
+  try {
+    result = await withTimeout(
+      io.run("gemini", ["--prompt", "Reply with exactly OK."]),
+      PROVIDER_CHECK_TIMEOUT_MS
+    );
+  } catch {
+    recordModelActivity({
+      kind: "probe",
+      action: "probe",
+      outcome: "error",
+      modelName: providerLabel,
+      result: "failed"
+    });
+    return { status: "error" };
+  }
+  if (result.code === 0 && GEMINI_READY_ANSWER_RE.test(result.stdout)) {
+    recordModelActivity({
+      kind: "probe",
+      action: "probe",
+      outcome: "ok",
+      modelName: providerLabel,
+      result: "completed"
+    });
+    return { status: "ready" };
+  }
+  recordModelActivity({
+    kind: "probe",
+    action: "probe",
+    outcome: "error",
+    modelName: providerLabel,
+    result: "failed"
+  });
   // Same split as the Claude check above: only output that actually talks about signing in counts
   // as "needs login". Anything else that fails is a fault, and calling it a login problem would
   // send the founder round a sign-in loop that cannot fix it.

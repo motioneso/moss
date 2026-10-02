@@ -60,6 +60,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkflowApprovalFixture: false,
       withWorkshopStorageFixture: false,
       withActivityOutcomeFixture: false,
+      withBriefingWriterFixture: false,
       chatScript: undefined
     });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
@@ -103,6 +104,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkflowApprovalFixture: false,
       withActivityOutcomeFixture: false,
       withWorkshopStorageFixture: false,
+      withBriefingWriterFixture: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -153,6 +155,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkflowApprovalFixture: false,
       withActivityOutcomeFixture: false,
       withWorkshopStorageFixture: false,
+      withBriefingWriterFixture: false,
       chatScript: undefined
     });
   });
@@ -181,6 +184,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkflowApprovalFixture: false,
       withActivityOutcomeFixture: false,
       withWorkshopStorageFixture: false,
+      withBriefingWriterFixture: false,
       chatScript: "phase1-smoke"
     });
   });

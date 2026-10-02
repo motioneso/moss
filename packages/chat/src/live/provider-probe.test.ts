@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TmuxIo } from "@moss/ai";
+import { installModelActivityRecorder, type ModelActivityEntry, type TmuxIo } from "@moss/ai";
 import {
   clearProviderProbeCacheForTests,
   invalidateProviderProbeCache,
@@ -321,5 +321,52 @@ describe("#2242: a refused sign-in outlives the provider's own readiness check",
         credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-fresh" }
       })
     ).toEqual({ status: "ready" });
+  });
+});
+
+describe("probeProvider model activity recording (plan 3.6b, #2890)", () => {
+  afterEach(() => {
+    installModelActivityRecorder(null);
+    clearProviderProbeCacheForTests();
+  });
+
+  it("records one probe row for a real claude readiness call, and none for a cached answer", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    await probeProvider("anthropic", { io, cliPresent: async () => true });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: "probe",
+      action: "probe",
+      outcome: "ok",
+      modelName: "anthropic",
+      result: "completed"
+    });
+
+    // The second call is served from the probe cache: no model call, so no new row.
+    await probeProvider("anthropic", { io, cliPresent: async () => true });
+    expect(entries).toHaveLength(1);
+  });
+
+  it("records an error row when the probe's real call fails", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    const { io } = fakeRealMergeIo({ code: 1, stdout: "unauthorized" });
+
+    const result = await probeProvider("anthropic", { io, cliPresent: async () => true });
+    expect(result.status).toBe("needs_login");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ outcome: "error", result: "failed" });
+  });
+
+  it("makes no codex model call and records nothing for the codex login-status check", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "Logged in" });
+
+    await probeProvider("openai-compatible", { io, cliPresent: async () => true });
+    expect(entries).toHaveLength(0);
   });
 });

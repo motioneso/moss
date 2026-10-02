@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  installModelActivityRecorder,
+  type ModelActivityEntry
+} from "../../packages/ai/src/model-activity.js";
 import { runCheckTurn } from "../../packages/chat/src/live/cli-check-turn.js";
 import { CLI_VERSION_TOO_OLD_MESSAGE } from "../../packages/chat/src/live/cli-version-errors.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
@@ -102,5 +106,50 @@ describe("runCheckTurn", () => {
     });
     const result = await runCheckTurn({ ...base, engine });
     expect(result).toEqual({ ok: false, reason: "tool_call_missing" });
+  });
+});
+
+describe("runCheckTurn model activity recording (plan 3.6b, #2890)", () => {
+  it("records one check row per turn with the launch model, never the prompt", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const engine = fakeEngine({
+        batches: [{ records: [{ kind: "reply", text: "ok" }], complete: true } as never]
+      });
+      const { toolName: _unused, ...noTool } = base;
+      const SENTINEL = "SENTINEL-check-prompt-do-not-record";
+      await runCheckTurn({
+        ...noTool,
+        prompt: SENTINEL,
+        launch: { neutralDir: "", personaPath: "", model: "check-model-1" },
+        engine
+      });
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        kind: "check",
+        action: "check",
+        outcome: "ok",
+        modelName: "check-model-1",
+        result: "completed"
+      });
+      expect(JSON.stringify(entries)).not.toContain(SENTINEL);
+    } finally {
+      installModelActivityRecorder(null);
+    }
+  });
+
+  it("records an error row when the check turn fails", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const engine = fakeEngine({ launchError: new Error("no login") });
+      await runCheckTurn({ ...base, engine });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ kind: "check", outcome: "error", result: "failed" });
+    } finally {
+      installModelActivityRecorder(null);
+    }
   });
 });

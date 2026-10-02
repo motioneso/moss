@@ -5,6 +5,7 @@ import type { ModuleServiceKey } from "@moss/shared";
 
 import { parseAiApiKeyCredential } from "../credentials.js";
 import type { AiSecretCipher } from "../crypto.js";
+import { recordModelActivity } from "../model-activity.js";
 import type { AiRepository } from "../repository.js";
 
 export type ChoiceQuestionInput = {
@@ -224,6 +225,83 @@ async function postSystemOne(
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
 
   const fetchImpl = deps.fetch ?? globalThis.fetch;
+  // Plan 3.6b (#2890): System One is reached by a raw fetch, not through the provider adapters
+  // 3.6a records. Log one row per real post attempt at the same transport-facts-only standard.
+  // The outcome reflects the whole call: an unusable body is a failed call, like the adapters.
+  let posted: Awaited<ReturnType<typeof postSystemOneRequest>>;
+  try {
+    posted = await postSystemOneRequest(
+      fetchImpl,
+      baseUrl,
+      apiKey,
+      serializedBody,
+      signal,
+      input.signal,
+      deps,
+      input.service,
+      logPrefix
+    );
+  } catch (error) {
+    recordSystemOneActivity(model.provider_model_id, "error");
+    throw error;
+  }
+
+  if (!posted.ok) {
+    recordSystemOneActivity(
+      model.provider_model_id,
+      posted.error === "aborted" ? "aborted" : "error"
+    );
+    return posted;
+  }
+
+  const payload = posted.payload;
+  if (!isRecord(payload)) {
+    recordSystemOneActivity(model.provider_model_id, "error");
+    deps.logger?.warn(
+      { service: input.service, code: "invalid_response" },
+      `${logPrefix} invalid response`
+    );
+    return { ok: false, error: "invalid_response" };
+  }
+
+  recordSystemOneActivity(model.provider_model_id, "ok");
+  const usage = isRecord(payload.usage) ? payload.usage : {};
+  return {
+    ok: true,
+    payload,
+    usage: {
+      inputTokens: readTokenCount(usage["input_tokens"]),
+      outputTokens: readTokenCount(usage["output_tokens"])
+    }
+  };
+}
+
+/** Record one System One post attempt. Transport facts only; never the state, questions or key. */
+function recordSystemOneActivity(modelName: string, outcome: "ok" | "error" | "aborted"): void {
+  recordModelActivity({
+    kind: "structured",
+    action: "choices",
+    outcome,
+    modelName,
+    result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+  });
+}
+
+/** The raw System One round: post the serialized body and read the JSON payload. */
+async function postSystemOneRequest(
+  fetchImpl: typeof fetch,
+  baseUrl: string,
+  apiKey: string,
+  serializedBody: string,
+  signal: AbortSignal,
+  callerSignal: AbortSignal | undefined,
+  deps: GenerateChoicesDeps,
+  service: ModuleServiceKey,
+  logPrefix: string
+): Promise<
+  | { readonly ok: true; readonly payload: unknown }
+  | { readonly ok: false; readonly error: GenerateChoicesFailure }
+> {
   let response: Response;
   try {
     response = await fetchImpl(`${baseUrl}/v1/systemone`, {
@@ -238,17 +316,14 @@ async function postSystemOne(
       signal
     });
   } catch (error) {
-    if (input.signal?.aborted) return { ok: false, error: "aborted" };
+    if (callerSignal?.aborted) return { ok: false, error: "aborted" };
     const code = isTimeoutLike(error) ? "timeout" : "network_error";
-    deps.logger?.warn({ service: input.service, code }, `${logPrefix} provider error`);
+    deps.logger?.warn({ service, code }, `${logPrefix} provider error`);
     return { ok: false, error: "provider_error" };
   }
 
   if (!response.ok) {
-    deps.logger?.warn(
-      { service: input.service, code: `http_${response.status}` },
-      `${logPrefix} provider error`
-    );
+    deps.logger?.warn({ service, code: `http_${response.status}` }, `${logPrefix} provider error`);
     return { ok: false, error: "provider_error" };
   }
 
@@ -257,31 +332,11 @@ async function postSystemOne(
     payload = await response.json();
   } catch {
     // The caller's signal firing mid-read is an abort, not a malformed body.
-    if (input.signal?.aborted) return { ok: false, error: "aborted" };
-    deps.logger?.warn(
-      { service: input.service, code: "invalid_response_body" },
-      `${logPrefix} invalid response`
-    );
+    if (callerSignal?.aborted) return { ok: false, error: "aborted" };
+    deps.logger?.warn({ service, code: "invalid_response_body" }, `${logPrefix} invalid response`);
     return { ok: false, error: "invalid_response" };
   }
-
-  if (!isRecord(payload)) {
-    deps.logger?.warn(
-      { service: input.service, code: "invalid_response" },
-      `${logPrefix} invalid response`
-    );
-    return { ok: false, error: "invalid_response" };
-  }
-
-  const usage = isRecord(payload.usage) ? payload.usage : {};
-  return {
-    ok: true,
-    payload,
-    usage: {
-      inputTokens: readTokenCount(usage["input_tokens"]),
-      outputTokens: readTokenCount(usage["output_tokens"])
-    }
-  };
+  return { ok: true, payload };
 }
 
 /** Every asked id answered as a noul with a probability inside 0 to 1; anything else fails. */

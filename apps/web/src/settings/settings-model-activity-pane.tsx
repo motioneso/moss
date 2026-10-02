@@ -166,8 +166,9 @@ export function ModelActivityPane(_props: PaneProps) {
       <header className="settings-section__header">
         <h2 className="settings-section__title">Model activity</h2>
         <p className="settings-section__desc">
-          API-key providers: chat, structured and transcription calls. CLI providers: structured
-          calls only; CLI chat turns are not recorded yet.
+          Every model call Moss makes: chat turns through CLI and API-key providers, structured
+          output including classifier choices, transcription, embeddings, background tasks, module
+          builds, and provider probes and checks.
         </p>
       </header>
 
