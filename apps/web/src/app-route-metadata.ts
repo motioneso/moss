@@ -105,7 +105,7 @@ export const webRoutes: readonly WebRouteMeta[] = [
   {
     id: "settings",
     path: "/settings",
-    title: "Settings & permissions",
+    title: "Settings",
     subtitle: () => "",
     match: (pathname) => pathname.startsWith("/settings")
   },
