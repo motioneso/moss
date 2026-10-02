@@ -27,6 +27,7 @@ import {
   type MailMessageKey
 } from "./email-read-provider.js";
 import { ownAddressSet } from "./email-sorting.js";
+import { loadOwnAddressesAndSettle, settleOwnSent } from "./own-sent.js";
 import { runSortingModelPass, threadUserSentLast } from "./email-sorting-live.js";
 import { projectEmailActions } from "./monitor-jobs.js";
 import { listSavedEmailContext } from "./source-context/email.js";
@@ -398,6 +399,8 @@ export interface SortFetchedEmailsInput {
   readonly onFailure: (error: unknown) => void;
   /** The clock for the judgement retry window. Defaults to the current time. */
   readonly now?: Date;
+  /** The user's own addresses. Mail sent from one is settled without any model. */
+  readonly ownAddresses?: ReadonlySet<string>;
 }
 
 /**
@@ -421,6 +424,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   readonly pending: ParsedEmail[];
   readonly unchangedKeys: string[];
   readonly otpKeys: string[];
+  readonly ownSentKeys: string[];
   readonly rejudgeThreadRefs: string[];
   readonly rejudgeKeys: ReadonlyMap<string, string[]>;
   readonly gaveUpKeys: string[];
@@ -431,6 +435,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   const rejudgeThreadRefs = new Set<string>();
   const unchangedKeys: string[] = [];
   const otpKeys: string[] = [];
+  const ownSentKeys: string[] = [];
   const gaveUpKeys: string[] = [];
   const fail = (error: unknown): void => {
     input.progress.emailFailures += 1;
@@ -462,6 +467,9 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
       }
       continue;
     }
+    const awaiting = Boolean(prior?.awaitingJudgement);
+    const keys = { settled: ownSentKeys, unchanged: unchangedKeys };
+    if (await settleOwnSent(input, parsed, { unchanged, awaiting }, keys, fail)) continue;
     if (unchanged) {
       unchangedKeys.push(parsed.externalId);
       const askedAt = prior?.judgementRequestedAt?.getTime();
@@ -492,6 +500,7 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
     pending,
     unchangedKeys,
     otpKeys,
+    ownSentKeys,
     rejudgeThreadRefs: [...rejudgeThreadRefs],
     rejudgeKeys,
     gaveUpKeys
@@ -821,11 +830,13 @@ export async function runGoogleEmailPhase(
         "google-sync email message failed"
       );
     };
-    const { pending, unchangedKeys, otpKeys, rejudgeThreadRefs, rejudgeKeys } =
+    const ownAddresses = await loadOwnAddressesAndSettle(context);
+    const { pending, unchangedKeys, otpKeys, ownSentKeys, rejudgeThreadRefs, rejudgeKeys } =
       await sortFetchedEmails({
         parsedMessages,
         seen,
         now: context.now(),
+        ownAddresses,
         persistEmail,
         progress: context.progress,
         onFailure: recordMessageFailure
@@ -907,6 +918,7 @@ export async function runGoogleEmailPhase(
     }
     await projectKeys(unchangedKeys);
     await projectKeys(otpKeys);
+    await projectKeys(ownSentKeys);
     await requestRejudgements(context, rejudgeThreadRefs, rejudgeKeys);
   } catch (error) {
     if (error instanceof EmailExtractRetryableError) {
