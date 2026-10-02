@@ -524,6 +524,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0253",
           name: "0253_integration_classifier_settings.sql"
+        },
+        // #2889 — plan 3.6a: the admin-only, append-only model activity log.
+        {
+          version: "0254",
+          name: "0254_moss_model_activity_log.sql"
         }
       ]);
     } finally {

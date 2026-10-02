@@ -183,7 +183,8 @@ describe("AI provider foundation", () => {
       "app.ai_configured_models",
       "app.ai_assistant_action_requests",
       "app.moss_action_audit_log",
-      "app.moss_error_log"
+      "app.moss_error_log",
+      "app.moss_model_activity_log"
     ]);
     expect(manifest?.settings?.[0]).toMatchObject({
       id: "ai.user-settings",
