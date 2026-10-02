@@ -230,5 +230,11 @@ cannot both be the active chat model on one instance (a single instance rejects 
 "Live chat does not support API-key providers yet"). Run via `pnpm test:uat` on an isolated
 instance; post command, exit code, and assertions as a PR comment.
 
+Issue #2906 (found while proving this): the scripted chat provider was seeded `api_key`, which the
+live chat route refuses, and a `cli` auth method with no ACP agent id trips the
+`ai_provider_configs_auth_agent_identity` constraint. `tests/uat/seed/chunks/chat-script.ts` now
+seeds an `anthropic` CLI provider with the `claude-acp` identity, and the spec's message includes
+the `phase1-smoke` fixture's expected substring ("goals") so its single scripted turn is eligible.
+
 If no working path is reachable on an isolated instance, report **code-complete, unverified** with
 the exact blocker and do not claim done.

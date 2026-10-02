@@ -16,8 +16,6 @@ export async function seedScriptedChatProviderChunk(
     const provider = await repo.createProvider(scopedDb, {
       providerKind: "anthropic",
       displayName: "UAT Scripted Provider",
-      authMethod: "cli",
-      acpAgentId: "claude-acp",
       executionMode: "non_interactive",
       authMethod: "cli",
       acpAgentId: "claude-acp",

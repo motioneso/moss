@@ -21,7 +21,11 @@ export const uatLevel = {
 
 // The scripted chat provider's model, seeded by tests/uat/seed/chunks/chat-script.ts.
 const SCRIPTED_CHAT_MODEL_NAME = "uat-scripted-chat-model";
-const MESSAGE = "UAT 3.6b chat turn for the model activity log";
+// The message must contain the "phase1-smoke" fixture's expected substring ("goals") so the
+// scripted provider's single turn is eligible; otherwise it fails ambiguous-or-zero-eligible-turns.
+// The reply is the fixture's fixed prose.
+const MESSAGE = "UAT 3.6b coverage check: what are my goals?";
+const SCRIPTED_REPLY = "Here are your goals.";
 
 function requireBaseURL(): string {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -59,6 +63,8 @@ async function sendMessage(page: Page): Promise<void> {
   await composer.press("Enter");
   const response = await turnResponse;
   expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
+  // The scripted provider returned its fixed reply; proves a real turn completed end to end.
+  await expect(drawer.getByText(SCRIPTED_REPLY)).toBeVisible({ timeout: 60_000 });
 }
 
 async function openModelActivity(page: Page): Promise<void> {
