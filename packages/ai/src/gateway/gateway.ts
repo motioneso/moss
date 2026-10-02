@@ -1,15 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { performance } from "node:perf_hooks";
-import { types as nodeUtilTypes } from "node:util";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
-import { HttpError } from "@moss/module-sdk";
 import type {
   ActionRequestPreview,
   MossModuleManifest,
   ModuleAssistantToolManifest,
   ToolContext,
-  ToolExecute,
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
@@ -25,17 +21,8 @@ import {
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import {
-  classifyToolDependencyFailure,
-  describeToolDependencyCause,
-  safeErrorName
-} from "./dependency-failure.js";
 import { validateToolInput } from "./input-validation.js";
-import {
-  liveStreamResult,
-  renderAndCap,
-  sanitizeAssistantToolResult
-} from "./output-validation.js";
+import { liveStreamResult, renderAndCap } from "./output-validation.js";
 import {
   createEffectivePolicyLookup,
   familyAllowsAutoRun,
@@ -61,43 +48,26 @@ import {
   type NativeToolPermissionResponse
 } from "./native-tool-permission.js";
 export type { NativeToolPermissionRequest, NativeToolPermissionResponse };
+import {
+  runToolHandler,
+  type ExecutableTool,
+  type GatewayLogger,
+  type RunHandlerOutcome
+} from "./run-tool-handler.js";
+export type { GatewayLogger };
 import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
-import type { ActiveModulesResolver, GatewayToolResponse, SessionNotifier } from "./types.js";
-
-export interface GatewayLogger {
-  error(event: string, fields: Record<string, unknown>): void;
-}
+import type {
+  ActiveModulesResolver,
+  GatewayDeclineReason,
+  GatewayGateOutcome,
+  GatewayToolResponse,
+  SessionNotifier
+} from "./types.js";
 
 const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
-
-/**
- * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
- * so every call site records them identically. `audit.errorClass` is `null` only for a genuine
- * success (a module self-reporting failure inside an `ok:true` result is not one); the live-stream
- * outcome keys off it too. Never exposed outside this file.
- */
-interface RunHandlerOutcome {
-  readonly response: GatewayToolResponse;
-  readonly audit: {
-    readonly outcome: InsertAuditLogInput["outcome"];
-    readonly durationMs: number;
-    readonly errorClass: string | null;
-  };
-}
-
-/**
- * Closed set of conventional error shapes a module handler may return inside an `ok:true`
- * ToolResult. Checked on the raw pre-sanitize payload (#1252) — top-level only, no recursion.
- */
-function isModuleReportedError(data: Record<string, unknown>): boolean {
-  if (data.status === "error") return true;
-  if (data.ok === false) return true;
-  if (typeof data.error === "string" && data.error.length > 0) return true;
-  return false;
-}
 
 export interface AssistantToolGatewayDependencies {
   readonly resolveActiveModules: ActiveModulesResolver;
@@ -160,12 +130,6 @@ const defaultPolicyLookup: ActionPolicyLookup = {
   getFamilyManifest: async () => null
 };
 
-interface ExecutableTool {
-  readonly tool: ModuleAssistantToolManifest;
-  readonly execute: ToolExecute;
-  readonly dto: AiAssistantToolDto;
-}
-
 /**
  * The single chokepoint between Jarvis and every module's real operations. Lists
  * tools, validates input, enforces the hardcoded risk policy + confirmation bridge,
@@ -188,110 +152,29 @@ export class AssistantToolGateway {
     rawInput: unknown,
     options: { onProgress?: (message: string) => void } = {}
   ): Promise<GatewayToolResponse> {
-    const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
-    const ctx: ToolContext = {
-      actorUserId,
-      requestId: `mcp_${randomUUID()}`,
-      chatSessionId,
-      localTimezone,
-      // Only the MCP transport passes a sink; every other caller sends nowhere.
-      ...(options.onProgress ? { reportProgress: options.onProgress } : {})
-    };
-
-    const found = (await this.executableTools(actorUserId)).find(
-      (entry) => entry.tool.name === toolName
-    );
-    if (!found) {
-      return { ok: false, error: `Tool not available: ${toolName}` };
-    }
-
-    // Server-side per-session allowlist check (defense-in-depth on top of executableTools).
-    // Only fires when allowedToolNames is non-null (MCP sessions with a captured allowlist).
-    // null = unrestricted (REST path tokens minted without an allowlist).
-    if (allowedToolNames !== null && !allowedToolNames.has(toolName)) {
-      return { ok: false, error: `Tool not in session allowlist: ${toolName}` };
-    }
-
-    let input: Record<string, unknown>;
-    try {
-      input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        // Missing provenance is untrusted: only the registry's explicit false marker gets the
-        // built-in synchronous path.
-        external: found.tool.isExternal !== false,
-        toolName
-      });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
-    }
+    const prepared = await this.prepareCall(token, toolName, rawInput, options.onProgress);
+    if ("failure" in prepared) return prepared.failure;
+    const { found, input, ctx } = prepared;
 
     const prefs = this.deps.agencyPrefs?.(ctx) ?? denyPrefs;
-    const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
-    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
-    const effectiveLookup = createEffectivePolicyLookup(
-      lookup,
-      this.deps.resolveActiveModules,
-      ctx.actorUserId
-    );
-    if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
-      if (
-        confirmOverride ||
-        !(await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup))
-      ) {
-        return this.confirmAndRun(
-          found,
-          input,
-          ctx,
-          await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
-        );
-      }
+    const route = await this.planCall(found, input, ctx);
+    if (route.kind === "yolo-confirm") {
+      return this.confirmAndRun(
+        found,
+        input,
+        ctx,
+        await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+      );
+    }
+    if (route.kind === "yolo-run") {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
-        emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
-          actionRequestId: ctx.requestId,
-          toolName: found.dto.name,
-          outcome: "denied",
-          decidedBy: "policy",
-          holdDurationMs: null,
-          reason: "Rate limit exceeded for unattended runs of this tool."
-        });
-        void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-          approvalMode: "yolo",
-          outcome: "denied",
-          durationMs: null,
-          errorClass: "rate_limited",
-          chatSessionId: ctx.chatSessionId
-        });
-        return {
-          ok: false,
-          denied: true,
-          reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
-        };
+        return this.denyRateLimited(found, ctx, "yolo");
       }
       const { response: result, audit } = await this.runHandler(found, input, ctx);
-      emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
-        actionRequestId: ctx.requestId,
-        toolName: found.dto.name,
-        outcome: audit.errorClass === null ? "executed" : "error",
-        decidedBy: "policy",
-        holdDurationMs: null,
-        ...(result.ok
-          ? { result: liveStreamResult(found.tool, result) }
-          : { reason: gatewayFailureReason(result) }),
-        ...(result.ok && found.tool.affectsQueryKeys
-          ? { affectsQueryKeys: found.tool.affectsQueryKeys }
-          : {})
-      });
-      void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-        approvalMode: "yolo",
-        ...audit,
-        chatSessionId: ctx.chatSessionId
-      });
+      this.recordUnattendedRun(found, ctx, "yolo", result, audit);
       return result;
     }
-    if (
-      (await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, effectiveLookup)) ===
-      "run"
-    ) {
+    if (route.kind === "auto-run") {
       if (
         found.tool.risk !== "read" &&
         !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)
@@ -312,24 +195,7 @@ export class AssistantToolGateway {
       }
       const { response: result, audit } = await this.runHandler(found, input, ctx);
       if (found.tool.risk !== "read") {
-        emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
-          actionRequestId: ctx.requestId,
-          toolName: found.dto.name,
-          outcome: audit.errorClass === null ? "executed" : "error",
-          decidedBy: "policy",
-          holdDurationMs: null,
-          ...(result.ok
-            ? { result: liveStreamResult(found.tool, result) }
-            : { reason: gatewayFailureReason(result) }),
-          ...(result.ok && found.tool.affectsQueryKeys
-            ? { affectsQueryKeys: found.tool.affectsQueryKeys }
-            : {})
-        });
-        void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-          approvalMode: "auto",
-          ...audit,
-          chatSessionId: ctx.chatSessionId
-        });
+        this.recordUnattendedRun(found, ctx, "auto", result, audit);
       }
       return result;
     }
@@ -339,6 +205,204 @@ export class AssistantToolGateway {
       ctx,
       await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
     );
+  }
+
+  /**
+   * Entry point for the classifier gate. Runs the same token, membership, input and policy checks
+   * as callTool, but never raises an approval card. A call that would need approval (including a
+   * rate-limit escalation) declines before any handler runs. `dry-run` evaluates the same decision
+   * without consuming allowance, running a handler or writing an audit row. A dry-run result is
+   * never authorization; `execute` re-evaluates everything at dispatch time.
+   */
+  async callToolForGate(
+    token: string,
+    toolName: string,
+    rawInput: unknown,
+    mode: "execute" | "dry-run"
+  ): Promise<GatewayGateOutcome> {
+    const prepared = await this.prepareCall(token, toolName, rawInput, undefined);
+    if ("failure" in prepared) {
+      return { kind: "declined", reason: prepared.reason };
+    }
+    const { found, input, ctx } = prepared;
+    const route = await this.planCall(found, input, ctx);
+    if (route.kind === "confirm" || route.kind === "yolo-confirm") {
+      return { kind: "declined", reason: "would_confirm" };
+    }
+    const approvalMode = route.kind === "yolo-run" ? "yolo" : "auto";
+    const limited = route.kind === "yolo-run" || found.tool.risk !== "read";
+    if (mode === "dry-run") {
+      if (limited && !this.autoRunLimiter.wouldAllow(ctx.actorUserId, found.dto.name)) {
+        return { kind: "declined", reason: "rate_limited" };
+      }
+      return { kind: "would_run", approvalMode };
+    }
+    if (limited && !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
+      if (route.kind === "yolo-run") {
+        this.denyRateLimited(found, ctx, "yolo");
+      } else {
+        void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
+          approvalMode: "auto",
+          outcome: "denied",
+          durationMs: null,
+          errorClass: "rate_limited",
+          chatSessionId: ctx.chatSessionId
+        });
+      }
+      return { kind: "declined", reason: "rate_limited" };
+    }
+    const { response, audit } = await this.runHandler(found, input, ctx);
+    if (limited) this.recordUnattendedRun(found, ctx, approvalMode, response, audit);
+    return {
+      kind: "executed",
+      response,
+      outcome:
+        audit.errorClass === null
+          ? "success"
+          : audit.errorClass === "module_reported"
+            ? "module_reported_error"
+            : "handler_error"
+    };
+  }
+
+  private async prepareCall(
+    token: string,
+    toolName: string,
+    rawInput: unknown,
+    onProgress: ((message: string) => void) | undefined
+  ): Promise<
+    | { found: ExecutableTool; input: Record<string, unknown>; ctx: ToolContext }
+    | { failure: GatewayToolResponse; reason: GatewayDeclineReason }
+  > {
+    const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
+    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const ctx: ToolContext = {
+      actorUserId,
+      requestId: `mcp_${randomUUID()}`,
+      chatSessionId,
+      localTimezone,
+      // Only the MCP transport passes a sink; every other caller sends nowhere.
+      ...(onProgress ? { reportProgress: onProgress } : {})
+    };
+
+    const found = (await this.executableTools(actorUserId)).find(
+      (entry) => entry.tool.name === toolName
+    );
+    if (!found) {
+      return {
+        failure: { ok: false, error: `Tool not available: ${toolName}` },
+        reason: "not_available"
+      };
+    }
+
+    // Server-side per-session allowlist check (defense-in-depth on top of executableTools).
+    // Only fires when allowedToolNames is non-null (MCP sessions with a captured allowlist).
+    // null = unrestricted (REST path tokens minted without an allowlist).
+    if (allowedToolNames !== null && !allowedToolNames.has(toolName)) {
+      return {
+        failure: { ok: false, error: `Tool not in session allowlist: ${toolName}` },
+        reason: "not_in_allowlist"
+      };
+    }
+
+    let input: Record<string, unknown>;
+    try {
+      input = await validateToolInput(found.tool.inputSchema, rawInput, {
+        // Missing provenance is untrusted: only the registry's explicit false marker gets the
+        // built-in synchronous path.
+        external: found.tool.isExternal !== false,
+        toolName
+      });
+    } catch (error) {
+      return {
+        failure: { ok: false, error: error instanceof Error ? error.message : "Invalid input" },
+        reason: "invalid_input"
+      };
+    }
+    return { found, input, ctx };
+  }
+
+  /** The single approval decision shared by live calls and the gate's dry run. */
+  private async planCall(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext
+  ): Promise<{ kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm" }> {
+    const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
+    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
+    const effectiveLookup = createEffectivePolicyLookup(
+      lookup,
+      this.deps.resolveActiveModules,
+      ctx.actorUserId
+    );
+    if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
+      return confirmOverride ||
+        !(await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup))
+        ? { kind: "yolo-confirm" }
+        : { kind: "yolo-run" };
+    }
+    return (await resolvePolicy(
+      found.tool,
+      found.dto.moduleId,
+      confirmOverride,
+      effectiveLookup
+    )) === "run"
+      ? { kind: "auto-run" }
+      : { kind: "confirm" };
+  }
+
+  private denyRateLimited(
+    found: ExecutableTool,
+    ctx: ToolContext,
+    approvalMode: "yolo"
+  ): GatewayToolResponse {
+    emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
+      actionRequestId: ctx.requestId,
+      toolName: found.dto.name,
+      outcome: "denied",
+      decidedBy: "policy",
+      holdDurationMs: null,
+      reason: "Rate limit exceeded for unattended runs of this tool."
+    });
+    void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
+      approvalMode,
+      outcome: "denied",
+      durationMs: null,
+      errorClass: "rate_limited",
+      chatSessionId: ctx.chatSessionId
+    });
+    return {
+      ok: false,
+      denied: true,
+      reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
+    };
+  }
+
+  private recordUnattendedRun(
+    found: ExecutableTool,
+    ctx: ToolContext,
+    approvalMode: "yolo" | "auto",
+    result: GatewayToolResponse,
+    audit: RunHandlerOutcome["audit"]
+  ): void {
+    emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
+      actionRequestId: ctx.requestId,
+      toolName: found.dto.name,
+      outcome: audit.errorClass === null ? "executed" : "error",
+      decidedBy: "policy",
+      holdDurationMs: null,
+      ...(result.ok
+        ? { result: liveStreamResult(found.tool, result) }
+        : { reason: gatewayFailureReason(result) }),
+      ...(result.ok && found.tool.affectsQueryKeys
+        ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+        : {})
+    });
+    void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
+      approvalMode,
+      ...audit,
+      chatSessionId: ctx.chatSessionId
+    });
   }
 
   async requestNativeToolPermission(
@@ -633,93 +697,20 @@ export class AssistantToolGateway {
     }
   }
 
-  private async runHandler(
+  private runHandler(
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext
   ): Promise<RunHandlerOutcome> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
-    const services = this.servicesFor(found.tool);
-    const startedAt = performance.now();
-    try {
-      const result = await this.executeTool(found, input, ctx, services, access);
-      const durationMs = Math.round(performance.now() - startedAt);
-      const sanitized = sanitizeAssistantToolResult(found.tool.outputSchema, result);
-      // Detection must run on the raw pre-sanitize payload: sanitizeAssistantToolResult allow-lists
-      // to schema-declared keys, so an undeclared status/ok/error field would already be stripped
-      // from structuredData. Applies to every module, built-in or external: isExternal only decides
-      // whether a module's INPUT is trusted (validateToolInput above), not whether its output can be
-      // taken at face value. Gating on isExternal used to mean a built-in module's self-reported
-      // error (e.g. tasks.updateStatus returning {error: "Task not found"} inside an ok:true result)
-      // never got flagged and was recorded as a plain "success" (#1252 finding).
-      const errorClass = isModuleReportedError(result.data) ? "module_reported" : null;
-      return {
-        response: {
-          ok: true,
-          data: renderAndCap(
-            found.tool.outputSchema,
-            result,
-            // Scope trust-boundary wrapping to tools with untrusted external content only.
-            // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
-            // externalContent: true on web.search + web.read; all others leave it unset).
-            found.tool.externalContent ? found.tool.name : undefined
-          ),
-          structuredData: sanitized.data,
-          // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema
-          // projection would drop the field and the 16k text cap would truncate base64. Size
-          // is already bounded at upload (attachment caps), and the payload flows only over
-          // the engine's MCP stdio channel — never into logs, DB, or job payloads.
-          ...(result.media ? { media: result.media } : {})
-        },
-        audit: {
-          // A tool's execute may request a distinct audit outcome (#2175 Task 7). Only a registry-
-          // trusted built-in tool's claim is honoured: an external tool cannot say "suppressed"/
-          // "refused" to hide a real failure from audit.
-          outcome:
-            (found.tool.isExternal === false ? result.auditOutcome : undefined) ??
-            (errorClass === null ? "success" : "failed"),
-          durationMs,
-          errorClass
-        }
-      };
-    } catch (error) {
-      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
-      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
-      // isExternal === false trusts the TOOL, not the shape of what it throws — a first-party
-      // dependency can still surface a hostile Proxy, so classifyToolDependencyFailure/
-      // safeErrorName brand-check with util.types.isNativeError before reading anything, exactly
-      // like this branch's untrusted path already refuses to touch `error` at all.
-      const isFirstParty = found.tool.isExternal === false;
-      const cause = isFirstParty ? classifyToolDependencyFailure(error) : null;
-      const errorName = isFirstParty ? safeErrorName(error) : undefined;
-      (this.deps.logger ?? defaultGatewayLogger).error("tool_handler_threw", {
-        toolName: found.dto.name,
-        requestId: ctx.requestId,
-        errorClass: "handler_error",
-        ...(cause ? { cause } : {}),
-        ...(errorName ? { errorName } : {})
-      });
-      return {
-        response: {
-          ok: false,
-          // The cause id goes in the log above; the chat gets ordinary words. The model is free to
-          // repeat this text to the user, so it must already read like something a person wrote.
-          error:
-            found.tool.safeErrors === true &&
-            nodeUtilTypes.isNativeError(error) &&
-            error instanceof HttpError
-              ? error.message
-              : cause
-                ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
-                : `Tool ${found.dto.name} failed`
-        },
-        audit: {
-          outcome: "failed",
-          durationMs: Math.round(performance.now() - startedAt),
-          errorClass: "handler_error"
-        }
-      };
-    }
+    return runToolHandler(
+      found,
+      input,
+      ctx,
+      this.deps.logger ?? defaultGatewayLogger,
+      (services) => this.executeTool(found, input, ctx, services, access),
+      this.servicesFor(found.tool)
+    );
   }
 
   private executeTool(
