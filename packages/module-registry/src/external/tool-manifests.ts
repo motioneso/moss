@@ -1,5 +1,8 @@
 import type {
+  ClassifierCandidate,
+  ClassifierCandidateProvider,
   ExternalModuleAssistantToolDeclaration,
+  ModuleAssistantToolClassifier,
   MossModuleManifest,
   ToolContext,
   ToolInput,
@@ -16,6 +19,19 @@ export type ExternalToolInvoker = (
   context: ToolContext
 ) => Promise<ToolResult>;
 
+/**
+ * Runs one installable module's candidate hook (plan 2.2, #2882). `handler` names a worker handler
+ * exposed through `defineModuleWorker`; the host invokes it through the existing sandbox/RPC
+ * runtime, actor-scoped and read-only. The returned list is validated by the caller with
+ * `normalizeClassifierCandidates`, so this boundary stays `unknown`.
+ */
+export type ExternalCandidateInvoker = (
+  module: ExternalModuleDiscovery,
+  handler: string,
+  access: { readonly actorUserId: string; readonly requestId: string },
+  signal: AbortSignal
+) => Promise<unknown>;
+
 function synthesizeRequiresConfirmation(
   tool: ExternalModuleAssistantToolDeclaration
 ): ToolRequiresConfirmation | undefined {
@@ -27,9 +43,42 @@ function synthesizeRequiresConfirmation(
     ) === true;
 }
 
+/**
+ * Turns the JSON classifier declaration into the SDK's function form. The candidate list is a
+ * handler name, so it becomes a provider that delegates to `invokeCandidates`; without an invoker
+ * there is no provider and `checkClassifierEligibility` marks any candidates argument ineligible.
+ * A field-by-field copy, like the tool remap below: a hostile key must not ride a spread through.
+ */
+function synthesizeClassifier(
+  module: ExternalModuleDiscovery,
+  tool: ExternalModuleAssistantToolDeclaration,
+  invokeCandidates: ExternalCandidateInvoker | undefined
+): ModuleAssistantToolClassifier | undefined {
+  const decl = tool.classifier;
+  if (!decl) return undefined;
+  const handler = decl.candidatesHandler;
+  const candidates: ClassifierCandidateProvider | undefined =
+    handler !== undefined && invokeCandidates !== undefined
+      ? (_scopedDb, ctx, options) =>
+          invokeCandidates(
+            module,
+            handler,
+            { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+            options.signal
+          ) as Promise<readonly ClassifierCandidate[]>
+      : undefined;
+  return {
+    description: decl.description,
+    ...(decl.arguments ? { arguments: decl.arguments } : {}),
+    ...(candidates ? { candidates } : {}),
+    replyTemplate: decl.replyTemplate
+  };
+}
+
 export function createExternalToolManifests(
   discoveries: readonly ExternalModuleDiscovery[],
-  invoke: ExternalToolInvoker
+  invoke: ExternalToolInvoker,
+  invokeCandidates?: ExternalCandidateInvoker
 ): MossModuleManifest[] {
   return discoveries
     .filter((module) => module.manifest.runtime && module.manifest.assistantTools?.length)
@@ -71,6 +120,7 @@ export function createExternalToolManifests(
           inputSchema: tool.inputSchema,
           isExternal: true,
           outputSchema: tool.outputSchema,
+          classifier: synthesizeClassifier(module, tool, invokeCandidates),
           execute: (_scopedDb, input, context) => invoke(module, tool, input, context)
         };
       })

@@ -150,6 +150,41 @@ describe("ExternalModuleWorkerRuntime", () => {
     await runtime.close();
   });
 
+  // Plan 2.2 (#2882): the caller's cancellation kills the sandbox instead of waiting out the
+  // hard ceiling, so a cancelled chat turn cannot leave a candidate hook running.
+  it("aborts an in-flight invocation when the caller's signal fires", async () => {
+    const runtime = new ExternalModuleWorkerRuntime({
+      invocationStallMs: 10_000,
+      idleTimeoutMs: 500
+    });
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const pending = runtime.invoke(await fixture(), "hang", {}, async () => null, {
+      lane: "queue",
+      signal: controller.signal
+    });
+    setTimeout(() => controller.abort(), 30);
+    await expect(pending).rejects.toMatchObject({ code: "aborted" });
+    expect(Date.now() - startedAt).toBeLessThan(9_000);
+    await runtime.close();
+  });
+
+  it("fails fast on an already-aborted signal", async () => {
+    const runtime = new ExternalModuleWorkerRuntime({
+      invocationStallMs: 10_000,
+      idleTimeoutMs: 500
+    });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      runtime.invoke(await fixture(), "echo", {}, async () => null, {
+        lane: "queue",
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ code: "aborted" });
+    await runtime.close();
+  });
+
   it("times out when a worker never announces readiness", async () => {
     const runtime = new ExternalModuleWorkerRuntime({
       invocationStallMs: 30,

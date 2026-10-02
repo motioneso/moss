@@ -3,7 +3,7 @@ import type { PgBoss } from "pg-boss";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { ChatAttachmentsService } from "@moss/chat";
 import { createPushQueuePort } from "@moss/jobs";
-import type { MossModuleManifest, ToolResult } from "@moss/module-sdk";
+import type { ModuleAssistantToolRisk, MossModuleManifest, ToolResult } from "@moss/module-sdk";
 import {
   createNotificationPreferencePort,
   createRuntimeEmbeddingProvider,
@@ -16,6 +16,7 @@ import {
   createExternalModuleRpcHandler,
   createExternalToolManifests,
   ExternalModuleWorkerRuntime,
+  type ExternalCandidateInvoker,
   type ExternalModuleAiRequest,
   type ExternalModuleAiResult,
   type ExternalToolInvoker
@@ -56,18 +57,26 @@ export function createExternalModuleTools(input: {
     createNotificationPreferencePort(),
     input.boss ? createPushQueuePort(input.boss) : undefined
   );
-  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
-    const rpc = createExternalModuleRpcHandler({
+  // Plan 2.2 (#2882): the tool call and a classifier candidate hook share one RPC construction.
+  // The hook is always "read", which makes every mutation branch in the RPC host refuse it
+  // (worker-rpc-host.ts: kv.set/delete, auth.setCredential, ai.generateStructured, notify.post)
+  // and runs db.query read-only.
+  const buildRpc = (
+    module: ExternalModuleDiscovery,
+    toolRisk: ModuleAssistantToolRisk,
+    access: { readonly actorUserId: string; readonly requestId: string }
+  ) =>
+    createExternalModuleRpcHandler({
       module,
-      toolRisk: tool.risk,
-      actorUserId: context.actorUserId,
-      requestId: context.requestId,
+      toolRisk,
+      actorUserId: access.actorUserId,
+      requestId: access.requestId,
       workerDataContext: input.workerDataContext!,
       isActorAdmin: () =>
         input.appDataContext.withDataContext(
-          { actorUserId: context.actorUserId, requestId: context.requestId },
+          access,
           async (scopedDb) =>
-            (await input.settingsRepository.getUserById(scopedDb, context.actorUserId))
+            (await input.settingsRepository.getUserById(scopedDb, access.actorUserId))
               ?.is_instance_admin === true
         ),
       // ctx.embed (#1281): resolved from the same runtime seam memory search
@@ -75,12 +84,11 @@ export function createExternalModuleTools(input: {
       // never named here. Lazy — only an invocation that actually embeds pays
       // for the config read.
       embeddingProvider: () =>
-        input.appDataContext.withDataContext(
-          { actorUserId: context.actorUserId, requestId: context.requestId },
-          (scopedDb) => createRuntimeEmbeddingProvider(scopedDb)
+        input.appDataContext.withDataContext(access, (scopedDb) =>
+          createRuntimeEmbeddingProvider(scopedDb)
         ),
-      readAttachmentText: async (access, attachmentId) => {
-        const content = await attachments.readContent(access, attachmentId);
+      readAttachmentText: async (attachmentAccess, attachmentId) => {
+        const content = await attachments.readContent(attachmentAccess, attachmentId);
         return content.kind === "text"
           ? {
               fileName: content.meta.fileName,
@@ -93,8 +101,8 @@ export function createExternalModuleTools(input: {
       // separate from workerDataContext above — notify.post runs outside the
       // db.query/ai.generateStructured withDataContext block in worker-rpc-host.ts,
       // so it needs a context of its own rather than reusing one already closed.
-      postNotification: async (access, notifyInput) => {
-        await input.appDataContext.withDataContext(access, (scopedDb) =>
+      postNotification: async (notifyAccess, notifyInput) => {
+        await input.appDataContext.withDataContext(notifyAccess, (scopedDb) =>
           notifications.create(scopedDb, notifyInput)
         );
       },
@@ -102,6 +110,25 @@ export function createExternalModuleTools(input: {
       // still enforces risk gating, the composition guard, and the call cap.
       ...(input.ai ? { ai: (db, req) => input.ai!(db, module.id, req) } : {})
     });
+
+  // A candidate hook must answer inside the gate's few-second budget, so it gets a tighter
+  // ceiling than a tool call. The caller's signal, when present, is the tighter bound still.
+  const CANDIDATE_HOOK_TIMEOUT_MS = 2_000;
+  const invokeCandidates: ExternalCandidateInvoker = async (module, handler, access, signal) =>
+    runtime.invoke(
+      module,
+      handler,
+      { actorUserId: access.actorUserId },
+      buildRpc(module, "read", access),
+      {
+        lane: "tool",
+        timeoutMs: CANDIDATE_HOOK_TIMEOUT_MS,
+        signal
+      }
+    );
+
+  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
+    const rpc = buildRpc(module, tool.risk, context);
     // #1768: resolved per invocation inside the ACTOR's data context, exactly as the
     // queued path does in apps/worker/src/external-module-invoke.ts. Without this the
     // synchronous tool path handed the module an empty preference set, so every read
@@ -143,7 +170,8 @@ export function createExternalModuleTools(input: {
   // module discovered after this function ran (an install, a draft, a rescan) shows up on the
   // next call with no restart. `invoke` itself does not depend on discoveries, so it stays a
   // single closure built once above.
-  const getManifests = () => createExternalToolManifests(input.discoveries(), invoke);
+  const getManifests = () =>
+    createExternalToolManifests(input.discoveries(), invoke, invokeCandidates);
   return { runtime, getManifests };
 }
 

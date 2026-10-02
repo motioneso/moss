@@ -25,6 +25,7 @@ import type {
   ModuleLifecycle,
   JsonSchema
 } from "./index.js";
+import type { ClassifierArgumentDecl } from "./classifier.js";
 
 /**
  * Credential slot a module declares (#918 Slice 2). Values are stored
@@ -176,6 +177,26 @@ export interface ExternalModuleConfirmWhenClause {
   readonly equals: string | number | boolean;
 }
 
+/**
+ * Classifier opt-in for an installable module's assistant tool (plan 2.2).
+ *
+ * The SDK's `ModuleAssistantToolClassifier` carries a candidate list as a function, which JSON
+ * cannot express. An installable module names a WORKER HANDLER instead; the host invokes it
+ * through the same sandbox/RPC runtime as the tool itself, read-only and actor-scoped, and
+ * validates the returned list with `normalizeClassifierCandidates`. A `candidates` argument
+ * without a handler is rejected, so an incomplete declaration is never listed.
+ */
+export interface ExternalModuleClassifierDeclaration {
+  /** One line the classifier reads when choosing between tools (200 characters). */
+  readonly description: string;
+  /** How each argument is supplied. See ClassifierArgumentDecl. */
+  readonly arguments?: Readonly<Record<string, ClassifierArgumentDecl>>;
+  /** Names a worker handler. Required when any argument is `candidates`. */
+  readonly candidatesHandler?: string;
+  /** Reply text with `{field}` placeholders into the tool result. */
+  readonly replyTemplate: string;
+}
+
 export interface ExternalModuleAssistantToolDeclaration {
   readonly name: string;
   readonly description: string;
@@ -189,6 +210,8 @@ export interface ExternalModuleAssistantToolDeclaration {
   readonly confirmWhenKeys?: readonly string[];
   readonly inputSchema?: JsonSchema;
   readonly outputSchema?: JsonSchema;
+  /** Opt-in to the chat classifier menu; absent means ineligible. See ExternalModuleClassifierDeclaration. */
+  readonly classifier?: ExternalModuleClassifierDeclaration;
   readonly handler: string;
 }
 

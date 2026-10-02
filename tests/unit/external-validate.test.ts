@@ -588,6 +588,132 @@ describe("validateExternalModuleManifest (#917)", () => {
     expect(autoWithFamily.ok).toBe(true);
   });
 
+  // Plan 2.2 (#2882): an installable module's classifier opt-in. The candidate list is a worker
+  // handler name, not a function, so the JSON form has its own symmetry rule; the rest of the
+  // rules come from the SDK's checkClassifierEligibility and are re-asserted here.
+  describe("classifier opt-in (#2882)", () => {
+    const withTool = (tool: Record<string, unknown>) =>
+      validateExternalModuleManifest(
+        {
+          ...base,
+          runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+          assistantTools: [
+            {
+              name: "acme-widgets.lookup",
+              description: "Look up a widget",
+              permissionId: "acme-widgets.lookup",
+              risk: "read",
+              handler: "lookup",
+              ...tool
+            }
+          ]
+        },
+        "acme-widgets",
+        "0.1.0"
+      );
+
+    const enumTool = {
+      inputSchema: {
+        type: "object",
+        properties: { mode: { type: "string", enum: ["on", "off"] } },
+        required: ["mode"]
+      },
+      outputSchema: { type: "object", properties: { ok: { type: "boolean" } } },
+      classifier: {
+        description: "Turn a widget on or off",
+        arguments: { mode: { kind: "enum" } },
+        replyTemplate: "Widget {ok}."
+      }
+    };
+
+    const candidatesTool = {
+      inputSchema: {
+        type: "object",
+        properties: { device: { type: "string" } },
+        required: ["device"]
+      },
+      outputSchema: { type: "object", properties: { name: { type: "string" } } },
+      classifier: {
+        description: "Switch a device",
+        arguments: { device: { kind: "candidates" } },
+        candidatesHandler: "acme.devices",
+        replyTemplate: "Switched {name}."
+      }
+    };
+
+    it("accepts a well-formed enum-only classifier and re-emits it", () => {
+      const result = withTool(enumTool);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.manifest.assistantTools?.[0]?.classifier).toEqual(enumTool.classifier);
+      }
+    });
+
+    it("accepts a candidates declaration with a handler", () => {
+      expect(withTool(candidatesTool).ok).toBe(true);
+    });
+
+    it("stays absent when no classifier is declared", () => {
+      const result = withTool({});
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.manifest.assistantTools?.[0]?.classifier).toBeUndefined();
+    });
+
+    it("rejects a candidates argument with no candidatesHandler", () => {
+      const result = withTool({
+        ...candidatesTool,
+        classifier: { ...candidatesTool.classifier, candidatesHandler: undefined }
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("no candidatesHandler");
+    });
+
+    it("rejects a candidatesHandler with no candidates argument", () => {
+      const result = withTool({
+        ...enumTool,
+        classifier: { ...enumTool.classifier, candidatesHandler: "acme.devices" }
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("no argument uses candidates");
+    });
+
+    it("rejects an unknown classifier field", () => {
+      const result = withTool({
+        ...enumTool,
+        classifier: { ...enumTool.classifier, spread: true }
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("unknown fields");
+    });
+
+    it("rejects a reply placeholder that is not on the output schema", () => {
+      const result = withTool({
+        ...enumTool,
+        classifier: { ...enumTool.classifier, replyTemplate: "Widget {missing}." }
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("missing");
+    });
+
+    it("rejects an over-length description", () => {
+      const result = withTool({
+        ...enumTool,
+        classifier: { ...enumTool.classifier, description: "x".repeat(201) }
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("description");
+    });
+
+    it("rejects a malformed candidatesHandler name", () => {
+      const result = withTool({
+        ...candidatesTool,
+        classifier: { ...candidatesTool.classifier, candidatesHandler: "BadName" }
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("candidatesHandler");
+    });
+  });
+
   // FIN-00 #1145: instanceWritePolicy is only meaningful (and only admin-approved)
   // for namespaces that actually carry instance scope, and only two values exist.
   it("accepts instanceWritePolicy 'module' on an instance-scoped namespace", () => {
