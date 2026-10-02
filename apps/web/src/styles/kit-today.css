@@ -268,3 +268,16 @@
 .cmd-main .sp-tkgrid > * {
   min-width: 0;
 }
+
+/* Quiet line: replaces the empty personal sections. Block gaps follow the
+   design-system minimums (sections --space-7, text above/below --space-5). */
+.today-quiet-line {
+  margin: var(--space-5) 0 var(--space-7);
+}
+.today-quiet-line__text {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}

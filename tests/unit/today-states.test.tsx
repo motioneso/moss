@@ -329,6 +329,78 @@ describe("TodayPage quiet day", () => {
   });
 });
 
+describe("TodayPage quiet line", () => {
+  const QUIET = "Nothing else yet today";
+
+  function eveningDefinition(): BriefingDefinitionDto {
+    return {
+      ...morningDefinition(),
+      id: "def-evening",
+      title: "Evening",
+      briefingType: "evening",
+      scheduleMetadata: { version: 1, targetTime: "23:00", timezone: "UTC" }
+    };
+  }
+
+  function summarizedMorningRun(): BriefingRunDto {
+    return {
+      id: "run-quiet-1",
+      definitionId: "def-morning",
+      ownerUserId: "user-1",
+      status: "succeeded",
+      runKind: "scheduled",
+      briefingType: "morning",
+      summaryText: "A calm day. Nothing needs you before noon.",
+      sourceMetadata: {},
+      feedbackItems: [],
+      structuredPayload: { version: 1, actionRows: [], catchUp: null },
+      createdAt: NOW.toISOString()
+    };
+  }
+
+  // Both runs lists must be cached, or the page treats them as still loading.
+  function seedQuiet(morningRuns: readonly BriefingRunDto[] = []): QueryClient {
+    const client = seedPage({ definitions: [morningDefinition(), eveningDefinition()] });
+    client.setQueryData(queryKeys.briefings.runs("def-morning"), { runs: [...morningRuns] });
+    client.setQueryData(queryKeys.briefings.runs("def-evening"), { runs: [] });
+    return client;
+  }
+
+  it("folds the empty personal sections into one line when all are empty", () => {
+    const html = renderPage(seedQuiet());
+    expect(html).toContain(QUIET);
+    expect(html).not.toContain("The few things that matter most");
+    expect(html).not.toContain("No evening review yet.");
+    expect(html).not.toContain("Nothing pressing right now.</p>");
+  });
+
+  it("restores the sections when the now-list has a task", () => {
+    const client = seedQuiet();
+    client.setQueryData(queryKeys.tasks.list, {
+      tasks: [
+        {
+          id: "task-1",
+          title: "Send the invoice",
+          status: "todo",
+          parentTaskId: null,
+          priority: 3,
+          dueAt: null
+        }
+      ]
+    });
+    const html = renderPage(client);
+    expect(html).not.toContain(QUIET);
+    expect(html).toContain("The few things that matter most");
+    expect(html).toContain("No evening review yet.");
+  });
+
+  it("restores the sections when the briefing has content", () => {
+    const html = renderPage(seedQuiet([summarizedMorningRun()]));
+    expect(html).not.toContain(QUIET);
+    expect(html).toContain("The few things that matter most");
+  });
+});
+
 describe("TodayPage stale source", () => {
   it("names the stale source while the schedule still renders", () => {
     const capturedAt = NOW.toISOString();

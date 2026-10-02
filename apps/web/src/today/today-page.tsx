@@ -100,6 +100,7 @@ import "../styles/kit-briefing-reader.css";
 import "../styles/kit-day-plan-review.css";
 import "../styles/kit-evening-planning.css";
 import { GoalsSection } from "./goals-section.js";
+import { TodayQuietLine } from "./today-quiet-line.js";
 
 /** Today — the all-day home: an editorial brief over the user's real tasks + calendar. */
 export function TodayPage(props: {
@@ -457,6 +458,16 @@ export function TodayPage(props: {
       ))}
     </nav>
   );
+  // Day mode folds the empty personal sections into one quiet line, once
+  // everything they read has loaded. Any one with content restores them all.
+  const personalSectionsEmpty =
+    todayMode === "day" &&
+    !tasksQuery.isPending &&
+    !morningLoading &&
+    !eveningRunsQuery.isPending &&
+    morningReadable === null &&
+    startHere.length === 0 &&
+    !latestEveningRun?.summaryText.trim();
   const railSection = (
     <TodayRail
       mode={todayMode}
@@ -477,7 +488,9 @@ export function TodayPage(props: {
       nextStarted={nextStarted}
       changedSinceLastNight={changedSinceLastNight}
       onNavigate={(path) => navigate(path)}
-      showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
+      showEveningReview={
+        eveningDefinition?.enabled === true && todayMode === "day" && !personalSectionsEmpty
+      }
       showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}
       latestEveningRun={latestEveningRun}
       eveningRunsPending={eveningRunsQuery.isPending}
@@ -668,7 +681,13 @@ export function TodayPage(props: {
               </p>
             ) : null}
 
-            {todayMode === "day" ? startHereSection : null}
+            {todayMode === "day" ? (
+              personalSectionsEmpty ? (
+                <TodayQuietLine />
+              ) : (
+                startHereSection
+              )
+            ) : null}
 
             <div id="needs-you">
               <BriefingActionRowsSection
