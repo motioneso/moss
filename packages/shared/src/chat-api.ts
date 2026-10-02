@@ -209,8 +209,8 @@ export const CLASSIFIER_GATE_MODE_DEFAULT: ClassifierGateMode = "off";
 /**
  * One approved tool release record. The gate may only be turned `on` when at least one of these
  * exists; the review step (plan task 4.2) is the writer. Empty by default. `classifierConfigVersion`
- * ties an approval to the reviewed classifier/configuration version, so a later classifier change
- * does not inherit an old approval.
+ * records the reviewed classifier/configuration version. Task 1.2 counts rows only; the match that
+ * stops an old approval surviving a classifier change is enforced by task 4.2.
  */
 export interface ClassifierToolReleaseRecord {
   readonly moduleId: string;

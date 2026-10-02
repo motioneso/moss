@@ -209,9 +209,9 @@ export const aiModuleManifest = {
     {
       id: "ai.classifier_gate_setting",
       description:
-        "Classifier gate switch beside the Sorting model row in Settings > Assistant & AI: Off by " +
-        "default, Shadow records only, On acts. On needs an approved tool release; then every " +
-        "user's eligible messages reach the classifier.",
+        "Classifier gate: an instance-wide setting (Off, Shadow, On) held through the admin " +
+        "configuration boundary beside the Classifier binding. No screen shows it yet. On needs an " +
+        "approved tool release.",
       remediations: [
         {
           id: "ai.classifier_gate_setting.not_released",

@@ -43,6 +43,8 @@ function makeServer(options?: {
   readonly hasEligibleRelease?: boolean;
   /** When false, no activation port is wired (exercises the fail-closed default). */
   readonly wireActivationPort?: boolean;
+  /** When true, the activation port's database read throws (exercises fail-closed on error). */
+  readonly activationPortThrows?: boolean;
 }): {
   readonly server: FastifyInstance;
   readonly upserts: unknown[];
@@ -96,7 +98,10 @@ function makeServer(options?: {
       ? {}
       : {
           classifierActivation: {
-            hasEligibleRelease: async () => options?.hasEligibleRelease ?? false
+            hasEligibleRelease: async () => {
+              if (options?.activationPortThrows) throw new Error("release read failed");
+              return options?.hasEligibleRelease ?? false;
+            }
           }
         })
   });
@@ -329,5 +334,28 @@ describe("runtime config admin routes", () => {
 
     expect(res.statusCode).toBe(403);
     expect(made.upserts).toEqual([]);
+  });
+
+  // #2881: if the release read fails, the activation check must fail closed — the `on` write is
+  // never stored. This is the "database read errors" path the security review asked to cover.
+  it("fails closed when the release check's database read throws (#2881)", async () => {
+    const made = makeServer({ activationPortThrows: true });
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+      payload: { value: "on" }
+    });
+
+    expect(res.statusCode).toBeGreaterThanOrEqual(500);
+    expect(made.upserts).toEqual([]);
+
+    // The read status stays at the default; nothing was turned on.
+    const getRes = await server.inject({
+      method: "GET",
+      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`
+    });
+    expect(getRes.json()).toEqual({ config: { value: "off", source: "default" } });
   });
 });

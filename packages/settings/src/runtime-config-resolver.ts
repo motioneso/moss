@@ -1,6 +1,9 @@
 import { resolveMossEnv, type DataContextDb } from "@moss/db";
 
+import { CLASSIFIER_GATE_MODE_DEFAULT } from "@moss/shared";
+
 import {
+  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   EMBED_PROVIDER_CONFIG_KEY,
   getRuntimeConfigEntry,
   type RuntimeConfigKeyEntry,
@@ -96,6 +99,13 @@ export class RuntimeConfigResolver {
 
     const envValue = resolveMossEnv(this.env, entry.envVar);
     if (envValue && envValue.length > 0) {
+      // Classifier gate (task 1.2, #2881): the environment variable must not turn the gate on
+      // without an approved tool release. There is no release check on this read path, so an env
+      // value of "on" fails closed to "off" (the release gate lives on the write route, where the
+      // admin action can be checked). Any other env value passes through untouched.
+      if (key === CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY && envValue === "on") {
+        return { entry, value: CLASSIFIER_GATE_MODE_DEFAULT, source: "default" };
+      }
       return { entry, value: envValue, source: "env" };
     }
 

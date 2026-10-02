@@ -15,10 +15,27 @@ let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
 const repository = new ClassifierReleaseRepository();
 
+/** Postgres invalid_table_definition / insufficient_privilege. RLS WITH CHECK refusals are 42501. */
+const RLS_REFUSAL = "42501";
+
 const asActor = <T>(
   actorUserId: string,
   work: (db: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]) => Promise<T>
 ) => dataContext.withDataContext({ actorUserId, requestId: "release-test" }, work);
+
+/** Run a statement as a non-admin actor and return the Postgres error code, or null on success. */
+async function nonAdminWriteErrorCode(
+  statement: (
+    db: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]
+  ) => Promise<unknown>
+): Promise<string | null> {
+  try {
+    await asActor(ids.userA, statement);
+    return null;
+  } catch (error) {
+    return (error as { code?: string }).code ?? "no-code";
+  }
+}
 
 beforeAll(async () => {
   await resetFoundationDatabase();
@@ -78,19 +95,54 @@ describe("app.chat_classifier_release_eligibility", () => {
     expect(typeof match?.approvedAt).toBe("string");
   });
 
-  it("is readable by a non-admin but not writable by one", async () => {
-    // Read: instance-global admin data is visible to every authed actor.
+  it("is readable by a non-admin actor", async () => {
+    // Read: instance-global admin data is visible to every authed actor. Self-contained: insert a
+    // row first so this test does not depend on another test having run.
+    await asActor(ids.adminUser, (db) =>
+      sql`
+        INSERT INTO app.chat_classifier_release_eligibility
+          (module_id, tool_name, classifier_config_version, approved_by_user_id)
+        VALUES ('tasks', 'tasks.create', 'cfg-read', ${ids.adminUser}::uuid)
+      `.execute(db.db)
+    );
     expect(await asActor(ids.userA, (db) => repository.hasEligibleRelease(db))).toBe(true);
+  });
 
-    // Write: RLS WITH CHECK requires current_actor_is_admin().
-    await expect(
-      asActor(ids.userA, (db) =>
-        sql`
-          INSERT INTO app.chat_classifier_release_eligibility
-            (module_id, tool_name, classifier_config_version, approved_by_user_id)
-          VALUES ('calendar', 'forged-tool', 'cfg-v1', ${ids.userA}::uuid)
-        `.execute(db.db)
-      )
-    ).rejects.toThrow();
+  it("refuses a non-admin INSERT with a row-security error", async () => {
+    const code = await nonAdminWriteErrorCode((db) =>
+      sql`
+        INSERT INTO app.chat_classifier_release_eligibility
+          (module_id, tool_name, classifier_config_version, approved_by_user_id)
+        VALUES ('calendar', 'forged-insert', 'cfg-v1', ${ids.userA}::uuid)
+      `.execute(db.db)
+    );
+    expect(code).toBe(RLS_REFUSAL);
+  });
+
+  it("refuses a non-admin UPDATE with a row-security error and changes no row", async () => {
+    const code = await nonAdminWriteErrorCode((db) =>
+      sql`
+        UPDATE app.chat_classifier_release_eligibility
+        SET tool_name = 'hijacked'
+        WHERE module_id = 'tasks'
+      `.execute(db.db)
+    );
+    expect(code).toBe(RLS_REFUSAL);
+
+    // The row the admin wrote is untouched.
+    const rows = await asActor(ids.adminUser, (db) => repository.listEligibleReleases(db));
+    expect(rows.some((r) => r.toolName === "hijacked")).toBe(false);
+  });
+
+  it("refuses a non-admin DELETE with a row-security error and removes no row", async () => {
+    const code = await nonAdminWriteErrorCode((db) =>
+      sql`
+        DELETE FROM app.chat_classifier_release_eligibility WHERE module_id = 'tasks'
+      `.execute(db.db)
+    );
+    expect(code).toBe(RLS_REFUSAL);
+
+    const rows = await asActor(ids.adminUser, (db) => repository.listEligibleReleases(db));
+    expect(rows.some((r) => r.toolName === "tasks.create")).toBe(true);
   });
 });

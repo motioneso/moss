@@ -1,10 +1,14 @@
 -- Classifier gate, task 1.2 (#2881): approved tool release eligibility.
 --
 -- The gate is one instance-wide switch (off/shadow/on). Turning it `on` is only allowed when at
--- least one row here matches an approved review. This table is EMPTY BY DEFAULT: the review step
--- (plan task 4.2) is the only writer, and it records the reviewed tool plus the classifier/config
--- version the approval was granted for, so a later classifier change does not inherit an old
--- approval.
+-- least one row here exists. This table is EMPTY BY DEFAULT: the review step (plan task 4.2) is the
+-- only writer. Each row records the reviewed tool plus the classifier/config version the approval
+-- was granted for. Task 1.2 only counts rows; the version-and-tool match that stops an old approval
+-- surviving a classifier change is enforced by task 4.2, not here.
+--
+-- Known gap owned by task 4.2 (revocation): deleting every row here does NOT clear an already stored
+-- `on` setting, because this check only runs on the write to that setting. Task 4.2 must enforce the
+-- gate's effective state at read time or clear it on revocation.
 --
 -- Instance-global admin data, not private user data: RLS mirrors app.instance_settings (all authed
 -- actors may read, only admins may write). No admin private-data bypass is introduced.
