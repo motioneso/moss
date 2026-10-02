@@ -84,7 +84,8 @@ import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
 import { RuntimeConfigResolver } from "@moss/settings";
 import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
-import { createClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import { buildClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
 import type { GateMode } from "./live/classifier-gate.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 
@@ -219,6 +220,12 @@ export interface ChatRoutesDependencies {
    */
   readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
   /**
+   * #2901 — same late-bound "adopt" seam: publishes the classifier gate runner the wiring closure
+   * built, so a test can drive the REAL route setup (mint/revoke/allowlist) and assert it. No-op
+   * when no gateway is wired.
+   */
+  readonly adoptClassifierGate?: (runner: ClassifierGateRunner) => void;
+  /**
    * #2689: publishes a minter for a token that may call only the named tools, and a way to drop it.
    * The version check uses it so its throwaway session is refused any call to another tool.
    */
@@ -330,38 +337,24 @@ export function registerChatRoutes(
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting
-   * only. The token is minted through the same registry every model session uses, scoped to a fresh
-   * correlation id, and revoked on every path. The ports factory is intentionally left unset: the
-   * tool list and classifier calls are the later live-wiring step, so today every gated message
+   * only. `buildClassifierGateRunner` owns the session-id shape, the empty allowlist and the short
+   * token lifetime; the ports factory is intentionally left unset, so today every gated message
    * declines and falls through to the default model. Nothing here can become reachable until an
    * approved release exists, which no code path writes yet.
    */
   const classifierGate = wiring
-    ? createClassifierGateRunner({
+    ? buildClassifierGateRunner({
         readMode: (actorUserId) =>
           dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
             new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
               CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
             )
           ),
-        tokens: {
-          mint: (actorUserId, correlationId) => {
-            const token = wiring.tokens.mint({
-              actorUserId,
-              chatSessionId: `classifier-gate:${correlationId}`,
-              // Tool limit: the gate token always carries an allowlist, never unrestricted. It is
-              // empty until the 3.5 ports factory supplies the turn's menu — every tool this token
-              // may call must be in the release-approved menu, and no release writer exists yet.
-              allowedToolNames: new Set<string>()
-            });
-            return token;
-          },
-          revoke: (correlationId) =>
-            wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`)
-        },
-        now: () => Date.now()
+        tokens: wiring.tokens
       })
     : undefined;
+
+  if (classifierGate) dependencies.adoptClassifierGate?.(classifierGate);
 
   const runtime = createChatSessionRuntime({
     rootDb: dependencies.rootDb,

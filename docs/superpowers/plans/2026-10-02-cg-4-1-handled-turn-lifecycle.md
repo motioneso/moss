@@ -156,9 +156,12 @@ describe the handled-turn path as present but unavailable pending review.
    Fakes for runner/gateway.
 7. `tests/integration/chat-classifier-gate-origin.test.ts`: a real database write proves a gate
    turn stores the origin with no `executed` and no `usage`, while a model turn keeps both. Unit
-   coverage stays in the live tests. Also `tests/unit/chat-classifier-live-wiring.test.ts` drives
-   the real composition root (real registry + real runtime, no ports) and proves one mint and one
-   matching revoke on decline, error and cancellation, plus the empty-allowlist token limit.
+   coverage stays in the live tests. `tests/unit/chat-classifier-live-wiring.test.ts` calls
+   `registerChatRoutes` itself, captures the runner the wiring closure built through the
+   `adoptClassifierGate` seam, and drives it against the real `SessionTokenRegistry` that
+   `registerChatRoutes` creates: one mint and one matching revoke on decline and cancellation,
+   plus the empty-allowlist token limit and the gate's short TTL. The thrown-evaluate revoke path
+   is covered by the runner's own unit test. Observed red when the production revoke is removed.
 8. Token safety: observe the revoke assertion fail with the `finally` removed, restore it.
 
 ### Post-review fixes (QA, 2026-10-02)

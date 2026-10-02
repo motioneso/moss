@@ -24,6 +24,70 @@ import {
  * live-wiring step. Until it lands, every gated message declines to the default model.
  */
 
+/**
+ * Real composition-root inputs for the gate runner: the admin settings read, the process-wide
+ * session-token registry, and the clock. Both `registerChatRoutes` and the tests call this, so the
+ * session-id shape, the empty allowlist and the short token lifetime have exactly one definition.
+ */
+export interface ClassifierGateWiringDeps {
+  /** Reads the admin `chat.classifier_gate_mode` setting through the caller's data access. */
+  readonly readMode: (actorUserId: string) => Promise<GateMode>;
+  /** The same `SessionTokenRegistry` every model session uses. */
+  readonly tokens: {
+    mint(
+      identity: {
+        actorUserId: string;
+        chatSessionId: string;
+        allowedToolNames: Set<string> | null;
+      },
+      options?: { readonly ttlMs?: number }
+    ): string;
+    revokeBySessionId(chatSessionId: string): void;
+  };
+  now?(): number;
+}
+
+/**
+ * The gate token's own short lifetime (one minute). A skipped revoke can then leak a token for at
+ * most a minute, instead of the registry's 60-minute default.
+ */
+export const GATE_TOKEN_TTL_MS = 60_000;
+
+/** The session id a gate attempt mints and revokes. ONE definition, so mint and revoke cannot drift. */
+export function classifierGateSessionId(correlationId: string): string {
+  return `classifier-gate:${correlationId}`;
+}
+
+/**
+ * Task 4.1 (#2901) — the real gate runner wiring. Mints one short-lived token per attempt through
+ * the composition root's registry, scoped to a fresh correlation id, with an empty allowlist (never
+ * unrestricted) and a one-minute TTL, and revokes it by the exact same session id. The ports factory
+ * is left unset (that is 3.5), so every attempt declines.
+ */
+export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): ClassifierGateRunner {
+  return createClassifierGateRunner({
+    readMode: deps.readMode,
+    tokens: {
+      mint: (actorUserId, correlationId, options) =>
+        deps.tokens.mint(
+          {
+            actorUserId,
+            chatSessionId: classifierGateSessionId(correlationId),
+            // Tool limit: the gate token always carries an allowlist, never unrestricted. It is empty
+            // until the 3.5 ports factory supplies the turn's menu — every tool this token may call
+            // must be in the release-approved menu, and no release writer exists yet.
+            allowedToolNames: new Set<string>()
+          },
+          options
+        ),
+      revoke: (correlationId) =>
+        deps.tokens.revokeBySessionId(classifierGateSessionId(correlationId)),
+      tokenOptions: { ttlMs: GATE_TOKEN_TTL_MS }
+    },
+    now: deps.now ?? (() => Date.now())
+  });
+}
+
 export interface ClassifierGateRunner {
   /** Admin-wide instance switch. `off`/`shadow` do nothing in this task; only `on` is handled. */
   mode(actorUserId: string): Promise<GateMode>;
@@ -31,10 +95,18 @@ export interface ClassifierGateRunner {
 }
 
 export interface GateTokenCallbacks {
-  /** Mints a short-lived gate token through the composition root's real token registry. */
-  mint(actorUserId: string, correlationId: string): string;
+  /**
+   * Mints a short-lived gate token through the composition root's real token registry. `options`
+   * carries the gate token's own TTL when the wiring sets one.
+   */
+  mint(actorUserId: string, correlationId: string, options?: { readonly ttlMs?: number }): string;
   /** Revokes that token alone. Never revokes an existing model session's tokens. */
   revoke(correlationId: string): void;
+  /**
+   * Mint options applied to every gate token. The production wiring sets a short `ttlMs`, so a
+   * skipped revoke can only leak a token for a minute.
+   */
+  readonly tokenOptions?: { readonly ttlMs?: number };
 }
 
 /** Everything a `ClassifierGate` needs except the clock (supplied by the runner) and the gateway. */
@@ -74,7 +146,7 @@ export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): Clas
     mode: (actorUserId) => deps.readMode(actorUserId),
     async evaluate(request) {
       const correlationId = newCorrelationId();
-      const token = deps.tokens.mint(request.actorUserId, correlationId);
+      const token = deps.tokens.mint(request.actorUserId, correlationId, deps.tokens.tokenOptions);
       try {
         if (!deps.createPorts) return declineWithoutPorts();
         const attempt = deps.createPorts(request.actorUserId, token);
