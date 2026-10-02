@@ -28,7 +28,10 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   createIntegration: vi.fn(),
   updateIntegration: vi.fn(),
   refreshIntegration: vi.fn(),
-  deleteIntegration: vi.fn()
+  deleteIntegration: vi.fn(),
+  prepareIntegrationClassifierTools: vi.fn(),
+  saveIntegrationClassifierTool: vi.fn(),
+  removeIntegrationClassifierTool: vi.fn()
 }));
 
 vi.mock("../../apps/web/src/settings/settings-feedback.js", () => ({
@@ -146,6 +149,18 @@ describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
+    expect(html).toContain("Allow repeated identical calls to ToolA");
+  });
+
+  it("mounts the classifier section without changing the ordinary tool controls (#2899)", () => {
+    currentDetail.value = baseDetail({
+      tools: [tool({ name: "ToolA" })]
+    });
+
+    const html = renderToString(createElement(SettingsIntegrationsPane));
+
+    expect(html).toContain("Let the classifier use this connection");
+    expect(html).toContain("Enable ToolA");
     expect(html).toContain("Allow repeated identical calls to ToolA");
   });
 });
