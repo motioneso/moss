@@ -211,10 +211,12 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     summary,
     preparedAt,
     readerControl: morningReadable ? <MorningHeroLinks onOpenReader={input.onOpenReader} /> : null,
+    // Independent of assessmentShown: a switched-off briefing hides the assessment
+    // but still has no report, and that is exactly when the reason matters.
     notReadyReason:
-      preparedAt === BRIEFING_NOT_READY_LABEL
-        ? morningNotReadyReason(input.morningRun, input.morningSchedule)
-        : null
+      input.morningLoading || morningReadable
+        ? null
+        : morningNotReadyReason(input.morningRun, input.morningSchedule)
   };
 }
 

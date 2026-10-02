@@ -422,11 +422,14 @@ export function TodayPage(props: {
     morningLoading,
     morningRun: latestMorningRun,
     morningDefinitionId: morningDefinition?.id ?? null,
-    morningSchedule: {
-      enabled: morningDefinition?.enabled === true,
-      targetTime: morningTargetTime,
-      pastTarget: (zonedClockMinutes(now, morningTimeZone) ?? 0) >= morningTargetMinutes
-    },
+    // Withheld until definitions load, so a missing definition is not read as "switched off".
+    morningSchedule: briefingDefinitionsQuery.isPending
+      ? undefined
+      : {
+          enabled: morningDefinition?.enabled === true,
+          targetTime: morningTargetTime,
+          pastTarget: (zonedClockMinutes(now, morningTimeZone) ?? 0) >= morningTargetMinutes
+        },
     morningSplit,
     morningFreshness,
     eveningRun: latestEveningRun,

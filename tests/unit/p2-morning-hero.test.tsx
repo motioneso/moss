@@ -405,6 +405,31 @@ describe("not-ready reason", () => {
     expect(markup).toContain(`Briefing not ready yet. ${reason.replace("'", "&#x27;")}`);
   });
 
+  it("explains a switched-off briefing when the assessment is hidden, as on the real page", () => {
+    const content = buildTodayHeroContent({
+      ...baseInput,
+      assessmentShown: false,
+      morningLoading: false,
+      morningRun: null,
+      morningSchedule: { ...schedule, enabled: false },
+      morningSplit: null,
+      morningFreshness: null
+    });
+    expect(content.notReadyReason).toBe("Your morning briefing is switched off.");
+  });
+
+  it("shows no reason while loading", () => {
+    const content = buildTodayHeroContent({
+      ...baseInput,
+      morningLoading: true,
+      morningRun: null,
+      morningSchedule: schedule,
+      morningSplit: null,
+      morningFreshness: null
+    });
+    expect(content.notReadyReason).toBeNull();
+  });
+
   it("shows no reason when a readable report exists", () => {
     const run = morningRun();
     const content = buildTodayHeroContent({
