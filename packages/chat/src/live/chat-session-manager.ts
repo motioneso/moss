@@ -375,16 +375,8 @@ export class ChatSessionManager {
     let session: UserSession;
     let turnElapsedMs: number | undefined;
     let turnUsage: ChatTurnUsageDto | undefined;
-    // #2907 (plan 3.5) — one shadow attempt alongside the default turn, under the same
-    // cancellation. The per-turn bookkeeping lives in the shadow module.
-    const gateShadow = beginClassifierGateShadowTurn(
-      this.deps.classifierGateShadow,
-      actorUserId,
-      surface,
-      text,
-      { hasAttachment: (opts?.attachments?.length ?? 0) > 0, signal: controller.signal }
-    );
-
+    // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
+    let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
     try {
       // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
       // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
@@ -413,6 +405,17 @@ export class ChatSessionManager {
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       }
       const turnProviderIdentity = session.providerIdentity;
+      gateShadow = beginClassifierGateShadowTurn(
+        this.deps.classifierGateShadow,
+        actorUserId,
+        surface,
+        text,
+        session.incognito,
+        {
+          hasAttachment: (opts?.attachments?.length ?? 0) > 0,
+          signal: controller.signal
+        }
+      );
 
       const attachments = opts?.attachments ?? [];
       const { text: builtEngineText, pendingItems } = await buildEngineText(
@@ -531,7 +534,7 @@ export class ChatSessionManager {
             invokedToolNames.add(record.toolName);
             if (record.toolName.startsWith("mcp__"))
               mcpAttempts.push({ name: record.toolName, id: record.toolCallId });
-            if (!record.rejected) gateShadow.noteTool(record.toolName);
+            if (!record.rejected) gateShadow?.noteTool(record.toolName);
           }
           if (record.kind === "tool" && record.rejected && record.toolCallId)
             rejectedCallIds.add(record.toolCallId);
@@ -564,7 +567,7 @@ export class ChatSessionManager {
         // Coordinator ruling (a): emit a status record over SSE, persist NOTHING. The user message
         // and any partial reply are discarded — the turn never completed.
         this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
-        gateShadow.cancel();
+        gateShadow?.cancel();
         session.lastActivity = this.deps.clock.now();
         this.deps.touchMcpToken?.(sessionKey);
         return { reply };
@@ -658,7 +661,7 @@ export class ChatSessionManager {
       };
     } finally {
       // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
-      gateShadow.finish();
+      gateShadow?.finish();
       flushPending();
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);

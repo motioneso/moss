@@ -31,6 +31,12 @@ export interface ClassifierGateShadowTurnInput {
   /** Server-issued correlation id for this turn. */
   readonly turnId: string;
   readonly hasAttachment: boolean;
+  /**
+   * The privacy of the conversation THIS turn runs in, captured from the turn's own session at the
+   * moment the turn starts. Never re-read later: the user can resume or start another conversation
+   * before the shadow check runs. A private turn is never classified or recorded.
+   */
+  readonly incognito: boolean;
   /** The turn's cancellation; aborting it stops the shadow attempt too. */
   readonly signal: AbortSignal;
 }
@@ -49,9 +55,7 @@ export interface ClassifierGateShadowRunner {
 export interface ClassifierGateShadowRunnerDeps {
   /** Reads the admin-wide gate mode. Only `shadow` runs an attempt. */
   readMode(actorUserId: string): Promise<GateMode>;
-  /** Whether this actor's current thread is private; a private chat is never classified. */
-  readIncognito(actorUserId: string, surface: ChatSurface): Promise<boolean>;
-  /** Builds the attempt ports, already bound to `token`. */
+  /** Builds the attempt ports, already bound to `token` and the attempt's correlation id. */
   createPorts: ClassifierGatePortsFactory;
   readonly repository: ClassifierShadowRepository;
   readonly dataContext: DataContextRunner;
@@ -177,9 +181,10 @@ export function createClassifierGateShadowRunner(
       const mode = await deps.readMode(actorUserId);
       if (mode !== "shadow") return;
       if (input.signal.aborted) return;
-      // Ruling 9 / Ben's 2026-10-02 ruling: a private chat takes part in nothing. This is the
-      // privacy boundary — without it the attempt would resolve a classifier and open a record.
-      if (await deps.readIncognito(actorUserId, input.surface)) return;
+      // Ruling 9 / Ben's 2026-10-02 ruling: a private chat takes part in nothing. The flag comes
+      // from THIS turn's own session, captured when the turn started, so a later resume or new chat
+      // cannot make a private message look public.
+      if (input.incognito) return;
       if (input.signal.aborted) return;
       // Match the gate's own bound so an oversize message is never written to the 3.4 record (its
       // message_text column caps at 2000 bytes) and never reaches a classifier.
@@ -188,7 +193,7 @@ export function createClassifierGateShadowRunner(
       const allowedToolNames = new Set(await deps.listToolNames(actorUserId));
       const token = deps.tokens.mint(actorUserId, turnId, allowedToolNames);
       try {
-        const ports = deps.createPorts(actorUserId, token);
+        const ports = deps.createPorts(actorUserId, token, turnId);
         let resolved: ClassifierHandle | null | undefined;
         const classifier = {
           ...ports.classifier,
@@ -380,6 +385,7 @@ export function beginClassifierGateShadowTurn(
   actorUserId: string,
   surface: ChatSurface,
   message: string,
+  incognito: boolean,
   options: { readonly hasAttachment: boolean; readonly signal: AbortSignal }
 ): ClassifierGateShadowTurn {
   const turnId = randomUUID();
@@ -389,6 +395,7 @@ export function beginClassifierGateShadowTurn(
     message,
     turnId,
     hasAttachment: options.hasAttachment,
+    incognito,
     signal: options.signal
   });
   let observed = false;

@@ -94,14 +94,12 @@ interface Harness {
   readonly mint: ReturnType<typeof vi.fn>;
   readonly revoke: ReturnType<typeof vi.fn>;
   readonly resolve: ReturnType<typeof vi.fn>;
-  readonly readIncognito: ReturnType<typeof vi.fn>;
   readonly onFailure: ReturnType<typeof vi.fn>;
 }
 
 function harness(
   overrides: {
     mode?: string;
-    incognito?: boolean;
     chooseImpl?: ReturnType<typeof vi.fn>;
     open?: ReturnType<typeof vi.fn>;
     complete?: ReturnType<typeof vi.fn>;
@@ -138,10 +136,8 @@ function harness(
   const revoke = vi.fn();
   const onFailure = vi.fn();
 
-  const readIncognito = vi.fn(async () => overrides.incognito ?? false);
   const deps: ClassifierGateShadowRunnerDeps = {
     readMode: vi.fn(async () => (overrides.mode ?? "shadow") as never),
-    readIncognito,
     createPorts,
     repository,
     dataContext,
@@ -160,7 +156,6 @@ function harness(
     mint,
     revoke,
     resolve,
-    readIncognito,
     onFailure
   };
 }
@@ -172,6 +167,7 @@ function input(turnId = "turn-1") {
     message: "what is on my calendar today",
     turnId,
     hasAttachment: false,
+    incognito: false,
     signal: new AbortController().signal
   };
 }
@@ -204,7 +200,6 @@ describe("no-shadow cases make no classifier request", () => {
     const h = harness({ mode: "off" });
     h.runner.start(input());
     await settle();
-    expect(h.readIncognito).not.toHaveBeenCalled();
     expect(h.resolve).not.toHaveBeenCalled();
     expect(h.mint).not.toHaveBeenCalled();
     expect(h.open).not.toHaveBeenCalled();
@@ -218,12 +213,12 @@ describe("no-shadow cases make no classifier request", () => {
     expect(h.open).not.toHaveBeenCalled();
   });
 
-  it("a private chat is never classified and gets no record", async () => {
-    const h = harness({ incognito: true });
-    h.runner.start(input());
+  it("a private turn is never classified and gets no record", async () => {
+    const h = harness();
+    h.runner.start({ ...input(), incognito: true });
     await settle();
-    // The guard is the privacy boundary: with it removed the attempt reaches `resolve`/`open`.
-    expect(h.readIncognito).toHaveBeenCalledWith("user-1", normalizeChatSurface("drawer"));
+    // The guard is the privacy boundary: with the incognito check removed the attempt reaches
+    // `resolve`/`open`; observed failing that way, then restored.
     expect(h.resolve).not.toHaveBeenCalled();
     expect(h.mint).not.toHaveBeenCalled();
     expect(h.open).not.toHaveBeenCalled();

@@ -86,7 +86,7 @@ import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
 import { RuntimeConfigResolver } from "@moss/settings";
 import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
-import { buildClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import { buildClassifierGateRunner, GATE_TOKEN_TTL_MS } from "./live/classifier-gate-runner.js";
 import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
 import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
@@ -401,21 +401,21 @@ export function registerChatRoutes(
                 CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
               )
             ),
-          readIncognito: (actorUserId, surface) =>
-            dependencies.dataContext.withDataContext({ actorUserId }, async (scopedDb) => {
-              const thread = await repository.getCurrentThread(scopedDb, actorUserId, surface);
-              return thread?.incognito ?? false;
-            }),
           createPorts: classifierGatePorts,
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
           tokens: {
             mint: (actorUserId, correlationId, allowedToolNames) =>
-              wiring.tokens.mint({
-                actorUserId,
-                chatSessionId: `classifier-gate:${correlationId}`,
-                allowedToolNames
-              }),
+              wiring.tokens.mint(
+                {
+                  actorUserId,
+                  chatSessionId: `classifier-gate:${correlationId}`,
+                  allowedToolNames
+                },
+                // #2907 QA N2: the short fixed lifetime, exactly like the 4.1 gate token, so a
+                // skipped revoke leaves it stale after a minute instead of an hour.
+                { ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true }
+              ),
             revoke: (correlationId) =>
               wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`)
           },

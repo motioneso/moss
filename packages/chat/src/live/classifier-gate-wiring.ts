@@ -34,7 +34,9 @@ export type ClassifierGateAttemptPorts = {
 
 export type ClassifierGatePortsFactory = (
   actorUserId: string,
-  token: string
+  token: string,
+  /** The attempt's non-secret correlation id; falls back to an opaque per-call id when absent. */
+  correlationId?: string
 ) => ClassifierGateAttemptPorts;
 
 export interface ClassifierGatePortsFactoryDeps {
@@ -76,7 +78,7 @@ export function createClassifierGatePortsFactory(
 ): ClassifierGatePortsFactory {
   const describe = deps.moduleDescription ?? ((manifest) => manifest.name);
 
-  return (actorUserId, token): ClassifierGateAttemptPorts => {
+  return (actorUserId, token, correlationId): ClassifierGateAttemptPorts => {
     const { dataContext, classifierDeps } = deps;
     /** The manifest tool behind each offered name, so `loadCandidates` can reach its hook. */
     const byName = new Map<string, ClassifierCapableTool>();
@@ -145,7 +147,8 @@ export function createClassifierGatePortsFactory(
         const ctx: ToolContext = {
           actorUserId,
           requestId: nextRequestId(),
-          chatSessionId: `classifier-gate:${token}`
+          // #2907 QA N1: never the live gate token. Use the attempt's non-secret correlation id.
+          chatSessionId: correlationId ?? nextRequestId()
         };
         return scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
       },
