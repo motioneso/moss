@@ -48,6 +48,8 @@ enum BacktrackEvent: Equatable {
     case frontmostChanged(Observation?, at: Date)
     /// `typingRecently`: a key went down within `BacktrackMachine.typingQuiet`.
     case tick(generation: Int, at: Date, typingRecently: Bool = false)
+    /// Accessibility text of the window (nil: none could be read) and the raw address.
+    case textRead(generation: Int, result: WindowTextResult?, address: String?, at: Date)
     case thumbnailChecked(generation: Int, changed: Bool, at: Date)
     /// Pixels are in the runtime's hands, secure fields masked, before recognition.
     case captured(generation: Int, at: Date)
@@ -59,6 +61,8 @@ enum BacktrackEvent: Equatable {
 enum BacktrackEffect: Equatable {
     /// Replaces any pending timer; it fires `tick(generation:at:)`.
     case schedule(after: TimeInterval, generation: Int)
+    /// Read the window's visible text through Accessibility (plan §7, retry 2, task 3).
+    case readText(Observation, generation: Int)
     case checkThumbnail(Observation, generation: Int)
     /// Capture by window identity (plan §3.1), fresh AX read, secure fields masked.
     case capture(Observation, generation: Int)
@@ -169,7 +173,7 @@ struct BacktrackMachine {
     /// ...but never longer than this in total, so long typing is still read.
     static let maxTypingDeferral: TimeInterval = 30
 
-    private enum Stage: Equatable { case checking, capturing, recognizing }
+    private enum Stage: Equatable { case readingText, checking, capturing, recognizing }
 
     private struct Chain: Equatable {
         let observation: Observation
@@ -185,6 +189,7 @@ struct BacktrackMachine {
     private var lastRecognitionStart: Date?
     private var deduper = SegmentDeduper()
     private var backoff = WindowBackoff()
+    private var accessibilityCost = AccessibilityCostTracker()
     /// The pending tick was scheduled by a switch: it is never deferred for typing.
     private var switchPending = false
     private var typingSince: Date?
@@ -238,9 +243,31 @@ struct BacktrackMachine {
             }
             typingSince = nil
             switchPending = false
-            // Switches and periodic checks use the same gate, including returns to a read screen.
-            chain = Chain(observation: observation, start: at, stage: .checking)
-            return [.checkThumbnail(observation, generation: generation)]
+            if WindowTextPolicy.skipsAccessibility(bundleId: observation.bundleId)
+                || accessibilityCost.skips(observation.bundleId, at: at) {
+                // Switches and periodic checks use the same gate, including returns to a read screen.
+                chain = Chain(observation: observation, start: at, stage: .checking)
+                return [.checkThumbnail(observation, generation: generation)]
+            }
+            chain = Chain(observation: observation, start: at, stage: .readingText)
+            return [.readText(observation, generation: generation)]
+
+        case .textRead(let eventGeneration, let result, let rawAddress, let at):
+            guard eventGeneration == generation, let current = chain, current.stage == .readingText, isRecording
+            else { return [] }
+            if let result {
+                accessibilityCost.record(
+                    current.observation.bundleId, milliseconds: result.walkMilliseconds, truncated: result.truncated, at: at
+                )
+            }
+            guard let result, WindowTextPolicy.verdict(result, address: rawAddress) == .use else {
+                // Too little: the picture decides, through the same gate as before.
+                chain?.stage = .checking
+                return [.checkThumbnail(current.observation, generation: generation)]
+            }
+            lastRecognitionStart = current.start
+            chain = nil
+            return finish(current, rawLines: result.lines, rawAddress: rawAddress, at: at)
 
         case .thumbnailChecked(let eventGeneration, let changed, let at):
             guard eventGeneration == generation, let current = chain, current.stage == .checking, isRecording
@@ -261,31 +288,41 @@ struct BacktrackMachine {
             guard eventGeneration == generation, let current = chain, current.stage == .recognizing, isRecording
             else { return [] }
             chain = nil
-            var effects: [BacktrackEffect] = []
-            let observation = current.observation
-            let key = DedupeKey(bundleId: observation.bundleId, frame: observation.window?.frame ?? .zero)
-            let fresh = deduper.newLines(for: key, lines: BacktrackSanitizer.lines(rawLines))
-            let foundNew = fresh.count >= Self.minNewLines || fresh.reduce(0, { $0 + $1.count }) >= Self.minNewCharacters
-            backoff.record(key, foundNew: foundNew, base: inputs.budget.minGap)
-            if foundNew {
-                effects.append(.emit(BacktrackSegment(
-                    appName: BacktrackSanitizer.title(observation.appName),
-                    bundleId: observation.bundleId,
-                    windowTitle: BacktrackSanitizer.title(observation.windowTitle),
-                    address: rawAddress.flatMap(BacktrackSanitizer.address),
-                    lines: fresh,
-                    start: current.start,
-                    end: at
-                )))
-            }
-            effects.append(.schedule(after: max(inputs.budget.minGap, backoff.gap(for: key) ?? 0), generation: generation))
-            return effects
+            return finish(current, rawLines: rawLines, rawAddress: rawAddress, at: at)
 
         case .failed(let eventGeneration, _):
             guard eventGeneration == generation, chain != nil else { return [] }
             chain = nil
             return isRecording ? [.schedule(after: inputs.budget.minGap, generation: generation)] : []
         }
+    }
+
+    /// Raw lines from either source: sanitised, deduped, emitted if material, and the window's
+    /// backoff updated.
+    private mutating func finish(_ current: Chain, rawLines: [String], rawAddress: String?, at: Date) -> [BacktrackEffect] {
+        var effects: [BacktrackEffect] = []
+        let observation = current.observation
+        let key = DedupeKey(bundleId: observation.bundleId, frame: observation.window?.frame ?? .zero)
+        let fresh = deduper.newLines(for: key, lines: BacktrackSanitizer.lines(rawLines))
+        let foundNew = fresh.count >= Self.minNewLines || fresh.reduce(0, { $0 + $1.count }) >= Self.minNewCharacters
+        backoff.record(key, foundNew: foundNew, base: inputs.budget.minGap)
+        if foundNew {
+            effects.append(.emit(BacktrackSegment(
+                appName: BacktrackSanitizer.title(observation.appName),
+                bundleId: observation.bundleId,
+                windowTitle: BacktrackSanitizer.title(observation.windowTitle),
+                address: rawAddress.flatMap(BacktrackSanitizer.address),
+                lines: fresh,
+                start: current.start,
+                end: at
+            )))
+        }
+        var next = max(inputs.budget.minGap, backoff.gap(for: key) ?? 0)
+        if WindowTextPolicy.ocrOnlyBundles.contains(observation.bundleId) {
+            next = max(next, WindowTextPolicy.ocrOnlyFloor)
+        }
+        effects.append(.schedule(after: next, generation: generation))
+        return effects
     }
 
     /// Every change of input or window: a new generation, and whatever was in flight is dropped.

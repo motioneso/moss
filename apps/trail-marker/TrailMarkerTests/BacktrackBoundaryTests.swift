@@ -53,6 +53,26 @@ final class BacktrackBoundaryTests: XCTestCase {
         }
     }
 
+    /// Plan §7, retry 2, task 3: answers with fixed text, records whether it ran on the main thread,
+    /// and can run something on the main actor mid-read (a window change).
+    final class FakeWindowText: WindowTextReading, @unchecked Sendable {
+        var result: WindowTextResult?
+        var during: (@MainActor () -> Void)?
+        private(set) var ranOnMain: [Bool] = []
+        init(_ result: WindowTextResult?) { self.result = result }
+        func visibleText(pid: pid_t, window: WindowIdentity, budget: TimeInterval) async -> WindowTextResult? {
+            ranOnMain.append(Thread.isMainThread)
+            if let during { await MainActor.run { during() } }
+            return result
+        }
+    }
+
+    static func windowText(_ lines: [String]) -> WindowTextResult {
+        WindowTextResult(
+            lines: lines, contentCharacters: lines.joined().count, controlCharacters: 0, truncated: false, walkMilliseconds: 3
+        )
+    }
+
     struct FakeAddress: BrowserAddressReading {
         var value: String?
         func address(pid: pid_t, window: WindowIdentity, bundleId: String) -> String? { value }
@@ -161,7 +181,8 @@ final class BacktrackBoundaryTests: XCTestCase {
     }
 
     private func harness(
-        observation: Observation = BacktrackBoundaryTests.docs, consentVersion: Int = 1, address: String? = nil
+        observation: Observation = BacktrackBoundaryTests.docs, consentVersion: Int = 1, address: String? = nil,
+        windowText: WindowTextReading = NoWindowText()
     ) async -> Harness {
         let suiteName = "BacktrackBoundaryTests.\(UUID().uuidString)"
         suiteNames.append(suiteName)
@@ -188,7 +209,7 @@ final class BacktrackBoundaryTests: XCTestCase {
         let services = BacktrackServices(
             capture: capture, secureFields: secure, addresses: FakeAddress(value: address), recognizer: recognizer,
             thumbnails: ThumbnailChangeDetector(), freshWindowIdentity: { [weak source] _ in source?.current?.window },
-            clock: { activity.now }, scheduler: scheduler, idleSeconds: { activity.idleSeconds }
+            clock: { activity.now }, scheduler: scheduler, idleSeconds: { activity.idleSeconds }, windowText: windowText
         )
         let runtime = BacktrackRuntime(
             connection: connection, permissions: permissions, focus: focus, preferences: preferences,
@@ -230,6 +251,43 @@ final class BacktrackBoundaryTests: XCTestCase {
         h.activity.now = h.activity.now.addingTimeInterval(ThumbnailChangeDetector.refreshInterval)
         await runChain(h)
         XCTAssertEqual(h.recognizer.images.count, 2, "similarity cannot hide changed text indefinitely")
+    }
+
+    func testAccessibilityTextReachesTheSinkSanitisedWithoutAPicture() async {
+        let text = FakeWindowText(Self.windowText([
+            "The quarterly plan for the companion app", "Ship the focus switch before Friday",
+            "Measure battery use across a working day", "token sk-live-0123456789abcdef"
+        ]))
+        let h = await harness(windowText: text)
+        await runChain(h)
+        XCTAssertEqual(h.sink.accepted.count, 1)
+        XCTAssertEqual(h.sink.accepted.first?.lines.last, "token [redacted]")
+        XCTAssertEqual(h.capture.fullCaptures, 0, "no picture was taken")
+        XCTAssertTrue(h.recognizer.images.isEmpty)
+        XCTAssertEqual(text.ranOnMain, [false], "the walk runs off the main actor")
+    }
+
+    func testAWindowChangeDuringTheTextReadEmitsNothing() async {
+        let text = FakeWindowText(Self.windowText([
+            "The quarterly plan for the companion app", "Ship the focus switch before Friday",
+            "Measure battery use across a working day"
+        ]))
+        let h = await harness(windowText: text)
+        text.during = { [weak source = h.source] in
+            source?.current = BacktrackBoundaryTests.docs.refreshed(
+                window: WindowIdentity(frame: CGRect(x: 50, y: 50, width: 800, height: 600), title: "Docs")
+            )
+        }
+        await runChain(h)
+        XCTAssertTrue(h.sink.accepted.isEmpty)
+        XCTAssertTrue(h.recognizer.images.isEmpty)
+    }
+
+    func testThinAccessibilityTextFallsBackToRecognition() async {
+        let h = await harness(windowText: FakeWindowText(Self.windowText(["Back", "Forward"])))
+        await runChain(h)
+        XCTAssertEqual(h.recognizer.images.count, 1)
+        XCTAssertEqual(h.sink.accepted.count, 1)
     }
 
     func testIdleStopsCaptureAndInputResumesWithoutDiscardingText() async {

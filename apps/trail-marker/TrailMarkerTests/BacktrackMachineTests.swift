@@ -31,13 +31,22 @@ final class BacktrackMachineTests: XCTestCase {
         var machine = BacktrackMachine()
         _ = machine.handle(.started(inputs, at: Self.t0))
         _ = machine.handle(.frontmostChanged(Self.docs, at: Self.t0))
-        let effects = machine.handle(.tick(generation: machine.generation, at: Self.t(1)))
+        let effects = handleTick(&machine, .tick(generation: machine.generation, at: Self.t(1)))
         XCTAssertEqual(effects, [.checkThumbnail(Self.docs, generation: machine.generation)])
         XCTAssertEqual(
             machine.handle(.thumbnailChecked(generation: machine.generation, changed: true, at: Self.t(1))),
             [.capture(Self.docs, generation: machine.generation)]
         )
         return machine
+    }
+
+    /// A tick, answered with "no Accessibility text" when it asks for it, so the chain goes on to
+    /// the picture as it did before retry 2.
+    private func handleTick(_ machine: inout BacktrackMachine, _ event: BacktrackEvent) -> [BacktrackEffect] {
+        let effects = machine.handle(event)
+        guard case .tick(_, let at, _) = event, effects.count == 1, case .readText(_, let generation) = effects[0]
+        else { return effects }
+        return machine.handle(.textRead(generation: generation, result: nil, address: nil, at: at))
     }
 
     private func emits(_ effects: [BacktrackEffect]) -> [BacktrackSegment] {
@@ -62,7 +71,7 @@ final class BacktrackMachineTests: XCTestCase {
             [.schedule(after: BacktrackMachine.switchSettle, generation: machine.generation)]
         )
         let generation = machine.generation
-        XCTAssertEqual(machine.handle(.tick(generation: generation, at: Self.t(1))), [.checkThumbnail(secret, generation: generation)])
+        XCTAssertEqual(handleTick(&machine, .tick(generation: generation, at: Self.t(1))), [.checkThumbnail(secret, generation: generation)])
         _ = machine.handle(.thumbnailChecked(generation: generation, changed: true, at: Self.t(1)))
         XCTAssertEqual(machine.handle(.captured(generation: generation, at: Self.t(1.1))), [.recognize(generation: generation)])
         let effects = machine.handle(.recognized(
@@ -107,7 +116,7 @@ final class BacktrackMachineTests: XCTestCase {
             XCTAssertEqual(
                 machine.handle(.recognized(generation: stale, lines: Self.lines, address: nil, at: Self.t(2))), [], name
             )
-            XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(30))), [], "\(name): no tick")
+            XCTAssertEqual(handleTick(&machine, .tick(generation: machine.generation, at: Self.t(30))), [], "\(name): no tick")
             XCTAssertFalse(machine.isRecording, name)
         }
     }
@@ -153,7 +162,7 @@ final class BacktrackMachineTests: XCTestCase {
 
         // A new chain for the same window starts; the first chain's late events must still not
         // land on it, which only a new generation guarantees.
-        let second = machine.handle(.tick(generation: machine.generation, at: Self.t(11)))
+        let second = handleTick(&machine, .tick(generation: machine.generation, at: Self.t(11)))
         XCTAssertEqual(second, [.checkThumbnail(Self.docs, generation: machine.generation)])
         _ = machine.handle(.thumbnailChecked(generation: machine.generation, changed: true, at: Self.t(11)))
         XCTAssertNotEqual(machine.generation, first)
@@ -164,14 +173,14 @@ final class BacktrackMachineTests: XCTestCase {
         var machine = BacktrackMachine()
         _ = machine.handle(.started(Self.allOn, at: Self.t0))
         XCTAssertEqual(machine.handle(.frontmostChanged(nil, at: Self.t0)), [])
-        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(5))), [])
+        XCTAssertEqual(handleTick(&machine, .tick(generation: machine.generation, at: Self.t(5))), [])
         XCTAssertFalse(machine.isRecording)
     }
 
     func testNothingHappensBeforeStartedOrWithoutConsent() {
         var machine = BacktrackMachine()
         XCTAssertEqual(machine.handle(.frontmostChanged(Self.docs, at: Self.t0)), [])
-        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(5))), [])
+        XCTAssertEqual(handleTick(&machine, .tick(generation: machine.generation, at: Self.t(5))), [])
 
         var inputs = Self.allOn
         inputs.consentAccepted = false
@@ -206,7 +215,7 @@ final class BacktrackMachineTests: XCTestCase {
         XCTAssertEqual(emits(machine.handle(.recognized(generation: generation, lines: Self.lines, address: nil, at: Self.t(2)))).count, 1)
 
         // The next periodic chain sees one extra short line: below both thresholds.
-        _ = machine.handle(.tick(generation: machine.generation, at: Self.t(12)))
+        _ = handleTick(&machine, .tick(generation: machine.generation, at: Self.t(12)))
         generation = machine.generation
         _ = machine.handle(.thumbnailChecked(generation: generation, changed: true, at: Self.t(12)))
         _ = machine.handle(.captured(generation: generation, at: Self.t(12.1)))
@@ -220,7 +229,7 @@ final class BacktrackMachineTests: XCTestCase {
         _ = machine.handle(.captured(generation: generation, at: Self.t(1.1)))
         _ = machine.handle(.recognized(generation: generation, lines: Self.lines, address: nil, at: Self.t(2)))
         XCTAssertEqual(
-            machine.handle(.tick(generation: machine.generation, at: Self.t(12))),
+            handleTick(&machine, .tick(generation: machine.generation, at: Self.t(12))),
             [.checkThumbnail(Self.docs, generation: machine.generation)]
         )
         let effects = machine.handle(.thumbnailChecked(generation: machine.generation, changed: false, at: Self.t(12)))
@@ -234,7 +243,7 @@ final class BacktrackMachineTests: XCTestCase {
         _ = machine.handle(.recognized(generation: first, lines: Self.lines, address: nil, at: Self.t(2)))
         _ = machine.handle(.frontmostChanged(Self.window("Other", x: 900), at: Self.t(3)))
         _ = machine.handle(.frontmostChanged(Self.docs, at: Self.t(4)))
-        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(11))),
+        XCTAssertEqual(handleTick(&machine, .tick(generation: machine.generation, at: Self.t(11))),
                        [.checkThumbnail(Self.docs, generation: machine.generation)])
         let effects = machine.handle(.thumbnailChecked(generation: machine.generation, changed: false, at: Self.t(11)))
         XCTAssertFalse(effects.contains { if case .capture = $0 { return true }; return false })
@@ -262,7 +271,7 @@ final class BacktrackMachineTests: XCTestCase {
 
     /// One periodic read of whatever is in front, run to the end; returns `recognized`'s effects.
     private func periodicRead(_ machine: inout BacktrackMachine, at second: TimeInterval, lines: [String]) -> [BacktrackEffect] {
-        let start = machine.handle(.tick(generation: machine.generation, at: Self.t(second)))
+        let start = handleTick(&machine, .tick(generation: machine.generation, at: Self.t(second)))
         guard case .checkThumbnail = start.first else {
             XCTFail("expected a check at \(second), got \(start)")
             return []
@@ -340,16 +349,16 @@ final class BacktrackMachineTests: XCTestCase {
     func testPeriodicReadsWaitWhileTypingButSwitchesDoNot() {
         var machine = readOnce()
         XCTAssertEqual(
-            machine.handle(.tick(generation: machine.generation, at: Self.t(100), typingRecently: true)),
+            handleTick(&machine, .tick(generation: machine.generation, at: Self.t(100), typingRecently: true)),
             [.schedule(after: BacktrackMachine.typingQuiet, generation: machine.generation)]
         )
         XCTAssertEqual(
-            machine.handle(.tick(generation: machine.generation, at: Self.t(129), typingRecently: true)),
+            handleTick(&machine, .tick(generation: machine.generation, at: Self.t(129), typingRecently: true)),
             [.schedule(after: BacktrackMachine.typingQuiet, generation: machine.generation)]
         )
         // Thirty seconds of continuous typing: read anyway.
         XCTAssertEqual(
-            machine.handle(.tick(generation: machine.generation, at: Self.t(130), typingRecently: true)),
+            handleTick(&machine, .tick(generation: machine.generation, at: Self.t(130), typingRecently: true)),
             [.checkThumbnail(Self.docs, generation: machine.generation)]
         )
         _ = machine.handle(.failed(generation: machine.generation, at: Self.t(130)))
@@ -357,18 +366,108 @@ final class BacktrackMachineTests: XCTestCase {
         let other = Self.window("Other", x: 900)
         _ = machine.handle(.frontmostChanged(other, at: Self.t(200)))
         XCTAssertEqual(
-            machine.handle(.tick(generation: machine.generation, at: Self.t(201), typingRecently: true)),
+            handleTick(&machine, .tick(generation: machine.generation, at: Self.t(201), typingRecently: true)),
             [.checkThumbnail(other, generation: machine.generation)]
         )
     }
 
     func testTypingStopsAndThePeriodicReadStarts() {
         var machine = readOnce()
-        _ = machine.handle(.tick(generation: machine.generation, at: Self.t(100), typingRecently: true))
+        _ = handleTick(&machine, .tick(generation: machine.generation, at: Self.t(100), typingRecently: true))
         XCTAssertEqual(
-            machine.handle(.tick(generation: machine.generation, at: Self.t(102))),
+            handleTick(&machine, .tick(generation: machine.generation, at: Self.t(102))),
             [.checkThumbnail(Self.docs, generation: machine.generation)]
         )
+    }
+
+    // MARK: - Accessibility text first (plan §7, retry 2, task 3)
+
+    private static func text(_ lines: [String], content: Int = 200, controls: Int = 0, ms: Int = 5) -> WindowTextResult {
+        WindowTextResult(lines: lines, contentCharacters: content, controlCharacters: controls, truncated: false, walkMilliseconds: ms)
+    }
+
+    private func captures(_ effects: [BacktrackEffect]) -> Bool {
+        effects.contains { if case .capture = $0 { return true } else { return false } }
+    }
+
+    /// Started with `observation` in front; returns the machine at its first `readText`.
+    private func startedAtText(_ observation: Observation = docs) -> BacktrackMachine {
+        var machine = BacktrackMachine()
+        _ = machine.handle(.started(Self.allOn, at: Self.t0))
+        _ = machine.handle(.frontmostChanged(observation, at: Self.t0))
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(1))),
+                       [.readText(observation, generation: machine.generation)])
+        return machine
+    }
+
+    func testEnoughAccessibilityTextEmitsSanitisedWithoutAPicture() {
+        var machine = startedAtText()
+        let effects = machine.handle(.textRead(
+            generation: machine.generation, result: Self.text(Self.lines + ["token sk-live-0123456789abcdef"]),
+            address: "https://example.com/a?token=abc", at: Self.t(1.1)
+        ))
+        XCTAssertFalse(captures(effects))
+        let segment = emits(effects).first
+        XCTAssertEqual(segment?.lines.last, "token [redacted]")
+        XCTAssertEqual(segment?.address, "https://example.com/a")
+        XCTAssertEqual(delay(effects), 10)
+        // The read counts against the global deadline: an early tick waits for it.
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(5))),
+                       [.schedule(after: 6, generation: machine.generation)])
+    }
+
+    func testThinAccessibilityTextGoesOnToThePicture() {
+        var machine = startedAtText()
+        XCTAssertEqual(
+            machine.handle(.textRead(generation: machine.generation, result: Self.text(["Back", "Forward"], content: 0, controls: 11),
+                                     address: nil, at: Self.t(1.1))),
+            [.checkThumbnail(Self.docs, generation: machine.generation)]
+        )
+        XCTAssertEqual(machine.handle(.thumbnailChecked(generation: machine.generation, changed: true, at: Self.t(1.2))),
+                       [.capture(Self.docs, generation: machine.generation)])
+    }
+
+    func testATextlessTerminalSkipsTheWalkAndIsReadAtMostEveryThirtySeconds() {
+        let kitty = Observation(
+            appName: "kitty", bundleId: "net.kovidgoyal.kitty", windowTitle: "zsh", pid: 7,
+            window: WindowIdentity(frame: CGRect(x: 0, y: 0, width: 800, height: 600), title: "zsh")
+        )
+        var machine = BacktrackMachine()
+        _ = machine.handle(.started(Self.allOn, at: Self.t0))
+        _ = machine.handle(.frontmostChanged(kitty, at: Self.t0))
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(1))),
+                       [.checkThumbnail(kitty, generation: machine.generation)])
+        _ = machine.handle(.thumbnailChecked(generation: machine.generation, changed: true, at: Self.t(1)))
+        _ = machine.handle(.captured(generation: machine.generation, at: Self.t(1.1)))
+        let effects = machine.handle(.recognized(generation: machine.generation, lines: Self.lines, address: nil, at: Self.t(2)))
+        XCTAssertEqual(emits(effects).count, 1)
+        XCTAssertEqual(delay(effects), WindowTextPolicy.ocrOnlyFloor)
+    }
+
+    func testASlowAppGoesStraightToThePictureForTenMinutes() {
+        var machine = startedAtText()
+        _ = machine.handle(.textRead(generation: machine.generation, result: Self.text(Self.lines, ms: 120), address: nil, at: Self.t(1.1)))
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(100))),
+                       [.checkThumbnail(Self.docs, generation: machine.generation)])
+        _ = machine.handle(.failed(generation: machine.generation, at: Self.t(100)))
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(700))),
+                       [.readText(Self.docs, generation: machine.generation)])
+    }
+
+    func testANeverWatchedAppIsNeverRead() {
+        var inputs = Self.allOn
+        inputs.policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true, excludedBundleIds: ["com.apple.Safari"])
+        var machine = BacktrackMachine()
+        _ = machine.handle(.started(inputs, at: Self.t0))
+        XCTAssertEqual(machine.handle(.frontmostChanged(Self.docs, at: Self.t0)), [])
+        XCTAssertEqual(machine.handle(.tick(generation: machine.generation, at: Self.t(1))), [])
+    }
+
+    func testAStaleTextReadIsIgnored() {
+        var machine = startedAtText()
+        let stale = machine.generation
+        _ = machine.handle(.frontmostChanged(Self.window("Other", x: 900), at: Self.t(1.05)))
+        XCTAssertEqual(machine.handle(.textRead(generation: stale, result: Self.text(Self.lines), address: nil, at: Self.t(1.1))), [])
     }
 
     // MARK: - Budget (one global deadline)
@@ -391,6 +490,8 @@ final class BacktrackMachineTests: XCTestCase {
             for effect in effects {
                 switch effect {
                 case .schedule(let after, let generation): timer = (now.addingTimeInterval(after), generation)
+                case .readText(_, let generation):
+                    queue.append((now, .textRead(generation: generation, result: nil, address: nil, at: now)))
                 case .checkThumbnail(_, let generation):
                     queue.append((now, .thumbnailChecked(generation: generation, changed: true, at: now)))
                 case .capture(let observation, let generation):

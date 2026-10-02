@@ -91,11 +91,25 @@ final class BacktrackMetrics {
         )
     }
 
-    func recognition(trigger: String, _ step: BacktrackStopwatch, lines: Int) {
+    /// An Accessibility read. The app is its bundle id, which is app metadata, never window content.
+    func text(trigger: String, app: String, _ step: BacktrackStopwatch, result: WindowTextResult?, verdict: WindowTextVerdict) {
+        let emitted = emittedLines
+        emittedLines = nil
+        let outcome: String
+        switch verdict {
+        case .use: outcome = "use"
+        case .thin(let reason): outcome = reason
+        }
+        log.notice(
+            "ax trigger=\(trigger, privacy: .public) app=\(app, privacy: .public) wall_ms=\(step.wallMilliseconds, privacy: .public) cpu_ms=\(step.cpuMilliseconds, privacy: .public) walk_ms=\(result?.walkMilliseconds ?? -1, privacy: .public) content=\(result?.contentCharacters ?? 0, privacy: .public) controls=\(result?.controlCharacters ?? 0, privacy: .public) truncated=\(result?.truncated == true ? 1 : 0, privacy: .public) verdict=\(outcome, privacy: .public) emitted_lines=\(emitted ?? 0, privacy: .public)"
+        )
+    }
+
+    func recognition(trigger: String, app: String, _ step: BacktrackStopwatch, lines: Int) {
         let emitted = emittedLines
         emittedLines = nil
         log.notice(
-            "ocr trigger=\(trigger, privacy: .public) wall_ms=\(step.wallMilliseconds, privacy: .public) cpu_ms=\(step.cpuMilliseconds, privacy: .public) lines=\(lines, privacy: .public) emitted_lines=\(emitted ?? 0, privacy: .public)"
+            "ocr trigger=\(trigger, privacy: .public) app=\(app, privacy: .public) wall_ms=\(step.wallMilliseconds, privacy: .public) cpu_ms=\(step.cpuMilliseconds, privacy: .public) lines=\(lines, privacy: .public) emitted_lines=\(emitted ?? 0, privacy: .public)"
         )
     }
 

@@ -46,6 +46,9 @@ struct BacktrackServices {
     var idleSeconds: () -> TimeInterval = { 0 }
     /// Seconds since a key last went down; periodic reads wait while the person types.
     var keyboardIdleSeconds: () -> TimeInterval = { .infinity }
+    /// Accessibility text first (plan §7, retry 2, task 3). The default reads nothing, so
+    /// recognition decides, as before.
+    var windowText: WindowTextReading = NoWindowText()
 
     static func live() -> BacktrackServices {
         BacktrackServices(
@@ -60,7 +63,8 @@ struct BacktrackServices {
             idleSeconds: {
                 CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
             },
-            keyboardIdleSeconds: { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) }
+            keyboardIdleSeconds: { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) },
+            windowText: AXWindowTextReader()
         )
     }
     /// For the UI test harness: every capture fails, so nothing is ever read from the screen.
@@ -96,6 +100,8 @@ final class BacktrackRuntime: ObservableObject {
     static let consentVersion = 1
     /// Secure fields must be found within this, or the capture is skipped (plan §4.3).
     static let secureFieldBudget: TimeInterval = 0.05
+    /// One Accessibility text walk, off the main actor (plan §7, retry 2, task 3).
+    static let windowTextBudget: TimeInterval = 0.15
     /// Recognition wants more pixels than a vision description does, for small text. Past about
     /// 1600 px Vision costs more without reading better (plan §7, retry 2, task 1).
     static let captureMaxDimension: CGFloat = 1600
@@ -323,6 +329,8 @@ final class BacktrackRuntime: ObservableObject {
                     let typingRecently = self.services.keyboardIdleSeconds() < BacktrackMachine.typingQuiet
                     self.send(.tick(generation: generation, at: self.services.clock(), typingRecently: typingRecently))
                 }
+            case .readText(let observation, let generation):
+                run { [weak self] in await self?.readText(observation, generation: generation) }
             case .checkThumbnail(let observation, let generation):
                 run { [weak self] in await self?.checkThumbnail(observation, generation: generation) }
             case .capture(let observation, let generation):
@@ -391,6 +399,32 @@ final class BacktrackRuntime: ObservableObject {
             return frames
         }
         return services.secureFields.secureFieldFrames(pid: observation.pid, window: window, budget: Self.secureFieldBudget)
+    }
+
+    /// Plan §7, retry 2, task 3: the visible text of the bound window, read off the main actor,
+    /// and kept only if the window is still the same one afterwards.
+    private func readText(_ observation: Observation, generation: Int) async {
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
+        guard let window = freshWindow(for: observation) else {
+            noteSkipped(observation, "its window couldn't be identified, or it is never watched")
+            return send(.failed(generation: generation, at: services.clock()))
+        }
+        let step = BacktrackStopwatch()
+        let result = await services.windowText.visibleText(pid: observation.pid, window: window, budget: Self.windowTextBudget)
+        guard !Task.isCancelled else { return }
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
+        guard freshWindow(for: observation) == window else {
+            noteSkipped(observation, "its window changed while its text was read")
+            return send(.failed(generation: generation, at: services.clock()))
+        }
+        let address = services.addresses.address(pid: observation.pid, window: window, bundleId: observation.bundleId)
+        let trigger = self.trigger
+        let verdict = WindowTextPolicy.verdict(result, address: address)
+        send(.textRead(generation: generation, result: result, address: address, at: services.clock()))
+        metrics.text(trigger: trigger, app: observation.bundleId, step, result: result, verdict: verdict)
+        if verdict == .use { self.trigger = "changed" }
     }
 
     private func checkThumbnail(_ observation: Observation, generation: Int) async {
@@ -490,7 +524,7 @@ final class BacktrackRuntime: ObservableObject {
             services.thumbnails.recognized(held.key, thumbnail: held.image, at: services.clock())
             metrics.emittedLines = nil
             send(.recognized(generation: generation, lines: lines, address: held.address, at: services.clock()))
-            metrics.recognition(trigger: trigger, step, lines: lines.count)
+            metrics.recognition(trigger: trigger, app: held.key.bundleId, step, lines: lines.count)
             self.trigger = "changed"
         } catch {
             metrics.skipped("ocr")
