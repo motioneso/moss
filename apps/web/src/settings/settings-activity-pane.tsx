@@ -193,7 +193,7 @@ export function ActivityPane(_props: PaneProps) {
                   )}
                 </div>
                 {outcomeNote(entry.outcome) && (
-                  <p className="aud__note">{outcomeNote(entry.outcome)}</p>
+                  <p className="aud__note jds-hint">{outcomeNote(entry.outcome)}</p>
                 )}
               </div>
               <div className="aud__cat">{moduleLabel(entry.toolModuleId)}</div>
