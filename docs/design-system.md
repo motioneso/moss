@@ -58,8 +58,10 @@ to the token column.
 | Hero headline                 | Display, 900    | `--text-3xl` to `--text-5xl`, 3.1vw | `clamp(30px, 3.1vw, 47px)`        |
 | Big number (next meeting)     | Display, 900    | `--text-4xl`                        | 39px                              |
 | Section title (numbered head) | Display, 900    | `--text-2xl`                        | 25px                              |
-| Desk and lead-story title     | Display, 700    | `--text-2xl`                        | 25px, 23px                        |
+| Desk title (numbered head)    | Display, 900    | `--text-2xl`                        | 25px                              |
+| Lead story title (desks)      | Sans, 700       | `--text-3xl`                        | 29px, 27px below 1080px           |
 | Rail item title               | Sans, 700       | `--text-xl`                         | 21px                              |
+| Evening recap introduction    | Sans, 400       | `--text-lg`, leading 1.65           | 17px, 15px on phones              |
 | Hero summary, lead body       | Sans, 400       | `--text-sm`, leading 1.6-1.65       | 14px                              |
 | Notes, secondary body, links  | Sans, 400-600   | `--text-xs`, leading 1.6-1.65       | 12px                              |
 | Meta, datelines, legends      | Sans, 400       | `--text-2xs`                        | 10px (below floor)                |
@@ -67,9 +69,10 @@ to the token column.
 | Section number                | Sans, 700       | `--text-2xs`                        | 10px (below floor)                |
 
 - Display titles track tight: about -0.03em (Today: -1.5px on the hero, -0.7px at 25px).
-- Body copy is dense. Today runs 12-14px; `--text-md` and up are for titles, not paragraphs.
+- Ordinary body copy is dense: 12-14px. The one larger paragraph is the evening recap
+  introduction, a short lede that opens the recap.
 - Eyebrows: sans, `--text-2xs`, bold, `--tracking-caps`, uppercase, in `--accent-fg` on paper and
-  `--hero-fg-muted` on the hero.
+  `--hero-fg` on the hero (see the hero contrast rule under Colour).
 
 ## Colour
 
@@ -99,7 +102,12 @@ Page is bone paper, cards are warm white, one living accent (forest) plus decora
 - Gold is never semantic. Caution is amber; error is red.
 - Plain `--gold` is for rules and marks only. Gold text uses `--gold-strong` (large) or
   `--gold-ink` (small); plain gold text fails contrast (#2914).
-- Hero secondary text uses `--hero-fg-muted`, which follows the theme. Raw `--sage` does not.
+- Hero text: small text on the band (eyebrow, prepared time, links) uses `--hero-fg`, which
+  clears 5.9:1 on the accent ground in every named light theme (re-measure in dark mode and custom themes). `--hero-fg-muted` is mixed against the
+  darker `--hero-bg`, not the accent ground the Today hero uses, so on the band it falls to about
+  4.2:1 in light Teal. Use it there only for large text, such as the headline's muted second
+  line. A muted token mixed against the accent ground, measured in every theme and mode, is
+  needed before small text can use one. Raw `--sage` follows no theme.
 - Every text colour clears 4.5:1 (3:1 for large text) on every surface it sits on, not only on
   the page colour. Check `--text-faint` and destructive fills in dark mode (#2914).
 - `--forest-*` is the accent slot. Themes re-point it, so "forest" means "the current accent".
@@ -131,52 +139,54 @@ Page is bone paper, cards are warm white, one living accent (forest) plus decora
 ## Page width
 
 - Use the horizontal space (Ben, reaffirmed 2026-08-19). Working screens run wide.
-- Today: hero spans the whole content region, 16px in from each side. Body `.cmd-wrap` max
+- Today: hero spans the whole content region, 16px in from each side (6px on phones). Body `.cmd-wrap` max
   1220px. Workshop: `.workshop-page` max 1220px. `--container` 1240px.
 - Sidebar: pale, `--nav-w` 194px (168px at 1180px and below), collapsible to an icon rail.
 - Phone: chat stays a drawer over the page.
 
 ## Page anatomy (Today is the standard)
 
-| Part                  | Shipped as                                                                                                                                                                                                                                                       |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Today hero            | `.today-hero` (`kit-today-hero.css`): accent band inset 16px, 3px gold bottom rule, no texture. Eyebrow, display headline whose second line is muted, summary, a `--hero-fg-muted` hairline, weather row, then underlined links and the prepared time on one row |
-| Section index         | `.today-hero__sections`: a hairline-ruled row of in-page links under the hero, 11px accent text                                                                                                                                                                  |
-| Main grid             | `.cmd-grid`: content column plus 270px rail, 34px gap, `--border-strong` keyline on the rail's left edge. Quick actions top the rail; the day plan spans both rows. Desks and widgets run full width below. One column at 1080px and below                       |
-| Section               | `.jds-brief`: hairline top rule (`--border`), `--space-5` vertical padding, no card                                                                                                                                                                              |
-| Section head          | Numbered head: section number (accent, bold, 2px gold underline), display title, meta right-aligned. Day plan (`.tl-head`), desks (`.desk-head`), evening (`.ev-head`). Intended primitive, see below                                                            |
-| Desk head             | Numbered head plus a 1px `--border-strong` rule beneath it                                                                                                                                                                                                       |
-| Block head            | Smaller blocks inside a section (Start here, Overnight, Focus, Needs you): `.jds-brief__head` + `.jds-brief__kicker` (eyebrow) + `.jds-brief__title`                                                                                                             |
-| Rail block            | Flat, no card. Eyebrow plus a small accent title over a 2px `--accent-rule` underline, rows split by hairlines (`.well` inside `.cmd-aside`)                                                                                                                     |
-| Next up               | Flat rail block: eyebrow, big display time in accent, sans title, muted note, underlined link, hairline beneath. Not the dark `--rail-*` block                                                                                                                   |
-| Notes                 | Three kinds, all Today-local; see below                                                                                                                                                                                                                          |
-| Links                 | `--accent-fg`, underlined, 4px underline offset, weight 600 for actions. On the hero, `--hero-fg` underlined                                                                                                                                                     |
-| Rows                  | `<RowIndex>` (`.jds-index`): heavy rule on top, one hairline per row, meta right-aligned; hover is a straight inset gold marker plus accent title, never a filled block                                                                                          |
-| Cards                 | `<Card>` (`.jds-card`): `--surface`, `--border`, `--radius-card`. For contained widgets in dialogs and settings. Today's sections and rail are not boxed                                                                                                         |
-| Hairlines             | `<Divider>` (`.jds-divider`, `--strong`, `--ink`, `--vertical`), `.jds-section-head__rule`                                                                                                                                                                       |
-| Eyebrows              | `.jds-eyebrow` (`--gold`, `--muted`, `--accent` tones), `.jds-masthead__eyebrow`                                                                                                                                                                                 |
-| Small text            | `.jds-caption`, `.jds-label`                                                                                                                                                                                                                                     |
-| Section-home masthead | Other sections' homes: `<Masthead tone="field">` (`.jds-masthead--field`), forest band, 4px gold bottom rule, eyebrow, Archivo title, optional lede and aside. Action button `<Button variant="field">`                                                          |
-| Plain masthead        | `<Masthead>`: ink on paper, with `MastheadDateline` and `MastheadClock`                                                                                                                                                                                          |
-| Footers               | No shared section footer. Dialogs use `.jds-dialog__foot`; the briefing reader uses `.brief-reader__footer-*`                                                                                                                                                    |
-| Paper grain           | `body::after` in `texture.css`; static, `--texture-opacity`                                                                                                                                                                                                      |
+| Part                  | Shipped as                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Today hero            | `.today-hero` (`kit-today-hero.css`): accent band inset 16px (6px on phones), 3px gold bottom rule, no texture. Eyebrow, display headline, summary, a hairline, weather row, then underlined links and the prepared time on one row. Only the fallback headline splits into a muted second line; saved morning and evening reports show one plain headline, and a new headline need not split |
+| Section index         | `.today-hero__sections`: a hairline-ruled row of in-page links under the hero, 11px accent text                                                                                                                                                                                                                                                                                               |
+| Main grid             | `.cmd-grid`: content column plus 270px rail, 34px gap, ordinary `--border` keyline on the rail's left edge. Quick actions top the rail; the day plan spans both rows. Desks and widgets run full width below. One column at 1080px and below                                                                                                                                                  |
+| Section               | `.jds-brief`: hairline top rule (`--border`), `--space-5` vertical padding, no card                                                                                                                                                                                                                                                                                                           |
+| Section head          | Numbered head: section number (accent, bold, 2px gold underline), display title, meta right-aligned. Day plan (`.tl-head`), desks (`.desk-head`), evening (`.ev-head`). Intended primitive, see below                                                                                                                                                                                         |
+| Desk head             | Numbered head with no rule beneath it. The desk section carries a 1px `--accent-rule` rule above instead                                                                                                                                                                                                                                                                                      |
+| Block head            | Smaller blocks inside a section (Start here, Overnight, Focus, Needs you): `.jds-brief__head` + `.jds-brief__kicker` (eyebrow) + `.jds-brief__title`                                                                                                                                                                                                                                          |
+| Rail block            | Flat, no card. Eyebrow plus a small accent title over a 2px `--accent-rule` underline, rows split by hairlines (`.well` inside `.cmd-aside`)                                                                                                                                                                                                                                                  |
+| Next up               | Flat rail block: eyebrow, big display time in accent, sans title, muted note, underlined link, hairline beneath. Not the dark `--rail-*` block                                                                                                                                                                                                                                                |
+| Notes                 | Three kinds, all Today-local; see below                                                                                                                                                                                                                                                                                                                                                       |
+| Links                 | Action links (open the briefing, meeting actions, hero links): `--accent-fg`, underlined, 4px offset, weight 600; `--hero-fg` on the hero. Section index links: accent, no underline at rest, underline on hover. Story headline links: normal ink, no accent. The news reading action still ships a 3px offset; new action links use 4px                                                     |
+| Rows                  | `<RowIndex>` (`.jds-index`): heavy rule on top, one hairline per row, meta right-aligned; hover is a straight inset gold marker plus accent title, never a filled block                                                                                                                                                                                                                       |
+| Cards                 | `<Card>` (`.jds-card`): `--surface`, `--border`, `--radius-card`. For contained widgets in dialogs and settings. Today's sections and rail are not boxed                                                                                                                                                                                                                                      |
+| Hairlines             | `<Divider>` (`.jds-divider`, `--strong`, `--ink`, `--vertical`), `.jds-section-head__rule`                                                                                                                                                                                                                                                                                                    |
+| Eyebrows              | `.jds-eyebrow` (`--gold`, `--muted`, `--accent` tones), `.jds-masthead__eyebrow`                                                                                                                                                                                                                                                                                                              |
+| Small text            | `.jds-caption`, `.jds-label`                                                                                                                                                                                                                                                                                                                                                                  |
+| Section-home masthead | Other sections' homes: `<Masthead tone="field">` (`.jds-masthead--field`), forest band, 4px gold bottom rule, eyebrow, Archivo title, optional lede and aside. Action button `<Button variant="field">`                                                                                                                                                                                       |
+| Plain masthead        | `<Masthead>`: ink on paper, with `MastheadDateline` and `MastheadClock`                                                                                                                                                                                                                                                                                                                       |
+| Footers               | No shared section footer. Dialogs use `.jds-dialog__foot`; the briefing reader uses `.brief-reader__footer-*`                                                                                                                                                                                                                                                                                 |
+| Paper grain           | `body::after` in `texture.css`; static, `--texture-opacity`                                                                                                                                                                                                                                                                                                                                   |
 
 Workshop project screen: chat fixed to the viewport, only the thread scrolls, composer pinned at
 the bottom; an artifact panel beside it whose tabs appear only once they have content.
 
 ### Notes
 
-| Kind           | Look                                                                                | Today example                            |
-| -------------- | ----------------------------------------------------------------------------------- | ---------------------------------------- |
-| Plan note      | `--sage-light` band, hairline top, `--text-xs` accent text, one line plus an action | Under "Your day, laid out"               |
-| Pull note      | Straight 2px gold left rule, eyebrow, `--text-xs` muted text, about 290px wide      | "Your news, in context" in the news desk |
-| Practical note | `--sage-light` fill, straight 2px gold left rule, `--text-xs` text in `--accent-fg` | "A little practical context" in the rail |
+| Kind           | Look                                                                                                | Today example                            |
+| -------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Plan note      | `--sage-light` band, hairline top, `--text-xs` accent text (ships at 11px), one line plus an action | Under "Your day, laid out"               |
+| Pull note      | Straight 2px gold left rule, eyebrow, `--text-xs` muted text, about 290px wide                      | "Your news, in context" in the news desk |
+| Practical note | `--sage-light` fill, straight 2px gold left rule, `--text-xs` text in `--accent-fg`                 | "A little practical context" in the rail |
 
 ### Patterns waiting for primitives (#2918)
 
 Today invented these locally. They are the intended shared primitives; #2918 moves them into
-`@moss/ui`. Until then, a new screen that needs one copies Today's look from this file, with the
-11px floor and the contrast rules applied, and links #2918 in its pull request.
+`@moss/ui`. Today's local copies are not a licence to copy. A new screen that needs one of these
+adds the shared primitive or `<Button>` variant first, in `packages/ui/`, and uses it; linking
+#2918 is not an exemption. The primitives follow Today's look from this file, with the 11px floor
+and the contrast rules applied.
 
 | Pattern               | Today copies                                                                             | Intended primitive                                      |
 | --------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
@@ -196,7 +206,7 @@ These ship on Today today. They are not rules; follow the corrected rule.
 | 42 hand-built buttons                                         | `<Button>`, extended where a variant is missing | #2918    |
 | Notes in raw `--forest` text, 1.8:1 in dark mode              | `--accent-fg`                                   | #2914    |
 | Gold warning number in plain `--gold`, 2.7:1                  | `--gold-strong`                                 | #2914    |
-| Hero eyebrow and accent line in raw `--sage`, fixed per theme | `--hero-fg-muted`                               | None yet |
+| Hero eyebrow and accent line in raw `--sage`, fixed per theme | `--hero-fg`; muted only for large text          | None yet |
 
 ## Primitives
 
