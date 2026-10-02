@@ -164,6 +164,12 @@ class FakeGateRunner implements ClassifierGateRunner {
   readonly requests: GateRequest[] = [];
   outcome: GateOutcome = { kind: "declined", reason: "none", trace: { latencyMs: 1 } };
   failEvaluate = false;
+  /**
+   * When set, evaluate calls this (e.g. `manager.stopTurn`) to abort the turn and then returns a
+   * decline — modelling Stop landing while the gate was deciding, for example a dispatched read
+   * that failed after the abort.
+   */
+  onEvaluate?: () => Promise<void>;
 
   async mode(): Promise<GateMode> {
     return this.modeValue;
@@ -172,6 +178,7 @@ class FakeGateRunner implements ClassifierGateRunner {
   async evaluate(request: GateRequest): Promise<GateOutcome> {
     this.evaluateCalls += 1;
     this.requests.push(request);
+    if (this.onEvaluate) await this.onEvaluate();
     if (this.failEvaluate) throw new Error("gate down");
     return this.outcome;
   }
@@ -328,6 +335,28 @@ describe("classifier gate — handled-turn lifecycle", () => {
     expect(engines).toHaveLength(0);
     expect(persistence.handled).toHaveLength(0);
     expect(records).toContainEqual({ kind: "status", text: "Stopped by user." });
+  });
+
+  it("Stop during a gate decision never falls through to the default model", async () => {
+    // Stop lands while the gate is deciding; the gate then reports a decline (e.g. the read it
+    // dispatched failed after the abort). The signal must win: no engine submit, nothing persisted.
+    const { manager, gate, persistence, engines } = makeManager();
+    gate.modeValue = "on";
+    gate.outcome = { kind: "declined", reason: "read_failed", trace: { latencyMs: 3 } };
+    // Stop lands mid-evaluate: stopTurn aborts the turn controller before the decline returns.
+    gate.onEvaluate = () => manager.stopTurn("user-12");
+    const records: TranscriptRecord[] = [];
+    manager.subscribe("user-12", (record) => records.push(record));
+
+    const result = await manager.submitTurn("user-12", "Ben", "stop this");
+
+    expect(gate.evaluateCalls).toBe(1);
+    expect(engines).toHaveLength(0);
+    expect(persistence.handled).toHaveLength(0);
+    expect(result.reply).toBe("");
+    expect(records).toContainEqual({ kind: "status", text: "Stopped by user." });
+    // The user's message must not be echoed as a submitted model turn.
+    expect(records.some((record) => record.kind === "reply")).toBe(false);
   });
 
   it("a read storage failure falls back, but a mutating storage failure never does", async () => {

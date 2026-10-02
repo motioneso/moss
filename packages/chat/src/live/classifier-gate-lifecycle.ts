@@ -88,16 +88,30 @@ export async function tryGatedTurn(
   try {
     outcome = await gate.evaluate(request);
   } catch {
-    // Gate infrastructure failure is a decline: the default model still answers once.
+    // Gate infrastructure failure is a decline: the default model still answers once — unless the
+    // user already stopped the turn, in which case no fallback may run (checked below).
+    if (controller.signal.aborted) return cancelledTurn(host, actorUserId, surface);
     return undefined;
   }
 
+  // A Stop that landed while the gate was deciding must stop the turn, not fall through to the
+  // default model. The gate may still report `declined` (for example a read it dispatched failed
+  // after the abort), so the signal is the authority here, checked before any decline branch.
+  if (controller.signal.aborted) return cancelledTurn(host, actorUserId, surface);
+
   if (outcome.kind === "declined" || outcome.kind === "would_handle") return undefined;
-  if (outcome.kind === "cancelled") {
-    host.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
-    return { reply: "" };
-  }
+  if (outcome.kind === "cancelled") return cancelledTurn(host, actorUserId, surface);
   return persistGateOutcome(host, actorUserId, surface, text, opts, outcome);
+}
+
+/** Emits the same status the default path uses on Stop and persists nothing. */
+function cancelledTurn(
+  host: GateLifecycleHost,
+  actorUserId: string,
+  surface: ChatSurface
+): GateTurnResult {
+  host.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
+  return { reply: "" };
 }
 
 /**
