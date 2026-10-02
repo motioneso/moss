@@ -509,6 +509,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0250",
           name: "0250_ai_admin_created_visibility.sql"
+        },
+        // #2868 — owner-only classifier shadow records with a fixed 7-day purge function.
+        {
+          version: "0251",
+          name: "0251_chat_classifier_shadow_records.sql"
         }
       ]);
     } finally {

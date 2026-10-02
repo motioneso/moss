@@ -66,3 +66,25 @@ export type GatewayToolResponse =
     }
   | { readonly ok: false; readonly denied: true; readonly reason: string }
   | { readonly ok: false; readonly error: string };
+
+/** Why the classifier gate's call was turned away before any handler ran. */
+export type GatewayDeclineReason =
+  | "not_available"
+  | "not_in_allowlist"
+  | "invalid_input"
+  | "would_confirm"
+  | "rate_limited";
+
+/**
+ * Result of a gate call. `declined` guarantees no handler ran and no approval card was raised.
+ * `would_run` is a dry-run verdict only and carries no authority. `outcome` separates a clean
+ * success from a module-reported error and from a thrown handler, which the public `ok` flag hides.
+ */
+export type GatewayGateOutcome =
+  | { readonly kind: "declined"; readonly reason: GatewayDeclineReason }
+  | { readonly kind: "would_run"; readonly approvalMode: "yolo" | "auto" }
+  | {
+      readonly kind: "executed";
+      readonly response: GatewayToolResponse;
+      readonly outcome: "success" | "module_reported_error" | "handler_error";
+    };

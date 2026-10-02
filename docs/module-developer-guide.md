@@ -339,6 +339,26 @@ capabilities and let the user's configured router decide.
 Installable modules use a separate JSON validator for tool names, host permissions, and automatic
 action policy (§13.1).
 
+### 11.1 Classifier opt-in
+
+A tool is offered to the chat classifier (the small model that routes simple commands before the
+default model) only if it declares `classifier`. No declaration means ineligible, so existing tools
+are unchanged. The declaration holds:
+
+- `description`: one line the classifier reads when choosing a tool (200 characters).
+- `arguments`: how each argument is supplied. A required argument whose schema is not an `enum`
+  must be declared as `candidates` (pick an id from the `candidates` hook) or `extract` (typed value
+  from the message, served only by a classifier that can return extracted fields).
+- `candidates`: an optional read-only, actor-scoped hook returning at most 50 `{ id, label }`
+  entries. Oversize or malformed output is rejected, never truncated.
+- `replyTemplate`: reply text with `{field}` placeholders. Each placeholder is a dotted path into
+  `outputSchema.properties` ending at a string, number or boolean. The classifier never writes
+  replies, and templates are data, not code.
+
+`checkClassifierEligibility` rejects an incomplete declaration with reasons, so build a test that
+asserts your declaration passes it. The declaration does not change the tool's risk, policy or
+approval behavior; the gateway still authorizes every call.
+
 ## 12. Registration (composition root)
 
 A bundled module is activated by one entry in `BUILT_IN_MODULES`

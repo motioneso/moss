@@ -27,7 +27,9 @@ export type {
   ActiveModulesResolver,
   SessionNotifier,
   GatewaySessionRecord,
-  GatewayToolResponse
+  GatewayToolResponse,
+  GatewayDeclineReason,
+  GatewayGateOutcome
 } from "./types.js";
 export {
   AssistantToolGateway,

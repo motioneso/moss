@@ -32,6 +32,8 @@ export {
 // #1723 item 3: the shape a module's list tool returns, so the next one does not have to decide
 // which end of an over-long list to drop.
 export { DEFAULT_LIST_LIMIT, applyListLimit, type LimitedList } from "./list-limits.js";
+export * from "./classifier.js";
+import type { ModuleAssistantToolClassifier } from "./classifier.js";
 // #2031 (epic #1586): the module diagnostics seam and its aggregator. Own file so index.ts stays
 // under the file-size gate, and exported by name so a wider SDK surface is visible in review.
 export {
@@ -647,6 +649,8 @@ export interface ModuleAssistantToolManifest {
    * never persisted and never leaves the acting user's own session.
    */
   readonly streamsStructuredResult?: boolean;
+  /** Opt-in to the chat classifier menu; absent means ineligible. See `checkClassifierEligibility`. */
+  readonly classifier?: ModuleAssistantToolClassifier;
 }
 
 export interface MossModuleManifest {

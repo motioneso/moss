@@ -49,14 +49,16 @@ export const chatModuleManifest = {
       "sql/0060_chat_memory_settings_to_role.sql",
       "sql/0146_private_chat_cleanup.sql",
       "sql/0149_chat_skills.sql",
-      "sql/0174_chat_surface.sql"
+      "sql/0174_chat_surface.sql",
+      "sql/0251_chat_classifier_shadow_records.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
       "app.chat_threads",
       "app.chat_messages",
       "app.chat_user_memory_settings",
-      "app.chat_skills"
+      "app.chat_skills",
+      "app.chat_classifier_shadow_records"
     ]
   },
   permissions: [
@@ -173,6 +175,14 @@ export const chatModuleManifest = {
       description:
         "Set how long answers should be (concise, balanced or detailed), in your own settings or " +
         "by asking during a conversation; the choice carries over to later chats."
+    },
+    {
+      id: "chat.classifier_shadow_records",
+      description:
+        "Groundwork for the classifier gate's trial mode: private 7-day storage only you can read. " +
+        "Nothing saves messages there yet and no screen shows it. A failed save will leave your " +
+        "normal reply unchanged.",
+      featureFlagId: "chat.module"
     },
     {
       id: "chat.thread_history",

@@ -774,6 +774,32 @@ export interface ChatThreadsTable {
   conversation_summary: string | null;
 }
 
+export interface ChatClassifierShadowRecordsTable {
+  id: ColumnType<string, string | undefined, string>;
+  owner_user_id: string;
+  turn_id: string;
+  message_text: string;
+  gate_mode: "shadow";
+  classifier_config_id: string;
+  classifier_config_version: string;
+  threshold_version: string;
+  decision: ColumnType<string, string | undefined, string>;
+  reason: string | null;
+  module_id: string | null;
+  tool_name: string | null;
+  confidence: number | null;
+  margin: number | null;
+  connection_id: string | null;
+  preparation_version: string | null;
+  risk_version: string | null;
+  latency_ms: number | null;
+  comparison_status: ColumnType<string, string | undefined, string>;
+  model_tool_id: string | null;
+  argument_agreement: string | null;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
 export interface ChatMessagesTable {
   id: string;
   thread_id: string;
@@ -1717,6 +1743,7 @@ export interface MossDatabase {
   "app.moss_error_log": MossErrorLogTable;
   "app.chat_threads": ChatThreadsTable;
   "app.chat_messages": ChatMessagesTable;
+  "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_skills": ChatSkillsTable;
   "app.briefing_definitions": BriefingDefinitionsTable;
   "app.briefing_runs": BriefingRunsTable;

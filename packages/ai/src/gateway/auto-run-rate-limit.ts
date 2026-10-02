@@ -101,4 +101,11 @@ export class AutoRunRateLimiter {
     bucket.count += 1;
     return true;
   }
+
+  /** Non-mutating twin of `consume`: true when a call would currently be allowed. */
+  wouldAllow(actorUserId: string, toolName: string): boolean {
+    const bucket = this.actors.get(actorUserId)?.get(toolName);
+    if (!bucket || Date.now() - bucket.windowStart >= this.windowMs) return true;
+    return bucket.count < this.maxCalls;
+  }
 }

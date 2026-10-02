@@ -67,8 +67,10 @@ const SYNTHESIS_INSTRUCTIONS_EVENING =
   "them in prose. Use the day_plan source for open commitments and the actor's own " +
   "corrections. A meeting that took place is not evidence that a follow-up was sent or that " +
   "a task finished; completion comes only from the [completed today] tags in " +
-  "tasks_reconciliation, never from plan or calendar words. Close with exactly two short " +
-  "reflection questions specific to today's items.";
+  "tasks_reconciliation, never from plan or calendar words. Never comment on the user's " +
+  "accounts, settings, setup or data quality, and never guess how the email or calendar " +
+  "systems see the user; report only today's work. Close with exactly two short " +
+  "reflection questions specific to today's items, never about setup or settings.";
 
 // The single evening trusted block. Built ONLY from the two literal constants — no
 // external/section value is interpolated (the static isolation test asserts this).
