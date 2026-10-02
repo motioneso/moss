@@ -157,14 +157,15 @@ export const INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE: IntegrationClassifie
   {
     sent:
       "Each tool's name, description, group, input schema and read-only, repeatable and " +
-      "destructive hints.",
+      "destructive hints. Credential header parameters and default or example values are " +
+      "removed from the schema first.",
     provider:
       "Your current default chat model reads these once; if it is a hosted model, they also go " +
       "to that model's provider.",
     cost: "Preparing, and preparing again after a change, uses model usage and may cost money.",
     excluded:
-      "Transport addresses, sign-in details, headers, secrets, device lists and raw tool " +
-      "results are never sent."
+      "Transport addresses, sign-in details, secrets and raw tool results are never sent. A " +
+      "tool's own fixed choice list is part of its schema and is sent with it."
   };
 
 /** Why one tool's draft could not be produced. Fixed codes; never raw provider text. */

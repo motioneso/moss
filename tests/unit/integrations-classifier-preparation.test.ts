@@ -171,6 +171,50 @@ describe("preparation definition payload", () => {
     }
   });
 
+  it("strips credential header parameters and default or example values from the schema", () => {
+    const withHeaders = {
+      ...tool(),
+      inputSchema: {
+        type: "object",
+        properties: {
+          "X-Api-Key": { type: "string", default: "sk-header-secret" },
+          body: {
+            type: "object",
+            properties: {
+              token: { type: "string", default: "sk-body-secret", example: "sk-example" }
+            }
+          }
+        },
+        required: ["X-Api-Key"]
+      },
+      invoke: {
+        method: "POST",
+        path: "/lights",
+        params: [{ name: "X-Api-Key", in: "header" }]
+      }
+    } as unknown as IntegrationToolDescriptor;
+
+    const payload = buildPreparationDefinitionPayload(withHeaders);
+    const serialized = JSON.stringify(payload);
+
+    for (const secret of [
+      "X-Api-Key",
+      "sk-header-secret",
+      "sk-body-secret",
+      "sk-example",
+      "default",
+      "example"
+    ]) {
+      expect(serialized, `payload must not contain "${secret}"`).not.toContain(secret);
+    }
+    const schema = payload.inputSchema as {
+      properties?: Record<string, unknown>;
+      required?: unknown;
+    };
+    expect(Object.keys(schema.properties ?? {})).toEqual(["body"]);
+    expect(schema.required).toBeUndefined();
+  });
+
   it("wraps the definition as untrusted data with a worked example and a short instruction", () => {
     const prompt = buildPreparationPrompt(
       JSON.stringify(buildPreparationDefinitionPayload(tool()))
@@ -200,6 +244,18 @@ describe("derivePreparationArguments", () => {
       name: { kind: "extract" }
     });
     expect(args.note).toBeUndefined();
+  });
+
+  it("does not declare a credential header parameter as a classifier argument", () => {
+    const args = derivePreparationArguments(
+      {
+        type: "object",
+        properties: { "X-Api-Key": { type: "string" }, name: { type: "string" } },
+        required: ["X-Api-Key", "name"]
+      },
+      new Set(["X-Api-Key"])
+    );
+    expect(args).toEqual({ name: { kind: "extract" } });
   });
 });
 
@@ -511,6 +567,54 @@ describe("POST /api/integrations/:id/classifier/prepare", () => {
     expect(body.drafts).toHaveLength(1);
     expect(body.failed).toHaveLength(0);
     expect(writes).toEqual([]);
+  });
+
+  it("sends an outgoing prompt free of transport URLs, credentials, header values and secrets", async () => {
+    const poisonedTool = {
+      ...tool(),
+      inputSchema: {
+        type: "object",
+        properties: {
+          "X-Api-Key": { type: "string", default: "sk-header-secret" },
+          body: {
+            type: "object",
+            properties: {
+              token: { type: "string", default: "sk-body-secret", example: "sk-example" }
+            }
+          }
+        },
+        required: ["X-Api-Key"]
+      },
+      invoke: {
+        method: "POST",
+        path: "/lights",
+        params: [{ name: "X-Api-Key", in: "header" }],
+        hasBody: true
+      },
+      devices: [{ id: "light.kitchen", name: "Kitchen" }]
+    } as unknown as IntegrationToolDescriptor;
+    const port = fakePort();
+    const server = buildServer(connection({ discoveredTools: [poisonedTool] }), port.port);
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/integrations/conn-1/classifier/prepare",
+      payload: {}
+    });
+    expect(response.statusCode).toBe(200);
+    expect(port.runCalls).toHaveLength(1);
+    const prompt = port.runCalls[0]?.prompt ?? "";
+    for (const secret of [
+      "sk-header-secret",
+      "sk-body-secret",
+      "sk-example",
+      "X-Api-Key",
+      "user:pass",
+      "sekret",
+      "internal.example.com",
+      "light.kitchen"
+    ]) {
+      expect(prompt, `prompt must not contain "${secret}"`).not.toContain(secret);
+    }
   });
 
   it("rejects a non-boolean force and requires the connection switch", async () => {

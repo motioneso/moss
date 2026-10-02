@@ -101,8 +101,10 @@ export interface PreparationDefinitionPayload {
 
 /**
  * Whitelist the definition. Transport URL, base URL, credential placement, credential envelope,
- * `invoke` recipes, headers, device inventories and every other field on the discovered object are
- * dropped by construction — never sent.
+ * `invoke` recipes and every other field on the discovered object are dropped by construction.
+ * Inside the input schema, credential header parameters (an OpenAPI header parameter, recorded on
+ * the tool's `invoke` recipe) and every `default`/`example`/`examples` value are removed too, so a
+ * schema-embedded credential or sample secret never reaches the model.
  */
 export function buildPreparationDefinitionPayload(
   tool: IntegrationToolDescriptor
@@ -111,10 +113,64 @@ export function buildPreparationDefinitionPayload(
     name: tool.name,
     description: tool.description,
     group: tool.group,
-    inputSchema: tool.inputSchema,
+    inputSchema: sanitizePreparationInputSchema(tool.inputSchema, headerParamNames(tool)),
     readOnly: tool.readOnly ?? null,
     idempotent: tool.idempotent ?? null,
     destructive: tool.destructive ?? null
+  };
+}
+
+/** Header parameters the tool invocation carries; the shared descriptor does not expose them. */
+interface ToolInvocationShape {
+  readonly invoke?: {
+    readonly params?: readonly { readonly name?: unknown; readonly in?: unknown }[];
+  };
+}
+
+function headerParamNames(tool: IntegrationToolDescriptor): ReadonlySet<string> {
+  const params = (tool as ToolInvocationShape).invoke?.params ?? [];
+  return new Set(
+    params
+      .filter((param) => param.in === "header" && typeof param.name === "string")
+      .map((param) => param.name as string)
+  );
+}
+
+const STRIPPED_SCHEMA_KEYS = new Set(["default", "example", "examples"]);
+
+/** Drop sample and default values anywhere in a schema; they can carry real secrets. */
+function stripSchemaSamples(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripSchemaSamples);
+  if (!isRecord(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (STRIPPED_SCHEMA_KEYS.has(key)) continue;
+    out[key] = stripSchemaSamples(child);
+  }
+  return out;
+}
+
+function sanitizePreparationInputSchema(
+  inputSchema: Record<string, unknown> | null,
+  headerParams: ReadonlySet<string>
+): Record<string, unknown> | null {
+  if (inputSchema === null) return null;
+  const cleaned = stripSchemaSamples(inputSchema) as Record<string, unknown>;
+  if (headerParams.size === 0) return cleaned;
+  if (!isRecord(cleaned.properties)) return cleaned;
+  const { required: rawRequired, ...rest } = cleaned;
+  const properties: Record<string, unknown> = {};
+  for (const [name, schema] of Object.entries(cleaned.properties)) {
+    if (headerParams.has(name)) continue;
+    properties[name] = schema;
+  }
+  const required = Array.isArray(rawRequired)
+    ? rawRequired.filter((name) => typeof name === "string" && !headerParams.has(name))
+    : [];
+  return {
+    ...rest,
+    properties,
+    ...(required.length > 0 ? { required } : {})
   };
 }
 
@@ -239,10 +295,13 @@ function enumValues(property: unknown): readonly string[] | null {
  * Derive the argument declarations from the tool's own input schema. Fixed choices come from the
  * schema, never from the model (`enum`); every other required argument needs typed extraction
  * (`extract`); optional arguments are omitted. A `candidates` source is a runtime concern (2b.5)
- * and is never invented here.
+ * and is never invented here. Credential header parameters are skipped: the classifier must not be
+ * asked to supply a credential, so a tool that requires one is left ineligible rather than exposing
+ * it.
  */
 export function derivePreparationArguments(
-  inputSchema: Record<string, unknown> | null
+  inputSchema: Record<string, unknown> | null,
+  headerParams: ReadonlySet<string> = new Set()
 ): Record<string, IntegrationClassifierArgument> {
   if (!isRecord(inputSchema)) return {};
   const properties = isRecord(inputSchema.properties) ? inputSchema.properties : {};
@@ -251,6 +310,7 @@ export function derivePreparationArguments(
     : [];
   const out: Record<string, IntegrationClassifierArgument> = {};
   for (const name of required) {
+    if (headerParams.has(name)) continue;
     if (!ARGUMENT_NAME.test(name) || name.length > INTEGRATION_CLASSIFIER_MAX_IDENTIFIER_CHARS) {
       continue;
     }
@@ -404,7 +464,7 @@ async function draftOne(
       toolName: tool.name,
       definitionFingerprint: toolDefinitionFingerprint(tool),
       description: parsed.value.description,
-      arguments: derivePreparationArguments(tool.inputSchema),
+      arguments: derivePreparationArguments(tool.inputSchema, headerParamNames(tool)),
       replyTemplate: parsed.value.replyTemplate
     }
   };
