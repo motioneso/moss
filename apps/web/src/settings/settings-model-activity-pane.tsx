@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, EmptyState } from "@moss/ui";
-import type { ModelActivityEntryDto } from "@moss/shared";
+import type { LocaleSettingsDto, ModelActivityEntryDto } from "@moss/shared";
 
 import { listModelActivity } from "../api/client.js";
+import { formatDate, formatTime, useUserLocale } from "../locale/locale-format.js";
 import type { PaneProps } from "./settings-types.js";
 import { Badge, Select } from "./settings-ui.js";
 
@@ -54,18 +55,17 @@ function localDayKey(iso: string): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
-function dayLabel(iso: string): string {
-  const date = new Date(iso);
+function dayLabel(iso: string, locale: LocaleSettingsDto): string {
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
   if (localDayKey(iso) === localDayKey(today.toISOString())) return "Today";
   if (localDayKey(iso) === localDayKey(yesterday.toISOString())) return "Yesterday";
-  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  return formatDate(iso, locale, { weekday: "long", month: "long", day: "numeric" });
 }
 
-function timeLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+function timeLabel(iso: string, locale: LocaleSettingsDto): string {
+  return formatTime(iso, locale);
 }
 
 function optionValues(
@@ -76,6 +76,7 @@ function optionValues(
 }
 
 export function ModelActivityPane(_props: PaneProps) {
+  const locale = useUserLocale();
   const [entries, setEntries] = useState<readonly ModelActivityEntryDto[]>([]);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -244,10 +245,10 @@ export function ModelActivityPane(_props: PaneProps) {
           <div className="aud">
             {groups.map((group) => (
               <div key={group.day}>
-                <div className="jds-eyebrow">{dayLabel(group.entries[0]!.occurredAt)}</div>
+                <div className="jds-eyebrow">{dayLabel(group.entries[0]!.occurredAt, locale)}</div>
                 {group.entries.map((entry) => (
                   <div key={entry.id} className="aud__row">
-                    <div className="aud__when">{timeLabel(entry.occurredAt)}</div>
+                    <div className="aud__when">{timeLabel(entry.occurredAt, locale)}</div>
                     <div className="aud__what">
                       <b>{entry.action}</b>
                       <div className="aud__badges">

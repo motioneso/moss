@@ -10,6 +10,12 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   listModelActivity
 }));
 
+vi.mock("../../apps/web/src/locale/locale-format.js", () => ({
+  formatDate: vi.fn(() => "July 16, 2026"),
+  formatTime: vi.fn(() => "9:41 AM"),
+  useUserLocale: vi.fn(() => ({ timezone: "UTC", region: "en-US", dateFormat: "12" }))
+}));
+
 import { ModelActivityPane } from "../../apps/web/src/settings/settings-model-activity-pane.js";
 
 const me: MeResponse = {
