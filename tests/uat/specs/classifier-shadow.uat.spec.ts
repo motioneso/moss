@@ -57,7 +57,7 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
 }
 
 const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
