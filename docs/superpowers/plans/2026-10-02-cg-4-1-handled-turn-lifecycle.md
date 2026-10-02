@@ -120,30 +120,40 @@ history. No synthetic submit happens during the gated reply.
 ### D6 — Real composition-root gate token
 
 `createClassifierGateRunner` (new `packages/chat/src/live/classifier-gate-runner.ts`) mints one token
-per attempt through the injected composition-root registry (`actorUserId`, a fresh correlation id,
-the actor's captured executable-tool allowlist), passes it only to
-`gateway.callToolForGate(token, name, input, mode)`, and revokes it in `finally` on every path. The
-token is never logged and never enters a job payload, prompt, response, or persisted record.
+per attempt through the injected composition-root registry (`actorUserId`, a fresh correlation id),
+and revokes it in `finally` on every path. The token is never logged and never enters a job payload,
+prompt, response, or persisted record.
+
+**Scope ruling (coordinator, 2026-10-02):** task 4 wires the runner with ONLY the real token
+mint/revoke and the admin settings read. The production gate ports factory — the tool menu from
+manifests, the classifier calls, and the release check — is deliberately NOT built here; it waits for
+3.5. `ClassifierGateRunnerDeps.createPorts` is left as an optional typed seam, and when it is unset
+the runner mints and revokes a real token, then declines with `no_eligible_tools`, so every message
+falls back to the default model. A test proves that fallback.
 
 ### D7 — Activation stays blocked
 
-Production `isReleased` reads `ClassifierReleaseRepository.listEligibleReleases` and requires a
-module+tool+classifier-config-version match. No code path writes a release row (that writer is 4.2),
-and the settings PUT refuses `on` without one, so the handled path is unreachable by a real turn. The
-agent loop in the runner pre-resolves the classifier config version for the match. Chat manifest and
-`app-map-core` describe the handled-turn path as present but unavailable pending review.
+The handled path is unreachable by a real turn: no code path writes a release row (that writer is
+4.2), the settings write path refuses `on` without one, and — pending 3.5 — the runner has no ports
+supplied, so an `on` attempt declines before any tool could run. The `isReleased` release check and
+the classifier-config-version match land with the 3.5 ports factory. Chat manifest and `app-map-core`
+describe the handled-turn path as present but unavailable pending review.
 
 ## Tasks and tests
 
 1. Shared origin types (`chat-api.ts`) + serialization (`route-serializers.ts`).
 2. Repository/persistence gate-origin write; model path unchanged.
 3. `ClassiferGateRunner` type + manager hook (D1/D2/D4/D5).
-4. `createClassifierGateRunner` + composition wiring in `routes.ts`/`runtime.ts` (D6/D7).
+4. `createClassifierGateRunner` + composition wiring in `routes.ts`/`runtime.ts` with ONLY the real
+   token mint/revoke and the settings read (D6/D7). `createPorts` is an optional typed seam left for
+   3.5; with no ports the runner declines and falls back. Do NOT build the ports factory here.
 5. Manifest + core map copy.
 6. `tests/unit/chat-classifier-live.test.ts`: cold and warm sessions; handled makes zero
    engine-launch/submit calls; decline submits original text once; read failure falls back; mutating
    partial failure never retries; storage failure after a mutating attempt never replays; cancelled
-   stops; subsequent reference has normal history; HTTP/SSE/history agree. Fakes for runner/gateway.
+   stops; subsequent reference has normal history; HTTP/SSE/history agree; origin serialization; the
+   runner mints/revokes on every path and declines (still minting/revoking) with no ports supplied.
+   Fakes for runner/gateway.
 7. Extend live-manager/persistence tests for the origin metadata and absent `executed`/`usage`.
 8. Token safety: observe the revoke assertion fail with the `finally` removed, restore it.
 

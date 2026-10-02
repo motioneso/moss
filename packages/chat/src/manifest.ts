@@ -181,10 +181,9 @@ export const chatModuleManifest = {
     {
       id: "chat.classifier_gate",
       description:
-        "The classifier gate's instance-wide switch: Off by default, with Shadow " +
-        "and On, shown as the Chat gate choice in the Classifier row on Settings > Assistant & AI. " +
-        "On is refused until an approved tool release exists. The chat path that would answer " +
-        "from an approved tool without the main model is built but cannot run yet.",
+        "The classifier gate switch: Off by default, with Shadow and On, shown as the Chat gate " +
+        "choice in Settings > Assistant & AI's Classifier row. On needs an approved tool release. " +
+        "The tool-answering path is built but not runnable yet.",
       featureFlagId: "chat.module"
     },
     {
