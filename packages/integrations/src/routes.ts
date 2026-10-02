@@ -9,16 +9,22 @@ import {
   type Keyring
 } from "@moss/db";
 import { HttpError, handleRouteError as handleModuleRouteError } from "@moss/module-sdk";
-import type {
-  CreateIntegrationRequest,
-  CredentialPlacement,
-  IntegrationDetail,
-  IntegrationKind,
-  IntegrationSummary,
-  ListIntegrationsResponse
+import {
+  INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
+  type CreateIntegrationRequest,
+  type CredentialPlacement,
+  type IntegrationDetail,
+  type IntegrationKind,
+  type IntegrationSummary,
+  type ListIntegrationsResponse,
+  type PrepareIntegrationClassifierResponse
 } from "@moss/shared";
 
 import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
+import {
+  prepareClassifierToolDrafts,
+  type ClassifierPreparationPort
+} from "./classifier-preparation.js";
 import { parseReviewedEntry } from "./classifier-settings.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
@@ -46,6 +52,12 @@ export interface IntegrationsRouteDependencies {
   readonly resolveKeyring?: (scopedDb: DataContextDb) => Promise<Keyring | null>;
   /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
   readonly resolverCache?: ResolverCache;
+  /**
+   * Plan 2b.3 (#2894): the composition-layer port that drafts tool preparation on the owner's
+   * default chat model. Absent (older wiring/tests) means preparation reports unavailable and
+   * calls no model.
+   */
+  readonly preparationPort?: ClassifierPreparationPort;
 }
 
 interface IdParams {
@@ -321,6 +333,72 @@ export function registerIntegrationsRoutes(
         if (!updated) return reply.code(404).send({ error: "Integration not found" });
         cache.drop(accessContext.actorUserId);
         return toDetail(updated, updated.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /**
+   * Plan 2b.3 (#2894): draft the owner-reviewed classifier preparation for this connection on the
+   * owner's current default chat model. Transient — nothing is stored here; the owner saves each
+   * reviewed draft through PUT .../classifier/tools/:toolName. When there is no default chat model,
+   * or it cannot produce the structured draft, this reports a setup failure and calls no model;
+   * there is no fallback to the classifier or another model.
+   */
+  server.post<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/prepare",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const body = requireObject(request.body ?? {});
+        if ("force" in body && typeof body.force !== "boolean") {
+          throw new HttpError(400, "force must be a boolean");
+        }
+        const force = body.force === true;
+
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        request.raw.once("aborted", abort);
+        try {
+          return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+            const row = await repository.getConnection(scopedDb, request.params.id);
+            if (!row) throw new HttpError(404, "Integration not found");
+            if (!row.classifierEnabled) {
+              throw new HttpError(
+                409,
+                "Turn on the connection classifier before preparing its tools."
+              );
+            }
+            if (!dependencies.preparationPort) {
+              return {
+                disclosure: INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
+                status: "unavailable",
+                drafts: [],
+                reused: [],
+                failed: [],
+                remaining: 0
+              } satisfies PrepareIntegrationClassifierResponse;
+            }
+            return prepareClassifierToolDrafts(
+              scopedDb,
+              {
+                discoveredTools: row.discoveredTools,
+                preparation: row.classifierPreparation,
+                curation: {
+                  enabledGroups: row.enabledGroups,
+                  enabledTools: row.enabledTools,
+                  mutedTools: row.mutedTools
+                },
+                force,
+                signal: controller.signal
+              },
+              dependencies.preparationPort
+            );
+          });
+        } finally {
+          request.raw.off("aborted", abort);
+        }
       } catch (error) {
         return handleRouteError(error, reply);
       }

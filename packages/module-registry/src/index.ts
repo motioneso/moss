@@ -66,6 +66,7 @@ import {
 } from "@moss/ai";
 import { buildCliToolAlertRaiser, buildCliVersionTooOldHandler } from "./cli-tools-alerts.js";
 import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
+import { createClassifierPreparationPort } from "./classifier-preparation-port.js";
 import {
   GraphMemoryRecallService,
   ManualMemoryCandidateService,
@@ -1917,6 +1918,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
+        // Plan 2b.3 (#2894): composition-layer model port, so the integrations package keeps no
+        // @moss/ai dependency.
+        preparationPort: createClassifierPreparationPort({
+          ...(deps.createCliStructuredAdapter
+            ? { createCliStructuredAdapter: deps.createCliStructuredAdapter }
+            : {})
+        }),
         // Master key store (#2312): per-request family key, never eager at boot.
         resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
       })
