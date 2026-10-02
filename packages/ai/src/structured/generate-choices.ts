@@ -5,6 +5,7 @@ import type { ModuleServiceKey } from "@moss/shared";
 
 import { parseAiApiKeyCredential } from "../credentials.js";
 import type { AiSecretCipher } from "../crypto.js";
+import { recordModelActivity } from "../model-activity.js";
 import type { AiRepository } from "../repository.js";
 
 export type ChoiceQuestionInput = {
@@ -224,47 +225,44 @@ async function postSystemOne(
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
 
   const fetchImpl = deps.fetch ?? globalThis.fetch;
-  let response: Response;
+  // Plan 3.6b (#2890): System One is reached by a raw fetch, not through the provider adapters
+  // 3.6a records. Log one row per real post attempt at the same transport-facts-only standard.
+  // The helper returns error values rather than throwing, so the outcome is derived from the
+  // returned error instead of the wrapper's throw signal.
+  let posted: Awaited<ReturnType<typeof postSystemOneRequest>>;
   try {
-    response = await fetchImpl(`${baseUrl}/v1/systemone`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`
-      },
-      body: serializedBody,
-      // The API key must never be replayed to a redirect target.
-      redirect: "error",
-      signal
-    });
+    posted = await postSystemOneRequest(
+      fetchImpl,
+      baseUrl,
+      apiKey,
+      serializedBody,
+      signal,
+      input.signal,
+      deps,
+      input.service,
+      logPrefix
+    );
   } catch (error) {
-    if (input.signal?.aborted) return { ok: false, error: "aborted" };
-    const code = isTimeoutLike(error) ? "timeout" : "network_error";
-    deps.logger?.warn({ service: input.service, code }, `${logPrefix} provider error`);
-    return { ok: false, error: "provider_error" };
+    recordModelActivity({
+      kind: "structured",
+      action: "choices",
+      outcome: "error",
+      modelName: model.provider_model_id,
+      result: "failed"
+    });
+    throw error;
   }
+  recordModelActivity({
+    kind: "structured",
+    action: "choices",
+    outcome: posted.ok ? "ok" : posted.error === "aborted" ? "aborted" : "error",
+    modelName: model.provider_model_id,
+    result: posted.ok ? "completed" : posted.error === "aborted" ? "stopped" : "failed"
+  });
 
-  if (!response.ok) {
-    deps.logger?.warn(
-      { service: input.service, code: `http_${response.status}` },
-      `${logPrefix} provider error`
-    );
-    return { ok: false, error: "provider_error" };
-  }
+  if (!posted.ok) return posted;
 
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    // The caller's signal firing mid-read is an abort, not a malformed body.
-    if (input.signal?.aborted) return { ok: false, error: "aborted" };
-    deps.logger?.warn(
-      { service: input.service, code: "invalid_response_body" },
-      `${logPrefix} invalid response`
-    );
-    return { ok: false, error: "invalid_response" };
-  }
-
+  const payload = posted.payload;
   if (!isRecord(payload)) {
     deps.logger?.warn(
       { service: input.service, code: "invalid_response" },
@@ -282,6 +280,58 @@ async function postSystemOne(
       outputTokens: readTokenCount(usage["output_tokens"])
     }
   };
+}
+
+/** The raw System One round: post the serialized body and read the JSON payload. */
+async function postSystemOneRequest(
+  fetchImpl: typeof fetch,
+  baseUrl: string,
+  apiKey: string,
+  serializedBody: string,
+  signal: AbortSignal,
+  callerSignal: AbortSignal | undefined,
+  deps: GenerateChoicesDeps,
+  service: ModuleServiceKey,
+  logPrefix: string
+): Promise<
+  | { readonly ok: true; readonly payload: unknown }
+  | { readonly ok: false; readonly error: GenerateChoicesFailure }
+> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`${baseUrl}/v1/systemone`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`
+      },
+      body: serializedBody,
+      // The API key must never be replayed to a redirect target.
+      redirect: "error",
+      signal
+    });
+  } catch (error) {
+    if (callerSignal?.aborted) return { ok: false, error: "aborted" };
+    const code = isTimeoutLike(error) ? "timeout" : "network_error";
+    deps.logger?.warn({ service, code }, `${logPrefix} provider error`);
+    return { ok: false, error: "provider_error" };
+  }
+
+  if (!response.ok) {
+    deps.logger?.warn({ service, code: `http_${response.status}` }, `${logPrefix} provider error`);
+    return { ok: false, error: "provider_error" };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    // The caller's signal firing mid-read is an abort, not a malformed body.
+    if (callerSignal?.aborted) return { ok: false, error: "aborted" };
+    deps.logger?.warn({ service, code: "invalid_response_body" }, `${logPrefix} invalid response`);
+    return { ok: false, error: "invalid_response" };
+  }
+  return { ok: true, payload };
 }
 
 /** Every asked id answered as a noul with a probability inside 0 to 1; anything else fails. */

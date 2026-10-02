@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 
 import {
+  installModelActivityRecorder,
+  type ModelActivityEntry
+} from "../../packages/ai/src/model-activity.js";
+import {
   generateChoices,
   type GenerateChoicesDeps
 } from "../../packages/ai/src/structured/generate-choices.js";
@@ -415,5 +419,96 @@ describe("generateChoices", () => {
       { service: "module.focus-judgment", code: "request_too_large" },
       "ai.generateChoices request rejected"
     );
+  });
+
+  describe("model activity recording (plan 3.6b, #2890)", () => {
+    it("records one structured/choices row for a real System One post", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const { deps } = okFetch(validResponse);
+        const result = await generateChoices(scopedDb, makeInput(), deps);
+
+        expect(result.ok).toBe(true);
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({
+          kind: "structured",
+          action: "choices",
+          outcome: "ok",
+          modelName: "jev-latest",
+          result: "completed"
+        });
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
+    it("records an error outcome when the provider call fails", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const deps = makeDeps({
+          fetch: vi.fn(async () => jsonResponse(500, {})) as unknown as typeof fetch
+        });
+        expect(await generateChoices(scopedDb, makeInput(), deps)).toEqual({
+          ok: false,
+          error: "provider_error"
+        });
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ outcome: "error", result: "failed" });
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
+    it("records an aborted outcome when the caller's signal fires", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const controller = new AbortController();
+        controller.abort();
+        const abortError = new Error("aborted");
+        abortError.name = "AbortError";
+        const deps = makeDeps({
+          fetch: vi.fn().mockRejectedValue(abortError) as unknown as typeof fetch
+        });
+        expect(
+          await generateChoices(scopedDb, makeInput({ signal: controller.signal }), deps)
+        ).toBeDefined();
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ outcome: "aborted", result: "stopped" });
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
+    it("records nothing when no call is made (not supported), and never the state text", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const fetchMock = vi.fn();
+        const deps = makeDeps({
+          repository: {
+            resolveModelForService: vi.fn(async () => ({
+              model: { ...(model as object), provider_kind: "anthropic" } as never,
+              reason: "matched-active-model" as const
+            }))
+          },
+          fetch: fetchMock as unknown as typeof fetch
+        });
+        expect(await generateChoices(scopedDb, makeInput(), deps)).toEqual({
+          ok: false,
+          error: "not_supported"
+        });
+        expect(entries).toHaveLength(0);
+
+        const SENTINEL = "SENTINEL-state-text-do-not-record";
+        const { deps: okDeps } = okFetch(validResponse);
+        await generateChoices(scopedDb, makeInput({ state: { title: SENTINEL } }), okDeps);
+        expect(JSON.stringify(entries)).not.toContain(SENTINEL);
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
   });
 });
