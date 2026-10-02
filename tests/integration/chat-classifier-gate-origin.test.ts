@@ -70,19 +70,21 @@ describe("gate-answered chat turn records no model or usage (#2901)", () => {
       return { gateMessage: gate.assistantMessage, modelMessage: model.assistantMessage };
     });
 
-    const rows = await sql<{ id: string; model_metadata: Record<string, unknown> }>`
-      SELECT id, model_metadata FROM app.chat_messages
-      WHERE id IN (${gateMessage.id}::uuid, ${modelMessage.id}::uuid)
-    `.execute(appDb);
-    const byId = new Map(rows.rows.map((row) => [row.id, row.model_metadata]));
+    const metaById = await asUserA(async (scopedDb) => {
+      const rows = await sql<{ id: string; model_metadata: Record<string, unknown> }>`
+        SELECT id, model_metadata FROM app.chat_messages
+        WHERE id IN (${gateMessage.id}::uuid, ${modelMessage.id}::uuid)
+      `.execute(scopedDb.db);
+      return new Map(rows.rows.map((row) => [row.id, row.model_metadata]));
+    });
 
-    const gateMeta = byId.get(gateMessage.id) ?? {};
+    const gateMeta = metaById.get(gateMessage.id) ?? {};
     expect(gateMeta.executed).toBeUndefined();
     expect(gateMeta.usage).toBeUndefined();
     expect(gateMeta.origin).toEqual(ORIGIN);
 
     // A normal model turn is unchanged: it still carries the executed provider/model and usage.
-    const modelMeta = byId.get(modelMessage.id) ?? {};
+    const modelMeta = metaById.get(modelMessage.id) ?? {};
     expect(modelMeta.executed).toEqual({ provider: "anthropic", model: "claude-x" });
     expect(modelMeta.usage).toEqual({ inputTokens: 5, outputTokens: 7 });
     expect(modelMeta.origin).toBeUndefined();
