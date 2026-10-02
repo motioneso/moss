@@ -146,3 +146,6 @@ blocking	apps/web/src/settings/settings-model-activity-pane.tsx	tests/uat/specs/
 blocking	packages/ai/src/model-activity.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
 blocking	packages/ai/src/adapters/http-api.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
 blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2889-model-activity-log.uat.spec.ts
+# #2899 classifier gate 2b.4: reviewed switches and preparation editor on a connection detail.
+blocking	apps/web/src/settings/settings-integrations-classifier.tsx	tests/uat/specs/2899-classifier-integrations-review.uat.spec.ts
+blocking	apps/web/src/settings/settings-integrations-pane.tsx	tests/uat/specs/2899-classifier-integrations-review.uat.spec.ts
