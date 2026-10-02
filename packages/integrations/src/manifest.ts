@@ -47,8 +47,15 @@ export const integrationsModuleManifest = {
       id: "integrations.connection_classifier_opt_in",
       description:
         "A connection can be opted into the chat classifier, one tool at a time. Each opt-in " +
-        "needs an owner-reviewed risk; a tool with no confirmed label stays out, and a changed " +
-        "tool definition marks the review stale until it is reviewed again."
+        "needs an owner-reviewed risk; a tool with no confirmed label stays out, a changed tool " +
+        "definition marks the review stale, and each unusable tool names why."
+    },
+    {
+      id: "integrations.connection_classifier_review",
+      description:
+        "The classifier section on a connection reviews each tool's description, reply and risk " +
+        "before use. Drafts look different from saved reviews, every unusable tool names why, and " +
+        "the connection switch never opts a tool in."
     },
     {
       id: "integrations.connection_classifier_preparation",
