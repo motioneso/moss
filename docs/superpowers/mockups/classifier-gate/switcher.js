@@ -25,3 +25,9 @@
   document.querySelectorAll('[data-default]').forEach(function(b){document.body.setAttribute('data-'+b.getAttribute('data-default').split(':')[0],b.getAttribute('data-default').split(':')[1]);});
   apply();
 })();
+/* Brief pop-up: tip('one short line') returns the markup; clicks toggle it. */
+window.tip=function(t){return '<span class="jds-infotip"><button type="button" class="jds-btn jds-btn--quiet jds-btn--sm" aria-label="More info" aria-expanded="false" data-tip>?</button><span class="jds-menu__list jds-infotip__panel mk-hide" role="tooltip">'+t+'</span></span>'};
+document.addEventListener('click',function(e){var b=e.target.closest('[data-tip]');
+ document.querySelectorAll('.jds-infotip__panel').forEach(function(p){if(!b||p!==b.nextElementSibling)p.classList.add('mk-hide')});
+ if(b){var p=b.nextElementSibling;p.classList.toggle('mk-hide');b.setAttribute('aria-expanded',!p.classList.contains('mk-hide'))}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')document.querySelectorAll('.jds-infotip__panel').forEach(function(p){p.classList.add('mk-hide')})});

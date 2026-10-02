@@ -2040,3 +2040,6 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .mk-meta{display:flex;gap:var(--space-2);align-items:center;margin-top:var(--space-1);color:var(--text-subtle);font-size:var(--text-xs);flex-wrap:wrap}
 .mk-sr{border-top:1px dashed var(--border);margin-top:var(--space-5);padding-top:var(--space-3);color:var(--text-subtle);font-size:var(--text-xs)}
 .mk-hide{display:none!important}
+.jds-menu__list{position:absolute;top:calc(100% + var(--space-1));right:0;z-index:20;display:flex;flex-direction:column;min-width:10rem;padding:var(--space-1);border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-raised,var(--surface));box-shadow:var(--shadow-md)}
+.jds-infotip{position:relative;display:inline-flex;vertical-align:middle}
+.jds-infotip__panel{left:0;right:auto;width:15rem;padding:var(--space-3);font-size:var(--text-sm);color:var(--text);line-height:1.4}

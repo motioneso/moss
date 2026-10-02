@@ -4,9 +4,7 @@
 <span class="mk-group"><span class="mk-label">State</span><span class="jds-segmented" id="views"></span></span>
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button><button class="jds-segmented__opt" data-pick="theme:sage">Sage</button><button class="jds-segmented__opt" data-pick="theme:dusk">Dusk</button></span></span></div>
 <div class="mk-page">
-<span class="jds-eyebrow jds-eyebrow--muted">Admin, under Classifier settings</span>
-<h1 class="mk-h">Classifier log</h1>
-<p class="mk-lede">One line each time the classifier looked at a chat message, in shadow or on, whether it handled the message or passed it on. Only admins can see this page. Lines are deleted after 7 days.</p>
+<h1 class="mk-h">Classifier log <span id="t0"></span></h1>
 <div class="mk-filters" id="filters">
  <div class="jds-field"><label class="jds-label" for="f1">Decision</label><span class="jds-selectwrap"><select class="jds-select" id="f1"><option>All</option><option>Handled</option><option>Declined</option><option>Failed</option></select></span></div>
  <div class="jds-field"><label class="jds-label" for="f2">Area</label><span class="jds-selectwrap"><select class="jds-select" id="f2"><option>All</option><option>Calendar</option><option>Home hub</option></select></span></div>
@@ -15,6 +13,7 @@
 <div id="stage"></div>
 <p class="mk-note" id="ret"></p>
 </div>
+<script src="switcher.js"></script>
 <script>
 var rows=[
 ['Today 9:41','What is on my calendar today?','Calendar','List visible events','0.97','Handled','Classifier'],
@@ -25,17 +24,17 @@ var rows=[
 var badge={Handled:'forest',Declined:'neutral',Failed:'red'};
 function table(rs){return '<div class="al-wrap"><table class="al"><thead><tr><th>Time</th><th>Message (admin only)</th><th>Area</th><th>Tool</th><th>Confidence</th><th>Decision</th><th>Answered by</th></tr></thead><tbody>'+rs.map(function(r){return '<tr><td class="num">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td class="num">'+r[4]+'</td><td><span class="jds-badge jds-badge--'+badge[r[5]]+'">'+r[5]+'</span></td><td>'+r[6]+'</td></tr>'}).join('')+'</tbody></table></div>'}
 var S={
- data:{l:'With lines',h:function(){return table(rows)},r:'Showing 5 lines from the last 7 days. Older lines are deleted automatically.'},
- filtered:{l:'Filtered: failed',h:function(){return table([rows[1]])},r:'Showing 1 line. Decision: Failed.',f:1},
- nomatch:{l:'No matches',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines match these filters</div><div class="jds-empty__sub">Try a longer time range or choose All.</div><button class="jds-btn jds-btn--secondary jds-btn--sm">Clear filters</button></div>'},r:'',f:1},
- empty:{l:'Empty',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines yet</div><div class="jds-empty__sub">Lines appear once the classifier is in shadow or on and someone sends a chat message.</div></div>'},r:'',nof:1},
- retention:{l:'7-day retention',h:function(){return table(rows.slice(0,3))+'<p class="mk-help" role="status">Lines older than 7 days are removed every night, including the message text. Private chats are never logged.</p>'},r:'Oldest line kept: 6 days 22 hours ago.'}
+ data:{l:'With lines',h:function(){return table(rows)},r:''},
+ filtered:{l:'Filtered: failed',h:function(){return table([rows[1]])},r:'',f:1},
+ nomatch:{l:'No matches',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines match these filters</div><button class="jds-btn jds-btn--secondary jds-btn--sm">Clear filters</button></div>'},r:'',f:1},
+ empty:{l:'Empty',h:function(){return '<div class="jds-empty"><div class="jds-empty__title">No lines yet</div></div>'},r:'',nof:1},
+ retention:{l:'7-day retention',h:function(){return table(rows.slice(0,3))},r:'Oldest line: 6 days 22 hours ago.'}
 };
 var vb=document.getElementById('views');
 Object.keys(S).forEach(function(k){var b=document.createElement('button');b.className='jds-segmented__opt';b.textContent=S[k].l;b.dataset.k=k;vb.appendChild(b)});
 function render(k){var s=S[k];history.replaceState(null,'','#'+k);[].forEach.call(vb.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});
- document.getElementById('stage').innerHTML=s.h();document.getElementById('filters').style.display=s.nof?'none':'flex';
+ document.getElementById('t0').innerHTML=tip('Admins only. Lines are deleted after 7 days.');document.getElementById('stage').innerHTML=s.h();document.getElementById('filters').style.display=s.nof?'none':'flex';
  document.getElementById('f1').value=k==='filtered'?'Failed':'All';document.getElementById('ret').textContent=s.r;document.getElementById('ret').style.display=s.r?'block':'none'}
 vb.onclick=function(e){if(e.target.dataset.k)render(e.target.dataset.k)};
 render(location.hash.slice(1)||'data');
-</script><script src="switcher.js"></script></body></html>
+</script></body></html>
