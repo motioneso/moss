@@ -312,6 +312,17 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     scope: "admin"
   },
   {
+    id: "modelactivity",
+    label: "Model activity",
+    description:
+      "Review every model call on this instance: a day-grouped feed with the time, the kind of " +
+      "call (chat answer, classifier or background task), what it did, the model that ran it, " +
+      "whether it succeeded, and the result. Filter by kind, model, result and time. The log never " +
+      "shows chat text and is kept indefinitely.",
+    path: "/settings?section=modelactivity",
+    scope: "admin"
+  },
+  {
     id: "host",
     label: "Advanced host setup",
     description: "Review non-secret host diagnostics and deployment guidance.",
