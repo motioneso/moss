@@ -1,5 +1,4 @@
 import type { ProviderKind } from "@moss/ai";
-import { recordModelActivity } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
@@ -121,22 +120,6 @@ export class ChatSessionManager {
       emit: this.emit.bind(this),
       ensureSession: this.ensureSession.bind(this)
     };
-  }
-
-  /**
-   * Plan 3.6b (#2890): one model activity row per live chat turn, including CLI chat turns the
-   * provider-adapter seam cannot see. Inner tool-loop calls are invisible, so the row is per turn.
-   * Only transport facts are recorded: the turn kind, the outcome, and the session's actual model.
-   * No message text, prompt, tool argument or identity ever enters the entry.
-   */
-  private recordChatTurn(session: UserSession, outcome: "ok" | "error" | "aborted"): void {
-    recordModelActivity({
-      kind: "chat",
-      action: "chat",
-      outcome,
-      modelName: session.model,
-      result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
-    });
   }
 
   /** Ensure one live engine per actor + surface; concurrent launches share a promise. */
@@ -391,9 +374,6 @@ export class ChatSessionManager {
     let session: UserSession;
     let turnElapsedMs: number | undefined;
     let turnUsage: ChatTurnUsageDto | undefined;
-    // Plan 3.6b (#2890): captured for the catch block, where `session` may be unassigned if the
-    // engine failed to launch. Undefined means no model work happened, so nothing is recorded.
-    let sessionForRecording: UserSession | undefined;
 
     try {
       // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
@@ -422,7 +402,6 @@ export class ChatSessionManager {
         this.pendingForcedReplay.add(sessionKey);
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       }
-      sessionForRecording = session;
       const turnProviderIdentity = session.providerIdentity;
 
       const attachments = opts?.attachments ?? [];
@@ -474,7 +453,6 @@ export class ChatSessionManager {
             userName,
             session
           );
-          sessionForRecording = session;
           await assertProviderIdentityForPendingTurn(
             turnProviderIdentity,
             session.providerIdentity
@@ -574,7 +552,6 @@ export class ChatSessionManager {
       if (stopped) {
         // Coordinator ruling (a): emit a status record over SSE, persist NOTHING. The user message
         // and any partial reply are discarded — the turn never completed.
-        this.recordChatTurn(session, "aborted");
         this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
         session.lastActivity = this.deps.clock.now();
         this.deps.touchMcpToken?.(sessionKey);
@@ -583,7 +560,6 @@ export class ChatSessionManager {
 
       if (watchdogTripped) {
         const seconds = Math.round(this.idleWatchdogMs / 1000);
-        this.recordChatTurn(session, "error");
         this.emit(actorUserId, surface, {
           kind: "status",
           text: `No response from the model for ${seconds} seconds — ending turn.`
@@ -679,21 +655,12 @@ export class ChatSessionManager {
         });
       }
 
-      this.recordChatTurn(session, "ok");
       return {
         reply,
         userMessageId: stored?.userMessageId,
         assistantMessageId: stored?.assistantMessageId,
         sourceFreshness: stored?.sourceFreshness
       };
-    } catch (error) {
-      // Plan 3.6b (#2890): a turn that throws before persisting still logs one row, but only when
-      // a session actually launched — a failed launch performed no model work. A caller Stop
-      // surfaces as an aborted controller signal, not a normal completion.
-      if (sessionForRecording) {
-        this.recordChatTurn(sessionForRecording, controller.signal.aborted ? "aborted" : "error");
-      }
-      throw error;
     } finally {
       flushPending();
       this.turnActivityBySession.delete(sessionKey);

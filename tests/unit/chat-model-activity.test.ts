@@ -1,15 +1,13 @@
 /**
  * Plan 3.6b (#2890): live chat records one model activity row per turn, including CLI chat turns
- * the provider-adapter seam cannot see. One row per turn (inner tool calls are not visible), with
- * only transport facts: kind, action, outcome and the session's actual model. No message text.
+ * the provider-adapter seam cannot see. `withTurnActivityRecording` wraps the session engine at the
+ * composition seam, so the row is per turn (inner tool-loop calls are not visible). Only transport
+ * facts are recorded — kind, action, outcome, the session's actual model. No message text.
  */
 import { describe, expect, it } from "vitest";
 
-import type { ProviderKind } from "../../packages/ai/src/index.js";
-import {
-  installModelActivityRecorder,
-  type ModelActivityEntry
-} from "../../packages/ai/src/model-activity.js";
+import { installModelActivityRecorder, type ModelActivityEntry } from "@moss/ai";
+import type { ProviderKind } from "@moss/ai";
 import {
   ChatSessionManager,
   type ChatPersistencePort,
@@ -17,6 +15,7 @@ import {
   type Clock
 } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { PersonaFs } from "../../packages/chat/src/live/persona.js";
+import { withTurnActivityRecording } from "../../packages/chat/src/live/turn-activity-engine.js";
 import type { CliChatEngine, TranscriptRecord } from "../../packages/chat/src/live/types.js";
 
 const NOW = 1_725_000_000_000;
@@ -32,7 +31,6 @@ class FakePersistence implements ChatPersistencePort {
     provider: "anthropic",
     model: "claude-x"
   };
-
   async resolveActiveProvider(): Promise<{ provider: ProviderKind; model: string }> {
     return this.active;
   }
@@ -70,11 +68,7 @@ class OkEngine implements CliChatEngine {
   ): Promise<{ records: TranscriptRecord[]; offset: number; complete: boolean }> {
     const records = this.pending;
     this.pending = [];
-    return {
-      records,
-      offset: afterOffset + 1,
-      complete: records.length > 0
-    };
+    return { records, offset: afterOffset + 1, complete: records.length > 0 };
   }
   async isAlive(): Promise<boolean> {
     return true;
@@ -83,7 +77,7 @@ class OkEngine implements CliChatEngine {
   async interrupt(): Promise<void> {}
 }
 
-/** Fails on the first read, so the turn throws after it started. */
+/** Fails on the first read, so the turn started but the model call failed. */
 class FailEngine implements CliChatEngine {
   constructor(public readonly provider: ProviderKind) {}
   async launch(): Promise<{ offset: number }> {
@@ -105,10 +99,11 @@ const noopPersonaFs: PersonaFs = {
   async writeFile() {}
 };
 
-function makeManager(engine: CliChatEngine): ChatSessionManager {
+/** A manager whose engine factory records turn activity, mirroring the runtime composition seam. */
+function makeManager(build: () => CliChatEngine): ChatSessionManager {
   const persistence = new FakePersistence();
   const deps: ChatSessionManagerDeps = {
-    engineFactory: () => engine,
+    engineFactory: () => withTurnActivityRecording(build()),
     persistence,
     personaFs: noopPersonaFs,
     clock: new FakeClock(),
@@ -130,7 +125,7 @@ describe("live chat model activity recording (plan 3.6b, #2890)", () => {
   it("records exactly one chat row per completed turn with the session's model", async () => {
     const { entries, restore } = collect();
     try {
-      const manager = makeManager(new OkEngine("anthropic"));
+      const manager = makeManager(() => new OkEngine("anthropic"));
       await manager.submitTurn("user-1", "Ben", "hello");
       await manager.submitTurn("user-1", "Ben", "again");
 
@@ -151,7 +146,7 @@ describe("live chat model activity recording (plan 3.6b, #2890)", () => {
     const { entries, restore } = collect();
     try {
       const SENTINEL = "SENTINEL-chat-message-do-not-record";
-      const manager = makeManager(new FailEngine("anthropic"));
+      const manager = makeManager(() => new FailEngine("anthropic"));
       await expect(manager.submitTurn("user-1", "Ben", SENTINEL)).rejects.toThrow("readNew failed");
 
       expect(entries).toHaveLength(1);
@@ -165,7 +160,6 @@ describe("live chat model activity recording (plan 3.6b, #2890)", () => {
   it("records an aborted row when the caller stops the turn", async () => {
     const { entries, restore } = collect();
     try {
-      // A gated engine that never completes, so the test can stop it mid-turn.
       let release!: (records: TranscriptRecord[]) => void;
       const gate = new Promise<TranscriptRecord[]>((resolve) => {
         release = resolve;
@@ -186,8 +180,10 @@ describe("live chat model activity recording (plan 3.6b, #2890)", () => {
         async kill() {},
         async interrupt() {}
       };
-      const manager = makeManager(engine);
+      const manager = makeManager(() => engine);
       const turn = manager.submitTurn("user-1", "Ben", "stop me");
+      // Give the turn time to submit before stopping it.
+      await new Promise((resolve) => setTimeout(resolve, 20));
       await manager.stopTurn("user-1");
       release([]);
       await turn;
