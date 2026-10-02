@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("truthful chat settings UI", () => {
-  it("does not expose fake chat controls and folds response style into Assistant & AI", () => {
+  it("does not expose fake chat controls and folds response style into Your assistant", () => {
     const subviewsSource = readFileSync(
       "apps/web/src/settings/settings-module-subviews.tsx",
       "utf8"

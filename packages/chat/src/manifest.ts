@@ -121,7 +121,7 @@ export const chatModuleManifest = {
         {
           id: "chat.acp_sign_in_expired.settings",
           description:
-            "For Codex, an administrator connects it once for everyone under Settings, Assistant & AI; other providers keep their existing sign-in path.",
+            "For Codex, an administrator connects it once for everyone under Settings, AI providers; other providers keep their existing sign-in path.",
           path: "/settings?section=aiproviders"
         }
       ]
@@ -183,7 +183,7 @@ export const chatModuleManifest = {
       id: "chat.classifier_gate",
       description:
         "The classifier gate switch: Off by default, with Shadow and On, shown as the Chat gate " +
-        "choice in Settings > Assistant & AI's Classifier row. On needs an approved tool release. " +
+        "choice in Settings > AI providers's Classifier row. On needs an approved tool release. " +
         "The tool-answering path is built but not runnable yet.",
       featureFlagId: "chat.module"
     },

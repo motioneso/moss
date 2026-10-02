@@ -29,7 +29,7 @@ describe("ConnectProviderEmpty (rendered)", () => {
 
   it("renders a direct link to the assistant/AI settings (deep-linked) for any user", () => {
     const html = render({ isFounder: false });
-    // Deep-link carries the assistant section so the user lands on Assistant & AI, not Profile.
+    // Deep-link carries the assistant section so the user lands on Your assistant, not Profile.
     expect(html).toContain("/settings?section=assistant");
   });
 

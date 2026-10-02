@@ -117,7 +117,7 @@ describe("app-map integrity and truthfulness", () => {
     }
   });
 
-  it("finds the Assistant & AI settings page for plain model wordings", () => {
+  it("finds the Your assistant settings page for plain model wordings", () => {
     // The map builder drops the AI module's shadow settings entry because core
     // already owns this path, so only the core wording ever reaches Moss. Search
     // the built map the way the map read service does: a case-insensitive
@@ -130,7 +130,7 @@ describe("app-map integrity and truthfulness", () => {
       const hits = assistantEntries.filter((entry) =>
         JSON.stringify(entry).toLowerCase().includes(phrase)
       );
-      expect(hits.length, `expected "${phrase}" to find the Assistant & AI page`).toBeGreaterThan(
+      expect(hits.length, `expected "${phrase}" to find the Your assistant page`).toBeGreaterThan(
         0
       );
     }

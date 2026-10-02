@@ -253,11 +253,11 @@ test("configures chat and email extraction models through settings", async ({ pa
   });
 
   await page.goto("/settings");
-  // Provider roster + capability routing live under Admin -> Assistant & AI.
+  // Provider roster + capability routing live under Admin -> AI providers.
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
 
-  await expect(page.getByRole("heading", { name: "Assistant & AI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI providers" })).toBeVisible();
   await page.getByRole("button", { name: "Add provider" }).click();
   await page.getByRole("button", { name: "Anthropic", exact: true }).click();
   await expect(page.locator(".prov__name", { hasText: "Anthropic" })).toBeVisible();
@@ -296,13 +296,13 @@ test("configures chat and email extraction models through settings", async ({ pa
   await expect(emailBinding).toHaveValue("model:ai-model-auto");
   await page.reload();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
   await expect(page.getByLabel("Binding for Email reading")).toHaveValue("model:ai-model-auto");
 
   await page.getByLabel("Binding for Email reading").selectOption("model:ai-model-mailbox");
   await page.reload();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
   await expect(page.getByLabel("Binding for Email reading")).toHaveValue("model:ai-model-mailbox");
 
   await page.getByRole("button", { name: "Remove Anthropic" }).click();
@@ -328,7 +328,7 @@ test("shows missing AI credentials as email-extraction configuration", async ({ 
 
   await page.goto("/settings");
   await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Assistant & AI" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
 
   await expect(page.getByText("API key needed", { exact: true })).toBeVisible();
   const emailBinding = page.getByLabel("Binding for Email reading");

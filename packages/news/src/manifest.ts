@@ -522,8 +522,8 @@ export const newsModuleManifest = {
       remediations: [
         {
           id: "news.add_source.configure_json_model",
-          description: "Bind a JSON-capable economy model for News in Assistant & AI settings.",
-          path: "/settings?section=assistant"
+          description: "Bind a JSON-capable economy model for News in AI providers settings.",
+          path: "/settings?section=aiproviders"
         }
       ],
       errors: [
@@ -559,7 +559,7 @@ export const newsModuleManifest = {
         {
           id: "news.described_topics.pick_searching_model",
           description:
-            "Your chat model has no built-in search. Pick a model under Assistant settings, or ask an admin to add a Brave key.",
+            "Your chat model has no built-in search. Pick a model under Your assistant, or ask an admin to add a Brave key.",
           path: "/settings?section=assistant"
         },
         {

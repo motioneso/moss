@@ -151,7 +151,7 @@ describe("SettingsPage priorities navigation", () => {
     expect(html).not.toContain("People &amp; access");
   });
 
-  it("renders Recently Released as the active Moss destination for a non-admin", async () => {
+  it("renders What's new as the active Moss destination for a non-admin", async () => {
     const html = await renderAll(
       withQueryClient(
         <MemoryRouter initialEntries={["/settings?section=released"]}>
@@ -160,15 +160,15 @@ describe("SettingsPage priorities navigation", () => {
       )
     );
     expect(html).toContain("Moss");
-    expect(html).toContain("Recently Released");
+    expect(html).toContain("What&#x27;s new");
     expect(html).toContain('aria-current="true"');
     expect(html).toContain("Guided Job Search onboarding");
   });
 
-  it("declares Recently Released in the core app map", () => {
+  it("declares What's new in the core app map", () => {
     expect(CORE_APP_SETTINGS).toContainEqual({
       id: "released",
-      label: "Recently Released",
+      label: "What's new",
       description: "See what was added, fixed, and changed in recent Moss releases.",
       path: "/settings?section=released",
       scope: "user"

@@ -624,7 +624,7 @@ export function AssistantPane({ me }: PaneProps) {
   return (
     <>
       <PaneHead
-        title="Assistant & AI"
+        title="Your assistant"
         desc={`Tune how ${assistantName} sounds, and choose which assistant powers your chat.`}
       />
       <Persona who={who} />

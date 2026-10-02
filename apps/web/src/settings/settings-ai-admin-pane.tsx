@@ -679,7 +679,7 @@ export function AiProvidersPane() {
   return (
     <>
       <PaneHead
-        title="Assistant & AI"
+        title="AI providers"
         desc={`The AI providers this instance runs on, and which model handles each kind of work. Everyone's ${assistantName} draws from what you set up here.`}
       />
       <Group
@@ -688,7 +688,7 @@ export function AiProvidersPane() {
       >
         <Row
           name="Allow user override"
-          desc="When off, Personal → Assistant & AI shows the instance default as read-only."
+          desc="When off, Personal → Your assistant shows the instance default as read-only."
           control={
             <Switch
               ariaLabel="Allow users to override their chat model"
