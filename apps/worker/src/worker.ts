@@ -54,6 +54,7 @@ import {
 } from "@moss/module-registry/node";
 import {
   AiRepository,
+  recordModelActivity,
   runModuleBuildStep,
   TmuxMultiplexer,
   type ProviderKind,
@@ -265,7 +266,17 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         mux: moduleBuildMux,
         provider: model.provider_kind as ProviderKind,
         ensureProviderLaunchReady: (provider, workingDir) =>
-          ensureProviderLaunchReady(moduleBuildCliHome, provider, workingDir)
+          ensureProviderLaunchReady(moduleBuildCliHome, provider, workingDir),
+        // Plan 3.6b (#2890): one model activity row per build step turn, with the real model name
+        // the step runs under. Only transport facts are logged.
+        recordTurn: (outcome) =>
+          recordModelActivity({
+            kind: "structured",
+            action: "module-build",
+            outcome,
+            modelName: model.provider_model_id,
+            result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+          })
       });
       return {
         launchLiveAgent: moduleBuildLiveAgent,

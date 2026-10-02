@@ -333,11 +333,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "modelactivity",
     label: "Model activity",
     description:
-      "Review the model calls Moss records: through API-key providers it records chat, structured " +
-      "output and transcription calls; through CLI providers it records structured calls only, and " +
-      "CLI chat turns are not recorded yet. A day-grouped feed with the time, what it did, the " +
-      "model that ran it, whether it succeeded, and a short result; filter by kind, model, result " +
-      "and time. The log never shows chat text and is kept indefinitely.",
+      "Review the model calls Moss records: chat turns through CLI and API-key providers, " +
+      "structured output including classifier choices, transcription, embeddings, background " +
+      "tasks, module builds, and provider probes and checks. A day-grouped feed with the time, " +
+      "what it did, the model that ran it, whether it succeeded, and a short result; filter by " +
+      "kind, model, result and time. The log never shows chat text and is kept indefinitely.",
     path: "/settings?section=modelactivity",
     scope: "admin"
   },

@@ -19,6 +19,7 @@ import {
   getEmbeddingProviderConfig,
   MemoryRepository,
   parseDocument,
+  withEmbeddingActivity,
   type NewChunkData
 } from "@moss/memory";
 import {
@@ -578,8 +579,10 @@ async function defaultEmbeddingProviderFactory(
   scopedDb: DataContextDb
 ): Promise<EmbeddingProvider> {
   const config = await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb));
+  // Plan 3.6b (#2890): record one model activity row per embedding job. The local path builds a
+  // CpuIsolatedEmbeddingProvider directly (the factory skips it), so wrap it here too.
   return config.kind === "local"
-    ? new CpuIsolatedEmbeddingProvider(config.modelId)
+    ? withEmbeddingActivity(new CpuIsolatedEmbeddingProvider(config.modelId))
     : createEmbeddingProvider(config);
 }
 

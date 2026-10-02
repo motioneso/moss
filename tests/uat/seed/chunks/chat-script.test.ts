@@ -23,6 +23,10 @@ describe("seedScriptedChatProviderChunk", () => {
       );
       expect(scriptedProviders).toHaveLength(1);
       expect(scriptedProviders[0]?.status).toBe("active");
+      // #2906: live chat only hosts a cli provider, and only with an ACP agent id; an api_key
+      // provider (or a cli provider with no identity) is rejected before any turn runs.
+      expect(scriptedProviders[0]?.auth_method).toBe("cli");
+      expect(scriptedProviders[0]?.acp_agent_id).toBe("claude-acp");
 
       const models = await aiRepo.listModels(scopedDb);
       const chatModels = models.filter((m) => m.capabilities.includes("chat"));

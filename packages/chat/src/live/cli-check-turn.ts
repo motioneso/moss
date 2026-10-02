@@ -1,3 +1,4 @@
+import { recordModelActivity } from "@moss/ai";
 import type { ProviderKind } from "@moss/ai";
 import type { AcpToolServer } from "@moss/acp";
 
@@ -37,7 +38,28 @@ const normalize = (name: string) => name.replace(/\./g, "_");
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Plan 3.6b (#2890): one model activity row per CLI check turn. The check drives a whole throwaway
+ * engine session, so the row is per turn. Only transport facts are recorded: the outcome, the
+ * launch model (or the provider kind when riding the default), and a fixed result line. No prompt
+ * text enters the row.
+ */
 export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurnResult> {
+  const outcome = await runCheckTurnInner(options);
+  const ok = outcome.result.ok;
+  recordModelActivity({
+    kind: "check",
+    action: "check",
+    outcome: ok ? "ok" : "error",
+    modelName: options.launch.model ?? options.engine.provider,
+    result: ok ? "completed" : "failed"
+  });
+  return outcome.result;
+}
+
+async function runCheckTurnInner(
+  options: CheckTurnOptions
+): Promise<{ readonly result: CheckTurnResult }> {
   const { engine, launch, prompt, toolName, timeoutMs } = options;
   const pollMs = options.pollMs ?? 500;
   const sleep = options.sleep ?? defaultSleep;
@@ -62,23 +84,27 @@ export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurn
       if (batch.complete) break;
       if (now() >= deadline) {
         await engine.interrupt().catch(() => undefined);
-        return { ok: false, reason: "timeout" };
+        return { result: { ok: false, reason: "timeout" } };
       }
       await sleep(pollMs);
     }
-    return called || !toolName
-      ? { ok: true, replyText }
-      : { ok: false, reason: "tool_call_missing" };
+    return {
+      result:
+        called || !toolName ? { ok: true, replyText } : { ok: false, reason: "tool_call_missing" }
+    };
   } catch (error) {
     // A refusal for an old tool version is a real failure of the candidate; anything else
     // (no login, runner down) says nothing about the candidate.
     return {
-      ok: false,
-      reason:
-        isCliVersionTooOldError(error) ||
-        (error instanceof CliChatUnavailableError && error.message === CLI_VERSION_TOO_OLD_MESSAGE)
-          ? "tool_call_missing"
-          : "check_unavailable"
+      result: {
+        ok: false,
+        reason:
+          isCliVersionTooOldError(error) ||
+          (error instanceof CliChatUnavailableError &&
+            error.message === CLI_VERSION_TOO_OLD_MESSAGE)
+            ? "tool_call_missing"
+            : "check_unavailable"
+      }
     };
   } finally {
     await engine.kill().catch(() => undefined);

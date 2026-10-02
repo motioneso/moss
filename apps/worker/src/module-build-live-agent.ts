@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { recordModelActivity } from "@moss/ai";
 import type { ModuleBuildStep, Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import {
   buildLaunchCommand,
@@ -16,6 +17,12 @@ export interface ModuleBuildLiveAgentDeps {
   readonly ensureProviderLaunchReady: (provider: ProviderKind, workingDir: string) => Promise<void>;
   readonly mcpToken?: string;
   readonly mcpServerUrl?: string;
+  /**
+   * Plan 3.6b (#2890): one model activity row per build step turn. The composition root supplies
+   * the resolved model name so no provider or model is hardcoded here. Defaults to recording
+   * against the process-wide recorder using the provider kind as the honest label.
+   */
+  readonly recordTurn?: (outcome: "ok" | "error" | "aborted") => void;
 }
 
 const STEP_TIMEOUT_MS = 30 * 60 * 1000;
@@ -129,14 +136,41 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         ".jarvis-claude-permission-hook.mjs",
         ".jarvis-claude-settings.json"
       ]);
-      return {
-        wroteFiles: listed.stdout
-          .split("\n")
-          .map((path) => path.replace(/^\.\//, ""))
-          .filter((path) => path.length > 0 && !internalFiles.has(path))
-      };
+      const wroteFiles = listed.stdout
+        .split("\n")
+        .map((path) => path.replace(/^\.\//, ""))
+        .filter((path) => path.length > 0 && !internalFiles.has(path));
+      recordBuildTurn(deps, input.step, "ok");
+      return { wroteFiles };
+    } catch (error) {
+      recordBuildTurn(deps, input.step, "error");
+      throw error;
     } finally {
       await deps.mux.kill(handle);
     }
   };
+}
+
+/**
+ * Plan 3.6b (#2890): one model activity row per module-build step turn. The step's model program
+ * runs a whole session the adapter seam never sees, so the row is per turn rather than per call.
+ * Only transport facts are recorded; no prompt, plan or source text enters the row.
+ */
+function recordBuildTurn(
+  deps: ModuleBuildLiveAgentDeps,
+  step: ModuleBuildStep,
+  outcome: "ok" | "error" | "aborted"
+): void {
+  const record = deps.recordTurn;
+  if (record) {
+    record(outcome);
+    return;
+  }
+  recordModelActivity({
+    kind: "structured",
+    action: `module-build:${step}`,
+    outcome,
+    modelName: deps.provider,
+    result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+  });
 }

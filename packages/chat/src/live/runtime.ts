@@ -66,6 +66,7 @@ export type {
 import { ChatSessionManager } from "./chat-session-manager.js";
 import { createRealPersonaFs } from "./persona.js";
 import { DataContextChatPersistence } from "./persistence.js";
+import { withTurnActivityRecording } from "./turn-activity-engine.js";
 import type { CliChatEngine, EngineKillOpts } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import { ChatRepository } from "../repository.js";
@@ -681,8 +682,20 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   // NOT re-submit. The in-process path keeps draining itself (serverOwnsDrain = false).
   const serverOwnsDrain = connection !== undefined;
 
+  // Plan 3.6b (#2890): wrap each session engine so one model activity row is recorded per live
+  // chat turn, CLI or otherwise. This is the composition seam — the manager is unchanged.
+  const recordingEngineFactory: ChatEngineFactory = (provider, sessionKey, options) => {
+    const engine = engineFactory(provider, sessionKey, options);
+    if (engine && typeof (engine as Promise<CliChatEngine>).then === "function") {
+      return (engine as Promise<CliChatEngine>).then((resolved) =>
+        withTurnActivityRecording(resolved)
+      );
+    }
+    return withTurnActivityRecording(engine as CliChatEngine);
+  };
+
   manager = new ChatSessionManager({
-    engineFactory,
+    engineFactory: recordingEngineFactory,
     persistence,
     personaFs: createRealPersonaFs(),
     clock: { now: () => Date.now() },
