@@ -2062,3 +2062,206 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
   width: 15px;
   height: 15px;
 }
+/* Form-control primitives — input, textarea, select, checkbox, switch, segmented control.
+   Split out of components-core.css, which crossed the 1000-line gate in scripts/check-file-size.ts.
+   Imported immediately after it in index.css so cascade order is unchanged. */
+
+/* ---------------------------------------------------------------
+   FORM CONTROLS — Input / Textarea / Select
+   --------------------------------------------------------------- */
+.jds-input,
+.jds-textarea,
+.jds-select {
+  padding: 0 var(--space-3);
+  height: 38px;
+  width: 100%;
+  transition: var(--transition-control);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.jds-textarea {
+  height: auto;
+  min-height: 88px;
+  padding: var(--space-3);
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+.jds-input[disabled],
+.jds-textarea[disabled],
+.jds-select[disabled] {
+  cursor: not-allowed;
+}
+.jds-input--sm {
+  height: 32px;
+}
+.jds-input--num {
+  width: 90px;
+}
+
+/* Input with leading icon / addon */
+.jds-inputwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.jds-inputwrap .jds-input {
+  padding-left: 36px;
+}
+.jds-inputwrap__icon {
+  position: absolute;
+  left: 11px;
+  display: inline-flex;
+  pointer-events: none;
+}
+.jds-inputwrap__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Select chevron */
+.jds-selectwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.jds-selectwrap .jds-select {
+  padding-right: 34px;
+}
+.jds-selectwrap .jds-select[multiple] {
+  height: auto;
+  min-height: 12rem;
+  padding: var(--space-2);
+  appearance: auto;
+}
+.jds-select[multiple] option {
+  padding: var(--space-2);
+}
+.jds-selectwrap__chev {
+  position: absolute;
+  right: 11px;
+  display: inline-flex;
+  pointer-events: none;
+}
+.jds-selectwrap__chev svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------------------------------------------------------------
+   CHECKBOX (custom)
+   --------------------------------------------------------------- */
+.jds-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+.jds-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.jds-check__box {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-control);
+}
+.jds-check__box svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: var(--transition-control);
+}
+.jds-check input:checked + .jds-check__box svg {
+  opacity: 1;
+  transform: scale(1);
+}
+.jds-check input:disabled ~ * {
+  opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------
+   SWITCH
+   --------------------------------------------------------------- */
+.jds-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+.jds-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.jds-switch__track {
+  width: 40px;
+  height: 23px;
+  position: relative;
+  transition: var(--transition-control);
+  flex: none;
+}
+.jds-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.jds-switch input:checked + .jds-switch__track .jds-switch__thumb {
+  transform: translateX(17px);
+}
+.jds-switch input:disabled + .jds-switch__track {
+  opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------
+   SEGMENTED CONTROL
+   --------------------------------------------------------------- */
+.jds-segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+}
+.jds-segmented__opt {
+  appearance: none;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-3);
+  height: 30px;
+  transition: var(--transition-control);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.jds-segmented__opt svg {
+  width: 15px;
+  height: 15px;
+}
+.jds-label .jds-infotip,.mk-h .jds-infotip{margin-left:var(--space-1)}
+.jds-label{display:flex;align-items:center;gap:var(--space-1)}
+.mk-tool .jds-field{max-width:520px}
+.mk-tool .jds-input{width:100%;box-sizing:border-box}
+.mk-tool{align-items:start}
+.mk-tool .jds-switch{margin-top:2px}
+.jds-infotip>.jds-btn{padding:0;width:22px;height:22px;min-width:0;line-height:1;border-radius:var(--radius-pill)}
+.mk-tool h4{margin-bottom:var(--space-2)}
+.mk-tool .jds-field{gap:var(--space-1)}
+.mk-tool .jds-field .jds-label:not(:first-child){margin-top:var(--space-3)!important}
+#body>div:first-child{padding-bottom:var(--space-3)}
+.mk-sec{padding:var(--space-4) 0}
+.mk-actions{align-items:center}
+.mk-diff{margin:var(--space-3) 0}
+.mk-diff div{padding:var(--space-3)}
+.mk-diff small{margin-bottom:var(--space-1)}
+#body>div:first-child{align-items:center!important}
+#body>.mk-help,#body>p.mk-help{margin:var(--space-2) 0}
+.jds-infotip>.jds-btn{font-weight:var(--weight-semibold);color:var(--text-subtle)}
