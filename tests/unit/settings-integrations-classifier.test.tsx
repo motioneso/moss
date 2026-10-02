@@ -209,115 +209,29 @@ async function flush(): Promise<void> {
 }
 
 describe("classifierSectionState (record-derived, fixed priority)", () => {
+  const base = {
+    enabled: true,
+    classifierEnabled: true,
+    toolCount: 1,
+    preparing: false,
+    prepareStatus: null,
+    prepareFailed: false,
+    draftCount: 0,
+    saved: []
+  } as const;
+
   const cases: readonly [ClassifierSectionState, Record<string, unknown>][] = [
-    [
-      "disconnected",
-      {
-        enabled: false,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 0,
-        saved: []
-      }
-    ],
-    [
-      "no-tools",
-      {
-        enabled: true,
-        toolCount: 0,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 0,
-        saved: []
-      }
-    ],
-    [
-      "preparing",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: true,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 0,
-        saved: []
-      }
-    ],
-    [
-      "failed",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: "unavailable",
-        prepareFailed: false,
-        draftCount: 0,
-        saved: []
-      }
-    ],
-    [
-      "failed",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: true,
-        draftCount: 0,
-        saved: []
-      }
-    ],
-    [
-      "review",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 2,
-        saved: [savedEntry({ state: "stale" })]
-      }
-    ],
-    [
-      "stale",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 0,
-        saved: [savedEntry({ state: "stale" })]
-      }
-    ],
-    [
-      "approved",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 0,
-        saved: [savedEntry()]
-      }
-    ],
-    [
-      "not-prepared",
-      {
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
-        draftCount: 0,
-        saved: []
-      }
-    ]
+    ["disconnected", { ...base, enabled: false }],
+    ["no-tools", { ...base, toolCount: 0 }],
+    ["preparing", { ...base, preparing: true }],
+    ["failed", { ...base, prepareStatus: "unavailable" }],
+    ["failed", { ...base, prepareFailed: true }],
+    ["review", { ...base, draftCount: 2, saved: [savedEntry({ state: "stale" })] }],
+    ["stale", { ...base, saved: [savedEntry({ state: "stale" })] }],
+    ["off", { ...base, classifierEnabled: false, saved: [savedEntry()] }],
+    ["risk-needed", { ...base, saved: [savedEntry({ reviewedRisk: null })] }],
+    ["approved", { ...base, saved: [savedEntry()] }],
+    ["not-prepared", { ...base }]
   ];
 
   for (const [expected, input] of cases) {
@@ -329,15 +243,24 @@ describe("classifierSectionState (record-derived, fixed priority)", () => {
   it("drafts beat a stale saved review, and stale beats approved", () => {
     expect(
       classifierSectionState({
-        enabled: true,
-        toolCount: 1,
-        preparing: false,
-        prepareStatus: null,
-        prepareFailed: false,
+        ...base,
         draftCount: 1,
         saved: [savedEntry({ state: "stale" })]
       })
     ).toBe("review");
+  });
+
+  it("a saved review with no risk is risk-needed, never approved; the switch off outranks both", () => {
+    expect(classifierSectionState({ ...base, saved: [savedEntry({ reviewedRisk: null })] })).toBe(
+      "risk-needed"
+    );
+    expect(
+      classifierSectionState({
+        ...base,
+        classifierEnabled: false,
+        saved: [savedEntry({ reviewedRisk: null })]
+      })
+    ).toBe("off");
   });
 });
 
@@ -367,30 +290,44 @@ describe("ordinaryEnabledToolNames and classifierEligibility", () => {
   it("names every reason a tool is out", () => {
     const detail = baseDetail({ mutedTools: ["ToolA"] });
     const ordinary = ordinaryEnabledToolNames(detail);
-    expect(classifierEligibility(tool(), undefined, ordinary).reasons).toEqual([
+    expect(classifierEligibility(tool(), undefined, ordinary, true).reasons).toEqual([
       "Off for ordinary chat, so the classifier cannot use it.",
       "Not reviewed yet."
     ]);
     expect(
-      classifierEligibility(tool(), savedEntry({ reviewedRisk: null }), ordinary).reasons
+      classifierEligibility(tool(), savedEntry({ reviewedRisk: null }), ordinary, true).reasons
     ).toEqual(["Off for ordinary chat, so the classifier cannot use it.", "Risk not chosen."]);
-    expect(classifierEligibility(tool(), savedEntry({ state: "stale" }), ordinary).reasons).toEqual(
-      [
-        "Off for ordinary chat, so the classifier cannot use it.",
-        "The connection changed this tool since it was reviewed."
-      ]
-    );
+    expect(
+      classifierEligibility(tool(), savedEntry({ state: "stale" }), ordinary, true).reasons
+    ).toEqual([
+      "Off for ordinary chat, so the classifier cannot use it.",
+      "The connection changed this tool since it was reviewed."
+    ]);
     const unlocked = baseDetail();
     expect(
       classifierEligibility(
         tool(),
         savedEntry({ optIn: false }),
-        ordinaryEnabledToolNames(unlocked)
+        ordinaryEnabledToolNames(unlocked),
+        true
       ).reasons
     ).toEqual(["Not allowed for the classifier yet."]);
     expect(
-      classifierEligibility(tool(), savedEntry(), ordinaryEnabledToolNames(unlocked)).eligible
+      classifierEligibility(tool(), savedEntry(), ordinaryEnabledToolNames(unlocked), true).eligible
     ).toBe(true);
+    // The connection switch off is its own reason, even for an otherwise usable tool.
+    expect(
+      classifierEligibility(tool(), savedEntry(), ordinaryEnabledToolNames(unlocked), false).reasons
+    ).toEqual(["The connection switch is off."]);
+    // A schema-combinator tool is named, not silently counted.
+    expect(
+      classifierEligibility(
+        tool({ inputSchema: { anyOf: [] } }),
+        undefined,
+        ordinaryEnabledToolNames(unlocked),
+        true
+      ).reasons
+    ).toEqual(["This tool's schema is too complex to prepare."]);
   });
 
   it("maps draft failures to plain words", () => {
@@ -598,5 +535,118 @@ describe("IntegrationClassifierSection", () => {
     );
     expect(text()).toContain("Locked");
     expect(text()).toContain("Off for ordinary chat");
+  });
+
+  it("shows the cost and sharing notice open, before the Prepare button (blocker 1)", async () => {
+    await render(baseDetail());
+    const rendered = text();
+    expect(rendered).toContain(DISCLOSURE.sent);
+    expect(rendered).toContain(DISCLOSURE.provider);
+    expect(rendered).toContain(DISCLOSURE.cost);
+    expect(rendered).toContain(DISCLOSURE.excluded);
+    // No collapsed container that would hide the body while Prepare is clickable.
+    expect(renderer!.root.findAllByType("details")).toHaveLength(0);
+    // The notice body precedes the Prepare button in render order.
+    expect(rendered.indexOf(DISCLOSURE.sent)).toBeLessThan(rendered.indexOf("Prepare 1 tool"));
+  });
+
+  it("says why a saved tool is out when it is off for ordinary chat (blocker 2)", async () => {
+    await render(
+      baseDetail({
+        classifierEnabled: true,
+        tools: [tool({ name: "ToolA" })],
+        mutedTools: ["ToolA"],
+        classifierPreparation: [savedEntry()]
+      })
+    );
+    expect(text()).toContain("Risk: Only reads");
+    expect(text()).toContain("Off for ordinary chat, so the classifier cannot use it.");
+  });
+
+  it("says why saved tools are out when the connection switch is off (blocker 2)", async () => {
+    await render(
+      baseDetail({
+        classifierEnabled: false,
+        classifierPreparation: [savedEntry()]
+      })
+    );
+    expect(text()).toContain("The classifier is off for this connection");
+    expect(text()).toContain("The connection switch is off.");
+    expect(text()).not.toContain("Current");
+  });
+
+  it("shows Risk needed for a saved tool with no risk, never Approved or Current (blocker 2)", async () => {
+    await render(
+      baseDetail({
+        classifierEnabled: true,
+        classifierPreparation: [savedEntry({ reviewedRisk: null })]
+      })
+    );
+    expect(text()).toContain("Risk needed");
+    expect(text()).toContain("Risk not chosen.");
+    expect(text()).not.toContain("Approved");
+    expect(text()).not.toContain("Current");
+    expect(selectByLabel("Risk for ToolA")).toBeTruthy();
+  });
+
+  it("hides 'Prepare N more' while a review is open (item 3)", async () => {
+    h.prepare.mockResolvedValue(approvedPrepare([draft()], { remaining: 3 }));
+    await render(baseDetail());
+    await act(async () => {
+      hostButton("Prepare 1 tool").props.onClick();
+    });
+    await flush();
+    expect(text()).toContain("Review required");
+    expect(
+      renderer!.root
+        .findAllByType("button")
+        .find((node) => flatten(node.props.children) === "Prepare 3 more")
+    ).toBeUndefined();
+  });
+
+  it("shows the real prepare error, not the missing-model message (item 4)", async () => {
+    h.prepare.mockRejectedValue(new Error("The preparation service is unavailable."));
+    await render(baseDetail());
+    await act(async () => {
+      hostButton("Prepare 1 tool").props.onClick();
+    });
+    await flush();
+    expect(text()).toContain("The preparation service is unavailable.");
+    expect(text()).not.toContain("No default chat model is set.");
+  });
+
+  it("keeps a saved tool's candidate source when an edit is saved", async () => {
+    await render(
+      baseDetail({
+        classifierEnabled: true,
+        classifierPreparation: [savedEntry({ candidateSource: "lights" })]
+      })
+    );
+    await act(async () => {
+      renderer!.root
+        .findAllByType("button")
+        .find((node) => node.props["aria-label"] === "Edit ToolA review")!
+        .props.onClick();
+    });
+    await act(async () => {
+      hostButton("Save").props.onClick();
+    });
+    await flush();
+    expect(h.save).toHaveBeenCalledWith(
+      "conn-1",
+      "ToolA",
+      expect.objectContaining({ candidateSource: "lights" })
+    );
+  });
+
+  it("does not badge a saved review as a draft", async () => {
+    await render(baseDetail({ classifierEnabled: true, classifierPreparation: [savedEntry()] }));
+    await act(async () => {
+      renderer!.root
+        .findAllByType("button")
+        .find((node) => node.props["aria-label"] === "Edit ToolA review")!
+        .props.onClick();
+    });
+    expect(text()).not.toContain("Draft");
   });
 });

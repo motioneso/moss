@@ -53,9 +53,9 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_classifier_review",
       description:
-        "The classifier section on a connection reviews each tool's description, reply and risk " +
-        "before use. Drafts look different from saved reviews, every unusable tool names why, and " +
-        "the connection switch never opts a tool in."
+        "Before Prepare sends tool definitions to a model, the classifier section shows what is " +
+        "sent and its cost. It reviews each tool's description, reply and risk; every unusable " +
+        "tool names why, and the connection switch never opts a tool in."
     },
     {
       id: "integrations.connection_classifier_preparation",

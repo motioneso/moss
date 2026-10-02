@@ -175,14 +175,16 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "tools and lets the owner choose which are on for ordinary chat and which may repeat " +
       "identical calls. It also has a classifier section: a Let the classifier use this connection " +
       "switch that only marks the connection eligible, a note that messages and device names go " +
-      "to the classifier provider, and an explicit Prepare action that first shows which tool " +
-      "definitions are sent to the owner's default chat model and that preparing costs model " +
-      "usage. Prepared tools appear as drafts that look different from saved reviews; the owner " +
-      "edits each description and reply, chooses a risk, and switches on only the tools the " +
-      "classifier may use, so the connection switch never opts a tool in. Every unusable tool " +
-      "names why (off for ordinary chat, not reviewed, risk not chosen, changed since reviewed, " +
-      "or not allowed). A setup failure names the missing default chat model and links to " +
-      "Assistant & AI to choose one, and nothing is stored by a cancelled or failed prepare.",
+      "to the classifier provider, and a cost and sharing notice shown open above an explicit " +
+      "Prepare action that names which tool definitions are sent to the owner's default chat " +
+      "model and that preparing costs model usage. Prepared tools appear as drafts that look " +
+      "different from saved reviews; the owner edits each description and reply, chooses a risk, " +
+      "and switches on only the tools the classifier may use, so the connection switch never " +
+      "opts a tool in. Every unusable tool names why (connection switch off, off for ordinary " +
+      "chat, not reviewed, risk not chosen, changed since reviewed, or not allowed), and a saved " +
+      "tool with no risk shows Risk needed rather than Approved. A missing or unsupported default " +
+      "chat model is named and links to Assistant & AI to choose one; any other preparation error " +
+      "shows the server's own message. Nothing is stored by a cancelled or failed prepare.",
     path: "/settings?section=integrations",
     scope: "user"
   },

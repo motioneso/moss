@@ -45,6 +45,8 @@ export type ClassifierSectionState =
   | "failed"
   | "review"
   | "stale"
+  | "off"
+  | "risk-needed"
   | "approved";
 
 export const CLASSIFIER_RISK_OPTIONS: readonly {
@@ -69,6 +71,7 @@ const OTHER_GROUP = "Other";
 
 export interface ClassifierStateInput {
   readonly enabled: boolean;
+  readonly classifierEnabled: boolean;
   readonly toolCount: number;
   readonly preparing: boolean;
   readonly prepareStatus: PrepareIntegrationClassifierResponse["status"] | null;
@@ -78,8 +81,9 @@ export interface ClassifierStateInput {
 }
 
 /**
- * Pick the section body in a fixed priority so a stale review can never be offered for approval and
- * a failed prepare is never hidden behind an old approved state.
+ * Pick the section body in a fixed priority so a stale review can never be offered for approval, a
+ * failed prepare is never hidden behind an old approved state, and a saved tool that cannot be used
+ * is never labelled "Approved / Current".
  */
 export function classifierSectionState(input: ClassifierStateInput): ClassifierSectionState {
   if (!input.enabled) return "disconnected";
@@ -91,6 +95,8 @@ export function classifierSectionState(input: ClassifierStateInput): ClassifierS
   if (input.prepareFailed) return "failed";
   if (input.draftCount > 0) return "review";
   if (input.saved.some((entry) => entry.state === "stale")) return "stale";
+  if (!input.classifierEnabled && input.saved.length > 0) return "off";
+  if (input.saved.some((entry) => entry.reviewedRisk === null)) return "risk-needed";
   if (input.saved.length > 0) return "approved";
   return "not-prepared";
 }
@@ -125,21 +131,34 @@ export interface ClassifierEligibility {
   readonly reasons: readonly string[];
 }
 
+const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
+
+/** A tool whose schema cannot be expressed as a bounded menu is ineligible (mirrors 2b.3). */
+export function hasRootCombinator(schema: Record<string, unknown> | null): boolean {
+  return schema !== null && ROOT_COMBINATORS.some((key) => key in schema);
+}
+
 export function classifierEligibility(
   tool: IntegrationToolDescriptor,
   entry: IntegrationClassifierToolPreparation | undefined,
-  ordinaryEnabled: ReadonlySet<string>
+  ordinaryEnabled: ReadonlySet<string>,
+  classifierEnabled: boolean
 ): ClassifierEligibility {
   const reasons: string[] = [];
+  if (!classifierEnabled) reasons.push("The connection switch is off.");
   if (!ordinaryEnabled.has(tool.name)) {
     reasons.push("Off for ordinary chat, so the classifier cannot use it.");
   }
+  const tooComplex = hasRootCombinator(tool.inputSchema);
   if (!entry) {
-    reasons.push("Not reviewed yet.");
+    reasons.push(
+      tooComplex ? "This tool's schema is too complex to prepare." : "Not reviewed yet."
+    );
     return { eligible: false, reasons };
   }
   if (entry.state === "stale")
     reasons.push("The connection changed this tool since it was reviewed.");
+  if (tooComplex) reasons.push("This tool's schema is too complex to prepare.");
   if (entry.reviewedRisk === null) reasons.push("Risk not chosen.");
   if (!entry.optIn) reasons.push("Not allowed for the classifier yet.");
   return { eligible: reasons.length === 0, reasons };
@@ -188,6 +207,8 @@ interface DraftRow {
   readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
   readonly reviewedRisk: IntegrationClassifierRisk | null;
   readonly optIn: boolean;
+  /** Only a saved entry carries a candidate source today; 2b.5 adds it to drafts. */
+  readonly candidateSource?: string;
 }
 
 function draftToRow(draft: IntegrationClassifierToolDraft): DraftRow {
@@ -210,7 +231,8 @@ function entryToRow(entry: IntegrationClassifierToolPreparation): DraftRow {
     replyTemplate: entry.replyTemplate,
     arguments: entry.arguments,
     reviewedRisk: entry.reviewedRisk,
-    optIn: entry.optIn
+    optIn: entry.optIn,
+    ...(entry.candidateSource !== undefined ? { candidateSource: entry.candidateSource } : {})
   };
 }
 
@@ -221,6 +243,7 @@ function rowBody(row: DraftRow): SaveIntegrationClassifierToolRequest {
     description: row.description,
     arguments: row.arguments,
     replyTemplate: row.replyTemplate,
+    ...(row.candidateSource !== undefined ? { candidateSource: row.candidateSource } : {}),
     reviewedFingerprint: row.definitionFingerprint
   };
 }
@@ -238,6 +261,7 @@ export function IntegrationClassifierSection(props: {
     PrepareIntegrationClassifierResponse["status"] | null
   >(null);
   const [prepareFailed, setPrepareFailed] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
   const [failedDrafts, setFailedDrafts] = useState<
     Readonly<Record<string, IntegrationClassifierDraftFailure>>
   >({});
@@ -260,6 +284,7 @@ export function IntegrationClassifierSection(props: {
 
   const state = classifierSectionState({
     enabled: detail.enabled,
+    classifierEnabled: detail.classifierEnabled,
     toolCount: detail.tools.length,
     preparing,
     prepareStatus,
@@ -292,6 +317,7 @@ export function IntegrationClassifierSection(props: {
         setDrafts({});
         setPrepareStatus(null);
         setPrepareFailed(false);
+        setPrepareError(null);
         setFailedDrafts({});
       }
       await invalidate();
@@ -309,6 +335,7 @@ export function IntegrationClassifierSection(props: {
     setBusy(true);
     setPreparing(true);
     setPrepareFailed(false);
+    setPrepareError(null);
     try {
       if (!detail.classifierEnabled) {
         await updateIntegration(detail.id, { classifierEnabled: true });
@@ -337,7 +364,7 @@ export function IntegrationClassifierSection(props: {
       if (controller.signal.aborted) return;
       setPrepareFailed(true);
       setPrepareStatus(null);
-      reportError(error);
+      setPrepareError(readError(error));
     } finally {
       setPreparing(false);
       setBusy(false);
@@ -374,6 +401,7 @@ export function IntegrationClassifierSection(props: {
     setDrafts({});
     setPrepareStatus(null);
     setPrepareFailed(false);
+    setPrepareError(null);
     setFailedDrafts({});
   };
 
@@ -454,9 +482,13 @@ export function IntegrationClassifierSection(props: {
               ? "Review required"
               : state === "stale"
                 ? "Needs review"
-                : state === "approved"
-                  ? "Approved"
-                  : "Not prepared";
+                : state === "off"
+                  ? "Off"
+                  : state === "risk-needed"
+                    ? "Risk needed"
+                    : state === "approved"
+                      ? "Approved"
+                      : "Not prepared";
 
   const headBadge =
     state === "approved" ? (
@@ -469,22 +501,29 @@ export function IntegrationClassifierSection(props: {
       <Badge tone="amber">{`${reviewedCount} of ${draftCount} reviewed`}</Badge>
     ) : state === "disconnected" ? (
       <Badge tone="neutral">Disconnected</Badge>
+    ) : state === "off" ? (
+      <Badge tone="neutral">Off</Badge>
     ) : null;
 
-  const prepareCount = ordinaryEnabled.size;
+  // Tools a prepare request would actually draft: ordinary-chat available and expressible as a
+  // bounded menu. Schema-combinator tools are skipped by 2b.3, so they must not inflate the count.
+  const prepareCount = detail.tools.filter(
+    (tool) => ordinaryEnabled.has(tool.name) && !hasRootCombinator(tool.inputSchema)
+  ).length;
 
   const renderEditor = (
     row: DraftRow,
     tool: IntegrationToolDescriptor | undefined,
     onChange: (patch: Partial<DraftRow>) => void,
-    actions: ReactNode
+    actions: ReactNode,
+    isDraft: boolean
   ) => {
     const hint = tool ? toolHint(tool) : { text: "", conflict: false };
     return (
       <div className="clsf__tool" key={row.toolName}>
         <div className="clsf__toolhead">
           <strong>{row.toolName}</strong>
-          <Badge tone="amber">Draft</Badge>
+          {isDraft ? <Badge tone="amber">Draft</Badge> : null}
         </div>
         <Field label="Description the classifier sees">
           <input
@@ -568,83 +607,105 @@ export function IntegrationClassifierSection(props: {
         </div>
       );
     }
+    const tool = detail.tools.find((candidate) => candidate.name === entry.toolName);
     const editRow = edits[entry.toolName];
-    if (editRow) {
-      return renderEditor(
-        editRow,
-        detail.tools.find((tool) => tool.name === entry.toolName),
-        (patch) => updateEdit(entry.toolName, patch),
+    const eligibility = tool
+      ? classifierEligibility(tool, entry, ordinaryEnabled, detail.classifierEnabled)
+      : { eligible: false, reasons: ["No longer available on the connection."] };
+    // A saved review with no risk is the mockup's "Risk needed" state: show the editor so the owner
+    // can pick a risk and save, never an "Approved / Current" row.
+    const pendingRisk = entry.reviewedRisk === null;
+    if (editRow || pendingRisk) {
+      const row = editRow ?? entryToRow(entry);
+      return (
         <>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => void saveEdit(editRow)}
-          >
-            Save
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            onClick={() =>
-              setEdits((prev) => {
-                const next = { ...prev };
-                delete next[entry.toolName];
-                return next;
-              })
-            }
-          >
-            Cancel
-          </Button>
+          {eligibility.reasons.length > 0 ? (
+            <Note key={`${entry.toolName}-why`}>{eligibility.reasons.join(" ")}</Note>
+          ) : null}
+          {renderEditor(
+            row,
+            tool,
+            (patch) => updateEdit(entry.toolName, patch),
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void saveEdit(row)}
+              >
+                Save
+              </Button>
+              {editRow ? (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  onClick={() =>
+                    setEdits((prev) => {
+                      const next = { ...prev };
+                      delete next[entry.toolName];
+                      return next;
+                    })
+                  }
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </>,
+            false
+          )}
         </>
       );
     }
     return (
-      <Row
-        key={entry.toolName}
-        name={entry.toolName}
-        desc={`Risk: ${riskLabel(entry.reviewedRisk)}`}
-        control={
-          <span className="intg__controls">
-            <Button
-              variant="quiet"
-              size="sm"
-              aria-label={`Edit ${entry.toolName} review`}
-              onClick={() => setEdits((prev) => ({ ...prev, [entry.toolName]: entryToRow(entry) }))}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="quiet"
-              size="sm"
-              aria-label={`Remove ${entry.toolName} review`}
-              onClick={() => removeReview(entry)}
-            >
-              Remove
-            </Button>
-            <Switch
-              ariaLabel={`Classifier may use ${entry.toolName}`}
-              checked={entry.optIn}
-              disabled={busy || entry.reviewedRisk === null}
-              onChange={(checked) => void setOptIn(entry, checked)}
-            />
-          </span>
-        }
-      />
+      <div className="clsf__tool" key={entry.toolName}>
+        <Row
+          name={entry.toolName}
+          desc={`Risk: ${riskLabel(entry.reviewedRisk)}`}
+          control={
+            <span className="intg__controls">
+              <Button
+                variant="quiet"
+                size="sm"
+                aria-label={`Edit ${entry.toolName} review`}
+                onClick={() =>
+                  setEdits((prev) => ({ ...prev, [entry.toolName]: entryToRow(entry) }))
+                }
+              >
+                Edit
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
+                aria-label={`Remove ${entry.toolName} review`}
+                onClick={() => removeReview(entry)}
+              >
+                Remove
+              </Button>
+              <Switch
+                ariaLabel={`Classifier may use ${entry.toolName}`}
+                checked={entry.optIn}
+                disabled={busy || entry.reviewedRisk === null}
+                onChange={(checked) => void setOptIn(entry, checked)}
+              />
+            </span>
+          }
+        />
+        {eligibility.reasons.length > 0 ? <Note>{eligibility.reasons.join(" ")}</Note> : null}
+      </div>
     );
   };
 
   const renderTool = (tool: IntegrationToolDescriptor) => {
     const draft = drafts[tool.name];
     if (draft) {
-      return renderEditor(draft, tool, (patch) => updateDraft(tool.name, patch), null);
+      return renderEditor(draft, tool, (patch) => updateDraft(tool.name, patch), null, true);
     }
     const entry = saved.find((savedEntry) => savedEntry.toolName === tool.name);
     if (entry) return renderSavedRow(entry);
     const failure = failedDrafts[tool.name];
     const reasons = failure
       ? [draftFailureReason(failure)]
-      : classifierEligibility(tool, undefined, ordinaryEnabled).reasons;
+      : classifierEligibility(tool, undefined, ordinaryEnabled, detail.classifierEnabled).reasons;
     return (
       <div className="clsf__ineligible" key={tool.name}>
         <strong>{tool.name}</strong>
@@ -681,17 +742,21 @@ export function IntegrationClassifierSection(props: {
     }
     if (state === "failed") {
       const message =
-        prepareStatus === "unsupported_model"
-          ? "Your default chat model cannot draft setup notes."
-          : "No default chat model is set.";
+        prepareStatus === "unavailable"
+          ? "No default chat model is set."
+          : prepareStatus === "unsupported_model"
+            ? "Your default chat model cannot draft setup notes."
+            : (prepareError ?? "Preparing failed.");
       return (
         <>
           <Note>{message}</Note>
-          <Note>
-            <a href="/settings?section=assistant">
-              Choose a chat model that supports structured output
-            </a>
-          </Note>
+          {prepareStatus === "unavailable" || prepareStatus === "unsupported_model" ? (
+            <Note>
+              <a href="/settings?section=assistant">
+                Choose a chat model that supports structured output
+              </a>
+            </Note>
+          ) : null}
           <Note>Nothing changed.</Note>
           <div className="clsf__actions">
             <Button
@@ -732,17 +797,10 @@ export function IntegrationClassifierSection(props: {
               Discard draft
             </Button>
           </div>
-          {remaining > 0 && !busy ? (
-            <div className="clsf__actions">
-              <Button size="sm" variant="secondary" onClick={() => void runPrepare(false)}>
-                {`Prepare ${remaining} more`}
-              </Button>
-            </div>
-          ) : null}
         </>
       );
     }
-    // stale and approved both show the saved rows; per-row controls differ.
+    // stale, off, risk-needed and approved show the saved rows; per-row controls differ.
     return (
       <>
         {state === "stale" ? (
@@ -751,6 +809,13 @@ export function IntegrationClassifierSection(props: {
             <Note>Preparing again costs one more default model request.</Note>
           </>
         ) : null}
+        {state === "off" ? (
+          <Note>
+            The classifier is off for this connection. These saved tools stay out until you turn it
+            on.
+          </Note>
+        ) : null}
+        {state === "risk-needed" ? <Note>Pick a risk for each tool.</Note> : null}
         {detail.tools.map(renderTool)}
         {orphanSaved.map((entry) => renderSavedRow(entry))}
         {remaining > 0 && state === "approved" ? (
@@ -787,6 +852,15 @@ export function IntegrationClassifierSection(props: {
         {headBadge}
       </div>
       <Note>Messages and device names go to the classifier provider.</Note>
+      {state === "disconnected" || state === "no-tools" ? null : (
+        <div className="clsf__disclosure">
+          <strong>What is sent, and what it costs</strong>
+          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.sent}</Note>
+          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.provider}</Note>
+          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.cost}</Note>
+          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.excluded}</Note>
+        </div>
+      )}
       {body}
       {state === "not-prepared" && prepareCount > 0 ? (
         <>
@@ -797,18 +871,6 @@ export function IntegrationClassifierSection(props: {
           </div>
           <Note>Your default model reads the tool list once.</Note>
         </>
-      ) : null}
-      {state === "not-prepared" ||
-      state === "failed" ||
-      state === "review" ||
-      state === "preparing" ? (
-        <details className="clsf__disclosure">
-          <summary>What is sent, and what it costs</summary>
-          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.sent}</Note>
-          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.provider}</Note>
-          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.cost}</Note>
-          <Note>{INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE.excluded}</Note>
-        </details>
       ) : null}
     </Group>
   );
