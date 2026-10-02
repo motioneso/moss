@@ -30,6 +30,18 @@
   background: var(--accent);
 }
 
+.chatd__status--offline::before {
+  background: var(--text-subtle);
+}
+
+.chatd-connect-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  text-decoration: none;
+}
+
 .chatd__hbtn {
   border-radius: var(--radius-md);
   border: 0;

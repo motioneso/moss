@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUp, Mic, Paperclip, Square, X } from "lucide-react";
 import {
@@ -34,7 +35,7 @@ import {
   removePendingAttachment,
   type PendingAttachment
 } from "./attachments";
-import { ConnectProviderEmpty } from "./connect-provider-empty";
+import { CONNECT_PROVIDER_HREF, ConnectProviderEmpty } from "./connect-provider-empty";
 import {
   activeSlashQuery,
   composeTurnText,
@@ -66,6 +67,8 @@ export function Composer(props: {
   readonly isSending: boolean;
   readonly sendError: string | null;
   readonly needsProvider: boolean;
+  /** No chat model is available: the message box is replaced by a connect-provider action. */
+  readonly noModelAvailable?: boolean;
   readonly lockedModelUnavailable: boolean;
   /** #1133 — attach UI is hidden and pending chips are dropped in private/incognito chat. */
   readonly privateMode: boolean;
@@ -446,91 +449,100 @@ export function Composer(props: {
           onSelect={(skill) => selectSkill(skill.id)}
         />
       ) : null}
-      <div className={`chatd-input${props.readOnly ? " is-readonly" : ""}`}>
-        <textarea
-          ref={textareaRef}
-          aria-label={assistantName ? `Message ${assistantName}` : "Message"}
-          aria-controls={skillMenuOpen ? "chat-skill-listbox" : undefined}
-          aria-expanded={skillMenuOpen}
-          aria-autocomplete={skillMenuOpen ? "list" : undefined}
-          aria-activedescendant={
-            skillMenuOpen && activeSkill ? `chat-skill-listbox-option-${activeSkill.id}` : undefined
-          }
-          aria-haspopup={skillMenuOpen ? "listbox" : undefined}
-          disabled={props.readOnly || props.lockedModelUnavailable}
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-          placeholder={
-            props.lockedModelUnavailable
-              ? "Chat locked — model unavailable"
-              : props.readOnly
-                ? "Read-only history"
-                : assistantName
-                  ? `Message ${assistantName}…`
-                  : "Message…"
-          }
-          rows={1}
-          value={text}
-        />
-        {!props.privateMode ? (
-          <>
-            <input
-              ref={fileInputRef}
-              accept={ATTACHMENT_ACCEPT}
-              aria-hidden="true"
-              className="chatd-attach__input"
-              multiple
-              tabIndex={-1}
-              type="file"
-              onChange={onFileInputChange}
-            />
-            <button
-              aria-label="Attach files"
-              className="chatd-attach__btn"
-              disabled={props.readOnly || props.lockedModelUnavailable}
-              title="Attach files (or paste an image)"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip size={16} aria-hidden="true" />
-            </button>
-          </>
-        ) : null}
-        <button
-          aria-label={recording ? "Stop recording" : "Record voice message"}
-          className={`chatd-mic${recording ? " is-recording" : ""}`}
-          disabled={micDisabled}
-          title={micTitle}
-          type="button"
-          onClick={recording ? stopRecording : () => void startRecording()}
-        >
-          {recording ? (
-            <Square size={15} aria-hidden="true" fill="currentColor" />
-          ) : (
-            <Mic size={17} aria-hidden="true" />
-          )}
-        </button>
-        <button
-          aria-label={props.isSending ? "Stop generating" : "Send"}
-          className="chatd-send"
-          disabled={
-            props.readOnly ||
-            props.lockedModelUnavailable ||
-            (!props.isSending &&
-              ((!composedText && readyAttachments.length === 0) || hasUploadingAttachment(pending)))
-          }
-          title={props.isSending ? "Stop" : "Send"}
-          type="button"
-          onClick={props.isSending ? stop : send}
-        >
-          {props.isSending ? (
-            <Square size={15} aria-hidden="true" fill="currentColor" />
-          ) : (
-            <ArrowUp size={17} aria-hidden="true" />
-          )}
-        </button>
-      </div>
+      {props.noModelAvailable ? (
+        <Link className="primary-button chatd-connect-cta" to={CONNECT_PROVIDER_HREF}>
+          Connect a provider
+        </Link>
+      ) : (
+        <div className={`chatd-input${props.readOnly ? " is-readonly" : ""}`}>
+          <textarea
+            ref={textareaRef}
+            aria-label={assistantName ? `Message ${assistantName}` : "Message"}
+            aria-controls={skillMenuOpen ? "chat-skill-listbox" : undefined}
+            aria-expanded={skillMenuOpen}
+            aria-autocomplete={skillMenuOpen ? "list" : undefined}
+            aria-activedescendant={
+              skillMenuOpen && activeSkill
+                ? `chat-skill-listbox-option-${activeSkill.id}`
+                : undefined
+            }
+            aria-haspopup={skillMenuOpen ? "listbox" : undefined}
+            disabled={props.readOnly || props.lockedModelUnavailable}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            placeholder={
+              props.lockedModelUnavailable
+                ? "Chat locked — model unavailable"
+                : props.readOnly
+                  ? "Read-only history"
+                  : assistantName
+                    ? `Message ${assistantName}…`
+                    : "Message…"
+            }
+            rows={1}
+            value={text}
+          />
+          {!props.privateMode ? (
+            <>
+              <input
+                ref={fileInputRef}
+                accept={ATTACHMENT_ACCEPT}
+                aria-hidden="true"
+                className="chatd-attach__input"
+                multiple
+                tabIndex={-1}
+                type="file"
+                onChange={onFileInputChange}
+              />
+              <button
+                aria-label="Attach files"
+                className="chatd-attach__btn"
+                disabled={props.readOnly || props.lockedModelUnavailable}
+                title="Attach files (or paste an image)"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip size={16} aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
+          <button
+            aria-label={recording ? "Stop recording" : "Record voice message"}
+            className={`chatd-mic${recording ? " is-recording" : ""}`}
+            disabled={micDisabled}
+            title={micTitle}
+            type="button"
+            onClick={recording ? stopRecording : () => void startRecording()}
+          >
+            {recording ? (
+              <Square size={15} aria-hidden="true" fill="currentColor" />
+            ) : (
+              <Mic size={17} aria-hidden="true" />
+            )}
+          </button>
+          <button
+            aria-label={props.isSending ? "Stop generating" : "Send"}
+            className="chatd-send"
+            disabled={
+              props.readOnly ||
+              props.lockedModelUnavailable ||
+              (!props.isSending &&
+                ((!composedText && readyAttachments.length === 0) ||
+                  hasUploadingAttachment(pending)))
+            }
+            title={props.isSending ? "Stop" : "Send"}
+            type="button"
+            onClick={props.isSending ? stop : send}
+          >
+            {props.isSending ? (
+              <Square size={15} aria-hidden="true" fill="currentColor" />
+            ) : (
+              <ArrowUp size={17} aria-hidden="true" />
+            )}
+          </button>
+        </div>
+      )}
       {props.queuedText !== null ? (
         <div className="chatd-next" aria-live="polite">
           <button

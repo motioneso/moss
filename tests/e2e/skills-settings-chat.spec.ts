@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { createMockConnectorProviders, mockApi } from "./mock-api.js";
+import { createMockConnectorProviders } from "./mock-api.js";
+import { mockApi } from "./mock-chat-model.js";
 
 test("skills settings leads with the list and opens focused authoring flows", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

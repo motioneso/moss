@@ -111,7 +111,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "assistant",
     label: "Your assistant",
     description:
-      "Change the AI model for chat: choose which model answers, change model routing and response behavior. When YOLO is active for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as YOLO in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning YOLO off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > AI providers. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > AI providers) to turn on the microphone in chat.",
+      "Change the AI model for chat: choose which model answers, change model routing and response behavior. The chat panel header and message box follow whether a chat model is available: with none, the header reads Not connected and a Connect a provider link to this screen replaces the message box, and with an admin-locked model that is unavailable, the header reads Model unavailable and the message box is disabled. When YOLO is active for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as YOLO in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning YOLO off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > AI providers. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > AI providers) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
@@ -397,6 +397,20 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
       "versions keep working."
   },
   {
+    code: "core.ai.chat_no_model_available",
+    class: "prerequisite",
+    remediationRef: "core.ai.connect_chat_provider",
+    description:
+      "No chat model is available. The chat panel header reads Not connected, the message box is replaced by a Connect a provider link to Settings > Your assistant, and nothing can be sent."
+  },
+  {
+    code: "core.ai.chat_locked_model_unavailable",
+    class: "prerequisite",
+    remediationRef: "core.ai.restore_locked_chat_model",
+    description:
+      "The chat model an admin locked is unavailable. The chat panel header reads Model unavailable, the message box is disabled, and a warning explains how to restore it."
+  },
+  {
     code: "core.ai.api_key_live_chat_unavailable",
     class: "prerequisite",
     remediationRef: "core.ai.connect_cli_provider",
@@ -457,6 +471,20 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     description:
       "Open Settings > AI providers and press Retry beside the provider's update notice. If it " +
       "is held back again, it stays on the current version until a later release passes.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
+  },
+  {
+    id: "core.ai.connect_chat_provider",
+    description:
+      "Press Connect a provider in the chat panel, or open Settings > Your assistant, and connect a provider that can chat.",
+    path: "/settings?section=assistant",
+    scope: "user"
+  },
+  {
+    id: "core.ai.restore_locked_chat_model",
+    description:
+      "Ask an administrator to re-enable the locked chat model or clear the lock in Settings > AI providers.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

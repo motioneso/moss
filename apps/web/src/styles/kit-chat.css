@@ -86,6 +86,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  margin-top: var(--space-1);
 }
 
 .chatd__status::before {

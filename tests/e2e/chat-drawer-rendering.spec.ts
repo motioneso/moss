@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { createMockConnectorProviders, mockApi } from "./mock-api.js";
+import { createMockConnectorProviders } from "./mock-api.js";
+import { mockApi } from "./mock-chat-model.js";
 
 /**
  * Live chat drawer E2E — rendering and reconciliation.
