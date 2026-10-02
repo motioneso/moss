@@ -632,11 +632,14 @@ Owner: UI implementer. Depends on 3.4 (shadow records). Build the admin-only scr
 `docs/superpowers/mockups/classifier-gate/audit-log.html`: a day-grouped feed of every model call
 (classifier, chat answer, background task) with action, one-line outcome, time, kind, actual model name
 and result, and filters for kind, model, result and time. It shows the action taken, never the chat
-text. Reads through an admin-gated endpoint; empty, no-match and retention states as mocked. Retention
-is undecided (7 days proposed, awaiting Ben). Recording chat answers and background tasks widens logging beyond the gate, so the recording
-side needs its own spec note and Ben's confirmation before this task starts. Add the screen to the app
-map. Tests: a non-admin cannot read it, and a line older than 7 days is gone. Exit: live-path proof on a
-dev instance through the real screen.
+text. Reads through an admin-gated endpoint; empty and no-match states as mocked. Lines are kept
+indefinitely with no purge job (ruling 14); drop any retention notice from the mockup. Store each call
+as one flat row of short plain-text fields (time, kind, action, outcome, model name, result) so it
+renders directly as a web table and can be paged by time. Ben confirmed recording chat answers and
+background tasks (ruling 12) and indefinite keeping (ruling 14). The row never holds chat text,
+prompts, tool arguments or secrets. Add the screen to the app map. Tests: a non-admin cannot read it,
+a row carries no message text, and old rows remain readable. Exit: live-path proof on a dev instance
+through the real screen.
 
 ## Slice 4: prepare and turn on
 
@@ -799,7 +802,11 @@ These answers supersede the matching "Decisions still needed" entries below.
 12. **Model activity log replaces it.** An admin-only log of every model call (classifier, chat answer,
     background task) showing the action, outcome, model name and result, not the chat text, with
     filters. Ben ruled on 2026-10-01 that it covers all model calls, not only the classifier. Mockup
-    agreed. Build task 3.6. **Retention is not decided**: 7 days is proposed and awaits Ben.
+    agreed. Build task 3.6.
+14. **Model activity log is kept indefinitely.** No purge. Store it in a simple format that renders
+    well on the web and stays auditable for as long as possible (Ben, 2026-10-01). Shadow records
+    (ruling 10) still purge after 7 days because they hold message text; the activity log never
+    holds chat text.
 13. **Mockups agreed** for tasks 1.1 and 2b.1: `docs/superpowers/mockups/classifier-gate/`.
 
 Still open: the external candidate-dispatch proof (module-platform implementer).
