@@ -79,8 +79,8 @@ export function firstName(name: string, email: string): string {
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-export function greeting(): string {
-  const h = new Date().getHours();
+export function greeting(now: Date = new Date()): string {
+  const h = now.getHours();
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
@@ -322,12 +322,32 @@ export const TODAY_SECTION_LINKS = [
 
 /** Morning hero copy shared by the day-mode kicker and reader links. */
 export const MORNING_BRIEFING_TITLE = "Morning briefing";
+export const DAYTIME_BRIEFING_TITLE = "Today's briefing";
 export const MORNING_READ_FULL_LABEL = "Read the full morning briefing";
-export function morningHeroKicker(firstName: string | null): string {
+/** The day briefing is only "morning" before noon; later it is simply today's. */
+export function morningHeroKicker(firstName: string | null, now: Date = new Date()): string {
   const name = (firstName ?? "").trim();
-  return name
-    ? `${greeting()}, ${name} / ${MORNING_BRIEFING_TITLE}`
-    : `${greeting()} / ${MORNING_BRIEFING_TITLE}`;
+  const title = now.getHours() < 12 ? MORNING_BRIEFING_TITLE : DAYTIME_BRIEFING_TITLE;
+  return name ? `${greeting(now)}, ${name} / ${title}` : `${greeting(now)} / ${title}`;
+}
+
+export const BRIEFING_OFF_REASON = "Your morning briefing is switched off.";
+export const BRIEFING_FAILED_REASON = "Today's briefing failed to run.";
+export const BRIEFING_BLOCKED_REASON = "Today's briefing was blocked.";
+
+/** "07:00" -> "7:00 AM". Returns the raw value when it does not parse. */
+export function clockLabel(targetTime: string): string {
+  const match = targetTime.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return targetTime;
+  const hour = Number(match[1]);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${suffix}`;
+}
+
+export function briefingScheduledReason(targetTime: string, pastTarget: boolean): string {
+  return pastTarget
+    ? `It should have run at ${clockLabel(targetTime)}.`
+    : `It runs at ${clockLabel(targetTime)}.`;
 }
 
 /** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1). */

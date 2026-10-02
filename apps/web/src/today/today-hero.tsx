@@ -6,7 +6,11 @@ import { BriefingProse, type TodayMode } from "./evening-mode.js";
 import { BriefingStaleBanner } from "./briefing-freshness.js";
 import { plainBriefingText } from "./briefing-markdown.js";
 import {
+  BRIEFING_BLOCKED_REASON,
+  BRIEFING_FAILED_REASON,
   BRIEFING_NOT_READY_LABEL,
+  BRIEFING_OFF_REASON,
+  briefingScheduledReason,
   EVENING_READ_FULL_LABEL,
   EVENING_SOURCES_LABEL,
   MORNING_READ_FULL_LABEL,
@@ -76,6 +80,7 @@ export interface TodayHeroProps {
   readonly summary: ReactNode;
   readonly preparedAt: string | null;
   readonly readerControl: ReactNode | null;
+  readonly notReadyReason?: string | null;
   readonly weather: ReactNode;
   readonly sectionLinks?: ReactNode;
 }
@@ -86,6 +91,12 @@ export interface TodayHeroContentInput {
   readonly morningLoading: boolean;
   readonly morningRun: BriefingRunDto | null;
   readonly morningDefinitionId: string | null;
+  /** Schedule state for the not-ready reason; omitted means no reason is shown. */
+  readonly morningSchedule?: {
+    readonly enabled: boolean;
+    readonly targetTime: string;
+    readonly pastTarget: boolean;
+  };
   readonly morningSplit: { readonly headline: string; readonly rest: string } | null;
   readonly morningFreshness: SourceFreshnessV1 | null;
   readonly eveningRun: BriefingRunDto | null;
@@ -106,6 +117,19 @@ export interface TodayHeroContent {
   readonly summary: ReactNode;
   readonly preparedAt: string | null;
   readonly readerControl: ReactNode;
+  readonly notReadyReason: string | null;
+}
+
+/** Why the day briefing has no readable report: switched off, failed, or still to run. */
+export function morningNotReadyReason(
+  run: BriefingRunDto | null,
+  schedule: TodayHeroContentInput["morningSchedule"]
+): string | null {
+  if (!schedule) return null;
+  if (!schedule.enabled) return BRIEFING_OFF_REASON;
+  if (run?.status === "failed") return BRIEFING_FAILED_REASON;
+  if (run?.status === "blocked") return BRIEFING_BLOCKED_REASON;
+  return briefingScheduledReason(schedule.targetTime, schedule.pastTarget);
 }
 
 /** Assemble the hero's headline, summary, prepared line and reader control
@@ -133,7 +157,8 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
         headline: input.eveningSplit ? input.eveningSplit.headline : fallbackHeadline,
         summary: <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />,
         preparedAt: null,
-        readerControl: null
+        readerControl: null,
+        notReadyReason: null
       };
     }
     const rest = input.eveningSplit?.rest.trim() ?? "";
@@ -150,7 +175,8 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
         : null,
       readerControl: input.eveningRun ? (
         <EveningHeroLinks onOpenReader={input.onOpenEveningReader} />
-      ) : null
+      ) : null,
+      notReadyReason: null
     };
   }
   // The stale banner shows whenever freshness data exists, including with a
@@ -184,7 +210,13 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     headline: input.morningSplit ? input.morningSplit.headline : fallbackHeadline,
     summary,
     preparedAt,
-    readerControl: morningReadable ? <MorningHeroLinks onOpenReader={input.onOpenReader} /> : null
+    readerControl: morningReadable ? <MorningHeroLinks onOpenReader={input.onOpenReader} /> : null,
+    // Independent of assessmentShown: a switched-off briefing hides the assessment
+    // but still has no report, and that is exactly when the reason matters.
+    notReadyReason:
+      input.morningLoading || morningReadable
+        ? null
+        : morningNotReadyReason(input.morningRun, input.morningSchedule)
   };
 }
 
@@ -256,7 +288,11 @@ export function TodayHero(props: TodayHeroProps) {
           {props.readerControl ? (
             <div className="today-hero__links">{props.readerControl}</div>
           ) : (
-            <span className="today-hero__not-ready">{BRIEFING_NOT_READY_LABEL}</span>
+            <span className="today-hero__not-ready">
+              {props.notReadyReason
+                ? `${BRIEFING_NOT_READY_LABEL}. ${props.notReadyReason}`
+                : BRIEFING_NOT_READY_LABEL}
+            </span>
           )}
           {preparedTime !== null ? (
             <span className="today-hero__prepared-time">{preparedTime}</span>

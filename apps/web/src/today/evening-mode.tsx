@@ -527,7 +527,7 @@ function compactSummary(value: string): string {
   return `${text.slice(0, 217).trimEnd()}...`;
 }
 
-function parseTargetMinutes(value: string): number | null {
+export function parseTargetMinutes(value: string): number | null {
   const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
