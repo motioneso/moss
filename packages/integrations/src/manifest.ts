@@ -23,7 +23,9 @@ export const integrationsModuleManifest = {
     { method: "GET", path: "/api/integrations/:id" },
     { method: "PATCH", path: "/api/integrations/:id" },
     { method: "POST", path: "/api/integrations/:id/refresh" },
-    { method: "DELETE", path: "/api/integrations/:id" }
+    { method: "DELETE", path: "/api/integrations/:id" },
+    { method: "PUT", path: "/api/integrations/:id/classifier/tools/:toolName" },
+    { method: "DELETE", path: "/api/integrations/:id/classifier/tools/:toolName" }
   ],
   dataLifecycle: {
     exportSections: [],
@@ -39,6 +41,13 @@ export const integrationsModuleManifest = {
         "A connection's tool list is grouped, with each tool getting a per-tool switch to allow " +
         "repeated identical calls (off by default). Notes explain grandfathered connections and " +
         "point to Refresh tools when read/repeat hints are missing."
+    },
+    {
+      id: "integrations.connection_classifier_opt_in",
+      description:
+        "A connection can be opted into the chat classifier, one tool at a time. Each opt-in " +
+        "needs an owner-reviewed risk; a tool with no confirmed label stays out, and a changed " +
+        "tool definition marks the review stale until it is reviewed again."
     },
     {
       id: "integrations.credentials_paused",

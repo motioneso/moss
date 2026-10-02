@@ -1,5 +1,6 @@
 import type { CredentialPlacement, IntegrationDetail, IntegrationKind } from "@moss/shared";
 
+import { classifierPreparationView } from "./classifier-settings.js";
 import {
   effectiveEnabledTools,
   isGroupOptIn,
@@ -31,6 +32,16 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
   const enabled = effectiveEnabledTools(tools, state);
   const withGroups = withDerivedGroups(tools);
   const isDerivedOther = willDeriveGroups(tools);
+  const classifierState = {
+    enabled: row.enabled,
+    classifierEnabled: row.classifierEnabled,
+    lastError: row.lastError,
+    discoveredTools: tools,
+    enabledGroups: row.enabledGroups,
+    enabledTools: row.enabledTools,
+    mutedTools: row.mutedTools,
+    classifierPreparation: row.classifierPreparation
+  };
   const groupNames = [...new Set(withGroups.map((t) => t.group))].sort((a, b) =>
     a === OTHER_GROUP ? 1 : b === OTHER_GROUP ? -1 : 0
   );
@@ -60,7 +71,9 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     mutedTools: row.mutedTools,
     unsuppressedTools: row.unsuppressedTools,
     groupOptIn: isGroupOptIn(tools),
-    specPasted: row.specPasted
+    specPasted: row.specPasted,
+    classifierEnabled: row.classifierEnabled,
+    classifierPreparation: classifierPreparationView(classifierState)
   };
 }
 
