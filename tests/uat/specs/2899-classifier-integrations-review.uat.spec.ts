@@ -149,7 +149,9 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   await expect(
     page.getByText("Messages and device names go to the classifier provider.")
   ).toBeVisible();
-  await expect(page.getByText("What is sent, and what it costs")).toBeVisible();
+  // The cost and sharing notice body is open (not collapsed) before Prepare can be clicked.
+  await expect(page.getByText(/Each tool's name, description, group/)).toBeVisible();
+  await expect(page.getByText(/uses model usage/)).toBeVisible();
 
   // 4. Keyboard: focus the switch and toggle it with Space; it persists across a reload.
   await classifierSwitch.focus();
@@ -240,6 +242,33 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   await expect(page.getByText("Not prepared")).toBeVisible();
   detail = await fetchDetail(page, connectionId);
   expect(detail.classifierPreparation).toHaveLength(0);
+
+  // 9b. A saved review with no risk shows "Risk needed" and names the reason, never
+  //     "Approved / Current" (QA blocker 2).
+  const noRiskStatus = await page.evaluate(
+    async ({ connectionId: cid, fp }) => {
+      const response = await fetch(`/api/integrations/${cid}/classifier/tools/list_lights`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          optIn: false,
+          reviewedRisk: null,
+          description: "List all the lights.",
+          arguments: {},
+          replyTemplate: "Listed the lights.",
+          reviewedFingerprint: fp
+        })
+      });
+      return response.status;
+    },
+    { connectionId, fp: reviewedFingerprint }
+  );
+  expect(noRiskStatus).toBe(200);
+  await page.goto(`${requireBaseURL()}/settings?section=integrations&integration=${connectionId}`);
+  await expect(page.getByText("Risk needed")).toBeVisible();
+  await expect(page.getByText("Risk not chosen.")).toBeVisible();
+  await expect(page.getByText("Current")).toHaveCount(0);
+  await expect(page.getByText("Approved")).toHaveCount(0);
 
   // 10. The ordinary controls are still exactly as they were.
   await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeChecked();
