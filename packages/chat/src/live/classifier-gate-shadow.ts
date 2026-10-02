@@ -330,6 +330,19 @@ function toCompletion(outcome: GateOutcome): CompletionInput {
   }
 }
 
+/**
+ * The 3.4 record stores `module_id` and a bare `tool_name`, and rebuilds the comparison identity as
+ * `module_id.tool_name`. A first-party manifest tool name already carries its module prefix
+ * (`calendar.listVisibleEvents`), so strip it here; otherwise the identity would double the prefix
+ * and every shadow comparison would read as a mismatch. A tool with no matching prefix is unchanged.
+ */
+function toBareToolName(moduleId: string | undefined, toolName: string): string {
+  if (moduleId !== undefined && toolName.startsWith(`${moduleId}.`)) {
+    return toolName.slice(moduleId.length + 1);
+  }
+  return toolName;
+}
+
 function withTrace(
   decision: "would_handle" | "declined" | "cancelled",
   outcome: Extract<GateOutcome, { trace: unknown }>
@@ -338,7 +351,9 @@ function withTrace(
   return {
     decision,
     ...(trace.moduleId !== undefined ? { moduleId: trace.moduleId } : {}),
-    ...(trace.toolName !== undefined ? { toolName: trace.toolName } : {}),
+    ...(trace.toolName !== undefined
+      ? { toolName: toBareToolName(trace.moduleId, trace.toolName) }
+      : {}),
     ...(trace.confidence !== undefined ? { confidence: trace.confidence } : {}),
     ...(trace.lead !== undefined ? { margin: trace.lead } : {}),
     latencyMs: trace.latencyMs

@@ -277,7 +277,8 @@ describe("shadow decisions", () => {
         turnId: "turn-1",
         decision: "would_handle",
         moduleId: "calendar",
-        toolName: "calendar.listVisibleEvents"
+        // The 3.4 record stores module_id + a bare tool name; the comparison identity is their join.
+        toolName: "listVisibleEvents"
       })
     );
     expect(h.mint).toHaveBeenCalledWith("user-1", "turn-1", expect.any(Set));
