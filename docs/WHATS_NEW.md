@@ -39,6 +39,10 @@ feature that is not present in the image you are running.
 
 - **The sorting model is now the classifier.** The assistant settings screen calls the sorting model the classifier and adds the new classifier gate choice, which stays off until a tool is approved. [PR #2897](https://github.com/motioneso/moss/pull/2897)
 
+#### Added
+
+- **Model activity log.** Administrators can review the model calls the assistant makes, with the time, kind, model and result, without exposing any chat content. [PR #2900](https://github.com/motioneso/moss/pull/2900)
+
 ### 2026-10-01
 
 #### Changed
