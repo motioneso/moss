@@ -129,6 +129,11 @@ export type GenerateStructuredInput = {
    * sorting model through the structured path, so its usage must not be logged as the main model.
    */
   readonly servedByLabel?: StructuredServedBy;
+  /**
+   * #2865: make one provider attempt and no repair retry. With `explicitModel` this also keeps the
+   * run on that model alone, so a latency-bound caller never waits on a second try.
+   */
+  readonly singleAttempt?: true;
 };
 
 export type GenerateStructuredExplicitModel = {
@@ -217,7 +222,7 @@ export async function generateStructured(
   if (!model) return { ok: false, error: "needs_config" };
 
   const result = await runOnModel(scopedDb, input, deps, model, {
-    maxAttempts: STRUCTURED_MAX_REPAIR_RETRIES + 1,
+    maxAttempts: input.singleAttempt ? 1 : STRUCTURED_MAX_REPAIR_RETRIES + 1,
     signal: input.signal,
     servedBy: input.servedByLabel ?? "main"
   });
