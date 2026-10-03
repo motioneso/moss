@@ -5,6 +5,8 @@
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). QA: Opus, own pane in a QA tab.
+**Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
+**Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
 **merges_since_relay:** 0
 
 ## Queue
@@ -40,4 +42,4 @@ None.
 
 ## Continuation note
 
-Wave 1 spawned. Waiting on plan pointers from three lanes. Background watcher on PR #2955.
+Wave 1 spawned. #2933 plan approved. Waiting on plans from #2939 and #2934. Background watcher on PR #2955.
