@@ -15,7 +15,7 @@
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | building | 2939 chat drawer tests | w1:p0Q | fix-2939-drawer-tests | - | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | rework after QA round 1 RED (2 leaks: no stop check between gate and submit; end-private-chat route same race), round 1 of 2; qa-2963 kept for incremental re-QA; live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
-| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands) | - | - | - | - | 0 |
+| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands; brief ready at ~/.coord-briefs/overnight/lane-fix-2942-midchat-tools.md) | - | - | - | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | building (reads shadow records, not activity lines, per Ben) | 2957 shadow report | w1:p0X | feat-2957-shadow-report | - | 0 |
 
@@ -52,3 +52,4 @@ None.
 ## Continuation note
 
 Wave 1 spawned. #2933, #2934, #2956 plans approved. #2934 must show each protection failing when removed. #2956: migrations 0256/0257 confirmed, slice A only then draft PR; kill gate after slice A is mine (plan section 6). Opus QA on #2956 should probe the owner-or-null insert rule (spec 5.1 allows any user to write an admin-visible System line). #2939 plan approved (cause: composer swaps the box for a connect link when the model lookup says none; lane must first check whether the lookup is a false negative). #2957 plan approved, kill gate pre-approved (counts, no message text, 30-day default); RLS proof must disable row security, not drop the policy.
+Coordinator context was compacted once (after QA 2963 round 1); re-oriented from this manifest, no merges since.
