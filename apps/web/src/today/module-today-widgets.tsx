@@ -1,6 +1,7 @@
 import { Component, Fragment, lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { MODULE_WEB_CONTRIBUTIONS } from "virtual:moss-module-web";
 
+import { Button } from "@moss/ui";
 import type { ModuleTodayWidget, ModuleWebContribution } from "@moss/module-web-sdk";
 
 type ContributionEntry = (typeof MODULE_WEB_CONTRIBUTIONS)[number];
@@ -53,9 +54,9 @@ class ModuleWidgetBoundary extends Component<BoundaryProps, BoundaryState> {
       return (
         <div className="cmd-empty" role="status">
           Couldn&apos;t load this widget right now.{" "}
-          <button type="button" onClick={this.handleRetry}>
+          <Button variant="link" onClick={this.handleRetry}>
             Retry
-          </button>
+          </Button>
         </div>
       );
     }

@@ -206,22 +206,25 @@ only. All text sits at or above the 11px floor.
 | Notes                 | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`             | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               |
 | Text-link buttons     | `<Button variant="link">` (retint with `--btn-link-color`)                 | `.today-hero__link`, `.cmd-next__link`                                                   |
 
-### Hand-built Today buttons still to move (#2918)
+### Hand-built Today buttons (#2918)
 
-Moved onto `Button`: the hero, meeting and evening-plan text links, Check in, Done, the evening
-choice buttons (new `chip` look), Plan tomorrow, Chat, and the briefing Accept, Dismiss, Reply,
-Close and report-picker buttons.
+Moved onto shared pieces: the hero, meeting and evening-plan text links, Check in, Done, the
+evening choice buttons (`chip` look), Plan tomorrow, Chat, the briefing Accept, Dismiss, Reply,
+Close and report-picker buttons, Undo and Retry (`link` look), and the medication plus, nudge
+dismiss and medications dialog close (`IconButton`, retinted with `--iconbtn-*` variables).
 
-Still hand-built, because each needs a shared piece that does not exist yet:
+Left as they are:
+
+- Briefing tabs (`brief-reader__tab`). They are true tabs with tab roles, arrow-key movement and
+  a panel link, so the shared `Segmented` control would change their look and keyboard behaviour.
+
+Split out to issue #2949, because each needs a shared piece that does not exist yet:
 
 - Clickable rows and cards with their own layout (`ev-done__main`, `ev-loop__open`,
   `ev-tomorrow__item`, `plan-review__titlelink`, `loose-row__main`, `brief-snapshot__main`, and
   the `jds-task__main` rows). They need a shared row-button piece.
-- Disclosure toggles (`brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`).
-- Tabs (`brief-reader__tab`). They need a shared tabs piece.
-- (moved) Icon buttons: the medication plus, the nudge dismiss and the medications dialog close now use the shared icon button.
-- Plain text buttons with no look of their own (Undo in the feedback menu, Retry in the module
-  widget error) and the feedback menu items.
+- Expand and collapse toggles (`brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`).
+- The evening planning step strip buttons (`evening-plan__strip`).
 
 ### Known Today defects
 
