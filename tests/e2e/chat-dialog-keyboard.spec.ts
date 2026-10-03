@@ -112,3 +112,19 @@ test("on a phone beside a running draft, the chat is still a modal dialog", asyn
   await expect(dialog).toHaveClass(/chatd--docked/);
   await expect(dialog).toHaveAttribute("aria-modal", "true");
 });
+
+test("unsent chat text survives resizing across the side-panel breakpoint", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await setup(page);
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const dialog = page.getByRole("dialog", { name: "Chat with Moss" });
+  const box = dialog.getByRole("textbox");
+  await box.fill("half-written question");
+
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await expect(box).toHaveValue("half-written question");
+
+  await box.fill("still half-written");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await expect(box).toHaveValue("still half-written");
+});

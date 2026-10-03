@@ -335,9 +335,9 @@ export function AppShell(props: AppShellProps) {
     activeModuleId !== null && hasModuleSettings(activeModuleId, props.modules);
   const closeMobileNav = () => setMobileNavOpen(false);
 
-  // #1756: exactly one ChatDrawer element, rendered in one of two spots below (docked beside
-  // the page, or in its ordinary floating overlay spot) depending on dockChat — never both at
-  // once, and never a second instance.
+  // Exactly one ChatDrawer element, always rendered in the same spot so it stays mounted (and
+  // keeps unsent text) when the window crosses the dock breakpoint. dockChat only switches its
+  // layout between beside-the-page and the floating overlay.
   const chatDrawer = (
     <ChatDrawer
       open={chatOpen}
@@ -443,7 +443,7 @@ export function AppShell(props: AppShellProps) {
               </AssistantSurfaceHostProvider>
             </main>
 
-            {dockChat ? chatDrawer : null}
+            {chatDrawer}
           </div>
         </div>
 
@@ -453,8 +453,6 @@ export function AppShell(props: AppShellProps) {
           themes={themesQuery.data}
           navigate={navigate}
         />
-
-        {dockChat ? null : chatDrawer}
       </PageTrailProvider>
     </div>
   );
