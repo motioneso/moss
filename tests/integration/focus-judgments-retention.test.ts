@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
-import { createDatabase, type MossDatabase } from "@moss/db";
+import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { FocusJudgmentRepository } from "@moss/focus-judgment";
 import type { Kysely } from "kysely";
 import { deleteUserData } from "../../scripts/delete-user-data.js";
@@ -11,8 +11,9 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 
 // Needs a database: run through the verify-gate skill, scoped to this file (#2637).
 //
-// Focus judgments are kept for 30 days. The nightly purge runs as the worker role, which has no
-// privilege on the table itself; it can only call the no-argument purge function.
+// Focus judgments are kept for 30 days. The nightly purge runs as the worker role, which may read
+// only the current actor's rows (for the export build job) and deletes only through the
+// no-argument purge function.
 
 const { Client } = pg;
 
@@ -106,15 +107,25 @@ describe("30-day retention purge", () => {
     expect(remaining).not.toContain(old);
   });
 
-  it("the worker still cannot read or delete the table directly", async () => {
-    await insertAged(ids.userA, 31);
-    await expect(worker.query("SELECT count(*) FROM app.focus_judgments")).rejects.toThrow(
-      /permission denied/i
+  it("the worker reads only the current person's judgments and can never delete them", async () => {
+    const ownA = await insertAged(ids.userA, 2);
+    await insertAged(ids.userB, 2);
+
+    // No actor set: the worker read rule matches nothing.
+    const unscoped = await worker.query("SELECT id FROM app.focus_judgments");
+    expect(unscoped.rows).toEqual([]);
+
+    // Actor set, as the export build job runs: only that person's rows.
+    const scoped = await new DataContextRunner(workerDb).withDataContext(
+      { actorUserId: ids.userA, requestId: "req:test" },
+      (scopedDb) => scopedDb.db.selectFrom("app.focus_judgments").select("id").execute()
     );
+    expect(scoped.map((row) => row.id)).toEqual([ownA]);
+
     await expect(worker.query("DELETE FROM app.focus_judgments")).rejects.toThrow(
       /permission denied/i
     );
-    expect(await remainingIds()).toHaveLength(1);
+    expect(await remainingIds()).toHaveLength(2);
   });
 });
 
