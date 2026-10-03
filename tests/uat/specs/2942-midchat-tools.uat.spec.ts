@@ -7,6 +7,11 @@
 // person sees the start-a-new-chat hint. A new chat then runs the tool, proving the
 // hint's advice works.
 //
+// Two tabs share one signed-in context. The settings tab holds the review dialog from
+// preparing through approval without navigating (preparation drafts are transient and
+// vanish if the dialog unmounts). The chat tab births its session after preparing but
+// before approval, so its captured tool list predates the newly usable tools.
+//
 // Reuses the classifier fixture's faithful fake hub (real MCP over the real connect,
 // discovery and approval paths) and the operator's own Codex sign-in with the cheapest
 // model tier, like classifier-integrations.uat.spec.ts. Nothing is intercepted.
@@ -163,90 +168,95 @@ async function sendTurn(page: Page, text: string): Promise<void> {
   expect(response.status(), "chat turn POST").toBe(200);
 }
 
-test("mid-conversation tools tell the person to start a new chat (#2942)", async ({ page }) => {
+test("mid-conversation tools tell the person to start a new chat (#2942)", async ({
+  page,
+  context
+}) => {
   test.setTimeout(900_000);
+  const chat = await context.newPage();
+  try {
+    await test.step("sign in and bring up the real default model (cheapest tier)", async () => {
+      await signIn(page);
+      if (!process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED) {
+        throw new Error(
+          "no Codex sign-in was copied into this stack; refusing to fake the chat turn"
+        );
+      }
+      await bringUpRealChatModel(page);
+    });
 
-  await test.step("sign in and bring up the real default model (cheapest tier)", async () => {
-    await signIn(page);
-    if (!process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED) {
-      throw new Error(
-        "no Codex sign-in was copied into this stack; refusing to fake the chat turn"
+    await test.step("connect through the real screen and prepare, approving nothing yet", async () => {
+      await openIntegrations(page);
+      await page.getByRole("button", { name: "Add connection" }).click();
+      await page.getByLabel("Name").fill(CONNECTION_NAME);
+      await page.getByLabel("URL").fill(classifierMcpFixtureEndpointFor(requireUatProjectName()));
+      await page.getByRole("button", { name: "Connect", exact: true }).click();
+      await expect(page.getByText(FIXTURE_LIGHT_TOOL).first()).toBeVisible({ timeout: 30_000 });
+      // Drafts are transient: preparing stores nothing and makes nothing eligible, so the
+      // hub tools are still unusable when the chat below opens. The dialog stays mounted
+      // from here through approval — navigating away would drop the drafts.
+      await openConnection(page);
+      await setSwitch(page.getByLabel("Let the classifier use this connection"), true);
+      await page.getByRole("button", { name: /^Prepare \d+ tools?$/ }).click();
+      await expect(page.getByText("Review required")).toBeVisible({ timeout: 240_000 });
+      expect(resolveMenu(await connectionDetail(page))).toEqual([]);
+    });
+
+    await test.step("open a chat while the hub tools are still unusable", async () => {
+      await openChat(chat);
+      // The hello forces the session (and its captured tool list) to exist before approval.
+      await sendTurn(chat, "hello");
+    });
+
+    await test.step("approve the hub tools mid-conversation", async () => {
+      await page.getByLabel(`Risk for ${FIXTURE_LIGHT_TOOL}`).selectOption("write");
+      await page.getByLabel(`Risk for ${FIXTURE_LIST_TOOL}`).selectOption("read");
+      await setSwitch(page.getByLabel(`Classifier may use ${FIXTURE_LIGHT_TOOL}`), true);
+      await setSwitch(page.getByLabel(`Classifier may use ${FIXTURE_LIST_TOOL}`), true);
+      await page.getByRole("button", { name: "Approve reviewed tools" }).click();
+      await expect
+        .poll(async () => resolveMenu(await connectionDetail(page)).sort())
+        .toEqual([FIXTURE_LIGHT_TOOL, FIXTURE_LIST_TOOL].sort());
+    });
+
+    await test.step("the open chat shows the start-a-new-chat hint, and the light stays off", async () => {
+      await sendTurn(
+        chat,
+        'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.'
       );
-    }
-    await bringUpRealChatModel(page);
-  });
+      // The session predates the approval, so the call is refused with the hint — the tool
+      // never runs and the person sees the way out in the chat itself.
+      await expect(chat.getByText(/Start a new chat/i).first()).toBeVisible({ timeout: 180_000 });
+      expect(
+        fixtureState().calls.filter((call) => call.tool === FIXTURE_LIGHT_TOOL),
+        "the refused tool never ran"
+      ).toEqual([]);
+      expect(
+        fixtureState().devices.find((device) => device.name === "Porch light")?.on,
+        "the light stayed off"
+      ).toBe(false);
+    });
 
-  await test.step("connect through the real screen, prepare, but approve nothing yet", async () => {
-    await openIntegrations(page);
-    await page.getByRole("button", { name: "Add connection" }).click();
-    await page.getByLabel("Name").fill(CONNECTION_NAME);
-    await page.getByLabel("URL").fill(classifierMcpFixtureEndpointFor(requireUatProjectName()));
-    await page.getByRole("button", { name: "Connect", exact: true }).click();
-    await expect(page.getByText(FIXTURE_LIGHT_TOOL).first()).toBeVisible({ timeout: 30_000 });
-    // Drafts are transient: preparing stores nothing and makes nothing eligible, so the
-    // hub tools are still unusable when the chat below opens.
-    await openConnection(page);
-    await setSwitch(page.getByLabel("Let the classifier use this connection"), true);
-    await page.getByRole("button", { name: /^Prepare \d+ tools?$/ }).click();
-    await expect(page.getByText("Review required")).toBeVisible({ timeout: 240_000 });
-    expect(resolveMenu(await connectionDetail(page))).toEqual([]);
-  });
-
-  await test.step("open a chat while the hub tools are still unusable", async () => {
-    await openChat(page);
-    // The hello forces the session (and its captured tool list) to exist before approval.
-    await sendTurn(page, "hello");
-  });
-
-  await test.step("approve the hub tools mid-conversation", async () => {
-    await openConnection(page);
-    await page.getByLabel(`Risk for ${FIXTURE_LIGHT_TOOL}`).selectOption("write");
-    await page.getByLabel(`Risk for ${FIXTURE_LIST_TOOL}`).selectOption("read");
-    await setSwitch(page.getByLabel(`Classifier may use ${FIXTURE_LIGHT_TOOL}`), true);
-    await setSwitch(page.getByLabel(`Classifier may use ${FIXTURE_LIST_TOOL}`), true);
-    await page.getByRole("button", { name: "Approve reviewed tools" }).click();
-    await expect
-      .poll(async () => resolveMenu(await connectionDetail(page)).sort())
-      .toEqual([FIXTURE_LIGHT_TOOL, FIXTURE_LIST_TOOL].sort());
-  });
-
-  await test.step("the open chat shows the start-a-new-chat hint, and the light stays off", async () => {
-    await page.goto(`${requireUatBaseURL()}/today`);
-    await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
-    await sendTurn(
-      page,
-      'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.'
-    );
-    // The session predates the approval, so the call is refused with the hint — the tool
-    // never runs and the person sees the way out in the chat itself.
-    await expect(page.getByText(/Start a new chat/i).first()).toBeVisible({ timeout: 180_000 });
-    expect(
-      fixtureState().calls.filter((call) => call.tool === FIXTURE_LIGHT_TOOL),
-      "the refused tool never ran"
-    ).toEqual([]);
-    expect(
-      fixtureState().devices.find((device) => device.name === "Porch light")?.on,
-      "the light stayed off"
-    ).toBe(false);
-  });
-
-  await test.step("a new chat runs the tool after one approval", async () => {
-    await page.getByRole("button", { name: "New chat" }).click();
-    await page.waitForTimeout(8_000);
-    await sendTurn(
-      page,
-      'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.'
-    );
-    const approve = page
-      .locator('[aria-label="Action request"]')
-      .getByRole("button", { name: "Approve" })
-      .first();
-    await approve.waitFor({ timeout: 180_000 });
-    await approve.click({ timeout: 5_000 }).catch(() => undefined);
-    await expect
-      .poll(() => fixtureState().devices.find((device) => device.name === "Porch light")?.on, {
-        timeout: 180_000
-      })
-      .toBe(true);
-  });
+    await test.step("a new chat runs the tool after one approval", async () => {
+      await chat.getByRole("button", { name: "New chat" }).click();
+      await chat.waitForTimeout(8_000);
+      await sendTurn(
+        chat,
+        'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.'
+      );
+      const approve = chat
+        .locator('[aria-label="Action request"]')
+        .getByRole("button", { name: "Approve" })
+        .first();
+      await approve.waitFor({ timeout: 180_000 });
+      await approve.click({ timeout: 5_000 }).catch(() => undefined);
+      await expect
+        .poll(() => fixtureState().devices.find((device) => device.name === "Porch light")?.on, {
+          timeout: 180_000
+        })
+        .toBe(true);
+    });
+  } finally {
+    await chat.close();
+  }
 });
