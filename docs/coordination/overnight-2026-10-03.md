@@ -88,6 +88,8 @@ None.
 
 ## Reaped sessions
 
+- w1:p11T "QA 2974 mid-chat tools (Opus)" (qa-2974) - RED on release-note wording only (merge-ready after body fix, no re-review); verdict 5972579568; closed, QA worktree removed.
+
 - w1:p11Q "QA 2977 focus cleanup (Opus)" (qa-2977) - round 1 RED (export omits focus judgments), round 2 all findings fixed, CI-only red (file size); verdicts on PR (5972170898, 5972486935); closed, QA worktree removed.
 
 - w1:p11S "QA 2975 job search test (Opus)" (qa-2975) - GREEN on 3ae81ea8b, verdict comment 5972043339; closed, QA worktree removed.
@@ -196,3 +198,5 @@ Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, 
 12:20 QA 2977 round 2: findings fixed, CI static check red only (data-export test file 1011 lines). Failure budget: two red rounds, but round 2's only red is a mechanical file-size check that CI verifies; QA said merge-ready on green CI without another review. Coordinator decision: no round 3 QA; lane moves the assertion, coordinator confirms CI green, then parks for Ben with this noted.
 
 12:30 2942 PR ready, live run GREEN on ab8d3de49. QA qa-2974 spawned (w1:p11T, worktree .claude/worktrees/qa-2974). Lane reported via cross-session message (from-name ben-28) rather than herdr prompt.
+
+12:40 QA 2974 RED on the release note only (claims a new-chat hint the default engine never shows). Lane rewording via REST + filing follow-up for refusal wording in check sessions / classifier gate. Then merge (sensitive) = merge 2 -> relay.
