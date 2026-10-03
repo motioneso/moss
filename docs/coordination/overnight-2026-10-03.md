@@ -19,7 +19,7 @@
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | building (Opus 5.5) | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | - | 0 |
-| Weather test stale wording | #2891 | routine (test-only) | building (Opus 5.5) | 2891 weather test wording | w1:p118 | fix-2891-weather-spec | - | 0 |
+| Weather test stale wording | #2891 | routine (test-only) | PR open, QA round 1 (qa-2968, w1:p119, Opus); Today change confirmed deliberate (523ad2371, #2641) | 2891 weather test wording | w1:p118 | fix-2891-weather-spec | #2968 | 0 |
 
 ## Dependency / merge order
 
