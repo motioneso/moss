@@ -73,7 +73,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "settings",
     label: "Settings",
     description:
-      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words, and also matches every installed module that has its own settings to open (for example News) by that module's name, description, and the name of each individual setting or credential it declares (for example, searching a credential's own name like \"Plaid\" finds the module that uses it). A module with nothing to configure is left out of the results. Picking a result jumps straight to that module's settings.",
+      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words, and also matches every installed module that has its own settings to open (for example News) by that module's name, description, and the name of each individual setting or credential it declares (for example, searching a credential's own name like \"Plaid\" finds the module that uses it). A module with nothing to configure is left out of the results. Picking a result jumps straight to that module's settings. On a phone, opening Settings with nothing chosen shows the full list of sections; choosing one folds the list into a bar that names the current section, and tapping that bar brings the list back as a sheet from the bottom, which closes with Escape or the close button. On a phone the AI provider actions (log in, terminal or test, edit, remove) sit in a More menu on each provider; on a wide screen they stay visible as buttons.",
     path: "/settings",
     scope: "user"
   },
@@ -111,7 +111,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "assistant",
     label: "Your assistant",
     description:
-      "Change the AI model for chat: choose which model answers, change model routing and response behavior. The chat panel header and message box follow whether a chat model is available: with none, the header reads Not connected and a Connect a provider link to this screen replaces the message box, and with an admin-locked model that is unavailable, the header reads Model unavailable and the message box is disabled. When YOLO is active for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as YOLO in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning YOLO off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > AI providers. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > AI providers) to turn on the microphone in chat. The chat panel works with the keyboard: opening it moves focus into the message box (or onto the panel when the message box is replaced or disabled), Escape closes it and returns focus to the button that opened it, and on a phone Tab and Shift+Tab stay inside the open panel and screen readers treat it as a modal dialog, including beside a running draft.",
+      "Change the AI model for chat: choose which model answers, change model routing and response behavior. The chat panel header and message box follow whether a chat model is available: with none, the header reads Not connected and a Connect a provider link to this screen replaces the message box, and with an admin-locked model that is unavailable, the header reads Model unavailable and the message box is disabled. When Auto-approve actions is on for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as auto-approved in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning Auto-approve actions off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > AI providers. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > AI providers) to turn on the microphone in chat. The chat panel works with the keyboard: opening it moves focus into the message box (or onto the panel when the message box is replaced or disabled), Escape closes it and returns focus to the button that opened it, and on a phone Tab and Shift+Tab stay inside the open panel and screen readers treat it as a modal dialog, including beside a running draft.",
     path: "/settings?section=assistant",
     scope: "user"
   },
@@ -152,28 +152,15 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     scope: "user"
   },
   {
-    id: "connected",
-    label: "Connected accounts",
+    id: "connections",
+    label: "Connections",
     description:
-      "Connect external accounts and review their status. Add an email account by typing its address; Yahoo Mail, Proton Mail, iCloud and Fastmail addresses are recognised and get their mail server settings and app-password instructions filled in, other addresses choose the mail service by hand.",
-    path: "/settings?section=connected",
-    scope: "user"
-  },
-  {
-    id: "sources",
-    label: "Data sources",
-    description:
-      "Review sources the assistant can read and choose the notes folder. Every folder comes " +
+      "One pane for everything the assistant can reach outside itself, with three parts: Accounts, Notes folder, and Apps & services. " +
+      "Accounts: connect external accounts and review their status. Add an email account by typing its address; Yahoo Mail, Proton Mail, iCloud and Fastmail addresses are recognised and get their mail server settings and app-password instructions filled in, other addresses choose the mail service by hand. " +
+      "Notes folder: review sources the assistant can read and choose the notes folder. Every folder comes " +
       "from the same list of folders available on the server, and People notes live inside " +
-      "the chosen notes folder. An info icon explains how folders get listed.",
-    path: "/settings?section=sources",
-    scope: "user"
-  },
-  {
-    id: "integrations",
-    label: "Integrations",
-    description:
-      "Connect external tools and services. A connection's detail screen lists its discovered " +
+      "the chosen notes folder. An info icon explains how folders get listed. " +
+      "Apps & services: connect external tools and services. A connection's detail screen lists its discovered " +
       "tools and lets the owner choose which are on for ordinary chat and which may repeat " +
       "identical calls. It also has a classifier section: a Let the classifier use this connection " +
       "switch that only marks the connection eligible, a note that messages and device names go " +
@@ -190,8 +177,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "the gate is active, a tool that needs a device or area name can pick it from the " +
       "connection's own list, read once through a listing tool the owner reviewed as Only reads; " +
       "the list is cached briefly for that owner only, and a missing or expired list keeps the " +
-      "tool out.",
-    path: "/settings?section=integrations",
+      "tool out. Old links to Connected accounts, Data sources and Integrations open this pane.",
+    path: "/settings?section=connections",
     scope: "user"
   },
   {

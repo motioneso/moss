@@ -28,7 +28,7 @@ export function VaultChooser(props: {
 }) {
   const [path, setPath] = useState<string | null>(props.current || null);
   const title = props.title ?? "Choose a notes folder";
-  const backLabel = props.backLabel ?? "Data sources";
+  const backLabel = props.backLabel ?? "Connections";
   const assistantName = useAssistantName();
   const rootsQuery = useQuery({
     queryKey: queryKeys.settings.notesSourceDirectories(null),

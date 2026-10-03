@@ -38,7 +38,7 @@ function sinceForRange(range: DateRange): string {
 function approvalLabel(mode: ActionAuditLogEntryDto["approvalMode"]): string {
   const labels: Record<typeof mode, string> = {
     auto: "Auto-run",
-    yolo: "YOLO",
+    yolo: "Auto-approved",
     confirmed: "Confirmed",
     rejected: "Declined",
     cancelled: "Cancelled",

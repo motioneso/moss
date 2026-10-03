@@ -43,7 +43,7 @@ export function YoloAdminGroup() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.settings.adminYolo, data);
-      toast("YOLO settings updated");
+      toast("Auto-approve settings updated");
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
@@ -90,23 +90,23 @@ export function YoloAdminGroup() {
 
   return (
     <Group
-      title="YOLO / auto-approval"
+      title="Auto-approve actions"
       desc="Blanket auto-approval for interactive chat actions. RLS and account permissions still apply."
     >
       <Row
         name="Instance master"
-        desc="When off, all saved per-user YOLO choices are inert."
+        desc="When off, every saved per-person auto-approve choice is ignored."
         control={
           <Switch
-            ariaLabel="YOLO instance master"
+            ariaLabel="Auto-approve actions for this instance"
             checked={yoloQuery.data?.instanceEnabled ?? false}
             disabled={yoloMutation.isPending}
             onChange={(enabled) =>
               enabled
                 ? confirm({
-                    title: "Enable YOLO for this instance?",
-                    description: `This also enables YOLO for your admin account. ${assistantName} can run destructive chat actions without asking.`,
-                    confirmLabel: "Enable YOLO",
+                    title: "Turn on auto-approve actions for this instance?",
+                    description: `This also turns on auto-approve for your admin account. ${assistantName} can run destructive chat actions without asking.`,
+                    confirmLabel: "Turn on",
                     danger: true,
                     onConfirm: () => yoloMutation.mutate({ kind: "instance", enabled })
                   })
@@ -131,7 +131,7 @@ export function YoloAdminGroup() {
       />
       <Row
         name="Add allowed member"
-        desc="Active members who are not yet YOLO-allowed."
+        desc="Active members who are not yet allowed to auto-approve."
         control={
           <div style={{ display: "flex", gap: "8px" }}>
             <input
@@ -175,7 +175,7 @@ export function YoloAdminGroup() {
             <Button
               variant="quiet"
               size="sm"
-              aria-label={`Remove YOLO allowance for ${user.email}`}
+              aria-label={`Remove auto-approve allowance for ${user.email}`}
               disabled={yoloMutation.isPending}
               onClick={() => yoloMutation.mutate({ kind: "user", id: user.id, allowed: false })}
             >

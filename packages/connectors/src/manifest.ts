@@ -80,7 +80,7 @@ export const connectorsModuleManifest = {
       id: "connectors.user-settings",
       label: "Connectors",
       description: "Connect and manage external accounts used by Moss.",
-      path: "/settings?section=connected",
+      path: "/settings?section=connections",
       scope: "user",
       order: 30,
       permissionId: "connectors.manage"
@@ -301,8 +301,8 @@ export const connectorsModuleManifest = {
       remediations: [
         {
           id: "connectors.reconnect_account",
-          description: "Reconnect the account under Connected accounts in Settings.",
-          path: "/settings?section=connected"
+          description: "Reconnect the account under Connections in Settings.",
+          path: "/settings?section=connections"
         }
       ]
     },
@@ -326,9 +326,9 @@ export const connectorsModuleManifest = {
         {
           id: "connectors.reconnect_imap",
           description:
-            "Connect the account again under Connected accounts in Settings using a fresh app " +
+            "Connect the account again under Connections in Settings using a fresh app " +
             "password; the connection is tested before it is saved.",
-          path: "/settings?section=connected"
+          path: "/settings?section=connections"
         }
       ]
     },
@@ -352,13 +352,13 @@ export const connectorsModuleManifest = {
       remediations: [
         {
           id: "connectors.connect_email_account",
-          description: "Connect an email account under Connected accounts in Settings.",
-          path: "/settings?section=connected"
+          description: "Connect an email account under Connections in Settings.",
+          path: "/settings?section=connections"
         },
         {
           id: "connectors.retry_email_refresh",
           description: "Retry the email refresh when the connection is available.",
-          path: "/settings?section=connected"
+          path: "/settings?section=connections"
         }
       ]
     }

@@ -167,20 +167,20 @@ export const notesModuleManifest = {
     {
       id: "notes.vault_sync",
       description:
-        "Sync Markdown notes from the folder you link in Settings, Data sources: new and changed " +
+        "Sync Markdown notes from the folder you link in Settings, Connections: new and changed " +
         "files are read into Moss on a schedule, and notes stay on disk where they are.",
       errors: [
         {
           code: "notes.folder_missing",
           class: "prerequisite",
           remediationRef: "notes.configure_folder",
-          description: "No notes folder is selected in Data sources."
+          description: "No notes folder is selected in Connections."
         }
       ],
       remediations: [
         {
           id: "notes.configure_folder",
-          description: "Choose a notes folder under Data sources in Settings.",
+          description: "Choose a notes folder under Connections in Settings.",
           path: "/settings?section=sources"
         }
       ]

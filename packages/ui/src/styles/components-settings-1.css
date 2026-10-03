@@ -17,6 +17,58 @@
   font-size: 13px;
   color: var(--text-subtle);
 }
+.set2__picker {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+}
+.set2__pickerlbl {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.set2__pickername {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.set2__scrim {
+  background: var(--scrim);
+  border: 0;
+}
+.set2__masttitle {
+  font-family: var(--font-display);
+  font-size: var(--text-5xl);
+  font-weight: 900;
+}
+@media (max-width: 860px) {
+  .set2__masttitle {
+    font-size: var(--text-4xl);
+  }
+}
+@media (max-width: 520px) {
+  .set2__masttitle {
+    font-size: var(--text-3xl);
+  }
+}
+.set2__nav.is-open {
+  background: var(--surface);
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  box-shadow: var(--shadow);
+}
+.set2__sheettitle {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+}
+.set2__sheetclose {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
 .set2__adv-t {
   font-size: 13px;
   font-weight: 600;
@@ -71,22 +123,23 @@
 }
 .pane__title {
   font-family: var(--font-display);
-  font-size: 25px;
-  font-weight: 600;
+  font-size: var(--text-3xl);
+  font-weight: 900;
+  word-spacing: 0.12em;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
 }
 .pane__desc {
   font-size: 14px;
   color: var(--text-subtle);
 }
 
+/* Ruled section, as on Today: an accent hairline above a display title. No box. */
 .pane__card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-top: 1px solid var(--accent-rule);
 }
 .pane__card--danger {
-  background: var(--danger-soft);
-  border: 1px solid var(--danger);
+  border-top-color: var(--danger);
 }
 .pane__card--danger .pane__cardtitle,
 .pane__card--danger .pane__carddesc {
@@ -94,12 +147,15 @@
 }
 .pane__cardtitle {
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--text-xl);
+  font-weight: 800;
+  word-spacing: 0.12em;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
   color: var(--text);
 }
 .pane__carddesc {
-  font-size: 12.5px;
+  font-size: var(--text-md);
   color: var(--text-subtle);
 }
 .fld__lbl {
@@ -445,4 +501,17 @@
 .vault__meta {
   font-size: 12px;
   color: var(--text-subtle);
+}
+.conn__count dd {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  color: var(--text);
+}
+.conn__count dt {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }

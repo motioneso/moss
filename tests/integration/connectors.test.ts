@@ -208,7 +208,7 @@ describe("Connectors encrypted foundation", () => {
       "sql/0248_connector_email_history_id.sql"
     ]);
     expect(manifest?.settings?.map((surface) => surface.path)).toEqual([
-      "/settings?section=connected",
+      "/settings?section=connections",
       "/settings?section=oversight"
     ]);
     expect(registration?.queueDefinitions).toEqual([

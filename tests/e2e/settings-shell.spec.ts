@@ -1,13 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { createMockUser, mockApi } from "./mock-api.js";
-import { createMockAiModel } from "./mock-ai-api.js";
+import { createMockAiModel, createMockAiProvider } from "./mock-ai-api.js";
 import { myModulesResponse } from "./mock-modules.js";
 
-async function mockSettingsApi(page: Page, isInstanceAdmin = true): Promise<void> {
+async function mockSettingsApi(
+  page: Page,
+  isInstanceAdmin = true,
+  aiProviders?: ReturnType<typeof createMockAiProvider>[]
+): Promise<void> {
   await mockApi(page, {
     authenticated: true,
     isInstanceAdmin,
+    ...(aiProviders ? { aiProviders } : {}),
     adminUsers: isInstanceAdmin
       ? [
           createMockUser("user-1", "Owner User", "owner@example.test", {
@@ -139,11 +144,11 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
 
   const nav = page.getByRole("navigation", { name: "Settings categories" });
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
-    await expect(nav.getByText(group, { exact: true })).toBeVisible();
+    await expect(nav.locator(".set2__navgroup", { hasText: group })).toBeVisible();
   }
-  await expect(nav.getByRole("button")).toHaveCount(12);
+  await expect(nav.getByRole("button")).toHaveCount(10);
   await expect(nav.getByRole("button", { name: "What's new" })).toBeVisible();
-  await expect(nav.getByRole("button", { name: "Integrations" })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Connections" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Profile & account" })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "General" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
@@ -202,8 +207,10 @@ test("short desktop rail reaches its final destination by keyboard", async ({ pa
   const nav = page.getByRole("navigation", { name: "Settings categories" });
   const first = nav.getByRole("button", { name: "Account & preferences" });
   const last = nav.getByRole("button").last();
+  await expect(first).toBeVisible();
+  const destinations = await nav.getByRole("button").count();
   await first.focus();
-  for (let index = 0; index < 11; index += 1) await page.keyboard.press("Tab");
+  for (let index = 1; index < destinations; index += 1) await page.keyboard.press("Tab");
   await expect(last).toBeFocused();
   await expect(last).toBeInViewport();
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
@@ -216,20 +223,63 @@ test("narrow shell keeps groups and destinations reachable without horizontal ov
   await mockSettingsApi(page);
   await page.goto("/settings");
 
-  const nav = page.getByRole("navigation", { name: "Settings categories" });
+  // While the sheet is open the list is a dialog, so address it by id rather than by role.
+  const nav = page.locator("#settings-sections");
+  const picker = page.getByRole("button", { name: /^Section/ });
+
+  // State 1: nothing chosen yet shows the whole list and no pane.
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
-    await expect(nav.getByText(group, { exact: true })).toBeVisible();
+    await expect(nav.locator(".set2__navgroup", { hasText: group })).toBeVisible();
   }
+  await expect(picker).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeHidden();
+
+  // State 2: choosing a section folds the list into the bar.
   await nav.getByRole("button", { name: "Modules" }).click();
   await expect(page.getByRole("heading", { name: "Modules" })).toBeVisible();
+  await expect(nav).toBeHidden();
+  await expect(picker).toContainText("Modules");
+
+  // State 3: the bar brings the list back as a sheet; Escape closes it and returns focus.
+  await picker.click();
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Account & preferences" })).toBeVisible();
+  // The open sheet is a labelled modal dialog and the rest of the app, chat button included, is
+  // unreachable behind it.
+  await expect(page.getByRole("dialog", { name: "Settings sections" })).toBeVisible();
+  await expect(nav).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator("main, header").first()).toBeAttached();
+  expect(
+    await page.evaluate(() => {
+      const chat = [...document.querySelectorAll("button")].find((b) =>
+        /chat with/i.test(b.getAttribute("aria-label") ?? "")
+      );
+      return chat ? Boolean(chat.closest("[inert]")) : true;
+    })
+  ).toBe(true);
+  // Tab wraps inside the sheet in both directions.
+  const items = nav.getByRole("button");
+  await items.last().focus();
+  await page.keyboard.press("Tab");
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(items.last()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(nav).toBeHidden();
+  await expect(picker).toBeFocused();
+
+  await picker.click();
   await nav.getByRole("button", { name: "Account & preferences" }).click();
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
+  await expect(nav).toBeHidden();
+  await expect(picker).toBeFocused();
 
   await page.getByRole("button", { name: "Admin / Setup" }).click();
+  await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible();
+  await picker.click();
   for (const group of ["Access", "AI & extensions", "Operations"]) {
     await expect(nav.getByText(group, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible();
   await nav.getByRole("button", { name: "People & access" }).focus();
   await expect(nav.getByRole("button", { name: "People & access" })).toBeFocused();
   expect(
@@ -374,4 +424,50 @@ test("data export resumes across remount and clears on new/expired job", async (
   expect(
     await page.evaluate(() => window.sessionStorage.getItem("moss.settings.export-job-id"))
   ).toBeNull();
+});
+
+test("assistant persona controls never run under the preview at in-between widths", async ({
+  page
+}) => {
+  await mockSettingsApi(page);
+  for (const width of [900, 1000, 1200, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/settings?section=assistant");
+    await expect(page.getByLabel("Assistant name")).toBeVisible();
+    const clash = await page.evaluate(() => {
+      const preview = document.querySelector(".psona > .ppv")?.getBoundingClientRect();
+      const fields = [
+        ...document.querySelectorAll(".psona__controls input, .psona__controls textarea")
+      ];
+      if (!preview) return "no preview";
+      return fields.some((field) => {
+        const r = field.getBoundingClientRect();
+        return (
+          r.right > preview.left + 0.5 &&
+          r.left < preview.right &&
+          r.bottom > preview.top &&
+          r.top < preview.bottom
+        );
+      });
+    });
+    expect(clash, `overlap at ${width}px`).toBe(false);
+  }
+});
+
+test("phone provider More menu stays fully visible, including Remove", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockSettingsApi(page, true, [
+    createMockAiProvider("p1", { displayName: "Short Provider" })
+  ]);
+  await page.goto("/settings?section=aiproviders");
+  await page.getByRole("button", { name: "More actions for Short Provider" }).click();
+  const remove = page.getByRole("menuitem", { name: "Remove" });
+  await expect(remove).toBeVisible();
+  const box = await remove.boundingBox();
+  if (!box) throw new Error("Remove has no box");
+  const hit = await page.evaluate(
+    ([x, y]) => document.elementFromPoint(x as number, y as number)?.textContent?.trim(),
+    [box.x + box.width / 2, box.y + box.height / 2] as const
+  );
+  expect(hit).toBe("Remove");
 });

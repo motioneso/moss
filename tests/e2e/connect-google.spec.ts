@@ -13,8 +13,8 @@ test("connects Google via the settings flow", async ({ page }) => {
   });
 
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Connected accounts" }).click();
-  await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
 
   // With no accounts yet, the service picker is shown immediately.
   await page.getByRole("button", { name: "Google", exact: true }).click();
@@ -48,6 +48,6 @@ test("connects Google via the settings flow", async ({ page }) => {
   await page.getByRole("button", { name: "Finish connection" }).click();
 
   // On success the takeover closes and we return to the accounts list.
-  await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   await expect(page.getByText("Connect Google")).not.toBeVisible();
 });
