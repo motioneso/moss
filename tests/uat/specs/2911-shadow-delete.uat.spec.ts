@@ -96,7 +96,7 @@ async function expectDeleteRequiresConfirmation(page: Page): Promise<void> {
   ).toEqual(expect.any(String));
 }
 
-test("asking Moss to delete your classifier shadow records removes them (#2911)", async ({
+test("a plain request to delete classifier shadow records is refused and the records stay (#2911)", async ({
   page
 }) => {
   test.setTimeout(300_000);

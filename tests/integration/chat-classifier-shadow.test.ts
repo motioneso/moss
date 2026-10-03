@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { sql, type Kysely } from "kysely";
+import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ClassifierShadowRepository } from "@moss/chat";
@@ -13,6 +14,8 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 // failures without throwing and skip private chats.
 // #2908: they are kept forever (no purge job or function) and the owner deletes their own on
 // request; another owner, and an admin, cannot.
+
+const { Client } = pg;
 
 let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
@@ -135,7 +138,7 @@ describe("app.chat_classifier_shadow_records", () => {
     ).rejects.toThrow();
   });
 
-  it("refuses a delete with no signed-in user", async () => {
+  it("refuses a delete with no signed-in user, and the actor guard is what refuses it", async () => {
     const turnId = `turn-${randomUUID()}`;
     await asActor(ids.userA, (db) => repository.open(db, open(turnId)));
 
@@ -147,6 +150,51 @@ describe("app.chat_classifier_shadow_records", () => {
       (r) => r.turnId
     );
     expect(survivors).toContain(turnId);
+
+    // Prove the actor guard is load-bearing, not decorative: with it removed the same actorless
+    // connection would delete every owner's rows. The policy is dropped to that weakened shape on
+    // THIS disposable test database and restored in the finally below.
+    const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    try {
+      await bootstrap.query(
+        `DROP POLICY chat_classifier_shadow_records_delete ON app.chat_classifier_shadow_records`
+      );
+      await bootstrap.query(
+        `CREATE POLICY chat_classifier_shadow_records_delete ON app.chat_classifier_shadow_records
+           FOR DELETE TO jarvis_app_runtime
+           USING (owner_user_id = app.current_actor_user_id())`
+      );
+      const weakened = await sql`DELETE FROM app.chat_classifier_shadow_records`.execute(appDb);
+      // owner_user_id = NULL is NULL, so no row is deletable without an actor: the actor clause is
+      // what the column comparison alone cannot express.
+      expect(Number(weakened.numAffectedRows ?? 0)).toBe(0);
+
+      // And with an actor present the column-only policy IS sufficient — the difference the actor
+      // clause makes is only the no-actor case, which is exactly the claim under test.
+      const asOwner = await asActor(ids.userA, async (db) => {
+        const deleted = await sql`DELETE FROM app.chat_classifier_shadow_records`.execute(db.db);
+        return Number(deleted.numAffectedRows ?? 0);
+      });
+      expect(asOwner).toBe(1);
+    } finally {
+      await bootstrap.query(
+        `DROP POLICY IF EXISTS chat_classifier_shadow_records_delete
+           ON app.chat_classifier_shadow_records`
+      );
+      await bootstrap.query(
+        `CREATE POLICY chat_classifier_shadow_records_delete
+         ON app.chat_classifier_shadow_records
+         FOR DELETE TO jarvis_app_runtime
+         USING (
+           app.current_actor_user_id() IS NOT NULL
+           AND owner_user_id = app.current_actor_user_id()
+         )`
+      );
+      await bootstrap.end();
+    }
+
+    // Everything is gone for user A either way; leave the table as the suite expects.
     await asActor(ids.userA, (db) => repository.deleteForOwner(db));
   });
 

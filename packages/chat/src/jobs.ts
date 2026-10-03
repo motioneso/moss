@@ -540,11 +540,23 @@ export async function retireShadowRecordPurgeQueue(
     await boss.unschedule(schedule.name, schedule.key);
     unscheduled += 1;
   }
-  const queue = await boss.getQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE);
-  if (queue) await boss.deleteQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE);
-  if ((queue || unscheduled > 0) && logger) {
+  let queueDeleted = false;
+  let queueLeftInPlace = false;
+  if (await boss.getQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE)) {
+    await boss.deleteQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE);
+    // pg-boss swallows a permission error from the delete and reports nothing, so ask again. Only
+    // this re-read may be logged as deleted; a row still present is reported as left in place.
+    queueDeleted = (await boss.getQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE)) === null;
+    queueLeftInPlace = !queueDeleted;
+  }
+  if ((queueDeleted || queueLeftInPlace || unscheduled > 0) && logger) {
     logger.info(
-      { queue: RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE, unscheduled, queueDeleted: Boolean(queue) },
+      {
+        queue: RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE,
+        unscheduled,
+        queueDeleted,
+        queueLeftInPlace
+      },
       "chat_classifier_shadow_purge_queue_retired"
     );
   }
