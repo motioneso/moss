@@ -524,3 +524,157 @@ describe("AI legacy capability-route read-through (H2)", () => {
     return response.json<{ model: { id: string } }>().model.id;
   }
 });
+
+// #2939: the chat capability lookup must agree with the turn path. The turn
+// resolves the user's override (`selectChatModelForUser` = override ??
+// default) while the lookup only saw the instance route — so a user whose
+// override pointed at a working model, with no default chat route, lost the
+// message box for a turn that would have succeeded.
+describe("AI chat capability lookup honors the user override (#2939)", () => {
+  let appDb: Kysely<MossDatabase>;
+  let dataContext: DataContextRunner;
+  let repository: AiRepository;
+  let server: ReturnType<typeof createApiServer>;
+  let boss: PgBoss;
+  let originalSecretKey: string | undefined;
+  let restoreFetch: () => void;
+  let providerId: string;
+  let chatModelId: string;
+
+  beforeAll(async () => {
+    originalSecretKey = process.env.JARVIS_AI_SECRET_KEY;
+    process.env.JARVIS_AI_SECRET_KEY = "test-ai-override-lookup-secret";
+    restoreFetch = installNetworkStub();
+
+    await resetFoundationDatabase();
+    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+    dataContext = new DataContextRunner(appDb);
+    repository = new AiRepository();
+    boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
+    server = createApiServer({ appDb, boss, logger: false });
+    await server.ready();
+
+    // Two providers: A is the flagged instance default but its only chat
+    // model is disabled, so the instance route cannot serve chat. B holds the
+    // working chat model, reachable only through the user's override.
+    const providerA = await seedProvider("Override lookup default provider");
+    const setDefault = await server.inject({
+      method: "PUT",
+      url: `/api/ai/providers/${providerA}/default`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    expect(setDefault.statusCode).toBe(200);
+    const retiredId = await seedModel(providerA, "override-retired-chat", ["chat"], "interactive");
+    const disableRes = await server.inject({
+      method: "PATCH",
+      url: `/api/ai/models/${retiredId}`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: { status: "disabled" }
+    });
+    expect(disableRes.statusCode).toBe(200);
+    providerId = await seedProvider("Override lookup working provider");
+    chatModelId = await seedModel(providerId, "override-chat", ["chat"], "interactive");
+
+    const enableOverride = await server.inject({
+      method: "PUT",
+      url: "/api/admin/ai/chat-model-override",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: { enabled: true }
+    });
+    expect(enableOverride.statusCode).toBe(200);
+
+    const setOverride = await server.inject({
+      method: "PUT",
+      url: "/api/ai/chat-model-override",
+      headers: { authorization: `Bearer ${ids.sessionB}` },
+      payload: { modelId: chatModelId }
+    });
+    expect(setOverride.statusCode).toBe(200);
+  });
+
+  afterAll(async () => {
+    await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
+    restoreFetch?.();
+    if (originalSecretKey === undefined) {
+      delete process.env.JARVIS_AI_SECRET_KEY;
+    } else {
+      process.env.JARVIS_AI_SECRET_KEY = originalSecretKey;
+    }
+  });
+
+  it("reports available for the user whose override resolves a chat model", async () => {
+    // The turn path would succeed for this user: the override resolves.
+    const selected = await dataContext.withDataContext(userBContext(), (scopedDb) =>
+      repository.selectChatModelForUser(scopedDb)
+    );
+    expect(selected?.id).toBe(chatModelId);
+
+    const lookupRes = await server.inject({
+      method: "GET",
+      url: "/api/ai/capability-route/chat",
+      headers: { authorization: `Bearer ${ids.sessionB}` }
+    });
+
+    expect(lookupRes.statusCode).toBe(200);
+    expect(lookupRes.json()).toMatchObject({
+      route: { capability: "chat", available: true, reason: "user-override" }
+    });
+  });
+
+  it("still reports unavailable for a user without an override", async () => {
+    const lookupRes = await server.inject({
+      method: "GET",
+      url: "/api/ai/capability-route/chat",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+
+    expect(lookupRes.statusCode).toBe(200);
+    expect(lookupRes.json()).toMatchObject({
+      route: { capability: "chat", available: false }
+    });
+  });
+
+  async function seedProvider(displayName: string): Promise<string> {
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/ai/providers",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: {
+        providerKind: "anthropic",
+        displayName,
+        credentialPayload: { apiKey: "override-lookup-secret" }
+      }
+    });
+    expect(response.statusCode).toBe(201);
+    return response.json<{ provider: { id: string } }>().provider.id;
+  }
+
+  async function seedModel(
+    providerConfigId: string,
+    providerModelId: string,
+    capabilities: readonly string[],
+    tier: string
+  ): Promise<string> {
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/ai/models",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: {
+        providerConfigId,
+        providerModelId,
+        displayName: providerModelId,
+        capabilities,
+        tier
+      }
+    });
+    expect(response.statusCode).toBe(201);
+    return response.json<{ model: { id: string } }>().model.id;
+  }
+});
+
+function userBContext(): AccessContext {
+  return {
+    actorUserId: ids.userB,
+    requestId: "request:ai-override-lookup"
+  };
+}

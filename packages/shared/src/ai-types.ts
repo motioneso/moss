@@ -42,7 +42,12 @@ export type AiCapabilityRouteReason =
   // #870 Slice 1: explicit "an admin must configure this" state for user-facing services
   // (Chat/Voice). Distinct from `no-active-model` (worker cross-provider miss) on purpose — the UI
   // renders needs-config as an actionable admin prompt, not a silent worker skip. See resolver.
-  | "needs-config";
+  | "needs-config"
+  // #2939: the instance route is unconfigured but this user's chat override
+  // resolves a working model — a turn would succeed, so the lookup reports
+  // available. Only ever produced by the user-facing lookup, never by the
+  // instance-truth resolver itself.
+  | "user-override";
 
 /**
  * #2689: the command-line tool a CLI provider runs. `version` is what the installed tool reports;
