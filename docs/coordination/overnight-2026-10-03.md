@@ -18,7 +18,7 @@
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | gate GREEN a26fdff31 (integration rerun 292 files/2722 passed); rebased ab8d3de49 (over 2963/2961/2973/2975), targeted reruns clean; browser test run GO 11:55 (doubles as live proof); then QA + merge (sensitive) | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | #2974 | 1 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | draft PR #2976 (5888cd2fb, slice A, migrations 0258/0259): gate green except 1 notes write-tools integration file (load flake?), lane rerunning that one file on the kept gate DB; section 6 kill-gate call pending lane evidence on late agreement + turn id | 2956 activity history (Opus) | w1:p11G | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
-| Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | PR #2977 open, gate GREEN af4fc88c7, live purge proof posted; QA round 1 RED (export archive omits focus judgments; comment 5972170898), lane fixing; QA qa-2977 (w1:p11Q) held open for incremental round 2 from af4fc88c7; then AWAITING-BEN + needs-ben, never merge | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | #2977 | 0 |
+| Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | QA round 2: all findings fixed, only CI static check red (export test file 1011 lines > 1000); lane moving the assertion; on CI green -> AWAITING-BEN + needs-ben, never merge | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | #2977 | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
 | Classifier review storage hardening | #2893 | routine | merged (103e94141) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
@@ -87,6 +87,8 @@ None.
   - Session id at merge matched lock anchor: y (6fb239b6). Merged b7dbb4636. Issue closed, board Done.
 
 ## Reaped sessions
+
+- w1:p11Q "QA 2977 focus cleanup (Opus)" (qa-2977) - round 1 RED (export omits focus judgments), round 2 all findings fixed, CI-only red (file size); verdicts on PR (5972170898, 5972486935); closed, QA worktree removed.
 
 - w1:p11S "QA 2975 job search test (Opus)" (qa-2975) - GREEN on 3ae81ea8b, verdict comment 5972043339; closed, QA worktree removed.
 - w1:p11E "2735 job search test (Opus)" (opus-2735) - built PR #2975, merged b7dbb4636; closed, worktree ~/Jarv1s/.claude/worktrees/fix-2735-jobsearch-uat removed (reap check: REAPABLE, gates clear; ahead=6), branch deleted.
@@ -190,3 +192,5 @@ Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, 
 12:05 2637 round 1 fixes pushed (rebased; f49c92e94 export fix at packages/settings/src/data-export-jobs.ts:136, 7c01c3eb5 tests), citations complete. Round 2 sent to qa-2977 (incremental: f49c92e94~1..7c01c3eb5 + range-diff). Shared Postgres slow to drop databases (checkpoint flush); four drops stuck, single-file test runs take 10+ min to exit.
 
 11:55 2942 gate GREEN, rebased ab8d3de49, browser test run (live proof) GO given. Next 2942 merge would be merge 2 since relay 4 -> relay after it.
+
+12:20 QA 2977 round 2: findings fixed, CI static check red only (data-export test file 1011 lines). Failure budget: two red rounds, but round 2's only red is a mechanical file-size check that CI verifies; QA said merge-ready on green CI without another review. Coordinator decision: no round 3 QA; lane moves the assertion, coordinator confirms CI green, then parks for Ben with this noted.
