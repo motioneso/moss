@@ -181,6 +181,27 @@ export interface ExternalModulesTable {
   updated_at: TimestampColumn;
 }
 
+/** Meeting draft records; capture and transcript persistence are separate later contracts. */
+export interface MeetingRecordsTable {
+  id: ColumnType<string, string | undefined, never>;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: ColumnType<string, string, never>;
+  title: ColumnType<string, string, never>;
+  personal_notes: ColumnType<string, string | undefined, string>;
+  notes_revision: ColumnType<number, number | undefined, number>;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface MeetingNoteWritesTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  expected_revision: number;
+  personal_notes: string;
+  saved_at: TimestampColumn;
+}
+
 export interface WorkshopProjectsTable {
   feed_sequence: ColumnType<string, string | undefined, string>;
   id: ColumnType<string, string | undefined, never>;
@@ -1724,6 +1745,8 @@ export interface MossDatabase {
   "app.module_enablement": ModuleEnablementTable;
   "app.external_modules": ExternalModulesTable;
   "app.module_builds": ModuleBuildsTable;
+  "app.meeting_records": MeetingRecordsTable;
+  "app.meeting_note_writes": MeetingNoteWritesTable;
   "app.workshop_projects": WorkshopProjectsTable;
   "app.workshop_project_feed": WorkshopProjectFeedTable;
   "app.module_credentials": ModuleCredentialsTable;

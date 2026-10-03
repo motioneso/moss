@@ -780,6 +780,24 @@ importers:
         specifier: ^12.18.2
         version: 12.18.2
 
+  packages/meetings:
+    dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
+      '@moss/module-sdk':
+        specifier: workspace:*
+        version: link:../module-sdk
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
+      fastify:
+        specifier: ^5.6.2
+        version: 5.8.5
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
+
   packages/memory:
     dependencies:
       '@huggingface/transformers':
@@ -862,6 +880,9 @@ importers:
       '@moss/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@moss/meetings':
+        specifier: workspace:*
+        version: link:../meetings
       '@moss/memory':
         specifier: workspace:*
         version: link:../memory

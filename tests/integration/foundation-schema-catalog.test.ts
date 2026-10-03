@@ -545,7 +545,8 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0257",
           name: "0257_focus_judgments_retention.sql"
-        }
+        },
+        { version: "0260", name: "0260_meeting_records.sql" }
       ]);
     } finally {
       await client.end();

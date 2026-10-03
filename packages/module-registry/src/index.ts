@@ -8,6 +8,11 @@ import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
 import {
+  meetingsModuleManifest,
+  meetingsModuleSqlMigrationDirectory,
+  registerMeetingRecordRoutes
+} from "@moss/meetings";
+import {
   commitmentsModuleManifest,
   commitmentsModuleSqlMigrationDirectory,
   COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
@@ -2765,6 +2770,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             throw error;
           }
         }
+      })
+  },
+  {
+    manifest: meetingsModuleManifest,
+    sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerMeetingRecordRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext
       })
   },
   {

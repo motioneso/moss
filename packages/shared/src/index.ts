@@ -69,3 +69,6 @@ export * from "./briefings-format.js";
 export * from "./briefing-editorial-evidence.js";
 export * from "./scratchpad-api.js";
 export * from "./scratchpad-shortcut.js";
+export * from "./meeting-api.js";
+export * from "./meeting-transcript-api.js";
+export * from "./meeting-record-api.js";

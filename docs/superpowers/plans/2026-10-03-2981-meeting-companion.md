@@ -122,3 +122,42 @@ Expected exit code is 0 for each applicable command; keep exit codes unpiped:
 - CodeGraph/codebase-memory and Herdr are unavailable here. Current source was read directly;
   this is a new isolated clone, not the user's shared checkout. Existing active PRs #2972,
   #2976 and #2860 must be considered before modifying their shared seams.
+
+## First code checkpoint (3 October 2026)
+
+Slice A now contains executable lifecycle/send-eligibility and transcript-revision code.
+Independent review found that changing a source ID could bypass transcript epoch chronology;
+that finding was corrected with switched-source regression cases. This is a domain foundation,
+not an actual recording controller or a claim that native devices have been stopped.
+
+The initial persistence checkpoint adds an optional, default-disabled Meetings module with
+browser-authenticated draft-record endpoints: create, list, read, and versioned personal-note
+writes. It does not add a navigation item, enable recording, or widen companion grants.
+The manifest's feature/error declarations describe only this implemented draft API.
+Owner-scoped repository types, migration 0260, and isolated integration tests are present;
+privacy/isolation claims remain unverified until the database tests and protection-removal
+negative proof actually run.
+
+This narrows Slice B's first checkpoint to draft identity and notes. Persisted lifecycle,
+transcript events, separate meeting-device authorization and native ingest still follow.
+Do not present a draft record as evidence that a capture occurred.
+
+Local verification status and exact commit evidence are recorded on draft PR #2982. The
+supported database launch failed with exit 4 because the expected development Postgres
+container is absent. The user will pull the branch into their existing local development
+environment; no desktop connection or new environment setup is required for that workflow.
+Native macOS/Windows capture and real UI live-path proof have not run.
+
+### Local continuation
+
+Use a separate checkout or worktree if another agent is actively editing the local tree.
+Read the repository's shared-checkout and verify-gate skills before Git tree changes or any
+DB-touching command. Use the project-pinned pnpm version and its frozen lockfile.
+
+- Branch: `feat/2981-meeting-companion`
+- Focused tests: `pnpm test:unit tests/unit/meeting-api-schema.test.ts tests/unit/meeting-lifecycle.test.ts tests/unit/meeting-transcript.test.ts tests/unit/meeting-record-routes.test.ts`
+- Full isolated gate: `scripts/run-gate.sh start`, then `scripts/run-gate.sh wait --follow`.
+- Integration suite `tests/integration/meeting-records.test.ts` is included in the normal
+  integration gate through registry migration discovery.
+- Do not run migrations/tests against a shared/live database by hand. No native capture or
+  provider test should use real workplace audio before its separate approval.

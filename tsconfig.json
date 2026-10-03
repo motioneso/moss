@@ -62,6 +62,7 @@
       "@moss/source-behaviors": ["packages/source-behaviors/src/index.ts"],
       "@moss/tasks": ["packages/tasks/src/index.ts"],
       "@moss/ui": ["packages/ui/src/index.ts"],
+      "@moss/meetings": ["packages/meetings/src/index.ts"],
       "@moss/memory": ["packages/memory/src/index.ts"],
       "@moss/usefulness-feedback": ["packages/usefulness-feedback/src/index.ts"],
       "@moss/vault": ["packages/vault/src/index.ts"],
