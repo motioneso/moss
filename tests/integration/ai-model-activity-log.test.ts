@@ -389,21 +389,24 @@ describe("activity history storage (#2956)", () => {
         result: "completed",
         ownerUserId: ids.userB,
         actionCode: "chat.answer",
+        turnId: "uat-turn-recorder-probe",
         detail: { quote: "through the recorder" }
       });
 
-      let found: { id: string } | undefined;
+      let found: { id: string; turn_id: string | null } | undefined;
       for (let attempt = 0; attempt < 40 && !found; attempt++) {
         found = await runner.withDataContext({ actorUserId: ids.userB }, (scopedDb) =>
           scopedDb.db
             .selectFrom("app.moss_model_activity_log")
-            .select("id")
+            .select(["id", "turn_id"])
             .where("model_name", "=", "uat-recorder-probe-model")
             .executeTakeFirst()
         );
         if (!found) await new Promise((resolve) => setTimeout(resolve, 50));
       }
       expect(found).toBeDefined();
+      // The turn id set at turn start survives the fire-and-forget write.
+      expect(found!.turn_id).toBe("uat-turn-recorder-probe");
       const detail = await runner.withDataContext({ actorUserId: ids.userB }, (scopedDb) =>
         repository.getModelActivityDetail(scopedDb, found!.id)
       );
