@@ -135,10 +135,13 @@ test("tool rows have one switch and repeated identical calls reach the service (
       expect(response.ok(), `PUT ${path} -> ${response.status()}`).toBeTruthy();
     }
     await page.setViewportSize({ width: 1440, height: 900 });
-    const listCallCount = () => fixtureCalls().filter((c) => c.tool === FIXTURE_LIST_TOOL).length;
+    const listCalls = () => fixtureCalls().filter((c) => c.tool === FIXTURE_LIST_TOOL);
     // A chat session keeps the tool list it started with, and a session whose background start
-    // raced the connection can miss the hub's tools. Each attempt is a fresh real chat.
-    for (let attempt = 1; attempt <= 3 && listCallCount() < 2; attempt++) {
+    // raced the connection can miss the hub's tools. Each attempt is a fresh real chat, and the
+    // proof needs two identical calls inside ONE attempt, so one call per chat never passes.
+    let proven: readonly FixtureCall[] = [];
+    for (let attempt = 1; attempt <= 3 && proven.length < 2; attempt++) {
+      const before = listCalls().length;
       await page.goto(`${requireUatBaseURL()}/today`);
       await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
       await page.getByRole("button", { name: "New chat" }).click();
@@ -152,13 +155,16 @@ test("tool rows have one switch and repeated identical calls reach the service (
       );
       await composer.press("Enter");
       await expect
-        .poll(listCallCount, { timeout: 90_000 })
+        .poll(() => listCalls().length - before, { timeout: 90_000 })
         .toBeGreaterThanOrEqual(2)
         .catch(() => undefined);
+      proven = listCalls().slice(before);
     }
-    expect(listCallCount()).toBeGreaterThanOrEqual(2);
-    const listCalls = fixtureCalls().filter((c) => c.tool === FIXTURE_LIST_TOOL);
-    expect(listCalls.map((c) => c.args)).toEqual(listCalls.map(() => ({})));
+    expect(
+      proven.length,
+      "two list calls reached the service within one chat"
+    ).toBeGreaterThanOrEqual(2);
+    expect(proven.map((c) => c.args)).toEqual(proven.map(() => ({})));
     await page.request.put("/api/me/yolo", { data: { enabled: false } });
   });
   // More than the live-tool threshold makes Moss group the list. The test tool server serves a
