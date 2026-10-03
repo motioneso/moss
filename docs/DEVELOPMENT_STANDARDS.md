@@ -118,6 +118,15 @@ UAT run, its exit code, and assertions or bounded DOM/network/log evidence for t
 A passing headless test alone is insufficient unless its recorded assertions prove the assembled
 path is reachable through the real UI.
 
+The proof must run against real data. Never intercept, stub, rewrite or replay network responses
+(Playwright route handlers, mock servers, hand-edited JSON) to make the screen show a state. Faked
+responses prove only that the UI renders the fake; they skip the API and the service, which is where
+the assembled path breaks. When a state cannot happen on demand, create it through the real data path
+(records the app itself reads), state exactly what was set up in the PR comment, and remove it
+afterwards. When the state cannot be reached for real at all, report that and leave the PR
+**code-complete, unverified**. Reviewers treat faked proof data as a must-fix finding. Ben's ruling,
+2026-10-03, after a proof rewrote API fields and never showed the service receiving the calls.
+
 No artifact means you may not merge and may not mark the issue or epic Done. The correct status is
 **code-complete, unverified** — say that plainly rather than reporting the work as finished.
 
