@@ -22,7 +22,7 @@
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
 | Classifier review storage hardening | #2893 | routine | PR #2973; gate green except known flake #1673 (rerun green); QA round 1 RED (1 blocking: __proto__ dropped on the pick-a-value path, classifier-gate.ts ~435); sent to opus-2893 to fix (lane near its context limit); qa-2973 (w1:p11K) kept for an incremental round 2 | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
-| Job search browser test signs in real chat | #2735 | routine (test-only) | PR #2975 code-complete, not green: final UAT run was killed for low memory; lane HOLDING for coordinator GO to rerun | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
+| Job search browser test signs in real chat | #2735 | routine (test-only) | PR #2975 code-complete, not green: final UAT run was killed for low memory; static-check fix 3ae81ea8b (file size); lane HOLDING for coordinator GO to rerun (after 2637 gate GO) | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
 
 ## Dependency / merge order
 
