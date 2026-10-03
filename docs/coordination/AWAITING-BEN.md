@@ -75,13 +75,4 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### PR 2964 - temporary shadow report page (#2957): merge sign-off (security tier)
-
-- Blocked: merge. Security tier, so the coordinator never merges it without Ben's OK.
-- State: two review rounds by an Opus reviewer, second round GREEN with no blocking findings; all
-  automated checks pass. Row security was proven by switching it off and watching another user's
-  data appear, then back on. Live proof used real records on a separate copy of the app built from
-  the branch, because the shared dev site does not run this code yet.
-- Options: approve the merge, or name changes.
-- Recommendation: merge.
-- Run: overnight-2026-10-03 (docs/coordination/overnight-2026-10-03.md).
+Nothing open.
