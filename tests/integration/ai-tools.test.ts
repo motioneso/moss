@@ -452,6 +452,7 @@ describe("AI read-only assistant tool execution foundation", () => {
       "system.upgrade-notify",
       "platform.module-control",
       "module-build",
+      "system.focus-judgment-purge",
       "export.build",
       "export.cleanup",
       "connectors.google-sync",
