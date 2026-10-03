@@ -16,6 +16,7 @@
     "@moss/connectors": "workspace:*",
     "@moss/db": "workspace:*",
     "@moss/email": "workspace:*",
+    "@moss/focus-judgment": "workspace:*",
     "@moss/host-fetch": "workspace:*",
     "@moss/jobs": "workspace:*",
     "@moss/memory": "workspace:*",

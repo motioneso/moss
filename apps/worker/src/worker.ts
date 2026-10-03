@@ -81,6 +81,7 @@ import {
   resolveE2eFetchOverride,
   createExternalModuleJobHandler
 } from "./external-module-job-handler.js";
+import { registerFocusJudgmentPurgeWorker } from "@moss/focus-judgment";
 import { ESPN_FETCH_HOSTS } from "@moss/sports";
 import { NEWS_FETCH_HOSTS } from "@moss/news";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
@@ -348,6 +349,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   await boss.work(UPGRADE_CHECK_QUEUE, async () => {
     await handleUpgradeCheckJob(workerDb, boss);
   });
+  await registerFocusJudgmentPurgeWorker(boss, workerDb);
   await registerUpgradeNotifyWorker(boss, dataContext, {
     logger: workerLogger,
     repository: new NotificationsRepository(
