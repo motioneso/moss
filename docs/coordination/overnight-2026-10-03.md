@@ -116,4 +116,4 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 07:22 PDT: box load 80-117 on 16 cores. No more lanes until load drops; slowness timeouts under load are not branch failures.
 
 - 07:50 Ben: use up usage before 11:00 with several builders; replace Muse lanes with Opus via handoff notes. 2942 replaced; 2934 and 2956 handoffs requested. Gates may queue on load.
-- 08:00 2934 Muse lane replaced by Opus (w1:p11F, rebase + gate only). Scoped arbiter (subagent) checking c0bd0f32. 2893 plan approved with a __proto__ round-trip condition; 2735 plan approved.
+- 08:00 2934 Muse lane replaced by Opus (w1:p11F, rebase + gate only). Scoped arbiter (subagent) checking c0bd0f32. 2893 plan approved with a __proto__ round-trip condition; 2735 plan approved.- 07:44 Ben delegated the merge decision on PR 2963 (#2934) to the coordinator: "please review privacy 4 me and make approval decision". Merge condition: scoped arbiter GREEN on c0bd0f32 + full gate green on the rebased head + CI green. Relay after the merge (security tier).
