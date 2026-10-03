@@ -29,6 +29,34 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-02
+
+#### Fixed
+
+- **Easier tapping on Today for phones.** Small links and buttons on the Today screen, such as the section links under the headline, the add-medication plus and the team story links, are now easier to tap on a phone. [PR #2947](https://github.com/motioneso/moss/pull/2947)
+- **No more blank page while Moss loads.** If Moss is slow to start, you now see the loading screen right away instead of an empty page. [PR #2944](https://github.com/motioneso/moss/pull/2944)
+- **Sports no longer says "a quiet night" during a game.** The Tonight section on Today no longer claims a quiet night while one of your teams is playing or has already played. [PR #2945](https://github.com/motioneso/moss/pull/2945)
+- **Easier-to-read text in a few places.** Some small notes on Today, faint labels in dark mode, the Delete account button and a warning number are now easier to read. [PR #2946](https://github.com/motioneso/moss/pull/2946)
+- **Chat no longer says it is ready when no AI model is connected.** When no AI model is connected, the chat panel now says so and offers a Connect a provider button instead of a message box that goes nowhere. [PR #2926](https://github.com/motioneso/moss/pull/2926)
+- **Today header shows the right time of day and why a briefing is missing.** The Today header no longer says "Morning briefing" in the afternoon, and when your briefing is not ready it now tells you why or when it will run. [PR #2929](https://github.com/motioneso/moss/pull/2929)
+- **Your own sent emails no longer show as needing you.** Emails you sent yourself no longer appear in your briefings as waiting for your decision. [PR #2880](https://github.com/motioneso/moss/pull/2880)
+
+#### Changed
+
+- **Chat now sits beside the page on wide screens.** On a wide screen, opening chat now makes room for it next to what you are looking at, so you can see your day while you ask about it. [PR #2941](https://github.com/motioneso/moss/pull/2941)
+- **Settings has a new look and one Connections page.** Settings now matches the rest of the app, your connected accounts, notes folder and services live together on one Connections page, and on phones you pick a section from a menu. [PR #2935](https://github.com/motioneso/moss/pull/2935)
+- **Chat panel works better with the keyboard.** Opening the chat puts the cursor in the message box, Escape closes it and takes you back to where you were, and on a phone the Tab key no longer wanders off behind the chat. [PR #2938](https://github.com/motioneso/moss/pull/2938)
+- **Quieter Today on empty days.** When your briefing, priorities and evening review are all empty, Today now shows a single short line instead of three separate empty messages. [PR #2931](https://github.com/motioneso/moss/pull/2931)
+- **Model activity log now lists every model call.** The admin Model activity page now also shows chat replies, background jobs, memory embeddings, and account checks, not just some of the calls Moss makes. [PR #2904](https://github.com/motioneso/moss/pull/2904)
+- **Settings fills the screen and reads more plainly.** Settings now uses the full width of your screen, the Activity page describes what Moss did in plain words, and a few Settings pages have clearer names: Your assistant, AI providers and What's new. [PR #2930](https://github.com/motioneso/moss/pull/2930)
+- **The sorting model is now the classifier.** The assistant settings screen calls the sorting model the classifier and adds the new classifier gate choice, which stays off until a tool is approved. [PR #2897](https://github.com/motioneso/moss/pull/2897)
+
+#### Added
+
+- **Ask Moss to delete your classifier trial records.** You can now ask Moss in chat to delete the private trial records the classifier keeps about your messages; Moss asks you to confirm before it deletes anything. [PR #2937](https://github.com/motioneso/moss/pull/2937)
+- **Choose which connected tools the classifier may use.** The connected-service screen now lets you review each tool before the classifier may use it, with a clear risk choice, a preview of what is sent, and a switch that never turns tools on by itself. [PR #2902](https://github.com/motioneso/moss/pull/2902)
+- **Model activity log.** Administrators can review the model calls the assistant makes, with the time, kind, model and result, without exposing any chat content. [PR #2900](https://github.com/motioneso/moss/pull/2900)
+
 ### 2026-10-01
 
 #### Changed
@@ -37,6 +65,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Evening review stays on your day.** The evening review no longer adds made-up remarks about your email or account setup. [PR #2877](https://github.com/motioneso/moss/pull/2877)
 - **Morning briefing keeps the day in time order.** The morning briefing now lists timed items in clock order and no longer adds a section that only repeats an event's name. [PR #2859](https://github.com/motioneso/moss/pull/2859)
 - **Admins keep access to shared AI providers.** When an admin who set up a shared AI provider is later demoted, the remaining admins can still see and manage it. [PR #2855](https://github.com/motioneso/moss/pull/2855)
 - **All-day events stay on the right day.** All-day calendar events now show on their own date in Today and in your briefings, instead of one day early when you are west of UTC. [PR #2852](https://github.com/motioneso/moss/pull/2852)
