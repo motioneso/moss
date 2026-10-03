@@ -182,15 +182,20 @@
 }
 
 @media (max-width: 680px) {
-  .today-hero__sections {
+  .cmd-sections.today-hero__sections {
     flex-wrap: wrap;
-    gap: 6px 15px;
+    gap: 8px 28px;
     margin: 0 6px 24px;
-    padding: 17px 0;
+    padding: 2px 0;
   }
 
+  /* Each link is a 44px-tall tap area. Vertical padding takes the row height
+     (the strip's own padding shrinks to match) and the sideways padding is
+     offset by margin plus the wider gap, so neighbours never overlap. */
   .today-hero__sections a {
     font-size: 9px;
+    padding: 15px 10px;
+    margin: 0 -10px;
   }
 
   .today-hero__sections-label {
