@@ -145,7 +145,7 @@
 :is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__kicker {
   display: block;
   margin-bottom: 7px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
@@ -199,7 +199,7 @@
   align-items: center;
   gap: var(--space-1);
   margin-bottom: 5px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--text-muted);
@@ -215,7 +215,7 @@
   font-weight: 400;
 }
 :is(.jds-brief--sports .sp-tkgrid, .sp-ticker__scroll) .sp-tk__scorechip {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 

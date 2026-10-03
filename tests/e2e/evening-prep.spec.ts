@@ -54,7 +54,7 @@ test("#891: evening Prep-for-tomorrow opens the chat drawer even when the seed i
 
   await page.goto("/today");
 
-  const prepButton = page.locator("button.ev-tomorrow__chat");
+  const prepButton = page.locator(".ev-tomorrow button.jds-btn--link");
   await expect(prepButton).toBeVisible();
   await prepButton.click();
 
@@ -88,7 +88,7 @@ test("#891: evening Prep-for-tomorrow opens the drawer before the seed POST reso
   });
 
   await page.goto("/today");
-  await page.locator("button.ev-tomorrow__chat").click();
+  await page.locator(".ev-tomorrow button.jds-btn--link").click();
 
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(drawer).toBeVisible(); // open while the seed POST is still pending

@@ -126,6 +126,20 @@
   background: var(--surface-3);
 }
 
+/* Text-link look: underlined, no box. Colour comes from --btn-link-color so a band can retint it. */
+.jds-btn--link {
+  display: inline;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--btn-link-color, var(--accent-fg));
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .jds-btn--active {
   background: var(--accent-soft);
   color: var(--accent-soft-fg);
@@ -176,16 +190,16 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: var(--border-w) solid transparent;
-  border-radius: var(--radius-md);
+  border: var(--iconbtn-border-w, var(--border-w)) solid transparent;
+  border-radius: var(--iconbtn-radius, var(--radius-md));
   background: transparent;
-  color: var(--text-muted);
+  color: var(--iconbtn-color, var(--text-muted));
   cursor: pointer;
   transition: var(--transition-control);
 }
 .jds-iconbtn:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--iconbtn-hover-bg, var(--surface-2));
+  color: var(--iconbtn-hover-color, var(--text));
 }
 .jds-iconbtn:active {
   background: var(--surface-3);
@@ -202,7 +216,7 @@
 .jds-iconbtn--sm {
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--iconbtn-radius, var(--radius-sm));
 }
 .jds-iconbtn--sm svg {
   width: 16px;
@@ -547,6 +561,13 @@
 }
 .jds-eyebrow--muted {
   color: var(--ink-3);
+}
+/* Bold weight and the hero-band tone (Today's eyebrow). */
+.jds-eyebrow--strong {
+  font-weight: var(--weight-bold);
+}
+.jds-eyebrow--hero {
+  color: var(--hero-fg-muted);
 }
 /* The board hero's "credible matches" label, baseline-aligned beside the 72px count — same
    eyebrow size (--text-2xs already matches its 11px override), just accent-toned. */

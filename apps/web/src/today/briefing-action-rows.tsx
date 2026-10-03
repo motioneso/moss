@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Clock, Flag, Reply } from "lucide-react";
 
@@ -276,22 +277,22 @@ function ActionRow(props: {
               chatAvailable={props.chatAvailable}
               onOpenChat={props.onOpenChat}
             />
-            <button
-              type="button"
-              className="jds-btn jds-btn--sm jds-btn--secondary"
+            <Button
+              size="sm"
+              variant="secondary"
               disabled={props.pending}
               onClick={() => props.onTriage("todo")}
             >
               Accept
-            </button>
-            <button
-              type="button"
-              className="jds-btn jds-btn--sm jds-btn--quiet"
+            </Button>
+            <Button
+              size="sm"
+              variant="quiet"
               disabled={props.pending}
               onClick={() => props.onTriage("archived")}
             >
               Dismiss
-            </button>
+            </Button>
           </>
         ) : (
           <span className="loose-row__meta">
@@ -314,15 +315,15 @@ function PrimaryControl(props: {
       if (row.primaryAction?.kind !== "reply") return null;
       const cacheMessageId = row.primaryAction.cacheMessageId;
       return (
-        <button
-          type="button"
-          className="jds-btn jds-btn--sm jds-btn--secondary"
+        <Button
+          size="sm"
+          variant="secondary"
           disabled={!props.chatAvailable}
           title={props.chatAvailable ? undefined : "Chat is unavailable right now."}
           onClick={() => props.onOpenChat(buildReplyChatPrompt(cacheMessageId))}
         >
           Reply
-        </button>
+        </Button>
       );
     }
     case "needs_action":

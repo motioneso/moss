@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { localDay } from "@moss/shared";
+import { Button, Eyebrow, IconButton } from "@moss/ui";
 
 import { createWellnessCheckin, getMedicationSchedule } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -87,7 +88,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
       {props.enabled ? (
         <div className="well">
           <div className="well__head">
-            <span className="well__eyebrow">Quick actions</span>
+            <Eyebrow tone="accent" className="well__eyebrow">
+              Quick actions
+            </Eyebrow>
             <span className="well__title">Wellness</span>
           </div>
           <div className="well__row">
@@ -97,27 +100,23 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
                 {medCountLine ? <span className="well__count">{medCountLine}</span> : null}
               </div>
             </div>
-            <button
-              type="button"
+            <IconButton
               ref={medsOpener}
-              className="well__plus"
+              size="sm"
               aria-label="Log medication"
               onClick={(event) => openMedsModal(event.currentTarget)}
             >
               +
-            </button>
+            </IconButton>
           </div>
           <div className="well__row">
             <div className="well__rowtext">
               <div className="well__label">Check in with yourself</div>
               <div className="well__sub">A moment to notice how you are.</div>
             </div>
-            <button
-              className="well__btn well__btn--primary"
-              onClick={() => setCheckinModalOpen(true)}
-            >
+            <Button size="sm" onClick={() => setCheckinModalOpen(true)}>
               Check in
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -147,15 +146,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
                   Medications
                 </div>
               </div>
-              <button
-                type="button"
-                ref={medsClose}
-                className="wl-modal__x"
-                aria-label="Close"
-                onClick={() => closeMedsModal()}
-              >
+              <IconButton ref={medsClose} aria-label="Close" onClick={() => closeMedsModal()}>
                 <XIcon />
-              </button>
+              </IconButton>
             </div>
             <div className="wl-modal__body" style={{ padding: "0 0 8px" }}>
               <MedToday
@@ -169,9 +162,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
             </div>
             <div className="wl-modal__foot">
               <span className="spacer" />
-              <button type="button" className="primary-button" onClick={() => closeMedsModal()}>
+              <Button size="sm" onClick={() => closeMedsModal()}>
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         </div>

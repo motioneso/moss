@@ -1,0 +1,75 @@
+/* Numbered section head */
+.jds-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.jds-section-head--center {
+  align-items: center;
+}
+.jds-section-head--rule {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line-strong);
+}
+.jds-section-head__number {
+  padding-bottom: 5px;
+  border-bottom: 2px solid var(--gold);
+  color: var(--accent-fg);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+}
+.jds-section-head__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 25px; /* Today's head size; --text-2xl is 24px */
+  line-height: 1.18;
+  letter-spacing: -0.7px;
+}
+.jds-section-head__meta {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  text-align: right;
+}
+
+/* Notes */
+.jds-note {
+  box-sizing: border-box;
+}
+.jds-note--plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 14px;
+  background: var(--sage-light);
+  border-top: 1px solid var(--line);
+  color: var(--accent-fg);
+  font-size: var(--text-2xs);
+}
+.jds-note--pull {
+  padding: 3px 0 3px var(--space-4);
+  border-left: 2px solid var(--gold);
+  color: var(--accent-fg);
+}
+.jds-note--practical {
+  padding: 14px;
+  background: var(--sage-light);
+  border-left: 2px solid var(--gold);
+  color: var(--accent-fg);
+  font-size: var(--text-xs);
+  line-height: 1.65;
+}
+
+/* Chip: a small outlined pill for a row of quick choices. */
+.jds-btn--chip {
+  height: auto;
+  padding: 6px 12px;
+  border-color: var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  letter-spacing: normal;
+}

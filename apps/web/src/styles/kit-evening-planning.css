@@ -58,7 +58,7 @@
 }
 
 .evening-plan__strip button > span {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -88,7 +88,7 @@
 
 .evening-plan__done-strip > span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 400;
 }
 
@@ -133,7 +133,7 @@
   display: block;
   margin-top: 2px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 400;
 }
 
@@ -253,7 +253,7 @@
 
 .evening-plan__choice-text small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.5;
 }
 
@@ -271,7 +271,7 @@
 .evening-plan__task .evening-plan__eyebrow {
   margin: 0;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 1.5px;
 }
@@ -336,7 +336,7 @@
   min-height: 40px;
   padding: 11px 12px;
   border-radius: 2px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -344,7 +344,7 @@
 .evening-plan__note-form .evening-plan__hint {
   margin-top: 9px;
   color: var(--accent-fg);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 /* Tomorrow rail and its phone disclosure. */
@@ -366,7 +366,7 @@
 .evening-plan__rail-date {
   margin: 0;
   color: var(--accent-fg);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -400,7 +400,7 @@
 .evening-plan__snapshot-entry > span {
   padding-top: 2px;
   color: var(--accent-fg);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -409,7 +409,7 @@
   display: block;
   margin-top: 4px;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   line-height: 1.5;
 }
 
@@ -426,7 +426,7 @@
   margin: 0 0 5px;
   padding: 9px 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.6;
 }
 
@@ -455,7 +455,7 @@
 
 .evening-plan__snapshot-bottom span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 .evening-plan__placement {
@@ -469,7 +469,7 @@
 .evening-plan__placement p {
   margin: 5px 0 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.6;
 }
 
@@ -619,7 +619,7 @@
 
 .evening-plan__record > span {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.9px;
   text-transform: uppercase;
@@ -627,7 +627,7 @@
 
 .evening-plan__record > small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.6;
 }
 
@@ -682,7 +682,7 @@
 .evening-plan__actions .plan-review__changed,
 .evening-plan__actions .plan-review__hint {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.5;
   color: var(--text-muted);
   opacity: 1;
@@ -725,20 +725,10 @@
   margin: 4px 0 0;
 }
 
-.evening-plan__link {
+:is(.evening-plan__section, .evening-plan__review-links) .jds-btn--link {
   padding: 10px 0;
-  border: 0;
-  background: none;
-  color: var(--accent-fg);
-  font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
-}
-
-.evening-plan__link:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  font-weight: var(--weight-regular);
+  line-height: normal;
 }
 
 .evening-plan__notes {
@@ -775,7 +765,7 @@
   font-size: 25px;
 }
 
-.evening-plan__section > .evening-plan__link {
+.evening-plan__section > .jds-btn--link {
   display: block;
 }
 
@@ -783,7 +773,7 @@
 .evening-plan__handoff-date {
   display: block;
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 1.5px;
   line-height: 22.5px;
@@ -834,7 +824,7 @@
 }
 
 .evening-plan__eyebrow {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-fg);
@@ -873,13 +863,13 @@
     justify-content: center;
     gap: 3px;
     padding: 10px 0;
-    font-size: 10px;
+    font-size: var(--text-2xs);
     line-height: 1.4;
     text-align: left;
   }
 
   .evening-plan__strip button > span {
-    font-size: 8px;
+    font-size: var(--text-2xs);
   }
 
   .evening-plan__grid {
@@ -958,7 +948,7 @@
   }
 
   .evening-plan__done-strip > span {
-    font-size: 9px;
+    font-size: var(--text-2xs);
   }
 
   .evening-plan__response {
