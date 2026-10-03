@@ -138,9 +138,22 @@
   .set2__nav {
     display: none;
   }
+  /* Nothing chosen yet: the full section list shows in the page and the pane waits. */
+  .set2--nolist .set2__nav {
+    display: flex;
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+  .set2--nolist .set2__picker,
+  .set2--nolist .set2__sheethead,
+  .set2--nolist .set2__pane {
+    display: none;
+  }
   .set2__nav.is-open {
     display: flex;
     position: fixed;
+    top: auto;
     left: 0;
     right: 0;
     bottom: 0;
@@ -354,4 +367,38 @@
 /* A note above the pane head keeps clear of the title. */
 .set2__pane > .set2-note {
   margin-bottom: 20px;
+}
+
+/* Persona controls sit beside their live preview on a wide screen. */
+.psona {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 32px;
+  align-items: start;
+}
+.psona__controls {
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .psona {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* Connections: a count per kind above the sections. */
+.conn__counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 24px 0 0;
+}
+.conn__count {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+.conn__count dd,
+.conn__count dt {
+  margin: 0;
 }

@@ -20,53 +20,53 @@
 .set2__picker {
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   color: var(--text);
 }
 .set2__pickerlbl {
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
 .set2__pickername {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 .set2__scrim {
-  background: rgba(0, 0, 0, 0.58);
+  background: var(--scrim);
   border: 0;
 }
 .set2__masttitle {
   font-family: var(--font-display);
-  font-size: 48px;
+  font-size: var(--text-5xl);
   font-weight: 900;
 }
 @media (max-width: 860px) {
   .set2__masttitle {
-    font-size: 36px;
+    font-size: var(--text-4xl);
   }
 }
 @media (max-width: 520px) {
   .set2__masttitle {
-    font-size: 32px;
+    font-size: var(--text-3xl);
   }
 }
 .set2__nav.is-open {
   background: var(--surface);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  box-shadow: var(--shadow);
 }
 .set2__sheettitle {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 800;
 }
 .set2__sheetclose {
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text);
 }
 .set2__adv-t {
@@ -123,7 +123,7 @@
 }
 .pane__title {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: var(--text-3xl);
   font-weight: 900;
   word-spacing: 0.12em;
   letter-spacing: -0.022em;
@@ -147,7 +147,7 @@
 }
 .pane__cardtitle {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: var(--text-xl);
   font-weight: 800;
   word-spacing: 0.12em;
   letter-spacing: -0.6px;
@@ -155,7 +155,7 @@
   color: var(--text);
 }
 .pane__carddesc {
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--text-subtle);
 }
 .fld__lbl {
@@ -501,4 +501,17 @@
 .vault__meta {
   font-size: 12px;
   color: var(--text-subtle);
+}
+.conn__count dd {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  color: var(--text);
+}
+.conn__count dt {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }

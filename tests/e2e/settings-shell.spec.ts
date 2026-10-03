@@ -139,7 +139,7 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
 
   const nav = page.getByRole("navigation", { name: "Settings categories" });
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
-    await expect(nav.getByText(group, { exact: true })).toBeVisible();
+    await expect(nav.locator(".set2__navgroup", { hasText: group })).toBeVisible();
   }
   await expect(nav.getByRole("button")).toHaveCount(10);
   await expect(nav.getByRole("button", { name: "What's new" })).toBeVisible();
@@ -202,8 +202,10 @@ test("short desktop rail reaches its final destination by keyboard", async ({ pa
   const nav = page.getByRole("navigation", { name: "Settings categories" });
   const first = nav.getByRole("button", { name: "Account & preferences" });
   const last = nav.getByRole("button").last();
+  await expect(first).toBeVisible();
+  const destinations = await nav.getByRole("button").count();
   await first.focus();
-  for (let index = 0; index < 11; index += 1) await page.keyboard.press("Tab");
+  for (let index = 1; index < destinations; index += 1) await page.keyboard.press("Tab");
   await expect(last).toBeFocused();
   await expect(last).toBeInViewport();
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
@@ -217,19 +219,41 @@ test("narrow shell keeps groups and destinations reachable without horizontal ov
   await page.goto("/settings");
 
   const nav = page.getByRole("navigation", { name: "Settings categories" });
+  const picker = page.getByRole("button", { name: /^Section/ });
+
+  // State 1: nothing chosen yet shows the whole list and no pane.
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
-    await expect(nav.getByText(group, { exact: true })).toBeVisible();
+    await expect(nav.locator(".set2__navgroup", { hasText: group })).toBeVisible();
   }
+  await expect(picker).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeHidden();
+
+  // State 2: choosing a section folds the list into the bar.
   await nav.getByRole("button", { name: "Modules" }).click();
   await expect(page.getByRole("heading", { name: "Modules" })).toBeVisible();
+  await expect(nav).toBeHidden();
+  await expect(picker).toContainText("Modules");
+
+  // State 3: the bar brings the list back as a sheet; Escape closes it and returns focus.
+  await picker.click();
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Account & preferences" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(nav).toBeHidden();
+  await expect(picker).toBeFocused();
+
+  await picker.click();
   await nav.getByRole("button", { name: "Account & preferences" }).click();
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
+  await expect(nav).toBeHidden();
+  await expect(picker).toBeFocused();
 
   await page.getByRole("button", { name: "Admin / Setup" }).click();
+  await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible();
+  await picker.click();
   for (const group of ["Access", "AI & extensions", "Operations"]) {
     await expect(nav.getByText(group, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible();
   await nav.getByRole("button", { name: "People & access" }).focus();
   await expect(nav.getByRole("button", { name: "People & access" })).toBeFocused();
   expect(

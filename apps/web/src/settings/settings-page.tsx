@@ -24,7 +24,7 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
+import { Fragment, lazy, Suspense, useEffect, useRef, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-module-settings";
@@ -467,6 +467,46 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const Pane = activeSection.Pane;
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const pickerRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const mastRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  // Phone: no ?section= means the person has not chosen yet, so show the whole list.
+  const nothingChosen = !requested;
+
+  // The open sheet behaves like a dialog: focus moves in, Tab stays in, Escape closes, the page
+  // behind is inert, and focus returns to the picker bar.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const nav = navRef.current;
+    const behind = [mastRef.current, paneRef.current, pickerRef.current];
+    behind.forEach((el) => el && (el.inert = true));
+    nav?.querySelector<HTMLElement>(".set2__navitem.is-active, .set2__navitem")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSheetOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !nav) return;
+      const focusable = [...nav.querySelectorAll<HTMLElement>("button")];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      behind.forEach((el) => el && (el.inert = false));
+      pickerRef.current?.focus();
+    };
+  }, [sheetOpen]);
 
   const setActiveSection = (id: PersonalSectionId | AdminSectionId) => {
     setSheetOpen(false);
@@ -521,8 +561,8 @@ export function SettingsPage({ me }: SettingsPageProps) {
 
   return (
     <FeedbackProvider>
-      <div className="set2">
-        <div className="set2__mast">
+      <div className={`set2${nothingChosen ? " set2--nolist" : ""}`}>
+        <div className="set2__mast" ref={mastRef}>
           <h1 className="set2__masttitle">Settings</h1>
           <div className="set2__bar">
             {isAdmin ? (
@@ -544,8 +584,9 @@ export function SettingsPage({ me }: SettingsPageProps) {
 
         <button
           type="button"
+          ref={pickerRef}
           className="set2__picker"
-          aria-haspopup="dialog"
+          aria-controls="settings-sections"
           aria-expanded={sheetOpen}
           onClick={() => setSheetOpen(true)}
         >
@@ -564,6 +605,8 @@ export function SettingsPage({ me }: SettingsPageProps) {
 
         <div className="set2__grid">
           <nav
+            id="settings-sections"
+            ref={navRef}
             className={`set2__nav${sheetOpen ? " is-open" : ""}`}
             aria-label="Settings categories"
           >
@@ -609,7 +652,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
             ) : null}
           </nav>
 
-          <div className="set2__pane">
+          <div className="set2__pane" ref={paneRef}>
             {adminMode && missingFamilyKeys.length > 0 ? (
               <Note icon={<KeyRound size={13} />}>
                 Encryption needs attention:{" "}

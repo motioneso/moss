@@ -181,108 +181,112 @@ function Persona({ who }: { readonly who: string }) {
       title="Persona"
       desc={`How ${assistantName} sounds and carries itself: write it yourself, or set it with the dials below. The preview shows the effect.`}
     >
-      <Field
-        label="Assistant name"
-        hint="What you call your assistant. Used in chat and the briefing."
-      >
-        <input
-          className="jds-input"
-          value={p.assistantName}
-          onChange={(e) => set("assistantName", e.target.value)}
-          aria-label="Assistant name"
-        />
-      </Field>
-      <Field label="How to set your persona">
-        <Segmented
-          ariaLabel="How to set your persona"
-          value={mode}
-          options={[
-            { value: "authored", label: "Write it yourself" },
-            { value: "guided", label: "Use guided dials" }
-          ]}
-          onChange={setMode}
-        />
-      </Field>
-      {mode === "authored" ? (
-        <Field
-          className="fld--no-border"
-          label="In your own words"
-          hint={`How should ${assistantName} interact with you? Its style, what to lean into, what to avoid.`}
-        >
-          <textarea
-            className="jds-textarea"
-            rows={3}
-            value={p.personaText}
-            onChange={(e) => set("personaText", e.target.value)}
-            aria-label="Persona"
-            placeholder="e.g. Be direct and a little dry. Skip the pep talks. Push me on commitments, but ease off on a rough day."
-          />
-        </Field>
-      ) : (
-        <>
+      <div className="psona">
+        <div className="psona__controls">
+          <Field
+            label="Assistant name"
+            hint="What you call your assistant. Used in chat and the briefing."
+          >
+            <input
+              className="jds-input"
+              value={p.assistantName}
+              onChange={(e) => set("assistantName", e.target.value)}
+              aria-label="Assistant name"
+            />
+          </Field>
+          <Field label="How to set your persona">
+            <Segmented
+              ariaLabel="How to set your persona"
+              value={mode}
+              options={[
+                { value: "authored", label: "Write it yourself" },
+                { value: "guided", label: "Use guided dials" }
+              ]}
+              onChange={setMode}
+            />
+          </Field>
+          {mode === "authored" ? (
+            <Field
+              className="fld--no-border"
+              label="In your own words"
+              hint={`How should ${assistantName} interact with you? Its style, what to lean into, what to avoid.`}
+            >
+              <textarea
+                className="jds-textarea"
+                rows={3}
+                value={p.personaText}
+                onChange={(e) => set("personaText", e.target.value)}
+                aria-label="Persona"
+                placeholder="e.g. Be direct and a little dry. Skip the pep talks. Push me on commitments, but ease off on a rough day."
+              />
+            </Field>
+          ) : (
+            <>
+              <Choice
+                key={`tone${rev}`}
+                className="fld--no-border"
+                label="Tone"
+                value={p.tone}
+                options={["Warm", "Neutral", "Crisp"]}
+                onChange={(v) => setDial("tone", v as ToneDial)}
+              />
+              <Choice
+                key={`dir${rev}`}
+                label="Directness"
+                value={p.directness}
+                options={["Gentle", "Balanced", "Direct"]}
+                onChange={(v) => setDial("directness", v as DirectnessDial)}
+              />
+              <Choice
+                key={`hum${rev}`}
+                label="Humor"
+                value={p.humor}
+                options={["None", "Dry", "Playful"]}
+                onChange={(v) => setDial("humor", v as HumorDial)}
+              />
+              <Choice
+                key={`rec${rev}`}
+                label="Recovery & accountability"
+                hint={`How ${assistantName} responds when you fall behind. Never shaming: that's a promise of the product.`}
+                value={p.recovery}
+                options={["Encouraging", "Matter-of-fact", "Firm"]}
+                onChange={(v) => setDial("recovery", v as RecoveryDial)}
+              />
+            </>
+          )}
           <Choice
-            key={`tone${rev}`}
-            className="fld--no-border"
-            label="Tone"
-            value={p.tone}
-            options={["Warm", "Neutral", "Crisp"]}
-            onChange={(v) => setDial("tone", v as ToneDial)}
-          />
-          <Choice
-            key={`dir${rev}`}
-            label="Directness"
-            value={p.directness}
-            options={["Gentle", "Balanced", "Direct"]}
-            onChange={(v) => setDial("directness", v as DirectnessDial)}
-          />
-          <Choice
-            key={`hum${rev}`}
-            label="Humor"
-            value={p.humor}
-            options={["None", "Dry", "Playful"]}
-            onChange={(v) => setDial("humor", v as HumorDial)}
-          />
-          <Choice
-            key={`rec${rev}`}
-            label="Recovery & accountability"
-            hint={`How ${assistantName} responds when you fall behind. Never shaming: that's a promise of the product.`}
-            value={p.recovery}
-            options={["Encouraging", "Matter-of-fact", "Firm"]}
-            onChange={(v) => setDial("recovery", v as RecoveryDial)}
-          />
-        </>
-      )}
-      <Choice
-        key={responseStyle}
-        label="Response style"
-        hint={RESPONSE_STYLE_EXAMPLE_HINT[responseStyle]}
-        value={cap(responseStyle)}
-        options={["Concise", "Balanced", "Detailed"]}
-        onChange={(v) =>
-          chatSettingsMutation.mutate({
-            chat: {
-              responseStyle: v.toLowerCase() as ChatResponseStyle,
-              ...(chatSettingsQuery.data?.chat.openCodeModel
-                ? { openCodeModel: chatSettingsQuery.data.chat.openCodeModel }
-                : {})
+            key={responseStyle}
+            label="Response style"
+            hint={RESPONSE_STYLE_EXAMPLE_HINT[responseStyle]}
+            value={cap(responseStyle)}
+            options={["Concise", "Balanced", "Detailed"]}
+            onChange={(v) =>
+              chatSettingsMutation.mutate({
+                chat: {
+                  responseStyle: v.toLowerCase() as ChatResponseStyle,
+                  ...(chatSettingsQuery.data?.chat.openCodeModel
+                    ? { openCodeModel: chatSettingsQuery.data.chat.openCodeModel }
+                    : {})
+                }
+              })
             }
-          })
-        }
-      />
-
-      <div className="ppv">
-        <div className="ppv__hd">
-          <GitCommitHorizontal size={13} aria-hidden="true" />
-          How {p.assistantName || "Moss"} would sound
+          />
         </div>
-        {previewReply ? (
-          <div className="ppv__bubble ppv__bubble--main">
-            <div className="ppv__cap">Response preview</div>
-            <p className="ppv__say">{previewReply}</p>
+
+        <div className="ppv">
+          <div className="ppv__hd">
+            <GitCommitHorizontal size={13} aria-hidden="true" />
+            How {p.assistantName || "Moss"} would sound
           </div>
-        ) : (
-          <p className="jds-hint">{PERSONA_PREVIEW_HINT}</p>
-        )}
+          {previewReply ? (
+            <div className="ppv__bubble ppv__bubble--main">
+              <div className="ppv__cap">Response preview</div>
+              <p className="ppv__say">{previewReply}</p>
+            </div>
+          ) : (
+            <p className="jds-hint">{PERSONA_PREVIEW_HINT}</p>
+          )}
+        </div>
       </div>
 
       <div className={`psona-save${dirty ? " is-dirty" : ""}`}>
