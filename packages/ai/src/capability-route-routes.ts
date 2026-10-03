@@ -49,8 +49,19 @@ export function registerAiServiceRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const capability = parseCapability(request.params.capability);
-        const route = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.resolveModelForCapability(scopedDb, capability)
+        const route = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const resolved = await repository.resolveModelForCapability(scopedDb, capability);
+            // #2939: the instance route never sees the per-user chat override,
+            // but a turn still succeeds through it (`selectChatModelForUser` =
+            // override ?? default). Answering unavailable here hid a working
+            // message box. Worker and admin paths keep the instance truth —
+            // this fallback asks only "would THIS user's turn work".
+            if (resolved.model || capability !== "chat") return resolved;
+            const override = await repository.selectChatModelForUser(scopedDb);
+            return override ? { model: override, reason: "user-override" as const } : resolved;
+          }
         );
 
         return {
