@@ -186,3 +186,5 @@ Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, 
 11:35 2975 merged b7dbb4636 (merge 1 since relay 4; next routine/sensitive merge = relay). 2912 full gate queued on the database lock behind 2942's integration run, which is in its final database drop.
 
 11:45 QA 2977 round 1 RED: one blocker, the Settings export archive omits the new focus judgments table (fixed table list in the export job). Sent to fix-2637-focus-retention with citation requirement. Round 2 is incremental in the same QA pane/worktree. Failure budget: 1 of 2 red rounds used.
+
+12:05 2637 round 1 fixes pushed (rebased; f49c92e94 export fix at packages/settings/src/data-export-jobs.ts:136, 7c01c3eb5 tests), citations complete. Round 2 sent to qa-2977 (incremental: f49c92e94~1..7c01c3eb5 + range-diff). Shared Postgres slow to drop databases (checkpoint flush); four drops stuck, single-file test runs take 10+ min to exit.
