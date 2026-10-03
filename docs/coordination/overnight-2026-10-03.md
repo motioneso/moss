@@ -14,7 +14,7 @@
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | building | 2939 chat drawer tests | w1:p0Q | fix-2939-drawer-tests | - | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
-| New chat stops running turn | #2934 | security | Opus QA (qa-2963, w1:p0Y); live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
+| New chat stops running turn | #2934 | security | rework after QA round 1 RED (2 leaks: no stop check between gate and submit; end-private-chat route same race), round 1 of 2; qa-2963 kept for incremental re-QA; live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands) | - | - | - | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | building (reads shadow records, not activity lines, per Ben) | 2957 shadow report | w1:p0X | feat-2957-shadow-report | - | 0 |
