@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Easier-to-read text in a few places.** Some small notes on Today, faint labels in dark mode, the Delete account button and a warning number are now easier to read. [PR #2946](https://github.com/motioneso/moss/pull/2946)
 - **Chat no longer says it is ready when no AI model is connected.** When no AI model is connected, the chat panel now says so and offers a Connect a provider button instead of a message box that goes nowhere. [PR #2926](https://github.com/motioneso/moss/pull/2926)
 - **Today header shows the right time of day and why a briefing is missing.** The Today header no longer says "Morning briefing" in the afternoon, and when your briefing is not ready it now tells you why or when it will run. [PR #2929](https://github.com/motioneso/moss/pull/2929)
 - **Your own sent emails no longer show as needing you.** Emails you sent yourself no longer appear in your briefings as waiting for your decision. [PR #2880](https://github.com/motioneso/moss/pull/2880)
