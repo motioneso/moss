@@ -477,6 +477,14 @@
   display: block;
   margin-top: 13px;
 }
+/* Phone: 44px tap area; the padding replaces the 13px space above and the negative margin keeps the line height. */
+@media (max-width: 680px) {
+  .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next .jds-btn--link {
+    margin-top: 0;
+    margin-bottom: -13px;
+    padding-block: 13px;
+  }
+}
 
 /* --- Morning rail: practical context note, study .support-note --- */
 .cmd-practical {
