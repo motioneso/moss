@@ -35,6 +35,8 @@ blocking	packages/chat/**	tests/uat/specs/1133-chat-attachments.uat.spec.ts
 blocking	packages/chat/src/classifier-shadow-tool.ts	tests/uat/specs/2911-shadow-delete.uat.spec.ts
 blocking	packages/chat/src/classifier-shadow-tool.ts	tests/uat/specs/2911-shadow-delete-real.uat.spec.ts
 blocking	packages/chat/src/jobs.ts	tests/uat/specs/2911-shadow-delete.uat.spec.ts
+blocking	packages/chat/src/jobs.ts	tests/uat/specs/2911-shadow-purge-queue.uat.spec.ts
+blocking	infra/postgres/grants/**	tests/uat/specs/2911-shadow-purge-queue.uat.spec.ts
 blocking	packages/chat/**	tests/uat/specs/runtime-context.uat.spec.ts
 blocking	packages/notes/**	tests/uat/specs/notes-default-retrieval.uat.spec.ts
 blocking	packages/notes/**	tests/uat/specs/notes-path-recheck.uat.spec.ts
