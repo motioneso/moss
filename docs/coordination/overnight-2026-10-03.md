@@ -170,3 +170,5 @@ RELAY POINT 4 (relay after compaction, session 759a1a1a). Successor next steps:
 9. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
 Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, PR watch re-armed on the five lane branches. 2956 slice B spawned as Muse (muse-spark-1.3, high) in w1:p11P "2956 slice B" (Builders tab w1:t9J), message with herdr pane run. Running at 11:01: 2942 integration rerun, 2637 full gate, 2735 UAT rerun (detached). 2912 waits for a gate slot. Disk 31 GB free, load 30.
+
+11:15 2956 slice B design calls (turn-id registry keyed by session key; one uuid as answer line id and turn id) adjudicated by Opus: both APPROVED WITH CHANGES. Ruling at ~/.coord-briefs/overnight/2956-slice-b-design-ruling.md, sent to w1:p11P.
