@@ -27,6 +27,15 @@ export interface GenerateChatInput {
   readonly onActivity?: (event: ChatActivityEvent) => void;
   /** Cancels the in-flight provider request when aborted. */
   readonly signal?: AbortSignal;
+  /**
+   * #2956: who this call runs for and which turn it belongs to. Recorded on the
+   * activity line; absent means a System line. `actionCode` defaults to a chat
+   * answer; background callers name their own `task.<job>` code.
+   */
+  readonly actionCode?: string;
+  readonly ownerUserId?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
 }
 
 export interface ChatProviderAdapter {

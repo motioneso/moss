@@ -140,6 +140,16 @@ export function modelActivityAction(service: string | undefined): string {
   return label.length > 0 ? label : "structured";
 }
 
+/**
+ * #2956: the fixed vocabulary for a structured activity line. A call no service
+ * names still gets a line, under the fallback the page titles "Ran a structured
+ * task". Shared by the API-key and CLI structured adapters so both agree.
+ */
+export function modelActivityStructuredCode(service: string | undefined): string {
+  const label = modelActivityAction(service);
+  return label === "structured" ? "structured.task" : `structured.${label}`;
+}
+
 /** DB CHECK limits for the short fields; a value over the limit is truncated, never dropped. */
 const KIND_LIMIT = 64;
 const ACTION_LIMIT = 200;
