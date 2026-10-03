@@ -99,9 +99,9 @@ export const aiModuleManifest = {
       // Plan 3.6a (#2889) — one flat, admin-readable, append-only row per model call.
       "sql/0254_moss_model_activity_log.sql",
       // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
-      "sql/0256_activity_owner_lines.sql",
+      "sql/0258_activity_owner_lines.sql",
       // #2956 — turn link on the action audit log for the per-turn step join.
-      "sql/0257_audit_log_turn_id.sql"
+      "sql/0259_audit_log_turn_id.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
