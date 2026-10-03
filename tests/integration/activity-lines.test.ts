@@ -5,8 +5,8 @@ import { sql, type Kysely } from "kysely";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { createDatabase, type MossDatabase } from "@moss/db";
-import { AiRepository, DataContextRunner } from "@moss/ai";
+import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { AiRepository } from "@moss/ai";
 import type { ActionAuditLogEntryDto, ActivityLineDto } from "@moss/shared";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
