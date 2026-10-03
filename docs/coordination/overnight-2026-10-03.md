@@ -19,7 +19,7 @@
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | plan approved 07:30 with 4 conditions from Opus check (owner does not bypass row security, table forces it; follows packages/ai/sql/0245 precedent): create as migration owner, pin search path + schema-qualify, test that the policy alone protects recent rows, number via check-migration-collisions | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | - | 0 |
-| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | building (plan approved, option A: test memory cap 6 GB + follow-up issue on duplicate embedding model; path test setup as folder owner) | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | - | 0 |
+| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30, draft PR meanwhile | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | - | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
 
 ## Dependency / merge order
@@ -109,3 +109,5 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 06:55 PDT: disk scan done (report in chat). Freed only caches (node compile cache, pnpm store prune); 16 GB free, RAM 9 GB available. #2637 held until a lane finishes. #2934 round-2 fixes pushed (head dfaca34dd), awaiting builder report before incremental re-QA in qa-2963.
 
 07:10 PDT: #2968 merged. Gate runs leave a 4.5 GB untagged app image each; pruned 13.5 GB, background sweep prunes untagged images every 10 min when free < 25 GB (coordinator background task, 5 h). #2637 spawned on Opus.
+
+07:22 PDT: box load 80-117 on 16 cores. No more lanes until load drops; slowness timeouts under load are not branch failures.
