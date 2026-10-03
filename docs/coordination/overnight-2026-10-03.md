@@ -255,3 +255,5 @@ RELAY POINT 6 (relay after security merge of #2977, session b1e6e877). Successor
 6. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
 Relay 6 (session 66aed34b): lock claimed 12:57, old coordinator w1:p11V closed.
+
+13:05 Board check for extra work (step 4): no item is spawnable without Ben. #2408 (vary Workshop example prompts) needs Ben's prompt wording + a short spec; #2275 (new folder in folder chooser) needs mockup sign-off; #2896, #2357, #1634, #2969, #2767 unsettled or large; #2906, #2876, #2775 likely already fixed. Asked Ben in chat.
