@@ -54,6 +54,9 @@ import {
   type ModuleDto
 } from "@moss/shared";
 
+// Narrowest window where the page and a 380px chat panel fit side by side without crowding.
+const WIDE_QUERY = "(min-width: 1280px)";
+
 const KNOWN_MODULES_WITH_SETTINGS = new Set(["calendar", "news", "sports", "tasks", "wellness"]);
 
 export function hasModuleSettings(moduleId: string, modules: readonly ModuleDto[] = []): boolean {
@@ -299,15 +302,26 @@ export function AppShell(props: AppShellProps) {
     }
   });
 
-  // #1756: dock the chat drawer beside the page only while the visible route is the caller's
-  // own running draft (ModuleDto.draft — set only for a draft the caller owns; see
-  // apps/api/src/module-dto.ts's serializeExternalModule). Everywhere else the drawer stays the
-  // ordinary floating overlay.
+  // Chat sits beside the page when the window is wide enough for both, on every screen. A
+  // running draft module keeps the docked layout down to the mobile breakpoint. Below that the
+  // drawer is the ordinary floating overlay.
+  const [wideWindow, setWideWindow] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.(WIDE_QUERY).matches
+  );
+  useEffect(() => {
+    const media = window.matchMedia?.(WIDE_QUERY);
+    if (!media) return;
+    const sync = () => setWideWindow(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
   const dockChat = useMemo(() => {
+    if (wideWindow) return true;
     if (!location.pathname.startsWith("/m/")) return false;
     const moduleId = location.pathname.slice("/m/".length).split("/")[0];
     return props.modules.some((module) => module.id === moduleId && module.draft === true);
-  }, [location.pathname, props.modules]);
+  }, [wideWindow, location.pathname, props.modules]);
 
   const locale = useUserLocale();
   const { title, subtitle } = resolvePageHeading(
