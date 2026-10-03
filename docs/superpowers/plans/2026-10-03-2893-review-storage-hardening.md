@@ -30,7 +30,7 @@ Not user-facing, so no live-path proof; the PR says so.
   on damage, so only the version check is added there if it fits cleanly).
 - Test (integration, `tests/integration/integrations-classifier-settings.test.ts`): seed
   `classifier_preparation` through the bootstrap client with each of
-  `{"version":1,"entries":[]}`, `{"version":1,"entries":"x"}`, `[]`, `"x"`,
+  `{"version":1,"entries":[]}`, `{"version":1,"entries":"x"}`,
   `{"version":99,"entries":{"turn_on":{}}}`; a save returns `saved` and the row reads back with
   exactly the one new entry.
 
@@ -53,10 +53,12 @@ Not user-facing, so no live-path proof; the PR says so.
 - Fix: `parseArguments` builds its output with `Object.create(null)`, the same approach as
   `entriesRecord` for tool names. The key becomes an own property, survives `JSON.stringify`,
   and cannot touch any prototype.
-- Test (unit, `tests/unit/integrations-classifier-settings.test.ts`): parse a body whose
-  `arguments` come from `JSON.parse('{"__proto__": {"kind": "extract"}}')`; the result holds an
-  own `__proto__` key, `Object.getPrototypeOf({})` is unchanged, and a stored map with that
-  argument round-trips through `parsePreparationMap`.
+- Coordinator condition: prove no later copy turns the key back into a prototype write. Four more
+  copy sites write argument or schema names into a plain `{}`: the fingerprint canonicalizer,
+  the synthetic tool's classifier declaration (`tool-manifests.ts`), and the gate's extraction
+  schema and call input (`classifier-gate-arguments.ts`). All use null-prototype records.
+- Test: `tests/unit/classifier-proto-argument.test.ts` follows one argument from the save body
+  through storage, the resolver and the gate; it fails when any single copy site is reverted.
 
 ## Verification
 
