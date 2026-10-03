@@ -6,7 +6,7 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 ## Queue
 
@@ -81,7 +81,15 @@ None.
   - CI fully green on 11588144f.
   - Session id at merge matched lock anchor: y (759a1a1a). Merged 103e94141.
 
+- #2975 (job search browser test, #2735) routine test-only:
+  - QA verdict + model: GREEN, merge-ready, no blocking findings; Opus (qa-2975), comment 5972043339.
+  - CI green, CLEAN; live UAT run exit 0, 2 passed (comment 5972023814).
+  - Session id at merge matched lock anchor: y (6fb239b6). Merged b7dbb4636. Issue closed, board Done.
+
 ## Reaped sessions
+
+- w1:p11S "QA 2975 job search test (Opus)" (qa-2975) - GREEN on 3ae81ea8b, verdict comment 5972043339; closed, QA worktree removed.
+- w1:p11E "2735 job search test (Opus)" (opus-2735) - built PR #2975, merged b7dbb4636; closed, worktree ~/Jarv1s/.claude/worktrees/fix-2735-jobsearch-uat removed (reap check: REAPABLE, gates clear; ahead=6), branch deleted.
 
 - w1:p11J "Coordinator (old)" (session 759a1a1a, relay 3 coordinator) - relayed at RELAY POINT 4 after compaction, nothing merged first; closed by relay 4.
 
@@ -174,3 +182,5 @@ Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, 
 11:15 2956 slice B design calls (turn-id registry keyed by session key; one uuid as answer line id and turn id) adjudicated by Opus: both APPROVED WITH CHANGES. Ruling at ~/.coord-briefs/overnight/2956-slice-b-design-ruling.md, sent to w1:p11P.
 
 11:25 2637 opened PR #2977 (gate GREEN af4fc88c7, live purge proof comment): Opus adversarial QA qa-2977 spawned in w1:p11Q "QA 2977 focus cleanup (Opus)", QA tab w1:t9Q, worktree .claude/worktrees/qa-2977 (detached). After verdict: AWAITING-BEN + needs-ben, never merge. 2912 given GO; running a FULL gate on 678a44e2a (integration-only cannot migrate a fresh DB). 2735 UAT rerun GREEN on 3ae81ea8b (comment 5972023814), CI green: Opus QA qa-2975 spawned in w1:p11S "QA 2975 job search test (Opus)", worktree .claude/worktrees/qa-2975. On GREEN: merge (routine) = merge 1 of 2 since relay 4.
+
+11:35 2975 merged b7dbb4636 (merge 1 since relay 4; next routine/sensitive merge = relay). 2912 full gate queued on the database lock behind 2942's integration run, which is in its final database drop.
