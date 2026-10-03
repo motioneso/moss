@@ -6,7 +6,7 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 ## Queue
 
@@ -21,7 +21,7 @@
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | gate found export bug (worker cannot read table); fixing with actor-scoped worker read rule + red proof; migration 0257 reserved; fix pushed af4fc88c7 with red proof (loosened rule fails both worker tests); FIRST in line for a full-gate GO when a slot frees (next after it: 2735 UAT rerun); then PR, Opus adversarial QA, PARK for Ben (not delegated) | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | - | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
-| Classifier review storage hardening | #2893 | routine | PR #2973; gate green except known flake #1673 (rerun green); QA round 1 RED (1 blocking: __proto__ dropped on the pick-a-value path, classifier-gate.ts ~435); sent to opus-2893 to fix (lane near its context limit); qa-2973 (w1:p11K) kept for an incremental round 2 | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
+| Classifier review storage hardening | #2893 | routine | merged (103e94141) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
 | Job search browser test signs in real chat | #2735 | routine (test-only) | PR #2975 code-complete, not green: final UAT run was killed for low memory; static-check fix 3ae81ea8b (file size); lane HOLDING for coordinator GO to rerun (after 2637 gate GO) | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
 
 ## Dependency / merge order
@@ -76,7 +76,14 @@ None.
   - CI fully green on 264a26ea6 incl. all integration and browser shards. Local gate red only on known flake #1673 (gateway pattern timeout), file untouched by PR.
   - Session id at merge matched lock anchor: y (3748ecb9). Merged b861a8093.
 
+- **PR #2973** (classifier review storage hardening, #2893), routine, not user-facing (no live-path proof required):
+  - QA: round 1 RED (1 blocking: __proto__ dropped on the pick-a-value path), fix 11588144f, round 2 GREEN; Opus (qa-2973). Verdicts on the PR.
+  - CI fully green on 11588144f.
+  - Session id at merge matched lock anchor: y (759a1a1a). Merged 103e94141.
+
 ## Reaped sessions
+
+- w1:p11K "QA 2973 review storage" (Opus QA, qa-2973) - round 1 RED (1 blocking), round 2 GREEN on PR 2973, verdicts on the PR; closed, QA worktree removed.
 
 - w1:p0R "2933 coverage guard" (Muse builder) - built #2933; landed as PR #2962 (6f9d95af6); closed after merge.
 - w1:p0W "QA 2962 coverage guard" (Opus QA) - reviewed PR #2962, verdict GREEN posted on the PR; closed after merge.
@@ -144,4 +151,4 @@ RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor
 9. Memory service (iii) climbs to ~10 GB within 20 min of restart; tracing turned off, not the cause. Do not restart it again for memory.
 10. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
-Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed. 2934 lane reaped. QA for 2973 spawned. 2942 gate start waits on a slow Postgres checkpoint (database drop), 2956 queued behind it; told to wait. 2735 holds for a GO to rerun its UAT once a gate slot frees.
+Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed. 2934 lane reaped. QA for 2973 spawned. 2942 gate start waits on a slow Postgres checkpoint (database drop), 2956 queued behind it; told to wait. 2735 holds for a GO to rerun its UAT once a gate slot frees. 2973 merged 103e94141 (routine, not user-facing, QA round 2 GREEN, CI green, session id matched lock). merges_since_relay 1: next routine/sensitive merge triggers relay. 2893 lane asked for teardown confirmation before reap.
