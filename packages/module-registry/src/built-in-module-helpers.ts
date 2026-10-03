@@ -6,7 +6,7 @@ import {
   type ProviderKind,
   type StructuredProviderAdapter
 } from "@moss/ai";
-import type { DataContextDb, DataContextRunner } from "@moss/db";
+import { readScopedActorUserId, type DataContextDb, type DataContextRunner } from "@moss/db";
 import {
   MemoryRepository,
   MemoryRetriever,
@@ -21,8 +21,13 @@ import { RuntimeConfigResolver, type PersonaPreviewInput } from "@moss/settings"
 import { UsefulnessFeedbackRepository } from "@moss/usefulness-feedback";
 
 export async function createRuntimeEmbeddingProvider(scopedDb: DataContextDb) {
+  // #2956: built per call, so the scoped actor is this call's owner.
+  const scopedOwner = await readScopedActorUserId(scopedDb);
   return createEmbeddingProvider(
-    await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb))
+    await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb)),
+    process.env,
+    undefined,
+    { source: "memory", ...(scopedOwner ? { ownerUserId: scopedOwner } : {}) }
   );
 }
 
