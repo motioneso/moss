@@ -6,7 +6,7 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 1
+**merges_since_relay:** 2
 
 ## Queue
 
@@ -15,8 +15,8 @@
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | reaped | fix-2934-newchat-stop | #2963 | 0 |
-| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | PR ready, browser test + live proof GREEN on ab8d3de49 (PR comment); Opus QA qa-2974 (w1:p11T, QA tab) running; refusal proven by gateway unit test (accepted, issue asks only for a test); hint gap on default engine = #2971; on GREEN merge = relay | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | #2974 | 1 |
-| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | draft PR #2976 (5888cd2fb, slice A, migrations 0258/0259): gate green except 1 notes write-tools integration file (load flake?), lane rerunning that one file on the kept gate DB; section 6 kill-gate call pending lane evidence on late agreement + turn id | 2956 activity history (Opus) | w1:p11G | feat-2956-activity-history | - | 0 |
+| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | merged (a1369fbed) | - | reaped | fix-2942-midchat-tools | #2974 | 1 |
+| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | draft PR #2976. Slice A done. Slice B building (Muse w1:p11P "2956 slice B", started 11:05; design ruling ~/.coord-briefs/overnight/2956-slice-b-design-ruling.md). Slices C, D later in fresh sessions. Then Opus adversarial QA, AWAITING-BEN, never merge | 2956 slice B (Muse) | w1:p11P | feat-2956-activity-history | #2976 | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | QA round 2: all findings fixed, only CI static check red (export test file 1011 lines > 1000); lane moving the assertion; on CI green -> AWAITING-BEN + needs-ben, never merge | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | #2977 | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
@@ -86,7 +86,14 @@ None.
   - CI green, CLEAN; live UAT run exit 0, 2 passed (comment 5972023814).
   - Session id at merge matched lock anchor: y (6fb239b6). Merged b7dbb4636. Issue closed, board Done.
 
+- #2974 (mid-chat tools hint + switched-off refusal test, #2942) sensitive:
+  - QA verdict + model: RED on release-note wording only, merge-ready after body fix with no re-review; Opus (qa-2974), comment 5972579568. Release note now Category N/A. Follow-up #2979 filed.
+  - CI 11 pass / 3 skipping, CLEAN; live browser run GREEN on ab8d3de49 (PR comment, real chat, nothing intercepted).
+  - Session id at merge matched lock anchor: y (6fb239b6). Merged a1369fbed. Issue closed, board Done.
+
 ## Reaped sessions
+
+- w1:p11B "2942 mid-chat tools (Opus)" (opus-2942) - built PR #2974, merged a1369fbed; closed, worktree removed (reap check: REAPABLE, gates clear; ahead=13), branch deleted local+remote.
 
 - w1:p11T "QA 2974 mid-chat tools (Opus)" (qa-2974) - RED on release-note wording only (merge-ready after body fix, no re-review); verdict 5972579568; closed, QA worktree removed.
 
@@ -200,3 +207,15 @@ Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, 
 12:30 2942 PR ready, live run GREEN on ab8d3de49. QA qa-2974 spawned (w1:p11T, worktree .claude/worktrees/qa-2974). Lane reported via cross-session message (from-name ben-28) rather than herdr prompt.
 
 12:40 QA 2974 RED on the release note only (claims a new-chat hint the default engine never shows). Lane rewording via REST + filing follow-up for refusal wording in check sessions / classifier gate. Then merge (sensitive) = merge 2 -> relay.
+
+12:55 2974 merged a1369fbed (sensitive). merges_since_relay 2 -> relay.
+
+RELAY POINT 5 (relay after 2nd merge since relay 4, session 6fb239b6). Successor next steps:
+1. Claim lock (herdr agent rename coordinator + pane rename Coordinator), update lock line to your session id, merges_since_relay 0, commit + push. Close the pane labelled "Coordinator (old)" (session 6fb239b6), record under Reaped sessions.
+2. Re-arm the PR watch (Monitor, 30 min, re-arm on expiry) on feat-2956-activity-history, fix-2637-focus-retention, fix-2912-notes-specs.
+3. 2637 (PR #2977, SECURITY): lane fix-2637-focus-retention (w1:p11A) is moving the new export assertion out of tests/integration/data-export.test.ts (1011 lines > 1000 limit) and will report SHA + CI. No QA round 3 (recorded decision 12:20). On CI green: add to docs/coordination/AWAITING-BEN.md + run needs-ben coordinator "PR 2977 focus history cleanup is security tier and ready: merge sign-off?" with the two QA verdict links (5972170898, 5972486935); arm a background watcher on ~/.needs-ben/replies/. Never merge without Ben's explicit OK; after a security merge, relay.
+4. 2912 (PR #2970 draft, routine): lane fix-2912-notes-specs (w1:p117) full gate on 678a44e2a was queued on the shared database lock; it reports the verdict. Postgres is slow to drop databases (checkpoint flush). On green: Opus QA (--model opus --effort high, then send /effort high), merge if GREEN + CI green.
+5. 2956 (PR #2976 draft, SECURITY): Muse lane w1:p11P "2956 slice B" is building writers + coverage guard per the design ruling. Message it with herdr pane run + bounded read. When slice B reports done: spawn slice C in a fresh session (Muse or DeepSeek per brief), then D. After D: Opus adversarial QA, AWAITING-BEN + needs-ben, never merge.
+6. Not ours: w1:t9F panes (Tasks redesign grid, Today row buttons, Review 2978), design-*, Epic 2864, Review 2961, 2918, 2951, review 2948.
+7. Lane agent names: fix-2637-focus-retention, fix-2912-notes-specs (herdr agent prompt). The 2942 lane replied via cross-session messages; lanes may do that too.
+8. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
