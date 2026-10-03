@@ -1,7 +1,17 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 
 import { createMockConnectorProviders } from "./mock-api.js";
 import { mockApi } from "./mock-chat-model.js";
+
+/** Opens the menu, checks the private item's state, and closes the menu again. */
+async function expectPrivateChecked(drawer: Locator, checked: boolean) {
+  await drawer.getByRole("button", { name: "More chat options" }).click();
+  await expect(
+    drawer.getByRole("menuitemcheckbox", { name: "Start private chat" })
+  ).toHaveAttribute("aria-checked", String(checked));
+  await drawer.page().keyboard.press("Escape");
+  await expect(drawer.getByRole("menu")).toHaveCount(0);
+}
 
 /**
  * #1133 — chat composer attachments (attach button + clipboard paste).
@@ -227,10 +237,7 @@ test("private mode hides the attach affordance (#1133)", async ({ page }) => {
   await page.route("**/api/chat/stream*", () => new Promise<void>(() => {}));
 
   const drawer = await openDrawer(page);
-  await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  );
+  await expectPrivateChecked(drawer, true);
   await expect(drawer.getByRole("button", { name: "Attach files" })).toHaveCount(0);
   await expect(drawer.locator(".chatd-attach__input")).toHaveCount(0);
 });

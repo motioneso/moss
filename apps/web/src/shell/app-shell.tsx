@@ -352,6 +352,10 @@ export function AppShell(props: AppShellProps) {
   // layout between beside-the-page and the floating overlay.
   const [chatExpanded, setChatExpanded] = useState(false);
   const expanded = chatExpanded && dockChat && chatOpen && !phoneWindow;
+  // Picking another screen drops back to docked so the chosen page is visible.
+  useEffect(() => {
+    setChatExpanded(false);
+  }, [location.pathname]);
   const chatDrawer = (
     <ChatDrawer
       open={chatOpen}
@@ -382,7 +386,7 @@ export function AppShell(props: AppShellProps) {
   );
 
   return (
-    <div className="app-frame" data-nav={navMode}>
+    <div className="app-frame" data-nav={navMode} data-chat-expanded={expanded || undefined}>
       <PageTrailProvider>
         <ShellNav
           navMode={navMode}

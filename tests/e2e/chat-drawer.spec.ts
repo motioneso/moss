@@ -1,9 +1,25 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 import { createMockAiModel } from "./mock-ai-api.js";
 import { createMockChatMessage, createMockChatThread } from "./mock-chat-api.js";
 import { createMockConnectorProviders } from "./mock-api.js";
 import { mockApi } from "./mock-chat-model.js";
+
+/** Opens the "More chat options" menu, picks one item, and leaves the menu closed (it closes itself). */
+async function pickChatMenuItem(drawer: Locator, name: string) {
+  await drawer.getByRole("button", { name: "More chat options" }).click();
+  await drawer.getByRole("menuitemcheckbox", { name }).click();
+}
+
+/** Opens the menu, checks the private item's state, and closes the menu again. */
+async function expectPrivateChecked(drawer: Locator, checked: boolean) {
+  await drawer.getByRole("button", { name: "More chat options" }).click();
+  await expect(
+    drawer.getByRole("menuitemcheckbox", { name: "Start private chat" })
+  ).toHaveAttribute("aria-checked", String(checked));
+  await drawer.page().keyboard.press("Escape");
+  await expect(drawer.getByRole("menu")).toHaveCount(0);
+}
 
 /**
  * Live chat drawer E2E.
@@ -131,7 +147,7 @@ test("private activation blocks send until the server confirms, then allows it",
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(drawer).toBeVisible();
-  await drawer.getByRole("button", { name: "Start private chat" }).click();
+  await pickChatMenuItem(drawer, "Start private chat");
 
   // While the server confirmation is held open, the private banner must not show yet,
   // and attempting to send must not reach POST /api/chat/turn.
@@ -162,10 +178,7 @@ test("reloading the page restores private-mode indication from server truth", as
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(drawer).toBeVisible();
 
-  await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  );
+  await expectPrivateChecked(drawer, true);
 });
 
 test("a focus refetch during a pending private close does not restore the closed banner early, and a failed close is restored afterwards", async ({
@@ -446,7 +459,7 @@ test("selecting a History row both opens and activates it — no separate resume
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   const composer = drawer.getByLabel("Message Moss");
   const modelTrigger = drawer.locator(".chatd-model__trigger");
-  await drawer.getByRole("button", { name: "Show chat history" }).click();
+  await pickChatMenuItem(drawer, "Show chat history");
   await drawer.getByText("Old chat").click();
 
   await expect.poll(() => resumeCalledWith).toBe("thread-old");
@@ -514,18 +527,17 @@ test("resuming a History thread while private clears the stale privateMode flag"
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  const privateToggle = drawer.getByRole("button", { name: "Start private chat" });
 
   // Sanity: private mode really is active before the resume (server-truth restore, #1036).
-  await expect(privateToggle).toHaveAttribute("aria-pressed", "true");
+  await expectPrivateChecked(drawer, true);
 
-  await drawer.getByRole("button", { name: "Show chat history" }).click();
+  await pickChatMenuItem(drawer, "Show chat history");
   await drawer.getByText("Old chat").click();
   await expect(drawer.getByText("Earlier context")).toBeVisible();
 
   // The stale privateMode flag from before the resume must already be gone — the resumed
   // thread is persisted (non-incognito), so the shield toggle must not show pressed.
-  await expect(privateToggle).toHaveAttribute("aria-pressed", "false");
+  await expectPrivateChecked(drawer, false);
 
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill("Continue here");
@@ -562,7 +574,7 @@ test("resume failure clears selection and reopens History", async ({ page }) => 
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await drawer.getByRole("button", { name: "Show chat history" }).click();
+  await pickChatMenuItem(drawer, "Show chat history");
   await drawer.getByText("Old chat").click();
 
   await expect(drawer.locator(".chatd-sess")).toBeVisible();
@@ -593,7 +605,7 @@ test("History hides the ordinary composer seeds while open", async ({ page }) =>
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await drawer.getByRole("button", { name: "Show chat history" }).click();
+  await pickChatMenuItem(drawer, "Show chat history");
 
   await expect(drawer.locator(".chatd-empty")).toHaveCount(0);
   await expect(drawer.locator(".chatd-sess")).toBeVisible();
@@ -612,7 +624,7 @@ test("empty History explains that there are no past conversations", async ({ pag
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await drawer.getByRole("button", { name: "Show chat history" }).click();
+  await pickChatMenuItem(drawer, "Show chat history");
 
   await expect(drawer.getByText("No past conversations yet.")).toBeVisible();
   await expect(drawer.locator(".chatd-empty")).toHaveCount(0);

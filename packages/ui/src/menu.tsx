@@ -5,6 +5,10 @@ export interface MenuItem {
   readonly label: ReactNode;
   readonly icon?: ReactNode;
   readonly disabled?: boolean;
+  /** Overrides the accessible name when the visible label is shorter than what a screen reader needs. */
+  readonly ariaLabel?: string;
+  /** When set, the item is a toggle and reports this state to assistive tech. */
+  readonly checked?: boolean;
 }
 
 export interface MenuProps {
@@ -68,7 +72,9 @@ export function Menu(props: MenuProps) {
             <button
               key={item.id}
               type="button"
-              role="menuitem"
+              role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+              aria-checked={item.checked}
+              aria-label={item.ariaLabel}
               disabled={item.disabled}
               onClick={() => {
                 close();

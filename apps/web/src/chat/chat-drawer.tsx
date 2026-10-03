@@ -496,6 +496,8 @@ export function ChatDrawer(props: {
 
   const onDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape" && !event.defaultPrevented) {
+      // An open More menu handles its own Escape.
+      if (asideRef.current?.querySelector('.chatd__head [aria-expanded="true"]')) return;
       event.stopPropagation();
       props.onClose();
       return;
@@ -655,14 +657,18 @@ export function ChatDrawer(props: {
             {
               id: "history",
               icon: <Clock aria-hidden="true" />,
-              label: showHistory ? "Hide history" : "History"
+              label: showHistory ? "Hide history" : "History",
+              ariaLabel: showHistory ? "Hide chat history" : "Show chat history",
+              checked: showHistory
             },
             ...(props.surface === DEFAULT_CHAT_SURFACE
               ? [
                   {
                     id: "private",
                     icon: <ShieldOff aria-hidden="true" />,
-                    label: privateMode ? "Leave private chat" : "Start private chat"
+                    label: privateMode ? "Leave private chat" : "Start private chat",
+                    ariaLabel: "Start private chat",
+                    checked: privateMode
                   }
                 ]
               : [])

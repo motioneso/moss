@@ -1,7 +1,6 @@
 # Docked chat: expand button and "more" menu (#2952)
 
-Status: draft for impeccable review. Prototype is rough and built on main before PR 2958, so
-the docked panel still shows the old rounded corners and wrapped status line.
+Status: approved by impeccable design review on 2026-10-03 (delegated by Ben), with the changes below folded in.
 
 ## Scope
 
@@ -24,8 +23,10 @@ The menu reuses the existing `Menu` primitive in `@moss/ui` (Escape and outside 
 ## Expanded behaviour
 
 - The page header and page body are hidden. Left navigation stays.
-- Chat fills the main area to the window height.
-- Header, thread and composer share one centred reading column, 820px max, with 16px minimum side padding.
+- Chat fills the main area to the window height, flush against the window edge and the left navigation: square corners, no border or shadow, no card.
+- Reading column is 960px at 1440 wide and about 820px at 1280 (the lesser of 960px and 78% of the area), with 16px minimum side padding.
+- Header text, suggestion cards, thread and message box share the same left and right edges. The header buttons stay pinned to the window's right edge.
+- The left navigation's highlighted item is dimmed while expanded.
 - The chat stays mounted, so unsent text survives expand and collapse.
 - Close while expanded closes chat and resets to docked for next open.
 
@@ -38,15 +39,17 @@ The menu reuses the existing `Menu` primitive in `@moss/ui` (Escape and outside 
 | Width use                             | Centred 820px reading column, full-bleed background and dividers. | Long lines hurt reading; the "use horizontal space" ruling is met by the full-width surface, not full-width text. |
 | Click another nav item while expanded | Navigate and collapse to docked, so the new page is visible.      | Staying expanded would hide the page the user just chose. Unsent text is kept.                                    |
 
-## Prototype findings to fix in the build
+## Review changes folded in
 
-- Menu icons render larger than header icons; match to 16px.
-- Hidden page header and body need `[hidden]` display rules (done in prototype).
-- Status line wrap is fixed by PR 2958; rebase onto it.
+1. The round button at the bottom right of the dev screen is the dev-only note-taking toolbar, not part of the product, so nothing in the product covers the send button. No change needed.
+2. Expanded edges line up (checked on the live page, equal to the pixel).
+3. Expanded has no card, rounded corner or shadow.
+4. The More button looks like the other header buttons, with a box only on hover or while open.
+5. Menu icons are 18px, the same as the header icons.
 
 ## Screens (local, not committed)
 
-`/tmp/design-chat-expand/`: docked-1440, docked-1280, menu-1440, menu-1280, expanded-1440, expanded-1280 (png).
+`/tmp/design-chat-expand/`: final-docked, final-menu and final-expanded at 1440 and 1280, and final-phone-390 (png).
 
 ## Build checklist
 

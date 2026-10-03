@@ -42,13 +42,21 @@
   /* Expanded: header, thread and composer share one centred reading column. */
   .chatd--expanded {
     width: auto;
-    --chatd-gutter: max(16px, calc((100% - 820px) / 2));
+    --chatd-gutter: max(16px, calc((100% - min(960px, 78%)) / 2));
   }
 
-  .chatd--expanded .chatd__head,
-  .chatd--expanded .chatd__body,
-  .chatd--expanded .chatd__composer {
+  .chatd--expanded .chatd__body {
     padding-inline: var(--chatd-gutter);
+  }
+
+  /* The thread content sits 12px inside the body padding, so the composer matches it. */
+  .chatd--expanded .chatd__composer {
+    padding-inline: calc(var(--chatd-gutter) + 12px);
+  }
+
+  /* Header text lines up with the column; the buttons stay pinned to the right edge. */
+  .chatd--expanded .chatd__head {
+    padding-inline: var(--chatd-gutter) 16px;
   }
 }
 
