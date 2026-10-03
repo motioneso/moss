@@ -241,17 +241,26 @@ export async function withModelActivityRecording<T>(
     readonly inputTokens?: number;
     readonly outputTokens?: number;
   },
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  opts?: {
+    /** Pull token usage off the settled value. Absent or empty means unreported. */
+    readonly usageOf?: (
+      value: T
+    ) => { readonly inputTokens?: number; readonly outputTokens?: number } | undefined;
+  }
 ): Promise<T> {
   const startedAt = Date.now();
   try {
     const value = await run();
     if (recorder) {
+      const usage = opts?.usageOf?.(value);
       invokeSafely(recorder, {
         ...context,
         outcome: "ok",
         result: RESULT_OK,
-        durationMs: Date.now() - startedAt
+        durationMs: Date.now() - startedAt,
+        ...(usage?.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+        ...(usage?.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {})
       });
     }
     return value;
