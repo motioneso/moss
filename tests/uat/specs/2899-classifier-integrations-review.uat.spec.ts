@@ -137,9 +137,6 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
   // 2. The ordinary controls are present and untouched before any classifier interaction. The
   //    switch input is visually hidden inside its track, so assert state, not visibility.
   await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeChecked();
-  await expect(
-    page.getByRole("checkbox", { name: "Allow repeated identical calls to list_lights" })
-  ).not.toBeChecked();
 
   // 3. The classifier section starts off, with its disclosure visible before any model request.
   const classifierSwitch = page.getByRole("checkbox", {
@@ -272,7 +269,4 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
 
   // 10. The ordinary controls are still exactly as they were.
   await expect(page.getByRole("checkbox", { name: "Enable list_lights" })).toBeChecked();
-  await expect(
-    page.getByRole("checkbox", { name: "Allow repeated identical calls to list_lights" })
-  ).not.toBeChecked();
 });

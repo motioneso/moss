@@ -161,8 +161,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "from the same list of folders available on the server, and People notes live inside " +
       "the chosen notes folder. An info icon explains how folders get listed. " +
       "Apps & services: connect external tools and services. A connection's detail screen lists its discovered " +
-      "tools and lets the owner choose which are on for ordinary chat and which may repeat " +
-      "identical calls. It also has a classifier section: a Let the classifier use this connection " +
+      "tools and lets the owner choose which are on for ordinary chat, with one on or off " +
+      "switch per tool. It also has a classifier section: a Let the classifier use this connection " +
       "switch that only marks the connection eligible, a note that messages and device names go " +
       "to the classifier provider, and a cost and sharing notice shown open above an explicit " +
       "Prepare action that names which tool definitions are sent to the owner's default chat " +
