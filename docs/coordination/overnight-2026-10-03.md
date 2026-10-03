@@ -18,7 +18,7 @@
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (plan approved: new-chat hint in refusal text; condition: prove the open chat can see and call the new tool, else kill gate -> chat-screen notice; plan to be committed) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
-| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | building (Opus 5.5) | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | - | 0 |
+| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | building (plan approved, option A: test memory cap 6 GB + follow-up issue on duplicate embedding model; path test setup as folder owner) | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | - | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | PR open, QA round 1 (qa-2968, w1:p119, Opus); Today change confirmed deliberate (523ad2371, #2641) | 2891 weather test wording | w1:p118 | fix-2891-weather-spec | #2968 | 0 |
 
 ## Dependency / merge order
@@ -95,3 +95,5 @@ RELAY POINT 2 (relay 1 after security merge of #2964). Successor next steps:
 Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All three builders confirmed alive: #2942 building test-first, #2934 running its gate before pushing round-2 fixes (branch head still 846bd1082), #2956 editing slice A. PR-opened watch re-armed (also watches the #2934 branch head for the round-2 push).
 
 06:30 PDT: disk was 97% full; removed untagged Docker images (5.4 GB), now 19 GB free. Ben: Opus 5.5 builders until 11:00 PDT, add more work to the queue.
+
+06:55 PDT: disk scan done (report in chat). Freed only caches (node compile cache, pnpm store prune); 16 GB free, RAM 9 GB available. #2637 held until a lane finishes. #2934 round-2 fixes pushed (head dfaca34dd), awaiting builder report before incremental re-QA in qa-2963.
