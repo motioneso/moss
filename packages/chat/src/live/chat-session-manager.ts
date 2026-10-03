@@ -1,18 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import { recordModelActivity, type ProviderKind } from "@moss/ai";
-import { resolveMossEnv, type ActivityDetailStep } from "@moss/db";
+import type { ActivityDetailStep } from "@moss/db";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
-import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
 import { buildEngineText } from "./engine-text.js";
 import {
-  assertLiveCliProvider,
   assertProviderIdentityForPendingTurn,
-  assertProviderIdentityBeforeReplay,
   discardChatSession,
   dropSessionsForProvider,
   ensureSessionForCurrentProvider,
@@ -20,6 +17,7 @@ import {
   type ActiveChatProvider,
   type UserSession
 } from "./chat-session-provider-identity.js";
+import { launchChatSession, seedChatContext } from "./chat-session-launch.js";
 import {
   ChatStreamLimitError,
   ChatTurnInFlightError,
@@ -29,9 +27,7 @@ import {
   ApiKeyLiveChatUnavailableError,
   UnsupportedLegacyCliProviderError
 } from "./errors.js";
-import { renderPersona } from "./persona.js";
 import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
-import { renderMemorySeedBlock } from "./recall-seed.js";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import {
@@ -40,7 +36,6 @@ import {
   clearChatSession,
   countSubscribersFor,
   delay,
-  drainEngine,
   createPendingActionResultFlusher,
   clearPrivateDetachTimer,
   endPrivateChatSession,
@@ -161,126 +156,18 @@ export class ChatSessionManager {
     surface: ChatSurface,
     providerIdentity: ActiveChatProvider
   ): Promise<UserSession> {
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const { provider, model, acpModel, providerConfigId, acpAgentId } = providerIdentity;
-    assertLiveCliProvider(providerIdentity);
-    let threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
-    if (!threadState && this.deps.persistence.getCurrentThreadState) {
-      await this.deps.persistence.openNewConversation(actorUserId, undefined, surface);
-      threadState = await this.deps.persistence.getCurrentThreadState(actorUserId, surface);
-    }
-    const persona =
-      typeof this.deps.persona === "string"
-        ? this.deps.persona
-        : await this.deps.persona(actorUserId, userName, surface);
-    const { neutralDir, personaPath } = await renderPersona(this.deps.personaFs, {
-      sessionKey,
+    return launchChatSession({
+      actorUserId,
       userName,
-      provider,
-      baseDir: this.deps.neutralBase,
-      persona
-    });
-    const mcpConfig = await this.deps.mintMcpToken?.(actorUserId, sessionKey);
-    if (!this.sequenceBySession.has(sessionKey)) this.sequenceBySession.set(sessionKey, 0);
-    const nextSequence = () => {
-      const next = (this.sequenceBySession.get(sessionKey) ?? 0) + 1;
-      this.sequenceBySession.set(sessionKey, next);
-      return next;
-    };
-    const engine = await this.deps.engineFactory(provider, sessionKey, {
-      providerConfigId,
-      acpAgentId,
-      ...(acpModel ? { acpModel } : {}),
-      ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
-      ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
-        ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
-        : {}),
-      nextSequence
-    });
-    await assertProviderIdentityBeforeReplay({
-      actorUserId,
-      sessionKey,
-      providerIdentity,
-      persistence: this.deps.persistence,
-      engine,
-      revokeMcpToken: this.deps.revokeMcpToken
-    });
-    // Rebuild replay from live state for every launch; recall precedes conversation replay.
-    const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
-    const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-    const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
-    const memorySeed = recallResult
-      ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
-      : "";
-    const { recent: recentTurns, oldSummary } = await this.deps.persistence.listPriorTurns(
-      actorUserId,
-      { forceReplay: opts?.forceReplay },
-      surface
-    );
-    if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
-      throw new CliChatUnavailableError("private chat is only available in the drawer");
-    }
-    if (threadState?.incognito && !engine.purgeTranscripts && !engine.handlesOwnPrivatePurge) {
-      throw new CliChatUnavailableError("private session unavailable");
-    }
-    const replayParts: string[] = [];
-    if (memorySeed) replayParts.push(memorySeed);
-    if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
-    if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
-    const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
-    const { offset } = await engine.launch({
-      neutralDir,
-      personaPath,
-      personaText: persona,
-      replayBatch,
-      // #367: launch builders emit `--model` only for a concrete settings override; the
-      // `"default"` sentinel omits it so the CLI rides its own interactive/account model.
-      model,
-      ...(acpModel ? { acpModel } : {}),
-      mcpToken: mcpConfig?.token,
-      mcpServerUrl: mcpConfig?.mcpServerUrl
-    });
-
-    const startsToolClientPerTurn = engine.startsToolClientPerTurn ?? false;
-    if (mcpConfig?.token && !startsToolClientPerTurn) {
-      const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
-      if (toolsListReady === false) {
-        // The engine process this launch just started, and the token just minted for it, would
-        // otherwise leak: nothing else tracks or reaps either once this throw unwinds the launch.
-        try {
-          await engine.kill();
-        } catch {
-          // Best-effort teardown of a process that never finished starting up.
-        }
-        this.deps.revokeMcpToken?.(sessionKey);
-        throw new CliChatUnavailableError("tools list was not ready in time");
-      }
-    }
-
-    const session: UserSession = {
-      actorUserId,
+      opts,
       surface,
-      engine,
-      provider,
-      model,
       providerIdentity,
-      lastActivity: this.deps.clock.now(),
-      transcriptOffset: offset,
-      incognito: threadState?.incognito ?? false,
-      seededContextKeys: new Set(),
-      mcpToken: mcpConfig?.token,
-      startsToolClientPerTurn
-    };
-    this.sessions.set(sessionKey, session);
-
-    // #342 — only in-process engines need manager-owned replay submit + drain.
-    if (replayBatch !== undefined && !this.serverOwnsDrain) {
-      await engine.submit(replayBatch);
-      // Drain (and discard) so real turn records start from a clean offset.
-      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, this.pollMs);
-    }
-
-    return session;
+      deps: this.deps,
+      sessions: this.sessions,
+      sequenceBySession: this.sequenceBySession,
+      serverOwnsDrain: this.serverOwnsDrain,
+      pollMs: this.pollMs
+    });
   }
 
   /**
@@ -319,13 +206,6 @@ export class ChatSessionManager {
     }
   }
 
-  /**
-   * #2956 (ruling R3): seeding submits model input outside any turn, so it
-   * sets no turn id. A tool call the seed triggers while a live turn runs on
-   * this session is filed under that turn. Seeding normally runs at session
-   * start, before any turn, so the overlap needs a seed racing a message —
-   * rare enough to document, not to refuse the seed over.
-   */
   async seedContext(
     actorUserId: string,
     userName: string,
@@ -333,19 +213,16 @@ export class ChatSessionManager {
     idempotencyKey?: string,
     surface?: string
   ): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const session = await this.ensureSession(actorUserId, userName, undefined, chatSurface);
-    if (idempotencyKey && session.seededContextKeys.has(idempotencyKey)) return;
-    await session.engine.submit(seed);
-    session.transcriptOffset = await drainEngine(
-      session.engine,
-      session.transcriptOffset,
-      this.pollMs
-    );
-    if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
-    session.lastActivity = this.deps.clock.now();
-    this.deps.touchMcpToken?.(sessionKey);
+    return seedChatContext({
+      actorUserId,
+      userName,
+      seed,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(surface ? { surface } : {}),
+      deps: this.deps,
+      ensureSession: this.ensureSession.bind(this),
+      pollMs: this.pollMs
+    });
   }
 
   private async runTurn(
