@@ -290,6 +290,16 @@
 :is(.cmd-aside, .cmd-dock) .well__plus:hover {
   color: var(--accent-fg-hover);
 }
+
+/* Phone: 44px tap area; the extra size is cancelled by the negative margin so
+   the plus keeps its look and position. */
+@media (max-width: 680px) {
+  :is(.cmd-aside, .cmd-dock) .well__plus {
+    height: 44px;
+    padding: 0 16px 0 20px;
+    margin: -10px -16px -10px -16px;
+  }
+}
 :is(.cmd-aside, .cmd-dock) .well__btn--primary {
   background: var(--forest);
   border: 1px solid var(--forest);

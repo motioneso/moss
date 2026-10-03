@@ -159,6 +159,15 @@
   text-decoration: underline;
 }
 
+/* Phone: 44px tap area; the padding is cancelled by the negative margin so the
+   links look and sit exactly as before. */
+@media (max-width: 680px) {
+  .today-hero__sections a {
+    padding: 15px 10px;
+    margin: -15px -10px;
+  }
+}
+
 .today-hero__sections-label {
   flex: none;
   margin-right: auto;

@@ -253,6 +253,15 @@
   overflow-wrap: anywhere;
 }
 
+/* Phone: 44px tap area for story links; the padding is cancelled by the
+   negative margin so the lines keep their spacing. */
+@media (max-width: 680px) {
+  .jds-brief--sports .sp-tkgrid .sp-tk__storylink {
+    padding-block: 14px;
+    margin-block: -14px;
+  }
+}
+
 /* At phone widths the status column's nowrap text would starve the two sides
    below crest-plus-score width, so the status takes its own full-width row.
    DOM order is unchanged, so visual order still matches it. */
