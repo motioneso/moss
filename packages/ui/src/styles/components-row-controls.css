@@ -23,3 +23,22 @@
   text-align: start;
   cursor: pointer;
 }
+
+/* Phone tap area: a short control grows an invisible 44px hit zone centred on itself, so the
+   look and the layout stay put. Controls already 44px or taller get no extra reach. */
+@media (max-width: 640px) {
+  .jds-rowbtn,
+  .jds-disclosure {
+    position: relative;
+  }
+
+  .jds-rowbtn::after,
+  .jds-disclosure::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: max(44px, 100%);
+    transform: translateY(-50%);
+  }
+}
