@@ -4,7 +4,7 @@
 **Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `3748ecb9-3142-49d8-8078-38dc9a19429b` (relay 2). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
-**Build lanes:** Muse Spark in the Builders tab (w1:t9J). QA: Opus, own pane in a QA tab.
+**Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
 **merges_since_relay:** 0
 
@@ -91,3 +91,5 @@ RELAY POINT 2 (relay 1 after security merge of #2964). Successor next steps:
 5. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
 Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All three builders confirmed alive: #2942 building test-first, #2934 running its gate before pushing round-2 fixes (branch head still 846bd1082), #2956 editing slice A. PR-opened watch re-armed (also watches the #2934 branch head for the round-2 push).
+
+06:30 PDT: disk was 97% full; removed untagged Docker images (5.4 GB), now 19 GB free. Ben: Opus 5.5 builders until 11:00 PDT, add more work to the queue.
