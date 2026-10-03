@@ -206,6 +206,22 @@ only. All text sits at or above the 11px floor.
 | Notes                 | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`             | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               |
 | Text-link buttons     | `<Button variant="link">` (retint with `--btn-link-color`)                 | `.today-hero__link`, `.cmd-next__link`                                                   |
 
+### Hand-built Today buttons still to move (#2918)
+
+Moved so far: the hero and meeting links (`Button` link) and the Check in and medication Done
+buttons (`Button` primary, small). Still hand-built, each with its own colour, border or type rules
+in a Today sheet, and to be moved onto `Button`:
+
+- `evening-plan__link` (four text links in the finished evening plan)
+- `ev-tomorrow__plan`, `ev-tomorrow__chat`, `ev-tomorrow__item`, `ev-loop__open`, `ev-done__main`
+- `plan-review__titlelink`, `loose-row__main`, `brief-snapshot__main`
+- `brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`
+- icon buttons `well__plus`, `well__nudge-x`, `wl-modal__x` (move onto the shared icon button)
+- the unclassed buttons in `briefing-report-shell`, `briefing-action-rows`, `briefing-dialog`,
+  `briefing-feedback-menu`, `morning-briefing`, `proactive-cards`, `today-timeline`, `day-plan`,
+  `day-plan-review-row`, `evening-mode`, `evening-planning-review`, `evening-planning-frame` and
+  the retry button in `module-today-widgets`
+
 ### Known Today defects
 
 These ship on Today today. They are not rules; follow the corrected rule.

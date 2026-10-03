@@ -40,7 +40,7 @@ _No enum or boolean props._
 
 ## button
 
-- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`, `link`, `rail`
+- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`, `link`
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **block** (optional boolean flag)
 - **active** (optional boolean flag)

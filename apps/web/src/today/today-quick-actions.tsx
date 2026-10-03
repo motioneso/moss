@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { localDay } from "@moss/shared";
-import { Eyebrow } from "@moss/ui";
+import { Button, Eyebrow } from "@moss/ui";
 
 import { createWellnessCheckin, getMedicationSchedule } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -115,12 +115,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
               <div className="well__label">Check in with yourself</div>
               <div className="well__sub">A moment to notice how you are.</div>
             </div>
-            <button
-              className="well__btn well__btn--primary"
-              onClick={() => setCheckinModalOpen(true)}
-            >
+            <Button size="sm" onClick={() => setCheckinModalOpen(true)}>
               Check in
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -172,9 +169,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
             </div>
             <div className="wl-modal__foot">
               <span className="spacer" />
-              <button type="button" className="primary-button" onClick={() => closeMedsModal()}>
+              <Button size="sm" onClick={() => closeMedsModal()}>
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         </div>

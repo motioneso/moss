@@ -7,8 +7,7 @@ export type ButtonVariant =
   | "accentSoft"
   | "danger"
   | "field"
-  | "link"
-  | "rail";
+  | "link";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className"> {

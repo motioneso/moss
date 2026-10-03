@@ -260,18 +260,11 @@
     margin: -10px -16px -10px -16px;
   }
 }
-:is(.cmd-aside, .cmd-dock) .well__btn--primary {
-  background: var(--forest);
-  border: 1px solid var(--forest);
-  border-radius: 8px;
-  color: var(--accent-label);
-  font-size: 12px;
-  line-height: 1.2;
+:is(.cmd-aside, .cmd-dock) .well__row .jds-btn {
+  height: auto;
   padding: 12px 6px;
-}
-:is(.cmd-aside, .cmd-dock) .well__btn--primary:hover {
-  background: var(--forest-hover);
-  border-color: var(--forest-hover);
+  border-radius: var(--radius-md);
+  line-height: 1.2;
 }
 
 /* --- Today page timeline (study .slot rules) ---
@@ -485,19 +478,9 @@
   line-height: 1.65;
   color: var(--text-muted);
 }
-.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__link {
+.cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next .jds-btn--link {
   display: block;
   margin-top: 13px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent-fg);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
 }
 
 /* --- Morning rail: practical context note, study .support-note --- */

@@ -223,6 +223,8 @@
   }
 
   .jds-brief--sports .sp-tkgrid .sp-tk__storylink {
+    box-sizing: border-box;
+    min-height: 44px;
     padding-block: 14px;
   }
 }
