@@ -725,20 +725,10 @@
   margin: 4px 0 0;
 }
 
-.evening-plan__link {
+:is(.evening-plan__section, .evening-plan__review-links) .jds-btn--link {
   padding: 10px 0;
-  border: 0;
-  background: none;
-  color: var(--accent-fg);
-  font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
-}
-
-.evening-plan__link:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  font-weight: var(--weight-regular);
+  line-height: normal;
 }
 
 .evening-plan__notes {
@@ -775,7 +765,7 @@
   font-size: 25px;
 }
 
-.evening-plan__section > .evening-plan__link {
+.evening-plan__section > .jds-btn--link {
   display: block;
 }
 

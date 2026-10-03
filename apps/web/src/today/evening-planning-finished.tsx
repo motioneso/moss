@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import type { DayPlanBlockInput, TaskDto } from "@moss/shared";
 
 import type { EveningPlanningController } from "./evening-planning-controller.js";
@@ -54,12 +55,12 @@ export function EveningFinishedStep(props: {
         <strong>{EVENING_FINISHED_REPLY_TITLE}</strong>
         {EVENING_FINISHED_REPLY}
       </div>
-      <button type="button" className="evening-plan__link" onClick={props.onHandoff}>
+      <Button variant="link" onClick={props.onHandoff}>
         {EVENING_HANDOFF_LINK}
-      </button>
-      <button type="button" className="evening-plan__link" onClick={props.onAdjust}>
+      </Button>
+      <Button variant="link" onClick={props.onAdjust}>
         {EVENING_ADJUST_LINK}
-      </button>
+      </Button>
     </section>
   );
 }

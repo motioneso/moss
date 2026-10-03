@@ -250,23 +250,17 @@ export function ReviewSection(props: {
             </div>
           ) : null}
           <div className="evening-plan__review-links">
-            <button
-              type="button"
-              className="evening-plan__link"
+            <Button
+              variant="link"
               disabled={review.busy || evening.busy}
               onClick={() => void review.runPreview()}
             >
               Preview changes
-            </button>
+            </Button>
             {failed ? (
-              <button
-                type="button"
-                className="evening-plan__link"
-                disabled={review.busy}
-                onClick={() => void review.retry()}
-              >
+              <Button variant="link" disabled={review.busy} onClick={() => void review.retry()}>
                 Retry
-              </button>
+              </Button>
             ) : null}
           </div>
           {notes.length > 0 ? (
