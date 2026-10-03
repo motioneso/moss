@@ -13,7 +13,7 @@ import {
 import type { ChatPersistencePort, ChatSessionManagerDeps } from "./chat-session-ports.js";
 import type { GateLifecycleHost } from "./classifier-gate-lifecycle.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
-import { CliChatUnavailableError } from "./errors.js";
+import { ChatThreadNotFoundError, CliChatUnavailableError } from "./errors.js";
 import { formatApprovalRecord, formatRefusalRecord } from "./acp-chat-engine.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 
@@ -421,6 +421,79 @@ export async function clearChatSession(input: {
     input.revokeMcpToken?.(sessionKey);
   }
   await input.persistence.openNewConversation(input.actorUserId, input.options, chatSurface);
+}
+
+export async function endPrivateChatSession(input: {
+  readonly actorUserId: string;
+  readonly surface?: string;
+  readonly persistence: Pick<ChatPersistencePort, "getCurrentThreadState">;
+  readonly sessions: Map<string, UserSession>;
+  readonly deps: ChatSessionManagerDeps;
+  readonly clearDetachTimer: (key: string) => void;
+  readonly stopTurn: (actorUserId: string, surface: ChatSurface) => Promise<void>;
+}): Promise<void> {
+  const chatSurface = normalizeChatSurface(input.surface);
+  const currentThread = await input.persistence.getCurrentThreadState?.(
+    input.actorUserId,
+    chatSurface
+  );
+  if (!currentThread?.incognito) return;
+
+  // #2934 finding 2 — stop a running turn before purging the private thread, the
+  // way clear and resume do. Otherwise the turn outlives the purge and launches
+  // post-purge work for whatever normal chat comes next.
+  await input.stopTurn(input.actorUserId, chatSurface);
+
+  await cleanupPrivateSession(
+    input.actorUserId,
+    chatSurface,
+    currentThread.id,
+    input.sessions.get(surfaceSessionKey(input.actorUserId, chatSurface)),
+    input.deps,
+    input.sessions,
+    input.clearDetachTimer
+  );
+}
+
+/** Resume an owned thread for this actor + surface. */
+export async function resumeChatThread(input: {
+  readonly actorUserId: string;
+  readonly threadId: string;
+  readonly surface?: string;
+  readonly persistence: Pick<ChatPersistencePort, "touchExistingThread">;
+  readonly sessions: Map<string, UserSession>;
+  readonly stopTurn: (actorUserId: string, surface: ChatSurface) => Promise<void>;
+  readonly revokeMcpToken?: (sessionKey: string) => void;
+  readonly pendingForcedReplay: Set<string>;
+}): Promise<void> {
+  const chatSurface = normalizeChatSurface(input.surface);
+  const sessionKey = surfaceSessionKey(input.actorUserId, chatSurface);
+  // Validate ownership FIRST — a stale or foreign id must NOT disrupt the active session.
+  // Only after confirming the thread exists and belongs to this user do we stop/drop.
+  const found = await input.persistence.touchExistingThread(
+    input.actorUserId,
+    input.threadId,
+    chatSurface
+  );
+  if (!found) {
+    throw new ChatThreadNotFoundError();
+  }
+
+  // Thread confirmed valid. Stop any in-flight turn (idempotent no-op when none is in flight).
+  await input.stopTurn(input.actorUserId, chatSurface);
+
+  // Drop the live engine so the next submitTurn launches fresh from the resumed thread.
+  const session = input.sessions.get(sessionKey);
+  if (session) {
+    try {
+      await session.engine.kill();
+    } catch {
+      // best-effort: session is dropped below regardless
+    }
+    input.sessions.delete(sessionKey);
+    input.revokeMcpToken?.(sessionKey);
+  }
+  input.pendingForcedReplay.add(sessionKey);
 }
 
 export async function sweepOrphanedPrivateThreads(

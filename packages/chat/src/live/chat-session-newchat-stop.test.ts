@@ -28,8 +28,14 @@ const noopPersonaFs = {
 /** A thread store where the test flips the current thread like a new chat would. */
 class FlipFlopPersistence implements ChatPersistencePort {
   private thread = { id: "thread-private", incognito: true };
+  private noThread = false;
   readonly recordedTurns: string[] = [];
   readonly recordedHandled: string[] = [];
+
+  /** Simulate a purge that deletes the current thread: no current thread after. */
+  clearThread(): void {
+    this.noThread = true;
+  }
 
   setPrivate(): void {
     this.thread = { id: "thread-private", incognito: true };
@@ -39,7 +45,25 @@ class FlipFlopPersistence implements ChatPersistencePort {
     this.thread = { id: "thread-normal", incognito: false };
   }
 
+  providerCalls = 0;
+  private providerHold: { wait: Promise<void>; open: () => void } | null = null;
+
+  /** Park provider resolution from the second call on, until openProvider. */
+  holdProviderFromSecondCall(): void {
+    let open!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    this.providerHold = { wait, open };
+  }
+
+  openProvider(): void {
+    this.providerHold?.open();
+  }
+
   async resolveActiveProvider(_actorUserId: string) {
+    this.providerCalls += 1;
+    if (this.providerCalls >= 2 && this.providerHold) await this.providerHold.wait;
     return { provider: "anthropic" as ProviderKind, model: "claude-3-7-sonnet" };
   }
 
@@ -49,9 +73,11 @@ class FlipFlopPersistence implements ChatPersistencePort {
     _surface?: ChatSurface
   ): Promise<void> {
     this.thread = { id: "thread-new", incognito: false };
+    this.noThread = false;
   }
 
   async getCurrentThreadState() {
+    if (this.noThread) return undefined;
     return { ...this.thread };
   }
 
@@ -92,16 +118,29 @@ class FlipFlopPersistence implements ChatPersistencePort {
 class DeferredGate {
   readonly evaluateCalls: GateRequest[] = [];
   private resolveMode!: (mode: "off" | "shadow" | "on") => void;
+  private resolveEvaluate!: () => void;
+  private resolveEvaluateEntered!: () => void;
   readonly modeGate = new Promise<"off" | "shadow" | "on">((resolve) => {
     this.resolveMode = resolve;
   });
+  readonly evaluateEntered = new Promise<void>((resolve) => {
+    this.resolveEvaluateEntered = resolve;
+  });
+  readonly evaluateWait = new Promise<void>((resolve) => {
+    this.resolveEvaluate = resolve;
+  });
   openMode(mode: "off" | "shadow" | "on"): void {
     this.resolveMode(mode);
+  }
+  openEvaluate(): void {
+    this.resolveEvaluate();
   }
   readonly runner = {
     mode: (_actorUserId: string) => this.modeGate,
     evaluate: async (request: GateRequest): Promise<GateOutcome> => {
       this.evaluateCalls.push(request);
+      this.resolveEvaluateEntered();
+      await this.evaluateWait;
       return { kind: "declined", reason: "gate_off", trace: { latencyMs: 0 } };
     }
   };
@@ -123,6 +162,11 @@ class RecordingShadow {
 class BlockingEngine implements CliChatEngine {
   readonly provider = "anthropic" as ProviderKind;
   readonly submits: string[] = [];
+  startsToolClientPerTurn = false;
+
+  get readCalls(): number {
+    return this.reads;
+  }
   interruptCalls = 0;
   // Declared before readEntered: class-field define semantics would otherwise
   // reset these to undefined after the readEntered initializer assigns them.
@@ -137,7 +181,10 @@ class BlockingEngine implements CliChatEngine {
   });
   private reads = 0;
 
+  launchCalls = 0;
+
   async launch(): Promise<{ offset: number }> {
+    this.launchCalls += 1;
     return { offset: 0 };
   }
 
@@ -167,6 +214,19 @@ class BlockingEngine implements CliChatEngine {
   async kill(): Promise<void> {}
 }
 
+/**
+ * Give the turn time to run past the point under test, then release the read
+ * in case the guard under test is missing and the turn kept going. Resolves
+ * early when the engine was never reached (the fixed behavior).
+ */
+async function settleTurn(engine: BlockingEngine, budgetMs = 2000): Promise<void> {
+  const start = Date.now();
+  while (engine.readCalls === 0 && Date.now() - start < budgetMs) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  if (engine.readCalls > 0) engine.releaseComplete("late");
+}
+
 function baseDeps(
   persistence: FlipFlopPersistence,
   engine: BlockingEngine,
@@ -186,7 +246,7 @@ function baseDeps(
 }
 
 describe("#2934 new chat must stop a running turn", () => {
-  it("T1: a thread flip inside the gate-mode wait never reaches the classifier or shadow log", async () => {
+  it("T1: a thread flip inside the gate-mode wait is refused, never classified, submitted, or saved", async () => {
     const persistence = new FlipFlopPersistence();
     persistence.setPrivate();
     const gate = new DeferredGate();
@@ -202,18 +262,20 @@ describe("#2934 new chat must stop a running turn", () => {
     const turn = manager.submitTurn("user-1", "Ben", "private text");
     await Promise.resolve();
     // The new chat finishes inside the gate-mode wait. This flips the thread
-    // with no stop signal, so the test isolates the privacy-capture layer (D1-D3)
-    // from the stop layer (D4, covered by T2).
+    // with no stop signal, so the test isolates the privacy layers from the
+    // stop layer (covered by T2).
     await persistence.openNewConversation("user-1", undefined, undefined);
     gate.openMode("on");
-    await engine.readEntered;
-    engine.releaseComplete("hello");
+    gate.openEvaluate();
+    await settleTurn(engine);
 
     const result = await turn;
-    expect(result.reply).toBe("hello");
+    expect(result.reply).toBe("");
     expect(gate.evaluateCalls).toEqual([]);
     expect(persistence.recordedHandled).toEqual([]);
-    expect(shadow.starts).toEqual([expect.objectContaining({ incognito: true })]);
+    expect(persistence.recordedTurns).toEqual([]);
+    expect(shadow.starts).toEqual([]);
+    expect(engine.submits).toEqual([]);
   });
 
   it("T2: a real new chat stops the default-path turn before it is saved", async () => {
@@ -236,6 +298,108 @@ describe("#2934 new chat must stop a running turn", () => {
     expect(seen).toContainEqual(
       expect.objectContaining({ kind: "status", text: "Stopped by user." })
     );
+  });
+
+  it("T4 (finding 1): a real new chat inside the evaluate wait never reaches the new model", async () => {
+    // Normal thread so the gate evaluates instead of bypassing: this isolates
+    // the stop-between-gate-and-submit mechanism. The private-text property is
+    // covered by T1 (refusal on privacy mismatch) and T5 (end-private route).
+    const persistence = new FlipFlopPersistence();
+    persistence.setNormal();
+    const gate = new DeferredGate();
+    const shadow = new RecordingShadow();
+    const engine = new BlockingEngine();
+    const manager = new ChatSessionManager(
+      baseDeps(persistence, engine, {
+        classifierGate: gate.runner,
+        classifierGateShadow: shadow.runner
+      })
+    );
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (record) => seen.push(record));
+
+    persistence.holdProviderFromSecondCall();
+    const turn = manager.submitTurn("user-1", "Ben", "normal text");
+    await Promise.resolve();
+    gate.openMode("on");
+    await gate.evaluateEntered;
+    gate.openEvaluate();
+    // The turn parks at the second provider read (past the gate, before the
+    // submit), so the real new chat lands exactly in that window.
+    const parkedAt = Date.now();
+    while (persistence.providerCalls < 2 && Date.now() - parkedAt < 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(persistence.providerCalls).toBeGreaterThanOrEqual(2);
+    await manager.clear("user-1");
+    persistence.openProvider();
+    await settleTurn(engine);
+
+    const result = await turn;
+    expect(result.reply).toBe("");
+    expect(engine.submits).toEqual([]);
+    expect(persistence.recordedTurns).toEqual([]);
+    expect(persistence.recordedHandled).toEqual([]);
+    expect(seen).toContainEqual(
+      expect.objectContaining({ kind: "status", text: "Stopped by user." })
+    );
+  });
+
+  it("T5 (finding 2): ending the private chat stops the running turn before it launches post-purge work", async () => {
+    const persistence = new FlipFlopPersistence();
+    persistence.setPrivate();
+    const gate = new DeferredGate();
+    const shadow = new RecordingShadow();
+    const engine = new BlockingEngine();
+    const manager = new ChatSessionManager(
+      baseDeps(persistence, engine, {
+        classifierGate: gate.runner,
+        classifierGateShadow: shadow.runner
+      })
+    );
+
+    const turn = manager.submitTurn("user-1", "Ben", "private text");
+    await Promise.resolve();
+    await manager.endPrivateSession("user-1");
+    // The purge deleted the private thread; the next launch auto-opens normal.
+    persistence.clearThread();
+    gate.openMode("on");
+    gate.openEvaluate();
+    await settleTurn(engine);
+
+    const result = await turn;
+    expect(result.reply).toBe("");
+    expect(engine.launchCalls).toBe(0);
+    expect(engine.submits).toEqual([]);
+    expect(persistence.recordedTurns).toEqual([]);
+    expect(persistence.recordedHandled).toEqual([]);
+    expect(gate.evaluateCalls).toEqual([]);
+  });
+
+  it("T6: a stop inside the tools-readiness wait still stops the save", async () => {
+    const persistence = new FlipFlopPersistence();
+    persistence.setNormal();
+    const engine = new BlockingEngine();
+    engine.startsToolClientPerTurn = true;
+    let observedCount = 5;
+    const manager = new ChatSessionManager(
+      baseDeps(persistence, engine, {
+        mintMcpToken: async () => ({ token: "tok", mcpServerUrl: "http://x" }),
+        getToolsListObservationCount: () => observedCount
+      })
+    );
+
+    const turn = manager.submitTurn("user-1", "Ben", "normal text");
+    await engine.readEntered;
+    engine.releaseComplete("hi");
+    // The turn now waits on the tools-list observation; stop inside that wait.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await manager.clear("user-1");
+    observedCount = 6;
+
+    await turn;
+    expect(persistence.recordedTurns).toEqual([]);
+    expect(engine.interruptCalls).toBe(1);
   });
 
   it("T3: the real gate declines a private request before any classifier call", async () => {

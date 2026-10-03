@@ -109,10 +109,6 @@ export async function tryGatedTurn(
     return { result: undefined, requestIncognito };
   if (outcome.kind === "cancelled")
     return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
-  // #2934 — a stop that landed after the gate decided must still stop the turn: the new
-  // chat may already have flipped the thread, so nothing may be recorded under it.
-  if (controller.signal.aborted)
-    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
   return {
     result: await persistGateOutcome(host, actorUserId, surface, text, opts, outcome),
     requestIncognito
