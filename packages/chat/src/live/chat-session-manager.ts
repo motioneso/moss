@@ -381,12 +381,9 @@ export class ChatSessionManager {
     // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
     let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
     try {
-      // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
-      // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
-      // turn returns without launching an engine; a decline returns undefined and the default
-      // model path below runs unchanged with the original text.
-      // #2934 — the gate attempt captures this turn's privacy before its mode wait
-      // and returns it for the shadow turn below.
+      // Task 4.1 (#2901) — the classifier gate runs before any engine launch (`on` only). A
+      // handled turn returns here; a decline falls through to the default model path unchanged.
+      // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
       const { result: gated, requestIncognito } = await tryGatedTurn(
         this.lifecycleHost,
         actorUserId,
@@ -484,9 +481,7 @@ export class ChatSessionManager {
             userName,
             session
           );
-          // #2934 round 2 — a new chat may have landed inside the heal, so the
-          // healed session can belong to a new normal thread. Re-check the stop
-          // and the privacy match before the retry submits.
+          // #2934 round 2 — a new chat inside the heal: re-check stop and privacy before resubmit.
           if (controller.signal.aborted)
             return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
           if (session.incognito !== requestIncognito)
