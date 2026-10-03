@@ -185,3 +185,9 @@ blocking	tests/uat/seed/chunks/classifier-ai.ts	tests/uat/specs/classifier-shado
 blocking	tests/uat/fixtures/classifier-fixture-server.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
 # #2942 mid-conversation tools: session-allowlist refusal hint and its live proof.
 blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/2942-midchat-tools.uat.spec.ts
+# #2956 slice C: the Activity page lines, detail dialog and layout. A real briefing
+# synthesis records a line the admin then sees as fixed words with a working dialog.
+blocking	apps/web/src/settings/settings-activity-pane.tsx	tests/uat/specs/2956-activity-history.uat.spec.ts
+blocking	apps/web/src/settings/settings-activity-dialog.tsx	tests/uat/specs/2956-activity-history.uat.spec.ts
+blocking	apps/web/src/settings/settings-activity-line.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
+blocking	packages/shared/src/ai-activity-lines-api.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
