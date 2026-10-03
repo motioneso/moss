@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 
 - **Chat box no longer disappears while typing.** If no chat model is connected, the message box stays put while you type instead of vanishing, and your draft is never lost when the connection status loads. [PR #2965](https://github.com/motioneso/moss/pull/2965)
 
+#### Added
+
+- **Temporary classifier shadow report.** Admins can open a temporary Shadow report from the Classifier row while the gate runs in Shadow, showing how often the classifier agreed with the main chat model over the last 7, 30 or 90 days. [PR #2964](https://github.com/motioneso/moss/pull/2964)
+
 ### 2026-10-02
 
 #### Fixed
