@@ -447,11 +447,9 @@ export function ChatDrawer(props: {
     if (!aside) return;
     const opener = document.activeElement as HTMLElement | null;
     const focusEntry = (): boolean => {
-      const box = aside.querySelector<HTMLTextAreaElement>("textarea");
-      if (box) {
-        box.focus();
-        return true;
-      }
+      const box = aside.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      box?.focus();
+      if (box && document.activeElement === box) return true;
       aside.focus();
       return false;
     };
@@ -465,7 +463,12 @@ export function ChatDrawer(props: {
       }
     });
     focusEntry();
-    watcher.observe(aside, { childList: true, subtree: true });
+    watcher.observe(aside, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled"]
+    });
     const stopWatching = window.setTimeout(() => watcher.disconnect(), 3000);
     return () => {
       window.clearTimeout(stopWatching);
@@ -602,7 +605,7 @@ export function ChatDrawer(props: {
       tabIndex={-1}
       className={props.docked ? "chatd chatd--docked" : "chatd"}
       role="dialog"
-      aria-modal={phone && !props.docked ? true : undefined}
+      aria-modal={phone ? true : undefined}
       onKeyDown={onDialogKeyDown}
       aria-label={assistantName ? `Chat with ${assistantName}` : "Chat"}
     >
