@@ -4,7 +4,9 @@ services:
   jarv1s:
     container_name: ${COMPOSE_PROJECT_NAME:?UAT project name required}-jarv1s-1
     cpus: 2.0
-    mem_limit: 4g
+    # The server and the worker each load the local embedding model (~1.3 GB per copy, #2969).
+    # With codex and the boot-time CLI install on top, a notes chat turn peaks near 3.8 GiB.
+    mem_limit: 6g
     pids_limit: 512
     environment:
       # Test-only pair. Both default to the normal production values and are never set in a

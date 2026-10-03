@@ -63,6 +63,30 @@ async function ensureRealChat(page: Page): Promise<void> {
     .toBe(true);
 }
 
+// The jarv1s service drops every capability but CHOWN, SETUID, SETGID, FOWNER and KILL, so root in
+// a plain `exec` has no DAC override and cannot traverse the owner-only vault directory. Plant
+// fixtures as the account that owns the vault root instead.
+function execInVaultAsOwner(projectName: string, script: string): void {
+  const owner = execFileSync(
+    "docker",
+    buildUatComposeArgs(projectName, [
+      "exec",
+      "-T",
+      "jarv1s",
+      "stat",
+      "-c",
+      "%u:%g",
+      "/data/vaults"
+    ]),
+    { encoding: "utf8" }
+  ).trim();
+  execFileSync(
+    "docker",
+    buildUatComposeArgs(projectName, ["exec", "-T", "-u", owner, "jarv1s", "sh", "-c", script]),
+    { stdio: "inherit" }
+  );
+}
+
 // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
 test.afterEach(async ({}, testInfo) => {
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
@@ -168,17 +192,9 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   // --- (b) rejectSymlinkParent: an ANCESTOR directory of the target is a symlink ----------
   // Pre-existing check (write-tools.ts:124-141), not part of #1512's fix, but in the approved
   // live-path scope: it must be shown to actually refuse via real chat, not just unit-tested.
-  execFileSync(
-    "docker",
-    buildUatComposeArgs(projectName, [
-      "exec",
-      "-T",
-      "jarv1s",
-      "sh",
-      "-c",
-      `mkdir -p /tmp/uat-1512-b-target-${stamp} && ln -sfn /tmp/uat-1512-b-target-${stamp} ${NOTES_ROOT}/D-${stamp}`
-    ]),
-    { stdio: "inherit" }
+  execInVaultAsOwner(
+    projectName,
+    `mkdir -p /tmp/uat-1512-b-target-${stamp} && ln -sfn /tmp/uat-1512-b-target-${stamp} ${NOTES_ROOT}/D-${stamp}`
   );
 
   // notes.create opts into the gateway's safe error path: this fixed, path-free guard message is
@@ -195,19 +211,11 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
 
   // --- (c') the #1512 guard itself: leaf symlink, kernel-vs-lexical ".." divergence -------
   // The opted-in notes.create tool exposes its fixed, path-free guard message.
-  execFileSync(
-    "docker",
-    buildUatComposeArgs(projectName, [
-      "exec",
-      "-T",
-      "jarv1s",
-      "sh",
-      "-c",
-      `mkdir -p /tmp/uat-1512-c-outside-${stamp} && ` +
-        `ln -sfn /tmp/uat-1512-c-outside-${stamp} ${NOTES_ROOT}/S-${stamp} && ` +
-        `ln -sfn "S-${stamp}/../evil-${stamp}.md" ${NOTES_ROOT}/b-${stamp}.md`
-    ]),
-    { stdio: "inherit" }
+  execInVaultAsOwner(
+    projectName,
+    `mkdir -p /tmp/uat-1512-c-outside-${stamp} && ` +
+      `ln -sfn /tmp/uat-1512-c-outside-${stamp} ${NOTES_ROOT}/S-${stamp} && ` +
+      `ln -sfn "S-${stamp}/../evil-${stamp}.md" ${NOTES_ROOT}/b-${stamp}.md`
   );
 
   await composer.fill(
