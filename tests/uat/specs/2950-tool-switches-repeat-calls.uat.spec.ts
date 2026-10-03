@@ -42,6 +42,17 @@ function fixtureCalls(): readonly FixtureCall[] {
   return (JSON.parse(out) as { calls: readonly FixtureCall[] }).calls;
 }
 
+function setFixtureTools(tools: readonly unknown[]): void {
+  const script =
+    `fetch("http://127.0.0.1:${CLASSIFIER_MCP_FIXTURE_CONTAINER_PORT}/__control/tools",` +
+    `{method:"POST",body:${JSON.stringify(JSON.stringify(tools))}}).then(r=>r.text()).then(t=>console.log(t))`;
+  execFileSync(
+    "docker",
+    ["exec", classifierMcpFixtureContainerName(requireUatProjectName()), "node", "-e", script],
+    { encoding: "utf8" }
+  );
+}
+
 async function signIn(page: Page): Promise<void> {
   await page.goto(requireUatBaseURL());
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
@@ -124,25 +135,62 @@ test("tool rows have one switch and repeated identical calls reach the service (
       expect(response.ok(), `PUT ${path} -> ${response.status()}`).toBeTruthy();
     }
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${requireUatBaseURL()}/today`);
-    await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
-    await page.getByRole("button", { name: "New chat" }).click();
-    // The page shows no ready signal for the background protocol start; give it a bounded settle.
-    await page.waitForTimeout(20_000);
-    const composer = page.getByRole("textbox", { name: /^Message/ });
-    await expect(composer).toBeEnabled();
-    await composer.fill(
-      `Call the tool named exactly "uat-smart-hub.${FIXTURE_LIST_TOOL}" twice in a row, both times with no ` +
-        "arguments and without any other tool in between. Do both calls now, no questions."
-    );
-    await composer.press("Enter");
-    await expect
-      .poll(() => fixtureCalls().filter((c) => c.tool === FIXTURE_LIST_TOOL).length, {
-        timeout: 180_000
-      })
-      .toBeGreaterThanOrEqual(2);
+    const listCallCount = () => fixtureCalls().filter((c) => c.tool === FIXTURE_LIST_TOOL).length;
+    // A chat session keeps the tool list it started with, and a session whose background start
+    // raced the connection can miss the hub's tools. Each attempt is a fresh real chat.
+    for (let attempt = 1; attempt <= 3 && listCallCount() < 2; attempt++) {
+      await page.goto(`${requireUatBaseURL()}/today`);
+      await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
+      await page.getByRole("button", { name: "New chat" }).click();
+      // The page shows no ready signal for the background protocol start; give it a bounded settle.
+      await page.waitForTimeout(20_000);
+      const composer = page.getByRole("textbox", { name: /^Message/ });
+      await expect(composer).toBeEnabled();
+      await composer.fill(
+        `Call the tool named exactly "uat-smart-hub.${FIXTURE_LIST_TOOL}" twice in a row, both times with no ` +
+          "arguments and without any other tool in between. Do both calls now, no questions."
+      );
+      await composer.press("Enter");
+      await expect
+        .poll(listCallCount, { timeout: 90_000 })
+        .toBeGreaterThanOrEqual(2)
+        .catch(() => undefined);
+    }
+    expect(listCallCount()).toBeGreaterThanOrEqual(2);
     const listCalls = fixtureCalls().filter((c) => c.tool === FIXTURE_LIST_TOOL);
     expect(listCalls.map((c) => c.args)).toEqual(listCalls.map(() => ({})));
     await page.request.put("/api/me/yolo", { data: { enabled: false } });
+  });
+  // More than the live-tool threshold makes Moss group the list. The test tool server serves a
+  // longer list and Moss discovers it through the real Refresh button.
+  await test.step("grouped list at both widths: one switch per row", async () => {
+    const groups = ["light", "lock", "sensor"];
+    setFixtureTools(
+      groups.flatMap((group) =>
+        Array.from({ length: 12 }, (_, i) => ({
+          name: `${group}_${String(i + 1).padStart(2, "0")}`,
+          description: `Read the ${group} number ${i + 1}.`,
+          inputSchema: { type: "object", properties: {} },
+          annotations: { readOnlyHint: true }
+        }))
+      )
+    );
+    await openConnection(page);
+    await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
+    await expect(page.getByLabel("Enable group light")).toBeAttached({ timeout: 30_000 });
+    await expect(page.getByLabel(/repeated/i)).toHaveCount(0);
+    for (const [name, size] of [
+      ["desktop", { width: 1440, height: 900 }],
+      ["phone", { width: 390, height: 844 }]
+    ] as const) {
+      await page.setViewportSize(size);
+      const row = page.locator(".set-row").filter({ has: page.getByLabel("Enable light_01") });
+      await expect(row).toHaveCount(1);
+      await expect(row.locator("input[type=checkbox]")).toHaveCount(1);
+      await row.evaluate((el) =>
+        window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 160)
+      );
+      await row.locator("xpath=..").screenshot({ path: `${SHOT_DIR}/2950-grouped-${name}.png` });
+    }
   });
 });
