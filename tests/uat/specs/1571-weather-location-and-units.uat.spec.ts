@@ -112,7 +112,7 @@ test("place search, ambiguity handling, and temperature units work through the U
   await expect(page.getByText("Temperatures are shown in Fahrenheit.")).toBeVisible();
   await expect(fahrenheitButton).toHaveAttribute("aria-pressed", "true");
   await expect(celsiusButton).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByText(`Using ${selectedCandidate}, set by searching.`)).toBeVisible();
+  await expect(page.getByText(`Using ${selectedCandidate}.`, { exact: true })).toBeVisible();
 
   const imperialWeather = await gotoTodayWeather(page);
   expect(imperialWeather.location).toBe(selectedCandidate);
