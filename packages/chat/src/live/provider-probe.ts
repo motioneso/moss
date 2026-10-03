@@ -151,11 +151,14 @@ async function recordProbeCall(
   provider: ProviderKind,
   run: () => Promise<ProbeProviderResult>
 ): Promise<ProbeProviderResult> {
+  // #2956: probes carry no user — the probe proves a credential works, but the
+  // deps name no actor, so the line is a System line under its fixed code.
   try {
     const result = await run();
     recordModelActivity({
       kind: "probe",
       action: "probe",
+      actionCode: "probe.reachable",
       outcome: result.status === "ready" ? "ok" : "error",
       modelName: provider,
       result: result.status === "ready" ? "completed" : "failed"
@@ -165,6 +168,7 @@ async function recordProbeCall(
     recordModelActivity({
       kind: "probe",
       action: "probe",
+      actionCode: "probe.reachable",
       outcome: "error",
       modelName: provider,
       result: "failed"
