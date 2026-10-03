@@ -109,7 +109,16 @@
         {
           "prop": "variant",
           "kind": "enum",
-          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field"],
+          "values": [
+            "primary",
+            "secondary",
+            "quiet",
+            "accentSoft",
+            "danger",
+            "field",
+            "link",
+            "rail"
+          ],
           "optional": true,
           "default": "primary"
         },
@@ -259,6 +268,23 @@
       "flags": []
     },
     {
+      "name": "eyebrow",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/eyebrow.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Eyebrow"],
+      "options": [
+        {
+          "prop": "tone",
+          "kind": "enum",
+          "values": ["subtle", "gold", "muted", "accent", "hero"],
+          "optional": true,
+          "default": "subtle"
+        }
+      ],
+      "flags": []
+    },
+    {
       "name": "field",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/field.tsx", "type": "registry:ui" }],
@@ -371,6 +397,23 @@
       "flags": [{ "prop": "block", "optional": true }]
     },
     {
+      "name": "note",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/note.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Note"],
+      "options": [
+        {
+          "prop": "variant",
+          "kind": "enum",
+          "values": ["plan", "pull", "practical"],
+          "optional": false,
+          "default": null
+        }
+      ],
+      "flags": []
+    },
+    {
       "name": "now-line",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/now-line.tsx", "type": "registry:ui" }],
@@ -405,6 +448,23 @@
       "exports": ["RowIndex", "RowIndexItem"],
       "options": [],
       "flags": []
+    },
+    {
+      "name": "section-head",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/section-head.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["SectionHead"],
+      "options": [
+        {
+          "prop": "align",
+          "kind": "enum",
+          "values": ["baseline", "center"],
+          "optional": true,
+          "default": "baseline"
+        }
+      ],
+      "flags": [{ "prop": "rule", "optional": true }]
     },
     {
       "name": "segmented",

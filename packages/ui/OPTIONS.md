@@ -40,7 +40,7 @@ _No enum or boolean props._
 
 ## button
 
-- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`
+- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`, `link`, `rail`
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **block** (optional boolean flag)
 - **active** (optional boolean flag)
@@ -92,6 +92,10 @@ _No enum or boolean props._
 
 - **variant** (required): `hard`, `tentative`, `block`
 
+## eyebrow
+
+- **tone** (optional, default `subtle`): `subtle`, `gold`, `muted`, `accent`, `hero`
+
 ## field
 
 _No enum or boolean props._
@@ -131,6 +135,10 @@ _No enum or boolean props._
 
 - **block** (optional boolean flag)
 
+## note
+
+- **variant** (required): `plan`, `pull`, `practical`
+
 ## now-line
 
 _No enum or boolean props._
@@ -146,6 +154,11 @@ _No enum or boolean props._
 ## row-index
 
 _No enum or boolean props._
+
+## section-head
+
+- **align** (optional, default `baseline`): `baseline`, `center`
+- **rule** (optional boolean flag)
 
 ## segmented
 
