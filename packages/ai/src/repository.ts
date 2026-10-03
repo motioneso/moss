@@ -2417,6 +2417,9 @@ export class AiRepository {
       .execute();
 
     if (input.detail && input.ownerUserId) {
+      // Arrays must go through the jsonb helper: node-pg serializes a top-level array as a
+      // Postgres array literal, which jsonb rejects. (Plain objects serialize fine.)
+      const steps = jsonb([...(input.detail.steps ?? [])]) as unknown as ActivityDetailStep[];
       await db
         .insertInto("app.moss_activity_detail")
         .values({
@@ -2424,7 +2427,7 @@ export class AiRepository {
           owner_user_id: input.ownerUserId,
           quote: input.detail.quote ?? null,
           result_line: input.detail.resultLine ?? null,
-          steps: [...(input.detail.steps ?? [])]
+          steps
         })
         .execute();
     }
@@ -2449,7 +2452,9 @@ export class AiRepository {
       .set({
         ...(facts.quote !== undefined ? { quote: facts.quote } : {}),
         ...(facts.resultLine !== undefined ? { result_line: facts.resultLine } : {}),
-        ...(facts.steps !== undefined ? { steps: [...facts.steps] } : {})
+        ...(facts.steps !== undefined
+          ? { steps: jsonb([...facts.steps]) as unknown as ActivityDetailStep[] }
+          : {})
       })
       .where("activity_id", "=", activityId)
       .execute();
