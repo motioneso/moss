@@ -36,6 +36,10 @@ feature that is not present in the image you are running.
 - **Cleaner docked chat panel.** The chat panel beside your page now sits flush against the edge with a single divider, and the message box has one outline instead of two. [PR #2958](https://github.com/motioneso/moss/pull/2958)
 - **Simpler tool switches.** Each tool in a connection now has a single on/off switch, and Moss no longer refuses to repeat the same request to a connected tool. [PR #2953](https://github.com/motioneso/moss/pull/2953)
 
+#### Fixed
+
+- **Chat box no longer disappears while typing.** If no chat model is connected, the message box stays put while you type instead of vanishing, and your draft is never lost when the connection status loads. [PR #2965](https://github.com/motioneso/moss/pull/2965)
+
 ### 2026-10-02
 
 #### Fixed
