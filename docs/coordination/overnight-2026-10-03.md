@@ -222,3 +222,5 @@ RELAY POINT 5 (relay after 2nd merge since relay 4, session 6fb239b6). Successor
 8. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
 Relay 5 (session b1e6e877): lock claimed, old coordinator w1:p11N closed.
+
+2912: second full gate red only on the gateway pattern timer flake (issue 1673, load 47; file 26/26 alone). Coordinator accepted run-1 unit green + file rerun + CI fully green on 678a44e2a (evidence comment 5972647949). PR 2970 marked ready. Opus QA qa-2970 spawned in w1:p11W "QA 2970 notes tests (Opus)", new QA tab w1:t9S, worktree .claude/worktrees/qa-2970 (detached). On GREEN: merge (routine, test-only, no live UI proof needed) = merge 1 since relay 5.
