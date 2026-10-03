@@ -15,8 +15,11 @@ import {
   type AiProviderConfigsTable,
   type AiProviderKind,
   type AiProviderStatus,
+  type ActivityDetailStep,
+  type ActivityFactCounts,
   type DataContextDb,
   type MossActionAuditLog,
+  type MossActivityDetail,
   type MossErrorLog,
   type MossModelActivityLog,
   type MossDatabase,
@@ -254,14 +257,45 @@ export interface ListAuditLogOptions {
   readonly limit: number;
 }
 
-/** Plan 3.6a (#2889): one model-call row. Short plain-text fields only; no message text. */
+/**
+ * Plan 3.6a (#2889): one model-call row. Short plain-text fields only; no message text.
+ * #2956: owned rows carry the owner fields plus optional detail. An owned row must be
+ * inserted on an actor-scoped handle (the RLS WITH CHECK rejects it otherwise); an
+ * ownerless row accepts any runtime handle.
+ */
 export interface InsertModelActivityInput {
+  readonly id?: string;
   readonly kind: string;
   readonly action: string;
   readonly outcome: string;
   readonly modelName: string;
   readonly result: string;
   readonly occurredAt?: Date;
+  readonly ownerUserId?: string;
+  readonly actionCode?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
+  readonly durationMs?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly failureCode?: string;
+  readonly factCounts?: ActivityFactCounts;
+  readonly detail?: {
+    readonly quote?: string;
+    readonly resultLine?: string;
+    readonly steps?: readonly ActivityDetailStep[];
+  };
+}
+
+/**
+ * #2956: late-arriving facts for one detail row (Jev agreement settles after the check).
+ * The bare line stays append-only — the agreement flag for the bare line goes on the chat
+ * answer's line, which is written when the turn ends, after agreement is known.
+ */
+export interface AttachModelActivityFactsInput {
+  readonly quote?: string;
+  readonly resultLine?: string;
+  readonly steps?: readonly ActivityDetailStep[];
 }
 
 export interface ListModelActivityOptions {
@@ -2349,26 +2383,103 @@ export class AiRepository {
   }
 
   /**
-   * Plan 3.6a (#2889): append one model-call row. Takes a root handle (no actor GUC) because the
-   * runtime writes the instance-global log on its own behalf; RLS INSERT is permissive for the
-   * runtime roles. Never called on the model-call path without a catch — a failed write is dropped.
+   * Plan 3.6a (#2889): append one model-call row. #2956: an owned row must be inserted on an
+   * actor-scoped handle — the RLS WITH CHECK rejects a row owned by anyone but the current
+   * actor, and an ownerless row accepts any runtime handle (the worker writes with no actor).
+   * The detail row, when present, lands in the same call; ownerless lines never get one.
+   * Never called on the model-call path without a catch — a failed write is dropped.
    */
   async insertModelActivity(
     db: Kysely<MossDatabase>,
     input: InsertModelActivityInput
-  ): Promise<void> {
+  ): Promise<string> {
+    const id = input.id ?? randomUUID();
     await db
       .insertInto("app.moss_model_activity_log")
       .values({
-        id: randomUUID(),
+        id,
         kind: input.kind,
         action: input.action,
         outcome: input.outcome,
         model_name: input.modelName,
         result: input.result,
-        ...(input.occurredAt ? { occurred_at: input.occurredAt } : {})
+        ...(input.occurredAt ? { occurred_at: input.occurredAt } : {}),
+        owner_user_id: input.ownerUserId ?? null,
+        action_code: input.actionCode ?? null,
+        turn_id: input.turnId ?? null,
+        parent_id: input.parentId ?? null,
+        duration_ms: input.durationMs ?? null,
+        input_tokens: input.inputTokens ?? null,
+        output_tokens: input.outputTokens ?? null,
+        failure_code: input.failureCode ?? null,
+        fact_counts: input.factCounts ?? null
       })
       .execute();
+
+    if (input.detail && input.ownerUserId) {
+      await db
+        .insertInto("app.moss_activity_detail")
+        .values({
+          activity_id: id,
+          owner_user_id: input.ownerUserId,
+          quote: input.detail.quote ?? null,
+          result_line: input.detail.resultLine ?? null,
+          steps: [...(input.detail.steps ?? [])]
+        })
+        .execute();
+    }
+    return id;
+  }
+
+  /**
+   * #2956: a late fact lands on an existing detail row (Jev agreement settles after the
+   * check is recorded). Owner-only by RLS, and the trigger rejects owner/expiry changes.
+   */
+  async attachModelActivityFacts(
+    scopedDb: DataContextDb,
+    activityId: string,
+    facts: AttachModelActivityFactsInput
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    if (facts.quote === undefined && facts.resultLine === undefined && facts.steps === undefined) {
+      return;
+    }
+    await scopedDb.db
+      .updateTable("app.moss_activity_detail")
+      .set({
+        ...(facts.quote !== undefined ? { quote: facts.quote } : {}),
+        ...(facts.resultLine !== undefined ? { result_line: facts.resultLine } : {}),
+        ...(facts.steps !== undefined ? { steps: [...facts.steps] } : {})
+      })
+      .where("activity_id", "=", activityId)
+      .execute();
+  }
+
+  /**
+   * #2956: read one unexpired detail row. The `expires_at` filter is in the query (not the
+   * policy) so a row the purge has not reached yet still never shows.
+   */
+  async getModelActivityDetail(
+    scopedDb: DataContextDb,
+    activityId: string
+  ): Promise<MossActivityDetail | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.moss_activity_detail")
+      .selectAll()
+      .where("activity_id", "=", activityId)
+      .where("expires_at", ">", new Date())
+      .executeTakeFirst();
+  }
+
+  // #2956: the nightly worker-run job calls this narrower function instead. It takes no
+  // cutoff argument -- the database computes its own fixed 30-day retention window -- so a
+  // worker connection can never widen it to delete rows it shouldn't.
+  async purgeExpiredActivityDetail(workerDb: Kysely<MossDatabase>): Promise<number> {
+    const result = await sql<{ count: number }>`
+      SELECT app.purge_expired_moss_activity_detail() AS count
+    `.execute(workerDb);
+    return Number(result.rows[0]?.count ?? 0);
   }
 
   /**

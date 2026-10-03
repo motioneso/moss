@@ -97,7 +97,11 @@ export const aiModuleManifest = {
       // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
       "sql/0245_moss_action_audit_purge_worker_grant.sql",
       // Plan 3.6a (#2889) — one flat, admin-readable, append-only row per model call.
-      "sql/0254_moss_model_activity_log.sql"
+      "sql/0254_moss_model_activity_log.sql",
+      // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
+      "sql/0256_activity_owner_lines.sql",
+      // #2956 — turn link on the action audit log for the per-turn step join.
+      "sql/0257_audit_log_turn_id.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -106,7 +110,8 @@ export const aiModuleManifest = {
       "app.ai_assistant_action_requests",
       "app.moss_action_audit_log",
       "app.moss_error_log",
-      "app.moss_model_activity_log"
+      "app.moss_model_activity_log",
+      "app.moss_activity_detail"
     ]
   },
   settings: [
