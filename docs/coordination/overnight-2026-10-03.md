@@ -168,3 +168,5 @@ RELAY POINT 4 (relay after compaction, session 759a1a1a). Successor next steps:
 7. Re-arm PR watch (Monitor) on all five lane branches; disk-prune watcher may still be running (free < 25 GB).
 8. Lane agent names: opus-2942, opus-2735, fix-2637-focus-retention, fix-2912-notes-specs (herdr agent prompt). merges_since_relay stays 1 (reset to 0 on claim per brief).
 9. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
+
+Relay 4 (session 6fb239b6): lock claimed 11:00, old coordinator w1:p11J closed, PR watch re-armed on the five lane branches. 2956 slice B spawned as Muse (muse-spark-1.3, high) in w1:p11P "2956 slice B" (Builders tab w1:t9J), message with herdr pane run. Running at 11:01: 2942 integration rerun, 2637 full gate, 2735 UAT rerun (detached). 2912 waits for a gate slot. Disk 31 GB free, load 30.
