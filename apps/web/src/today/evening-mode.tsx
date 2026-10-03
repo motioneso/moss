@@ -9,7 +9,7 @@ import {
 import { Check } from "lucide-react";
 import { useState } from "react";
 
-import { Card, Eyebrow, SectionHead } from "@moss/ui";
+import { Button, Card, Eyebrow, SectionHead } from "@moss/ui";
 
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { targetTimeFor } from "../briefings/briefing-settings-model.js";
@@ -375,15 +375,15 @@ export function EveningSupportSections(props: {
                 ) : null}
                 {moved[task.id] === undefined ? (
                   <div className="ev-loop__actions">
-                    <button
-                      type="button"
+                    <Button
+                      variant="chip"
                       disabled={busy}
                       onClick={() => void decide(task, { kind: "tomorrow" }, "Moved to tomorrow.")}
                     >
                       Tomorrow
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="chip"
                       disabled={busy}
                       aria-expanded={pickingId === task.id}
                       onClick={() => {
@@ -392,14 +392,14 @@ export function EveningSupportSections(props: {
                       }}
                     >
                       Choose a day
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="chip"
                       disabled={busy}
                       onClick={() => void decide(task, { kind: "drop" }, "Let go.")}
                     >
                       Let it go
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 {pickingId === task.id ? (
@@ -410,8 +410,8 @@ export function EveningSupportSections(props: {
                       value={pickedDate}
                       onChange={(event) => setPickedDate(event.target.value)}
                     />
-                    <button
-                      type="button"
+                    <Button
+                      variant="chip"
                       disabled={busy || pickedDate === ""}
                       onClick={() => {
                         void decide(
@@ -423,7 +423,7 @@ export function EveningSupportSections(props: {
                       }}
                     >
                       Save day
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
               </div>
@@ -486,21 +486,12 @@ export function EveningTomorrowSection(props: {
         </button>
       ))}
       <p className="ev-tomorrow__note">Nothing new is committed until you plan tomorrow.</p>
-      <button
-        type="button"
-        className="ev-tomorrow__plan"
-        onClick={(event) => props.onPlan(event.currentTarget)}
-      >
+      <Button size="sm" block onClick={(event) => props.onPlan(event.currentTarget)}>
         {PLAN_TOMORROW_LABEL}
-      </button>
-      <button
-        type="button"
-        className="ev-tomorrow__chat"
-        disabled={props.interviewPending}
-        onClick={props.onPrep}
-      >
+      </Button>
+      <Button variant="link" disabled={props.interviewPending} onClick={props.onPrep}>
         {assistantName ? `Chat with ${assistantName}` : "Chat"} ↗
-      </button>
+      </Button>
     </section>
   );
 }

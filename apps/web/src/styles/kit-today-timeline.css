@@ -819,35 +819,16 @@ button.ev-tomorrow__item {
   font-size: 11px;
   line-height: 1.65;
 }
-.ev-tomorrow__plan {
-  display: block;
-  width: 100%;
+.ev-tomorrow > .jds-btn--block {
+  height: auto;
   margin-top: 17px;
   padding: 11px 14px;
-  border: 1px solid var(--forest);
-  background: var(--forest);
-  color: var(--accent-label);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  border-radius: 0;
+  line-height: normal;
 }
-.ev-tomorrow__plan:hover {
-  background: var(--forest-hover);
-}
-.ev-tomorrow__chat {
+.ev-tomorrow > .jds-btn--link {
   display: block;
   margin-top: 13px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent-fg);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
 }
 @media (max-width: 680px) {
   .ev-recap__intro {

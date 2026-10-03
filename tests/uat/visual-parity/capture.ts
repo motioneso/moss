@@ -753,7 +753,12 @@ export async function waitForRoutePopulated(
     await routeText(page, ".today-hero", "EVENING BRIEFING", "Evening hero", matched);
     await routeText(page, ".ev-recap", "What happened today", "Evening summary title", matched);
     await routeVisible(page, ".jds-brief__body", "Rendered evening summary", matched);
-    await routeVisible(page, ".ev-tomorrow__chat", "Prep for tomorrow action", matched);
+    await routeVisible(
+      page,
+      ".ev-tomorrow button.jds-btn--link",
+      "Prep for tomorrow action",
+      matched
+    );
     for (const [selector, label] of [
       ["main h1", "Evening heading"],
       [".ev-head__title", "Evening section title"],

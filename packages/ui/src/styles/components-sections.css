@@ -60,3 +60,16 @@
   font-size: var(--text-xs);
   line-height: 1.65;
 }
+
+/* Chip: a small outlined pill for a row of quick choices. */
+.jds-btn--chip {
+  height: auto;
+  padding: 6px 12px;
+  border-color: var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  letter-spacing: normal;
+}
