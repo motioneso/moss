@@ -1,6 +1,6 @@
 import { Button, NavIndex, NavIndexItem, Select } from "@moss/ui";
 import { ChevronDown, Layers } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
 import { type ListState, primaryListSelection } from "./task-view-model";
@@ -16,8 +16,9 @@ export interface TaskListNavigationProps {
   readonly lists: readonly ListRef[];
   readonly listStates: Readonly<Record<string, ListState>>;
   readonly soloIds: readonly string[];
-  readonly counts: Record<string, number>;
-  readonly allCount: number;
+  /** Open-task counts per list; null until tasks have loaded, so no count is ever invented. */
+  readonly counts: Readonly<Record<string, number>> | null;
+  readonly allCount: number | null;
   readonly status: "loading" | "error" | "ready";
   readonly onRetry: () => void;
   /** Show only this list. */
@@ -31,6 +32,8 @@ function taskCount(n: number): string {
   return `${n} ${n === 1 ? "task" : "tasks"}`;
 }
 
+const COUNT_SCOPE = "Counts follow the status and tag filters, before search.";
+
 function customLabel(props: TaskListNavigationProps): string {
   const hidden = props.lists.filter((list) => props.listStates[list.id] === "excluded").length;
   if (props.soloIds.length > 1) return `${props.soloIds.length} lists shown`;
@@ -40,6 +43,9 @@ function customLabel(props: TaskListNavigationProps): string {
 /** Desktop index beside the task surface. */
 export function TaskListIndex(props: TaskListNavigationProps) {
   const selection = primaryListSelection(props.listStates);
+  const scopeId = useId();
+  const counted = props.status === "ready" && props.counts !== null && props.allCount !== null;
+  const describedBy = counted ? scopeId : undefined;
   return (
     <NavIndex
       ariaLabel="Lists"
@@ -52,26 +58,31 @@ export function TaskListIndex(props: TaskListNavigationProps) {
             </p>
           ) : null}
           <ListFilterMenu {...props} />
+          {counted ? (
+            <p id={scopeId} className="jds-sr-only">
+              {COUNT_SCOPE}
+            </p>
+          ) : null}
         </>
       }
     >
       <NavIndexItem
         label="All lists"
-        count={props.status === "ready" ? props.allCount : undefined}
-        ariaLabel={
-          props.status === "ready" ? `All lists, ${taskCount(props.allCount)}` : "All lists"
-        }
+        count={counted ? props.allCount : undefined}
+        ariaLabel={counted ? `All lists, ${taskCount(props.allCount ?? 0)}` : "All lists"}
+        describedBy={describedBy}
         selected={selection.kind === "all"}
         onSelect={props.onReset}
       />
       {props.lists.map((list) => {
-        const count = props.counts[list.id] ?? 0;
+        const count = counted ? (props.counts?.[list.id] ?? 0) : undefined;
         return (
           <NavIndexItem
             key={list.id}
             label={list.name}
             count={count}
-            ariaLabel={`${list.name}, ${taskCount(count)}`}
+            ariaLabel={count === undefined ? list.name : `${list.name}, ${taskCount(count)}`}
+            describedBy={describedBy}
             selected={selection.kind === "one" && selection.id === list.id}
             onSelect={() => props.onSelect(list.id)}
           />
@@ -104,11 +115,13 @@ export function TaskListPicker(props: TaskListNavigationProps) {
             ? "Loading lists"
             : props.status === "error"
               ? "Lists unavailable"
-              : `All lists (${props.allCount})`}
+              : props.allCount === null
+                ? "All lists"
+                : `All lists (${props.allCount})`}
         </option>
         {props.lists.map((list) => (
           <option key={list.id} value={list.id}>
-            {`${list.name} (${props.counts[list.id] ?? 0})`}
+            {props.counts === null ? list.name : `${list.name} (${props.counts[list.id] ?? 0})`}
           </option>
         ))}
         {selection.kind === "custom" ? (
@@ -193,7 +206,7 @@ function ListFilterMenu(props: TaskListNavigationProps) {
           >
             <Layers size={14} aria-hidden="true" />
             <span className="nm">All lists</span>
-            <span className="ct">{props.allCount}</span>
+            {props.allCount === null ? null : <span className="ct">{props.allCount}</span>}
           </button>
           <div className="tk-tagmenu__hd">Your lists</div>
           {props.lists.map((list) => {
@@ -220,7 +233,9 @@ function ListFilterMenu(props: TaskListNavigationProps) {
                 ) : st === "excluded" ? (
                   <span className="tk-liststate tk-liststate--hidden">Hidden</span>
                 ) : null}
-                <span className="ct">{props.counts[list.id] ?? 0}</span>
+                {props.counts === null ? null : (
+                  <span className="ct">{props.counts[list.id] ?? 0}</span>
+                )}
               </button>
             );
           })}

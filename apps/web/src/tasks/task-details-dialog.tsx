@@ -82,15 +82,22 @@ export function TaskDetailsDialog(props: {
   const onCloseRef = useRef(props.onClose);
   onCloseRef.current = props.onClose;
 
-  // Escape closes the dialog; focus returns to the control that opened it.
+  const mountedRef = useRef(false);
+
+  // Escape closes the dialog; focus returns to the control that opened it. The restore waits
+  // a microtask so StrictMode's effect replay, which remounts at once, keeps focus inside.
   useEffect(() => {
+    mountedRef.current = true;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !event.defaultPrevented) onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      mountedRef.current = false;
       document.removeEventListener("keydown", onKeyDown);
-      if (opener?.isConnected) opener.focus();
+      queueMicrotask(() => {
+        if (!mountedRef.current && opener?.isConnected) opener.focus();
+      });
     };
   }, [opener]);
 

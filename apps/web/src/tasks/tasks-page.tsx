@@ -171,8 +171,9 @@ export function TasksPage() {
     lists,
     listStates,
     soloIds,
-    counts: listCounts,
-    allCount: listCountTotal,
+    // A refresh failure keeps the loaded tasks, so their counts stay true.
+    counts: tasksQuery.data ? listCounts : null,
+    allCount: tasksQuery.data ? listCountTotal : null,
     status: listsQuery.isPending ? "loading" : listsQuery.isError ? "error" : "ready",
     onRetry: () => void listsQuery.refetch(),
     onSelect: (id) => setListStates({ [id]: "solo" }),

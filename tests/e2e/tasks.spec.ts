@@ -179,6 +179,69 @@ test("task details window is named, closes on Escape and returns focus", async (
   await expect(opener).toBeFocused();
 });
 
+test("opening task details moves keyboard focus inside the window", async ({ page }) => {
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Open File taxes" }).first().focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Task details" });
+  await expect(dialog.getByRole("textbox", { name: "Task title" })).toHaveValue("File taxes");
+  await expect(dialog.getByRole("textbox", { name: "Task title" })).toBeFocused();
+});
+
+test("Escape in the status menu closes only the menu and keeps unsaved edits", async ({ page }) => {
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Open File taxes" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Task details" });
+  const title = dialog.getByRole("textbox", { name: "Task title" });
+  await expect(title).toHaveValue("File taxes");
+  await title.fill("File taxes early");
+  const more = dialog.getByRole("button", { name: "More status options" });
+  await more.click();
+  await expect(dialog.getByRole("button", { name: "Archive" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog.getByRole("button", { name: "Archive" })).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(title).toHaveValue("File taxes early");
+  await expect(more).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("list index shows no counts while tasks are unavailable, never zero", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let failing = true;
+  await page.route("**/api/tasks", (route) =>
+    route.request().method() === "GET" && failing ? route.fulfill(serverError) : route.fallback()
+  );
+  await page.goto("/tasks");
+  await expect(page.getByRole("alert")).toContainText("Could not load your tasks");
+  const index = page.getByRole("navigation", { name: "Lists" });
+  await expect(index.getByRole("button", { name: "All lists", exact: true })).toBeVisible();
+  await expect(index.getByRole("button", { name: "Personal", exact: true })).toBeVisible();
+  await expect(index.getByRole("button", { name: "Errands", exact: true })).toBeVisible();
+  await expect(index.locator(".jds-navindex__count")).toHaveCount(0);
+  await index.getByRole("button", { name: "List filters" }).click();
+  await expect(index.locator(".tk-tagmenu__item", { hasText: "Errands" })).toBeVisible();
+  await expect(index.locator(".tk-tagmenu__item .ct")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const picker = page.getByRole("combobox", { name: "Show list" });
+  await expect(picker.locator("option")).toHaveText(["All lists", "Personal", "Errands"]);
+
+  failing = false;
+  await page.getByRole("button", { name: "Retry" }).first().click();
+  await expect(picker.locator("option")).toHaveText([
+    "All lists (2)",
+    "Personal (1)",
+    "Errands (1)"
+  ]);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(
+    index.getByRole("button", { name: "All lists, 2 tasks" })
+  ).toHaveAccessibleDescription(/before search/);
+});
+
 test("list index focuses one list and All lists resets", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/tasks");

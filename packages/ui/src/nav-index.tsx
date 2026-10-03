@@ -27,6 +27,8 @@ export interface NavIndexItemProps {
   readonly selected?: boolean;
   /** Full accessible name when the visible label is shortened or needs context. */
   readonly ariaLabel?: string;
+  /** Id of an element that explains the row, such as what its count covers. */
+  readonly describedBy?: string;
   readonly onSelect: () => void;
 }
 
@@ -38,6 +40,7 @@ export function NavIndexItem(props: NavIndexItemProps) {
         className="jds-navindex__item"
         aria-pressed={props.selected ?? false}
         aria-label={props.ariaLabel}
+        aria-describedby={props.describedBy}
         onClick={props.onSelect}
       >
         <span className="jds-navindex__name">{props.label}</span>
