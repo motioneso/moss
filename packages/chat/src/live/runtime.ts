@@ -36,6 +36,7 @@ import type { NotesRecallPort } from "@moss/notes";
 
 import type { RecallPort } from "../recall-port.js";
 import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
+import type { ClassifierGateShadowRunner } from "./classifier-gate-shadow.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
 import { NotesContextRetriever } from "./notes-retrieval.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
@@ -484,6 +485,11 @@ export interface CreateChatSessionRuntimeDeps {
    * exists; absent ⇒ every turn follows today's default-model path.
    */
   readonly classifierGate?: ClassifierGateRunner;
+  /**
+   * #2907 (plan 3.5) — the classifier gate's shadow runner, wired by the composition root when a
+   * gateway exists. Absent ⇒ every turn follows today's default-model path unchanged.
+   */
+  readonly classifierGateShadow?: ClassifierGateShadowRunner;
   /** Phase 2: MCP token lifecycle hooks — mint on engine launch, revoke on reap. */
   readonly mcpTokenLifecycle?: {
     readonly mint: (
@@ -746,7 +752,10 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
           preferencesRepository: deps.priorityPreferences
         })
       : undefined,
-    classifierGate: deps.classifierGate
+    classifierGate: deps.classifierGate,
+    // #2907 (plan 3.5) — the shadow half of the classifier gate. Undefined when the composition
+    // root does not wire it (tests/embedders, or no gateway).
+    classifierGateShadow: deps.classifierGateShadow
   });
 
   if (connection) {

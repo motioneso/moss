@@ -13,6 +13,7 @@ import {
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
 import type { GateLifecycleHost } from "./classifier-gate-lifecycle.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
+import { CliChatUnavailableError } from "./errors.js";
 import { formatApprovalRecord, formatRefusalRecord } from "./acp-chat-engine.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 
@@ -116,6 +117,53 @@ export async function waitForNewToolsListObservation(
     if (now() >= deadline) return false;
     await delay(TOOLS_LIST_OBSERVATION_POLL_MS);
   }
+}
+
+/**
+ * #2164 r21 — the per-turn readiness check, extracted from `runTurn` (file-size gate). A per-turn
+ * engine that answered without a fresh, identified tools/list attach is a broken turn: it emits the
+ * fixed "tools were not available" status and throws `CliChatUnavailableError`. Returns normally for
+ * every engine that does not need the guard (in-process, non-anthropic, no token, a tool already
+ * used, or an empty reply).
+ */
+export async function assertNewToolsAttached(input: {
+  readonly startsToolClientPerTurn: boolean | undefined;
+  readonly provider: string;
+  readonly mcpToken: string | undefined;
+  readonly mcpToolInvoked: boolean;
+  readonly reply: string;
+  readonly toolsListBaseline: number | undefined;
+  readonly getToolsListObservationCount: ((token: string) => number) | undefined;
+  readonly now: () => number;
+  readonly engine: unknown;
+  readonly emitUnavailable: () => void;
+}): Promise<void> {
+  if (
+    !input.startsToolClientPerTurn ||
+    input.provider !== "anthropic" ||
+    !input.mcpToken ||
+    input.mcpToolInvoked ||
+    !input.reply
+  ) {
+    return;
+  }
+  const toolsListReady = await waitForNewToolsListObservation(
+    input.getToolsListObservationCount,
+    input.now,
+    input.mcpToken,
+    input.toolsListBaseline
+  );
+  if (toolsListReady !== false) return;
+
+  // #2164 r21 — bounded, scrubbed diagnostic; duck-typed cast since not on CliChatEngine.
+  type Diagnostics = { readonly stderrTail: string; readonly exitCode: number | null };
+  type DiagnosticsCapable = { getLastSubmitDiagnostics?: () => Diagnostics | undefined };
+  const diag = (input.engine as DiagnosticsCapable).getLastSubmitDiagnostics?.();
+  if (diag) {
+    console.error(`[chat] readiness gate failed: exit=${diag.exitCode} stderr=${diag.stderrTail}`);
+  }
+  input.emitUnavailable();
+  throw new CliChatUnavailableError("MCP tools were never attached before the reply was accepted");
 }
 
 export interface PrivateSessionRecord {

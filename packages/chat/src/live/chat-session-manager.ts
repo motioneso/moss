@@ -29,6 +29,7 @@ import {
   UnsupportedLegacyCliProviderError
 } from "./errors.js";
 import { renderPersona } from "./persona.js";
+import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
@@ -47,7 +48,7 @@ import {
   schedulePrivateDetachTimer,
   sweepOrphanedPrivateThreads,
   upsertActivityRecord,
-  waitForNewToolsListObservation
+  assertNewToolsAttached
 } from "./session-runtime-helpers.js";
 import {
   DEFAULT_CHAT_SURFACE,
@@ -374,7 +375,8 @@ export class ChatSessionManager {
     let session: UserSession;
     let turnElapsedMs: number | undefined;
     let turnUsage: ChatTurnUsageDto | undefined;
-
+    // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
+    let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
     try {
       // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
       // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
@@ -403,6 +405,17 @@ export class ChatSessionManager {
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       }
       const turnProviderIdentity = session.providerIdentity;
+      gateShadow = beginClassifierGateShadowTurn(
+        this.deps.classifierGateShadow,
+        actorUserId,
+        surface,
+        text,
+        session.incognito,
+        {
+          hasAttachment: (opts?.attachments?.length ?? 0) > 0,
+          signal: controller.signal
+        }
+      );
 
       const attachments = opts?.attachments ?? [];
       const { text: builtEngineText, pendingItems } = await buildEngineText(
@@ -521,6 +534,7 @@ export class ChatSessionManager {
             invokedToolNames.add(record.toolName);
             if (record.toolName.startsWith("mcp__"))
               mcpAttempts.push({ name: record.toolName, id: record.toolCallId });
+            if (!record.rejected) gateShadow?.noteTool(record.toolName);
           }
           if (record.kind === "tool" && record.rejected && record.toolCallId)
             rejectedCallIds.add(record.toolCallId);
@@ -553,6 +567,7 @@ export class ChatSessionManager {
         // Coordinator ruling (a): emit a status record over SSE, persist NOTHING. The user message
         // and any partial reply are discarded — the turn never completed.
         this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
+        gateShadow?.cancel();
         session.lastActivity = this.deps.clock.now();
         this.deps.touchMcpToken?.(sessionKey);
         return { reply };
@@ -569,39 +584,22 @@ export class ChatSessionManager {
         return { reply };
       }
       // #2164: per-turn engines need a fresh attach; only successful identified calls satisfy the gate.
-      const mcpToolInvoked = mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id));
-      if (
-        session.startsToolClientPerTurn &&
-        session.provider === "anthropic" &&
-        session.mcpToken &&
-        !mcpToolInvoked &&
-        reply
-      ) {
-        const toolsListReady = await waitForNewToolsListObservation(
-          this.deps.getToolsListObservationCount,
-          () => this.deps.clock.now(),
-          session.mcpToken,
-          toolsListBaseline
-        );
-        if (toolsListReady === false) {
-          // #2164 r21 — bounded, scrubbed diagnostic; duck-typed cast since not on CliChatEngine.
-          type Diagnostics = { readonly stderrTail: string; readonly exitCode: number | null };
-          type DiagnosticsCapable = { getLastSubmitDiagnostics?: () => Diagnostics | undefined };
-          const diag = (session.engine as DiagnosticsCapable).getLastSubmitDiagnostics?.();
-          if (diag) {
-            console.error(
-              `[chat] readiness gate failed: exit=${diag.exitCode} stderr=${diag.stderrTail}`
-            );
-          }
+      await assertNewToolsAttached({
+        startsToolClientPerTurn: session.startsToolClientPerTurn,
+        provider: session.provider,
+        mcpToken: session.mcpToken,
+        mcpToolInvoked: mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id)),
+        reply,
+        toolsListBaseline,
+        getToolsListObservationCount: this.deps.getToolsListObservationCount,
+        now: () => this.deps.clock.now(),
+        engine: session.engine,
+        emitUnavailable: () =>
           this.emit(actorUserId, surface, {
             kind: "status",
             text: "Chat tools were not available for this reply — please try again."
-          });
-          throw new CliChatUnavailableError(
-            "MCP tools were never attached before the reply was accepted"
-          );
-        }
-      }
+          })
+      });
 
       let answerProvenance: AnswerProvenanceMetadataV1 | undefined;
       if (pendingItems.length > 0 && reply) {
@@ -662,6 +660,8 @@ export class ChatSessionManager {
         sourceFreshness: stored?.sourceFreshness
       };
     } finally {
+      // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
+      gateShadow?.finish();
       flushPending();
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);

@@ -17,6 +17,7 @@ import type {
 import type { MemoryRecallItem } from "@moss/memory";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
 import type { RecallPort } from "../recall-port.js";
+import type { ClassifierGateShadowRunner } from "./classifier-gate-shadow.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
@@ -180,6 +181,12 @@ export interface ChatSessionManagerDeps {
    * without launching an engine. Absent ⇒ every turn follows today's default-model path unchanged.
    */
   readonly classifierGate?: ClassifierGateRunner;
+  /**
+   * #2907 (plan 3.5) — the classifier gate's shadow runner. When present, `runTurn` starts one
+   * shadow attempt alongside the default turn and reports the model's first tool record so the
+   * hypothetical decision can be compared. Absent ⇒ no shadow attempts and no behavior change.
+   */
+  readonly classifierGateShadow?: ClassifierGateShadowRunner;
   readonly personaFs: PersonaFs;
   readonly clock: Clock;
   readonly idleMs: number;

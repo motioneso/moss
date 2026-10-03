@@ -21,6 +21,7 @@
 // text, MCP config contents, the bearer token, tool arguments/results, captures, or reply
 // content.
 import { mkdirSync, readFileSync, appendFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { transcriptGlobDir } from "@moss/ai";
@@ -433,6 +434,64 @@ export async function runScriptedClaudeAcp(): Promise<void> {
       candidate.expectIncludes.every((expected) => promptText.includes(expected))
     );
     if (!turn) fail(scriptId, undefined, "ambiguous-or-zero-eligible-turns");
+
+    // #2907: a scripted turn's tool calls ride the CLI's stream-json so the ACP adapter reports a
+    // real tool_call; the MCP call itself runs here, exactly as the print fixture's transcript
+    // branch does. Without this, a scripted ACP turn only ever replies with text and no tool record.
+    const captures = new Map<string, unknown>();
+    for (const [index, call] of turn.calls.entries()) {
+      const toolUseId = `toolu_${index}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+      const mcpName = `mcp__moss__${call.tool.replace(/\./g, "_")}`;
+      let resolvedArgs: Record<string, unknown> = {};
+      try {
+        resolvedArgs = resolveCaptures(call.arguments, captures) as Record<string, unknown>;
+      } catch {
+        fail(scriptId, 0, "capture-resolution-failed");
+      }
+      emitNativeMessage({
+        type: "assistant",
+        message: {
+          id: `${sessionId}-tool-${index}`,
+          type: "message",
+          role: "assistant",
+          model,
+          content: [{ type: "tool_use", id: toolUseId, name: mcpName, input: resolvedArgs }],
+          stop_reason: "tool_use",
+          usage: { input_tokens: 0, output_tokens: 0 }
+        },
+        session_id: sessionId
+      });
+      const callBody = await callMcp(
+        endpoint,
+        "tools/call",
+        { name: call.tool, arguments: resolvedArgs },
+        TOOLS_CALL_TIMEOUT_MS,
+        scriptId,
+        0,
+        "acp-mcp-tools-call"
+      );
+      if (callBody.error) fail(scriptId, 0, "acp-mcp-tools-call-jsonrpc-error");
+      const result = callBody.result as
+        | { isError?: boolean; content?: Array<{ text?: unknown }> }
+        | undefined;
+      if (result?.isError) fail(scriptId, 0, "acp-mcp-tools-call-denied-or-failed");
+      for (const [name, pointer] of Object.entries(call.captures ?? {})) {
+        try {
+          captures.set(name, extractCapture(result, pointer));
+        } catch {
+          fail(scriptId, 0, "capture-extraction-failed");
+        }
+      }
+      emitNativeMessage({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: toolUseId, content: result?.content ?? [] }]
+        },
+        session_id: sessionId
+      });
+    }
+
     const reply = turn.reply;
     emitNativeMessage({
       type: "assistant",

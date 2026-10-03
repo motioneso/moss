@@ -46,6 +46,10 @@ export * from "./live/cli-check-turn.js";
 export { notifyCliVersionTooOld, setCliVersionTooOldListener } from "./live/cli-version-errors.js";
 export * from "./live/chat-surface.js";
 export * from "./live/cli-structured-adapter.js";
+// #2907 (plan 3.5) — the classifier gate's production ports factory and shadow runner, exported so
+// the composition root and the handled-turn runner (open PR 2903) share one implementation.
+export * from "./live/classifier-gate-wiring.js";
+export * from "./live/classifier-gate-shadow.js";
 // #342 Phase 2: the api-side install state machine (§A.4) — driver, reconcile projection,
 // store port + wire types. Consumed by the composition root to wire the onboarding install seam.
 export {

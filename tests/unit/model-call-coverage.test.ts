@@ -82,6 +82,9 @@ const ADAPTER_CONSTRUCTION_ALLOWLIST = new Set([
   "packages/module-registry/src/built-in-module-helpers.ts",
   "packages/chat/src/live/cli-structured-adapter.ts",
   "packages/module-registry/src/index.ts",
+  // Chat composition root: builds the classifier gate's structured adapter factory. The classifier
+  // calls go through generateStructured, so the adapter records them.
+  "packages/chat/src/routes.ts",
   "apps/api/src/focus-service.ts",
   "apps/api/src/server.ts",
   "apps/worker/src/external-module-ai-bridge.ts"
@@ -272,6 +275,10 @@ const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
   [
     "packages/module-registry/src/index.ts",
     "composition root: builds the structured adapter factories whose calls are recorded"
+  ],
+  [
+    "packages/chat/src/routes.ts",
+    "chat composition root: builds the classifier gate's structured adapter factory; its calls are recorded by the adapter"
   ]
 ]);
 
