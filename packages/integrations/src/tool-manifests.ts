@@ -9,6 +9,10 @@ import {
   type Keyring
 } from "@moss/db";
 import type {
+  ClassifierArgumentDecl,
+  ClassifierCandidate,
+  JsonSchema,
+  ModuleAssistantToolClassifier,
   ModuleAssistantToolManifest,
   MossModuleManifest,
   ToolContext,
@@ -17,6 +21,17 @@ import type {
 } from "@moss/module-sdk";
 
 import { callMemory, requestBudget, type CallMemory, type RequestBudget } from "./call-memory.js";
+import {
+  candidateCache,
+  loadCachedCandidates,
+  type CandidateCache
+} from "./classifier-candidates.js";
+import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import {
+  effectiveClassifierTools,
+  type ClassifierConnectionState,
+  type EligibleClassifierTool
+} from "./classifier-settings.js";
 import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { capChars, INTEGRATION_RESPONSE_CHAR_CAP } from "./limits.js";
@@ -38,6 +53,23 @@ export interface IntegrationOutcomeEnvelope {
   readonly summary: string;
   readonly detail: unknown;
 }
+
+/**
+ * The envelope fields a classifier reply template may reference (plan 2b.5, #2905). Declaring this
+ * as the synthetic tool's `outputSchema` lets a reviewed `{status}/{action}/{summary}` template
+ * pass `checkClassifierEligibility`, while `detail` stays declared so the model-visible render for
+ * ordinary chat is unchanged. `detail` is unknown-typed, so the SDK template check rejects a
+ * template that names it.
+ */
+export const INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA: JsonSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string" },
+    action: { type: "string" },
+    summary: { type: "string" },
+    detail: {}
+  }
+};
 
 /** Minimal logger shape this module needs — matches FastifyBaseLogger's warn signature. */
 export interface ToolManifestLogger {
@@ -62,6 +94,8 @@ export interface IntegrationsActiveModulesResolverDeps {
   readonly requestBudget?: RequestBudget;
   /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
   readonly resolverCache?: ResolverCache;
+  /** Test seam — defaults to the module-level `candidateCache` singleton (plan 2b.5, #2905). */
+  readonly candidateCache?: CandidateCache;
 }
 
 type ActiveModulesResolver = (actorUserId: string) => Promise<readonly MossModuleManifest[]>;
@@ -120,6 +154,22 @@ export function createIntegrationsActiveModulesResolver(
         enabledTools: conn.enabledTools,
         mutedTools: conn.mutedTools
       };
+      // Plan 2b.5 (#2905): the reviewed classifier menu for this connection, computed once. A
+      // tool's `classifier` declaration and output schema are added only when it is currently
+      // eligible, so ordinary manifests and curation are untouched for every other tool.
+      const classifierState: ClassifierConnectionState = {
+        enabled: conn.enabled,
+        classifierEnabled: conn.classifierEnabled,
+        lastError: conn.lastError,
+        discoveredTools: conn.discoveredTools,
+        enabledGroups: conn.enabledGroups,
+        enabledTools: conn.enabledTools,
+        mutedTools: conn.mutedTools,
+        classifierPreparation: conn.classifierPreparation
+      };
+      const classifierByTool = new Map(
+        effectiveClassifierTools(classifierState).map((entry) => [entry.tool.name, entry] as const)
+      );
       const tools: ModuleAssistantToolManifest[] = [];
       for (const tool of effectiveEnabledTools(conn.discoveredTools, state)) {
         if (hasRootCombinator(tool.inputSchema)) {
@@ -129,7 +179,17 @@ export function createIntegrationsActiveModulesResolver(
           );
           continue;
         }
-        tools.push(buildToolManifest(conn, slug, tool as DiscoveredTool, deps, repository, cipher));
+        tools.push(
+          buildToolManifest(
+            conn,
+            slug,
+            tool as DiscoveredTool,
+            deps,
+            repository,
+            cipher,
+            classifierByTool
+          )
+        );
       }
       if (tools.length > 0) synthetic.push(buildSyntheticModule(conn, slug, tools));
     }
@@ -167,13 +227,20 @@ function buildToolManifest(
   tool: DiscoveredTool,
   deps: IntegrationsActiveModulesResolverDeps,
   repository: IntegrationsRepository,
-  cipher: JsonSecretCipher | null
+  cipher: JsonSecretCipher | null,
+  classifierByTool: ReadonlyMap<string, EligibleClassifierTool>
 ): ModuleAssistantToolManifest {
   const memory = deps.callMemory ?? callMemory;
   const budget = deps.requestBudget ?? requestBudget;
   const action: IntegrationOutcomeEnvelope["action"] =
     tool.readOnly === true ? "read" : "performed";
   const skipSuppression = tool.idempotent === true || conn.unsuppressedTools.includes(tool.name);
+  const classifierEntry = classifierByTool.get(tool.name);
+  // Plan 2b.5: a connected read tool's reply can only be the fixed envelope summary with no
+  // content ("Read succeeded."), so it cannot count as handled and stays off the menu. It can
+  // still serve as a candidate source for another tool (resolved through `classifierByTool`).
+  const menuEntry =
+    classifierEntry !== undefined && classifierEntry.risk !== "read" ? classifierEntry : undefined;
 
   const execute: ToolExecute = async (scopedDb, input, ctx: ToolContext): Promise<ToolResult> => {
     const scope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
@@ -274,8 +341,71 @@ function buildToolManifest(
     isExternal: true,
     externalContent: true,
     inputSchema: tool.inputSchema ?? { type: "object", properties: {} },
+    ...(menuEntry
+      ? {
+          outputSchema: INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA,
+          classifier: buildClassifierDeclaration(menuEntry, conn, classifierByTool, deps)
+        }
+      : {}),
     execute
   };
+}
+
+/**
+ * Builds the classifier declaration on a synthetic tool from its current reviewed preparation
+ * (plan 2b.5, #2905). The SDK's `checkClassifierEligibility` is the final gate: a `candidates`
+ * argument with no resolvable read-only listing tool gets no hook, so the tool is marked ineligible
+ * rather than offered with an unfillable list. The candidate hook only reads the owner-scoped
+ * cache; it never calls a tool on the message path.
+ */
+function buildClassifierDeclaration(
+  entry: EligibleClassifierTool,
+  conn: ConnectionRow,
+  classifierByTool: ReadonlyMap<string, EligibleClassifierTool>,
+  deps: IntegrationsActiveModulesResolverDeps
+): ModuleAssistantToolClassifier {
+  const cache = deps.candidateCache ?? candidateCache;
+  const args: Record<string, ClassifierArgumentDecl> = {};
+  const candidateSources = new Set<string>();
+  for (const [name, argument] of Object.entries(entry.arguments)) {
+    args[name] = { kind: argument.kind };
+    if (argument.kind === "candidates" && argument.candidateSource !== undefined) {
+      candidateSources.add(argument.candidateSource);
+    }
+  }
+
+  const declaration: ModuleAssistantToolClassifier = {
+    description: entry.description,
+    arguments: args,
+    replyTemplate: entry.replyTemplate
+  };
+  // One tool gets one candidate hook, and the gate offers that single list for every candidates
+  // argument. If a tool's arguments name more than one distinct source, attaching either list
+  // would let the classifier fill one argument from a list the owner never approved for it, so the
+  // tool stays off the menu. The review-save path also refuses this shape.
+  if (candidateSources.size !== 1) return declaration;
+  const source = [...candidateSources][0]!;
+
+  const listingEntry = classifierByTool.get(source);
+  if (!listingEntry || listingEntry.risk !== "read") return declaration;
+  const sourceFingerprint = toolDefinitionFingerprint(listingEntry.tool);
+
+  const candidates = async (
+    _scopedDb: unknown,
+    ctx: ToolContext
+  ): Promise<readonly ClassifierCandidate[]> => {
+    const cached = loadCachedCandidates({
+      cache,
+      actorUserId: ctx.actorUserId,
+      connectionId: conn.id,
+      sourceName: source,
+      sourceFingerprint
+    });
+    if (!cached) throw new Error("candidates_unavailable");
+    return cached;
+  };
+
+  return { ...declaration, candidates };
 }
 
 function buildSyntheticModule(

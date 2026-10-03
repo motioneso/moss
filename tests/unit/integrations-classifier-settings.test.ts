@@ -118,6 +118,26 @@ describe("reviewed entry validation", () => {
     expect(parseReviewedEntry({ ...valid, description: "two\nlines" }).ok).toBe(false);
   });
 
+  it("rejects a review whose arguments name more than one candidate source", () => {
+    const twoSources = {
+      ...valid,
+      arguments: {
+        light: { kind: "candidates", candidateSource: "list_lights" },
+        lock: { kind: "candidates", candidateSource: "list_locks" }
+      }
+    };
+    expect(parseReviewedEntry(twoSources).ok).toBe(false);
+    // Two arguments sharing one source is fine; the gate offers that one list for both.
+    const oneSource = {
+      ...valid,
+      arguments: {
+        light: { kind: "candidates", candidateSource: "list_lights" },
+        room: { kind: "candidates", candidateSource: "list_lights" }
+      }
+    };
+    expect(parseReviewedEntry(oneSource).ok).toBe(true);
+  });
+
   it("bounds enum values and argument count", () => {
     const tooManyValues = {
       ...valid,
