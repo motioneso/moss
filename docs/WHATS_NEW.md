@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Small text on Today is easier to read.** The smallest labels and notes on the Today screen are a little larger, and the layout looks the same. [PR #2948](https://github.com/motioneso/moss/pull/2948)
 - **Cleaner docked chat panel.** The chat panel beside your page now sits flush against the edge with a single divider, and the message box has one outline instead of two. [PR #2958](https://github.com/motioneso/moss/pull/2958)
 - **Simpler tool switches.** Each tool in a connection now has a single on/off switch, and Moss no longer refuses to repeat the same request to a connected tool. [PR #2953](https://github.com/motioneso/moss/pull/2953)
 
