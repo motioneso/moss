@@ -2480,6 +2480,44 @@ export class AiRepository {
       .executeTakeFirst();
   }
 
+  /**
+   * #2956 (slice C): the viewer's own lines, newest first. Row security limits rows to the
+   * current actor (plus ownerless System lines for admins); the query adds no actor filter
+   * of its own. Bare lines are kept forever, so there is no retention floor here.
+   */
+  async listActivityLines(
+    scopedDb: DataContextDb,
+    opts: { readonly since: Date; readonly limit: number }
+  ): Promise<MossModelActivityLog[]> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.moss_model_activity_log")
+      .selectAll()
+      .where("occurred_at", ">=", opts.since)
+      .orderBy("occurred_at", "desc")
+      .orderBy("id", "desc")
+      .limit(opts.limit)
+      .execute();
+  }
+
+  /**
+   * #2956 (slice C): the unexpired detail rows for the given lines. The `expires_at` filter
+   * is in the query (not the policy) so a row the purge has not reached yet still never shows.
+   */
+  async listActivityDetails(
+    scopedDb: DataContextDb,
+    activityIds: readonly string[]
+  ): Promise<MossActivityDetail[]> {
+    assertDataContextDb(scopedDb);
+    if (activityIds.length === 0) return [];
+    return scopedDb.db
+      .selectFrom("app.moss_activity_detail")
+      .selectAll()
+      .where("activity_id", "in", [...activityIds])
+      .where("expires_at", ">", new Date())
+      .execute();
+  }
+
   // #2956: the nightly worker-run job calls this narrower function instead. It takes no
   // cutoff argument -- the database computes its own fixed 30-day retention window -- so a
   // worker connection can never widen it to delete rows it shouldn't.
