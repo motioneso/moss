@@ -25,12 +25,15 @@ import { describe, expect, it } from "vitest";
  *    the quote-anchored check above cannot see.
  *  - EVERY file that names a shared command-runner helper (`createRealTmuxIo`,
  *    `createSanitizedTmuxIo`, `createOwnerIo`, `runBounded`, `perUserSessionIo`,
- *    `createModuleBuildIo`, `AcpExecManager`) must be in the runner allow-list, with a reason. The
+ *    `createModuleBuildIo`, `AcpExecManager`, `preparePerUserStructuredLaunch`) must be in the
+ *    runner allow-list, with a reason. The
  *    names match as bare identifiers, so a call, an import, a renamed import, a dynamic-import
- *    destructure and a variable that stores the helper all match. The finder skips a helper's own
- *    definition (`function X`, `class X`), comment lines and `export { ... } from` re-export
- *    lines. These helpers hand out a run-any-command function, so a file can start a program
- *    through them without importing the child-process library.
+ *    destructure and a variable that stores the helper all match. A rename through a value
+ *    re-export (`export { A as B } from ...`) is tracked across the scan, so a file using `B`
+ *    is flagged. The finder skips a helper's own definition (`function X`, `class X`),
+ *    comment lines and `export { ... } from` re-export lines. These helpers hand out a
+ *    run-any-command function, so a file can start a program through them without importing
+ *    the child-process library.
  *  - EVERY chat-engine construction (`new AcpChatEngine(`, `new CliChatEngineImpl(`,
  *    `new CodexExecSession(`, `createStructuredEngine(`, the persistent runtimes, and the CLI
  *    structured adapter factory) must appear in the chat-engine allow-list, so a new engine built
@@ -49,11 +52,13 @@ import { describe, expect, it } from "vitest";
  *    allow-listed with a reason, and a reviewer weighing that reason is the safety net.
  *  - The process-start check is anchored on import syntax. These routes to the library are NOT
  *    caught: `createRequire(...)` followed by a require, and `process.getBuiltinModule(...)`.
- *  - The runner check matches only the seven names above. A new runner helper is not caught until
+ *  - The runner check matches only the eight names above. A new runner helper is not caught until
  *    its name is added to the pattern.
  *  - A runner passed in as a parameter or a dependency (for example a `createSlotIo` dependency)
  *    is not caught in the file that receives it. Only the file that names the helper is checked.
  *  - A runner reached through a string-built or computed property name is not caught.
+ *  - Only renames through `export { ... } from` are tracked. A locally-defined alias
+ *    re-exported without a `from` clause and consumed elsewhere still escapes.
  *  - A name used only inside a string, a template literal or a block comment line that does not
  *    start with `*` still matches, so those can raise a false alarm. Such a file needs an entry.
  *  - The chat-engine check matches the known constructors by name; a brand-new engine class whose
@@ -405,8 +410,47 @@ const CHILD_PROCESS_IMPORT_RE =
  * The lookbehinds skip the helper's own definition. The finder also skips comment lines and
  * `export { ... } from` re-export lines.
  */
-const RUNNER_NAME_RE =
-  /(?<!function\s)(?<!class\s)\b(?:createRealTmuxIo|createSanitizedTmuxIo|createOwnerIo|runBounded|perUserSessionIo|createModuleBuildIo|AcpExecManager)\b/g;
+const RUNNER_NAMES = [
+  "createRealTmuxIo",
+  "createSanitizedTmuxIo",
+  "createOwnerIo",
+  "runBounded",
+  "perUserSessionIo",
+  "createModuleBuildIo",
+  "AcpExecManager",
+  "preparePerUserStructuredLaunch"
+] as const;
+
+const RUNNER_NAME_RE = new RegExp(
+  `(?<!function\\s)(?<!class\\s)\\b(?:${RUNNER_NAMES.join("|")})\\b`,
+  "g"
+);
+
+/** A value re-export that renames a runner (`export { runBounded as rb } from ...`). */
+const REEXPORT_RENAME_RE = /export\s*\{([^}]*)\}\s*from\s*["'`]/g;
+
+/** Aliases handed out by renamed value re-exports, mapped back to the runner name. */
+function runnerReexportAliases(files: readonly SourceFile[]): Map<string, string> {
+  const known = new Set<string>(RUNNER_NAMES);
+  const aliases = new Map<string, string>();
+  for (const { text } of files) {
+    for (const match of text.matchAll(REEXPORT_RENAME_RE)) {
+      for (const part of (match[1] ?? "").split(",")) {
+        const pair = part.split(/\s+as\s+/).map((entry) => entry.trim());
+        if (pair.length !== 2) continue;
+        const [original, alias] = pair as [string, string];
+        if (known.has(original) && alias && !known.has(alias) && !aliases.has(alias)) {
+          aliases.set(alias, original);
+        }
+      }
+    }
+  }
+  return aliases;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
 const CHAT_ENGINE_RE =
@@ -426,17 +470,44 @@ function findProcessStarts(files: readonly SourceFile[]): Hit[] {
   return dedupeByFileAndLine(hits);
 }
 
+function runnerLineSkipped(text: string, index: number, line: string): boolean {
+  const lineStart = text.lastIndexOf("\n", index) + 1;
+  if (/^\s*(?:\/\/|\*|\/\*)/.test(text.slice(lineStart, index))) return true;
+  return /^\s*export\s*(?:type\s*)?\{[^}]*\}\s*from\b/.test(line);
+}
+
 function findRunnerCalls(files: readonly SourceFile[]): Hit[] {
   const hits: Hit[] = [];
+  const aliases = runnerReexportAliases(files);
+  const aliasRe =
+    aliases.size === 0
+      ? null
+      : new RegExp(
+          `(?<!function\\s)(?<!class\\s)\\b(?:${[...aliases.keys()].map(escapeRegExp).join("|")})\\b`,
+          "g"
+        );
   for (const { file, text } of files) {
     for (const match of text.matchAll(RUNNER_NAME_RE)) {
       const index = match.index ?? 0;
       const lineStart = text.lastIndexOf("\n", index) + 1;
       const lineEnd = text.indexOf("\n", index);
       const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-      if (/^\s*(?:\/\/|\*|\/\*)/.test(text.slice(lineStart, index))) continue;
-      if (/^\s*export\s*(?:type\s*)?\{[^}]*\}\s*from\b/.test(line)) continue;
+      if (runnerLineSkipped(text, index, line)) continue;
       hits.push({ file, line: lineOf(text, index), detail: `runner use ${match[0]}` });
+    }
+    if (aliasRe) {
+      for (const match of text.matchAll(aliasRe)) {
+        const index = match.index ?? 0;
+        const lineStart = text.lastIndexOf("\n", index) + 1;
+        const lineEnd = text.indexOf("\n", index);
+        const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+        if (runnerLineSkipped(text, index, line)) continue;
+        hits.push({
+          file,
+          line: lineOf(text, index),
+          detail: `runner use ${match[0]} (re-export of ${aliases.get(match[0])})`
+        });
+      }
     }
   }
   return dedupeByFileAndLine(hits);
@@ -639,6 +710,10 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     ["the per-user session runner", `const io = slot.perUserSessionIo(deps, key, params);`],
     ["the module-build runner", `const io = createModuleBuildIo(deps);`],
     [
+      "the launch-prep helper",
+      `const l = await preparePerUserStructuredLaunch(deps, key, params);\nawait l.io.run(bin, ["--print", p]);`
+    ],
+    [
       "a renamed import",
       `import { runBounded as go } from "./per-user-structured.js";\ngo(bin, []);`
     ],
@@ -653,6 +728,24 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     expect(hits.length).toBeGreaterThan(0);
     expect([...new Set(uncovered(hits, RUNNER_CALL_ALLOWLIST).map((hit) => hit.file))]).toEqual([
       file
+    ]);
+  });
+
+  it("flags a consumer using a renamed runner re-export", () => {
+    const files = [
+      {
+        file: "packages/example/runner-barrel.ts",
+        text: `export { runBounded as rb } from "./per-user-structured.js";`
+      },
+      {
+        file: "packages/example/renamed-use.ts",
+        text: `import { rb } from "./runner-barrel.js";\nrb(bin, []);`
+      }
+    ];
+    const hits = findRunnerCalls(files);
+    expect(uncovered(hits, RUNNER_CALL_ALLOWLIST).map(describeHit)).toEqual([
+      "packages/example/renamed-use.ts:1 — runner use rb (re-export of runBounded)",
+      "packages/example/renamed-use.ts:2 — runner use rb (re-export of runBounded)"
     ]);
   });
 
