@@ -183,3 +183,13 @@
     padding: var(--space-5) 0 0;
   }
 }
+
+/* Priority groups: hairline-ruled sections, no panel. */
+.tasks-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+.tasks-group__rows {
+  padding-top: var(--space-2);
+}

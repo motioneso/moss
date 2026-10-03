@@ -167,3 +167,84 @@ test("task dialog selects use the canonical select wrapper", async ({ page }) =>
   await expect(dialog.locator(".jds-selectwrap select.jds-select")).toHaveCount(3);
   await expect(dialog.locator("select:not(.jds-select)")).toHaveCount(0);
 });
+
+test("priority groups are headed sections with task counts", async ({ page }) => {
+  await page.goto("/tasks");
+  const headings = page.getByRole("heading", { level: 2 });
+  await expect(headings).toHaveText(["Critical", "Someday"]);
+  const critical = page.getByRole("region", { name: "Critical" });
+  await expect(critical.getByText("1 task", { exact: true })).toBeVisible();
+  await expect(critical.getByText("File taxes")).toBeVisible();
+});
+
+test("quick add creates a task from the title alone and ignores blank input", async ({ page }) => {
+  await page.goto("/tasks");
+  const posts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/tasks") {
+      posts.push(request.postData() ?? "");
+    }
+  });
+  const field = page.getByRole("textbox", { name: "Task title" });
+  await field.fill("   ");
+  await expect(page.getByRole("button", { name: "Add task" })).toBeDisabled();
+  await field.press("Enter");
+
+  await field.fill("Water the plants");
+  await field.press("Enter");
+  await expect(page.getByText("Water the plants")).toBeVisible();
+  await expect(field).toHaveValue("");
+  expect(posts).toHaveLength(1);
+  expect(JSON.parse(posts[0] ?? "{}")).toMatchObject({ title: "Water the plants" });
+});
+
+test("quick add files a new task in the focused list", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/tasks");
+  await page
+    .getByRole("navigation", { name: "Lists" })
+    .getByRole("button", { name: "Errands, 1 task" })
+    .click();
+  const request = page.waitForRequest(
+    (req) => req.method() === "POST" && new URL(req.url()).pathname === "/api/tasks"
+  );
+  const field = page.getByRole("textbox", { name: "Task title" });
+  await field.fill("Post the parcel");
+  await field.press("Enter");
+  expect((await request).postDataJSON()).toMatchObject({
+    title: "Post the parcel",
+    listId: "list-2"
+  });
+  await expect(page.getByText("Post the parcel")).toBeVisible();
+});
+
+test("quick add sends one request while saving and keeps the draft when it fails", async ({
+  page
+}) => {
+  let posts = 0;
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/tasks", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts += 1;
+    await held;
+    return route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Server unavailable" })
+    });
+  });
+  await page.goto("/tasks");
+  const field = page.getByRole("textbox", { name: "Task title" });
+  await field.fill("Call the plumber");
+  await field.press("Enter");
+  await field.press("Enter");
+  await expect(page.getByRole("button", { name: "Add task" })).toBeDisabled();
+  release();
+
+  await expect(page.getByRole("alert")).toContainText("Could not add the task.");
+  await expect(field).toHaveValue("Call the plumber");
+  expect(posts).toBe(1);
+});

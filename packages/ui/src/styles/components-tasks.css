@@ -256,28 +256,9 @@
   background: var(--surface-3);
   color: var(--text);
 }
-.tk-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-}
-.tk-panel__head {
-  background: var(--surface-2);
-}
 .tk-panel__dot {
   border-radius: 50%;
   background: var(--tk-swatch);
-}
-.tk-panel__name {
-  font-family: var(--font-sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.tk-panel__count {
-  font-family: var(--font-sans);
-  font-size: 11.5px;
-  color: var(--text-faint);
 }
 .tk-quad {
   border: 1px solid var(--border);

@@ -18,6 +18,11 @@
   font-size: var(--text-2xs);
   font-weight: var(--weight-bold);
 }
+.jds-section-head__marker {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+}
 .jds-section-head__title {
   margin: 0;
   font-family: var(--font-display);
