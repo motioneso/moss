@@ -17,6 +17,7 @@ import type {
 import {
   dedupeStructuredSources,
   modelActivityAction,
+  modelActivityStructuredCode,
   recordModelActivity,
   withModelActivityRecording,
   type ModelActivityRecorder
@@ -115,10 +116,15 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       {
         kind: "structured",
         action: modelActivityAction(input.service),
-        modelName: input.model.provider_model_id
+        modelName: input.model.provider_model_id,
+        actionCode: modelActivityStructuredCode(input.service),
+        ...(input.actorUserId ? { ownerUserId: input.actorUserId } : {}),
+        ...(input.turnId ? { turnId: input.turnId } : {}),
+        ...(input.parentId ? { parentId: input.parentId } : {})
       },
       () =>
-        input.scope ? this.generateScopedStructured(input) : this.generateOneShotStructured(input)
+        input.scope ? this.generateScopedStructured(input) : this.generateOneShotStructured(input),
+      { usageOf: structuredUsageOrUndefined }
     );
   }
 
@@ -446,6 +452,18 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       await new Promise((resolve) => setTimeout(resolve, this.pollMs));
     }
   }
+}
+
+/**
+ * #2956: tokens off the settled CLI result. Both paths report zeroes as a
+ * placeholder, never a measurement — omit them so the line reads unreported.
+ */
+function structuredUsageOrUndefined(
+  result: StructuredProviderResult
+): { readonly inputTokens: number; readonly outputTokens: number } | undefined {
+  const usage = result.usage;
+  if (!usage || (usage.inputTokens === 0 && usage.outputTokens === 0)) return undefined;
+  return usage;
 }
 
 /** #2228: every source the CLI's search tool reported on the records read so far. */

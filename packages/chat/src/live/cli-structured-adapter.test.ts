@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, afterAll } from "vitest";
 
-import type { GenerateStructuredProviderInput } from "@moss/ai";
+import type { GenerateStructuredProviderInput, ModelActivityEntry } from "@moss/ai";
 
 import { CliStructuredAdapter } from "./cli-structured-adapter.js";
 import { AcpChatEngine } from "./acp-chat-engine.js";
@@ -473,5 +473,54 @@ describe("CliStructuredAdapter cancellation (#2276)", () => {
         scope: { actorUserId: "user-1", connectorAccountId: "conn-1", lineageId: "lineage-1" }
       })
     ).rejects.toThrow();
+  });
+});
+
+describe("CliStructuredAdapter activity lines", () => {
+  it("records the service code with owner and turn, omitting placeholder zeros", async () => {
+    const seen: ModelActivityEntry[] = [];
+    const adapter = new CliStructuredAdapter(
+      "anthropic",
+      factoryCapturing([]),
+      5000,
+      100,
+      (entry) => seen.push(entry)
+    );
+    await adapter.generateStructured({
+      ...baseInput("module.job-fit"),
+      actorUserId: "user-1",
+      turnId: "turn-1"
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      kind: "structured",
+      actionCode: "structured.job-fit",
+      ownerUserId: "user-1",
+      turnId: "turn-1",
+      outcome: "ok"
+    });
+    expect(seen[0]).not.toHaveProperty("inputTokens");
+    expect(seen[0]).not.toHaveProperty("outputTokens");
+    expect(typeof seen[0]?.durationMs).toBe("number");
+  });
+
+  it("records a failure with a code, never raw error text", async () => {
+    const seen: ModelActivityEntry[] = [];
+    const adapter = new CliStructuredAdapter(
+      "anthropic",
+      () => mismatchedFolderEngine({ count: 0 }),
+      5000,
+      100,
+      (entry) => seen.push(entry)
+    );
+    await expect(
+      adapter.generateStructured({ ...baseInput("module.job-fit"), actorUserId: "user-1" })
+    ).rejects.toThrow(CliTranscriptLocationMismatchError);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      actionCode: "structured.job-fit",
+      ownerUserId: "user-1",
+      outcome: "error"
+    });
   });
 });

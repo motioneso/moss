@@ -72,6 +72,12 @@ export type GenerateStructuredProviderInput = {
    * per-user slot; the cli-runner refuses a structured launch without it.
    */
   readonly actorUserId?: string;
+  /**
+   * #2956: which turn this call belongs to. Recorded on the activity line alongside
+   * the owner above; absent means the line stands alone.
+   */
+  readonly turnId?: string;
+  readonly parentId?: string;
 };
 
 export type StructuredProviderResult =
