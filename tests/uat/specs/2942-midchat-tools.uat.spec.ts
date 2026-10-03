@@ -107,11 +107,14 @@ async function openChat(page: Page): Promise<void> {
 
 type TurnResponse = Awaited<ReturnType<Page["waitForResponse"]>>;
 
-async function sendTurn(
+// The turn POST answers only when the turn ends, and a turn that raises an approval card
+// does not end until someone answers the card. So this returns the pending response and
+// leaves awaiting it to the caller.
+async function dispatchTurn(
   page: Page,
   text: string,
   responseTimeoutMs = 30_000
-): Promise<TurnResponse> {
+): Promise<{ readonly pending: Promise<TurnResponse> }> {
   // The settings tab takes focus while connecting; a backgrounded chat tab may not
   // dispatch the composer Enter, so foreground it before every turn.
   await page.bringToFront();
@@ -124,7 +127,15 @@ async function sendTurn(
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await composer.fill(text);
   await composer.press("Enter");
-  const response = await turnResponse;
+  return { pending: turnResponse };
+}
+
+async function sendTurn(
+  page: Page,
+  text: string,
+  responseTimeoutMs = 30_000
+): Promise<TurnResponse> {
+  const response = await (await dispatchTurn(page, text, responseTimeoutMs)).pending;
   expect(response.status(), "chat turn POST").toBe(200);
   return response;
 }
@@ -207,13 +218,15 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
       // The fresh protocol session starts in the background; sending before the composer
       // is enabled dispatches nothing.
       await expect(chat.getByRole("textbox", { name: /^Message/ })).toBeEnabled();
-      await sendTurn(
+      // Approve while the turn is still open. Awaiting the turn response first would
+      // block until the approval hold expires unanswered.
+      const turn = await dispatchTurn(
         chat,
         'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.',
-        180_000
+        600_000
       );
       // Approve in a loop until the effect lands: a single click can miss while the
-      // card is still attaching, and the hold expires unanswered if it does.
+      // card is still attaching.
       const porchOn = () =>
         fixtureState().devices.find((device) => device.name === "Porch light")?.on === true;
       const deadline = Date.now() + 180_000;
@@ -229,6 +242,7 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
         await next.click({ timeout: 5_000 }).catch(() => undefined);
         await chat.waitForTimeout(1_000);
       }
+      expect((await turn.pending).status(), "chat turn POST").toBe(200);
     });
   } finally {
     await chat.close();
