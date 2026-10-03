@@ -56,6 +56,7 @@ import {
 
 // Narrowest window where the page and a 380px chat panel fit side by side without crowding.
 const WIDE_QUERY = "(min-width: 1280px)";
+const PHONE_QUERY = "(max-width: 720px)";
 
 const KNOWN_MODULES_WITH_SETTINGS = new Set(["calendar", "news", "sports", "tasks", "wellness"]);
 
@@ -316,6 +317,17 @@ export function AppShell(props: AppShellProps) {
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);
   }, []);
+  const [phoneWindow, setPhoneWindow] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.(PHONE_QUERY).matches
+  );
+  useEffect(() => {
+    const media = window.matchMedia?.(PHONE_QUERY);
+    if (!media) return;
+    const sync = () => setPhoneWindow(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
   const dockChat = useMemo(() => {
     if (wideWindow) return true;
     if (!location.pathname.startsWith("/m/")) return false;
@@ -338,12 +350,17 @@ export function AppShell(props: AppShellProps) {
   // Exactly one ChatDrawer element, always rendered in the same spot so it stays mounted (and
   // keeps unsent text) when the window crosses the dock breakpoint. dockChat only switches its
   // layout between beside-the-page and the floating overlay.
+  const [chatExpanded, setChatExpanded] = useState(false);
+  const expanded = chatExpanded && dockChat && chatOpen && !phoneWindow;
   const chatDrawer = (
     <ChatDrawer
       open={chatOpen}
       docked={dockChat}
+      expanded={expanded}
+      onToggleExpanded={dockChat && !phoneWindow ? () => setChatExpanded((v) => !v) : undefined}
       onClose={() => {
         setChatOpen(false);
+        setChatExpanded(false);
         setFocusActionRequestId(null);
         // #916: starters are one-shot — a later manual open starts from a blank composer.
         setModuleDraft(undefined);
@@ -387,7 +404,7 @@ export function AppShell(props: AppShellProps) {
         />
 
         <div className="workspace-area">
-          <header className="topbar">
+          <header className="topbar" hidden={expanded}>
             <button
               aria-label="Open navigation"
               className="icon-button mobile-only"
@@ -421,8 +438,10 @@ export function AppShell(props: AppShellProps) {
             </div>
           </header>
 
-          <div className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""}`}>
-            <main className="content-surface">
+          <div
+            className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""} ${expanded ? "workspace-body--expanded" : ""}`}
+          >
+            <main className="content-surface" hidden={expanded}>
               <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
                 <ChatControlsProvider
                   value={{

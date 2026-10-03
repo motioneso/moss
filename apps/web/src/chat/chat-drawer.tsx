@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Clock, MessageSquareText, ShieldOff, SquarePen, X } from "lucide-react";
+import {
+  ChevronDown,
+  Clock,
+  MessageSquareText,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  ShieldOff,
+  SquarePen,
+  X
+} from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type UIEvent,
@@ -9,7 +19,7 @@ import {
   useState
 } from "react";
 
-import { BrandMark, EmptyState as JdsEmptyState, IconButton } from "@moss/ui";
+import { BrandMark, EmptyState as JdsEmptyState, IconButton, Menu } from "@moss/ui";
 
 import {
   cancelChatTurn,
@@ -78,6 +88,9 @@ export function ChatDrawer(props: {
    * breakpoint, since the phone chat always stays the app's normal pop-up drawer.
    */
   readonly docked?: boolean;
+  /** Desktop docked chat only. Expanded chat replaces the page; undefined hides the button. */
+  readonly expanded?: boolean;
+  readonly onToggleExpanded?: () => void;
 }) {
   const queryClient = useQueryClient();
   const assistantName = useAssistantName("");
@@ -603,7 +616,7 @@ export function ChatDrawer(props: {
     <aside
       ref={asideRef}
       tabIndex={-1}
-      className={props.docked ? "chatd chatd--docked" : "chatd"}
+      className={`chatd${props.docked ? " chatd--docked" : ""}${props.expanded ? " chatd--expanded" : ""}`}
       role="dialog"
       aria-modal={phone ? true : undefined}
       onKeyDown={onDialogKeyDown}
@@ -626,26 +639,39 @@ export function ChatDrawer(props: {
         <IconButton aria-label="New chat" title="New chat" onClick={startNewChat}>
           <SquarePen aria-hidden="true" />
         </IconButton>
-        {props.surface === DEFAULT_CHAT_SURFACE && (
+        {props.onToggleExpanded ? (
           <IconButton
-            aria-label="Start private chat"
-            aria-pressed={privateMode}
-            active={privateMode}
-            title="Private chat"
-            onClick={startPrivateChat}
+            aria-label={props.expanded ? "Collapse chat" : "Expand chat"}
+            title={props.expanded ? "Collapse" : "Expand"}
+            onClick={props.onToggleExpanded}
           >
-            <ShieldOff aria-hidden="true" />
+            {props.expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
           </IconButton>
-        )}
-        <IconButton
-          aria-label={showHistory ? "Hide chat history" : "Show chat history"}
-          aria-pressed={showHistory}
-          active={showHistory}
-          title={showHistory ? "Hide history" : "History"}
-          onClick={() => setShowHistory((prev) => !prev)}
-        >
-          <Clock aria-hidden="true" />
-        </IconButton>
+        ) : null}
+        <Menu
+          triggerIcon={<MoreHorizontal aria-hidden="true" />}
+          triggerLabel="More chat options"
+          items={[
+            {
+              id: "history",
+              icon: <Clock aria-hidden="true" />,
+              label: showHistory ? "Hide history" : "History"
+            },
+            ...(props.surface === DEFAULT_CHAT_SURFACE
+              ? [
+                  {
+                    id: "private",
+                    icon: <ShieldOff aria-hidden="true" />,
+                    label: privateMode ? "Leave private chat" : "Start private chat"
+                  }
+                ]
+              : [])
+          ]}
+          onSelect={(id) => {
+            if (id === "history") setShowHistory((prev) => !prev);
+            else if (id === "private") startPrivateChat();
+          }}
+        />
         <IconButton aria-label="Close chat" title="Close" onClick={props.onClose}>
           <X aria-hidden="true" />
         </IconButton>

@@ -38,6 +38,18 @@
   .chatd--docked .chatd__status {
     white-space: nowrap;
   }
+
+  /* Expanded: header, thread and composer share one centred reading column. */
+  .chatd--expanded {
+    width: auto;
+    --chatd-gutter: max(16px, calc((100% - 820px) / 2));
+  }
+
+  .chatd--expanded .chatd__head,
+  .chatd--expanded .chatd__body,
+  .chatd--expanded .chatd__composer {
+    padding-inline: var(--chatd-gutter);
+  }
 }
 
 @keyframes chatd-in {
