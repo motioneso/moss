@@ -89,3 +89,5 @@ RELAY POINT 2 (relay 1 after security merge of #2964). Successor next steps:
 3. #2956 (w1:p0T): slice A building (gate wait); then draft PR -> kill-gate call (plan section 6) -> fresh sessions for B, C, D. Now must rebase over #2957 (settings + app map overlap).
 4. PR-opened watch on fix-2942-midchat-tools and feat-2956-activity-history must be re-armed (it died with relay 1).
 5. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
+
+Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All three builders confirmed alive: #2942 building test-first, #2934 running its gate before pushing round-2 fixes (branch head still 846bd1082), #2956 editing slice A. PR-opened watch re-armed (also watches the #2934 branch head for the round-2 push).
