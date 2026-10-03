@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import {
   useEffect,
   useId,
@@ -79,14 +80,14 @@ export function BriefingDialog(props: BriefingDialogProps) {
           <h2 id={titleId} data-briefing-title tabIndex={-1} className="brief-reader__title">
             {props.title}
           </h2>
-          <button
-            type="button"
-            className="jds-btn jds-btn--sm jds-btn--quiet"
+          <Button
+            size="sm"
+            variant="quiet"
             onClick={props.onClose}
             aria-label="Close briefing reader"
           >
             Close
-          </button>
+          </Button>
         </div>
         {props.nav}
         <div className="brief-reader__body">{props.children}</div>
