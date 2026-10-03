@@ -17,9 +17,11 @@ export function TaskCapture(props: {
   const [formError, setFormError] = useState<string | null>(null);
 
   const createMutation = useMutation({
-    mutationFn: () => createTask({ title: title.trim(), listId: props.defaultListId || undefined }),
-    onSuccess: async () => {
-      setTitle("");
+    mutationFn: (submitted: string) =>
+      createTask({ title: submitted, listId: props.defaultListId || undefined }),
+    onSuccess: async (_task, submitted) => {
+      // Keep anything typed while the request was in flight.
+      setTitle((current) => (current.trim() === submitted ? "" : current));
       setFormError(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
     },
@@ -28,9 +30,10 @@ export function TaskCapture(props: {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!title.trim()) return;
+    const submitted = title.trim();
+    if (!submitted || createMutation.isPending) return;
     setFormError(null);
-    createMutation.mutate();
+    createMutation.mutate(submitted);
   };
 
   return (
@@ -69,7 +72,11 @@ export function TaskCapture(props: {
           </Button>
         </div>
       </div>
-      {formError ? <p className="form-error">{formError}</p> : null}
+      {formError ? (
+        <p className="jds-hint jds-hint--error" role="alert">
+          {`Could not add the task. ${formError}`}
+        </p>
+      ) : null}
     </form>
   );
 }

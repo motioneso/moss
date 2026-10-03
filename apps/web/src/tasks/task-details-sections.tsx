@@ -85,6 +85,7 @@ export function TaskTagsField(props: {
             ))}
         <input
           value={props.draft}
+          aria-label="Add a tag"
           placeholder={activeCount ? "Add another…" : "Type a tag and press Enter"}
           onChange={(event) => props.onDraft(event.target.value)}
           onKeyDown={(event) => {

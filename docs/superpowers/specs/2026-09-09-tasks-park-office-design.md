@@ -34,6 +34,27 @@ These show the upper content region, not entire pages. They are visual reference
 - Use confident Swiss sans-serif typography and functional park-signage organization. No landscapes, park-service seals, faux official branding, heavy frames, patina, serif/mono headings, mascots, or wellness softness.
 - Today, the global shell, other pages, and global theme redesign are not part of this implementation.
 
+## Rulings against Today (2026-10-03)
+
+Ben ruled on 2026-10-02 that Today is the newest look and the design basis. Where the September
+mockup and Today disagreed, Ben ruled on 2026-10-03. These rulings override the mockup and the
+locked decisions above.
+
+| Topic               | Ruling                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Header              | Shared section-home masthead (`<Masthead tone="field">`), spanning Today's hero width |
+| Gold full stop      | Keep "Tasks." with a small decorative gold mark                                       |
+| Eyebrow and tagline | Drop "Personal workspace" and "Everything in its place."                              |
+| Selected list       | Today's style: accent text, bold, thin straight marker; no filled block               |
+| List/Grid on band   | Add an on-dark option to the shared `Segmented` control; no local styling             |
+| Priority groups     | Hairline-ruled groups with display heading and count; no sage fill, no boxed panel    |
+| Status filters      | Keep the shared `Segmented` switch; no underlined tabs                                |
+| Add button          | Shared primary `<Button>`                                                             |
+| Page width          | Today's working width (up to 1220px), not the old 940px                               |
+
+The interactive study cited above is not on main. The committed reference images and this
+spec are the working source.
+
 ## Production reconciliation
 
 The mockup establishes appearance, not a replacement domain model. These implementation choices preserve capabilities omitted from the preview.

@@ -1,64 +1,75 @@
-import { QUADRANTS, type TaskDto, type TaskListDto } from "@moss/shared";
+import { QUADRANTS, type TaskDto, type TaskListDto, type TaskQuadrant } from "@moss/shared";
+import { SectionHead } from "@moss/ui";
 
 import { listColorMap, TaskRow } from "./task-list-view";
 import { groupTasksByQuadrant } from "./task-view-model";
 
-/** Mono kicker per Eisenhower quadrant (importance × urgency). */
-const QUAD_TAG: Record<string, string> = {
-  do: "IMPORTANT · URGENT",
-  schedule: "IMPORTANT",
-  delegate: "URGENT",
-  eliminate: "NEITHER"
+/** Marker colour per quadrant. Do First carries the accent; the rest stay quiet. */
+const QUAD_COLOR: Record<TaskQuadrant, string> = {
+  do: "var(--accent-fg)",
+  schedule: "var(--steel)",
+  delegate: "var(--amber)",
+  eliminate: "var(--ink-4)"
 };
 
 export function TaskMatrixView(props: {
   readonly tasks: readonly TaskDto[];
   readonly lists: readonly TaskListDto[];
   readonly isUpdating: boolean;
-  readonly onToggleDone: (task: TaskDto) => void;
+  readonly onToggleDone: (task: TaskDto) => Promise<unknown> | void;
   readonly onOpen: (task: TaskDto) => void;
+  readonly onAccept?: (task: TaskDto) => void;
+  readonly onDismiss?: (task: TaskDto) => void;
 }) {
   const listMeta = listColorMap(props.lists);
   const tasksByQuadrant = groupTasksByQuadrant(props.tasks);
 
   return (
-    <div>
-      <div className="tk-matrix" role="grid" aria-label="Eisenhower matrix">
-        {QUADRANTS.map((quadrant) => {
-          const tasks = tasksByQuadrant[quadrant.key];
-          return (
-            <div className={`tk-quad tk-quad--${quadrant.key}`} key={quadrant.key} role="gridcell">
-              <div className="tk-quad__head">
-                <span className="tk-quad__n">{tasks.length}</span>
-                <span className="tk-quad__tag">
-                  <span className="dot" />
-                  {QUAD_TAG[quadrant.key]}
-                </span>
-                <div className="tk-quad__verb">{quadrant.title}</div>
-              </div>
-              <div className="tk-quad__body">
-                {tasks.length === 0 ? (
-                  <div className="tk-quad__empty">
-                    Nothing here{quadrant.key === "eliminate" ? " — a clean corner." : "."}
-                  </div>
-                ) : (
-                  tasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      list={listMeta.get(task.listId)}
-                      isUpdating={props.isUpdating}
-                      compact
-                      onToggleDone={props.onToggleDone}
-                      onOpen={props.onOpen}
-                    />
-                  ))
-                )}
-              </div>
+    <div className="tasks-matrix">
+      {QUADRANTS.map((quadrant) => {
+        const tasks = tasksByQuadrant[quadrant.key];
+        const headingId = `tasks-quad-${quadrant.key}`;
+        return (
+          <section
+            className={`tasks-quad tasks-quad--${quadrant.key}`}
+            key={quadrant.key}
+            aria-labelledby={headingId}
+          >
+            <SectionHead
+              rule
+              titleId={headingId}
+              title={quadrant.title}
+              marker={
+                <span
+                  className="tk-panel__dot"
+                  style={{ "--tk-swatch": QUAD_COLOR[quadrant.key] } as React.CSSProperties}
+                />
+              }
+              meta={`${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`}
+            />
+            <p className="tasks-quad__subtitle jds-caption">{quadrant.subtitle}</p>
+            <div className="tasks-quad__rows">
+              {tasks.length === 0 ? (
+                <p className="tasks-quad__empty jds-caption">Nothing here.</p>
+              ) : (
+                tasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    list={listMeta.get(task.listId)}
+                    isUpdating={props.isUpdating}
+                    compact
+                    onToggleDone={props.onToggleDone}
+                    onOpen={props.onOpen}
+                    onAccept={props.onAccept}
+                    onDismiss={props.onDismiss}
+                  />
+                ))
+              )}
             </div>
-          );
-        })}
-      </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

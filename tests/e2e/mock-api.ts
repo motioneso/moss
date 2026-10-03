@@ -613,7 +613,8 @@ async function handleTaskListRoute(route: Route, state: MockApiState): Promise<v
     const task = createMockTask(`task-${state.tasks.length + 1}`, input.title, {
       description: input.description ?? null,
       dueAt: input.dueAt ?? null,
-      priority: input.priority ?? null
+      priority: input.priority ?? null,
+      ...(input.listId ? { listId: input.listId } : {})
     });
 
     state.tasks = [...state.tasks, task];

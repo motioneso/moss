@@ -269,7 +269,7 @@ export const tasksModuleManifest = {
       id: "tasks",
       label: "Tasks",
       description:
-        "View and manage the active actor's tasks: create, update, and complete tasks, organize them into lists and tags, break a task into subtasks, and see them ranked by priority in the do/schedule/delegate/eliminate matrix.",
+        "View and manage tasks in lists and tags, with subtasks, a List view grouped by priority and a Grid view by importance and urgency. A list index beside the tasks, or a list picker on a phone, chooses the lists shown.",
       path: "/tasks",
       icon: "check-square",
       order: 10,
@@ -814,14 +814,46 @@ export const tasksModuleManifest = {
     {
       id: "tasks.lists_and_tags",
       description:
-        "Organize tasks into lists with filterable tags; rename, reassign, or delete lists and " +
-        "tags without losing the tasks in them."
+        "Organize tasks into lists and tags, and rename, reassign or delete them without losing tasks. Pick a list from the index or the phone picker; it stays across List and Grid. When nothing matches, Clear filters resets them.",
+      errors: [
+        {
+          code: "tasks.load_failed",
+          class: "transient",
+          description:
+            "Tasks could not load. With nothing loaded the page says so with Retry; after an earlier load it keeps those tasks on screen, says the refresh failed and offers Retry."
+        },
+        {
+          code: "tasks.lists_load_failed",
+          class: "transient",
+          description:
+            "Lists could not load. The list index, or the list picker on a phone, says so and offers Retry."
+        },
+        {
+          code: "tasks.update_failed",
+          class: "transient",
+          description:
+            "Completing, reopening, accepting or dismissing a task failed. The task returns to its previous state and a message asks you to try again."
+        }
+      ]
     },
     {
       id: "tasks.priority_matrix",
       description:
-        "Rank tasks across the do / schedule / delegate / eliminate matrix, plus a focus list of " +
-        "overdue and at-risk tasks for today."
+        "Grid ranks tasks into Do First, Schedule, Delegate and Later by importance and urgency, each a headed section with a count that stays visible when empty. A focus list shows overdue and at-risk tasks for today.",
+      errors: [
+        {
+          code: "tasks.view_load_failed",
+          class: "transient",
+          description:
+            "The saved List or Grid choice could not load, so List shows with a Retry beside the message."
+        },
+        {
+          code: "tasks.view_save_failed",
+          class: "transient",
+          description:
+            "Switching between List and Grid could not be saved. The previous view stays selected and a message says so; press List or Grid again."
+        }
+      ]
     },
     {
       id: "tasks.breakdown",
