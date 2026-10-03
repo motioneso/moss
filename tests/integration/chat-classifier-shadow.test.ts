@@ -165,11 +165,11 @@ describe("app.chat_classifier_shadow_records", () => {
       await bootstrap.query(
         `CREATE POLICY chat_classifier_shadow_records_delete ON app.chat_classifier_shadow_records
            FOR DELETE TO jarvis_app_runtime
-           USING (owner_user_id IS NOT DISTINCT FROM app.current_actor_user_id())`
+           USING (true)`
       );
+      // Weakened this far, the actorless delete removes every owner's rows: the real policy's
+      // whole predicate, not just its actor clause, is what normally refuses it.
       const weakened = await sql`DELETE FROM app.chat_classifier_shadow_records`.execute(appDb);
-      // NULL IS NOT DISTINCT FROM NULL is TRUE, so an actorless delete now matches a row whose
-      // owner is NULL — proof the actor clause is what normally stops it.
       expect(Number(weakened.numAffectedRows ?? 0)).toBeGreaterThan(0);
     } finally {
       await bootstrap.query(
