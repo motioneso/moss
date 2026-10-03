@@ -407,9 +407,11 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     const before = await modelCallCount(page);
     await page.getByRole("button", { name: "Review changes" }).first().click();
     await expect(page.getByText("Review required")).toBeVisible({ timeout: 240_000 });
-    expect((await modelCallCount(page)) - before, "re-preparing made model calls").toBeGreaterThan(
-      0
-    );
+    // One call per tool the screen drafts again.
+    const drafted = await page.getByText("Draft", { exact: true }).count();
+    expect(drafted, "tools drafted again").toBeGreaterThan(0);
+    const callEntries = (await modelCalls(page)).filter((entry) => entry.kind === "structured");
+    expect(callEntries.length - before, "re-preparing model calls").toBe(drafted);
     // Old approval is still the saved one until the owner approves the new draft.
     expect(resolveMenu(await connectionDetail(page))).toEqual([FIXTURE_LIGHT_TOOL]);
     await page.getByLabel(`Risk for ${FIXTURE_LIST_TOOL}`).selectOption("read");
@@ -460,19 +462,27 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     );
     await approveButton().first().waitFor({ timeout: 180_000 });
     expect(lightCalls()).toEqual([]);
-    // The model may look up devices first, which is its own request. Approve each card in turn
-    // until the light action itself has run.
-    await expect
-      .poll(
-        async () => {
-          if (porch()?.on) return true;
-          const next = approveButton().first();
-          if (await next.isVisible()) await next.click({ timeout: 5_000 }).catch(() => undefined);
-          return porch()?.on ?? false;
-        },
-        { timeout: 180_000, intervals: [1_000] }
-      )
-      .toBe(true);
+    // The model may look up devices first, which is its own request. Read each card before
+    // approving it: only the device listing and the light action are allowed.
+    const deadline = Date.now() + 180_000;
+    while (porch()?.on !== true) {
+      if (Date.now() > deadline) throw new Error("the light action never ran after approval");
+      const next = approveButton().first();
+      if (!(await next.isVisible())) {
+        await page.waitForTimeout(1_000);
+        continue;
+      }
+      const card = await next
+        .locator('xpath=ancestor::*[@aria-label="Action request"][1]')
+        .innerText();
+      if (card.includes(FIXTURE_LIGHT_TOOL)) {
+        expect(porch()?.on, "the light is still off before its card is approved").toBe(false);
+      } else {
+        expect(card, "unexpected approval card").toContain(FIXTURE_LIST_TOOL);
+      }
+      await next.click({ timeout: 5_000 }).catch(() => undefined);
+      await page.waitForTimeout(1_000);
+    }
   });
 
   await test.step("YOLO mode runs the same action with no approval card", async () => {
@@ -498,5 +508,11 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     await expect.poll(() => porch()?.on, { timeout: 180_000 }).toBe(false);
     await expect(approveButton()).toHaveCount(0);
     await page.request.put("/api/me/yolo", { data: { enabled: false } });
+    // Across both chat steps only the listing and the light tool ran. The unlock never did.
+    const toolsCalled = new Set(fixtureState().calls.map((c) => c.tool));
+    expect([...toolsCalled].every((t) => t === FIXTURE_LIGHT_TOOL || t === FIXTURE_LIST_TOOL)).toBe(
+      true
+    );
+    expect(toolsCalled.has(FIXTURE_UNLOCK_TOOL)).toBe(false);
   });
 });
