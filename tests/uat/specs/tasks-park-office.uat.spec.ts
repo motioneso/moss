@@ -107,7 +107,7 @@ test("Tasks page captures, edits, filters and remembers through the real UI (#24
   const subInput = dialog.getByPlaceholder("Add a subtask and press Enter");
   await subInput.fill(`UAT step ${RUN}`);
   await subInput.press("Enter");
-  await expect(dialog.getByText(`UAT step ${RUN}`)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: `Complete UAT step ${RUN}` })).toBeVisible();
   await dialog.getByLabel("Priority").selectOption({ label: "High" });
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toHaveCount(0);
@@ -120,7 +120,9 @@ test("Tasks page captures, edits, filters and remembers through the real UI (#24
     .getByRole("button", { name: `Open ${TITLE}` })
     .first()
     .click();
-  await expect(page.getByRole("dialog").getByText(`UAT step ${RUN}`)).toBeVisible();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: `Complete UAT step ${RUN}` })
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
