@@ -36,12 +36,14 @@ import type { ReapReason } from "./provider-runtime.js";
 import {
   applyRemoteReap,
   cleanupPrivateSession,
+  clearChatSession,
   countSubscribersFor,
   delay,
   drainEngine,
   createPendingActionResultFlusher,
   clearPrivateDetachTimer,
   healAndRelaunchSession,
+  stopSessionTurn,
   injectActionResultRecord,
   type PendingActionResult,
   type SessionRecoveryHost,
@@ -382,20 +384,15 @@ export class ChatSessionManager {
       // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
       // turn returns without launching an engine; a decline returns undefined and the default
       // model path below runs unchanged with the original text.
-      // #2934 — capture this turn's privacy before the gate-mode wait inside
-      // tryGatedTurn. A new chat landing inside that wait flips the thread; the captured
-      // value keeps the turn's own privacy with the request.
-      const requestIncognito =
-        (await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface))?.incognito ??
-        false;
-      const gated = await tryGatedTurn(
+      // #2934 — the gate attempt captures this turn's privacy before its mode wait
+      // and returns it for the shadow turn below.
+      const { result: gated, requestIncognito } = await tryGatedTurn(
         this.lifecycleHost,
         actorUserId,
         surface,
         text,
         opts,
-        controller,
-        requestIncognito
+        controller
       );
       if (gated) return gated;
       try {
@@ -417,8 +414,7 @@ export class ChatSessionManager {
         actorUserId,
         surface,
         text,
-        // #2934 — the turn's own privacy from before the gate wait, not the session
-        // resolved after it: the session may already belong to the new chat.
+        // #2934 — the turn's own privacy, not the session resolved after the wait.
         requestIncognito,
         {
           hasAttachment: (opts?.attachments?.length ?? 0) > 0,
@@ -692,19 +688,12 @@ export class ChatSessionManager {
 
   /** #456 — stop one in-flight turn for this actor + surface. */
   async stopTurn(actorUserId: string, surface?: string): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const controller = this.turnControllers.get(sessionKey);
-    if (!controller) return; // no turn in flight — idempotent no-op
-    controller.abort();
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      try {
-        await session.engine.interrupt();
-      } catch {
-        // best-effort: the stop signal already broke the loop; interrupt failure must not wedge.
-      }
-    }
+    await stopSessionTurn({
+      actorUserId,
+      surface: normalizeChatSurface(surface),
+      turnControllers: this.turnControllers,
+      sessions: this.sessions
+    });
   }
 
   /** /clear drops the live engine; the next turn relaunches from the new thread. */
@@ -713,28 +702,16 @@ export class ChatSessionManager {
     options?: { incognito?: boolean },
     surface?: string
   ): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    // #2934 — stop a running turn the way resume does, before the thread flips: the
-    // in-flight turn must resolve stopped instead of saving under the new chat.
-    await this.stopTurn(actorUserId, chatSurface);
-    const currentThread = await this.deps.persistence.getCurrentThreadState?.(
+    await clearChatSession({
       actorUserId,
-      chatSurface
-    );
-    if (currentThread?.incognito) {
-      await this.endPrivateSession(actorUserId, chatSurface);
-      await this.deps.persistence.openNewConversation(actorUserId, options, chatSurface);
-      return;
-    }
-
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      await session.engine.kill();
-      this.sessions.delete(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    }
-    await this.deps.persistence.openNewConversation(actorUserId, options, chatSurface);
+      surface,
+      options,
+      persistence: this.deps.persistence,
+      sessions: this.sessions,
+      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
+      endPrivateSession: (userId, chatSurface) => this.endPrivateSession(userId, chatSurface),
+      revokeMcpToken: this.deps.revokeMcpToken
+    });
   }
 
   async endPrivateSession(actorUserId: string, surface?: string): Promise<void> {

@@ -10,7 +10,7 @@ import {
   surfaceSessionKey,
   type ChatSurface
 } from "./chat-surface.js";
-import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
+import type { ChatPersistencePort, ChatSessionManagerDeps } from "./chat-session-ports.js";
 import type { GateLifecycleHost } from "./classifier-gate-lifecycle.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import { CliChatUnavailableError } from "./errors.js";
@@ -365,6 +365,62 @@ export async function cleanupPrivateSession(
   if (purged && threadId) {
     await deps.persistence.deleteThread?.(actorUserId, threadId, surface);
   }
+}
+
+/** #456 — stop one in-flight turn for this actor + surface. Idempotent no-op when none runs. */
+export async function stopSessionTurn(input: {
+  readonly actorUserId: string;
+  readonly surface: ChatSurface;
+  readonly turnControllers: Map<string, AbortController>;
+  readonly sessions: Map<string, UserSession>;
+}): Promise<void> {
+  const sessionKey = surfaceSessionKey(input.actorUserId, input.surface);
+  const controller = input.turnControllers.get(sessionKey);
+  if (!controller) return; // no turn in flight — idempotent no-op
+  controller.abort();
+  const session = input.sessions.get(sessionKey);
+  if (session) {
+    try {
+      await session.engine.interrupt();
+    } catch {
+      // best-effort: the stop signal already broke the loop; interrupt failure must not wedge.
+    }
+  }
+}
+
+/** /clear drops the live engine; the next turn relaunches from the new thread. */
+export async function clearChatSession(input: {
+  readonly actorUserId: string;
+  readonly surface?: string;
+  readonly options?: { incognito?: boolean };
+  readonly persistence: Pick<ChatPersistencePort, "getCurrentThreadState" | "openNewConversation">;
+  readonly sessions: Map<string, UserSession>;
+  readonly stopTurn: (actorUserId: string, surface: ChatSurface) => Promise<void>;
+  readonly endPrivateSession: (actorUserId: string, surface: ChatSurface) => Promise<void>;
+  readonly revokeMcpToken?: (sessionKey: string) => void;
+}): Promise<void> {
+  const chatSurface = normalizeChatSurface(input.surface);
+  const sessionKey = surfaceSessionKey(input.actorUserId, chatSurface);
+  // #2934 — stop a running turn the way resume does, before the thread flips: the
+  // in-flight turn must resolve stopped instead of saving under the new chat.
+  await input.stopTurn(input.actorUserId, chatSurface);
+  const currentThread = await input.persistence.getCurrentThreadState?.(
+    input.actorUserId,
+    chatSurface
+  );
+  if (currentThread?.incognito) {
+    await input.endPrivateSession(input.actorUserId, chatSurface);
+    await input.persistence.openNewConversation(input.actorUserId, input.options, chatSurface);
+    return;
+  }
+
+  const session = input.sessions.get(sessionKey);
+  if (session) {
+    await session.engine.kill();
+    input.sessions.delete(sessionKey);
+    input.revokeMcpToken?.(sessionKey);
+  }
+  await input.persistence.openNewConversation(input.actorUserId, input.options, chatSurface);
 }
 
 export async function sweepOrphanedPrivateThreads(

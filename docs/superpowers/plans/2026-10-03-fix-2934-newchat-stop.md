@@ -50,21 +50,26 @@ the new normal chat. New chat also never stops the running turn, while resume do
 
 ## Decisions (signatures and paths, no bodies)
 
-- D1. runTurn captures `requestIncognito` from
-  `deps.persistence.getCurrentThreadState` before calling tryGatedTurn, and
-  tryGatedTurn takes it as a required field and uses it for the Ruling 9 bypass
-  instead of re-reading the thread after the mode wait.
+- D1. tryGatedTurn captures `requestIncognito` from
+  `deps.persistence.getCurrentThreadState` itself, before the gate-mode wait,
+  and returns it alongside the result — captured inside the waiter so no call
+  site can skip it. It uses the value for the Ruling 9 bypass instead of
+  re-reading the thread after the wait.
 - D2. tryGatedTurn puts the captured value into GateRequest.incognito (replacing
   the hardcoded false), so a private turn declines as private_chat before any
   classifier call.
-- D3. runTurn passes the captured value to beginClassifierGateShadowTurn instead
+- D3. runTurn passes the returned value to beginClassifierGateShadowTurn instead
   of session.incognito.
-- D4. clear stops the turn first: `await this.stopTurn(actorUserId, chatSurface)`
-  before any thread read or openNewConversation, in both the private and normal
-  branches, mirroring resumeThread ordering.
+- D4. clear stops the turn first: `await input.stopTurn(...)` before any thread
+  read or openNewConversation, in both the private and normal branches,
+  mirroring resumeThread ordering.
 - D5. Abort guards before both save points. persistGateOutcome returns the
   cancelled turn when the controller is aborted; runTurn checks the signal before
   recordTurn and takes the existing stopped path (status emit, no persist).
+- D6. `stopTurn` and `clear` bodies move to session-runtime-helpers.ts (the
+  module that already hosts their shared cleanup helper) behind thin manager
+  delegates — the manager file was already at the 1000-line file-size gate and
+  the fix put it over. No behavior change from the move.
 - Rejected option, steelmanned: serialize clear behind the in-flight turn (make
   new chat wait for the turn to finish). It keeps the window open rather than
   closing it, because the turn still resolves under the new thread, and it makes

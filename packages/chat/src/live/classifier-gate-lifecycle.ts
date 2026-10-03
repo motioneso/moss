@@ -45,9 +45,10 @@ export const GATE_STORAGE_FAILURE_MESSAGE =
   "That action ran, but its result could not be saved. Check before trying again.";
 
 /**
- * One gate attempt before any engine launch. Returns a completed turn when the gate handled it, hit
- * a terminal failure, or the user stopped it; returns undefined for every decline (so the default
- * model path runs) and for `off`/`shadow`/incognito/read-storage-failure.
+ * One gate attempt before any engine launch. Returns the completed turn (if the gate handled it,
+ * hit a terminal failure, or the user stopped it) plus the turn's privacy, captured below. A
+ * decline (so the default model path runs), `off`/`shadow`/incognito, and read-storage-failure
+ * all return an undefined result.
  */
 export async function tryGatedTurn(
   host: GateLifecycleHost,
@@ -57,26 +58,27 @@ export async function tryGatedTurn(
   opts:
     | { readonly attachments?: readonly StoredAttachmentMeta[]; readonly moduleControl?: string }
     | undefined,
-  controller: AbortController,
-  requestIncognito: boolean
-): Promise<GateTurnResult | undefined> {
+  controller: AbortController
+): Promise<{ result: GateTurnResult | undefined; requestIncognito: boolean }> {
+  // #2934 — capture this turn's privacy BEFORE the gate-mode wait: a new chat landing inside
+  // that wait flips the thread, and the turn keeps its own privacy with the request. Captured
+  // here (not by the caller) so no call site can skip it. Never re-read below.
+  const requestIncognito =
+    (await host.deps.persistence.getCurrentThreadState?.(actorUserId, surface))?.incognito ?? false;
   const gate = host.deps.classifierGate;
-  if (!gate) return undefined;
+  if (!gate) return { result: undefined, requestIncognito };
 
   let mode: GateMode;
   try {
     mode = await gate.mode(actorUserId);
   } catch {
     // A settings read failure behaves as `off`: chat must never break because the gate did.
-    return undefined;
+    return { result: undefined, requestIncognito };
   }
-  if (mode !== "on") return undefined;
+  if (mode !== "on") return { result: undefined, requestIncognito };
 
   // Ruling 9: private chats bypass the gate entirely — no classifier call and no record.
-  // #2934 — the privacy rides with the request (captured by the caller before the mode
-  // wait above) and is never re-read here: a new chat landing inside that wait must not
-  // make a private turn look public.
-  if (requestIncognito) return undefined;
+  if (requestIncognito) return { result: undefined, requestIncognito };
 
   const request: GateRequest = {
     actorUserId,
@@ -92,21 +94,29 @@ export async function tryGatedTurn(
   } catch {
     // Gate infrastructure failure is a decline: the default model still answers once — unless the
     // user already stopped the turn, in which case no fallback may run (checked below).
-    if (controller.signal.aborted) return cancelledTurn(host, actorUserId, surface);
-    return undefined;
+    if (controller.signal.aborted)
+      return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
+    return { result: undefined, requestIncognito };
   }
 
   // A Stop that landed while the gate was deciding must stop the turn, not fall through to the
   // default model. The gate may still report `declined` (for example a read it dispatched failed
   // after the abort), so the signal is the authority here, checked before any decline branch.
-  if (controller.signal.aborted) return cancelledTurn(host, actorUserId, surface);
+  if (controller.signal.aborted)
+    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
 
-  if (outcome.kind === "declined" || outcome.kind === "would_handle") return undefined;
-  if (outcome.kind === "cancelled") return cancelledTurn(host, actorUserId, surface);
+  if (outcome.kind === "declined" || outcome.kind === "would_handle")
+    return { result: undefined, requestIncognito };
+  if (outcome.kind === "cancelled")
+    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
   // #2934 — a stop that landed after the gate decided must still stop the turn: the new
   // chat may already have flipped the thread, so nothing may be recorded under it.
-  if (controller.signal.aborted) return cancelledTurn(host, actorUserId, surface);
-  return persistGateOutcome(host, actorUserId, surface, text, opts, outcome);
+  if (controller.signal.aborted)
+    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
+  return {
+    result: await persistGateOutcome(host, actorUserId, surface, text, opts, outcome),
+    requestIncognito
+  };
 }
 
 /** Emits the same status the default path uses on Stop and persists nothing. */
