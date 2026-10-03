@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-03
+
+#### Changed
+
+- **Simpler tool switches.** Each tool in a connection now has a single on/off switch, and Moss no longer refuses to repeat the same request to a connected tool. [PR #2953](https://github.com/motioneso/moss/pull/2953)
+
 ### 2026-10-02
 
 #### Fixed
