@@ -20,7 +20,6 @@ import {
 } from "./chat-session-provider-identity.js";
 import {
   ChatStreamLimitError,
-  ChatThreadNotFoundError,
   ChatTurnInFlightError,
   mapChatEngineReadError,
   CliChatDeliveryUnknownError,
@@ -36,12 +35,16 @@ import type { ReapReason } from "./provider-runtime.js";
 import {
   applyRemoteReap,
   cleanupPrivateSession,
+  clearChatSession,
   countSubscribersFor,
   delay,
   drainEngine,
   createPendingActionResultFlusher,
   clearPrivateDetachTimer,
+  endPrivateChatSession,
   healAndRelaunchSession,
+  resumeChatThread,
+  stopSessionTurn,
   injectActionResultRecord,
   type PendingActionResult,
   type SessionRecoveryHost,
@@ -378,11 +381,10 @@ export class ChatSessionManager {
     // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
     let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
     try {
-      // Task 4.1 (#2901) — the classifier gate is tried before any engine launch. Only `on` is
-      // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
-      // turn returns without launching an engine; a decline returns undefined and the default
-      // model path below runs unchanged with the original text.
-      const gated = await tryGatedTurn(
+      // Task 4.1 (#2901) — the classifier gate runs before any engine launch (`on` only). A
+      // handled turn returns here; a decline falls through to the default model path unchanged.
+      // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
+      const { result: gated, requestIncognito } = await tryGatedTurn(
         this.lifecycleHost,
         actorUserId,
         surface,
@@ -391,6 +393,9 @@ export class ChatSessionManager {
         controller
       );
       if (gated) return gated;
+      // #2934 finding 1 — a stop during the gate attempt stops the turn pre-emit.
+      if (controller.signal.aborted)
+        return this.finishRefusedTurn(actorUserId, surface, sessionKey, undefined, undefined);
       try {
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       } catch (err) {
@@ -404,13 +409,17 @@ export class ChatSessionManager {
         this.pendingForcedReplay.add(sessionKey);
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       }
+      // #2934 finding 1 — fail closed on privacy mismatch: refuse another thread's model.
+      if (session.incognito !== requestIncognito)
+        return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
       const turnProviderIdentity = session.providerIdentity;
       gateShadow = beginClassifierGateShadowTurn(
         this.deps.classifierGateShadow,
         actorUserId,
         surface,
         text,
-        session.incognito,
+        // #2934 — the turn's own privacy, not the session resolved after the wait.
+        requestIncognito,
         {
           hasAttachment: (opts?.attachments?.length ?? 0) > 0,
           signal: controller.signal
@@ -443,9 +452,15 @@ export class ChatSessionManager {
       let toolsListBaseline = session.mcpToken
         ? this.deps.getToolsListObservationCount?.(session.mcpToken)
         : undefined;
+      // #2934 finding 1 — stop before the submit so flipped-thread text never reaches the model.
+      if (controller.signal.aborted)
+        return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
       try {
         await session.engine.submit(engineText);
       } catch (err) {
+        // #2934 finding 1 — a stop around a failed submit refuses instead of resubmitting.
+        if (controller.signal.aborted)
+          return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
         if (err instanceof CliChatDeliveryUnknownError) {
           // Delivery MAY have happened — never resubmit (duplicate-turn risk); evict so the
           // next turn relaunches cleanly (pre-#1157 behavior, kept).
@@ -466,6 +481,11 @@ export class ChatSessionManager {
             userName,
             session
           );
+          // #2934 round 2 — a new chat inside the heal: re-check stop and privacy before resubmit.
+          if (controller.signal.aborted)
+            return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
+          if (session.incognito !== requestIncognito)
+            return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
           await assertProviderIdentityForPendingTurn(
             turnProviderIdentity,
             session.providerIdentity
@@ -611,6 +631,10 @@ export class ChatSessionManager {
         }
       }
 
+      // #2934 — a stop after the read loop still stops the save under a flipped thread.
+      if (controller.signal.aborted)
+        return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
+
       const stored = await this.deps.persistence.recordTurn(
         actorUserId,
         text,
@@ -671,21 +695,31 @@ export class ChatSessionManager {
     }
   }
 
+  /** #2934 — fail a turn closed before it touches the model or the store. */
+  private finishRefusedTurn(
+    actorUserId: string,
+    surface: ChatSurface,
+    sessionKey: string,
+    session: UserSession | undefined,
+    gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined
+  ): { reply: string } {
+    this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
+    gateShadow?.cancel();
+    if (session) {
+      session.lastActivity = this.deps.clock.now();
+      this.deps.touchMcpToken?.(sessionKey);
+    }
+    return { reply: "" };
+  }
+
   /** #456 — stop one in-flight turn for this actor + surface. */
   async stopTurn(actorUserId: string, surface?: string): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const controller = this.turnControllers.get(sessionKey);
-    if (!controller) return; // no turn in flight — idempotent no-op
-    controller.abort();
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      try {
-        await session.engine.interrupt();
-      } catch {
-        // best-effort: the stop signal already broke the loop; interrupt failure must not wedge.
-      }
-    }
+    await stopSessionTurn({
+      actorUserId,
+      surface: normalizeChatSurface(surface),
+      turnControllers: this.turnControllers,
+      sessions: this.sessions
+    });
   }
 
   /** /clear drops the live engine; the next turn relaunches from the new thread. */
@@ -694,44 +728,28 @@ export class ChatSessionManager {
     options?: { incognito?: boolean },
     surface?: string
   ): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const currentThread = await this.deps.persistence.getCurrentThreadState?.(
+    await clearChatSession({
       actorUserId,
-      chatSurface
-    );
-    if (currentThread?.incognito) {
-      await this.endPrivateSession(actorUserId, chatSurface);
-      await this.deps.persistence.openNewConversation(actorUserId, options, chatSurface);
-      return;
-    }
-
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      await session.engine.kill();
-      this.sessions.delete(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    }
-    await this.deps.persistence.openNewConversation(actorUserId, options, chatSurface);
+      surface,
+      options,
+      persistence: this.deps.persistence,
+      sessions: this.sessions,
+      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
+      endPrivateSession: (userId, chatSurface) => this.endPrivateSession(userId, chatSurface),
+      revokeMcpToken: this.deps.revokeMcpToken
+    });
   }
 
   async endPrivateSession(actorUserId: string, surface?: string): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const currentThread = await this.deps.persistence.getCurrentThreadState?.(
+    await endPrivateChatSession({
       actorUserId,
-      chatSurface
-    );
-    if (!currentThread?.incognito) return;
-
-    await cleanupPrivateSession(
-      actorUserId,
-      chatSurface,
-      currentThread.id,
-      this.sessions.get(surfaceSessionKey(actorUserId, chatSurface)),
-      this.deps,
-      this.sessions,
-      (k) => clearPrivateDetachTimer(this.privateDetachTimers, k)
-    );
+      surface,
+      persistence: this.deps.persistence,
+      sessions: this.sessions,
+      deps: this.deps,
+      clearDetachTimer: (k) => clearPrivateDetachTimer(this.privateDetachTimers, k),
+      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface)
+    });
   }
 
   async getPrivacyState(
@@ -747,34 +765,16 @@ export class ChatSessionManager {
 
   /** Resume an owned thread for this actor + surface. */
   async resumeThread(actorUserId: string, threadId: string, surface?: string): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    // Validate ownership FIRST — a stale or foreign id must NOT disrupt the active session.
-    // Only after confirming the thread exists and belongs to this user do we stop/drop.
-    const found = await this.deps.persistence.touchExistingThread(
+    await resumeChatThread({
       actorUserId,
       threadId,
-      chatSurface
-    );
-    if (!found) {
-      throw new ChatThreadNotFoundError();
-    }
-
-    // Thread confirmed valid. Stop any in-flight turn (idempotent no-op when none is in flight).
-    await this.stopTurn(actorUserId, chatSurface);
-
-    // Drop the live engine so the next submitTurn launches fresh from the resumed thread.
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      try {
-        await session.engine.kill();
-      } catch {
-        // best-effort: session is dropped below regardless
-      }
-      this.sessions.delete(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    }
-    this.pendingForcedReplay.add(sessionKey);
+      surface,
+      persistence: this.deps.persistence,
+      sessions: this.sessions,
+      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
+      revokeMcpToken: this.deps.revokeMcpToken,
+      pendingForcedReplay: this.pendingForcedReplay
+    });
   }
 
   /** Switch provider without resetting the surface's conversation. */
