@@ -431,10 +431,11 @@ export function ChatDrawer(props: {
   // whatever opened the chat. On a phone the drawer covers the page, so Tab stays inside it.
   const asideRef = useRef<HTMLElement | null>(null);
   const [phone, setPhone] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(PHONE_QUERY).matches
+    () => typeof window !== "undefined" && !!window.matchMedia?.(PHONE_QUERY).matches
   );
   useEffect(() => {
-    const media = window.matchMedia(PHONE_QUERY);
+    const media = window.matchMedia?.(PHONE_QUERY);
+    if (!media) return;
     const sync = () => setPhone(media.matches);
     sync();
     media.addEventListener("change", sync);
@@ -442,15 +443,16 @@ export function ChatDrawer(props: {
   }, []);
   useEffect(() => {
     if (!props.open) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const aside = asideRef.current;
+    if (!aside) return;
+    const opener = document.activeElement as HTMLElement | null;
     const focusEntry = (): boolean => {
-      const box = aside?.querySelector<HTMLTextAreaElement>("textarea");
+      const box = aside.querySelector<HTMLTextAreaElement>("textarea");
       if (box) {
         box.focus();
         return true;
       }
-      aside?.focus();
+      aside.focus();
       return false;
     };
     // The message box can mount (or remount) after the panel while the model check settles, which
@@ -458,12 +460,12 @@ export function ChatDrawer(props: {
     const watcher = new MutationObserver(() => {
       const active = document.activeElement;
       if (active === aside || active === document.body) focusEntry();
-      else if (active !== opener && aside?.contains(active) && active?.tagName !== "TEXTAREA") {
+      else if (active !== opener && aside.contains(active) && active?.tagName !== "TEXTAREA") {
         watcher.disconnect();
       }
     });
     focusEntry();
-    if (aside) watcher.observe(aside, { childList: true, subtree: true });
+    watcher.observe(aside, { childList: true, subtree: true });
     const stopWatching = window.setTimeout(() => watcher.disconnect(), 3000);
     return () => {
       window.clearTimeout(stopWatching);
