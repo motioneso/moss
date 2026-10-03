@@ -41,4 +41,4 @@ None.
 
 ## Continuation note
 
-Wave 1 spawned. #2933 plan approved. Waiting on plans from #2939 and #2934. Background watcher on PR #2955.
+Wave 1 spawned. #2933 and #2934 plans approved (2934 must show each protection failing when removed). Waiting on #2939 plan. Background watcher on PR #2955.
