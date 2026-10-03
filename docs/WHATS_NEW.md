@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Easier tapping on Today for phones.** Small links and buttons on the Today screen, such as the section links under the headline, the add-medication plus and the team story links, are now easier to tap on a phone. [PR #2947](https://github.com/motioneso/moss/pull/2947)
 - **No more blank page while Moss loads.** If Moss is slow to start, you now see the loading screen right away instead of an empty page. [PR #2944](https://github.com/motioneso/moss/pull/2944)
 - **Sports no longer says "a quiet night" during a game.** The Tonight section on Today no longer claims a quiet night while one of your teams is playing or has already played. [PR #2945](https://github.com/motioneso/moss/pull/2945)
 - **Easier-to-read text in a few places.** Some small notes on Today, faint labels in dark mode, the Delete account button and a warning number are now easier to read. [PR #2946](https://github.com/motioneso/moss/pull/2946)
