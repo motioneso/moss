@@ -6,7 +6,7 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 1
+**merges_since_relay:** 2
 
 ## Queue
 
@@ -96,6 +96,12 @@ None.
   - CI: fully green on 678a44e2a. Local gate run 2 red only on the gateway timer flake (issue 1673), accepted.
   - Session id at merge matched lock anchor: y (b1e6e877). Merged ba84d9387. Issue closed, board Done.
 
+- #2977 (issue #2637, focus history 30-day cleanup) - security
+  - QA verdict + model: round 1 RED (download omitted the table), round 2 GREEN; Opus (qa-2977). Comments 5972170898, 5972486935.
+  - CI: fully green on aabd87364.
+  - Ben's explicit sign-off: yes (board answer, relay 5).
+  - Session id at merge matched lock anchor: y (b1e6e877). Merged 2c3c12da0. Issue closed, board Done.
+
 ## Reaped sessions
 
 - w1:p11B "2942 mid-chat tools (Opus)" (opus-2942) - built PR #2974, merged a1369fbed; closed, worktree removed (reap check: REAPABLE, gates clear; ahead=13), branch deleted local+remote.
@@ -128,6 +134,7 @@ None.
 - w1:p115 "Coordinator (old)" (session 3748ecb9-3142-49d8-8078-38dc9a19429b) - relay-2 coordinator; merged #2968 and #2963 (Ben's delegated sign-off); work recorded in this manifest; closed by relay-3 successor.
 - w1:p11W "QA 2970 notes tests (Opus)" (qa-2970) - GREEN on PR 2970, verdict on the PR; closed, QA worktree removed.
 - w1:p117 "2912 notes browser tests" (Opus builder, fix-2912-notes-specs) - landed as PR #2970 (ba84d9387); reap check REAPABLE; worktree and branch removed.
+- w1:p11A "2637 focus history cleanup" (Opus builder, fix-2637-focus-retention) - landed as PR #2977 (2c3c12da0); reap check REAPABLE; worktree and branch removed.
 - w1:p11N "Coordinator (old)" (session 6fb239b6, relay 4 coordinator) - merged #2975 and #2974; relayed at RELAY POINT 5; closed by relay 5.
 
 ## Continuation note
@@ -235,3 +242,13 @@ Relay 5 (session b1e6e877): lock claimed, old coordinator w1:p11N closed.
 2970 merged ba84d9387 (routine). merges_since_relay 1: next routine/sensitive merge triggers relay.
 
 2977: CI fully green on aabd87364 (download test now tests/integration/focus-judgments-retention.test.ts:193, observed failing without the archive entry). Added to AWAITING-BEN, needs-ben sent, background watcher on ~/.needs-ben/replies (marker /tmp/coord-r5-nb-mark). Ben is also active in chat; his chat OK counts.
+
+2977 merged 2c3c12da0 on Ben's explicit sign-off (board answer "Yes, merge it"). Security merge -> relay. AWAITING-BEN cleared. needs-ben watcher and PR watch stopped.
+
+RELAY POINT 6 (relay after security merge of #2977, session b1e6e877). Successor next steps:
+1. Claim lock (herdr agent rename coordinator + pane rename Coordinator), update lock line to your session id, merges_since_relay 0, commit + push. Close the pane labelled "Coordinator (old)" (session b1e6e877), record under Reaped sessions.
+2. Only open lane: 2956 (PR #2976 draft, SECURITY). Muse lane "2956 slice B" (was w1:p11P, Builders tab w1:t9J) is rerunning its touched test suites (writers + coverage guard per ~/.coord-briefs/overnight/2956-slice-b-design-ruling.md). Message it with herdr pane run + bounded read. Re-arm the PR watch (Monitor, 30 min, re-arm on expiry) on PR 2976.
+3. When slice B reports done: spawn slice C in a fresh session (Muse, or DeepSeek 4.1 Flash in OpenCode, per the brief), then D. After D: Opus adversarial QA, AWAITING-BEN + needs-ben, never merge without Ben's OK.
+4. Ben asked earlier to fit more work into the run; with only 2956 left, check the board (project 2) for small approved items with a task issue and spawn them per the lane rules in the header.
+5. QA tab is w1:t9S (empty now; it may have closed). Not ours: w1:t9F panes (Tasks redesign grid, Today row buttons, Review 2978), design-*, Epic 2864, Review 2961, 2918, 2951, review 2948.
+6. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.

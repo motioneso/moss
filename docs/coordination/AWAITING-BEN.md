@@ -75,12 +75,4 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-- **PR #2977 (issue #2637, focus history 30-day cleanup) - security tier, merge sign-off.** Run
-  overnight-2026-10-03. Adds a delete rule and a database function that removes focus judgments
-  older than 30 days, plus the Settings data download now including them. Opus adversarial review:
-  round 1 RED (download left the new table out), round 2 all findings fixed
-  (https://github.com/motioneso/moss/pull/2977#issuecomment-5972170898,
-  https://github.com/motioneso/moss/pull/2977#issuecomment-5972486935). Only remaining red was the
-  file-size check, fixed by moving the download test to its own file (seen failing without the
-  fix). CI fully green on aabd87364. Options: approve and the coordinator merges; or hold.
-  Recommendation: approve.
+Nothing open.
