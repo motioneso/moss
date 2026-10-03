@@ -120,3 +120,4 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 
 - Migration numbers: main has 0256. 0257 reserved for #2637; #2956 takes 0258/0259.
 - 2963 scoped arbiter GREEN: https://github.com/motioneso/moss/pull/2963#issuecomment-5970231610 . Waiting on rebase + gate (w1:p11F).- 08:14 Memory tight (5 GB avail, 4-6 gates). Gate queue held by coordinator: 2942 waits for GO after one of 2637/2893/2934 finishes. Stale 2942 gate on old head f35e6a4 killed. Memory service back to 10 GB 20 min after restart: tracing not the cause.
+- 08:36 Gate queue: running 2942, 2637 (+2912, plus a non-run design gate). Next GO: 2956 after 2637 finishes. 2893 and 2934 gates red; lanes rerunning failed files only.
