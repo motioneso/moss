@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { NavLink } from "react-router";
 
 import type { MeResponse, ModuleNavigationEntryDto } from "@moss/shared";
-import { BrandMark } from "@moss/ui";
+import { BrandMark, IconButton } from "@moss/ui";
 import type { NavSection } from "../app-route-metadata.js";
 import { NAV_ICON_MAP } from "./nav-icons.js";
 import type { ShellNavMode } from "./nav-storage.js";
@@ -62,20 +62,20 @@ export function ShellNav(props: ShellNavProps) {
             <span className="brand-wordmark">Moss</span>
           </div>
 
-          <button
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-            className="nav-collapse"
-            title={collapsed ? "Expand navigation" : "Collapse navigation"}
-            type="button"
-            onClick={props.onToggleNav}
-          >
-            {collapsed ? (
-              <ChevronsRight size={20} aria-hidden="true" />
-            ) : (
-              <ChevronsLeft size={20} aria-hidden="true" />
-            )}
-          </button>
+          <span className="nav-collapse">
+            <IconButton
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+              title={collapsed ? "Expand navigation" : "Collapse navigation"}
+              onClick={props.onToggleNav}
+            >
+              {collapsed ? (
+                <ChevronsRight aria-hidden="true" />
+              ) : (
+                <ChevronsLeft aria-hidden="true" />
+              )}
+            </IconButton>
+          </span>
         </div>
 
         {/* #1734: the accessible name is what a screen reader announces on entering this

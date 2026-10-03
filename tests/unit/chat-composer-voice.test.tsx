@@ -378,13 +378,13 @@ async function renderInteractiveComposer(
 
 /** Extracts the mic `<button ...>` opening tag, regardless of the order React writes attributes. */
 function extractMicButtonTag(html: string): string {
-  const start = html.indexOf('<button aria-label="Record voice message"');
-  if (start === -1) {
-    const altStart = html.indexOf('<button aria-label="Stop recording"');
-    if (altStart === -1) throw new Error("mic button not found in rendered HTML");
-    return html.slice(altStart, html.indexOf(">", altStart) + 1);
-  }
-  return html.slice(start, html.indexOf(">", start) + 1);
+  const tags = html.match(/<button\b[^>]*>/g) ?? [];
+  const tag = tags.find(
+    (t) =>
+      t.includes('aria-label="Record voice message"') || t.includes('aria-label="Stop recording"')
+  );
+  if (!tag) throw new Error("mic button not found in rendered HTML");
+  return tag;
 }
 
 // Defense-in-depth source guard: transcription is required to land in the composer for

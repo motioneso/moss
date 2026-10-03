@@ -477,7 +477,7 @@ function listboxLabel(stage: Stage): string {
   return "Commands";
 }
 
-function trapFocus(event: ReactKeyboardEvent<HTMLDivElement>, root: HTMLDivElement | null) {
+export function trapFocus(event: ReactKeyboardEvent<HTMLElement>, root: HTMLElement | null) {
   if (!root) return;
   const nodes = focusableElements(root);
   if (nodes.length === 0) {
