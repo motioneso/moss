@@ -8,6 +8,11 @@ import { resolveMossEnv } from "@moss/db";
 
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
 import * as briefingWriter from "./briefing-writer-container.js";
+
+export {
+  briefingWriterFixtureBaseUrlFor,
+  briefingWriterFixtureContainerName
+} from "./briefing-writer-container.js";
 import {
   classifierFixtureBaseUrlFor,
   removeClassifierFixtureContainer,
