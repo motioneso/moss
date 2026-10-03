@@ -20,6 +20,7 @@ export const UPGRADE_CHECK_QUEUE = "system.upgrade-check";
 export const UPGRADE_NOTIFY_QUEUE = "system.upgrade-notify";
 export const PLATFORM_MODULE_CONTROL_QUEUE = "platform.module-control";
 export const MODULE_BUILD_QUEUE = "module-build";
+export const FOCUS_JUDGMENT_PURGE_QUEUE = "system.focus-judgment-purge";
 export const MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS = 60;
 
 export interface ActorScopedJobPayload {
@@ -77,6 +78,16 @@ export const FOUNDATION_QUEUES: readonly QueueDefinition[] = [
       deleteAfterSeconds: 3600,
       retentionSeconds: 3600,
       heartbeatSeconds: MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS
+    }
+  },
+  {
+    name: FOCUS_JUDGMENT_PURGE_QUEUE,
+    options: {
+      retryLimit: 3,
+      retryDelay: 300,
+      retryBackoff: true,
+      deleteAfterSeconds: 86400,
+      retentionSeconds: 86400
     }
   }
 ];

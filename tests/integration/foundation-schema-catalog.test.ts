@@ -539,6 +539,12 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0256",
           name: "0256_proactive_monitor_state_app_read.sql"
+        },
+        // #2637 — 30-day focus judgment purge: age-bound maintenance policies and a worker-only
+        // no-argument purge function.
+        {
+          version: "0257",
+          name: "0257_focus_judgments_retention.sql"
         }
       ]);
     } finally {

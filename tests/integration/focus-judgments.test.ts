@@ -99,8 +99,11 @@ describe("row-level security (owner-only)", () => {
     ).rejects.toThrow();
   });
 
-  it("the background worker role has no access to the table", async () => {
-    await expect(worker.query("SELECT count(*) FROM app.focus_judgments")).rejects.toThrow(
+  it("the background worker sees no rows without an actor and cannot write", async () => {
+    await insertFor(ids.userA, {});
+    const unscoped = await worker.query("SELECT id FROM app.focus_judgments");
+    expect(unscoped.rows).toEqual([]);
+    await expect(worker.query("UPDATE app.focus_judgments SET reason = 'x'")).rejects.toThrow(
       /permission denied/i
     );
   });
