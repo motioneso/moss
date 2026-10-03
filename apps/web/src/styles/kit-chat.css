@@ -27,8 +27,6 @@
     height: 100%;
     animation: none;
     border-width: 0 0 0 1px;
-    border-radius: 0;
-    box-shadow: none;
   }
 
   /* The docked width is narrow, so the header gives its status line room to stay on one line. */
@@ -373,12 +371,6 @@
 
 .chatd-input.is-readonly {
   opacity: 0.72;
-}
-
-.chatd-input textarea:focus,
-.chatd-input textarea:focus-visible {
-  outline: none;
-  box-shadow: none;
 }
 
 .chatd-input textarea {

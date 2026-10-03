@@ -13,6 +13,13 @@
   box-shadow: var(--shadow-lg);
 }
 
+@media (min-width: 721px) {
+  .chatd.chatd--docked {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 .chatd__mark {
   border-radius: 9px;
   background: var(--forest-soft);
@@ -243,8 +250,10 @@
   color: var(--text);
 }
 
-.chatd-input textarea:focus {
+.chatd-input textarea:focus,
+.chatd-input textarea:focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 .chatd-send {
