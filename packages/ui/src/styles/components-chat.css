@@ -20,6 +20,42 @@
   }
 }
 
+/* The more-menu trigger matches the other header buttons: box only on hover or while open. */
+.chatd__head .jds-menu__trigger {
+  width: 36px;
+  height: 36px;
+  border-color: transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  transition: var(--transition-control);
+}
+
+.chatd__head .jds-menu__trigger:hover,
+.chatd__head .jds-menu__trigger[aria-expanded="true"] {
+  border-color: transparent;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.chatd__head .jds-menu svg,
+.chatd__head .jds-menu__list svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* Expanded chat is flush against the window and the left menu, not a card. */
+.chatd.chatd--expanded {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+[data-chat-expanded] .module-link.active {
+  opacity: 0.6;
+}
+
 .chatd__mark {
   border-radius: 9px;
   background: var(--forest-soft);

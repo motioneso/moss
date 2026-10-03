@@ -65,6 +65,7 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
 import {
   cancelChatTurn,
   clearChat,
+  endPrivateChat,
   getChatPrivacyState,
   listChatThreads,
   resumeChat,
@@ -114,6 +115,36 @@ function findByClassName(renderer: ReactTestRenderer, className: string) {
 function findByAriaLabel(renderer: ReactTestRenderer, label: string) {
   const matches = renderer.root.findAll((node) => node.props["aria-label"] === label);
   return matches.length > 0 ? matches[0] : null;
+}
+
+function menuIsOpen(renderer: ReactTestRenderer) {
+  return renderer.root.findAll((node) => node.props.role === "menu").length > 0;
+}
+
+/** Opens the "More chat options" menu if closed, then returns the item with this accessible name. */
+async function menuItem(renderer: ReactTestRenderer, label: string) {
+  if (!menuIsOpen(renderer)) {
+    await act(async () => {
+      findByAriaLabel(renderer, "More chat options")!.props.onClick();
+    });
+  }
+  // The private item's name flips with its state, so the start name finds either one.
+  if (label === "Start private chat") {
+    return findByAriaLabel(renderer, label) ?? findByAriaLabel(renderer, "Leave private chat");
+  }
+  return findByAriaLabel(renderer, label);
+}
+
+/** Opens the menu and clicks the named item (the menu closes itself after a pick). */
+async function clickMenuItem(renderer: ReactTestRenderer, label: string, flush = false) {
+  const item = await menuItem(renderer, label);
+  await act(async () => {
+    item!.props.onClick();
+    if (flush) {
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+  });
 }
 
 function buildElement(
@@ -198,7 +229,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
   it("hides the private-chat control on a module surface", async () => {
     const renderer = await renderDrawer(moduleSurface);
-    expect(findByAriaLabel(renderer, "Start private chat")).toBeNull();
+    expect(await menuItem(renderer, "Start private chat")).toBeNull();
   });
 
   it("sends on the module surface, not the default drawer surface", async () => {
@@ -370,7 +401,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
   it("shows the private-chat control and sends on the default drawer surface", async () => {
     const renderer = await renderDrawer(DEFAULT_CHAT_SURFACE);
-    expect(findByAriaLabel(renderer, "Start private chat")).not.toBeNull();
+    expect(await menuItem(renderer, "Start private chat")).not.toBeNull();
 
     await typeAndSend(renderer, "Remote only");
     expect(sendChatTurn).toHaveBeenCalledExactlyOnceWith(
@@ -422,9 +453,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       await Promise.resolve();
     });
 
-    await act(async () => {
-      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
-    });
+    await clickMenuItem(renderer, "Show chat history");
     const row = findByClassName(renderer, "chatd-sess__row");
     await act(async () => {
       row!.props.onClick();
@@ -436,7 +465,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
     expect(findByClassName(renderer, "chatd-empty")).not.toBeNull();
     expect(findByClassName(renderer, "chatd-send")?.props["aria-label"]).toBe("Send");
-    expect(findByAriaLabel(renderer, "Hide chat history")).toBeNull();
+    expect(await menuItem(renderer, "Hide chat history")).toBeNull();
 
     await act(async () => {
       resolveSend({
@@ -491,9 +520,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
     const renderer = await renderDrawer(DEFAULT_CHAT_SURFACE);
 
-    await act(async () => {
-      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
-    });
+    await clickMenuItem(renderer, "Show chat history");
 
     const rows = renderer.root.findAll((node) => node.props.className === "chatd-sess__title");
     expect(rows.map((row) => row.children)).toEqual([["resumed"], ["middle"], ["newest-updated"]]);
@@ -550,9 +577,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       await Promise.resolve();
     });
 
-    await act(async () => {
-      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
-    });
+    await clickMenuItem(renderer, "Show chat history");
 
     expect(scrollRequests.at(-1)).toBe(0);
   });
@@ -633,9 +658,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
         }
       ]
     });
-    await act(async () => {
-      findByAriaLabel(renderer, "Start private chat")?.props.onClick();
-    });
+    await clickMenuItem(renderer, "Start private chat");
     await flipSurface(renderer, client, moduleSurface, clearRecords);
     await act(async () => {
       resolvePrivate(undefined);
@@ -654,9 +677,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
           resolveResume = resolve;
         })
     );
-    await act(async () => {
-      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
-    });
+    await clickMenuItem(renderer, "Show chat history");
     const row = findByClassName(renderer, "chatd-sess__row")!;
     await act(async () => {
       row.props.onClick();
@@ -724,9 +745,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     const clearRecordsA = vi.fn();
     const rendererA = await mountWithClient(clientA, moduleSurface, clearRecordsA);
 
-    await act(async () => {
-      findByAriaLabel(rendererA, "Show chat history")?.props.onClick();
-    });
+    await clickMenuItem(rendererA, "Show chat history");
 
     vi.mocked(sendChatTurn).mockRejectedValueOnce(new Error("boom"));
     const textarea = rendererA.root.findByType("textarea");
@@ -743,27 +762,21 @@ describe("ChatDrawer surface routing (#1533)", () => {
     await flipSurface(rendererA, clientA, moduleSurfaceB, clearRecordsA);
 
     expect(findByClassName(rendererA, "form-error")).toBeNull();
-    expect(findByAriaLabel(rendererA, "Hide chat history")).toBeNull();
+    expect(await menuItem(rendererA, "Hide chat history")).toBeNull();
 
     // DEFAULT_CHAT_SURFACE -> moduleSurface: privateMode + showHistory reset.
     const clientB = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearRecordsB = vi.fn();
     const rendererB = await mountWithClient(clientB, DEFAULT_CHAT_SURFACE, clearRecordsB);
 
-    await act(async () => {
-      findByAriaLabel(rendererB, "Start private chat")?.props.onClick();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      findByAriaLabel(rendererB, "Show chat history")?.props.onClick();
-    });
-    expect(findByAriaLabel(rendererB, "Start private chat")?.props["aria-pressed"]).toBe(true);
+    await clickMenuItem(rendererB, "Start private chat", true);
+    await clickMenuItem(rendererB, "Show chat history");
+    expect((await menuItem(rendererB, "Start private chat"))?.props["aria-checked"]).toBe(true);
 
     await flipSurface(rendererB, clientB, moduleSurface, clearRecordsB);
 
-    expect(findByAriaLabel(rendererB, "Start private chat")).toBeNull();
-    expect(findByAriaLabel(rendererB, "Hide chat history")).toBeNull();
+    expect(await menuItem(rendererB, "Start private chat")).toBeNull();
+    expect(await menuItem(rendererB, "Hide chat history")).toBeNull();
   });
 
   // #1780. The drawer seeds private mode from the server on open, and the toggle sets it from what
@@ -788,12 +801,8 @@ describe("ChatDrawer surface routing (#1533)", () => {
     const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
 
     // The user turns private mode on while the privacy fetch is still outstanding.
-    await act(async () => {
-      findByAriaLabel(renderer, "Start private chat")?.props.onClick();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(findByAriaLabel(renderer, "Start private chat")?.props["aria-pressed"]).toBe(true);
+    await clickMenuItem(renderer, "Start private chat", true);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
 
     // Now the stale answer comes back saying the session is not private. It must not win.
     // Flushed with a macrotask, not a couple of microtask drains: react-query notifies through its
@@ -804,7 +813,28 @@ describe("ChatDrawer surface routing (#1533)", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(findByAriaLabel(renderer, "Start private chat")?.props["aria-pressed"]).toBe(true);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
+  });
+
+  it("leaves private chat when the checked More menu item is chosen again", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
+    vi.mocked(clearChat).mockClear();
+    vi.mocked(endPrivateChat).mockClear();
+
+    await clickMenuItem(renderer, "Start private chat", true);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
+    expect(clearChat).toHaveBeenCalledTimes(1);
+    expect(findByAriaLabel(renderer, "Leave private chat")).not.toBeNull();
+    expect(findByAriaLabel(renderer, "Start private chat")).toBeNull();
+
+    await clickMenuItem(renderer, "Start private chat", true);
+
+    expect(endPrivateChat).toHaveBeenCalledWith(DEFAULT_CHAT_SURFACE);
+    expect(clearChat).toHaveBeenCalledTimes(1);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(false);
+    expect(findByAriaLabel(renderer, "Start private chat")).not.toBeNull();
+    expect(findByAriaLabel(renderer, "Leave private chat")).toBeNull();
   });
 
   // The other half of the same rule: seeding still has to work when the user has done nothing, or a
@@ -821,6 +851,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(findByAriaLabel(renderer, "Start private chat")?.props["aria-pressed"]).toBe(true);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
   });
 });
