@@ -16,7 +16,7 @@
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | reaped | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | merged (a1369fbed) | - | reaped | fix-2942-midchat-tools | #2974 | 1 |
-| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | draft PR #2976. Slice A done. Slice B building (Muse w1:p11P "2956 slice B", started 11:05; design ruling ~/.coord-briefs/overnight/2956-slice-b-design-ruling.md). Slices C, D later in fresh sessions. Then Opus adversarial QA, AWAITING-BEN, never merge | 2956 slice B (Muse) | w1:p11P | feat-2956-activity-history | #2976 | 0 |
+| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | deferred - not this run (Ben ended the run 13:15). Slices A and B pushed on draft PR #2976 (head 9c19f3765); slice B full gate still running at close. Remaining: slices C, D, Opus QA, Ben sign-off | - | reaped | feat-2956-activity-history | #2976 | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | QA round 2: all findings fixed, only CI static check red (export test file 1011 lines > 1000); lane moving the assertion; on CI green -> AWAITING-BEN + needs-ben, never merge | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | #2977 | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
@@ -257,3 +257,16 @@ RELAY POINT 6 (relay after security merge of #2977, session b1e6e877). Successor
 Relay 6 (session 66aed34b): lock claimed 12:57, old coordinator w1:p11V closed.
 
 13:05 Board check for extra work (step 4): no item is spawnable without Ben. #2408 (vary Workshop example prompts) needs Ben's prompt wording + a short spec; #2275 (new folder in folder chooser) needs mockup sign-off; #2896, #2357, #1634, #2969, #2767 unsettled or large; #2906, #2876, #2775 likely already fixed. Asked Ben in chat.
+
+## Run closed (13:20 PDT, relay 6, session 66aed34b)
+
+Ben asked to wrap up the run at 13:15.
+
+- Shipped this run: #2965 (2939), #2962 (2933), #2963 (2934, security), #2964 (2957, security), #2968 (2891), #2973 (2893), #2975 (2735), #2974 (2942, sensitive), #2970 (2912), #2977 (2637, security). All issues closed, board Done (2934 closed at close-out; it had been left open).
+- Deferred, not this run: #2956 activity history. Slices A and B pushed to draft PR #2976 (head 9c19f3765), parking comment on the PR. Slice B's full gate was still running detached at close; its log is /tmp/jarv1s-gate/feat_2956_activity_history-20261003-130727.log. Worktree .claude/worktrees/overnight-coord/.claude/worktrees/feat-2956-activity-history kept (unmerged work). Next run: read the gate verdict, then slices C and D, Opus adversarial QA, Ben sign-off.
+- Extra work for the run: none spawnable without Ben (#2408 needs his prompt wording and a short spec; #2275 needs mockup sign-off).
+- Panes: Muse lane w1:p11P "2956 slice B" closed after it pushed and parked. Builders and QA tabs empty and gone.
+- Backlog worktree sweep: 3 removed (agent-ab272756 PR 2725 merged, agent-acf8226a PR 2955 merged, /tmp/2934-base2 in main) plus this run's qa-2893-r1. Kept in use: dev-worker, fix-model-picker-name, tasks-park-office (PR 2972 open), feat-2956-activity-history. Flagged, unconfirmed so left in place: ~/.worktrees/uat-2719-20260926, agent-a101c005, agent-a9d76889, classifier-gate-spec (no PR), /tmp/jarv1s-moss2521-baseline-ff0233a (PR 2708 closed unmerged), /tmp/moss-weekly-pages.* (gh-pages publishing tree).
+- AWAITING-BEN: nothing open from this run. Watchdog stopped. Coordinator name released.
+
+Status: closed.
