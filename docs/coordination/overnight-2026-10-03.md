@@ -12,7 +12,7 @@
 
 | Item | Issue | Tier | Status | Pane label | Pane | Branch | PR | Relays |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
-| Chat drawer browser tests | #2939 | routine (UI, live proof) | building | 2939 chat drawer tests | w1:p0Q | fix-2939-drawer-tests | - | 0 |
+| Chat drawer browser tests | #2939 | routine (UI, live proof) | PR open, gate rc 0, live proof on isolated stacks; Opus QA running (qa-2965, w1:p111); PR also fixes model-availability lookup for user override | 2939 chat drawer tests | w1:p0Q | fix-2939-drawer-tests | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | rework after QA round 1 RED (2 leaks: no stop check between gate and submit; end-private-chat route same race), round 1 of 2; qa-2963 kept for incremental re-QA; live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands; brief ready at ~/.coord-briefs/overnight/lane-fix-2942-midchat-tools.md) | - | - | - | - | 0 |
