@@ -136,6 +136,17 @@ test("assigning a tag from the task modal renders a chip", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove urgent" })).toBeVisible();
 });
 
+test("task details window is named, closes on Escape and returns focus", async ({ page }) => {
+  await page.goto("/tasks");
+  const opener = page.getByRole("button", { name: "Open File taxes" }).first();
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
 test("list index focuses one list and All lists resets", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/tasks");

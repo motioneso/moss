@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import {
   PRIORITY_LEVELS,
@@ -73,6 +73,27 @@ export function TaskDetailsDialog(props: {
   readonly onClose: () => void;
 }) {
   const isNew = props.taskId === null;
+  const headingId = useId();
+
+  // Captured during render, before the title field's autoFocus moves focus into the dialog.
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  );
+  const onCloseRef = useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+
+  // Escape closes the dialog; focus returns to the control that opened it.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [opener]);
+
   const requireTaskId = () => {
     if (!props.taskId) throw new Error("Task id required for this operation");
     return props.taskId;
@@ -263,11 +284,14 @@ export function TaskDetailsDialog(props: {
   return (
     <Dialog
       className="tk-modal"
+      aria-labelledby={headingId}
       onClose={props.onClose}
       title={
         <div className="tk-modal__head">
           <div className="tk-modal__headmain">
-            <div className="tk-modal__eyebrow">{isNew ? "New task" : "Task details"}</div>
+            <div className="tk-modal__eyebrow" id={headingId}>
+              {isNew ? "New task" : "Task details"}
+            </div>
             <input
               className="tk-modal__titlein"
               value={form.title}
