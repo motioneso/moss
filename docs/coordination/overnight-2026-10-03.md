@@ -15,7 +15,7 @@
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | rework after QA round 1 RED (2 leaks: no stop check between gate and submit; end-private-chat route same race), round 1 of 2; qa-2963 kept for incremental re-QA; live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
-| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (Muse, planning) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
+| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (plan approved: new-chat hint in refusal text; condition: prove the open chat can see and call the new tool, else kill gate -> chat-screen notice; plan to be committed) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | rework after QA round 1 RED (sidebar item breaks settings browser test, row-security-off run output not posted, live proof empty-state only), round 1 of 2; builder running own branch servers on spare ports against dev DB for proof; qa-2964 (w1:p00) kept for re-QA | 2957 shadow report | w1:p0X | feat-2957-shadow-report | #2964 | 0 |
 
