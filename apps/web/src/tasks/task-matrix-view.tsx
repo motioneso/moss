@@ -36,7 +36,8 @@ export function TaskMatrixView(props: {
             aria-labelledby={headingId}
           >
             <SectionHead
-              id={headingId}
+              rule
+              titleId={headingId}
               title={quadrant.title}
               marker={
                 <span
