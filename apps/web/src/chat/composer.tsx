@@ -68,7 +68,11 @@ export function Composer(props: {
   readonly isSending: boolean;
   readonly sendError: string | null;
   readonly needsProvider: boolean;
-  /** No chat model is available: the message box is replaced by a connect-provider action. */
+  /**
+   * No chat model is available: the message box is replaced by a
+   * connect-provider action — unless the user already has unsent content,
+   * which is never destroyed to show an empty state (#2939).
+   */
   readonly noModelAvailable?: boolean;
   readonly lockedModelUnavailable: boolean;
   /** #1133 — attach UI is hidden and pending chips are dropped in private/incognito chat. */
@@ -230,6 +234,13 @@ export function Composer(props: {
   const clearBoundSkill = () => setBoundSkillId(null);
 
   const readyAttachments = readyAttachmentDtos(pending);
+
+  // #2939: the availability lookup resolves after the drawer opens, so it can
+  // arrive mid-typing. Swapping the box for the connect link then would
+  // destroy the user's draft (and strand browser flows between fill and Send).
+  // A send from the kept box still travels the normal turn path and lands on
+  // the honest no-model error, which raises the provider empty state.
+  const hasUnsentContent = text !== "" || pending.length > 0;
 
   const send = () => {
     if (props.readOnly) return;
@@ -450,7 +461,7 @@ export function Composer(props: {
           onSelect={(skill) => selectSkill(skill.id)}
         />
       ) : null}
-      {props.noModelAvailable ? (
+      {props.noModelAvailable && !hasUnsentContent ? (
         <Link className="primary-button chatd-connect-cta" to={CONNECT_PROVIDER_HREF}>
           Connect a provider
         </Link>
