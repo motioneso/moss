@@ -1,10 +1,21 @@
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { FocusJudgmentRepository } from "@moss/focus-judgment";
+import type { Job } from "@moss/jobs";
+import { getBuiltInModuleManifests } from "@moss/module-registry";
+import { readVaultFile, VaultContextRunner } from "@moss/vault";
 import type { Kysely } from "kysely";
+import {
+  handleExportBuildJob,
+  type ExportBuildJobPayload
+} from "../../packages/settings/src/data-export-jobs.js";
+import { DataExportRepository } from "../../packages/settings/src/data-export-repository.js";
 import { deleteUserData } from "../../scripts/delete-user-data.js";
 import { exportUserData } from "../../scripts/export-user-data.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -177,6 +188,49 @@ describe("user export and deletion", () => {
         reason: "Unrelated site."
       })
     );
+  });
+
+  it("the Settings export download carries the person's own judgments and not another person's", async () => {
+    const own = await insertAged(ids.userA, 2);
+    const other = await insertAged(ids.userB, 2);
+
+    const appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+    const vaultRoot = await mkdtemp(join(tmpdir(), "jarvis-export-focus-"));
+    const originalVaultRoot = process.env.JARVIS_VAULT_ROOT;
+    process.env.JARVIS_VAULT_ROOT = vaultRoot;
+    try {
+      const context = { actorUserId: ids.userA, requestId: "req:test" };
+      const jobRecord = await new DataContextRunner(appDb).withDataContext(context, (scopedDb) =>
+        new DataExportRepository().createJob(scopedDb, ids.userA)
+      );
+
+      // The Settings "Export data" button builds the archive in this worker job.
+      await new DataContextRunner(workerDb).withDataContext(context, (scopedDb) =>
+        handleExportBuildJob(
+          {
+            data: { actorUserId: ids.userA, jobId: jobRecord.id, kind: "export.build" }
+          } as Job<ExportBuildJobPayload>,
+          scopedDb,
+          () => getBuiltInModuleManifests()
+        )
+      );
+
+      const archiveJson = await new VaultContextRunner(vaultRoot).withVaultContext(
+        { actorUserId: ids.userA },
+        (vaultCtx) => readVaultFile(vaultCtx, `exports/${jobRecord.id}.json`)
+      );
+      const archive = JSON.parse(archiveJson) as {
+        sections: { focus_judgments: Array<{ id: string }> };
+      };
+
+      expect(archive.sections.focus_judgments.map((row) => row.id)).toEqual([own]);
+      expect(archiveJson).not.toContain(other);
+    } finally {
+      if (originalVaultRoot === undefined) delete process.env.JARVIS_VAULT_ROOT;
+      else process.env.JARVIS_VAULT_ROOT = originalVaultRoot;
+      await rm(vaultRoot, { recursive: true, force: true });
+      await appDb.destroy();
+    }
   });
 
   it("deleting a person counts and removes their judgments and leaves another person's", async () => {
