@@ -134,7 +134,7 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 
 RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor next steps:
 1. GATE QUEUE (memory is the bottleneck, ~5-10 GB free): lanes do NOT start full gates on their own; they wait for a coordinator GO. Keep at most 3 full gates running (count with: ps -eo args | grep -c -e '[r]un-gate.sh __run'; one may be a non-run design gate). Running now: 2942 (opus-2942), 2956 (opus-2956), 2912. Next GO: 2637 when it reports its fix ready. Gateway pattern-timeout failures (#1673) are load flakes: rerun that file alone.
-2. Lanes (all Opus, agent names opus-NNNN, message with herdr agent prompt): opus-2942, opus-2893, opus-2735, opus-2956, opus-2637 (pane label "2637 focus history cleanup"), 2912 lane (label "2912 notes browser tests"). opus-2934 is done: confirm clean, close its pane, reap its worktree.
+2. Lanes (all Opus, agent names opus-NNNN, message with herdr agent prompt): opus-2942, opus-2893, opus-2735, opus-2956, fix-2637-focus-retention (pane label "2637 focus history cleanup"), fix-2912-notes-specs (label "2912 notes browser tests"). opus-2934 is done: confirm clean, close its pane, reap its worktree.
 3. PR 2973: my QA subagent may die with me. If no "QA:" comment on 2973, spawn coordinated-qa (Opus). GREEN + CI green -> merge (routine, not user-facing).
 4. PR 2974: after gate + rebase over #2963, QA + live proof on dev + matched UAT, then auto-merge (sensitive).
 5. 2637: security tier, NOT delegated by Ben -> after Opus adversarial QA, AWAITING-BEN + needs-ben; never merge.
