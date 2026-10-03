@@ -15,6 +15,11 @@
       "expectIncludes": ["uatoff"],
       "calls": [],
       "reply": "All set."
+    },
+    {
+      "expectIncludes": ["uatmiss"],
+      "calls": [{ "tool": "tasks.list", "arguments": {} }],
+      "reply": "Here are your tasks."
     }
   ]
 }

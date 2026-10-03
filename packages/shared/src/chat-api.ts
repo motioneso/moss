@@ -702,3 +702,34 @@ export const listMemoryCorrectionsRouteSchema = {
     401: errorResponseSchema
   }
 } as const;
+
+/**
+ * Temporary classifier shadow report (#2957). Owner-only counts over a day window plus the
+ * disagreement rows, newest first. No message text: the numbers answer whether the classifier
+ * is doing the job.
+ */
+export type ClassifierShadowReportRange = 7 | 30 | 90;
+
+export interface ClassifierShadowDisagreementDto {
+  readonly id: string;
+  readonly createdAt: string;
+  /** Lowercased `module.tool` the classifier picked, or null when it named none. */
+  readonly classifierTool: string | null;
+  /** Lowercased `module.tool` the main model used first, or null when it used none. */
+  readonly modelTool: string | null;
+  readonly confidence: number | null;
+}
+
+export interface ClassifierShadowReportDto {
+  readonly days: ClassifierShadowReportRange;
+  readonly checked: number;
+  readonly pickedTool: number;
+  readonly agreed: number;
+  readonly comparable: number;
+  readonly missedTool: number;
+  readonly disagreements: readonly ClassifierShadowDisagreementDto[];
+}
+
+export interface GetClassifierShadowReportResponse {
+  readonly report: ClassifierShadowReportDto;
+}

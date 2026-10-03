@@ -286,4 +286,21 @@ describe("SortingModelRow (Classifier)", () => {
     expect(text(renderer)).toContain("Chosen model is unavailable. Using your main model.");
     expect(text(renderer)).not.toContain(CLASSIFIER_API_DISCLOSURE);
   });
+
+  it("links the Shadow badge and note to the shadow report while the gate is shadow", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "shadow", source: "instance" }
+    } as never);
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    const hrefs = renderer.root.findAllByType("a").map((anchor) => anchor.props.href);
+    expect(hrefs.filter((href) => href === "/settings?section=shadowreport")).toHaveLength(2);
+    expect(text(renderer)).toContain("See shadow results");
+  });
+
+  it("shows no shadow report link while the gate is off", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    const hrefs = renderer.root.findAllByType("a").map((anchor) => anchor.props.href);
+    expect(hrefs).not.toContain("/settings?section=shadowreport");
+    expect(text(renderer)).not.toContain("See shadow results");
+  });
 });
