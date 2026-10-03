@@ -626,6 +626,22 @@ turn. Show normal and YOLO behavior. Update chat features/errors/remediations an
 core app map in this PR. Exit: live proof linked on the future product PR with exit
 code and redacted assertions; collect shadow data only after privacy decisions clear.
 
+2b.5 wiring notes. This lane also wires the pieces 2b.5 left as injected ports:
+
+- the explicit user-requested candidate refresh uses the gateway's no-card
+  `callToolForGate` path through `CandidateListingPort`; hand the port
+  `response.structuredData` (the outcome envelope), never the whole response
+  and never the rendered text, whose `<tool_result source=...>` boundary lines
+  would become candidate names. Shadow makes no candidate-tool call and no
+  listing call happens on a message turn;
+- the connected-tool reply renderer may return null after a mutating attempt;
+  treat that as a terminal code-written failure and never run the tool again;
+- the empty-success performed/read fallback currently keys off the server's
+  read-only hint, not the owner-reviewed risk; resolve it when wiring the menu;
+- two preserved `INTEGRATION_SUMMARY` strings ("answer with what you have" and
+  "ask for a narrower query") are model-facing and would reach the user as
+  written; decide their user-facing wording here.
+
 ### 3.6 Model activity log screen (one UI session)
 
 Owner: UI implementer. Depends on 3.4 (shadow records). Build the admin-only screen agreed in
@@ -869,14 +885,14 @@ Revision 1 adds two decisions:
 
 Additional seams requiring a ruling, not an invented implementation assumption:
 
-- **Prepared text and candidate privacy (Ben, before real 2b preparation/candidate
-  use and 2.3/3.5):** spec 3.3 says no stored data reaches the classifier, while 3.4
-  allows device names. Slice 2b also exposes reviewed prepared descriptions and
-  template metadata to the classifier. Agree the narrow allowance, whether the
-  read-only device-list preparation is permitted, and the corresponding disclosure.
-  Keep real definition sharing, prepared text sharing and device inventories
-  distinct; none is implicitly approved by the others. Until ruled, use static
-  enums/synthetic fixtures. Reconcile spec 3.3/3.4 after the ruling.
+- **Prepared text and candidate privacy — resolved by ruling 8 (Ben, 2026-10-01).**
+  Ruling 8 set the classifier's data ceiling to anything the default model would see:
+  prepared descriptions and candidate lists (device names) are allowed, while credentials,
+  secrets and example values stay excluded. The read-only device-list preparation in 2b.5
+  is permitted under that ceiling, and only when the reviewed record marks the listing tool
+  read-only and the existing gateway permits the call. This reconciles spec 3.3 and 3.4.
+  Keep real definition sharing, prepared text sharing and device inventories distinct, as
+  none is implicitly approved by the others.
 - ~~**Shadow retention/private chat (Ben, before 3.5 collection)**~~ — **resolved by ruling 16
   (Ben, 2026-10-02):** records are kept forever and deleted on the owner's request; private
   chats never take part. Task #2908.

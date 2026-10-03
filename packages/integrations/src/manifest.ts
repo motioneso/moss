@@ -88,6 +88,31 @@ export const integrationsModuleManifest = {
       ]
     },
     {
+      id: "integrations.connection_classifier_candidates",
+      description:
+        "When the gate is active, a tool that needs a device or area name can pick from the " +
+        "connection's list, read through the reviewed read-only listing tool and cached briefly " +
+        "for its owner. A missing or expired list keeps the tool out.",
+      remediations: [
+        {
+          id: "integrations.connection_classifier_candidates.refresh",
+          description:
+            "Review the connection's device-listing tool as Only reads and switch it on for the " +
+            "classifier.",
+          path: "/settings?section=integrations"
+        }
+      ],
+      errors: [
+        {
+          code: "integrations.connection_classifier_candidates.unavailable",
+          class: "prerequisite",
+          remediationRef: "integrations.connection_classifier_candidates.refresh",
+          description:
+            "A tool needs a device or area name, but the connection has no current list of them."
+        }
+      ]
+    },
+    {
       id: "integrations.credentials_paused",
       description:
         "Integration credentials pause when no encryption key is set up. Credentialed tools " +

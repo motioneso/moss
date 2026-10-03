@@ -246,6 +246,21 @@ export function parseReviewedEntry(raw: unknown): ParseResult<ReviewedEntryInput
     problems.push("reviewedFingerprint must be a non-empty string");
   }
 
+  // One tool gets one candidate list, and the gate offers that single list for every candidates
+  // argument. A tool whose arguments name more than one distinct source would have one argument
+  // filled from a list the owner never approved for it, so the shape is refused at save time. The
+  // menu builder enforces the same rule for entries already stored by an older version.
+  const distinctSources = new Set(
+    Object.values(args)
+      .filter(
+        (argument) => argument.kind === "candidates" && argument.candidateSource !== undefined
+      )
+      .map((argument) => argument.candidateSource as string)
+  );
+  if (distinctSources.size > 1) {
+    problems.push("a tool may name at most one candidate source across its arguments");
+  }
+
   if (problems.length > 0) return { ok: false, problems };
 
   const value: ReviewedEntryInput = {
