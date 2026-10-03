@@ -460,8 +460,19 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     );
     await approveButton().first().waitFor({ timeout: 180_000 });
     expect(lightCalls()).toEqual([]);
-    await approveButton().first().click();
-    await expect.poll(() => porch()?.on, { timeout: 120_000 }).toBe(true);
+    // The model may look up devices first, which is its own request. Approve each card in turn
+    // until the light action itself has run.
+    await expect
+      .poll(
+        async () => {
+          if (porch()?.on) return true;
+          const next = approveButton().first();
+          if (await next.isVisible()) await next.click({ timeout: 5_000 }).catch(() => undefined);
+          return porch()?.on ?? false;
+        },
+        { timeout: 180_000, intervals: [1_000] }
+      )
+      .toBe(true);
   });
 
   await test.step("YOLO mode runs the same action with no approval card", async () => {
