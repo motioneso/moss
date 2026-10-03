@@ -382,13 +382,20 @@ export class ChatSessionManager {
       // acted on here (`off`/`shadow` fall through; shadow wiring is 3.5). A handled or terminal
       // turn returns without launching an engine; a decline returns undefined and the default
       // model path below runs unchanged with the original text.
+      // #2934 — capture this turn's privacy before the gate-mode wait inside
+      // tryGatedTurn. A new chat landing inside that wait flips the thread; the captured
+      // value keeps the turn's own privacy with the request.
+      const requestIncognito =
+        (await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface))?.incognito ??
+        false;
       const gated = await tryGatedTurn(
         this.lifecycleHost,
         actorUserId,
         surface,
         text,
         opts,
-        controller
+        controller,
+        requestIncognito
       );
       if (gated) return gated;
       try {
@@ -410,7 +417,9 @@ export class ChatSessionManager {
         actorUserId,
         surface,
         text,
-        session.incognito,
+        // #2934 — the turn's own privacy from before the gate wait, not the session
+        // resolved after it: the session may already belong to the new chat.
+        requestIncognito,
         {
           hasAttachment: (opts?.attachments?.length ?? 0) > 0,
           signal: controller.signal
@@ -611,6 +620,16 @@ export class ChatSessionManager {
         }
       }
 
+      // #2934 — a stop that landed after the read loop finished must still stop the
+      // turn: the thread may have flipped, so the reply must not be saved under it.
+      if (controller.signal.aborted) {
+        this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
+        gateShadow?.cancel();
+        session.lastActivity = this.deps.clock.now();
+        this.deps.touchMcpToken?.(sessionKey);
+        return { reply };
+      }
+
       const stored = await this.deps.persistence.recordTurn(
         actorUserId,
         text,
@@ -696,6 +715,9 @@ export class ChatSessionManager {
   ): Promise<void> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
+    // #2934 — stop a running turn the way resume does, before the thread flips: the
+    // in-flight turn must resolve stopped instead of saving under the new chat.
+    await this.stopTurn(actorUserId, chatSurface);
     const currentThread = await this.deps.persistence.getCurrentThreadState?.(
       actorUserId,
       chatSurface

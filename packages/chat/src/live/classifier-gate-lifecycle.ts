@@ -57,7 +57,8 @@ export async function tryGatedTurn(
   opts:
     | { readonly attachments?: readonly StoredAttachmentMeta[]; readonly moduleControl?: string }
     | undefined,
-  controller: AbortController
+  controller: AbortController,
+  requestIncognito: boolean
 ): Promise<GateTurnResult | undefined> {
   const gate = host.deps.classifierGate;
   if (!gate) return undefined;
@@ -72,15 +73,16 @@ export async function tryGatedTurn(
   if (mode !== "on") return undefined;
 
   // Ruling 9: private chats bypass the gate entirely — no classifier call and no record.
-  const incognito =
-    (await host.deps.persistence.getCurrentThreadState?.(actorUserId, surface))?.incognito ?? false;
-  if (incognito) return undefined;
+  // #2934 — the privacy rides with the request (captured by the caller before the mode
+  // wait above) and is never re-read here: a new chat landing inside that wait must not
+  // make a private turn look public.
+  if (requestIncognito) return undefined;
 
   const request: GateRequest = {
     actorUserId,
     message: text,
     hasAttachment: (opts?.attachments?.length ?? 0) > 0,
-    incognito: false,
+    incognito: requestIncognito,
     mode,
     signal: controller.signal
   };
@@ -101,6 +103,9 @@ export async function tryGatedTurn(
 
   if (outcome.kind === "declined" || outcome.kind === "would_handle") return undefined;
   if (outcome.kind === "cancelled") return cancelledTurn(host, actorUserId, surface);
+  // #2934 — a stop that landed after the gate decided must still stop the turn: the new
+  // chat may already have flipped the thread, so nothing may be recorded under it.
+  if (controller.signal.aborted) return cancelledTurn(host, actorUserId, surface);
   return persistGateOutcome(host, actorUserId, surface, text, opts, outcome);
 }
 
