@@ -236,7 +236,7 @@
   padding: 6px 0 2px;
 }
 .prov {
-  overflow: hidden;
+  overflow: visible;
 }
 .prov__head {
   display: flex;

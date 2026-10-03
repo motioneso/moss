@@ -469,8 +469,6 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const pickerRef = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
-  const mastRef = useRef<HTMLDivElement>(null);
-  const paneRef = useRef<HTMLDivElement>(null);
   // Phone: no ?section= means the person has not chosen yet, so show the whole list.
   const nothingChosen = !requested;
 
@@ -479,8 +477,25 @@ export function SettingsPage({ me }: SettingsPageProps) {
   useEffect(() => {
     if (!sheetOpen) return;
     const nav = navRef.current;
-    const behind = [mastRef.current, paneRef.current, pickerRef.current];
-    behind.forEach((el) => el && (el.inert = true));
+    // Everything outside the sheet goes inert (the whole app, not just Settings), except the
+    // scrim, which must stay clickable.
+    const behind: HTMLElement[] = [];
+    for (let node: HTMLElement | null = nav; node && node !== document.body; ) {
+      const parent: HTMLElement | null = node.parentElement;
+      if (!parent) break;
+      for (const sibling of Array.from(parent.children)) {
+        if (
+          sibling !== node &&
+          sibling instanceof HTMLElement &&
+          !sibling.classList.contains("set2__scrim") &&
+          !sibling.inert
+        ) {
+          sibling.inert = true;
+          behind.push(sibling);
+        }
+      }
+      node = parent;
+    }
     nav?.querySelector<HTMLElement>(".set2__navitem.is-active, .set2__navitem")?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -503,7 +518,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      behind.forEach((el) => el && (el.inert = false));
+      behind.forEach((el) => (el.inert = false));
       pickerRef.current?.focus();
     };
   }, [sheetOpen]);
@@ -562,7 +577,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
   return (
     <FeedbackProvider>
       <div className={`set2${nothingChosen ? " set2--nolist" : ""}`}>
-        <div className="set2__mast" ref={mastRef}>
+        <div className="set2__mast">
           <h1 className="set2__masttitle">Settings</h1>
           <div className="set2__bar">
             {isAdmin ? (
@@ -608,10 +623,15 @@ export function SettingsPage({ me }: SettingsPageProps) {
             id="settings-sections"
             ref={navRef}
             className={`set2__nav${sheetOpen ? " is-open" : ""}`}
-            aria-label="Settings categories"
+            aria-label={sheetOpen ? undefined : "Settings categories"}
+            role={sheetOpen ? "dialog" : undefined}
+            aria-modal={sheetOpen ? true : undefined}
+            aria-labelledby={sheetOpen ? "settings-sections-title" : undefined}
           >
             <div className="set2__sheethead">
-              <span className="set2__sheettitle">Settings sections</span>
+              <span id="settings-sections-title" className="set2__sheettitle">
+                Settings sections
+              </span>
               <button
                 type="button"
                 className="set2__sheetclose"
@@ -652,7 +672,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
             ) : null}
           </nav>
 
-          <div className="set2__pane" ref={paneRef}>
+          <div className="set2__pane">
             {adminMode && missingFamilyKeys.length > 0 ? (
               <Note icon={<KeyRound size={13} />}>
                 Encryption needs attention:{" "}

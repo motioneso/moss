@@ -369,21 +369,20 @@
   margin-bottom: 20px;
 }
 
-/* Persona controls sit beside their live preview on a wide screen. */
+/* Persona controls sit beside their live preview when the pane has room, and stack when not. */
 .psona {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
-  gap: 32px;
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: flex-start;
 }
 .psona__controls {
+  flex: 1 1 320px;
   min-width: 0;
 }
-@media (max-width: 860px) {
-  .psona {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
+.psona > .ppv {
+  flex: 0 1 380px;
+  min-width: min(280px, 100%);
 }
 
 /* Connections: a count per kind above the sections. */
