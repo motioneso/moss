@@ -253,6 +253,19 @@
   overflow-wrap: anywhere;
 }
 
+/* Phone: each story link is a 44px-tall tap area. Its padding takes the row
+   height, so stacked links sit 8px apart and never overlap. */
+@media (max-width: 680px) {
+  .jds-brief--sports .sp-tkgrid .sp-tk .sp-tk__stories {
+    gap: 8px;
+    padding-top: 0;
+  }
+
+  .jds-brief--sports .sp-tkgrid .sp-tk__storylink {
+    padding-block: 14px;
+  }
+}
+
 /* At phone widths the status column's nowrap text would starve the two sides
    below crest-plus-score width, so the status takes its own full-width row.
    DOM order is unchanged, so visual order still matches it. */
