@@ -360,6 +360,65 @@ describe("Sports Today Tonight", () => {
     expect(html).toContain(QUIET_NIGHT_LINE);
   });
 
+  describe("when today's games have started or finished", () => {
+    const followedTeams = [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }];
+    const liveGame = game({
+      id: "live-today",
+      state: "live",
+      statusDetail: "Q3 4:12",
+      startsAt: "2026-07-07T20:00:00.000Z",
+      home: vikingSide(21),
+      away: cowboySide(14)
+    });
+    const finishedToday = game({
+      id: "final-today",
+      state: "final",
+      statusDetail: "Final",
+      startsAt: "2026-07-07T14:00:00.000Z",
+      home: vikingSide(21),
+      away: cowboySide(14)
+    });
+    const upcoming = game({
+      id: "later-today",
+      state: "pre",
+      statusDetail: "7:30 PM",
+      startsAt: "2026-07-07T23:30:00.000Z",
+      home: cowboySide(null),
+      away: vikingSide(null)
+    });
+    const withGames = (games: GameSummary[]): string =>
+      render(
+        seed(
+          overview({
+            scoreboard: [{ competitionKey: "nfl", competitionLabel: "NFL", games }],
+            followedTeams
+          })
+        )
+      );
+
+    it("does not claim a quiet night while a followed game is live", () => {
+      const html = withGames([liveGame]);
+
+      expect(html).not.toContain(QUIET_NIGHT_LINE);
+      expect(html).not.toContain("sp-tonight__quiet");
+    });
+
+    it("does not claim a quiet night after a followed game finished today", () => {
+      const html = withGames([finishedToday]);
+
+      expect(html).not.toContain(QUIET_NIGHT_LINE);
+      expect(html).not.toContain("sp-tonight__quiet");
+    });
+
+    it("still lists upcoming games alongside live and finished ones", () => {
+      const html = withGames([liveGame, finishedToday, upcoming]);
+
+      expect(html).toContain("desk-tonight");
+      expect(html.match(/sp-tonight__row/g)).toHaveLength(1);
+      expect(html).not.toContain(QUIET_NIGHT_LINE);
+    });
+  });
+
   it("uses an existing followed-card story for the recap when top stories are empty", () => {
     const data = overview({
       followed: [
