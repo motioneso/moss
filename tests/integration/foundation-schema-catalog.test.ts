@@ -534,6 +534,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0255",
           name: "0255_chat_classifier_shadow_retention.sql"
+        },
+        // #2966 — app runtime reads proactive monitor state for the manual refresh cooldown.
+        {
+          version: "0256",
+          name: "0256_proactive_monitor_state_app_read.sql"
         }
       ]);
     } finally {
