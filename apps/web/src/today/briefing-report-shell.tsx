@@ -8,7 +8,7 @@ import {
 
 import type { LocaleSettingsDto } from "@moss/shared";
 
-import { Button } from "@moss/ui";
+import { Button, DisclosureToggle } from "@moss/ui";
 
 import { formatDate } from "../locale/locale-format.js";
 
@@ -76,15 +76,14 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
 
   const schedule = (
     <div className="brief-reader__railwrap">
-      <button
-        type="button"
+      <DisclosureToggle
         className="brief-reader__schedule-toggle"
-        aria-expanded={scheduleOpen}
-        aria-controls={railRegionId}
+        expanded={scheduleOpen}
+        controls={railRegionId}
         onClick={() => setScheduleOpen((open) => !open)}
       >
         {SCHEDULE_TOGGLE_LABEL}
-      </button>
+      </DisclosureToggle>
       <div className="brief-reader__rail" id={railRegionId} hidden={!scheduleOpen}>
         <p className="brief-reader__rail-date">{railDate}</p>
         <h3 className="brief-reader__rail-heading">{props.railHeading}</h3>

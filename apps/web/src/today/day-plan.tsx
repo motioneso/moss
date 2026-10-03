@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { CalendarEventDto, GetDayPlanResponse, LocaleSettingsDto } from "@moss/shared";
 
-import { Button, Note, SectionHead as HeadRow } from "@moss/ui";
+import { Button, Note, RowButton, SectionHead as HeadRow } from "@moss/ui";
 
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
@@ -121,11 +121,7 @@ function DayItemRow(props: {
       </div>
       <div>
         {item.taskId !== null && !item.unavailable ? (
-          <button
-            type="button"
-            className="jds-task__main"
-            onClick={() => props.onOpenTask(item.taskId!)}
-          >
+          <RowButton className="jds-task__main" onClick={() => props.onOpenTask(item.taskId!)}>
             <div className="jds-task__title">{item.title}</div>
             <div className="jds-task__meta">
               {item.kindLabel !== null ? (
@@ -133,7 +129,7 @@ function DayItemRow(props: {
               ) : null}
               <span className="jds-task__state">{item.label}</span>
             </div>
-          </button>
+          </RowButton>
         ) : (
           <div className="jds-task__main">
             <div className="jds-task__title">{item.title}</div>

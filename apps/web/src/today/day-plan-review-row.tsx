@@ -1,4 +1,4 @@
-import { Select } from "@moss/ui";
+import { RowButton, Select } from "@moss/ui";
 
 import { localDay } from "@moss/shared";
 
@@ -119,13 +119,12 @@ export function ReviewRow(props: {
     <li className="plan-review__row">
       <div>
         {block.taskId !== null ? (
-          <button
-            type="button"
+          <RowButton
             className="plan-review__titlelink"
             onClick={() => props.onOpenTask(block.taskId!)}
           >
             {props.title}
-          </button>
+          </RowButton>
         ) : (
           <div className="plan-review__title">{props.title}</div>
         )}
