@@ -156,6 +156,9 @@ async function openChat(page: Page): Promise<void> {
 }
 
 async function sendTurn(page: Page, text: string): Promise<void> {
+  // The settings tab takes focus during approval; a backgrounded chat tab may not
+  // dispatch the composer Enter, so foreground it before every turn.
+  await page.bringToFront();
   const turnResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
@@ -238,6 +241,7 @@ test("mid-conversation tools tell the person to start a new chat (#2942)", async
     });
 
     await test.step("a new chat runs the tool after one approval", async () => {
+      await chat.bringToFront();
       await chat.getByRole("button", { name: "New chat" }).click();
       await chat.waitForTimeout(8_000);
       await sendTurn(
