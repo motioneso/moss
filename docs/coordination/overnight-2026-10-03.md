@@ -17,7 +17,7 @@
 | New chat stops running turn | #2934 | security | building | 2934 new chat stops turn | w1:p0S | fix-2934-newchat-stop | - | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands) | - | - | - | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
-| Temporary shadow report page | #2957 | security (new private-data read route) | queued (next free slot) | - | - | - | - | 0 |
+| Temporary shadow report page | #2957 | security (new private-data read route) | building (reads shadow records, not activity lines, per Ben) | 2957 shadow report | w1:p0X | feat-2957-shadow-report | - | 0 |
 
 ## Dependency / merge order
 
