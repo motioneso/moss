@@ -42,6 +42,7 @@ export function ChatModelPill(props: {
   const settings = settingsQuery.data?.settings;
   const choices = settings ? buildChatModelChoices(settings) : [];
   const active = activeChatModel(settings ?? null);
+  const activeLabel = active?.displayName || active?.providerModelId || "Instance default";
   const locked = settings ? !settings.overrideEnabled : false;
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -125,7 +126,7 @@ export function ChatModelPill(props: {
     return (
       <div className="chatd-model chatd-model--locked">
         <Lock size={13} aria-hidden="true" />
-        {active?.providerModelId ?? "Instance default"}
+        {activeLabel}
       </div>
     );
   }
@@ -163,10 +164,10 @@ export function ChatModelPill(props: {
         onClick={() => (open ? closeMenu() : setOpen(true))}
         aria-expanded={open}
         aria-haspopup="true"
-        aria-label={`Chat model: ${active?.providerModelId ?? "Instance default"}`}
+        aria-label={`Chat model: ${activeLabel}`}
       >
         <GitCommitHorizontal size={13} aria-hidden="true" />
-        <span>{active?.providerModelId ?? "Instance default"}</span>
+        <span>{activeLabel}</span>
         <ChevronDown size={13} aria-hidden="true" />
       </button>
       {open ? (
