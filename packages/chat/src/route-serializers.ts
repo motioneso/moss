@@ -12,8 +12,50 @@ import type {
 } from "@moss/shared";
 
 import { readAttachments } from "./attachments-routes.js";
+import type { ShadowReport, ShadowReportRange } from "./classifier-shadow-repository.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
 import { toIsoString } from "./memory-serializers.js";
+
+/** Temporary shadow report (#2957): allowlisted day range, defaulting to 30. */
+export function readShadowReportDays(value: unknown): ShadowReportRange {
+  const record = typeof value === "object" && value !== null ? asRecord(value) : {};
+  const raw = Array.isArray(record.days) ? record.days[0] : record.days;
+  const days = typeof raw === "string" && raw.trim().length > 0 ? Number(raw) : NaN;
+  return days === 7 || days === 90 ? days : 30;
+}
+
+/** Temporary shadow report (#2957): owner-only counts and disagreements as plain JSON. */
+export function serializeShadowReport(report: ShadowReport): {
+  readonly days: ShadowReportRange;
+  readonly checked: number;
+  readonly pickedTool: number;
+  readonly agreed: number;
+  readonly comparable: number;
+  readonly missedTool: number;
+  readonly disagreements: readonly {
+    readonly id: string;
+    readonly createdAt: string;
+    readonly classifierTool: string | null;
+    readonly modelTool: string | null;
+    readonly confidence: number | null;
+  }[];
+} {
+  return {
+    days: report.days,
+    checked: report.checked,
+    pickedTool: report.pickedTool,
+    agreed: report.agreed,
+    comparable: report.comparable,
+    missedTool: report.missedTool,
+    disagreements: report.disagreements.map((row) => ({
+      id: row.id,
+      createdAt: toIsoString(row.createdAt),
+      classifierTool: row.classifierTool,
+      modelTool: row.modelTool,
+      confidence: row.confidence
+    }))
+  };
+}
 
 /** First non-blank line of a message body, capped for a list row. Never a code name or path. */
 function firstLinePreview(body: string | null | undefined): string | null {

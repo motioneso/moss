@@ -260,6 +260,9 @@ export const chatModuleManifest = {
     // #2908 — the owner deletes their own classifier shadow records on request. RLS scopes the
     // delete; there is no admin path and no separate verb for another actor.
     { method: "DELETE", path: "/api/chat/classifier/shadow-records", permissionId: "chat.message" },
+    // #2957 — temporary shadow report: the viewer's own classifier shadow counts and
+    // disagreements. Owner-only through row security, including for admins.
+    { method: "GET", path: "/api/chat/classifier/shadow-report", permissionId: "chat.view" },
     { method: "PATCH", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
     { method: "POST", path: "/api/chat/memory/facts/:id/confirm", permissionId: "chat.message" },
     { method: "POST", path: "/api/chat/memory/facts/:id/reject", permissionId: "chat.message" },

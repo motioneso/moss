@@ -80,7 +80,13 @@ import { VaultContextRunner, getVaultBaseDir } from "@moss/vault";
 import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
-import { asRecord, serializeMessage, serializeThread } from "./route-serializers.js";
+import {
+  asRecord,
+  readShadowReportDays,
+  serializeMessage,
+  serializeShadowReport,
+  serializeThread
+} from "./route-serializers.js";
 import { registerChatSkillsRoutes } from "./skills/routes.js";
 import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
@@ -743,6 +749,22 @@ export function registerChatRoutes(
         classifierShadowRepository.deleteForOwner(scopedDb)
       );
       return { deleted };
+    } catch (error) {
+      return handleRouteError(error, reply);
+    }
+  });
+
+  // #2957 — temporary shadow report. Owner-only counts and disagreements over 7, 30 or
+  // 90 days. Row-level security scopes every row to the caller, so an admin reads only
+  // their own records; there is intentionally no admin or cross-user variant here.
+  server.get("/api/chat/classifier/shadow-report", async (request, reply) => {
+    try {
+      const access = await dependencies.resolveAccessContext(request);
+      const days = readShadowReportDays(request.query);
+      const report = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
+        classifierShadowRepository.getReportForOwner(scopedDb, { days })
+      );
+      return { report: serializeShadowReport(report) };
     } catch (error) {
       return handleRouteError(error, reply);
     }
