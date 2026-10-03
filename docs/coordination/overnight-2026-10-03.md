@@ -17,7 +17,7 @@
 | New chat stops running turn | #2934 | security | rework after QA round 1 RED (2 leaks: no stop check between gate and submit; end-private-chat route same race), round 1 of 2; qa-2963 kept for incremental re-QA; live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (plan approved: new-chat hint in refusal text; condition: prove the open chat can see and call the new tool, else kill gate -> chat-screen notice; plan to be committed) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
-| Temporary shadow report page | #2957 | security (new private-data read route) | round-1 fixes in b3db9608c (CI green, row-security-off output + real-record live proof posted, proof on provisioned branch instance); QA round 2 of 2 running in qa-2964 (incremental from 3a5596f72) | 2957 shadow report | w1:p0X | feat-2957-shadow-report | #2964 | 0 |
+| Temporary shadow report page | #2957 | security (new private-data read route) | QA round 2 GREEN on b3db9608c (verdict on PR); parked for Ben's merge sign-off (AWAITING-BEN + needs-ben sent); builder w1:p0X kept until merge | 2957 shadow report | w1:p0X | feat-2957-shadow-report | #2964 | 0 |
 
 ## Dependency / merge order
 
@@ -58,6 +58,7 @@ None.
 - w1:p0Q "2939 chat drawer tests" (Muse builder) - built #2939; landed as PR #2965 (5eef54630); closed after merge.
 - w1:p111 "QA 2965 drawer tests" (Opus QA) - GREEN verdict on PR #2965; closed after merge.
 - w1:p0P "Coordinator (old)" (session 350800e5-1c37-4fe8-a928-2392ffce7055) - coordinator through relay point after #2939; work recorded in this manifest; closed by relay-1 successor.
+- w1:p00 "QA 2964 shadow report" (Opus QA, qa-2964) - rounds 1 (RED) and 2 (GREEN) on PR 2964, verdicts posted on the PR; closed and QA worktree removed after round 2.
 
 ## Continuation note
 
