@@ -84,7 +84,7 @@ export const scratchpadModuleManifest = {
         {
           id: "scratchpad.settings.connect_notes_folder",
           description:
-            "Connect a notes folder under Data sources in Settings, then turn on copying the scratchpad to notes again.",
+            "Connect a notes folder under Connections in Settings, then turn on copying the scratchpad to notes again.",
           path: "/settings?section=sources"
         }
       ],

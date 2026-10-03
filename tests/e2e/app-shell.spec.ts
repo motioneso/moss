@@ -211,8 +211,8 @@ test("connector accounts panel shows existing accounts and supports revoke", asy
   });
 
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Connected accounts" }).click();
-  await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
 
   await expect(page.getByText("Google Email")).toBeVisible();
   await expect(page.getByText("Live connection")).toBeVisible();

@@ -7,14 +7,13 @@ import {
   Activity,
   Boxes,
   Brain,
+  ChevronDown,
   Command,
   Cpu,
-  Database,
   Link2,
   ListChecks,
   Package,
   Palette,
-  Plug,
   ScrollText,
   ServerCog,
   ShieldCheck,
@@ -22,6 +21,7 @@ import {
   KeyRound,
   UserRound,
   Users,
+  X,
   type LucideIcon
 } from "lucide-react";
 import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
@@ -74,9 +74,7 @@ type PersonalSectionId =
   | "assistant"
   | "priorities"
   | "memory"
-  | "connected"
-  | "sources"
-  | "integrations"
+  | "connections"
   | "modules"
   | "appearance"
   | "activity"
@@ -103,19 +101,11 @@ const AssistantPane = lazyPane(() =>
 const MemoryPane = lazyPane(() =>
   import("./settings-memory-pane").then((module) => ({ default: module.MemoryPane }))
 );
-const ConnectedPane = lazyPane(() =>
-  import("./settings-personal-data-panes").then((module) => ({ default: module.ConnectedPane }))
-);
-const SourcesPane = lazyPane(() =>
-  import("./settings-personal-data-panes").then((module) => ({ default: module.SourcesPane }))
+const ConnectionsPane = lazyPane(() =>
+  import("./settings-connections-pane").then((module) => ({ default: module.ConnectionsPane }))
 );
 const ModulesPane = lazyPane(() =>
   import("./settings-personal-data-panes").then((module) => ({ default: module.ModulesPane }))
-);
-const IntegrationsPane = lazyPane(() =>
-  import("./settings-integrations-pane").then((module) => ({
-    default: module.SettingsIntegrationsPane
-  }))
 );
 const AppearancePane = lazyPane(() =>
   import("./settings-appearance-pane").then((module) => ({ default: module.AppearancePane }))
@@ -164,6 +154,12 @@ const EncryptionKeysPane = lazyPane(() =>
     default: module.EncryptionKeysPane
   }))
 );
+
+const LEGACY_CONNECTION_SECTIONS: ReadonlySet<string> = new Set([
+  "connected",
+  "sources",
+  "integrations"
+]);
 
 const ASSISTANT_NAME_GROUP_LABEL = "__ASSISTANT_NAME__";
 
@@ -231,25 +227,11 @@ const PERSONAL_GROUPS = [
     label: "Connections",
     sections: [
       {
-        id: "connected",
+        id: "connections",
         icon: Link2,
-        label: "Connected accounts",
-        description: coreSettingDescription("connected"),
-        Pane: ConnectedPane
-      },
-      {
-        id: "sources",
-        icon: Database,
-        label: "Data sources",
-        description: coreSettingDescription("sources"),
-        Pane: SourcesPane
-      },
-      {
-        id: "integrations",
-        icon: Plug,
-        label: "Integrations",
-        description: coreSettingDescription("integrations"),
-        Pane: IntegrationsPane
+        label: "Connections",
+        description: coreSettingDescription("connections"),
+        Pane: ConnectionsPane
       }
     ]
   },
@@ -375,6 +357,17 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "delete account"
   ],
   appearance: ["theme", "dark mode", "light mode", "colours", "colors", "palette"],
+  connections: [
+    "accounts",
+    "email",
+    "google",
+    "notes folder",
+    "data sources",
+    "integrations",
+    "apps",
+    "services",
+    "connected accounts"
+  ],
   assistant: ["model", "ai", "provider", "assistant name", "personality", "voice"],
   people: ["users", "invite", "roles", "admin", "members"],
   aiproviders: [
@@ -441,6 +434,15 @@ export function SettingsPage({ me }: SettingsPageProps) {
   );
 
   const requested = searchParams.get("section");
+
+  // Old links to the three panes that became Connections keep working.
+  useEffect(() => {
+    if (requested && LEGACY_CONNECTION_SECTIONS.has(requested)) {
+      const next = new URLSearchParams(searchParams);
+      next.set("section", "connections");
+      setSearchParams(next, { replace: true });
+    }
+  }, [requested, searchParams, setSearchParams]);
   const requestedPersonal = PERSONAL_SECTIONS.find((section) => section.id === requested);
   const requestedAdmin = isAdmin
     ? ADMIN_SECTIONS.find((section) => section.id === requested)
@@ -464,7 +466,10 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const activeSection = sections.find((section) => section.id === active) ?? sections[0]!;
   const Pane = activeSection.Pane;
 
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   const setActiveSection = (id: PersonalSectionId | AdminSectionId) => {
+    setSheetOpen(false);
     // A link from a personal pane may target an admin section (Chat settings' "Set up" points at
     // AI providers). Resolve across both lists so the URL carries the real id and the mode follows
     // it; coercing against the current mode's list silently landed on its first entry.
@@ -517,25 +522,62 @@ export function SettingsPage({ me }: SettingsPageProps) {
   return (
     <FeedbackProvider>
       <div className="set2">
-        <div className="set2__bar">
-          {isAdmin ? (
-            <Segmented
-              value={mode === "admin" ? "admin" : "personal"}
-              options={[
-                { value: "personal", label: "Personal" },
-                { value: "admin", label: "Admin / Setup" }
-              ]}
-              ariaLabel="Settings mode"
-              onChange={setActiveMode}
-            />
-          ) : (
-            <span />
-          )}
-          <SettingsSearch items={searchItems} onSelect={pickSearchResult} />
+        <div className="set2__mast">
+          <h1 className="set2__masttitle">Settings</h1>
+          <div className="set2__bar">
+            {isAdmin ? (
+              <Segmented
+                value={mode === "admin" ? "admin" : "personal"}
+                options={[
+                  { value: "personal", label: "Personal" },
+                  { value: "admin", label: "Admin / Setup" }
+                ]}
+                ariaLabel="Settings mode"
+                onChange={setActiveMode}
+              />
+            ) : (
+              <span />
+            )}
+            <SettingsSearch items={searchItems} onSelect={pickSearchResult} />
+          </div>
         </div>
 
+        <button
+          type="button"
+          className="set2__picker"
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+          onClick={() => setSheetOpen(true)}
+        >
+          <span className="set2__pickerlbl">Section</span>
+          <span className="set2__pickername">{activeSection.label}</span>
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+        {sheetOpen ? (
+          <button
+            type="button"
+            className="set2__scrim"
+            aria-label="Close section list"
+            onClick={() => setSheetOpen(false)}
+          />
+        ) : null}
+
         <div className="set2__grid">
-          <nav className="set2__nav" aria-label="Settings categories">
+          <nav
+            className={`set2__nav${sheetOpen ? " is-open" : ""}`}
+            aria-label="Settings categories"
+          >
+            <div className="set2__sheethead">
+              <span className="set2__sheettitle">Settings sections</span>
+              <button
+                type="button"
+                className="set2__sheetclose"
+                aria-label="Close section list"
+                onClick={() => setSheetOpen(false)}
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
             {groups.map((group) => (
               <Fragment key={group.label}>
                 <div className="set2__navgroup">

@@ -17,6 +17,58 @@
   font-size: 13px;
   color: var(--text-subtle);
 }
+.set2__picker {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text);
+}
+.set2__pickerlbl {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.set2__pickername {
+  font-size: 15px;
+  font-weight: 700;
+}
+.set2__scrim {
+  background: rgba(0, 0, 0, 0.58);
+  border: 0;
+}
+.set2__masttitle {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 900;
+}
+@media (max-width: 860px) {
+  .set2__masttitle {
+    font-size: 36px;
+  }
+}
+@media (max-width: 520px) {
+  .set2__masttitle {
+    font-size: 32px;
+  }
+}
+.set2__nav.is-open {
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+}
+.set2__sheettitle {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+}
+.set2__sheetclose {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+}
 .set2__adv-t {
   font-size: 13px;
   font-weight: 600;
@@ -71,22 +123,23 @@
 }
 .pane__title {
   font-family: var(--font-display);
-  font-size: 25px;
-  font-weight: 600;
+  font-size: 32px;
+  font-weight: 900;
+  word-spacing: 0.12em;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
 }
 .pane__desc {
   font-size: 14px;
   color: var(--text-subtle);
 }
 
+/* Ruled section, as on Today: an accent hairline above a display title. No box. */
 .pane__card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-top: 1px solid var(--accent-rule);
 }
 .pane__card--danger {
-  background: var(--danger-soft);
-  border: 1px solid var(--danger);
+  border-top-color: var(--danger);
 }
 .pane__card--danger .pane__cardtitle,
 .pane__card--danger .pane__carddesc {
@@ -94,12 +147,15 @@
 }
 .pane__cardtitle {
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 800;
+  word-spacing: 0.12em;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
   color: var(--text);
 }
 .pane__carddesc {
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--text-subtle);
 }
 .fld__lbl {

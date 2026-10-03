@@ -6,6 +6,7 @@ import {
   Plus,
   GitCommitHorizontal,
   LogIn,
+  MoreHorizontal,
   Terminal,
   Trash2,
   Unlink,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { Button, IconButton } from "@moss/ui";
+import { Button, IconButton, Menu } from "@moss/ui";
 import {
   createAiProvider,
   getChatModelOverrideSettings,
@@ -207,6 +208,27 @@ function ProviderCard(props: {
               />
             </div>
           ) : null}
+        </div>
+        <div className="prov__more">
+          <Menu
+            triggerIcon={<MoreHorizontal size={16} aria-hidden="true" />}
+            triggerLabel={`More actions for ${provider.displayName}`}
+            items={[
+              ...(canAutomateLogin ? [{ id: "login", label: "Log in" }] : []),
+              provider.authMethod === "cli"
+                ? { id: "terminal", label: "Terminal" }
+                : { id: "test", label: "Test", disabled: testMutation.isPending },
+              { id: "edit", label: props.editing ? "Done" : "Edit" },
+              { id: "remove", label: "Remove" }
+            ]}
+            onSelect={(id) => {
+              if (id === "login") props.onLogin();
+              else if (id === "terminal") setTerminalOpen(true);
+              else if (id === "test") testMutation.mutate();
+              else if (id === "edit") props.onEdit(props.editing ? null : provider.id);
+              else if (id === "remove") props.onRemove();
+            }}
+          />
         </div>
         <div className="prov__acts">
           {canAutomateLogin ? (

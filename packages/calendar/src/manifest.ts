@@ -621,7 +621,7 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_reconnect",
           description:
             "Reconnect or fix a calendar account so additions are written against real commitments again.",
-          path: "/settings?section=connected"
+          path: "/settings?section=connections"
         }
       ]
     },
@@ -785,7 +785,7 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_reconnect",
           description:
             "Reconnect or fix a calendar account so conflicts are checked against real commitments again.",
-          path: "/settings?section=connected"
+          path: "/settings?section=connections"
         }
       ]
     },

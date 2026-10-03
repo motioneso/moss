@@ -113,9 +113,9 @@ describe("deriveNotWorking", () => {
     );
     expect(entries.every((entry) => !entry.ability.toLowerCase().includes("calendar"))).toBe(true);
   });
-  it("every shipped reconnect link points at the Connected accounts section", () => {
+  it("every shipped reconnect link points at the Connections section", () => {
     for (const capability of [...GOOGLE_CAPABILITIES, ...IMAP_CAPABILITIES]) {
-      expect(capability.fix.path).toBe("/settings?section=connected");
+      expect(capability.fix.path).toBe("/settings?section=connections");
     }
   });
 
@@ -133,7 +133,7 @@ describe("deriveNotWorking", () => {
     expect(entries).toHaveLength(GOOGLE_CAPABILITIES.length);
     for (const entry of entries) {
       expect(entry.reason).toBe("the background worker has not picked up the sync");
-      expect(entry.fix).toEqual({ label: "Sync now", path: "/settings?section=connected" });
+      expect(entry.fix).toEqual({ label: "Sync now", path: "/settings?section=connections" });
     }
   });
 

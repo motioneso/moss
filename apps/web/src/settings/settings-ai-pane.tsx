@@ -478,23 +478,24 @@ function YoloMode() {
     mutationFn: (enabled: boolean) => putYoloSelf({ enabled }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.settings.yolo, data);
-      toast(data.self.enabled ? "YOLO mode enabled" : "YOLO mode disabled");
+      toast(data.self.enabled ? "Auto-approve actions on" : "Auto-approve actions off");
     },
-    onError: (error) => toast(error instanceof Error ? error.message : "Could not update YOLO mode")
+    onError: (error) =>
+      toast(error instanceof Error ? error.message : "Could not update auto-approve actions")
   });
   const state = query.data;
   if (!state?.self.allowed) return null;
   const enable = () =>
     confirm({
-      title: "Enable YOLO mode?",
+      title: "Turn on auto-approve actions?",
       description: `${assistantName} will perform actions, including permanent deletions, without asking. You accept responsibility.`,
-      confirmLabel: "Enable YOLO",
+      confirmLabel: "Turn on",
       danger: true,
       onConfirm: () => mutation.mutate(true)
     });
   return (
     <Group
-      title="YOLO mode"
+      title="Auto-approve actions"
       desc="Your personal approval preference for interactive chat. The instance owner controls whether it can take effect."
     >
       <Row
@@ -504,7 +505,7 @@ function YoloMode() {
             ? "Effective state: enabled for interactive chat. Background work still uses its own policy."
             : state.instanceEnabled
               ? "Effective state: inactive because your preference is off."
-              : "Effective state: inactive because the instance owner has disabled YOLO. Your preference remains saved."
+              : "Effective state: inactive because the instance owner has turned auto-approve off. Your preference remains saved."
         }
         control={
           <Switch
@@ -571,7 +572,7 @@ function ChatArchive() {
           <div className="ai-empty__main">
             <div className="ai-empty__t">No notes folder connected</div>
             <div className="ai-empty__d">
-              Connect a notes folder in <b>Data sources</b> before turning this on.
+              Connect a notes folder in <b>Connections</b> before turning this on.
             </div>
           </div>
         </div>

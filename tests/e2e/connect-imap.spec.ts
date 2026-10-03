@@ -15,7 +15,7 @@ test("service picker offers Google and Email (IMAP) — no GitHub, Apple, or Oth
   });
 
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Connected accounts" }).click();
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "Google", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Email (IMAP)" })).toBeVisible();
@@ -35,7 +35,7 @@ test("connects an email account via the settings IMAP flow", async ({ page }) =>
   });
 
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Connected accounts" }).click();
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
   await page.getByRole("button", { name: "Email (IMAP)" }).click();
 
   // One address-first form: typing a known address picks the mail service for you.
@@ -50,7 +50,7 @@ test("connects an email account via the settings IMAP flow", async ({ page }) =>
   await expect(connect).toBeEnabled();
   await connect.click();
 
-  await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   await expect(page.getByText("Add an email account")).not.toBeVisible();
 });
 
@@ -74,7 +74,7 @@ test("reconnect on an IMAP account opens ImapConnect, not GoogleConnect", async 
   });
 
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Connected accounts" }).click();
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
   await page.getByRole("button", { name: "Reconnect" }).click();
 
   await expect(page.locator(".gflow__title", { hasText: "Add an email account" })).toBeVisible();

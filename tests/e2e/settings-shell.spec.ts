@@ -141,9 +141,9 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
     await expect(nav.getByText(group, { exact: true })).toBeVisible();
   }
-  await expect(nav.getByRole("button")).toHaveCount(12);
+  await expect(nav.getByRole("button")).toHaveCount(10);
   await expect(nav.getByRole("button", { name: "What's new" })).toBeVisible();
-  await expect(nav.getByRole("button", { name: "Integrations" })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Connections" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Profile & account" })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "General" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();

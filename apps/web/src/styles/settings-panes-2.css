@@ -274,6 +274,18 @@
   gap: 4px;
   flex: none;
 }
+.prov__more {
+  display: none;
+  flex: none;
+}
+@media (max-width: 860px) {
+  .prov__acts {
+    display: none;
+  }
+  .prov__more {
+    display: block;
+  }
+}
 .prov__edit {
   padding: 2px 15px 8px;
   border-top: 1px solid var(--border-subtle);
