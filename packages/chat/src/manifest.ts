@@ -17,6 +17,11 @@ import {
   chatSetResponseStyleInputSchema,
   chatSetResponseStyleOutputSchema
 } from "./response-style-tool.js";
+import {
+  chatDeleteClassifierShadowRecordsExecute,
+  chatDeleteClassifierShadowRecordsInputSchema,
+  chatDeleteClassifierShadowRecordsOutputSchema
+} from "./classifier-shadow-tool.js";
 
 const CHAT_MODULE_ID = "chat";
 export const chatModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
@@ -191,8 +196,8 @@ export const chatModuleManifest = {
       id: "chat.classifier_shadow_records",
       description:
         "Groundwork for the classifier gate's trial mode: private records only you can read, kept " +
-        "until you delete them. Nothing saves messages there yet and no screen shows it. A failed " +
-        "save will leave your normal reply unchanged.",
+        "until you ask Moss in chat to delete them. Nothing saves messages there yet. Deletion is " +
+        "confirmed first; a failed save leaves your reply unchanged.",
       featureFlagId: "chat.module"
     },
     {
@@ -348,6 +353,22 @@ export const chatModuleManifest = {
       inputSchema: chatSetResponseStyleInputSchema,
       outputSchema: chatSetResponseStyleOutputSchema,
       execute: chatSetResponseStyleExecute
+    },
+    {
+      // #2911 — a person asks Moss in chat to delete their classifier shadow records. Destructive
+      // and confirm_always, so nothing is removed before an approval card. RLS scopes the delete
+      // to the caller, and there is no admin or cross-user variant.
+      name: "chat.deleteClassifierShadowRecords",
+      description:
+        "Delete all of the current user's classifier shadow records - the private trial records " +
+        "kept while the classifier gate runs in shadow mode. Use only when the user asks to " +
+        "delete that trial data.",
+      permissionId: "chat.message",
+      risk: "destructive",
+      selfOperationGrant: "confirm_always",
+      inputSchema: chatDeleteClassifierShadowRecordsInputSchema,
+      outputSchema: chatDeleteClassifierShadowRecordsOutputSchema,
+      execute: chatDeleteClassifierShadowRecordsExecute
     }
   ]
 } satisfies MossModuleManifest;

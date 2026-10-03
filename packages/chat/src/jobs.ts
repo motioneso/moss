@@ -70,6 +70,13 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
 ];
 
+/**
+ * #2911 — the queue the removed 7-day shadow-record purge used to run on. #2910 deleted the job
+ * and the queue definition, but an install that ran 0251's version still holds the queue and its
+ * daily schedule in pgboss.
+ */
+export const RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE = "chat.purge-classifier-shadow-records";
+
 // ── Payloads ──────────────────────────────────────────────────────────────────
 
 export interface EmbedTurnJobPayload extends ActorScopedJobPayload {
@@ -464,6 +471,8 @@ export async function registerChatJobWorkers(
     (extractFactsDeps as { logger?: Pick<FastifyBaseLogger, "error"> }).logger = options.logger;
   }
 
+  await retireShadowRecordPurgeQueue(boss, options.logger);
+
   const embedWorkId = await registerDataContextWorker<EmbedTurnJobPayload, void>(
     boss,
     CHAT_EMBED_TURN_QUEUE,
@@ -513,6 +522,44 @@ export async function registerChatJobWorkers(
 
   const workIds = [embedWorkId, extractWorkId, archiveWorkId];
   return workIds;
+}
+
+/**
+ * #2911 tidy-up for installs that ran 0251's fixed 7-day purge: #2910 removed the job and its
+ * queue definition from the code, but an upgraded install can still hold the queue and its daily
+ * schedule in pgboss. Drop both when present. Idempotent and quiet: on a fresh install it removes
+ * nothing and logs nothing. Owned by the chat module, not the shared pg-boss migration.
+ */
+export async function retireShadowRecordPurgeQueue(
+  boss: PgBoss,
+  logger?: Pick<FastifyBaseLogger, "info">
+): Promise<void> {
+  let unscheduled = 0;
+  for (const schedule of await boss.getSchedules()) {
+    if (schedule.name !== RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE) continue;
+    await boss.unschedule(schedule.name, schedule.key);
+    unscheduled += 1;
+  }
+  let queueDeleted = false;
+  let queueLeftInPlace = false;
+  if (await boss.getQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE)) {
+    await boss.deleteQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE);
+    // pg-boss swallows a permission error from the delete and reports nothing, so ask again. Only
+    // this re-read may be logged as deleted; a row still present is reported as left in place.
+    queueDeleted = (await boss.getQueue(RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE)) === null;
+    queueLeftInPlace = !queueDeleted;
+  }
+  if ((queueDeleted || queueLeftInPlace || unscheduled > 0) && logger) {
+    logger.info(
+      {
+        queue: RETIRED_CHAT_PURGE_SHADOW_RECORDS_QUEUE,
+        unscheduled,
+        queueDeleted,
+        queueLeftInPlace
+      },
+      "chat_classifier_shadow_purge_queue_retired"
+    );
+  }
 }
 
 async function maybePromoteCandidate(
