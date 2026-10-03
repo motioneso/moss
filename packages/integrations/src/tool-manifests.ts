@@ -366,11 +366,11 @@ function buildClassifierDeclaration(
 ): ModuleAssistantToolClassifier {
   const cache = deps.candidateCache ?? candidateCache;
   const args: Record<string, ClassifierArgumentDecl> = {};
-  let candidateSource: string | undefined;
+  const candidateSources = new Set<string>();
   for (const [name, argument] of Object.entries(entry.arguments)) {
     args[name] = { kind: argument.kind };
     if (argument.kind === "candidates" && argument.candidateSource !== undefined) {
-      candidateSource = argument.candidateSource;
+      candidateSources.add(argument.candidateSource);
     }
   }
 
@@ -379,8 +379,12 @@ function buildClassifierDeclaration(
     arguments: args,
     replyTemplate: entry.replyTemplate
   };
-  const source = candidateSource;
-  if (source === undefined) return declaration;
+  // One tool gets one candidate hook, and the gate offers that single list for every candidates
+  // argument. If a tool's arguments name more than one distinct source, attaching either list
+  // would let the classifier fill one argument from a list the owner never approved for it, so the
+  // tool stays off the menu. The review-save path also refuses this shape.
+  if (candidateSources.size !== 1) return declaration;
+  const source = [...candidateSources][0]!;
 
   const listingEntry = classifierByTool.get(source);
   if (!listingEntry || listingEntry.risk !== "read") return declaration;

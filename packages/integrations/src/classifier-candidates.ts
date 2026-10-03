@@ -209,7 +209,9 @@ function mcpContentText(value: Record<string, unknown>): string | null {
 /**
  * A listing returned as text. MCP flattens its `content` blocks into one string, so a JSON array
  * is parsed, and otherwise one non-empty line is read as one candidate name (a text block per
- * device). A long prose line is rejected later by the per-entry bound, never truncated.
+ * device). Lines that look like prose or a list header ("No devices found.", "Here are your
+ * lights:", "- Kitchen") are skipped, because a name that is not a real device would be picked and
+ * then fail to match. A long prose line is rejected later by the per-entry bound, never truncated.
  */
 function parseListingText(text: string): unknown[] | null {
   const trimmed = text.trim();
@@ -227,8 +229,18 @@ function parseListingText(text: string): unknown[] | null {
   const lines = trimmed
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line !== "");
+    .filter((line) => isNameLikeListingLine(line));
   return lines.length > 0 ? lines : null;
+}
+
+/** Rejects prose and list markers so a sentence or a bullet never becomes a device name. */
+function isNameLikeListingLine(line: string): boolean {
+  if (line === "") return false;
+  if (line.endsWith(":")) return false; // a list header such as "Here are your lights:"
+  if (/^[-*•]\s/.test(line)) return false; // a bullet such as "- Kitchen"
+  if (/^\d+[.)]\s/.test(line)) return false; // a numbered item such as "1. Kitchen"
+  if (/\s/.test(line) && !line.includes(",")) return false; // a sentence, not a name
+  return true;
 }
 
 /**
@@ -275,6 +287,7 @@ export function extractCandidatesFromListing(
   if (isRecord(result) && typeof result.status === "string" && result.status !== "ok") {
     return null;
   }
+  if (isRecord(result) && result.truncated === true) return null;
   const list = findListingArray(result);
   if (!list) return null;
   if (list.length === 0 || list.length > CLASSIFIER_LIMITS.candidates) return null;

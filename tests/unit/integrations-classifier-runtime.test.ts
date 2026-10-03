@@ -271,6 +271,28 @@ describe("candidate extraction mapping", () => {
     ).toBeNull();
   });
 
+  it("skips prose and list markers in the one-name-per-line fallback", () => {
+    expect(extractCandidatesFromListing(envelope({ result: "No devices found." }))).toBeNull();
+    expect(
+      extractCandidatesFromListing(envelope({ result: "Here are your lights:\n- Kitchen\n- Desk" }))
+    ).toBeNull();
+    expect(extractCandidatesFromListing(envelope({ result: "1. Kitchen\n2. Desk" }))).toBeNull();
+    // A real one-name-per-line list still reads.
+    expect(extractCandidatesFromListing(envelope({ result: "Kitchen\nDesk" }))).toEqual([
+      { id: "Kitchen", label: "Kitchen" },
+      { id: "Desk", label: "Desk" }
+    ]);
+  });
+
+  it("rejects a listing explicitly marked truncated", () => {
+    expect(
+      extractCandidatesFromListing({
+        ...envelope({ result: JSON.stringify([{ id: "a", name: "A" }]) }),
+        truncated: true
+      })
+    ).toBeNull();
+  });
+
   it("never copies a secret or a sample value into a candidate label", () => {
     const out = extractCandidatesFromListing(
       envelope({
@@ -733,6 +755,7 @@ describe("runtime classifier menu on synthetic tools", () => {
           list_lights: entry(listingFingerprint, { reviewedRisk: "write" }),
           turn_on: entry(switchFingerprint, {
             description: "Turn one light on.",
+            reviewedRisk: "write",
             arguments: { target: { kind: "candidates", candidateSource: "list_lights" } },
             replyTemplate: "Turned {summary}"
           })
@@ -745,6 +768,41 @@ describe("runtime classifier menu on synthetic tools", () => {
     const turnOn = (synthetic.assistantTools ?? []).find((tool) => tool.name === "home.turn_on")!;
     expect(turnOn.classifier?.candidates).toBeUndefined();
     expect(checkClassifierEligibility(turnOn).eligible).toBe(false);
+  });
+
+  it("stays off the menu when its arguments name more than one candidate source", async () => {
+    const lights = discovered("list_lights", {}, { readOnly: true });
+    const locks = discovered("list_locks", {}, { readOnly: true });
+    const act = discovered("act", {
+      type: "object",
+      properties: { light: { type: "string" }, lock: { type: "string" } },
+      required: ["light", "lock"]
+    });
+    const multiSource = connection({
+      discoveredTools: [lights, locks, act],
+      classifierPreparation: {
+        version: 1,
+        entries: {
+          list_lights: entry(toolDefinitionFingerprint(lights as IntegrationToolDescriptor)),
+          list_locks: entry(toolDefinitionFingerprint(locks as IntegrationToolDescriptor)),
+          act: entry(toolDefinitionFingerprint(act as IntegrationToolDescriptor), {
+            description: "Set a light and a lock.",
+            reviewedRisk: "write",
+            arguments: {
+              light: { kind: "candidates", candidateSource: "list_lights" },
+              lock: { kind: "candidates", candidateSource: "list_locks" }
+            },
+            replyTemplate: "Done."
+          })
+        }
+      }
+    });
+
+    const modules = await build([multiSource], createCandidateCache())("actor-1");
+    const synthetic = modules.find((module) => module.id === "integration-home")!;
+    const actTool = (synthetic.assistantTools ?? []).find((tool) => tool.name === "home.act")!;
+    expect(actTool.classifier?.candidates).toBeUndefined();
+    expect(checkClassifierEligibility(actTool).eligible).toBe(false);
   });
 
   it("reads only the owner's cached candidates in the hook", async () => {

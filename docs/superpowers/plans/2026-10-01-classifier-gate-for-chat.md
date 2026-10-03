@@ -629,8 +629,11 @@ code and redacted assertions; collect shadow data only after privacy decisions c
 2b.5 wiring notes. This lane also wires the pieces 2b.5 left as injected ports:
 
 - the explicit user-requested candidate refresh uses the gateway's no-card
-  `callToolForGate` path through `CandidateListingPort`; shadow makes no
-  candidate-tool call and no listing call happens on a message turn;
+  `callToolForGate` path through `CandidateListingPort`; hand the port
+  `response.structuredData` (the outcome envelope), never the whole response
+  and never the rendered text, whose `<tool_result source=...>` boundary lines
+  would become candidate names. Shadow makes no candidate-tool call and no
+  listing call happens on a message turn;
 - the connected-tool reply renderer may return null after a mutating attempt;
   treat that as a terminal code-written failure and never run the tool again;
 - the empty-success performed/read fallback currently keys off the server's

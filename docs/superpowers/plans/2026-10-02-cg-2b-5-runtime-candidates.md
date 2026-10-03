@@ -207,8 +207,10 @@ eligible tool:
   `IntegrationClassifierArgument` to the SDK's `{ kind }` declarations;
 - when an argument is `candidates`, add `candidates: ClassifierCandidateProvider` that reads
   `loadCachedCandidates` with the listing tool's current fingerprint and throws on a miss (the gate
-  turns a throw into `candidates_unavailable`). At most one `candidates` argument is allowed by the
-  gate; the provider captures that argument's `candidateSource`;
+  turns a throw into `candidates_unavailable`). One tool gets one candidate hook and the gate offers
+  that single list for every `candidates` argument, so a tool whose arguments name **more than one
+  distinct source** gets no hook and stays off the menu; the same shape is refused at save
+  (`classifier-settings.ts`);
 - attach the declaration only when the reviewed risk is **not `read`**. A connected read reply can
   only be the fixed envelope summary with no content ("Read succeeded."), so it cannot count as
   handled and stays off the menu; it can still serve as a candidate source.
