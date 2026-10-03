@@ -9,7 +9,10 @@ import { DEFAULT_CHAT_SURFACE, type LookupAiCapabilityRouteResponse } from "@mos
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
 
-function render(route: LookupAiCapabilityRouteResponse): string {
+function render(
+  route: LookupAiCapabilityRouteResponse,
+  options?: { readonly initialText?: string }
+): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.ai.capability("chat"), route);
   return renderToString(
@@ -26,7 +29,8 @@ function render(route: LookupAiCapabilityRouteResponse): string {
           clearRecords: () => {},
           streamErrorCount: 0,
           isFounder: false,
-          surface: DEFAULT_CHAT_SURFACE
+          surface: DEFAULT_CHAT_SURFACE,
+          initialText: options?.initialText
         })
       )
     )
@@ -70,6 +74,18 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     });
 
     expect(html).toContain("Here when you need me");
+    expect(html).toContain("<textarea");
+    expect(html).not.toContain("chatd-connect-cta");
+  });
+
+  it("keeps a started draft instead of swapping in the connect link (#2939)", () => {
+    const html = render(
+      {
+        route: { capability: "chat", available: false, reason: "no-active-model", model: null }
+      },
+      { initialText: "Say hello in three words." }
+    );
+
     expect(html).toContain("<textarea");
     expect(html).not.toContain("chatd-connect-cta");
   });
