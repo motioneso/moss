@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Trail Marker focus checks now expire after 30 days.** Trail Marker's focus checks are now deleted after 30 days as promised, and they are included in your data export and removed when your account is deleted. [PR #2977](https://github.com/motioneso/moss/pull/2977)
 - **Starting a new chat stops the current reply.** Starting a new chat now stops the reply that was still being written, so it can no longer leak into the new chat. [PR #2963](https://github.com/motioneso/moss/pull/2963)
 - **Refreshing your nudges on Today works again.** Refreshing the "On your radar" nudges on Today no longer fails with an error. [PR #2967](https://github.com/motioneso/moss/pull/2967)
 - **Chat box no longer disappears while typing.** If no chat model is connected, the message box stays put while you type instead of vanishing, and your draft is never lost when the connection status loads. [PR #2965](https://github.com/motioneso/moss/pull/2965)
