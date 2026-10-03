@@ -40,7 +40,23 @@ async function searchAndChoose(page: Page, query: string, expectedLabel: string)
   await expect(page.getByText(expectedLabel, { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Use this place" }).first().click();
   await expect(page.getByText(`Weather location saved: ${expectedLabel}.`)).toBeVisible();
-  await expect(page.getByText(`Currently using ${expectedLabel}.`)).toBeVisible();
+  await expect(page.getByText(`Using ${expectedLabel}, set by searching.`)).toBeVisible();
+}
+
+// Today's weather row names no place (study layout, #2641), so the place is read from the weather
+// request Today makes on this navigation. Waiting is armed after the place change, so an earlier
+// response cannot satisfy it.
+async function gotoTodayWeather(page: Page): Promise<{ location: string; unit: string }> {
+  const weatherResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/weather/today") && response.request().method() === "GET"
+  );
+  await page.goto(`${requireBaseURL()}/today`);
+  const body = (await (await weatherResponse).json()) as {
+    data: { location: string; unit: string } | null;
+  };
+  expect(body.data).not.toBeNull();
+  return body.data!;
 }
 
 test("place search, ambiguity handling, and temperature units work through the UI", async ({
@@ -54,19 +70,11 @@ test("place search, ambiguity handling, and temperature units work through the U
 
   await gotoProfileSettings(page);
   await searchAndChoose(page, "San Diego", "San Diego, California, United States");
-  await page.goto(`${baseURL}/today`);
-  await expect(page.locator(".jds-weather-chip__city")).toHaveText(
-    "San Diego, California, United States",
-    { timeout: 20_000 }
-  );
+  expect((await gotoTodayWeather(page)).location).toBe("San Diego, California, United States");
 
   await gotoProfileSettings(page);
   await searchAndChoose(page, "London", "London, England, United Kingdom");
-  await page.goto(`${baseURL}/today`);
-  await expect(page.locator(".jds-weather-chip__city")).toHaveText(
-    "London, England, United Kingdom",
-    { timeout: 20_000 }
-  );
+  expect((await gotoTodayWeather(page)).location).toBe("London, England, United Kingdom");
 
   await gotoProfileSettings(page);
   await page.getByLabel("Search for a weather location").fill("Springfield");
@@ -74,24 +82,26 @@ test("place search, ambiguity handling, and temperature units work through the U
   const candidates = page.getByRole("button", { name: "Use this place" });
   await expect(candidates.nth(1)).toBeVisible({ timeout: 20_000 });
   expect(await candidates.count()).toBeGreaterThan(1);
-  await expect(page.getByText("Currently using London, England, United Kingdom.")).toBeVisible();
+  await expect(
+    page.getByText("Using London, England, United Kingdom.", { exact: true })
+  ).toBeVisible();
   const selectedCandidate = await page
     .getByText(/Springfield, .*United States/, { exact: true })
     .first()
     .innerText();
   await candidates.first().click();
-  await expect(page.getByText(`Currently using ${selectedCandidate}.`)).toBeVisible();
+  await expect(page.getByText(`Using ${selectedCandidate}, set by searching.`)).toBeVisible();
 
   const unitGroup = page.getByRole("group", { name: "Unit" });
   const celsiusButton = unitGroup.getByRole("button", { name: "Celsius" });
   const fahrenheitButton = unitGroup.getByRole("button", { name: "Fahrenheit" });
   if ((await fahrenheitButton.getAttribute("aria-pressed")) === "true") {
     await celsiusButton.click();
-    await expect(page.getByText("Weather temperatures are shown in Celsius.")).toBeVisible();
+    await expect(page.getByText("Temperatures are shown in Celsius.")).toBeVisible();
   }
   await expect(celsiusButton).toHaveAttribute("aria-pressed", "true");
-  await page.goto(`${baseURL}/today`);
-  const metricTemp = await page.locator(".jds-weather-chip__temp").innerText();
+  expect((await gotoTodayWeather(page)).unit).toBe("metric");
+  await expect(page.locator(".wx-now small")).toHaveText("C");
   await gotoProfileSettings(page);
   const unitResponse = page.waitForResponse(
     (response) =>
@@ -99,16 +109,15 @@ test("place search, ambiguity handling, and temperature units work through the U
   );
   await fahrenheitButton.click();
   expect((await (await unitResponse).json()).unit).toBe("imperial");
-  await expect(page.getByText("Weather temperatures are shown in Fahrenheit.")).toBeVisible();
+  await expect(page.getByText("Temperatures are shown in Fahrenheit.")).toBeVisible();
   await expect(fahrenheitButton).toHaveAttribute("aria-pressed", "true");
   await expect(celsiusButton).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByText(`Currently using ${selectedCandidate}.`)).toBeVisible();
+  await expect(page.getByText(`Using ${selectedCandidate}, set by searching.`)).toBeVisible();
 
-  await page.goto(`${baseURL}/today`);
-  await expect(page.locator(".jds-weather-chip__city")).toHaveText(selectedCandidate, {
-    timeout: 20_000
-  });
-  await expect(page.locator(".jds-weather-chip__temp")).not.toHaveText(metricTemp);
+  const imperialWeather = await gotoTodayWeather(page);
+  expect(imperialWeather.location).toBe(selectedCandidate);
+  expect(imperialWeather.unit).toBe("imperial");
+  await expect(page.locator(".wx-now small")).toHaveText("F");
 });
 
 test.afterAll(async ({ browser }) => {
