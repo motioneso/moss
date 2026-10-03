@@ -172,8 +172,8 @@ async function setSwitch(input: Locator, on: boolean): Promise<void> {
 }
 
 async function openIntegrations(page: Page): Promise<void> {
-  await page.goto(`${requireUatBaseURL()}/settings?section=integrations`);
-  await expect(page.getByRole("heading", { name: "Integrations" }).first()).toBeVisible();
+  await page.goto(`${requireUatBaseURL()}/settings?section=connections`);
+  await expect(page.getByRole("heading", { name: "Connections" }).first()).toBeVisible();
 }
 
 async function openConnection(page: Page): Promise<void> {
@@ -250,7 +250,8 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     await page.getByRole("button", { name: /^Prepare \d+ tools?$/ }).click();
     await expect(page.getByText("Review required")).toBeVisible({ timeout: 240_000 });
     callsAfterPrepare = await modelCallCount(page);
-    expect(callsAfterPrepare - callsBeforePrepare, "setup made model calls").toBeGreaterThan(0);
+    // One batch: one call per tool still on (three), none for the muted tool.
+    expect(callsAfterPrepare - callsBeforePrepare, "one preparing batch").toBe(3);
     // Drafts are transient: nothing is persisted, nothing is eligible.
     const detail = await connectionDetail(page);
     expect(detail.classifierPreparation).toEqual([]);
@@ -303,6 +304,7 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
 
   await test.step("reconnecting with unchanged configuration prepares nothing again", async () => {
     callsBeforeReconnect = await modelCallCount(page);
+    expect(callsBeforeReconnect, "approving made no model call").toBe(callsAfterPrepare);
     const listRequestsBefore = fixtureState().toolListRequests;
     // Rediscover from the server.
     await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
@@ -420,7 +422,7 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     expect(resolveMenu(await connectionDetail(page))).not.toContain("dim_light");
   });
 
-  await test.step("a failed discovery removes eligibility", async () => {
+  await test.step("an empty tool list removes eligibility", async () => {
     control("POST", "/__control/tools", []);
     await openConnection(page);
     await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
@@ -439,8 +441,10 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     await page.getByRole("button", { name: "New chat" }).click();
     // The new conversation starts its protocol session in the background; sending before it is
     // ready gets "Live chat is temporarily unavailable".
+    // The page shows no ready signal for this background start, so give it a bounded settle.
     await page.waitForTimeout(8_000);
     const composer = page.getByRole("textbox", { name: /^Message/ });
+    await expect(composer).toBeEnabled();
     await composer.fill(text);
     await composer.press("Enter");
   };
@@ -484,6 +488,4 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     await expect(approveButton()).toHaveCount(0);
     await page.request.put("/api/me/yolo", { data: { enabled: false } });
   });
-
-  void callsAfterPrepare;
 });
