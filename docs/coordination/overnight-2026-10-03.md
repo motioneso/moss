@@ -233,3 +233,5 @@ Relay 5 (session b1e6e877): lock claimed, old coordinator w1:p11N closed.
 2912: second full gate red only on the gateway pattern timer flake (issue 1673, load 47; file 26/26 alone). Coordinator accepted run-1 unit green + file rerun + CI fully green on 678a44e2a (evidence comment 5972647949). PR 2970 marked ready. Opus QA qa-2970 spawned in w1:p11W "QA 2970 notes tests (Opus)", new QA tab w1:t9S, worktree .claude/worktrees/qa-2970 (detached). On GREEN: merge (routine, test-only, no live UI proof needed) = merge 1 since relay 5.
 
 2970 merged ba84d9387 (routine). merges_since_relay 1: next routine/sensitive merge triggers relay.
+
+2977: CI fully green on aabd87364 (download test now tests/integration/focus-judgments-retention.test.ts:193, observed failing without the archive entry). Added to AWAITING-BEN, needs-ben sent, background watcher on ~/.needs-ben/replies (marker /tmp/coord-r5-nb-mark). Ben is also active in chat; his chat OK counts.
