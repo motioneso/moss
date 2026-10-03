@@ -154,3 +154,15 @@ RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor
 10. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
 Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed. 2934 lane reaped. QA for 2973 spawned. 2942 gate start waits on a slow Postgres checkpoint (database drop), 2956 queued behind it; told to wait. 2735 holds for a GO to rerun its UAT once a gate slot frees. 2973 merged 103e94141 (routine, not user-facing, QA round 2 GREEN, CI green, session id matched lock). merges_since_relay 1: next routine/sensitive merge triggers relay. 2893 lane reaped. 09:08 PDT shared Postgres crashed (backend exit code 2) and recovered 09:11; 2912's gate red from it (evidence otherwise done, PR #2970); 2942/2956 warned. Gate GO queue: 2735 UAT rerun, then 2912 integration-only rerun.
+11:00 PDT: 2956 section 6 call CONTINUE (late agreement lands by UPDATE on owner-only detail table, bare line stays append-only; turn id survives fire-and-forget, red-proofed 7ae548aea). Slice A session closed clean (head 7ae548aea, handoff comment 5971908911 on PR #2976), pane w1:p11G closed. 2735 UAT rerun GO given 10:57 (running in its pane). Coordinator context compacted -> relay now, nothing merged.
+
+RELAY POINT 4 (relay after compaction, session 759a1a1a). Successor next steps:
+1. Spawn 2956 slice B: fresh session in the 2956 worktree (Builders tab w1:t9J), brief ~/.coord-briefs/overnight/lane-2956-slice-b.md, boot pointer ~/.coord-briefs/overnight/boot-2956-slice-b.txt. After 11:00 use Muse (herdr pane run, `muse --yolo --reasoning-effort high '<pointer>'`) or DeepSeek 4.1 Flash in interactive OpenCode. Label the pane "2956 slice B". Slices C and D later in fresh sessions; then Opus adversarial QA on PR #2976, AWAITING-BEN + needs-ben, never merge.
+2. Gates running at 11:00: 2637 full, 2942 integration-only rerun, design-row-buttons (not ours). 2735's UAT rerun is separate. Next gate GO: 2912 integration-only rerun when a slot frees. Max 3.
+3. 2735 (PR #2975, routine, test-only): on UAT green, Opus QA (--effort high), CI green -> merge. That is merge 2 -> relay.
+4. 2637: on gate green + PR, Opus adversarial QA, AWAITING-BEN + needs-ben; never merge.
+5. 2942 (PR #2974, sensitive): integration rerun, rebase over #2963, QA, live proof on dev, matched UAT, auto-merge.
+6. 2912 (PR #2970 draft): integration rerun (gate DB kept), then QA + merge.
+7. Re-arm PR watch (Monitor) on all five lane branches; disk-prune watcher may still be running (free < 25 GB).
+8. Lane agent names: opus-2942, opus-2735, fix-2637-focus-retention, fix-2912-notes-specs (herdr agent prompt). merges_since_relay stays 1 (reset to 0 on claim per brief).
+9. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
