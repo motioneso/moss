@@ -340,10 +340,13 @@ describe("probeProvider model activity recording (plan 3.6b, #2890)", () => {
     expect(entries[0]).toMatchObject({
       kind: "probe",
       action: "probe",
+      actionCode: "probe.reachable",
       outcome: "ok",
       modelName: "anthropic",
       result: "completed"
     });
+    // Probes name no actor, so the line is a System line.
+    expect(entries[0]).not.toHaveProperty("ownerUserId");
 
     // The second call is served from the probe cache: no model call, so no new row.
     await probeProvider("anthropic", { io, cliPresent: async () => true });

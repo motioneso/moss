@@ -545,6 +545,16 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0257",
           name: "0257_focus_judgments_retention.sql"
+        },
+        // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
+        {
+          version: "0258",
+          name: "0258_activity_owner_lines.sql"
+        },
+        // #2956 — turn link on the action audit log for the per-turn step join.
+        {
+          version: "0259",
+          name: "0259_audit_log_turn_id.sql"
         }
       ]);
     } finally {

@@ -250,7 +250,11 @@ export function createClassifierGateShadowRunner(
           hasAttachment: input.hasAttachment,
           incognito: false,
           mode: "shadow",
-          signal: input.signal
+          signal: input.signal,
+          // #2956: the shadow turn id is the chat turn id, so the check lines
+          // join the turn they informed; the answer line id is its parent.
+          turnId,
+          parentId: turnId
         });
         // Cross-turn cooldown, matching the engine's rule at the runner's scope.
         if (
@@ -386,9 +390,16 @@ export function beginClassifierGateShadowTurn(
   surface: ChatSurface,
   message: string,
   incognito: boolean,
-  options: { readonly hasAttachment: boolean; readonly signal: AbortSignal }
+  options: {
+    readonly hasAttachment: boolean;
+    readonly signal: AbortSignal;
+    readonly turnId?: string;
+  }
 ): ClassifierGateShadowTurn {
-  const turnId = randomUUID();
+  // #2956: the turn id is minted once where the chat turn starts, so the shadow
+  // record, the audit rows and the activity lines share one value. Callers that
+  // predate the turn id keep the old mint.
+  const turnId = options.turnId ?? randomUUID();
   runner?.start({
     actorUserId,
     surface,

@@ -134,6 +134,12 @@ export type GenerateStructuredInput = {
    * run on that model alone, so a latency-bound caller never waits on a second try.
    */
   readonly singleAttempt?: true;
+  /**
+   * #2956: which turn this call belongs to. Passed to the adapter for the
+   * activity line; the owner travels separately via the scoped actor.
+   */
+  readonly turnId?: string;
+  readonly parentId?: string;
 };
 
 export type GenerateStructuredExplicitModel = {
@@ -310,7 +316,9 @@ async function runOnModel(
           scope: input.scope,
           closeScope: input.closeScope,
           ...(provider.auth_method === "cli" ? { acpAgentId: provider.acp_agent_id } : {}),
-          ...(actorUserId ? { actorUserId } : {})
+          ...(actorUserId ? { actorUserId } : {}),
+          ...(input.turnId ? { turnId: input.turnId } : {}),
+          ...(input.parentId ? { parentId: input.parentId } : {})
         }),
         signal
       );

@@ -205,6 +205,7 @@ import type {
   PutCustomThemeRequest,
   PutCustomThemeResponse,
   ListActionAuditLogResponse,
+  ListActivityLinesResponse,
   ListModelActivityResponse,
   YoloSettingsResponse,
   YoloAdminSettingsResponse
@@ -1541,6 +1542,26 @@ export async function listModelActivity(params?: {
   try {
     return await requestJson<ListModelActivityResponse>(
       `/api/ai/model-activity${qs ? `?${qs}` : ""}`,
+      { signal: controller.signal }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function listActivityLines(params?: {
+  since?: string;
+  limit?: number;
+}): Promise<ListActivityLinesResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  const search = new URLSearchParams();
+  if (params?.since) search.set("since", params.since);
+  if (params?.limit !== undefined) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  try {
+    return await requestJson<ListActivityLinesResponse>(
+      `/api/ai/activity-lines${qs ? `?${qs}` : ""}`,
       { signal: controller.signal }
     );
   } finally {

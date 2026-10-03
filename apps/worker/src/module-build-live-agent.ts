@@ -166,9 +166,12 @@ function recordBuildTurn(
     record(outcome);
     return;
   }
+  // #2956: no composition root claimed this turn, so the line is a System
+  // line — but it still carries its code.
   recordModelActivity({
     kind: "structured",
     action: `module-build:${step}`,
+    actionCode: "module.build",
     outcome,
     modelName: deps.provider,
     result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"

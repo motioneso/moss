@@ -25,6 +25,13 @@ export interface EmbeddingActivityEntry {
   readonly outcome: EmbeddingActivityOutcome;
   readonly modelName: string;
   readonly result: string;
+  /**
+   * #2956: what was embedded and for whom. The wrap site names the source
+   * (`notes`, `memory`); the forward maps it to the `embed.<source>` line
+   * code and the owner onto the row. Absent means a System line.
+   */
+  readonly source?: string;
+  readonly ownerUserId?: string;
 }
 
 export type EmbeddingActivityRecorder = (entry: EmbeddingActivityEntry) => void;
@@ -60,7 +67,12 @@ function defaultEmbeddingRecorder(entry: EmbeddingActivityEntry): void {
 export function withEmbeddingActivity(
   provider: EmbeddingProvider,
   recorder: EmbeddingActivityRecorder = defaultEmbeddingRecorder,
-  options: { readonly aggregatePerInstance?: boolean } = {}
+  options: {
+    readonly aggregatePerInstance?: boolean;
+    /** #2956: the embedded source and owner, recorded on every row. */
+    readonly source?: string;
+    readonly ownerUserId?: string;
+  } = {}
 ): EmbeddingProvider {
   let recorded = false;
   const record = (outcome: EmbeddingActivityOutcome): void => {
@@ -74,7 +86,9 @@ export function withEmbeddingActivity(
         action: "embedding",
         outcome,
         modelName: provider.modelName,
-        result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+        result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed",
+        ...(options.source ? { source: options.source } : {}),
+        ...(options.ownerUserId ? { ownerUserId: options.ownerUserId } : {})
       });
     } catch {
       // Never let recording fail the embedding call.
@@ -129,10 +143,11 @@ function isStubEmbeddingAllowed(env: NodeJS.ProcessEnv): boolean {
 export function createEmbeddingProvider(
   config: EmbeddingProviderConfig,
   env: NodeJS.ProcessEnv = process.env,
-  onModelCall: EmbeddingActivityRecorder = defaultEmbeddingRecorder
+  onModelCall: EmbeddingActivityRecorder = defaultEmbeddingRecorder,
+  activity?: { readonly source?: string; readonly ownerUserId?: string }
 ): EmbeddingProvider {
   const provider = buildEmbeddingProvider(config, env);
-  return withEmbeddingActivity(provider, onModelCall);
+  return withEmbeddingActivity(provider, onModelCall, { ...(activity ?? {}) });
 }
 
 function buildEmbeddingProvider(
