@@ -83,6 +83,8 @@ None.
 
 ## Reaped sessions
 
+- w1:p11D "2893 review storage" (Opus builder, opus-2893) - built #2893; landed as PR #2973 (103e94141); teardown confirmed; reap check REAPABLE; worktree and branch removed.
+
 - w1:p11K "QA 2973 review storage" (Opus QA, qa-2973) - round 1 RED (1 blocking), round 2 GREEN on PR 2973, verdicts on the PR; closed, QA worktree removed.
 
 - w1:p0R "2933 coverage guard" (Muse builder) - built #2933; landed as PR #2962 (6f9d95af6); closed after merge.
@@ -151,4 +153,4 @@ RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor
 9. Memory service (iii) climbs to ~10 GB within 20 min of restart; tracing turned off, not the cause. Do not restart it again for memory.
 10. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
-Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed. 2934 lane reaped. QA for 2973 spawned. 2942 gate start waits on a slow Postgres checkpoint (database drop), 2956 queued behind it; told to wait. 2735 holds for a GO to rerun its UAT once a gate slot frees. 2973 merged 103e94141 (routine, not user-facing, QA round 2 GREEN, CI green, session id matched lock). merges_since_relay 1: next routine/sensitive merge triggers relay. 2893 lane asked for teardown confirmation before reap.
+Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed. 2934 lane reaped. QA for 2973 spawned. 2942 gate start waits on a slow Postgres checkpoint (database drop), 2956 queued behind it; told to wait. 2735 holds for a GO to rerun its UAT once a gate slot frees. 2973 merged 103e94141 (routine, not user-facing, QA round 2 GREEN, CI green, session id matched lock). merges_since_relay 1: next routine/sensitive merge triggers relay. 2893 lane reaped.
