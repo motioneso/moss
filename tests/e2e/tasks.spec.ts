@@ -307,3 +307,93 @@ test("quick add sends one request while saving and keeps the draft when it fails
   await expect(field).toHaveValue("Call the plumber");
   expect(posts).toBe(1);
 });
+
+const serverError = { status: 500, contentType: "application/json", body: '{"error":"down"}' };
+
+test("a failed task load says so and Retry recovers", async ({ page }) => {
+  let failing = true;
+  await page.route("**/api/tasks", (route) =>
+    route.request().method() === "GET" && failing ? route.fulfill(serverError) : route.fallback()
+  );
+  await page.goto("/tasks");
+  await expect(page.getByRole("alert")).toContainText("Could not load your tasks");
+  await expect(page.getByText("No tasks yet")).toHaveCount(0);
+  failing = false;
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByText("File taxes")).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("a failed background refresh keeps the loaded tasks and says so", async ({ page }) => {
+  let gets = 0;
+  await page.route("**/api/tasks", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    gets += 1;
+    return gets === 1 ? route.fallback() : route.fulfill(serverError);
+  });
+  await page.goto("/tasks");
+  const box = page.getByRole("checkbox", { name: "Complete File taxes" });
+  await page.locator("label.jds-check", { has: box }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not refresh your tasks");
+  await expect(page.getByText("Learn cello")).toBeVisible();
+});
+
+test("a literal search with no match offers Clear filters", async ({ page }) => {
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Toggle search" }).click();
+  await page.getByLabel("Search tasks").fill("zebra");
+  await expect(page.getByText("No tasks match")).toBeVisible();
+  await expect(page.getByText("No tasks yet")).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.getByText("File taxes")).toBeVisible();
+  await expect(page.getByLabel("Search tasks")).toHaveValue("");
+});
+
+test("a failed completion puts the checkbox back and says so", async ({ page }) => {
+  await page.route("**/api/tasks/*", (route) =>
+    route.request().method() === "PATCH" ? route.fulfill(serverError) : route.fallback()
+  );
+  await page.goto("/tasks");
+  const box = page.getByRole("checkbox", { name: "Complete File taxes" });
+  await page.locator("label.jds-check", { has: box }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not update the task");
+  await expect(box).not.toBeChecked();
+});
+
+test("a failed view save keeps the previous view and says so", async ({ page }) => {
+  await page.route("**/api/tasks/preferences", (route) =>
+    route.request().method() === "GET" ? route.fallback() : route.fulfill(serverError)
+  );
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Grid", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not save the view");
+  await expect(page.getByRole("button", { name: "List", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await expect(page.getByText("Critical")).toBeVisible();
+});
+
+test("a failed saved-view load shows List with a Retry", async ({ page }) => {
+  await page.route("**/api/tasks/preferences", (route) =>
+    route.request().method() === "GET" ? route.fulfill(serverError) : route.fallback()
+  );
+  await page.goto("/tasks");
+  await expect(page.getByText("Could not load your saved view, so List is showing.")).toBeVisible();
+  await expect(page.getByText("File taxes")).toBeVisible();
+});
+
+test("failed lists show Retry in the index without inventing a list", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let failing = true;
+  await page.route("**/api/tasks/lists", (route) =>
+    route.request().method() === "GET" && failing ? route.fulfill(serverError) : route.fallback()
+  );
+  await page.goto("/tasks");
+  const index = page.getByRole("navigation", { name: "Lists" });
+  await expect(index.getByText("Lists could not load.")).toBeVisible();
+  await expect(index.getByRole("button", { name: /Personal/ })).toHaveCount(0);
+  failing = false;
+  await index.getByRole("button", { name: "Retry" }).click();
+  await expect(index.getByRole("button", { name: /Personal/ })).toBeVisible();
+});

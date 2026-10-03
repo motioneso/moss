@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TaskDefaultView, TaskDto, TaskSearchIntent } from "@moss/shared";
-import { Chip, EmptyState, IconButton, Masthead, Segmented } from "@moss/ui";
-import { CheckCheck, LoaderCircle, Search, GitCommitHorizontal, Tag } from "lucide-react";
+import { Button, Chip, EmptyState, IconButton, Masthead, Segmented } from "@moss/ui";
+import {
+  CheckCheck,
+  CircleAlert,
+  LoaderCircle,
+  Search,
+  GitCommitHorizontal,
+  Tag
+} from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -182,7 +189,19 @@ export function TasksPage() {
     focus !== null ||
     tagFilter.length > 0 ||
     searchIntent !== null ||
+    deferredSearch.trim() !== "" ||
     Object.values(listStates).some((state) => state !== "included");
+  const clearFilters = () => {
+    setStatusFilter("todo");
+    if (focus) clearFocus();
+    setTagFilter([]);
+    setSearch("");
+    setSearchIntent(null);
+    setSearchWarning(null);
+    setListStates({});
+  };
+  const viewLabel = view === "matrix" ? "Grid" : "List";
+  const rowUpdateFailed = updateMutation.isError || triageMutation.isError;
 
   return (
     <section className="tasks-page tasks--comfortable tasks--panels" aria-label="Tasks">
@@ -357,17 +376,66 @@ export function TasksPage() {
               </div>
             ) : null}
 
-            {tasksQuery.isLoading ? (
+            {prefsQuery.isError ? (
+              <div className="tasks-notice" role="status">
+                <p className="jds-hint">Could not load your saved view, so List is showing.</p>
+                <Button size="sm" variant="secondary" onClick={() => void prefsQuery.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : null}
+            {viewMutation.isError ? (
+              <p className="jds-hint jds-hint--error" role="alert">
+                Could not save the view, so {viewLabel} is still your default.
+              </p>
+            ) : null}
+            {rowUpdateFailed ? (
+              <p className="jds-hint jds-hint--error" role="alert">
+                Could not update the task. Nothing changed, so try again.
+              </p>
+            ) : null}
+            {tasksQuery.isError && tasksQuery.data ? (
+              <div className="tasks-notice" role="alert">
+                <p className="jds-hint jds-hint--error">
+                  Could not refresh your tasks. These are the ones loaded earlier.
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => void tasksQuery.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : null}
+
+            {tasksQuery.isPending ? (
               <EmptyState
                 icon={<LoaderCircle className="spin" size={24} aria-hidden="true" />}
                 title="Loading tasks"
               />
+            ) : tasksQuery.isError && !tasksQuery.data ? (
+              <div role="alert">
+                <EmptyState
+                  icon={<CircleAlert size={24} aria-hidden="true" />}
+                  title="Could not load your tasks"
+                  description="Your tasks are safe. Check your connection, then try again."
+                >
+                  <Button
+                    variant="secondary"
+                    disabled={tasksQuery.isFetching}
+                    onClick={() => void tasksQuery.refetch()}
+                  >
+                    Retry
+                  </Button>
+                </EmptyState>
+              </div>
             ) : visibleTasks.length === 0 && isFiltered ? (
               <EmptyState
                 icon={<CheckCheck size={24} aria-hidden="true" />}
                 title="No tasks match"
-                description="Try clearing a filter or two."
-              />
+                description="Nothing fits the current filters and search."
+              >
+                <Button variant="secondary" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              </EmptyState>
             ) : visibleTasks.length === 0 ? (
               <EmptyState
                 icon={<CheckCheck size={24} aria-hidden="true" />}
@@ -379,7 +447,7 @@ export function TasksPage() {
                 tasks={visibleTasks}
                 lists={lists}
                 isUpdating={updateMutation.isPending || triageMutation.isPending}
-                onToggleDone={(task) => updateMutation.mutate(task)}
+                onToggleDone={(task) => updateMutation.mutateAsync(task)}
                 onOpen={(task) => setDialog({ id: task.id })}
                 onAccept={(task) => triageMutation.mutate({ task, status: "todo" })}
                 onDismiss={(task) => triageMutation.mutate({ task, status: "archived" })}
@@ -389,7 +457,7 @@ export function TasksPage() {
                 tasks={visibleTasks}
                 lists={lists}
                 isUpdating={updateMutation.isPending || triageMutation.isPending}
-                onToggleDone={(task) => updateMutation.mutate(task)}
+                onToggleDone={(task) => updateMutation.mutateAsync(task)}
                 onOpen={(task) => setDialog({ id: task.id })}
                 onAccept={(task) => triageMutation.mutate({ task, status: "todo" })}
                 onDismiss={(task) => triageMutation.mutate({ task, status: "archived" })}

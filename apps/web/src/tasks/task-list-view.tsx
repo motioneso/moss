@@ -115,7 +115,7 @@ export function TaskListView(props: {
   readonly tasks: readonly TaskDto[];
   readonly lists: readonly TaskListDto[];
   readonly isUpdating: boolean;
-  readonly onToggleDone: (task: TaskDto) => void;
+  readonly onToggleDone: (task: TaskDto) => Promise<unknown> | void;
   readonly onOpen: (task: TaskDto) => void;
   readonly onAccept?: (task: TaskDto) => void;
   readonly onDismiss?: (task: TaskDto) => void;
@@ -185,7 +185,7 @@ export function TaskRow(props: {
   readonly list?: { readonly name: string; readonly color: string };
   readonly isUpdating: boolean;
   readonly compact?: boolean;
-  readonly onToggleDone: (task: TaskDto) => void;
+  readonly onToggleDone: (task: TaskDto) => Promise<unknown> | void;
   readonly onOpen: (task: TaskDto) => void;
   readonly onAccept?: (task: TaskDto) => void;
   readonly onDismiss?: (task: TaskDto) => void;
@@ -218,8 +218,11 @@ export function TaskRow(props: {
               checked={done}
               disabled={props.isUpdating}
               onChange={() => {
-                setOptimisticDone(!optimisticDone);
-                props.onToggleDone(task);
+                const next = !optimisticDone;
+                setOptimisticDone(next);
+                void Promise.resolve(props.onToggleDone(task)).catch(() =>
+                  setOptimisticDone(!next)
+                );
               }}
               aria-label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}
             />

@@ -16,7 +16,7 @@ export function TaskMatrixView(props: {
   readonly tasks: readonly TaskDto[];
   readonly lists: readonly TaskListDto[];
   readonly isUpdating: boolean;
-  readonly onToggleDone: (task: TaskDto) => void;
+  readonly onToggleDone: (task: TaskDto) => Promise<unknown> | void;
   readonly onOpen: (task: TaskDto) => void;
   readonly onAccept?: (task: TaskDto) => void;
   readonly onDismiss?: (task: TaskDto) => void;
@@ -46,10 +46,10 @@ export function TaskMatrixView(props: {
               }
               meta={`${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`}
             />
-            <p className="tasks-quad__subtitle">{quadrant.subtitle}</p>
+            <p className="tasks-quad__subtitle jds-caption">{quadrant.subtitle}</p>
             <div className="tasks-quad__rows">
               {tasks.length === 0 ? (
-                <p className="tasks-quad__empty">Nothing here.</p>
+                <p className="tasks-quad__empty jds-caption">Nothing here.</p>
               ) : (
                 tasks.map((task) => (
                   <TaskRow
