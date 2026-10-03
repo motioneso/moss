@@ -15,12 +15,14 @@
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | QA round 2 RED (failure budget reached): round-1 fixes confirmed; 1 blocking: retry after failed send re-sends private text into a new normal chat if a new chat lands during reconnect (no stop/privacy re-check after heal), comment 5970117903. Builder fixing only that; then ONE fresh Opus arbiter scoped to that fix only; then park for Ben | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
-| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (plan approved: new-chat hint in refusal text; condition: prove the open chat can see and call the new tool, else kill gate -> chat-screen notice; plan to be committed) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
+| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | Muse lane replaced by Opus 07:50 per Ben (handoff-2942.md); branch at 091e4410a, rebase then PR; gap (tools listed once per session) to its own issue | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | - | 1 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | plan approved 07:30 with 4 conditions from Opus check (owner does not bypass row security, table forces it; follows packages/ai/sql/0245 precedent): create as migration owner, pin search path + schema-qualify, test that the policy alone protects recent rows, number via check-migration-collisions | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | - | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
+| Classifier review storage hardening | #2893 | routine | building (Opus, spawned 07:52) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | - | 0 |
+| Job search browser test signs in real chat | #2735 | routine (test-only) | building (Opus, spawned 07:52) | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
 
 ## Dependency / merge order
 
@@ -112,3 +114,5 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 07:10 PDT: #2968 merged. Gate runs leave a 4.5 GB untagged app image each; pruned 13.5 GB, background sweep prunes untagged images every 10 min when free < 25 GB (coordinator background task, 5 h). #2637 spawned on Opus.
 
 07:22 PDT: box load 80-117 on 16 cores. No more lanes until load drops; slowness timeouts under load are not branch failures.
+
+- 07:50 Ben: use up usage before 11:00 with several builders; replace Muse lanes with Opus via handoff notes. 2942 replaced; 2934 and 2956 handoffs requested. Gates may queue on load.
