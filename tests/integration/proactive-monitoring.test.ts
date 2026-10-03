@@ -101,6 +101,35 @@ describe("Proactive Monitoring — integration", () => {
     });
   });
 
+  describe("Monitor state read by the app runtime", () => {
+    it("the app role can read its own monitor state (manual refresh cooldown check)", async () => {
+      const { MonitorStateRepository } = await import("@moss/proactive-monitoring");
+      const monitorRepo = new MonitorStateRepository();
+      const ctxA = { actorUserId: ids.userA, requestId: "test:monitor-state-app-read" };
+      const ctxB = { actorUserId: ids.userB, requestId: "test:monitor-state-app-read" };
+      const appContext = new DataContextRunner(appDb);
+
+      await dataContext.withDataContext(ctxB, (scopedDb) =>
+        monitorRepo.advanceCursor(scopedDb, ids.userB, "tasks", {})
+      );
+
+      const ownState = await appContext.withDataContext(ctxA, (scopedDb) =>
+        monitorRepo.get(scopedDb, ids.userA, "tasks")
+      );
+      expect(ownState).toBeUndefined();
+
+      const otherUsersState = await appContext.withDataContext(ctxA, (scopedDb) =>
+        monitorRepo.get(scopedDb, ids.userB, "tasks")
+      );
+      expect(otherUsersState).toBeUndefined();
+
+      const ownerState = await appContext.withDataContext(ctxB, (scopedDb) =>
+        monitorRepo.get(scopedDb, ids.userB, "tasks")
+      );
+      expect(ownerState?.owner_user_id).toBe(ids.userB);
+    });
+  });
+
   describe("CardRepository lifecycle", () => {
     it("upsert, listActive, markDismissed, reactivate", async () => {
       const ctx = { actorUserId: ids.userA, requestId: "test:lifecycle" };
