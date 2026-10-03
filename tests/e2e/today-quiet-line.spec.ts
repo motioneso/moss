@@ -14,7 +14,7 @@ const QUIET = "Nothing else yet today";
 
 async function openToday(
   page: Page,
-  options: { readonly withTask: boolean; readonly briefing: boolean }
+  options: { readonly withTask: boolean; readonly briefing: boolean; readonly evening?: boolean }
 ): Promise<void> {
   await page.clock.setFixedTime(new Date(NOW));
   const morning = createMockBriefingDefinition("briefing-morning", "Morning", {
@@ -55,7 +55,7 @@ async function openToday(
     tasks: options.withTask ? [createMockTask("task-quiet", "Send the invoice")] : [],
     connectorAccounts: [],
     connectorProviders: createMockConnectorProviders(),
-    briefingDefinitions: [morning, evening],
+    briefingDefinitions: options.evening === false ? [morning] : [morning, evening],
     briefingRuns: { [morning.id]: options.briefing ? [run] : [], [evening.id]: [] },
     calendarEvents: []
   };
@@ -93,6 +93,33 @@ for (const viewport of [
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
+
+      // No fixed-position product element covers the line. The dev-only note toolbar
+      // (its layers carry styles-module__ class names) is excluded because it never ships.
+      const covering = await line.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return [...document.querySelectorAll("body *")]
+          .filter((other) => getComputedStyle(other).position === "fixed")
+          .filter(
+            (other) =>
+              !other.contains(el) &&
+              !other.closest("#agentation-root") &&
+              !String(other.className).includes("styles-module__")
+          )
+          .map((other) => other.getBoundingClientRect())
+          .filter((r) => r.width > 0 && r.height > 0)
+          .filter(
+            (r) =>
+              r.left < box.right && r.right > box.left && r.top < box.bottom && r.bottom > box.top
+          ).length;
+      });
+      expect(covering).toBe(0);
+    });
+
+    test("no evening review set up: still one quiet line", async ({ page }) => {
+      await openToday(page, { withTask: false, briefing: false, evening: false });
+      await expect(page.locator(".today-quiet-line")).toContainText(QUIET);
+      await expect(page.getByText("The few things that matter most")).toHaveCount(0);
     });
 
     test("partly empty: a task brings the sections back", async ({ page }) => {

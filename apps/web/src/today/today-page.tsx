@@ -464,7 +464,8 @@ export function TodayPage(props: {
     todayMode === "day" &&
     !tasksQuery.isPending &&
     !morningLoading &&
-    !eveningRunsQuery.isPending &&
+    // The evening runs query stays idle (pending forever) without a definition.
+    (eveningDefinition === undefined || !eveningRunsQuery.isPending) &&
     morningReadable === null &&
     startHere.length === 0 &&
     !latestEveningRun?.summaryText.trim();

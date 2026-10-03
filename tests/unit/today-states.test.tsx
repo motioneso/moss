@@ -374,6 +374,14 @@ describe("TodayPage quiet line", () => {
     expect(html).not.toContain("Nothing pressing right now.</p>");
   });
 
+  it("folds the sections when no evening review is set up at all", () => {
+    const client = seedPage({ definitions: [morningDefinition()] });
+    client.setQueryData(queryKeys.briefings.runs("def-morning"), { runs: [] });
+    const html = renderPage(client);
+    expect(html).toContain(QUIET);
+    expect(html).not.toContain("The few things that matter most");
+  });
+
   it("restores the sections when the now-list has a task", () => {
     const client = seedQuiet();
     client.setQueryData(queryKeys.tasks.list, {
