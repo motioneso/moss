@@ -173,7 +173,6 @@ function RailUserMenu(props: {
         </span>
         <span className="jds-usermenu__id">
           <span className="jds-usermenu__nm">{name}</span>
-          <span className="jds-usermenu__sub">{props.me.user.email}</span>
         </span>
         {!open && props.unreadCount > 0 ? (
           <span className="jds-badge-count" aria-hidden="true">

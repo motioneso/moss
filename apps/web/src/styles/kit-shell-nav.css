@@ -35,7 +35,6 @@
   color: var(--ink);
 }
 
-.sidebar .jds-usermenu__sub,
 .sidebar .jds-usermenu__chev {
   color: var(--muted);
 }

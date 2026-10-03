@@ -65,7 +65,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "notifications",
     label: "Notifications",
     description:
-      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label.",
+      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the person's name and avatar only (no email line, unless no name is set) and the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label.",
     path: "/notifications",
     scope: "user"
   },
