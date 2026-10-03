@@ -1,12 +1,12 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `3748ecb9-3142-49d8-8078-38dc9a19429b` (relay 2). Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `759a1a1a-321c-4310-842a-e99f5ad41459` (relay 3). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 1
+**merges_since_relay:** 0
 
 ## Queue
 
@@ -89,6 +89,7 @@ None.
 - w1:p0Y "QA 2963 new chat stop" (Opus QA, qa-2963) - rounds 1 and 2 (both RED) on PR 2963, verdicts on the PR; closed, QA worktree removed.
 - w1:p118 "2891 weather test wording" (Opus builder) - built #2891; landed as PR #2968 (05769bf43); worktree and branch removed.
 - w1:p119 "QA 2968 weather test" (Opus QA) - GREEN verdict on PR #2968; closed, QA worktree removed.
+- w1:p115 "Coordinator (old)" (session 3748ecb9-3142-49d8-8078-38dc9a19429b) - relay-2 coordinator; merged #2968 and #2963 (Ben's delegated sign-off); work recorded in this manifest; closed by relay-3 successor.
 
 ## Continuation note
 
@@ -141,3 +142,5 @@ RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor
 8. Opus builders until 11:00 PDT (Ben); after that new lanes go back to Muse. Ben wants several builders busy until then.
 9. Memory service (iii) climbs to ~10 GB within 20 min of restart; tracing turned off, not the cause. Do not restart it again for memory.
 10. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
+
+Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed.
