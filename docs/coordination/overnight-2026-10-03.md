@@ -15,7 +15,7 @@
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | rework after QA round 1 RED (2 leaks: no stop check between gate and submit; end-private-chat route same race), round 1 of 2; qa-2963 kept for incremental re-QA; live proof partial (model-backed browser halves fail on main too) | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
-| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands; brief ready at ~/.coord-briefs/overnight/lane-fix-2942-midchat-tools.md) | - | - | - | - | 0 |
+| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (Muse, planning) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | rework after QA round 1 RED (sidebar item breaks settings browser test, row-security-off run output not posted, live proof empty-state only), round 1 of 2; builder running own branch servers on spare ports against dev DB for proof; qa-2964 (w1:p00) kept for re-QA | 2957 shadow report | w1:p0X | feat-2957-shadow-report | #2964 | 0 |
 
@@ -71,3 +71,5 @@ RELAY POINT (after 2nd routine merge). Successor next steps:
 4. #2956 (w1:p0T): slice A building -> draft PR -> my kill-gate call (plan section 6) -> fresh sessions for B, C, D in same worktree/PR.
 5. Arm a PR-opened watch on feat-2956-activity-history and fix-2942-midchat-tools.
 6. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
+
+Relay 1 (session 9dcc4a5e): lock claimed, old coordinator closed. #2934 (w1:p0S) and #2956 (w1:p0T) builders confirmed alive mid-gate, no relaunch needed. #2942 lane spawned (w1:p114). PR-opened watch armed on fix-2942-midchat-tools and feat-2956-activity-history.
