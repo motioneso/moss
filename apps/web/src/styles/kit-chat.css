@@ -40,7 +40,7 @@
   }
 
   /* Expanded: header, thread and composer share one centred reading column. */
-  .chatd--expanded {
+  .chatd.chatd--expanded {
     width: auto;
     --chatd-gutter: max(16px, calc((100% - min(960px, 78%)) / 2));
   }
