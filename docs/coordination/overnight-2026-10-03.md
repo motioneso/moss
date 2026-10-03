@@ -16,7 +16,7 @@
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | reaped | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | merged (a1369fbed) | - | reaped | fix-2942-midchat-tools | #2974 | 1 |
-| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | deferred - not this run (Ben ended the run 13:15). Slices A and B pushed on draft PR #2976 (head 9c19f3765); slice B full gate still running at close. Remaining: slices C, D, Opus QA, Ben sign-off | - | reaped | feat-2956-activity-history | #2976 | 0 |
+| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | slice C building (reopened 13:35 on Ben's ask). Slices A, B on draft PR #2976; B gate red only on file size (gateway.ts 1002, chat-session-manager.ts 1119), fixed first in slice C session. Brief ~/.coord-briefs/overnight/lane-2956-slice-c.md. Then D, Opus QA, Ben sign-off | 2956 slice C (Muse) | w1:p11Z | feat-2956-activity-history | #2976 | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | QA round 2: all findings fixed, only CI static check red (export test file 1011 lines > 1000); lane moving the assertion; on CI green -> AWAITING-BEN + needs-ben, never merge | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | #2977 | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
@@ -269,4 +269,8 @@ Ben asked to wrap up the run at 13:15.
 - Backlog worktree sweep: 3 removed (agent-ab272756 PR 2725 merged, agent-acf8226a PR 2955 merged, /tmp/2934-base2 in main) plus this run's qa-2893-r1. Kept in use: dev-worker, fix-model-picker-name, tasks-park-office (PR 2972 open), feat-2956-activity-history. Flagged, unconfirmed so left in place: ~/.worktrees/uat-2719-20260926, agent-a101c005, agent-a9d76889, classifier-gate-spec (no PR), /tmp/jarv1s-moss2521-baseline-ff0233a (PR 2708 closed unmerged), /tmp/moss-weekly-pages.* (gh-pages publishing tree).
 - AWAITING-BEN: nothing open from this run. Watchdog stopped. Coordinator name released.
 
-Status: closed.
+Status: closed 13:20, REOPENED 13:35 (below).
+
+## Run reopened (13:35 PDT, session 66aed34b)
+
+Ben asked to start slice C (Activity page lines + detail dialog) right after close. Coordinator name reclaimed, watchdog started again. Slice B's detached gate on 9c19f3765 was RED only on the file-size check (gateway.ts 1002, chat-session-manager.ts 1119 lines); the slice C session fixes that first. Slice C spawned as Muse (muse-spark-1.3, high) in w1:p11Z "2956 slice C", new Builders tab w1:t9T. Message it with herdr pane run + bounded read. merges_since_relay 0.
