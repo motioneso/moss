@@ -9,7 +9,7 @@ import {
 import { Check } from "lucide-react";
 import { useState } from "react";
 
-import { Button, Card, Eyebrow, SectionHead } from "@moss/ui";
+import { Button, Card, Eyebrow, RowButton, SectionHead } from "@moss/ui";
 
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { targetTimeFor } from "../briefings/briefing-settings-model.js";
@@ -272,16 +272,12 @@ function EveningRecapRows(props: {
           <span className="ev-done__check" aria-hidden="true">
             <Check size={15} strokeWidth={2.25} />
           </span>
-          <button
-            type="button"
-            className="ev-done__main"
-            onClick={() => props.onOpenTask?.(task.id)}
-          >
+          <RowButton className="ev-done__main" onClick={() => props.onOpenTask?.(task.id)}>
             <span className="ev-done__title">{task.title}</span>
             {doneNote(task, props.locale) ? (
               <span className="ev-done__sub">{doneNote(task, props.locale)}</span>
             ) : null}
-          </button>
+          </RowButton>
         </div>
       ))}
     </div>
@@ -355,13 +351,9 @@ export function EveningSupportSections(props: {
             return (
               <div className="ev-loop" key={task.id}>
                 {why ? <span className="ev-loop__topic">{why.topic}</span> : null}
-                <button
-                  type="button"
-                  className="ev-loop__open"
-                  onClick={() => props.onOpenTask(task.id)}
-                >
+                <RowButton className="ev-loop__open" onClick={() => props.onOpenTask(task.id)}>
                   <span className="ev-loop__title">{task.title}</span>
-                </button>
+                </RowButton>
                 {why ? <span className="ev-loop__sub">{why.reason}</span> : null}
                 {moved[task.id] ? (
                   <span className="ev-loop__moved" role="status">
@@ -474,8 +466,7 @@ export function EveningTomorrowSection(props: {
         </div>
       ))}
       {props.tasks.slice(0, 3).map((task) => (
-        <button
-          type="button"
+        <RowButton
           className="ev-tomorrow__item"
           key={task.id}
           onClick={() => props.onOpenTask(task.id)}
@@ -483,7 +474,7 @@ export function EveningTomorrowSection(props: {
           <strong>Due tomorrow / Task</strong>
           {task.title}
           {task.source ? <small>{task.source}</small> : null}
-        </button>
+        </RowButton>
       ))}
       <p className="ev-tomorrow__note">Nothing new is committed until you plan tomorrow.</p>
       <Button size="sm" block onClick={(event) => props.onPlan(event.currentTarget)}>

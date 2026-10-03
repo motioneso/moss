@@ -199,12 +199,14 @@ Today invented these locally; they now live in `@moss/ui` and Today uses them. A
 needs one uses the shared piece and never copies Today's local rules. Screens own width and margins
 only. All text sits at or above the 11px floor.
 
-| Pattern               | Shared piece                                                               | Replaces                                                                                 |
-| --------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Numbered section head | `<SectionHead number title meta rule align>`, `.jds-section-head`          | `.tl-head`, `.desk-head`, `.ev-head`                                                     |
-| Eyebrow               | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow` |
-| Notes                 | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`             | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               |
-| Text-link buttons     | `<Button variant="link">` (retint with `--btn-link-color`)                 | `.today-hero__link`, `.cmd-next__link`                                                   |
+| Pattern                | Shared piece                                                                                                                                | Replaces                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Numbered section head  | `<SectionHead number title meta rule align>`, `.jds-section-head`                                                                           | `.tl-head`, `.desk-head`, `.ev-head`                                                                                                                |
+| Eyebrow                | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px                                                                  | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow`                                                            |
+| Notes                  | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`                                                                              | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                                                                                          |
+| Text-link buttons      | `<Button variant="link">` (retint with `--btn-link-color`)                                                                                  | `.today-hero__link`, `.cmd-next__link`                                                                                                              |
+| Clickable row          | `<RowButton className>`, `.jds-rowbtn` (strips the native button look; the screen sets spacing and hover)                                   | `.jds-task__main`, `.loose-row__main`, `.ev-done__main`, `.ev-loop__open`, `.ev-tomorrow__item`, `.brief-snapshot__main`, `.plan-review__titlelink` |
+| Expand/collapse toggle | `<DisclosureToggle expanded controls className>`, `.jds-disclosure` (sets `aria-expanded` and `aria-controls`; the screen draws the marker) | `.brief-reader__schedule-toggle`, `.brief-reader__callout-disclosure`                                                                               |
 
 ### Hand-built Today buttons (#2918)
 
@@ -243,7 +245,7 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
 
 | Group     | Components                                                                                            |
 | --------- | ----------------------------------------------------------------------------------------------------- |
-| Actions   | `Button`, `ButtonLink`, `IconButton`, `Menu`, `Segmented`, `Switch`                                   |
+| Actions   | `Button`, `ButtonLink`, `IconButton`, `RowButton`, `DisclosureToggle`, `Menu`, `Segmented`, `Switch`  |
 | Forms     | `Field`, `FormLabel`, `Select`, `Combobox`                                                            |
 | Structure | `Masthead`, `Card`, `Divider`, `RowIndex`, `Dialog`, `PeekPanel`, `PeekCloseButton`, `HeldBanner`     |
 | Status    | `Badge`, `Chip`, `Indicator`, `StatTile`, `InfoTip`, `EmptyState`                                     |

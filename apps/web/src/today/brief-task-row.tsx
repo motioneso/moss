@@ -1,6 +1,7 @@
 import { Check, GitCommitHorizontal } from "lucide-react";
 import { useState } from "react";
 
+import { RowButton } from "@moss/ui";
 import type { TaskDto } from "@moss/shared";
 
 import { useUserLocale } from "../locale/locale-format";
@@ -43,7 +44,7 @@ export function BriefTaskRow(props: {
           </span>
         </label>
       </span>
-      <button type="button" className="jds-task__main" onClick={props.onOpen}>
+      <RowButton className="jds-task__main" onClick={props.onOpen}>
         <div className="jds-task__title">{task.title}</div>
         <div className="jds-task__meta">
           {drift ? (
@@ -60,7 +61,7 @@ export function BriefTaskRow(props: {
             <span className="jds-task__time">{shortDate(task.dueAt, locale)}</span>
           ) : null}
         </div>
-      </button>
+      </RowButton>
     </div>
   );
 }

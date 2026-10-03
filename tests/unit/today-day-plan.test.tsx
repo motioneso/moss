@@ -142,7 +142,7 @@ function render(input: {
 
 /** Base HTML of the plain variant, rendered from the pre-V3 code with the
     same input as the first test. The dialogs keep this byte-for-byte. */
-const BASE_PLAIN_HTML = `<section class="jds-brief" id="schedule"><div class="jds-brief__head"><span class="jds-brief__kicker">Walking the day</span></div><div class="jds-brief__title">Schedule and preparation</div><div class="day-list"><div class="day-ev" data-jarvis-capture-text="9:30 am — Standup — Room A — 30m"><div class="day-ev__t">9:30<span class="ap"> <!-- -->am</span></div><div><div class="day-ev__title">Standup</div><div class="day-ev__where">Room A</div></div><div class="day-ev__who">30m</div></div><div class="jds-task" data-state="committed"><div class="day-ev__t">10:00<span class="ap"> <!-- -->am</span></div><div><button type="button" class="jds-task__main"><div class="jds-task__title">Write the draft</div><div class="jds-task__meta"><span class="jds-task__state">On the calendar</span></div></button></div><div class="day-ev__who">1h</div></div></div></section>`;
+const BASE_PLAIN_HTML = `<section class="jds-brief" id="schedule"><div class="jds-brief__head"><span class="jds-brief__kicker">Walking the day</span></div><div class="jds-brief__title">Schedule and preparation</div><div class="day-list"><div class="day-ev" data-jarvis-capture-text="9:30 am — Standup — Room A — 30m"><div class="day-ev__t">9:30<span class="ap"> <!-- -->am</span></div><div><div class="day-ev__title">Standup</div><div class="day-ev__where">Room A</div></div><div class="day-ev__who">30m</div></div><div class="jds-task" data-state="committed"><div class="day-ev__t">10:00<span class="ap"> <!-- -->am</span></div><div><button type="button" class="jds-rowbtn jds-task__main"><div class="jds-task__title">Write the draft</div><div class="jds-task__meta"><span class="jds-task__state">On the calendar</span></div></button></div><div class="day-ev__who">1h</div></div></div></section>`;
 
 describe("DayPlanSection", () => {
   it("renders the editorial timeline head, legend and timeline class", () => {
@@ -232,14 +232,14 @@ describe("DayPlanSection", () => {
 
   it("opens the task dialog from a task row but renders unavailable tasks as text", () => {
     const html = render({ plan: plan([placed("b1", "t1", null, 0)]) });
-    expect(html).toMatch(/<button[^>]*class="jds-task__main"[^>]*>/);
+    expect(html).toMatch(/<button[^>]*class="jds-rowbtn jds-task__main"[^>]*>/);
 
     const gone = render({
       plan: plan([placed("b1", "gone", "Kept title", 0)]),
       unavailableTaskIds: ["gone"]
     });
     expect(gone).toContain("Task no longer visible");
-    expect(gone).not.toMatch(/<button[^>]*class="jds-task__main"[^>]*>/);
+    expect(gone).not.toMatch(/<button[^>]*class="jds-rowbtn jds-task__main"[^>]*>/);
   });
 
   it("keeps calendar events visible with the authored notice when the plan read fails", () => {

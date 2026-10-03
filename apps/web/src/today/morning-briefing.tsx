@@ -15,7 +15,7 @@ import {
   type TaskDto
 } from "@moss/shared";
 
-import { Button } from "@moss/ui";
+import { Button, DisclosureToggle } from "@moss/ui";
 
 import { getBriefingRun, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -569,14 +569,13 @@ function BriefingCallout(props: {
         <>
           <p className="brief-reader__callout-headline">{copy.headline}</p>
           <p className="brief-reader__plan-changed">{copy.sentence}</p>
-          <button
-            type="button"
+          <DisclosureToggle
             className="brief-reader__callout-disclosure"
-            aria-expanded={open}
+            expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
             {open ? "▾" : "▸"} {copy.disclosureLabel}
-          </button>
+          </DisclosureToggle>
           {open ? (
             <ul className="brief-reader__callout-detail">
               {copy.disclosureLines.map((line) => (
