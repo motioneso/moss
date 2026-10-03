@@ -183,7 +183,8 @@ const aiCapabilityRouteSchema = {
         "manual-route-unavailable-fallback",
         "matched-active-model",
         "no-active-model",
-        "needs-config"
+        "needs-config",
+        "user-override"
       ]
     },
     model: {
