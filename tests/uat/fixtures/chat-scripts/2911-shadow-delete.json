@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["2911-shadow-delete"],
+      "calls": [],
+      "reply": "I can help with that. Please approve the delete first."
+    }
+  ]
+}

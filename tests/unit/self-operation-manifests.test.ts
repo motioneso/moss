@@ -367,7 +367,8 @@ const PLANNED_CONFIRM_ALWAYS_TOOL_NAMES = [
   "sports.confirmSourceAssignments",
   "sports.confirmSourceRecipe",
   "sports.retrySource",
-  "sports.removeSource"
+  "sports.removeSource",
+  "chat.deleteClassifierShadowRecords"
 ];
 
 describe("Sports/News denylist check (#1265)", () => {
@@ -394,7 +395,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 58", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 59", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -454,7 +455,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // #2809: +1 (briefings.rerun), granted_at_install. It queues one fresh run of the caller's
     // own briefing; earlier reports stay, so nothing is lost or sent anywhere.
     expect(grantedAtInstall.length).toBe(44);
-    expect(confirmAlways.length).toBe(9);
+    expect(confirmAlways.length).toBe(10);
     expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
@@ -478,7 +479,8 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // confirm_always to risk "read" — 42 + 9 + 5 = 56 total. T21 adds calendar.dayPlanDraft
     // (granted_at_install, own day-plan draft only, review-gated before any calendar effect)
     // — 43 + 9 + 5 = 57 total. #2809 adds briefings.rerun (granted_at_install) — 44 + 9 + 5 = 58.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(58);
+    // #2911 adds chat.deleteClassifierShadowRecords (confirm_always, destructive) — 44 + 10 + 5 = 59.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(59);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(
