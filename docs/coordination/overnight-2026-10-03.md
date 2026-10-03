@@ -119,4 +119,4 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 - 08:00 2934 Muse lane replaced by Opus (w1:p11F, rebase + gate only). Scoped arbiter (subagent) checking c0bd0f32. 2893 plan approved with a __proto__ round-trip condition; 2735 plan approved.- 07:44 Ben delegated the merge decision on PR 2963 (#2934) to the coordinator: "please review privacy 4 me and make approval decision". Merge condition: scoped arbiter GREEN on c0bd0f32 + full gate green on the rebased head + CI green. Relay after the merge (security tier).
 
 - Migration numbers: main has 0256. 0257 reserved for #2637; #2956 takes 0258/0259.
-- 2963 scoped arbiter GREEN: https://github.com/motioneso/moss/pull/2963#issuecomment-5970231610 . Waiting on rebase + gate (w1:p11F).
+- 2963 scoped arbiter GREEN: https://github.com/motioneso/moss/pull/2963#issuecomment-5970231610 . Waiting on rebase + gate (w1:p11F).- 08:14 Memory tight (5 GB avail, 4-6 gates). Gate queue held by coordinator: 2942 waits for GO after one of 2637/2893/2934 finishes. Stale 2942 gate on old head f35e6a4 killed. Memory service back to 10 GB 20 min after restart: tracing not the cause.
