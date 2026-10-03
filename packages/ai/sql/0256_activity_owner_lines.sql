@@ -34,18 +34,41 @@ ALTER TABLE app.moss_model_activity_log
       )
     ),
   -- Numbers and booleans only, so the bare sub-line survives expiry without keeping words.
-  -- A code-level JSON schema admits the same shapes; this CHECK is the second lock.
+  -- A code-level JSON schema admits the same shapes; the trigger below is the second lock.
+  -- (A subquery CHECK cannot do this: Postgres forbids subqueries in CHECK constraints.)
   ADD COLUMN fact_counts jsonb
     CHECK (
       fact_counts IS NULL OR (
         jsonb_typeof(fact_counts) = 'object'
         AND pg_column_size(fact_counts) <= 512
-        AND NOT EXISTS (
-          SELECT 1 FROM jsonb_each(fact_counts) AS entry
-          WHERE jsonb_typeof(entry.value) NOT IN ('number', 'boolean')
-        )
       )
     );
+
+-- Rejects any fact_counts value that is not a number or boolean. A trigger, not a CHECK,
+-- because the check needs jsonb_each, which CHECK constraints cannot call.
+CREATE OR REPLACE FUNCTION app.moss_model_activity_log_check_facts()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  entry record;
+BEGIN
+  IF NEW.fact_counts IS NULL THEN
+    RETURN NEW;
+  END IF;
+  FOR entry IN SELECT * FROM jsonb_each(NEW.fact_counts) LOOP
+    IF jsonb_typeof(entry.value) NOT IN ('number', 'boolean') THEN
+      RAISE EXCEPTION 'moss_model_activity_log: fact_counts holds numbers and booleans only';
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS moss_model_activity_log_check_facts ON app.moss_model_activity_log;
+CREATE TRIGGER moss_model_activity_log_check_facts
+BEFORE INSERT OR UPDATE ON app.moss_model_activity_log
+FOR EACH ROW EXECUTE FUNCTION app.moss_model_activity_log_check_facts();
 
 -- Owner-ordered read for the per-user page; partial turn index for the step join.
 CREATE INDEX IF NOT EXISTS moss_model_activity_log_owner_time_idx
