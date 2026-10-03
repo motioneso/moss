@@ -121,7 +121,10 @@ describe("classifier gate wiring through registerChatRoutes (#2901)", () => {
           return mintedToken;
         },
         // Swallow the revoke so the token's own expiry is what we observe.
-        revokeBySessionId: () => undefined
+        revokeBySessionId: () => undefined,
+        setCurrentTurnId: (chatSessionId, turnId) =>
+          registry.setCurrentTurnId(chatSessionId, turnId),
+        clearCurrentTurnId: (chatSessionId) => registry.clearCurrentTurnId(chatSessionId)
       },
       now: () => now
     });

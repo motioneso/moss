@@ -56,7 +56,13 @@ export async function tryGatedTurn(
   surface: ChatSurface,
   text: string,
   opts:
-    | { readonly attachments?: readonly StoredAttachmentMeta[]; readonly moduleControl?: string }
+    | {
+        readonly attachments?: readonly StoredAttachmentMeta[];
+        readonly moduleControl?: string;
+        /** #2956: the turn the gate's check lines join. */
+        readonly turnId?: string;
+        readonly parentId?: string;
+      }
     | undefined,
   controller: AbortController
 ): Promise<{ result: GateTurnResult | undefined; requestIncognito: boolean }> {
@@ -86,7 +92,10 @@ export async function tryGatedTurn(
     hasAttachment: (opts?.attachments?.length ?? 0) > 0,
     incognito: requestIncognito,
     mode,
-    signal: controller.signal
+    signal: controller.signal,
+    // #2956: the turn the gate's check lines join (and the answer line id).
+    ...(opts?.turnId ? { turnId: opts.turnId } : {}),
+    ...(opts?.parentId ? { parentId: opts.parentId } : {})
   };
   let outcome: GateOutcome;
   try {

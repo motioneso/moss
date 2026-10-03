@@ -748,6 +748,9 @@ export class AssistantToolGateway {
     notice?: string
   ): Promise<GatewayToolResponse> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    // #2956: the approval hold below can outlive the turn, so the turn is
+    // captured at arrival and handed to each audit write explicitly.
+    const arrivalTurnId = this.deps.tokens.readCurrentTurnId(ctx.chatSessionId);
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.createPendingAssistantAction(scopedDb, {
@@ -824,7 +827,8 @@ export class AssistantToolGateway {
           approvalMode,
           outcome: outcome === "cancelled" ? "cancelled" : "denied",
           durationMs: null,
-          chatSessionId: ctx.chatSessionId
+          chatSessionId: ctx.chatSessionId,
+          ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
         });
         const reason = APPROVAL_REFUSED_REASON;
         return { ok: false, denied: true, reason };
@@ -847,7 +851,8 @@ export class AssistantToolGateway {
       void this.recordAudit(access, found, {
         approvalMode: "confirmed",
         ...audit,
-        chatSessionId: ctx.chatSessionId
+        chatSessionId: ctx.chatSessionId,
+        ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
       });
       return result;
     } finally {
@@ -926,8 +931,17 @@ export class AssistantToolGateway {
       errorClass?: string | null;
       chatSessionId?: string;
       inputSummary?: ActionAuditInputSummary | null;
+      /** #2956: captured at tool-call arrival; survives an approval hold. */
+      turnId?: string;
     }
   ): Promise<void> {
+    // #2956: capture the turn BEFORE any await. These writers are invoked
+    // fire-and-forget (`void this.recordAudit(...)`), so the body starts now —
+    // but the write below lands later. An explicit id (an approval hold captured
+    // it at arrival, before the hold) wins; otherwise the live turn is read.
+    // Either way the id stays in a local; it never enters the context handed
+    // to module tools.
+    const turnId = opts.turnId ?? this.deps.tokens.readCurrentTurnId(opts.chatSessionId);
     try {
       await this.deps.runner.withDataContext(access, (scopedDb) =>
         this.deps.repository.insertActionAuditLog(scopedDb, {
@@ -942,6 +956,7 @@ export class AssistantToolGateway {
           errorClass: opts.errorClass ?? null,
           requestId: access.requestId ?? null,
           chatSessionId: opts.chatSessionId ?? null,
+          ...(turnId ? { turnId } : {}),
           sourceSurface: "chat",
           inputSummary: opts.inputSummary ?? null,
           durationMs: opts.durationMs
@@ -969,6 +984,8 @@ export class AssistantToolGateway {
       durationMs: number | null;
       errorClass?: string | null;
       chatSessionId?: string;
+      /** #2956: captured at tool-call arrival; survives an approval hold. */
+      turnId?: string;
     }
   ): Promise<void> {
     return this.recordAuditRaw(

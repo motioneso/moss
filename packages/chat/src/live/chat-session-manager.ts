@@ -1,5 +1,7 @@
-import type { ProviderKind } from "@moss/ai";
-import { resolveMossEnv } from "@moss/db";
+import { randomUUID } from "node:crypto";
+
+import { recordModelActivity, type ProviderKind } from "@moss/ai";
+import { resolveMossEnv, type ActivityDetailStep } from "@moss/db";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
@@ -317,6 +319,13 @@ export class ChatSessionManager {
     }
   }
 
+  /**
+   * #2956 (ruling R3): seeding submits model input outside any turn, so it
+   * sets no turn id. A tool call the seed triggers while a live turn runs on
+   * this session is filed under that turn. Seeding normally runs at session
+   * start, before any turn, so the overlap needs a seed racing a message —
+   * rare enough to document, not to refuse the seed over.
+   */
   async seedContext(
     actorUserId: string,
     userName: string,
@@ -355,6 +364,12 @@ export class ChatSessionManager {
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
+    // #2956: one id for the turn, the shadow record, the audit rows and the
+    // answer line. Minted once here, so a launch retry or a replayed submit in
+    // this same turn reuses it and the answer line is written exactly once.
+    const turnId = randomUUID();
+    // File this session's tool rows under the turn; cleared in the finally below.
+    this.deps.setCurrentTurnId?.(sessionKey, turnId);
     const controller = new AbortController();
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
@@ -389,7 +404,7 @@ export class ChatSessionManager {
         actorUserId,
         surface,
         text,
-        opts,
+        { ...opts, turnId, parentId: turnId },
         controller
       );
       if (gated) return gated;
@@ -422,7 +437,9 @@ export class ChatSessionManager {
         requestIncognito,
         {
           hasAttachment: (opts?.attachments?.length ?? 0) > 0,
-          signal: controller.signal
+          signal: controller.signal,
+          // #2956: the shadow record shares the turn-start id.
+          turnId
         }
       );
 
@@ -665,6 +682,24 @@ export class ChatSessionManager {
       session.lastActivity = this.deps.clock.now();
       this.deps.touchMcpToken?.(sessionKey);
 
+      // #2956: the turn's answer line, with the turn-start id. Only a stored
+      // turn writes one — refused, stopped and private turns persist nothing,
+      // so their steps reference a missing parent, by design. Jev agreement
+      // settles in the shadow record after this write; the bare line carries
+      // tool counts, and agreement attaches to the detail row separately.
+      if (stored) {
+        this.recordAnswerLine(actorUserId, turnId, {
+          modelName: session.model,
+          durationMs: turnElapsedMs,
+          usage: turnUsage,
+          toolNames: invokedToolNames,
+          actionResults: this.actionResultsBySession.get(sessionKey),
+          quote: text,
+          records: turnActivityRecords,
+          reply
+        });
+      }
+
       // Post-store: re-emit reply with messageId + sourceFreshness so live UI picks it up
       if (stored?.assistantMessageId && stored.sourceFreshness !== undefined) {
         this.emit(actorUserId, surface, {
@@ -686,6 +721,9 @@ export class ChatSessionManager {
     } finally {
       // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
       gateShadow?.finish();
+      // #2956: release the turn's filing slot in the same finally that drops
+      // every other per-turn state, so later tool calls cannot join this turn.
+      this.deps.clearCurrentTurnId?.(sessionKey);
       flushPending();
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
@@ -693,6 +731,48 @@ export class ChatSessionManager {
       this.sequenceBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
+  }
+
+  /**
+   * #2956: one owned answer line per completed chat turn. Fire-and-forget like
+   * every other writer: the installed recorder routes the owned write through
+   * the owner's scope, and a failed write is logged and dropped, never thrown
+   * into the turn.
+   */
+  private recordAnswerLine(
+    actorUserId: string,
+    turnId: string,
+    turn: {
+      readonly modelName: string;
+      readonly durationMs?: number;
+      readonly usage?: ChatTurnUsageDto;
+      readonly toolNames: ReadonlySet<string>;
+      readonly actionResults?: readonly ActionResultMetadata[];
+      readonly quote: string;
+      readonly records: readonly TranscriptRecord[];
+      readonly reply: string;
+    }
+  ): void {
+    const failed = (turn.actionResults ?? []).filter((r) => r.outcome === "error").length;
+    recordModelActivity({
+      id: turnId,
+      kind: "chat",
+      action: "chat",
+      outcome: "ok",
+      modelName: turn.modelName,
+      result: "completed",
+      ownerUserId: actorUserId,
+      actionCode: "chat.answer",
+      turnId,
+      ...(turn.durationMs !== undefined ? { durationMs: turn.durationMs } : {}),
+      ...(turn.usage?.inputTokens !== undefined ? { inputTokens: turn.usage.inputTokens } : {}),
+      ...(turn.usage?.outputTokens !== undefined ? { outputTokens: turn.usage.outputTokens } : {}),
+      factCounts: { tools: turn.toolNames.size, tools_failed: failed },
+      detail: {
+        quote: turn.quote,
+        steps: answerDetailSteps(turn.records, turn.reply)
+      }
+    });
   }
 
   /** #2934 — fail a turn closed before it touches the model or the store. */
@@ -997,4 +1077,43 @@ export class ChatSessionManager {
   private countSubscribers(actorUserId: string): number {
     return countSubscribersFor(this.subscribers, actorUserId);
   }
+}
+
+/** #2956: detail steps are bounded twice — few steps, short text. */
+const ANSWER_DETAIL_STEP_CAP = 20;
+const ANSWER_DETAIL_TEXT_CAP = 300;
+
+function answerStepTitle(record: TranscriptRecord): string {
+  if (record.toolName) return record.toolName;
+  switch (record.kind) {
+    case "thought":
+    case "thinking":
+      return "Thinking";
+    case "result":
+      return "Result";
+    case "reply":
+      return "Answer";
+    default:
+      return record.kind;
+  }
+}
+
+/**
+ * #2956: the turn's records as detail steps, ending with the answer itself
+ * (the live record list excludes replies). Asked-for and returned values stay
+ * out: they must come from each tool's declared display fields, which is
+ * slice C work. Long turns keep their first steps; the tail is the answer.
+ */
+function answerDetailSteps(
+  records: readonly TranscriptRecord[],
+  reply: string
+): ActivityDetailStep[] {
+  const steps = records.slice(0, ANSWER_DETAIL_STEP_CAP - 1).map((record) => ({
+    title: answerStepTitle(record),
+    result: record.text.slice(0, ANSWER_DETAIL_TEXT_CAP)
+  }));
+  if (reply) {
+    steps.push({ title: "Answer", result: reply.slice(0, ANSWER_DETAIL_TEXT_CAP) });
+  }
+  return steps;
 }

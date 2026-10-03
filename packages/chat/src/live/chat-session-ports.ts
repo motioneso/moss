@@ -215,6 +215,13 @@ export interface ChatSessionManagerDeps {
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
   /**
+   * #2956: file this session's tool rows under the running turn. Set when a
+   * turn starts, cleared in the same finally that releases the turn. Absent
+   * (tests, embedders) means tool rows carry no turn id.
+   */
+  readonly setCurrentTurnId?: (chatSessionId: string, turnId: string) => void;
+  readonly clearCurrentTurnId?: (chatSessionId: string) => void;
+  /**
    * #2159 — resolves once this session's MCP client has completed its first tools/list round
    * trip (or resolves `false` after a bounded timeout if it never does — see
    * `SessionTokenRegistry.waitForToolsListObserved`). `launchSession` awaits this right after

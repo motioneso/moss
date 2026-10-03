@@ -246,6 +246,8 @@ export interface InsertAuditLogInput {
   readonly errorClass: string | null;
   readonly requestId: string | null;
   readonly chatSessionId: string | null;
+  /** #2956: the chat turn that ran this tool. Set by chat turns only. */
+  readonly turnId?: string;
   readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
   readonly inputSummary: ActionAuditInputSummary | null;
   readonly durationMs: number | null;
@@ -2354,6 +2356,7 @@ export class AiRepository {
         error_class: input.errorClass ?? null,
         request_id: input.requestId ?? null,
         chat_session_id: input.chatSessionId ?? null,
+        turn_id: input.turnId ?? null,
         source_surface: input.sourceSurface,
         input_summary: input.inputSummary,
         duration_ms: input.durationMs
