@@ -1,12 +1,12 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `350800e5-1c37-4fe8-a928-2392ffce7055`. Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `9dcc4a5e-af83-4e58-9566-5e42f99b6825` (relay 1). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 2 (relay due)
+**merges_since_relay:** 0
 
 ## Queue
 
@@ -57,6 +57,7 @@ None.
 - w1:p0W "QA 2962 coverage guard" (Opus QA) - reviewed PR #2962, verdict GREEN posted on the PR; closed after merge.
 - w1:p0Q "2939 chat drawer tests" (Muse builder) - built #2939; landed as PR #2965 (5eef54630); closed after merge.
 - w1:p111 "QA 2965 drawer tests" (Opus QA) - GREEN verdict on PR #2965; closed after merge.
+- w1:p0P "Coordinator (old)" (session 350800e5-1c37-4fe8-a928-2392ffce7055) - coordinator through relay point after #2939; work recorded in this manifest; closed by relay-1 successor.
 
 ## Continuation note
 
