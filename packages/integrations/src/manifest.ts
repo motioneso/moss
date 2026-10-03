@@ -39,9 +39,9 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_detail_grouped_tools",
       description:
-        "A connection's tool list is grouped, with each tool getting a per-tool switch to allow " +
-        "repeated identical calls (off by default). Notes explain grandfathered connections and " +
-        "point to Refresh tools when read/repeat hints are missing."
+        "A connection's tool list is grouped, with one on or off switch per tool. Moss never " +
+        "blocks an integration tool for repeating an identical call. Notes explain grandfathered " +
+        "connections and point to Refresh tools when read hints are missing."
     },
     {
       id: "integrations.connection_classifier_opt_in",
