@@ -289,13 +289,6 @@ const ADMIN_GROUPS = [
         Pane: AiProvidersPane
       },
       {
-        id: "shadowreport",
-        icon: GitCommitHorizontal,
-        label: "Shadow report",
-        description: coreSettingDescription("shadowreport"),
-        Pane: ShadowReportPane
-      },
-      {
         id: "instmods",
         icon: Package,
         label: "Instance modules",
@@ -397,7 +390,6 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],
   modelactivity: ["model", "ai", "calls", "log", "activity", "classifier"],
-  shadowreport: ["shadow", "classifier", "agreement", "report"],
   host: ["server", "domain", "url", "backup", "advanced"],
   enckeys: ["encryption", "keys", "secret", "credentials", "setup"]
 };
@@ -462,6 +454,19 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const requestedAdmin = isAdmin
     ? ADMIN_SECTIONS.find((section) => section.id === requested)
     : undefined;
+  // Temporary shadow report (#2957): reached by direct link from the Classifier row, never
+  // from the sidebar, so it stays out of ADMIN_GROUPS while ?section=shadowreport keeps working.
+  // It carries the full section shape (the icon is unused) so the pane lookup below typechecks.
+  const requestedHiddenAdmin: SettingsSection<AdminSectionId> | undefined =
+    isAdmin && requested === "shadowreport"
+      ? {
+          id: "shadowreport",
+          icon: GitCommitHorizontal,
+          label: "Shadow report",
+          description: coreSettingDescription("shadowreport"),
+          Pane: ShadowReportPane
+        }
+      : undefined;
 
   useEffect(() => {
     if (requestedPersonal) {
@@ -470,15 +475,26 @@ export function SettingsPage({ me }: SettingsPageProps) {
     } else if (requestedAdmin) {
       setMode("admin");
       setCategoryAdmin(requestedAdmin.id);
+    } else if (requestedHiddenAdmin) {
+      setMode("admin");
     }
-  }, [requestedAdmin, requestedPersonal]);
+  }, [requestedAdmin, requestedHiddenAdmin, requestedPersonal]);
 
-  const adminMode = requestedAdmin ? true : requestedPersonal ? false : isAdmin && mode === "admin";
+  const adminMode =
+    requestedAdmin || requestedHiddenAdmin
+      ? true
+      : requestedPersonal
+        ? false
+        : isAdmin && mode === "admin";
   const groups = adminMode ? ADMIN_GROUPS : PERSONAL_GROUPS;
   const sections = adminMode ? ADMIN_SECTIONS : PERSONAL_SECTIONS;
   const active =
-    requestedAdmin?.id ?? requestedPersonal?.id ?? (adminMode ? categoryAdmin : categoryPersonal);
-  const activeSection = sections.find((section) => section.id === active) ?? sections[0]!;
+    requestedAdmin?.id ??
+    requestedHiddenAdmin?.id ??
+    requestedPersonal?.id ??
+    (adminMode ? categoryAdmin : categoryPersonal);
+  const activeSection =
+    sections.find((section) => section.id === active) ?? requestedHiddenAdmin ?? sections[0]!;
   const Pane = activeSection.Pane;
 
   const [sheetOpen, setSheetOpen] = useState(false);
