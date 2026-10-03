@@ -497,7 +497,7 @@
 }
 .np-photo__cap {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
 }
 .np-photo__crest {
   border-radius: 8px;

@@ -208,19 +208,20 @@ only. All text sits at or above the 11px floor.
 
 ### Hand-built Today buttons still to move (#2918)
 
-Moved so far: the hero and meeting links (`Button` link) and the Check in and medication Done
-buttons (`Button` primary, small). Still hand-built, each with its own colour, border or type rules
-in a Today sheet, and to be moved onto `Button`:
+Moved onto `Button`: the hero, meeting and evening-plan text links, Check in, Done, the evening
+choice buttons (new `chip` look), Plan tomorrow, Chat, and the briefing Accept, Dismiss, Reply,
+Close and report-picker buttons.
 
-- `evening-plan__link` (four text links in the finished evening plan)
-- `ev-tomorrow__plan`, `ev-tomorrow__chat`, `ev-tomorrow__item`, `ev-loop__open`, `ev-done__main`
-- `plan-review__titlelink`, `loose-row__main`, `brief-snapshot__main`
-- `brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`
-- icon buttons `well__plus`, `well__nudge-x`, `wl-modal__x` (move onto the shared icon button)
-- the unclassed buttons in `briefing-report-shell`, `briefing-action-rows`, `briefing-dialog`,
-  `briefing-feedback-menu`, `morning-briefing`, `proactive-cards`, `today-timeline`, `day-plan`,
-  `day-plan-review-row`, `evening-mode`, `evening-planning-review`, `evening-planning-frame` and
-  the retry button in `module-today-widgets`
+Still hand-built, because each needs a shared piece that does not exist yet:
+
+- Clickable rows and cards with their own layout (`ev-done__main`, `ev-loop__open`,
+  `ev-tomorrow__item`, `plan-review__titlelink`, `loose-row__main`, `brief-snapshot__main`, and
+  the `jds-task__main` rows). They need a shared row-button piece.
+- Disclosure toggles (`brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`).
+- Tabs (`brief-reader__tab`). They need a shared tabs piece.
+- Icon buttons (`well__plus`, `well__nudge-x`, `wl-modal__x`). They need the shared icon button.
+- Plain text buttons with no look of their own (Undo in the feedback menu, Retry in the module
+  widget error) and the feedback menu items.
 
 ### Known Today defects
 

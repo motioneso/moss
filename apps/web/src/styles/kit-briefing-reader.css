@@ -177,7 +177,7 @@
   grid-column: 1;
   grid-row: 1;
   padding-top: 5px;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   line-height: 17.5px;
   letter-spacing: 1.7px;
@@ -302,7 +302,7 @@
 }
 .brief-reader__schedule-toggle::before {
   content: "\25b6";
-  font-size: 8px;
+  font-size: var(--text-2xs);
   line-height: 1;
 }
 .brief-reader__schedule-toggle[aria-expanded="true"]::before {
@@ -412,7 +412,7 @@
 .brief-reader__editorial-eyebrow {
   margin: 0 0 12px;
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   line-height: 1.5;
   letter-spacing: 1.5px;
@@ -712,7 +712,7 @@
 }
 .brief-snapshot__time {
   padding-top: 2px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   line-height: 1.5;
   color: var(--accent-fg);
@@ -747,7 +747,7 @@ button.brief-snapshot__main:focus-visible {
 .brief-snapshot__main small {
   display: block;
   margin-top: 4px;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -793,7 +793,7 @@ button.brief-snapshot__main:focus-visible {
   .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
     .brief-reader__eyebrow {
     padding-top: 6px;
-    font-size: 8px;
+    font-size: var(--text-2xs);
     line-height: 16.5px;
     letter-spacing: 1.2px;
   }
@@ -832,7 +832,7 @@ button.brief-snapshot__main:focus-visible {
     gap: 14px;
   }
   .brief-reader__tabs .brief-reader__jump a {
-    font-size: 10px;
+    font-size: var(--text-2xs);
   }
   .brief-reader__railwrap {
     margin-bottom: 22px;
