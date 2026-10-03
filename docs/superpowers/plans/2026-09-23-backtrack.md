@@ -587,9 +587,10 @@ issue #59; Windrecorder `windrecorder/record.py`. None publishes a measured whol
   (`scripts/check-backtrack-sources.sh`). Detecting Electron by reading the app bundle would need
   `FileManager`, so this pass does not detect Electron at all (see Task 3, browsers).
 
-Open question, owner the Task 4 builder: **Q5** — the CPU cost of `VNDetectTextRectanglesRequest`
-on a 1600 px window image. If it costs more than 100 ms CPU a pass, Task 4 drops it and the gate
-hashes a fixed 64×64 greyscale downscale of the masked image instead.
+Open question, owner the Task 4 builder (moot: Task 4 was dropped, see below): **Q5** — the CPU
+cost of `VNDetectTextRectanglesRequest` on a 1600 px window image. If it costs more than 100 ms CPU
+a pass, Task 4 drops it and the gate hashes a fixed 64×64 greyscale downscale of the masked image
+instead.
 
 #### Task 1 — cheaper passes (`Backtrack/BacktrackCapture.swift`, `Backtrack/BacktrackRuntime.swift`)
 
@@ -705,6 +706,10 @@ Tests (fake `WindowTextReading` and a fake AX tree):
 
 #### Task 4 — skip OCR when the text area is unchanged (`Backtrack/BacktrackCapture.swift`, runtime)
 
+**Dropped, 2026-10-03 (Ben).** Not built. Tasks 1–3 passed the gate without it, and in the trial
+window only 38 of 284 OCR passes (13%) found nothing new, so a text-area hash gate has little left
+to save. It stays here as the first option if CPU climbs again.
+
 After masking and before OCR, find text regions with `VNDetectTextRectanglesRequest` (see Q5), hash
 the masked pixels inside them at reduced scale, and compare with the last hash for that window
 (32 windows). A match skips OCR and counts as an empty pass for Task 2's backoff. The hash is stored
@@ -749,6 +754,15 @@ The original gate below applies unchanged to a fresh working-day sample of this 
 unmasked secret or never-watched text. If it still fails, the next options are Vision `.fast` for
 the OCR fallback (held in reserve; Screenpipe never uses it) and the browser flag above, each a
 plan change for Ben's approval.
+
+**Result (2026-10-03, recorded on #2638): passed.** The eight-hour `top` sample started 12:19 PDT
+on 2026-10-02 but never completed: Ben stopped working at about 16:05, the Mac stayed idle and then
+slept, and `top` keeps only an end-of-run summary. Ben ruled that the working window counts. The
+app's own five-minute process-CPU totals for 12:19–16:05 (3.8 h) give a **2.3% mean** (30 of 44
+blocks at or under 3%). OCR ran 75 passes an hour at about 480 ms CPU each, almost all in apps
+that expose no accessibility text (Zen, Moonlight). Ben confirmed recall was useful and that no
+password-field, private-window or never-watched text appeared in Show text…. Next time, the trial
+runner should keep every `top` reading so a run cut short is still readable.
 
 ### Performance retry 1 (authorized by Ben, 2026-10-01)
 
