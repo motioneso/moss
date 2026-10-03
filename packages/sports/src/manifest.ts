@@ -187,7 +187,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.tonight_band",
       description:
-        "The Tonight band on Today lists games still to start today, followed teams first. When none are left to start but a game today is live or finished, the band is hidden because the scores above already show it. It says A quiet night only when no game today is upcoming, live or finished."
+        "Today's Tonight band lists games yet to start, followed teams first. With none left but a game live or finished today, it hides because the scores already show it. A quiet night shows only when no game today is upcoming, live or finished."
     }
   ],
   navigation: [
