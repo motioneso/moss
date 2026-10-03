@@ -1,12 +1,12 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `b1e6e877-42fd-4bc7-ae18-fb15c7a3544a` (relay 5). Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `66aed34b-7709-4403-bfa6-6489b593c259` (relay 6). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 2
+**merges_since_relay:** 0
 
 ## Queue
 
@@ -136,6 +136,7 @@ None.
 - w1:p117 "2912 notes browser tests" (Opus builder, fix-2912-notes-specs) - landed as PR #2970 (ba84d9387); reap check REAPABLE; worktree and branch removed.
 - w1:p11A "2637 focus history cleanup" (Opus builder, fix-2637-focus-retention) - landed as PR #2977 (2c3c12da0); reap check REAPABLE; worktree and branch removed.
 - w1:p11N "Coordinator (old)" (session 6fb239b6, relay 4 coordinator) - merged #2975 and #2974; relayed at RELAY POINT 5; closed by relay 5.
+- w1:p11V "Coordinator (old)" (session b1e6e877, relay 5 coordinator) - merged #2970 and #2977 (security, Ben sign-off); relayed at RELAY POINT 6; closed by relay 6.
 
 ## Continuation note
 
@@ -252,3 +253,5 @@ RELAY POINT 6 (relay after security merge of #2977, session b1e6e877). Successor
 4. Ben asked earlier to fit more work into the run; with only 2956 left, check the board (project 2) for small approved items with a task issue and spawn them per the lane rules in the header.
 5. QA tab is w1:t9S (empty now; it may have closed). Not ours: w1:t9F panes (Tasks redesign grid, Today row buttons, Review 2978), design-*, Epic 2864, Review 2961, 2918, 2951, review 2948.
 6. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
+
+Relay 6 (session 66aed34b): lock claimed 12:57, old coordinator w1:p11V closed.
