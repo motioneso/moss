@@ -89,9 +89,8 @@
   .tk-bar__left {
     min-width: 0;
   }
-  .tk-bar__r1 .tk-listfilter {
+  .tk-bar__r1 .tasks-picker {
     flex: 1;
-    min-width: 0;
   }
   .tk-listbtn {
     min-width: 0;
@@ -101,17 +100,8 @@
     min-width: 0;
     flex-wrap: wrap;
   }
-  .tk-bar__r1 .tk-listbtn {
-    width: 100%;
-    justify-content: flex-start;
-  }
   .tk-bar__search.is-open {
     flex: 1 1 100%;
-  }
-  /* #404: hide the "· N hidden" count text on mobile so the list-filter button
-     stays narrow when lists are excluded. Users open the dropdown to see state. */
-  .tk-listbtn__hidden {
-    display: none;
   }
   /* #404: cap the list-filter dropdown to the viewport width and anchor its
      right edge to the button so it never overflows off-screen to the right. */
@@ -120,4 +110,124 @@
     left: auto;
     right: 0;
   }
+}
+
+/* Page layout: forest masthead at Today's hero width, then the list index beside the
+   working surface. The index folds into the compact picker by usable width, so an open
+   chat drawer collapses it too. */
+.tasks-page {
+  padding-bottom: var(--space-12);
+}
+.tasks-page > .jds-masthead--field {
+  margin: 7px 16px 0;
+}
+.tasks-body {
+  container-type: inline-size;
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: var(--space-7) 16px 0;
+}
+.tasks-layout {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: start;
+}
+.tasks-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.tasks-nav__note,
+.tasks-nav__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+.tasks-picker {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.tasks-picker .jds-selectwrap {
+  flex: 1;
+  min-width: 0;
+}
+@container (max-width: 1000px) {
+  .tasks-layout {
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+}
+@container (max-width: 760px) {
+  .tasks-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tasks-index {
+    display: none;
+  }
+  .tasks-picker {
+    display: flex;
+  }
+}
+@media (max-width: 680px) {
+  .tasks-page > .jds-masthead--field {
+    margin: 7px 6px 0;
+  }
+  .tasks-body {
+    padding: var(--space-5) 0 0;
+  }
+}
+
+/* Priority groups: hairline-ruled sections, no panel. */
+.tasks-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+.tasks-group__rows {
+  padding-top: var(--space-2);
+}
+
+/* Grid: four ruled quadrants on the same hairline heads as the priority groups. */
+.tasks-matrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-7) var(--space-6);
+}
+.tasks-quad {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tasks-quad__subtitle {
+  margin: var(--space-1) 0 0;
+}
+.tasks-quad__rows {
+  padding-top: var(--space-2);
+}
+.tasks-quad__empty {
+  margin: 0;
+  padding: var(--space-3) 0;
+}
+@container (max-width: 760px) {
+  .tasks-matrix {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Inline recovery notice: message and its action on one line, wrapping on a phone. */
+.tasks-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.tasks-notice > .jds-hint {
+  margin: 0;
 }

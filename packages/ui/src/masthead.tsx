@@ -6,6 +6,8 @@ export interface MastheadProps {
   readonly eyebrow?: ReactNode;
   readonly title: ReactNode;
   readonly accent?: ReactNode;
+  /** Decorative mark set flush after the title, such as a gold full stop. */
+  readonly mark?: ReactNode;
   readonly lede?: ReactNode;
   readonly aside?: ReactNode;
   readonly tone?: MastheadTone;
@@ -23,6 +25,11 @@ export function Masthead(props: MastheadProps) {
           {props.eyebrow ? <p className="jds-masthead__eyebrow">{props.eyebrow}</p> : null}
           <h1 className="jds-masthead__title">
             <span>{props.title}</span>
+            {props.mark ? (
+              <span className="jds-masthead__mark" aria-hidden="true">
+                {props.mark}
+              </span>
+            ) : null}
             {props.accent ? (
               <>
                 {" "}

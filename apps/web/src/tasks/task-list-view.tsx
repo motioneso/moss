@@ -10,7 +10,7 @@ import {
   type TaskEffort,
   type TaskListDto
 } from "@moss/shared";
-import { Button } from "@moss/ui";
+import { Button, SectionHead } from "@moss/ui";
 
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { formatDate, useUserLocale } from "../locale/locale-format.js";
@@ -115,7 +115,7 @@ export function TaskListView(props: {
   readonly tasks: readonly TaskDto[];
   readonly lists: readonly TaskListDto[];
   readonly isUpdating: boolean;
-  readonly onToggleDone: (task: TaskDto) => void;
+  readonly onToggleDone: (task: TaskDto) => Promise<unknown> | void;
   readonly onOpen: (task: TaskDto) => void;
   readonly onAccept?: (task: TaskDto) => void;
   readonly onDismiss?: (task: TaskDto) => void;
@@ -132,33 +132,41 @@ export function TaskListView(props: {
   }
 
   return (
-    <div>
-      {groups.map((group) => (
-        <div className="tk-panel" key={group.value ?? "none"}>
-          <div className="tk-panel__head">
-            <span
-              className="tk-panel__dot"
-              style={{ "--tk-swatch": priorityColor(group.value) } as React.CSSProperties}
+    <div className="tasks-groups">
+      {groups.map((group) => {
+        const headingId = `tasks-group-${group.value ?? "none"}`;
+        const count = group.tasks.length;
+        return (
+          <section className="tasks-group" key={group.value ?? "none"} aria-labelledby={headingId}>
+            <SectionHead
+              rule
+              titleId={headingId}
+              title={group.label}
+              marker={
+                <span
+                  className="tk-panel__dot"
+                  style={{ "--tk-swatch": priorityColor(group.value) } as React.CSSProperties}
+                />
+              }
+              meta={`${count} ${count === 1 ? "task" : "tasks"}`}
             />
-            <span className="tk-panel__name">{group.label}</span>
-            <span className="tk-panel__count">{group.tasks.length}</span>
-          </div>
-          <div className="tk-panel__body">
-            {group.tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                list={listMeta.get(task.listId)}
-                isUpdating={props.isUpdating}
-                onToggleDone={props.onToggleDone}
-                onOpen={props.onOpen}
-                onAccept={props.onAccept}
-                onDismiss={props.onDismiss}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+            <div className="tasks-group__rows">
+              {group.tasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  list={listMeta.get(task.listId)}
+                  isUpdating={props.isUpdating}
+                  onToggleDone={props.onToggleDone}
+                  onOpen={props.onOpen}
+                  onAccept={props.onAccept}
+                  onDismiss={props.onDismiss}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
       {mossSourcedCount > 0 ? (
         <div className="tk-foot">
           <span className="ic">
@@ -177,7 +185,7 @@ export function TaskRow(props: {
   readonly list?: { readonly name: string; readonly color: string };
   readonly isUpdating: boolean;
   readonly compact?: boolean;
-  readonly onToggleDone: (task: TaskDto) => void;
+  readonly onToggleDone: (task: TaskDto) => Promise<unknown> | void;
   readonly onOpen: (task: TaskDto) => void;
   readonly onAccept?: (task: TaskDto) => void;
   readonly onDismiss?: (task: TaskDto) => void;
@@ -210,8 +218,11 @@ export function TaskRow(props: {
               checked={done}
               disabled={props.isUpdating}
               onChange={() => {
-                setOptimisticDone(!optimisticDone);
-                props.onToggleDone(task);
+                const next = !optimisticDone;
+                setOptimisticDone(next);
+                void Promise.resolve(props.onToggleDone(task)).catch(() =>
+                  setOptimisticDone(!next)
+                );
               }}
               aria-label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}
             />

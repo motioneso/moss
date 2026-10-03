@@ -132,6 +132,30 @@
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
+/* On the forest masthead band. */
+.jds-segmented--field {
+  background: transparent;
+  border-color: var(--masthead-line);
+}
+.jds-segmented--field .jds-segmented__opt {
+  color: var(--masthead-fg);
+}
+.jds-segmented--field .jds-segmented__opt:hover {
+  color: var(--masthead-fg);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.jds-segmented--field .jds-segmented__opt[aria-pressed="true"] {
+  background: var(--masthead-fg);
+  color: var(--masthead-bg);
+  text-decoration: none;
+  box-shadow: none;
+}
+.jds-segmented--field .jds-segmented__opt:focus-visible {
+  outline: 2px solid var(--masthead-accent);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------
    COMBOBOX — select-shaped trigger, type-to-filter listbox
    --------------------------------------------------------------- */

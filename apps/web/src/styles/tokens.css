@@ -367,6 +367,7 @@
   --masthead-fg-muted: rgba(237, 229, 210, 0.85);
   --masthead-accent: var(--gold-soft);
   --masthead-rule: var(--gold);
+  --masthead-line: color-mix(in srgb, var(--masthead-fg) 45%, transparent);
   --masthead-action-bg: var(--gold);
   --masthead-action-fg: #241a06;
 
