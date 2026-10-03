@@ -65,6 +65,7 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
 import {
   cancelChatTurn,
   clearChat,
+  endPrivateChat,
   getChatPrivacyState,
   listChatThreads,
   resumeChat,
@@ -809,6 +810,23 @@ describe("ChatDrawer surface routing (#1533)", () => {
     });
 
     expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
+  });
+
+  it("leaves private chat when the checked More menu item is chosen again", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
+    vi.mocked(clearChat).mockClear();
+    vi.mocked(endPrivateChat).mockClear();
+
+    await clickMenuItem(renderer, "Start private chat", true);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
+    expect(clearChat).toHaveBeenCalledTimes(1);
+
+    await clickMenuItem(renderer, "Start private chat", true);
+
+    expect(endPrivateChat).toHaveBeenCalledWith(DEFAULT_CHAT_SURFACE);
+    expect(clearChat).toHaveBeenCalledTimes(1);
+    expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(false);
   });
 
   // The other half of the same rule: seeding still has to work when the user has done nothing, or a

@@ -675,7 +675,7 @@ export function ChatDrawer(props: {
           ]}
           onSelect={(id) => {
             if (id === "history") setShowHistory((prev) => !prev);
-            else if (id === "private") startPrivateChat();
+            else if (id === "private") (privateMode ? closePrivateChat : startPrivateChat)();
           }}
         />
         <IconButton aria-label="Close chat" title="Close" onClick={props.onClose}>

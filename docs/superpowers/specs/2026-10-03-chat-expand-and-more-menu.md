@@ -24,7 +24,7 @@ The menu reuses the existing `Menu` primitive in `@moss/ui` (Escape and outside 
 
 - The page header and page body are hidden. Left navigation stays.
 - Chat fills the main area to the window height, flush against the window edge and the left navigation: square corners, no border or shadow, no card.
-- Reading column is 960px at 1440 wide and about 820px at 1280 (the lesser of 960px and 78% of the area), with 16px minimum side padding.
+- Reading column is 960px at 1440 wide and about 850px at 1280 (the lesser of 960px and 78% of the area), with 16px minimum side padding. Header text, cards and message box share the same two edges.
 - Header text, suggestion cards, thread and message box share the same left and right edges. The header buttons stay pinned to the window's right edge.
 - The left navigation's highlighted item is dimmed while expanded.
 - The chat stays mounted, so unsent text survives expand and collapse.

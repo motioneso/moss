@@ -45,13 +45,14 @@
     --chatd-gutter: max(16px, calc((100% - min(960px, 78%)) / 2));
   }
 
+  /* The thread content sits 12px inside the body padding, so the body gives back 12px to put the
+     content edge on the gutter. The composer has no inner inset, so it takes the gutter as is. */
   .chatd--expanded .chatd__body {
-    padding-inline: var(--chatd-gutter);
+    padding-inline: calc(var(--chatd-gutter) - 12px);
   }
 
-  /* The thread content sits 12px inside the body padding, so the composer matches it. */
   .chatd--expanded .chatd__composer {
-    padding-inline: calc(var(--chatd-gutter) + 12px);
+    padding-inline: var(--chatd-gutter);
   }
 
   /* Header text lines up with the column; the buttons stay pinned to the right edge. */
