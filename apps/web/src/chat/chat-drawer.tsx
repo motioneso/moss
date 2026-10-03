@@ -667,7 +667,7 @@ export function ChatDrawer(props: {
                     id: "private",
                     icon: <ShieldOff aria-hidden="true" />,
                     label: privateMode ? "Leave private chat" : "Start private chat",
-                    ariaLabel: "Start private chat",
+                    ariaLabel: privateMode ? "Leave private chat" : "Start private chat",
                     checked: privateMode
                   }
                 ]

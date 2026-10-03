@@ -96,7 +96,9 @@ test("chat surface routing: drawer-only regression, no module mounted (#1533)", 
 
   await test.step("Start then end a private chat; the drawer-only control still works", async () => {
     const more = page.getByRole("button", { name: "More chat options" });
-    const privateItem = page.getByRole("menuitemcheckbox", { name: "Start private chat" });
+    const privateItem = page.getByRole("menuitemcheckbox", {
+      name: /^(Start|Leave) private chat$/
+    });
     const expectPrivateChecked = async (checked: boolean) => {
       await more.click();
       await expect(privateItem).toHaveAttribute("aria-checked", String(checked));

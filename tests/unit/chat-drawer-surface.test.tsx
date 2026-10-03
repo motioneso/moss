@@ -128,6 +128,10 @@ async function menuItem(renderer: ReactTestRenderer, label: string) {
       findByAriaLabel(renderer, "More chat options")!.props.onClick();
     });
   }
+  // The private item's name flips with its state, so the start name finds either one.
+  if (label === "Start private chat") {
+    return findByAriaLabel(renderer, label) ?? findByAriaLabel(renderer, "Leave private chat");
+  }
   return findByAriaLabel(renderer, label);
 }
 
@@ -821,12 +825,16 @@ describe("ChatDrawer surface routing (#1533)", () => {
     await clickMenuItem(renderer, "Start private chat", true);
     expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
     expect(clearChat).toHaveBeenCalledTimes(1);
+    expect(findByAriaLabel(renderer, "Leave private chat")).not.toBeNull();
+    expect(findByAriaLabel(renderer, "Start private chat")).toBeNull();
 
     await clickMenuItem(renderer, "Start private chat", true);
 
     expect(endPrivateChat).toHaveBeenCalledWith(DEFAULT_CHAT_SURFACE);
     expect(clearChat).toHaveBeenCalledTimes(1);
     expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(false);
+    expect(findByAriaLabel(renderer, "Start private chat")).not.toBeNull();
+    expect(findByAriaLabel(renderer, "Leave private chat")).toBeNull();
   });
 
   // The other half of the same rule: seeding still has to work when the user has done nothing, or a

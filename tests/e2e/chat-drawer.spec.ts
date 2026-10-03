@@ -15,7 +15,7 @@ async function pickChatMenuItem(drawer: Locator, name: string) {
 async function expectPrivateChecked(drawer: Locator, checked: boolean) {
   await drawer.getByRole("button", { name: "More chat options" }).click();
   await expect(
-    drawer.getByRole("menuitemcheckbox", { name: "Start private chat" })
+    drawer.getByRole("menuitemcheckbox", { name: /^(Start|Leave) private chat$/ })
   ).toHaveAttribute("aria-checked", String(checked));
   await drawer.page().keyboard.press("Escape");
   await expect(drawer.getByRole("menu")).toHaveCount(0);
