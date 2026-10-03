@@ -14,14 +14,14 @@
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
-| New chat stops running turn | #2934 | security | round-2 fix c0bd0f32 pushed; scoped Opus arbiter running on that fix only; Opus lane rebasing + full gate; then park for Ben | 2934 new chat stops turn (Opus) | w1:p11F | fix-2934-newchat-stop | #2963 | 0 |
-| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | Muse lane replaced by Opus 07:50 per Ben (handoff-2942.md); branch at 091e4410a, rebase then PR; gap (tools listed once per session) to its own issue | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | - | 1 |
-| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | slice A built (91670daa9); Muse replaced by Opus; rebase, renumber migrations to 0258/0259, gate, draft PR, then coordinator kill-gate call before slice B | 2956 activity history (Opus) | w1:p11G | feat-2956-activity-history | - | 0 |
+| New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | w1:p11F (lane told to stop; reap) | fix-2934-newchat-stop | #2963 | 0 |
+| Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | draft PR #2974 (head a26fdff31); full gate running; must rebase over #2963; then QA + live proof + matched UAT (sensitive), auto-merge | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | #2974 | 1 |
+| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | rebased, migrations 0258/0259 (5888cd2fb); full gate GO given 08:50; then draft PR, then coordinator plan section 6 continue-or-stop call before slice B | 2956 activity history (Opus) | w1:p11G | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
-| Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | plan approved 07:30 with 4 conditions from Opus check (owner does not bypass row security, table forces it; follows packages/ai/sql/0245 precedent): create as migration owner, pin search path + schema-qualify, test that the policy alone protects recent rows, number via check-migration-collisions | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | - | 0 |
+| Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | gate found export bug (worker cannot read table); fixing with actor-scoped worker read rule + red proof; migration 0257 reserved; needs coordinator GO for full gate; then PR, Opus adversarial QA, PARK for Ben (not delegated) | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | - | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
-| Classifier review storage hardening | #2893 | routine | building (Opus, spawned 07:52) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | - | 0 |
+| Classifier review storage hardening | #2893 | routine | PR #2973; gate green except known flake #1673 (rerun green); Opus QA subagent running (look for a 'QA:' comment on the PR; if none, spawn QA) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
 | Job search browser test signs in real chat | #2735 | routine (test-only) | building (Opus, spawned 07:52) | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
 
 ## Dependency / merge order
@@ -68,6 +68,13 @@ None.
   - Session id at merge matched lock anchor: y (3748ecb9). CI green, CLEAN.
   - Worktree check: `VERDICT: REAPABLE .../fix-2891-weather-spec (gates clear; ahead=2)`
   - Issue closed, board Done (automatic).
+
+- **PR #2963** (new chat stops the running turn, #2934), security:
+  - Sign-off: Ben delegated the decision to the coordinator ("please review privacy 4 me and make approval decision").
+  - QA: round 1 RED, round 2 RED (1 blocking), scoped Opus arbiter on fix c0bd0f32 GREEN (comment 5970231610). Decision comment posted on the PR.
+  - After the arbiter: clean rebase (range-diff identical) + comments-only trim to 1000 lines (verified no code lines changed).
+  - CI fully green on 264a26ea6 incl. all integration and browser shards. Local gate red only on known flake #1673 (gateway pattern timeout), file untouched by PR.
+  - Session id at merge matched lock anchor: y (3748ecb9). Merged b861a8093.
 
 ## Reaped sessions
 
@@ -121,3 +128,16 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 - Migration numbers: main has 0256. 0257 reserved for #2637; #2956 takes 0258/0259.
 - 2963 scoped arbiter GREEN: https://github.com/motioneso/moss/pull/2963#issuecomment-5970231610 . Waiting on rebase + gate (w1:p11F).- 08:14 Memory tight (5 GB avail, 4-6 gates). Gate queue held by coordinator: 2942 waits for GO after one of 2637/2893/2934 finishes. Stale 2942 gate on old head f35e6a4 killed. Memory service back to 10 GB 20 min after restart: tracing not the cause.
 - 08:36 Gate queue: running 2942, 2637 (+2912, plus a non-run design gate). Next GO: 2956 after 2637 finishes. 2893 and 2934 gates red; lanes rerunning failed files only.
+
+
+RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor next steps:
+1. GATE QUEUE (memory is the bottleneck, ~5-10 GB free): lanes do NOT start full gates on their own; they wait for a coordinator GO. Keep at most 3 full gates running (count with: ps -eo args | grep -c -e '[r]un-gate.sh __run'; one may be a non-run design gate). Running now: 2942 (opus-2942), 2956 (opus-2956), 2912. Next GO: 2637 when it reports its fix ready. Gateway pattern-timeout failures (#1673) are load flakes: rerun that file alone.
+2. Lanes (all Opus, agent names opus-NNNN, message with herdr agent prompt): opus-2942, opus-2893, opus-2735, opus-2956, opus-2637 (pane label "2637 focus history cleanup"), 2912 lane (label "2912 notes browser tests"). opus-2934 is done: confirm clean, close its pane, reap its worktree.
+3. PR 2973: my QA subagent may die with me. If no "QA:" comment on 2973, spawn coordinated-qa (Opus). GREEN + CI green -> merge (routine, not user-facing).
+4. PR 2974: after gate + rebase over #2963, QA + live proof on dev + matched UAT, then auto-merge (sensitive).
+5. 2637: security tier, NOT delegated by Ben -> after Opus adversarial QA, AWAITING-BEN + needs-ben; never merge.
+6. 2956: on draft PR, make the plan section 6 continue-or-stop call, then fresh sessions for slices B-D.
+7. Re-arm: PR watch on all lane branches; Docker untagged-image prune sweep (free < 25 GB).
+8. Opus builders until 11:00 PDT (Ben); after that new lanes go back to Muse. Ben wants several builders busy until then.
+9. Memory service (iii) climbs to ~10 GB within 20 min of restart; tracing turned off, not the cause. Do not restart it again for memory.
+10. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
