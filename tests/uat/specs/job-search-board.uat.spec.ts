@@ -19,6 +19,8 @@
 //     stay gated on REAL_CHAT_CONFIGURED, exactly like real-chat-onboarding.uat.spec.ts's #1121
 //     gate: skipped on every default/CI run, exercised only when the operator's own signed-in
 //     Codex CLI login has been copied into the stack (see tests/uat/real-chat-env.ts, #2732).
+//     Each spec file gets a fresh stack, so this spec signs in its own Codex provider and binds
+//     the cheapest chat model before Phase 3 (#2735).
 //   - Phases 5-12 are ABOUT the board, sort, portal banner, inspector, drawer scoping, and nav
 //     badge — NONE of them are about onboarding. Gating those on a real model too would mean this
 //     spec's only board/sort/banner/inspector coverage never runs on CI, which is what the
@@ -39,9 +41,15 @@ import {
 
 import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.js";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
 import { execUatSql } from "./job-search-board-sql.js";
+import {
+  bringUpRealChatModel,
+  requireUatBaseURL as requireBaseURL,
+  requireUatProjectName as requireProjectName,
+  signInUatAdmin as signIn
+} from "./real-chat-signin.js";
 
 export const uatLevel = {
   level: "admin+data",
@@ -61,37 +69,18 @@ const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED
 const POLL_DEADLINE_MS = 120_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
 const POLL_MAX_INTERVAL_MS = 4_000;
+// Onboarding step keys (profile.completedSteps) and the row labels the screen announces.
+const ONBOARDING_STEP_LABELS = {
+  role: "Role",
+  want: "What you want",
+  where: "Where",
+  comp: "Pay",
+  sources: "Job boards"
+} as const;
+
 // How long one poll cycle waits for the reloaded page to render what it is looking for. Generous
 // because the board's data arrives over two sequential fetches (profile list, then matches).
 const POLL_SETTLE_MS = 5_000;
-
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) {
-    throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  }
-  return baseURL;
-}
-
-function requireProjectName(): string {
-  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
-  if (!projectName) {
-    throw new Error("JARVIS_UAT_PROJECT_NAME must be set by run-uat.ts");
-  }
-  return projectName;
-}
-
-// Copied (not imported) from finance-feed.uat.spec.ts / real-chat-onboarding.uat.spec.ts — the
-// harness's established pattern for avoiding cross-file test() registration. admin+data lands
-// directly on AppShell (no first-run wizard), so no Skip-setup handling is needed here, unlike the
-// solo-admin copies.
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
-}
 
 async function openInstanceModules(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
@@ -104,7 +93,12 @@ async function openJobSearch(page: Page): Promise<void> {
   await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Job Search" }).click();
 }
 
-async function observedProfiles(response: Response): Promise<Array<{ state?: string }> | null> {
+interface ObservedProfile {
+  state?: string;
+  completedSteps?: string[];
+}
+
+async function observedProfiles(response: Response): Promise<ObservedProfile[] | null> {
   if (
     !response.url().endsWith("/api/ai/assistant-tools/job-search.profile.list/invoke") ||
     response.request().method() !== "POST" ||
@@ -113,7 +107,7 @@ async function observedProfiles(response: Response): Promise<Array<{ state?: str
     return null;
   }
   const body = (await response.json()) as {
-    invocation?: { status?: string; result?: { profiles?: Array<{ state?: string }> } };
+    invocation?: { status?: string; result?: { profiles?: ObservedProfile[] } };
   };
   return body.invocation?.status === "succeeded" && Array.isArray(body.invocation.result?.profiles)
     ? body.invocation.result.profiles
@@ -406,17 +400,26 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   let crawlRunObservation: Promise<Request> | null = null;
 
   if (REAL_CHAT_CONFIGURED) {
+    // The only seeded model is the structured-output scoring model, so the conversation needs a
+    // real chat provider signed in on this spec's own stack.
+    await test.step("Real chat: sign in Codex and bind the cheapest chat model", async () => {
+      await bringUpRealChatModel(page);
+    });
+
     // --- Phase 3: onboarding screen renders while state === "in_conversation" ---
     await test.step("Phase 3: onboarding screen appears, no board list yet", async () => {
       await page.reload();
-      await expect(page.getByText("Let's work out what this search is for.")).toBeVisible({
+      // The heading renders a typographic apostrophe (&rsquo;).
+      await expect(page.getByText("Let\u2019s work out what this search is for.")).toBeVisible({
         timeout: POLL_DEADLINE_MS
       });
       await expect(page.locator(".jsm-board-list")).toHaveCount(0);
 
-      // The five onboarding chips render as plain-text spans, not-done styled until completed.
-      for (const step of ["role", "want", "where", "comp", "sources"]) {
-        await expect(page.getByText(step, { exact: true })).toBeVisible();
+      // Each of the five step rows announces its label and "still needed" until answered.
+      for (const label of Object.values(ONBOARDING_STEP_LABELS)) {
+        await expect(
+          page.getByRole("listitem", { name: `${label} \u2014 still needed`, exact: true })
+        ).toBeVisible();
       }
       await shot(page, "03-onboarding-screen");
     });
@@ -434,29 +437,39 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       // #1306: portal-enabling only happens via the job-search.portal.set-enabled tool, invoked by
       // the assistant conversation — there is no onboarding-time UI toggle (settings.tsx's toggle is
       // for an already-active profile). The prompt above asks explicitly so "sources" can complete.
-      const done = new Set(["role", "want", "where", "comp", "sources"]);
-      await pollWithReload(
-        page,
-        async () => {
-          const state: Record<string, boolean> = {};
-          for (const step of done) {
-            const chip = page.getByText(step, { exact: true });
-            const className = (await chip.getAttribute("class")) ?? "";
-            state[step] = className.includes("jds-badge--forest");
+      // Completion must be persisted, not live component state. Poll the same read-only
+      // profile.list invoke the page uses rather than reloading, because a reload mid-turn cuts
+      // the streaming conversation off.
+      const steps = Object.keys(ONBOARDING_STEP_LABELS);
+      await expect
+        .poll(
+          async () => {
+            const response = await page.request.post(
+              "/api/ai/assistant-tools/job-search.profile.list/invoke",
+              { data: { input: {} } }
+            );
+            expect(response.ok(), `profile.list invoke -> ${response.status()}`).toBe(true);
+            const body = (await response.json()) as {
+              invocation?: { result?: { profiles?: ObservedProfile[] } };
+            };
+            const profile = body.invocation?.result?.profiles?.[0];
+            return {
+              state: profile?.state,
+              missing: steps.filter((step) => !profile?.completedSteps?.includes(step))
+            };
+          },
+          {
+            message: "all five onboarding steps answered and the profile active",
+            timeout: POLL_DEADLINE_MS * 3,
+            intervals: [1_000, 2_000, POLL_MAX_INTERVAL_MS]
           }
-          return state;
-        },
-        (state) => Object.values(state).every(Boolean),
-        "all five onboarding chips (role, want, where, comp, sources) reaching done"
-      );
+        )
+        .toEqual({ state: "active", missing: [] });
 
-      // Explicit reload + re-check: chip completion must survive a fresh page load, not just live
-      // component state left over from the conversation.
+      // A fresh load of an active profile shows the board, not the onboarding screen.
       await page.reload();
-      for (const step of done) {
-        const chip = page.getByText(step, { exact: true });
-        await expect(chip).toHaveClass(/jds-badge--forest/);
-      }
+
+      await expect(page.getByText("Let\u2019s work out what this search is for.")).toHaveCount(0);
       await shot(page, "04-onboarding-all-steps-done");
     });
   } else {
@@ -948,7 +961,8 @@ test("nav badge reflects unread matches and clears on mark-read (#1285)", async 
     expect(await badge.textContent()).toBe(String(seeded.unreadByModule["job-search"]));
 
     await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Notifications" }).click();
+    // The account trigger's label also mentions notifications, so target the menu item.
+    await page.locator(".jds-usermenu__item").getByText("Notifications").click();
     const notice = page.locator("article.jds-task").filter({
       has: page.getByText(notificationTitle, { exact: true })
     });
