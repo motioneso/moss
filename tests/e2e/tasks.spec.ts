@@ -67,6 +67,65 @@ test("grid toggle switches to the grid view", async ({ page }) => {
   await expect(page.getByText("Do First")).toBeVisible();
 });
 
+test("grid shows four ruled quadrant sections with counts and keeps the index", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Grid", exact: true }).click();
+
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+    "Do First",
+    "Schedule",
+    "Delegate",
+    "Later"
+  ]);
+  const doFirst = page.getByRole("region", { name: "Do First" });
+  await expect(doFirst.getByText("1 task", { exact: true })).toBeVisible();
+  await expect(doFirst.getByText("File taxes")).toBeVisible();
+  const schedule = page.getByRole("region", { name: "Schedule" });
+  await expect(schedule.getByText("0 tasks", { exact: true })).toBeVisible();
+  await expect(schedule.getByText("Nothing here.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Later" }).getByText("Learn cello")).toBeVisible();
+  await expect(page.getByRole("grid")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Lists" })).toBeVisible();
+
+  await doFirst.getByRole("button", { name: "Open File taxes" }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("grid stacks to one column on a phone without horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Grid", exact: true }).click();
+  const doFirst = page.getByRole("region", { name: "Do First" });
+  const schedule = page.getByRole("region", { name: "Schedule" });
+  const [a, b] = [await doFirst.boundingBox(), await schedule.boundingBox()];
+  expect(a && b && b.y >= a.y + a.height).toBe(true);
+  for (const region of [doFirst, schedule]) {
+    const box = await region.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 375).toBe(true);
+  }
+});
+
+test("suggested tasks can be accepted from the grid", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    taskLists: [personalList],
+    tasks: [createMockTask("t-suggested", "Book the dentist", { status: "suggested" })]
+  });
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Grid", exact: true }).click();
+  await page.getByRole("button", { name: "Suggested", exact: true }).click();
+  const later = page.getByRole("region", { name: "Later" });
+  const patch = page.waitForRequest((req) => req.method() === "PATCH");
+  await later.getByRole("button", { name: "Accept" }).click();
+  expect((await patch).postDataJSON()).toMatchObject({ status: "todo" });
+});
+
 test("assigning a tag from the task modal renders a chip", async ({ page }) => {
   await page.goto("/tasks");
   await page.getByRole("button", { name: "Open File taxes" }).first().click();

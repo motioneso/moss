@@ -318,54 +318,6 @@
   padding-left: 10px;
 }
 
-/* ---- Matrix (Eisenhower) ---- */
-.tk-matrix {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-@media (max-width: 760px) {
-  .tk-matrix {
-    grid-template-columns: 1fr;
-  }
-}
-.tk-quad {
-  display: flex;
-  flex-direction: column;
-  min-height: 188px;
-  overflow: hidden;
-}
-.tk-quad__head {
-  padding: 13px 16px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.tk-quad__tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  letter-spacing: 0.1em;
-}
-.tk-quad__tag .dot {
-  width: 7px;
-  height: 7px;
-}
-.tk-quad__verb {
-  letter-spacing: -0.01em;
-  margin-top: 7px;
-}
-.tk-quad__n {
-  float: right;
-  margin-top: 2px;
-}
-.tk-quad__body {
-  padding: 5px 7px 9px;
-  flex: 1;
-}
-.tk-quad__empty {
-  font-style: italic;
-  padding: 16px 10px;
-}
-
 /* ---- Empty state + footer ---- */
 .tk-foot {
   display: flex;

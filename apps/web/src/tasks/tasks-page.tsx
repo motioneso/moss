@@ -378,9 +378,11 @@ export function TasksPage() {
               <TaskMatrixView
                 tasks={visibleTasks}
                 lists={lists}
-                isUpdating={updateMutation.isPending}
+                isUpdating={updateMutation.isPending || triageMutation.isPending}
                 onToggleDone={(task) => updateMutation.mutate(task)}
                 onOpen={(task) => setDialog({ id: task.id })}
+                onAccept={(task) => triageMutation.mutate({ task, status: "todo" })}
+                onDismiss={(task) => triageMutation.mutate({ task, status: "archived" })}
               />
             ) : (
               <TaskListView
