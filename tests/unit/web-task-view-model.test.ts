@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { TaskDto, TaskListDto } from "@moss/shared";
 import {
   deriveTaskFilters,
+  primaryListSelection,
   groupTasksByQuadrant,
   type ListState
 } from "../../apps/web/src/tasks/task-view-model.js";
@@ -192,3 +193,20 @@ function task(
     suggestionMetadata: null
   };
 }
+
+describe("primary list selection", () => {
+  it("reads an untouched or fully included state as all lists", () => {
+    expect(primaryListSelection({})).toEqual({ kind: "all" });
+    expect(primaryListSelection({ a: "included" })).toEqual({ kind: "all" });
+  });
+
+  it("reads a single solo list as that one list", () => {
+    expect(primaryListSelection({ a: "solo", b: "included" })).toEqual({ kind: "one", id: "a" });
+  });
+
+  it("reports hidden lists and several solo lists as custom", () => {
+    expect(primaryListSelection({ a: "excluded" })).toEqual({ kind: "custom" });
+    expect(primaryListSelection({ a: "solo", b: "solo" })).toEqual({ kind: "custom" });
+    expect(primaryListSelection({ a: "solo", b: "excluded" })).toEqual({ kind: "custom" });
+  });
+});

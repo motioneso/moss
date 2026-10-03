@@ -139,6 +139,10 @@ _No enum or boolean props._
 
 - **block** (optional boolean flag)
 
+## nav-index
+
+- **selected** (optional boolean flag)
+
 ## note
 
 - **variant** (required): `plan`, `pull`, `practical`
@@ -170,7 +174,7 @@ _No enum or boolean props._
 
 ## segmented
 
-_No enum or boolean props._
+- **tone** (optional): `default`, `field`
 
 ## select
 

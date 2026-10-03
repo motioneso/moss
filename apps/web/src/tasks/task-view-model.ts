@@ -151,3 +151,17 @@ function byDueThenTitle(left: TaskDto, right: TaskDto): number {
   const rightDueAt = right.dueAt ? new Date(right.dueAt).getTime() : Number.MAX_SAFE_INTEGER;
   return leftDueAt - rightDueAt || left.title.localeCompare(right.title);
 }
+
+/** Which primary choice the current filter state equals, or "custom" for anything else. */
+export function primaryListSelection(
+  listStates: Readonly<Record<string, ListState>>
+):
+  | { readonly kind: "all" }
+  | { readonly kind: "one"; readonly id: string }
+  | { readonly kind: "custom" } {
+  const changed = Object.entries(listStates).filter(([, state]) => state !== "included");
+  if (changed.length === 0) return { kind: "all" };
+  const [only] = changed;
+  if (changed.length === 1 && only && only[1] === "solo") return { kind: "one", id: only[0] };
+  return { kind: "custom" };
+}

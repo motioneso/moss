@@ -1,12 +1,6 @@
 /* =====================================================================
    TASKS — priority-grouped list + Eisenhower matrix
    ===================================================================== */
-.tasks-wrap {
-  max-width: 940px;
-  margin: 0 auto;
-  padding: 26px 40px 96px;
-}
-
 /* ---- Control bar ---- */
 .tk-bar {
   display: flex;

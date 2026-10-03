@@ -44,6 +44,12 @@
 .jds-masthead__accent {
   color: var(--accent-fg);
 }
+.jds-masthead__mark {
+  color: var(--gold-strong);
+}
+.jds-masthead--field .jds-masthead__mark {
+  color: var(--masthead-rule);
+}
 .jds-masthead__lede {
   margin: var(--space-2) 0 0;
   font-size: var(--text-md);
@@ -724,4 +730,76 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+}
+
+/* NavIndex: quiet vertical index of selectable rows. Selection is accent text plus a
+   straight accent marker; hover is the row index's gold marker. Never a filled block. */
+.jds-navindex {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.jds-navindex__label {
+  margin: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--accent-fg);
+}
+.jds-navindex__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-strong);
+}
+.jds-navindex__row {
+  border-bottom: 1px solid var(--border);
+}
+.jds-navindex__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.jds-navindex__item:hover {
+  box-shadow: inset 3px 0 0 var(--gold);
+  color: var(--accent-fg);
+}
+.jds-navindex__item[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--accent-fg);
+  font-weight: var(--weight-bold);
+}
+.jds-navindex__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.jds-navindex__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.jds-navindex__count {
+  flex: none;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.jds-navindex__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
 }

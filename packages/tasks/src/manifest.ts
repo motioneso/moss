@@ -269,7 +269,7 @@ export const tasksModuleManifest = {
       id: "tasks",
       label: "Tasks",
       description:
-        "View and manage the active actor's tasks: create, update, and complete tasks, organize them into lists and tags, break a task into subtasks, and see them ranked by priority in the do/schedule/delegate/eliminate matrix.",
+        "View and manage the active actor's tasks: create, update, and complete tasks, organize them into lists and tags, break a task into subtasks, and switch between a List view grouped by priority and a Grid view sorted by importance and urgency. A list index beside the tasks (a list picker on narrow screens) shows one list or all lists, and a List filters menu can show or hide several lists at once.",
       path: "/tasks",
       icon: "check-square",
       order: 10,
@@ -815,13 +815,14 @@ export const tasksModuleManifest = {
       id: "tasks.lists_and_tags",
       description:
         "Organize tasks into lists with filterable tags; rename, reassign, or delete lists and " +
-        "tags without losing the tasks in them."
+        "tags without losing the tasks in them. Pick a list from the index beside your tasks, or " +
+        "from the list picker on a phone, and the choice stays when you switch between List and Grid."
     },
     {
       id: "tasks.priority_matrix",
       description:
-        "Rank tasks across the do / schedule / delegate / eliminate matrix, plus a focus list of " +
-        "overdue and at-risk tasks for today."
+        "Switch to the Grid view to rank tasks into do first / schedule / delegate / later by " +
+        "importance and urgency, plus a focus list of overdue and at-risk tasks for today."
     },
     {
       id: "tasks.breakdown",
