@@ -6,7 +6,8 @@ import type { IntegrationToolDescriptor } from "@moss/shared";
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
-    const sorted: Record<string, unknown> = {};
+    // Null prototype: a schema key named `__proto__` is hashed instead of dropped by the setter.
+    const sorted = Object.create(null) as Record<string, unknown>;
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
     }

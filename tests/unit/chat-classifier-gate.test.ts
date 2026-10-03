@@ -601,6 +601,29 @@ describe("candidates and typed values", () => {
   });
 });
 
+describe("an argument named __proto__ on the pick path", () => {
+  it("reaches the tool call as an own key", async () => {
+    // JSON.parse keeps `__proto__` an own key, as it arrives from a connected server.
+    const tool = readTool({
+      inputSchema: JSON.parse(
+        '{"type":"object","properties":{"__proto__":{"type":"string","enum":["today","tomorrow"]}},' +
+          '"required":["__proto__"],"additionalProperties":false}'
+      ) as GateTool["inputSchema"],
+      classifier: {
+        description: "List the day's events",
+        arguments: JSON.parse('{"__proto__":{"kind":"enum"}}') as Record<string, { kind: "enum" }>,
+        replyTemplate: "Events: {summary}"
+      }
+    });
+    const h = harness({ tools: [tool] });
+
+    expect(await h.gate.evaluate(request())).toMatchObject({ kind: "handled" });
+    const input = h.gatewayCall.mock.calls.at(-1)![1] as object;
+    expect(Object.prototype.hasOwnProperty.call(input, "__proto__")).toBe(true);
+    expect(JSON.stringify(input)).toBe('{"__proto__":"today"}');
+  });
+});
+
 describe("the gateway and the tool result", () => {
   it("evaluates without running anything in shadow mode", async () => {
     const h = harness({ gateway: { kind: "would_run", approvalMode: "auto" } });

@@ -432,7 +432,8 @@ export class ClassifierGate {
       if (!checked.ok) return new Stop(checked.reason);
       input = checked.input;
     } else {
-      input = {};
+      // Argument names may come from a connected server; a null prototype keeps `__proto__` an own key.
+      input = Object.create(null) as Record<string, unknown>;
       for (const arg of plan) {
         const offered = options.get(arg.name)!;
         const criteria = Object.fromEntries(offered.map((option) => [option.id, option.label]));

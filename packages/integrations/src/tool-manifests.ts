@@ -345,7 +345,8 @@ function buildClassifierDeclaration(
   deps: IntegrationsActiveModulesResolverDeps
 ): ModuleAssistantToolClassifier {
   const cache = deps.candidateCache ?? candidateCache;
-  const args: Record<string, ClassifierArgumentDecl> = {};
+  // Argument names come from a connected server; a null prototype keeps `__proto__` an own key.
+  const args = Object.create(null) as Record<string, ClassifierArgumentDecl>;
   const candidateSources = new Set<string>();
   for (const [name, argument] of Object.entries(entry.arguments)) {
     args[name] = { kind: argument.kind };

@@ -140,7 +140,8 @@ export function extractionSchema(
   plan: readonly ArgumentPlan[],
   options: ReadonlyMap<string, readonly ArgumentOption[]>
 ): Record<string, unknown> {
-  const properties: Record<string, unknown> = {};
+  // Argument names may come from a connected server; a null prototype keeps `__proto__` an own key.
+  const properties = Object.create(null) as Record<string, unknown>;
   for (const arg of plan) {
     const offered = options.get(arg.name);
     properties[arg.name] = offered
@@ -173,7 +174,7 @@ export function checkExtractedArguments(
   if (Object.keys(values).some((key) => !allowed.has(key))) {
     return { ok: false, reason: "invalid_arguments" };
   }
-  const input: Record<string, unknown> = {};
+  const input = Object.create(null) as Record<string, unknown>;
   for (const arg of plan) {
     const value = values[arg.name];
     if (value === undefined) {

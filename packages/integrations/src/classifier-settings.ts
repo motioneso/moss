@@ -186,7 +186,8 @@ function parseArguments(
     problems.push(`more than ${INTEGRATION_CLASSIFIER_MAX_ARGUMENTS} arguments`);
     return {};
   }
-  const out: Record<string, IntegrationClassifierArgument> = {};
+  // Null prototype: an argument named `__proto__` stays an own key instead of hitting the setter.
+  const out = Object.create(null) as Record<string, IntegrationClassifierArgument>;
   for (const name of names) {
     const parsed = parseArgument(name, raw[name], problems);
     if (parsed) out[name] = parsed;

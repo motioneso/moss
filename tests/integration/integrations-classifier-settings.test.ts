@@ -9,6 +9,7 @@ import {
   createIntegrationsCipher,
   createResolverCache,
   effectiveClassifierTools,
+  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   IntegrationsRepository,
   registerIntegrationsRoutes,
   toolDefinitionFingerprint,
@@ -309,6 +310,117 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
 
     const row = (await load(ids.userA, conn.id))!;
     expect(Object.keys(row.classifierPreparation.entries).sort()).toEqual(["turn_off", "turn_on"]);
+  });
+
+  async function seedPreparation(id: string, value: unknown): Promise<void> {
+    const admin = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await admin.connect();
+    try {
+      await admin.query(
+        "UPDATE app.integration_connections SET classifier_preparation = $2::jsonb WHERE id = $1",
+        [id, JSON.stringify(value)]
+      );
+    } finally {
+      await admin.end();
+    }
+  }
+
+  /** Run `saves` while a bootstrap session holds the row, so every save queues on it first. */
+  async function withRowHeld<T>(id: string, saves: () => Promise<T>): Promise<T> {
+    const locker = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await locker.connect();
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT id FROM app.integration_connections WHERE id = $1 FOR UPDATE", [
+        id
+      ]);
+      const pending = saves();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await locker.query("COMMIT");
+      return await pending;
+    } finally {
+      await locker.end();
+    }
+  }
+
+  function saveReviewed(id: string, tool: IntegrationToolDescriptor) {
+    return dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.saveClassifierToolReview(scopedDb, id, tool.name, {
+        optIn: true,
+        reviewedRisk: "write",
+        description: "Reviewed",
+        arguments: {},
+        replyTemplate: "Done.",
+        reviewedFingerprint: toolDefinitionFingerprint(tool)
+      })
+    );
+  }
+
+  it.each([
+    ["entries is an array", { version: 1, entries: [] }],
+    ["entries is a string", { version: 1, entries: "x" }],
+    ["the version is unknown", { version: 99, entries: { turn_off: {} } }]
+  ])("starts a clean list when %s", async (_label, damaged) => {
+    const conn = await createConnection(ids.userA, `Owner A Damaged ${_label}`);
+    await seedPreparation(conn.id, damaged);
+
+    const result = await saveReviewed(conn.id, TURN_ON);
+    expect(result.status).toBe("saved");
+
+    const row = (await load(ids.userA, conn.id))!;
+    expect(Object.keys(row.classifierPreparation.entries)).toEqual(["turn_on"]);
+    expect(row.classifierPreparation.entries["turn_on"]?.preparationVersion).toBe(1);
+  });
+
+  it("gives two saves of the same tool at the same moment distinct versions", async () => {
+    const conn = await createConnection(ids.userA, "Owner A Concurrent Versions");
+
+    const results = await withRowHeld(conn.id, () =>
+      Promise.all([saveReviewed(conn.id, TURN_ON), saveReviewed(conn.id, TURN_ON)])
+    );
+
+    const versions = results
+      .map((result) =>
+        result.status === "saved"
+          ? result.connection.classifierPreparation.entries["turn_on"]?.preparationVersion
+          : undefined
+      )
+      .sort();
+    expect(versions).toEqual([1, 2]);
+    const row = (await load(ids.userA, conn.id))!;
+    expect(row.classifierPreparation.entries["turn_on"]?.preparationVersion).toBe(2);
+  });
+
+  it("holds the saved-review cap when two new reviews land at the same moment", async () => {
+    const first: IntegrationToolDescriptor = { ...TURN_ON, name: "cap_first" };
+    const second: IntegrationToolDescriptor = { ...TURN_ON, name: "cap_second" };
+    const conn = await createConnection(ids.userA, "Owner A Concurrent Cap", [first, second]);
+
+    const filler = {
+      optIn: false,
+      reviewedRisk: "read",
+      description: "Filler",
+      arguments: {},
+      replyTemplate: "Done.",
+      definitionFingerprint: "filler",
+      reviewedAt: new Date().toISOString(),
+      preparationVersion: 1
+    };
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < INTEGRATION_CLASSIFIER_MAX_ENTRIES - 1; i += 1) {
+      entries[`filler_${i}`] = filler;
+    }
+    await seedPreparation(conn.id, { version: 1, entries });
+
+    const results = await withRowHeld(conn.id, () =>
+      Promise.all([saveReviewed(conn.id, first), saveReviewed(conn.id, second)])
+    );
+
+    expect(results.map((result) => result.status).sort()).toEqual(["saved", "too_many"]);
+    const row = (await load(ids.userA, conn.id))!;
+    expect(Object.keys(row.classifierPreparation.entries)).toHaveLength(
+      INTEGRATION_CLASSIFIER_MAX_ENTRIES
+    );
   });
 
   it("cascades prepared text away when the connection is deleted", async () => {
