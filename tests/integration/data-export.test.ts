@@ -616,6 +616,22 @@ describe("Data export", () => {
     });
 
     it("async nested-archive surface (sections.newsPersonalization) matches and leaks nothing", async () => {
+      // #2637: one focus judgment per person, so the archive must carry A's and never B's.
+      const focusOwnId = "99999999-0000-4000-8000-000000002637";
+      const focusOtherId = "99999999-0000-4000-8000-000000002638";
+      const focusClient = new Client({ connectionString: connectionStrings.bootstrap });
+      await focusClient.connect();
+      try {
+        await focusClient.query(
+          `INSERT INTO app.focus_judgments (id, owner_user_id, block_ref, label, reason)
+           VALUES ($1, $2, 'block-export', 'focused', 'Own judgment.'),
+                  ($3, $4, 'block-export', 'distracted', 'Other judgment.')`,
+          [focusOwnId, ids.userA, focusOtherId, ids.userB]
+        );
+      } finally {
+        await focusClient.end();
+      }
+
       const vaultRoot = await mkdtemp(join(tmpdir(), "jarvis-export-news-"));
       const originalVaultRoot = process.env.JARVIS_VAULT_ROOT;
       process.env.JARVIS_VAULT_ROOT = vaultRoot;
@@ -651,7 +667,9 @@ describe("Data export", () => {
           { actorUserId: ids.userA },
           (vaultCtx) => readVaultFile(vaultCtx, `exports/${jobRecord.id}.json`)
         );
-        const archive = JSON.parse(archiveJson) as { sections: ExportedSections };
+        const archive = JSON.parse(archiveJson) as {
+          sections: ExportedSections & { focus_judgments: Array<{ id: string }> };
+        };
 
         const section = archive.sections.newsPersonalization;
         expect(section).toBeDefined();
@@ -683,6 +701,8 @@ describe("Data export", () => {
         expect(archiveJson).not.toContain(sportsParameterMarker);
         expect(archiveJson).not.toContain(sportsPrivateHost);
         expect(archiveJson).not.toContain(userBSportsDomain);
+        expect(archive.sections.focus_judgments.map((row) => row.id)).toEqual([focusOwnId]);
+        expect(archiveJson).not.toContain(focusOtherId);
       } finally {
         if (originalVaultRoot === undefined) delete process.env.JARVIS_VAULT_ROOT;
         else process.env.JARVIS_VAULT_ROOT = originalVaultRoot;
