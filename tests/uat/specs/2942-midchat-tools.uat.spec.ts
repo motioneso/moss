@@ -155,14 +155,21 @@ async function openChat(page: Page): Promise<void> {
   await expect(composer).toBeEnabled();
 }
 
-async function sendTurn(page: Page, text: string): Promise<void> {
+type TurnResponse = Awaited<ReturnType<Page["waitForResponse"]>>;
+
+async function sendTurn(
+  page: Page,
+  text: string,
+  responseTimeoutMs = 30_000
+): Promise<TurnResponse> {
   // The settings tab takes focus during approval; a backgrounded chat tab may not
   // dispatch the composer Enter, so foreground it before every turn.
   await page.bringToFront();
   const turnResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
-      response.request().method() === "POST"
+      response.request().method() === "POST",
+    { timeout: responseTimeoutMs }
   );
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await composer.fill(text);
@@ -170,9 +177,26 @@ async function sendTurn(page: Page, text: string): Promise<void> {
   const response = await turnResponse;
   expect(response.status(), "chat turn POST").toBe(200);
   // waitForResponse fires on response headers, but a model turn keeps working long
-  // after that. Reading the full body waits for the turn to actually finish, so the
-  // next turn never lands while one is still in flight (the UI then sends nothing).
-  await expect.poll(() => response.json().then(() => true), { timeout: 300_000 }).toBe(true);
+  // after that. The caller waits for the end explicitly (or answers the approval card
+  // the turn is holding on) — never fire the next turn while one is still in flight,
+  // or the UI sends nothing.
+  return response;
+}
+
+// Reading the full body waits for the turn to actually finish. Never use this for a
+// turn that is expected to raise an approval card — the hold only releases when someone
+// answers the card.
+async function awaitTurnEnd(response: TurnResponse, timeoutMs = 300_000): Promise<void> {
+  await expect.poll(() => response.json().then(() => true), { timeout: timeoutMs }).toBe(true);
+}
+
+async function sendTurnAndWait(
+  page: Page,
+  text: string,
+  responseTimeoutMs = 30_000,
+  endTimeoutMs = 300_000
+): Promise<void> {
+  await awaitTurnEnd(await sendTurn(page, text, responseTimeoutMs), endTimeoutMs);
 }
 
 test("mid-conversation tools tell the person to start a new chat (#2942)", async ({
@@ -212,7 +236,7 @@ test("mid-conversation tools tell the person to start a new chat (#2942)", async
     await test.step("open a chat while the hub tools are still unusable", async () => {
       await openChat(chat);
       // The hello forces the session (and its captured tool list) to exist before approval.
-      await sendTurn(chat, "hello");
+      await sendTurnAndWait(chat, "hello");
     });
 
     await test.step("approve the hub tools mid-conversation", async () => {
@@ -227,13 +251,32 @@ test("mid-conversation tools tell the person to start a new chat (#2942)", async
     });
 
     await test.step("the open chat shows the start-a-new-chat hint, and the light stays off", async () => {
-      await sendTurn(
+      // A tool-using turn needs several model round trips; the default 30 s wait is only
+      // enough for a plain reply.
+      const pending = await sendTurn(
         chat,
-        'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.'
+        'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.',
+        180_000
+      );
+      // Either the turn ends with the hint (the call was refused on the stale session
+      // allowlist) or an approval card appears (the call was allowed — the session must
+      // have relaunched with a fresh allowlist, and the hint cannot fire here).
+      const card = chat
+        .locator('[aria-label="Action request"]')
+        .getByRole("button", { name: "Approve" })
+        .first();
+      const hint = chat.getByText(/Start a new chat/i).first();
+      const raced = await Promise.race([
+        card.waitFor({ timeout: 180_000 }).then(() => "card-path" as const),
+        hint.waitFor({ timeout: 180_000 }).then(() => "hint-path" as const)
+      ]);
+      expect(raced, "an approval card in the old chat means its session was refreshed").toBe(
+        "hint-path"
       );
       // The session predates the approval, so the call is refused with the hint — the tool
       // never runs and the person sees the way out in the chat itself.
-      await expect(chat.getByText(/Start a new chat/i).first()).toBeVisible({ timeout: 180_000 });
+      await expect(hint).toBeVisible({ timeout: 180_000 });
+      await awaitTurnEnd(pending);
       expect(
         fixtureState().calls.filter((call) => call.tool === FIXTURE_LIGHT_TOOL),
         "the refused tool never ran"
@@ -250,7 +293,8 @@ test("mid-conversation tools tell the person to start a new chat (#2942)", async
       await chat.waitForTimeout(8_000);
       await sendTurn(
         chat,
-        'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.'
+        'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.',
+        180_000
       );
       const approve = chat
         .locator('[aria-label="Action request"]')
