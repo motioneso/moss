@@ -169,6 +169,10 @@ async function sendTurn(page: Page, text: string): Promise<void> {
   await composer.press("Enter");
   const response = await turnResponse;
   expect(response.status(), "chat turn POST").toBe(200);
+  // waitForResponse fires on response headers, but a model turn keeps working long
+  // after that. Reading the full body waits for the turn to actually finish, so the
+  // next turn never lands while one is still in flight (the UI then sends nothing).
+  await expect.poll(() => response.json().then(() => true), { timeout: 300_000 }).toBe(true);
 }
 
 test("mid-conversation tools tell the person to start a new chat (#2942)", async ({
