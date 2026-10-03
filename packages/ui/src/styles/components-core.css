@@ -190,7 +190,7 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: var(--border-w) solid transparent;
+  border: var(--iconbtn-border-w, var(--border-w)) solid transparent;
   border-radius: var(--iconbtn-radius, var(--radius-md));
   background: transparent;
   color: var(--iconbtn-color, var(--text-muted));
@@ -216,7 +216,7 @@
 .jds-iconbtn--sm {
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--iconbtn-radius, var(--radius-sm));
 }
 .jds-iconbtn--sm svg {
   width: 16px;

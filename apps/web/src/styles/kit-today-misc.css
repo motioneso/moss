@@ -152,6 +152,7 @@
   height: 22px;
   margin-left: 8px;
   --iconbtn-radius: var(--radius-sm);
+  --iconbtn-border-w: 0;
   --iconbtn-color: var(--amber-ink);
   --iconbtn-hover-bg: var(--amber-soft-2);
   --iconbtn-hover-color: var(--amber-ink);

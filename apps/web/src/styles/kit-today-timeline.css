@@ -238,6 +238,7 @@
   height: 24px;
   padding: 0 0 0 4px;
   --iconbtn-radius: 0;
+  --iconbtn-border-w: 0;
   --iconbtn-color: var(--accent-fg);
   --iconbtn-hover-bg: transparent;
   --iconbtn-hover-color: var(--accent-fg-hover);
