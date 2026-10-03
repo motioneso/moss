@@ -10,6 +10,7 @@ import { orderFollowedCards, TickerLeague, TickerTeam } from "./sports-ticker.js
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 import {
   QUIET_NIGHT_LINE,
+  hasGameStartedToday,
   ScoreRow,
   TonightRow,
   selectScoreRows,
@@ -123,6 +124,9 @@ export function SportsTodayWidget(): ReactNode {
   const elsewhereRows = scoreGroups?.elsewhereRows ?? [];
   const tonightRows = tonightGroups?.tonightRows ?? [];
   const postponedRows = tonightGroups?.postponedRows ?? [];
+  // Live or finished-today games already show in the scores block, so an empty band must not
+  // claim a quiet night; it steps aside instead.
+  const startedToday = data && hasGameStartedToday(data, now, locale.timezone);
   const hasScores = followedRows.length > 0 || elsewhereRows.length > 0;
   const hasTonight = tonightRows.length > 0 || postponedRows.length > 0;
   // Show the desk if there's ANY content: scores, tonight games, top stories, followed teams,
@@ -291,27 +295,29 @@ export function SportsTodayWidget(): ReactNode {
       {/* The band stays last in DOM order so keyboard readers reach scores, lead, briefs,
           cards, then Tonight, while the desktop grid places it immediately below the
           score/story row. */}
-      <div className="desk-tonight">
-        <div className="desk-tonight__head">
-          <div className="sp-tksub">Tonight</div>
-          <span>
-            {formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })}
-            {formatTimeZoneShort(now, locale) ? ` · ${formatTimeZoneShort(now, locale)}` : ""}
-          </span>
+      {hasTonight || !startedToday ? (
+        <div className="desk-tonight">
+          <div className="desk-tonight__head">
+            <div className="sp-tksub">Tonight</div>
+            <span>
+              {formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })}
+              {formatTimeZoneShort(now, locale) ? ` · ${formatTimeZoneShort(now, locale)}` : ""}
+            </span>
+          </div>
+          {hasTonight ? (
+            <ul className="sp-tonight">
+              {tonightRows.map((row) => (
+                <TonightRow key={row.game.id} row={row} locale={locale} />
+              ))}
+              {postponedRows.map((row) => (
+                <TonightRow key={row.game.id} row={row} locale={locale} />
+              ))}
+            </ul>
+          ) : (
+            <p className="sp-tonight__quiet">{QUIET_NIGHT_LINE}</p>
+          )}
         </div>
-        {hasTonight ? (
-          <ul className="sp-tonight">
-            {tonightRows.map((row) => (
-              <TonightRow key={row.game.id} row={row} locale={locale} />
-            ))}
-            {postponedRows.map((row) => (
-              <TonightRow key={row.game.id} row={row} locale={locale} />
-            ))}
-          </ul>
-        ) : (
-          <p className="sp-tonight__quiet">{QUIET_NIGHT_LINE}</p>
-        )}
-      </div>
+      ) : null}
     </section>
   );
 }

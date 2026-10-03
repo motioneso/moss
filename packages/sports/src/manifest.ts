@@ -183,6 +183,11 @@ export const sportsModuleManifest = {
       id: "sports.live_status_line",
       description:
         "A followed team's card shows the quarter, period, or inning and clock under a live score, on Today and Sports. This also makes the live card the same height as a card showing the team's next game."
+    },
+    {
+      id: "sports.tonight_band",
+      description:
+        "Today's Tonight band lists games yet to start, followed teams first. With none left but a game live or finished today, it hides because the scores already show it. A quiet night shows only when no game today is upcoming, live or finished."
     }
   ],
   navigation: [
