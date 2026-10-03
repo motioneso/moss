@@ -10,6 +10,7 @@ import {
   useState
 } from "react";
 
+import { IconButton } from "@moss/ui";
 import type { ChatAttachmentDto } from "@moss/shared";
 
 import {
@@ -495,32 +496,29 @@ export function Composer(props: {
                 type="file"
                 onChange={onFileInputChange}
               />
-              <button
+              <IconButton
                 aria-label="Attach files"
-                className="chatd-attach__btn"
                 disabled={props.readOnly || props.lockedModelUnavailable}
                 title="Attach files (or paste an image)"
-                type="button"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Paperclip size={16} aria-hidden="true" />
-              </button>
+                <Paperclip aria-hidden="true" />
+              </IconButton>
             </>
           ) : null}
-          <button
+          <IconButton
             aria-label={recording ? "Stop recording" : "Record voice message"}
-            className={`chatd-mic${recording ? " is-recording" : ""}`}
+            active={recording}
             disabled={micDisabled}
             title={micTitle}
-            type="button"
             onClick={recording ? stopRecording : () => void startRecording()}
           >
             {recording ? (
-              <Square size={15} aria-hidden="true" fill="currentColor" />
+              <Square aria-hidden="true" fill="currentColor" />
             ) : (
-              <Mic size={17} aria-hidden="true" />
+              <Mic aria-hidden="true" />
             )}
-          </button>
+          </IconButton>
           <button
             aria-label={props.isSending ? "Stop generating" : "Send"}
             className="chatd-send"

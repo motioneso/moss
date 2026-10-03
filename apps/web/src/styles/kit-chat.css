@@ -95,16 +95,6 @@
   height: 6px;
 }
 
-.chatd__hbtn {
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition-control);
-}
-
 .chatd__body-wrap {
   position: relative;
   flex: 1;
@@ -390,22 +380,6 @@
 }
 
 .chatd-send:disabled {
-  cursor: default;
-}
-
-.chatd-mic {
-  width: 34px;
-  height: 34px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  transition: var(--transition-control);
-}
-
-.chatd-mic:disabled {
-  opacity: 0.45;
   cursor: default;
 }
 

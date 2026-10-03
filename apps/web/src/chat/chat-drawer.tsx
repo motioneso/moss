@@ -1,8 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Clock, MessageSquareText, ShieldOff, SquarePen, X } from "lucide-react";
-import { type UIEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type UIEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 
-import { BrandMark, EmptyState as JdsEmptyState } from "@moss/ui";
+import { BrandMark, EmptyState as JdsEmptyState, IconButton } from "@moss/ui";
 
 import {
   cancelChatTurn,
@@ -32,6 +39,7 @@ import { ChatModelPill } from "./chat-model-pill";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { Thread } from "@moss/ui";
+import { trapFocus } from "../shell/command-palette";
 
 import { RecordRow } from "./message-row";
 import { buildChatSeeds } from "./seeds";
@@ -45,6 +53,8 @@ export { recordsFromMessages } from "./use-chat-stream";
 import "../styles/kit-chat.css";
 import "../styles/kit-chat-attach.css";
 import "../styles/kit-chat-skills.css";
+
+const PHONE_QUERY = "(max-width: 720px)";
 
 export function ChatDrawer(props: {
   readonly open: boolean;
@@ -417,9 +427,68 @@ export function ChatDrawer(props: {
     }
   }, [effectiveRecords.length, isWaiting, reviewThreadId, showHistory]);
 
+  // Dialog contract: focus enters the message box on open, Escape closes, and focus returns to
+  // whatever opened the chat. On a phone the drawer covers the page, so Tab stays inside it.
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [phone, setPhone] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.(PHONE_QUERY).matches
+  );
+  useEffect(() => {
+    const media = window.matchMedia?.(PHONE_QUERY);
+    if (!media) return;
+    const sync = () => setPhone(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+  useEffect(() => {
+    if (!props.open) return;
+    const aside = asideRef.current;
+    if (!aside) return;
+    const opener = document.activeElement as HTMLElement | null;
+    const focusEntry = (): boolean => {
+      const box = aside.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      box?.focus();
+      if (box && document.activeElement === box) return true;
+      aside.focus();
+      return false;
+    };
+    // The message box can mount (or remount) after the panel while the model check settles, which
+    // drops focus to the page. Pull focus back until the user moves it themselves.
+    const watcher = new MutationObserver(() => {
+      const active = document.activeElement;
+      if (active === aside || active === document.body) focusEntry();
+      else if (active !== opener && aside.contains(active) && active?.tagName !== "TEXTAREA") {
+        watcher.disconnect();
+      }
+    });
+    focusEntry();
+    watcher.observe(aside, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled"]
+    });
+    const stopWatching = window.setTimeout(() => watcher.disconnect(), 3000);
+    return () => {
+      window.clearTimeout(stopWatching);
+      watcher.disconnect();
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [props.open]);
+
   if (!props.open) {
     return null;
   }
+
+  const onDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape" && !event.defaultPrevented) {
+      event.stopPropagation();
+      props.onClose();
+      return;
+    }
+    if (event.key === "Tab" && phone) trapFocus(event, asideRef.current);
+  };
 
   const startNewChat = () => {
     setReviewThreadId(null);
@@ -532,8 +601,12 @@ export function ChatDrawer(props: {
 
   return (
     <aside
+      ref={asideRef}
+      tabIndex={-1}
       className={props.docked ? "chatd chatd--docked" : "chatd"}
       role="dialog"
+      aria-modal={phone ? true : undefined}
+      onKeyDown={onDialogKeyDown}
       aria-label={assistantName ? `Chat with ${assistantName}` : "Chat"}
     >
       <div className="chatd__head">
@@ -550,46 +623,32 @@ export function ChatDrawer(props: {
                 : "Here when you need me"}
           </div>
         </div>
-        <button
-          aria-label="New chat"
-          className="chatd__hbtn"
-          title="New chat"
-          type="button"
-          onClick={startNewChat}
-        >
-          <SquarePen size={16} aria-hidden="true" />
-        </button>
+        <IconButton aria-label="New chat" title="New chat" onClick={startNewChat}>
+          <SquarePen aria-hidden="true" />
+        </IconButton>
         {props.surface === DEFAULT_CHAT_SURFACE && (
-          <button
+          <IconButton
             aria-label="Start private chat"
             aria-pressed={privateMode}
-            className={`chatd__hbtn${privateMode ? " is-on" : ""}`}
+            active={privateMode}
             title="Private chat"
-            type="button"
             onClick={startPrivateChat}
           >
-            <ShieldOff size={16} aria-hidden="true" />
-          </button>
+            <ShieldOff aria-hidden="true" />
+          </IconButton>
         )}
-        <button
+        <IconButton
           aria-label={showHistory ? "Hide chat history" : "Show chat history"}
           aria-pressed={showHistory}
-          className={`chatd__hbtn${showHistory ? " is-on" : ""}`}
+          active={showHistory}
           title={showHistory ? "Hide history" : "History"}
-          type="button"
           onClick={() => setShowHistory((prev) => !prev)}
         >
-          <Clock size={16} aria-hidden="true" />
-        </button>
-        <button
-          aria-label="Close chat"
-          className="chatd__hbtn"
-          title="Close"
-          type="button"
-          onClick={props.onClose}
-        >
-          <X size={17} aria-hidden="true" />
-        </button>
+          <Clock aria-hidden="true" />
+        </IconButton>
+        <IconButton aria-label="Close chat" title="Close" onClick={props.onClose}>
+          <X aria-hidden="true" />
+        </IconButton>
       </div>
 
       <div className="chatd__body-wrap">

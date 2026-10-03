@@ -27,20 +27,6 @@
 .nav-collapse {
   flex: none;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  min-height: 2rem;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.nav-collapse:hover {
-  background: var(--hover-tint);
-  color: var(--ink);
 }
 
 /* The sidebar is a light ground, so the account block takes surface text
