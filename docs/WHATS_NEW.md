@@ -45,6 +45,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Expand button for chat.** You can now expand the chat to fill the whole screen beside the menu, and History and private chat are in a new More menu. [PR #2961](https://github.com/motioneso/moss/pull/2961)
 - **Temporary classifier shadow report.** Admins can open a temporary Shadow report from the Classifier row while the gate runs in Shadow, showing how often the classifier agreed with the main chat model over the last 7, 30 or 90 days. [PR #2964](https://github.com/motioneso/moss/pull/2964)
 
 ### 2026-10-02
