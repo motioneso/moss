@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Refreshing your nudges on Today works again.** Refreshing the "On your radar" nudges on Today no longer fails with an error. [PR #2967](https://github.com/motioneso/moss/pull/2967)
 - **Chat box no longer disappears while typing.** If no chat model is connected, the message box stays put while you type instead of vanishing, and your draft is never lost when the connection status loads. [PR #2965](https://github.com/motioneso/moss/pull/2965)
 
 #### Added
