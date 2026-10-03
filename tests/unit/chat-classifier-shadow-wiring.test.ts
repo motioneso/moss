@@ -123,14 +123,11 @@ describe("ChatSessionManager classifier shadow hook (#2907)", () => {
       thresholdVersion: "v1",
       now: () => 0
     });
-    // The turn starts in a private conversation. Any LATER read of "the most recent conversation"
-    // would see the normal thread the user switched to — the exact old bug. The fix reads the
-    // turn's own session privacy once, so there is no second read and nothing is recorded.
-    // The turn starts in a private conversation; immediately after the session launches the user
-    // switches to a normal chat (modelled by flipping this flag inside `engine.launch`). The fix
-    // takes the private flag from the turn's own session, captured before the switch, so nothing is
-    // recorded. The old "most recently active conversation" lookup would read normal at shadow time
-    // and record the private message.
+    // The turn starts private; `engine.launch` flips the current thread to normal immediately
+    // after the session is established, modelling a user who switches chats before the shadow
+    // check. This catches a regression to reading the current thread at shadow time: then the
+    // runner opens a record and the `open` assertion below fails. It does not assert how many
+    // times the thread state is read.
     let privateNow = true;
     const getCurrentThreadState = vi.fn(async () => ({
       id: privateNow ? "private-thread" : "normal-thread",
@@ -155,9 +152,6 @@ describe("ChatSessionManager classifier shadow hook (#2907)", () => {
     await manager.submitTurn("u1", "Ben", "private message that must not be recorded");
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // With the old "read the most recently active conversation" lookup this fails: by shadow time
-    // the current thread reads as normal and the runner opens a record. The fix takes the private
-    // flag from the turn's own session, captured once when the turn started.
     expect(open).not.toHaveBeenCalled();
   });
 

@@ -65,8 +65,30 @@ const gateButton = (page: Page, name: string) =>
   page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
 
 async function chooseClassifier(page: Page, label: string): Promise<void> {
+  // Wait for the binding save before navigating away, or the next screen can load before the
+  // classifier selection has landed and the gate keeps its previous classifier.
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/api/ai/services/sorting/binding") &&
+      response.request().method() === "PUT",
+    { timeout: 30_000 }
+  );
   await classifierSelect(page).selectOption({ label });
+  expect((await saved).status()).toBe(200);
   await expect(classifierSelect(page)).toHaveValue(/^model:/);
+}
+
+async function setGate(page: Page, name: string): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(
+        "/api/admin/runtime-config/chat.classifier_gate_mode"
+      ) && response.request().method() === "PUT",
+    { timeout: 30_000 }
+  );
+  await gateButton(page, name).click();
+  expect((await saved).status()).toBe(200);
+  await expect(gateButton(page, name)).toHaveAttribute("aria-pressed", "true");
 }
 
 async function openChat(page: Page): Promise<Locator> {
@@ -136,8 +158,7 @@ test("shadow records a would-handle match without executing or raising a card, a
   // Pick the fixture classifier and turn the gate to Shadow through the real settings row.
   await openAssistantAndAiSettings(page);
   await chooseClassifier(page, "UAT Classifier Fixture Model");
-  await gateButton(page, "Shadow").click();
-  await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
+  await setGate(page, "Shadow");
 
   const cardsBefore = approvalCardCount(project);
 
@@ -174,8 +195,7 @@ test("shadow records a would-handle match without executing or raising a card, a
 
   // 3. Gate Off: no further classifier request, so no new shadow record.
   await openAssistantAndAiSettings(page);
-  await gateButton(page, "Off").click();
-  await expect(gateButton(page, "Off")).toHaveAttribute("aria-pressed", "true");
+  await setGate(page, "Off");
   const beforeOff = shadowCount(project);
   await page.goto(requireBaseURL());
   drawer = await openChat(page);
