@@ -164,6 +164,22 @@ export function selectTonightRows(
   };
 }
 
+/**
+ * True when a game is live now or finished on the actor's local day. The Tonight band uses it
+ * to step aside instead of claiming a quiet night while those games show in the scores block.
+ */
+export function hasGameStartedToday(
+  data: SportsOverviewResponse,
+  now: Date,
+  timeZone: string
+): boolean {
+  return collectGames(data).some(({ game }) => {
+    const phase = deriveGamePhase(game, now, timeZone);
+    if (phase === "live") return true;
+    return phase === "final" && localDay(game.startsAt, timeZone) === localDay(now, timeZone);
+  });
+}
+
 // Sides reuse the Around-the-leagues board row classes: same crest/name/score shape and
 // the same followed highlight, with visual rules in the sanctioned (non-migrated) sheets.
 function ScoreSide(props: { side: GameSide; followed: boolean }): ReactNode {
