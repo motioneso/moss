@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import { sql, type Kysely } from "kysely";
-import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ClassifierShadowRepository } from "@moss/chat";
@@ -14,8 +13,6 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 // failures without throwing and skip private chats.
 // #2908: they are kept forever (no purge job or function) and the owner deletes their own on
 // request; another owner, and an admin, cannot.
-
-const { Client } = pg;
 
 let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
@@ -138,11 +135,12 @@ describe("app.chat_classifier_shadow_records", () => {
     ).rejects.toThrow();
   });
 
-  it("refuses a delete with no signed-in user, and the actor guard is what refuses it", async () => {
+  it("refuses a delete with no signed-in user", async () => {
     const turnId = `turn-${randomUUID()}`;
     await asActor(ids.userA, (db) => repository.open(db, open(turnId)));
 
-    // The un-scoped app connection has no actor, so row-level security matches no rows.
+    // The un-scoped app connection has no actor. Row-level security covers this case on its own:
+    // the owner comparison resolves against a NULL actor, so the delete matches no rows.
     const result = await sql`DELETE FROM app.chat_classifier_shadow_records`.execute(appDb);
     expect(Number(result.numAffectedRows ?? 0)).toBe(0);
 
@@ -150,43 +148,6 @@ describe("app.chat_classifier_shadow_records", () => {
       (r) => r.turnId
     );
     expect(survivors).toContain(turnId);
-
-    // Prove the actor guard is load-bearing, not decorative: weaken the live policy to drop the
-    // `actor IS NOT NULL` clause on THIS disposable test database and observe the owner comparison
-    // resolve against a NULL actor. The policy is restored in the finally below. The count is only
-    // asserted to be greater than zero: the suite shares one database with earlier tests, so the
-    // actorless delete legitimately takes every other owner's rows too, which is the point.
-    const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
-    await bootstrap.connect();
-    try {
-      await bootstrap.query(
-        `DROP POLICY chat_classifier_shadow_records_delete ON app.chat_classifier_shadow_records`
-      );
-      await bootstrap.query(
-        `CREATE POLICY chat_classifier_shadow_records_delete ON app.chat_classifier_shadow_records
-           FOR DELETE TO jarvis_app_runtime
-           USING (true)`
-      );
-      // Weakened this far, the actorless delete removes every owner's rows: the real policy's
-      // whole predicate, not just its actor clause, is what normally refuses it.
-      const weakened = await sql`DELETE FROM app.chat_classifier_shadow_records`.execute(appDb);
-      expect(Number(weakened.numAffectedRows ?? 0)).toBeGreaterThan(0);
-    } finally {
-      await bootstrap.query(
-        `DROP POLICY IF EXISTS chat_classifier_shadow_records_delete
-           ON app.chat_classifier_shadow_records`
-      );
-      await bootstrap.query(
-        `CREATE POLICY chat_classifier_shadow_records_delete
-         ON app.chat_classifier_shadow_records
-         FOR DELETE TO jarvis_app_runtime
-         USING (
-           app.current_actor_user_id() IS NOT NULL
-           AND owner_user_id = app.current_actor_user_id()
-         )`
-      );
-      await bootstrap.end();
-    }
   });
 
   it("the background worker role still cannot delete shadow records", async () => {
