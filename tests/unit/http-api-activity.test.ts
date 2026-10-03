@@ -82,6 +82,23 @@ describe("HttpApiAdapter activity lines", () => {
     });
   });
 
+  it("lets a caller name its own code instead of the service code", async () => {
+    const { seen, recorder } = collect();
+    const adapter = new HttpApiAdapter("anthropic", "key", {
+      fetch: structuredFetch(structuredPayload),
+      onModelCall: recorder
+    });
+    await adapter.generateStructured({
+      service: "module.sorting",
+      model,
+      messages: [{ role: "user", content: "sort" }],
+      schema: { type: "object" },
+      maxOutputTokens: 100,
+      actionCode: "module.build"
+    });
+    expect(seen[0]).toMatchObject({ actionCode: "module.build" });
+  });
+
   it("falls back to structured.task when no service names the call", async () => {
     const { seen, recorder } = collect();
     const adapter = new HttpApiAdapter("anthropic", "key", {

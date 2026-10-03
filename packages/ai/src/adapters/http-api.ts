@@ -101,7 +101,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         kind: "structured",
         action: modelActivityAction(input.service),
         modelName: input.model.provider_model_id,
-        actionCode: modelActivityStructuredCode(input.service),
+        actionCode: input.actionCode ?? modelActivityStructuredCode(input.service),
         ...(input.actorUserId ? { ownerUserId: input.actorUserId } : {}),
         ...(input.turnId ? { turnId: input.turnId } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {})
