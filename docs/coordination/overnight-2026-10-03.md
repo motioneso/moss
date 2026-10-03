@@ -1,12 +1,12 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `759a1a1a-321c-4310-842a-e99f5ad41459` (relay 3). Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `6fb239b6-08b3-41a4-887e-c1e887b29dcd` (relay 4). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 1
+**merges_since_relay:** 0
 
 ## Queue
 
@@ -82,6 +82,8 @@ None.
   - Session id at merge matched lock anchor: y (759a1a1a). Merged 103e94141.
 
 ## Reaped sessions
+
+- w1:p11J "Coordinator (old)" (session 759a1a1a, relay 3 coordinator) - relayed at RELAY POINT 4 after compaction, nothing merged first; closed by relay 4.
 
 - w1:p11D "2893 review storage" (Opus builder, opus-2893) - built #2893; landed as PR #2973 (103e94141); teardown confirmed; reap check REAPABLE; worktree and branch removed.
 
