@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { Button, Dialog } from "@moss/ui";
+import { Badge, Button, Dialog } from "@moss/ui";
 
 import type { LocaleSettingsDto } from "@moss/shared";
 
@@ -76,11 +76,11 @@ export function ActivityDialog(props: {
       title={
         <div className="act-dialog__heading">
           <div className="act-dialog__titlerow">
-            <span className={`jds-badge jds-badge--${data.statusTone}`}>{data.statusText}</span>
+            <Badge tone={data.statusTone}>{data.statusText}</Badge>
             {data.badges.map((badge) => (
-              <span key={badge.text} className={`jds-badge jds-badge--${badge.tone}`}>
+              <Badge key={badge.text} tone={badge.tone}>
                 {badge.text}
-              </span>
+              </Badge>
             ))}
             <span id="act-dialog-title">{data.title}</span>
           </div>
