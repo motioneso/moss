@@ -19,6 +19,8 @@
 //     stay gated on REAL_CHAT_CONFIGURED, exactly like real-chat-onboarding.uat.spec.ts's #1121
 //     gate: skipped on every default/CI run, exercised only when the operator's own signed-in
 //     Codex CLI login has been copied into the stack (see tests/uat/real-chat-env.ts, #2732).
+//     Each spec file gets a fresh stack, so this spec signs in its own Codex provider and binds
+//     the cheapest chat model before Phase 3 (#2735).
 //   - Phases 5-12 are ABOUT the board, sort, portal banner, inspector, drawer scoping, and nav
 //     badge — NONE of them are about onboarding. Gating those on a real model too would mean this
 //     spec's only board/sort/banner/inspector coverage never runs on CI, which is what the
@@ -42,6 +44,7 @@ import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
 import { execUatSql } from "./job-search-board-sql.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 export const uatLevel = {
   level: "admin+data",
@@ -406,6 +409,12 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   let crawlRunObservation: Promise<Request> | null = null;
 
   if (REAL_CHAT_CONFIGURED) {
+    // The only seeded model is the structured-output scoring model, so the conversation needs a
+    // real chat provider signed in on this spec's own stack.
+    await test.step("Real chat: sign in Codex and bind the cheapest chat model", async () => {
+      await bringUpRealChatModel(page);
+    });
+
     // --- Phase 3: onboarding screen renders while state === "in_conversation" ---
     await test.step("Phase 3: onboarding screen appears, no board list yet", async () => {
       await page.reload();
