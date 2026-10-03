@@ -209,14 +209,23 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
         'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.',
         180_000
       );
-      const approve = approvalCards(chat).first();
-      await approve.waitFor({ timeout: 180_000 });
-      await approve.click({ timeout: 5_000 }).catch(() => undefined);
-      await expect
-        .poll(() => fixtureState().devices.find((device) => device.name === "Porch light")?.on, {
-          timeout: 180_000
-        })
-        .toBe(true);
+      // Approve in a loop until the effect lands: a single click can miss while the
+      // card is still attaching, and the hold expires unanswered if it does.
+      const porchOn = () =>
+        fixtureState().devices.find((device) => device.name === "Porch light")?.on === true;
+      const deadline = Date.now() + 180_000;
+      while (!porchOn()) {
+        if (Date.now() > deadline) {
+          throw new Error("the light action never ran after approval");
+        }
+        const next = approvalCards(chat).first();
+        if (!(await next.isVisible())) {
+          await chat.waitForTimeout(1_000);
+          continue;
+        }
+        await next.click({ timeout: 5_000 }).catch(() => undefined);
+        await chat.waitForTimeout(1_000);
+      }
     });
   } finally {
     await chat.close();
