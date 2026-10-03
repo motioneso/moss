@@ -1,12 +1,12 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `9dcc4a5e-af83-4e58-9566-5e42f99b6825` (relay 1). Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `3748ecb9-3142-49d8-8078-38dc9a19429b` (relay 2). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 1 (security merge - relay due)
+**merges_since_relay:** 0
 
 ## Queue
 
@@ -66,6 +66,7 @@ None.
 - w1:p0P "Coordinator (old)" (session 350800e5-1c37-4fe8-a928-2392ffce7055) - coordinator through relay point after #2939; work recorded in this manifest; closed by relay-1 successor.
 - w1:p00 "QA 2964 shadow report" (Opus QA, qa-2964) - rounds 1 (RED) and 2 (GREEN) on PR 2964, verdicts posted on the PR; closed and QA worktree removed after round 2.
 - w1:p0X "2957 shadow report" (Muse builder) - built #2957; landed as PR #2964 (a968e0a1f); orphaned dev server watcher pid 2946226 killed by PID; reap check REAPABLE; worktree and branch removed.
+- w1:p113 "Coordinator (old)" (session 9dcc4a5e-af83-4e58-9566-5e42f99b6825) - relay-1 coordinator; merged #2964 on Ben's sign-off, spawned #2942; work recorded in this manifest; closed by relay-2 successor.
 
 ## Continuation note
 
