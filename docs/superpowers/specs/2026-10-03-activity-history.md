@@ -46,9 +46,15 @@ Ben, 2026-10-03.
 6. **Lines come from recorded facts,** never from an extra model call that summarises.
 7. **Filters:** keep the module filter and time range; add a model checklist (so embeddings can
    be unticked); remember the last choice in the browser; show a Reset filters button in the
-   filter bar whenever a filter differs from the default.
+   filter bar whenever a filter differs from the default. **No result filter.** Lines still carry
+   their "Did not work" and "Jev disagreed" badges.
 8. **Layout:** use the horizontal space, no big side gutters; no button or text crowds its
    neighbour.
+9. **Old lines are deleted.** Lines recorded before this ships have no owner. The migration
+   deletes them; they do not become System lines.
+10. **Jev's numbers live in the shadow report, not on Activity.** The Activity page has no Jev
+    rail. Jev's agreement numbers move to a shadow report reached from the chat gate's Shadow
+    mode in Settings, AI (§11).
 
 ## 3. The page
 
@@ -56,12 +62,16 @@ Ben, 2026-10-03.
 
 | Part     | Source                                            | Example                                                                                                                        |
 | -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Time     | Bare line, own left column                        | 09:41                                                                                                                          |
 | Title    | Fixed per action code (§4)                        | Answered a chat message                                                                                                        |
 | Quote    | Owner detail, first 140 chars                     | "Turn on the kitchen light and tell me what's on..."                                                                           |
 | Sub-line | Template over recorded facts (§4)                 | Turned on the kitchen light, read 3 events, weather did not answer. Jev picked Home Assistant first and the chat model agreed. |
-| Meta     | Bare line columns                                 | 09:41 - Claude Sonnet 4.6 - 6.2s - 5 steps                                                                                     |
+| Meta     | Bare line columns                                 | Claude Sonnet 4.6 - 6.2s - 5 steps                                                                                             |
 | Badge    | Outcome or flag, right-aligned, only when notable | Did not work / 1 step failed / Jev disagreed / System                                                                          |
 
+- The time sits in its own narrow left column so the eye can run down it; the meta keeps model,
+  duration and step count. On a phone the badge drops under the meta instead of sitting at the
+  far right.
 - Successful lines carry no badge. A badge appears only for a failure, a partial failure, a Jev
   disagreement, or a System line.
 - After 30 days the quote and sub-line facts that quote content are gone. The line keeps its
@@ -88,7 +98,9 @@ Built on the `Dialog` primitive with a layout-only size class.
   surface), the quoted words, and a Close button top right. Escape and a scrim click also
   close.
 - **Left column, steps:** number, title, result line, small meta (model or module, approval
-  mode, duration). The first failed step is selected on open; otherwise the first step.
+  mode, duration). The first failed step is selected on open; otherwise the first step. The steps
+  are a list box: the selected step takes focus and the up and down arrow keys move the
+  selection.
 - **Right column, selected step:**
   - eyebrow "Step 4 of 5 - tool action" and the step title
   - "Why it did not work" panel when the step failed, written from a failure code (§5.4)
@@ -99,17 +111,6 @@ Built on the `Dialog` primitive with a layout-only size class.
 - After expiry the dialog still opens and shows the bare facts per step (titles, durations,
   outcomes, failure reasons, tokens).
 
-### 3.4 Jev panel
-
-A rail beside the list (the mockup's right column, 280px) answers "is Jev doing the job",
-counted from the viewer's own lines over the selected range:
-
-- chat messages checked, picked a tool, chat model agreed (x of y), missed a tool the chat used,
-  typical time
-- a link that sets the result filter to "Jev disagreed"
-
-The counts come from bare columns (§5.1), so they survive the 30-day expiry.
-
 ## 4. Line per call kind
 
 Writers verified from the brief and code on main. Examples are made up. "Bare" is what the line
@@ -119,7 +120,7 @@ shows after the 30-day expiry.
 | ------------------------------------------------ | ----------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------- |
 | Chat turn, API-key provider (`http-api` adapter) | `chat.answer`           | Answered a chat message                                          | Turned on the kitchen light, read 3 events. Jev picked Home Assistant; chat model agreed. | Used 2 tools. Jev agreed.              |
 | Chat turn, CLI provider (chat multiplexer)       | `chat.answer`           | Answered a chat message                                          | Same as above                                                                             | Same as above                          |
-| Classifier (`generate-choices`, today `choices`) | `chat.tool_check`       | Step: Jev checked for one tool                                   | Would use Home Assistant: turn on light, 92% sure. Chat model agreed.                     | Picked a tool, 92% sure. Chat agreed.  |
+| Classifier (`generate-choices`, today `choices`) | `chat.tool_check`       | Step: Jev guessed which tool to use                              | Would use Home Assistant: turn on light, 92% sure. Chat model agreed.                     | Picked a tool, 92% sure. Chat agreed.  |
 | Structured call, CLI (`cli-structured-adapter`)  | `structured.<service>`  | From the service's manifest title, e.g. Sorted new email         | Filed 12 emails: 3 to Needs you, 9 to Later.                                              | Finished. / Did not work: wrong shape. |
 | Structured call, API key (`http-api` adapter)    | `structured.<service>`  | Same                                                             | Same                                                                                      | Same                                   |
 | Embeddings (`packages/memory`)                   | `embed.<source>`        | Indexed notes for search                                         | Embedded 24 passages from 3 notes: "Garden plan", "Boiler service", "Trip ideas".         | Embedded 24 passages.                  |
@@ -167,11 +168,14 @@ Row security changes in the same migration:
 - INSERT `WITH CHECK` becomes owner-or-null: a writer may insert a row for the current actor, or
   an ownerless row. It may not insert a row owned by someone else.
 - Still append-only: no UPDATE, no DELETE. Bare lines are kept forever (existing ruling 14,
-  2026-10-01). Existing rows have no owner; they become System lines, visible to admins
-  only. That is the safe direction, since no one gains access to anything.
+  2026-10-01) from this release on.
+- **Existing rows are deleted** (ruling 9). The migration runs
+  `DELETE FROM app.moss_model_activity_log` before it adds the new columns and policies, so no
+  pre-release row survives to be read as a System line. The detail table is created after the
+  delete, so nothing cascades.
 
-`fact_counts` holds numbers and booleans only, so the bare sub-line and the Jev panel survive
-expiry without keeping words. A JSON schema in code and a size CHECK in SQL keep text out.
+`fact_counts` holds numbers and booleans only, so the bare sub-line and the shadow report (§11)
+survive expiry without keeping words. A JSON schema in code and a size CHECK in SQL keep text out.
 
 ### 5.2 Owner detail: new table
 
@@ -280,19 +284,21 @@ stay as the fallback when a writer passes nothing new.
 
 ### 7.1 The bar
 
-Left to right: time range (Today, 7 days, 30 days, 90 days), module select, Models button,
-result select (All, Did not work, Jev disagreed), a hidden-count note, then Reset filters at the
-right. The bar wraps with an 8px gap both ways.
+Left to right: time range (Today, 7 days, 30 days, 90 days), module select, Models button, a
+hidden-count note, then Reset filters at the right. The bar wraps with an 8px gap both ways.
+There is no result filter (ruling 7).
 
 ### 7.2 Model checklist
 
-- The Models button reads "Models: all" or "Models: 5 of 6" and opens a checklist of models in
+- The Models button reads "Models: all" or "Models: 6 of 7" (the count includes "No model") and
+  opens a checklist of models in
   the loaded range, each with a count, plus "No model (tool only)". Tick all and Done sit at the
   bottom.
 - No primitive does this today (`Menu` closes on each pick). The build adds a checklist
   primitive to `packages/ui/src/` and its styles to `packages/ui/src/styles/`; the mockup's
   `.jds-checklist` classes are the proposed names.
-- When unticked models hide lines, the bar says so: "9 lines hidden by the model filter".
+- When unticked models hide lines, the bar says so: "9 entries hidden by the model filter".
+- On a phone the checklist opens as a sheet from the bottom of the screen, with 44px rows.
 
 ### 7.3 Remembered filters and reset
 
@@ -301,14 +307,15 @@ right. The bar wraps with an 8px gap both ways.
 - The checklist saves the **unticked** models, so a model added later shows by default.
 - On load the saved state is restored; unknown values are dropped.
 - Reset filters shows whenever any filter differs from the default (30 days, all modules, all
-  models, all results). It restores the default and clears the saved state.
+  models). It restores the default and clears the saved state.
 
 ## 8. Layout
 
-- The list column takes the full width left of a 280px Jev rail, with a 34px gap and a keyline,
-  matching Today's main grid. The rail drops below the list at 1080px and narrower.
-- The dialog is up to 1120px wide, with a 300-400px step column. On a phone it becomes full
-  screen and the step detail opens below the selected step.
+- The list takes the full content width. There is no side rail (ruling 10).
+- The dialog is up to 1120px wide, with a 300-400px step column. On a phone (640px and
+  narrower) it fills the screen and the selected step's detail opens directly below that step.
+- On a phone every filter control and the dialog's Close button is at least 44px tall. The time
+  range buttons take their own row.
 - Spacing follows the minimum-gap table in `docs/design-system.md`: 4px between lines in one
   text block, 8px between buttons, 12px between a control and text.
 
@@ -317,9 +324,10 @@ right. The bar wraps with an 8px gap both ways.
 Same PR as the build:
 
 - `packages/shared/src/app-map-core.ts`, entry `activity`: rewrite the description to cover
-  model calls, the detail dialog, the Jev panel, the model checklist, remembered filters, Reset
+  model calls, the detail dialog, the model checklist, remembered filters, Reset
   filters, the 30-day expiry of quoted words, and System lines for admins.
 - Remove the entry `modelactivity` and its settings section.
+- Add the shadow report (§11) under Settings, AI, with its path from the chat gate.
 - Each module manifest that calls structured models declares the title for its service in its
   `features` metadata, so the line title and the app map agree.
 
@@ -329,13 +337,22 @@ Same PR as the build:
 - Exporting the history.
 - Replaying or retrying a step from the dialog.
 - Cost in money (tokens only).
-- Backfilling owners or detail onto lines written before the build.
+- Backfilling owners or detail onto lines written before the build; those lines are deleted
+  (ruling 9).
 
-## 11. Open questions for Ben
+## 11. Follow-on: the shadow report
 
-1. **Old lines.** Lines recorded before this ships have no owner. The plan makes them System
-   lines that only admins see. Keep them that way, or delete them?
-2. **Jev panel.** Is a rail with Jev's agreement numbers wanted, or is the "Jev disagreed"
-   filter enough?
-3. **Result filter.** The coordinator's brief kept module and range and added models. The
-   mockup also adds a result select so "Jev disagreed" and "Did not work" can be found. Keep it?
+Ruling 10 moves Jev's numbers off the Activity page. They answer "is Jev doing the job" where
+the decision is made: the chat gate setting under Settings, AI, Classifier.
+
+- **Entry.** While the gate is in Shadow, the amber Shadow badge on the Classifier row becomes a
+  link, and the line "On opens after shadow review" gains a "See shadow results" link. Both open
+  the report. Clicking the Shadow option in the gate's switch still only changes the mode.
+- **Numbers,** counted from the viewer's own activity lines (bare columns, §5.1) over a chosen
+  range of 7, 30 or 90 days: chat messages checked, picked a tool, chat model agreed (x of y),
+  missed a tool the chat used, typical time.
+- **Disagreements.** A link lists the lines where Jev and the chat model disagreed; each opens
+  the same detail dialog as Activity (§3.3).
+- **Whose lines.** The gate is an admin setting, but row security is owner-only (ruling 4), so
+  the report counts only the viewing admin's own chat messages. It does not show anyone else's.
+- The report gets its own mockup before it is built. It is not part of the Activity build.
