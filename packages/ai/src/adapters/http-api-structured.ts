@@ -73,6 +73,11 @@ export type GenerateStructuredProviderInput = {
    */
   readonly actorUserId?: string;
   /**
+   * #2956: explicit line code. Defaults to the service's structured code; a caller
+   * whose work is not a module service (a preview, a probe) names its own.
+   */
+  readonly actionCode?: string;
+  /**
    * #2956: which turn this call belongs to. Recorded on the activity line alongside
    * the owner above; absent means the line stands alone.
    */
