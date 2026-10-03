@@ -219,7 +219,7 @@ Still hand-built, because each needs a shared piece that does not exist yet:
   the `jds-task__main` rows). They need a shared row-button piece.
 - Disclosure toggles (`brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`).
 - Tabs (`brief-reader__tab`). They need a shared tabs piece.
-- Icon buttons (`well__plus`, `well__nudge-x`, `wl-modal__x`). They need the shared icon button.
+- (moved) Icon buttons: the medication plus, the nudge dismiss and the medications dialog close now use the shared icon button.
 - Plain text buttons with no look of their own (Undo in the feedback menu, Retry in the module
   widget error) and the feedback menu items.
 

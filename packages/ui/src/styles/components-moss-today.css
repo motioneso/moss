@@ -613,15 +613,6 @@
   background: var(--amber-soft);
   border: 1px solid var(--amber-soft-2);
 }
-.well__nudge-x {
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--amber-ink);
-}
-.well__nudge-x:hover {
-  background: var(--amber-soft-2);
-}
 .bfresh__item {
   font-size: 12px;
   color: var(--text-muted);

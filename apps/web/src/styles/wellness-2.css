@@ -269,6 +269,12 @@
   align-items: center;
   justify-content: center;
 }
+.wl-modal__head > .jds-iconbtn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  --iconbtn-color: var(--text-subtle);
+}
 .wl-modal__body {
   flex: 1;
   min-height: 0;

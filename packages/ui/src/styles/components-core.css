@@ -191,15 +191,15 @@
   width: 36px;
   height: 36px;
   border: var(--border-w) solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--iconbtn-radius, var(--radius-md));
   background: transparent;
-  color: var(--text-muted);
+  color: var(--iconbtn-color, var(--text-muted));
   cursor: pointer;
   transition: var(--transition-control);
 }
 .jds-iconbtn:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--iconbtn-hover-bg, var(--surface-2));
+  color: var(--iconbtn-hover-color, var(--text));
 }
 .jds-iconbtn:active {
   background: var(--surface-3);

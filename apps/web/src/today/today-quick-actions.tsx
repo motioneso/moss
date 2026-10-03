@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { localDay } from "@moss/shared";
-import { Button, Eyebrow } from "@moss/ui";
+import { Button, Eyebrow, IconButton } from "@moss/ui";
 
 import { createWellnessCheckin, getMedicationSchedule } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -100,15 +100,14 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
                 {medCountLine ? <span className="well__count">{medCountLine}</span> : null}
               </div>
             </div>
-            <button
-              type="button"
+            <IconButton
               ref={medsOpener}
-              className="well__plus"
+              size="sm"
               aria-label="Log medication"
               onClick={(event) => openMedsModal(event.currentTarget)}
             >
               +
-            </button>
+            </IconButton>
           </div>
           <div className="well__row">
             <div className="well__rowtext">
@@ -147,15 +146,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
                   Medications
                 </div>
               </div>
-              <button
-                type="button"
-                ref={medsClose}
-                className="wl-modal__x"
-                aria-label="Close"
-                onClick={() => closeMedsModal()}
-              >
+              <IconButton ref={medsClose} aria-label="Close" onClick={() => closeMedsModal()}>
                 <XIcon />
-              </button>
+              </IconButton>
             </div>
             <div className="wl-modal__body" style={{ padding: "0 0 8px" }}>
               <MedToday
