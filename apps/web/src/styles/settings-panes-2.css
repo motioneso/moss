@@ -232,17 +232,17 @@
 .prov-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   padding: 6px 0 2px;
 }
 .prov {
-  overflow: hidden;
+  overflow: visible;
 }
 .prov__head {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 14px 15px;
+  gap: 16px;
+  padding: 16px 0;
 }
 .prov__mark {
   width: 38px;
@@ -259,6 +259,7 @@
 }
 .prov__name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 9px;
 }
@@ -271,11 +272,23 @@
 .prov__acts {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex: none;
 }
+.prov__more {
+  display: none;
+  flex: none;
+}
+@media (max-width: 860px) {
+  .prov__acts {
+    display: none;
+  }
+  .prov__more {
+    display: block;
+  }
+}
 .prov__edit {
-  padding: 2px 15px 8px;
+  padding: 2px 0 8px;
   border-top: 1px solid var(--border-subtle);
 }
 .prov__edit .fld:first-child {
@@ -283,7 +296,7 @@
 }
 .prov__models {
   border-top: 1px solid var(--border-subtle);
-  padding: 11px 15px 13px;
+  padding: 11px 0 16px;
 }
 .prov__modelshd {
   display: flex;

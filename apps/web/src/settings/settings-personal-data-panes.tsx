@@ -234,11 +234,19 @@ function ServicePicker(props: { readonly onGoogle: () => void; readonly onImap: 
   );
 }
 
-function ConnectedPane() {
+interface EmbeddedPaneProps {
+  /** Inside the merged Connections pane: no pane heading, and report when a full-pane flow is open. */
+  readonly embedded?: boolean;
+  readonly onFlowChange?: (open: boolean) => void;
+}
+
+function ConnectedPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
   const queryClient = useQueryClient();
   const { toast, confirm } = useFeedback();
   const assistantName = useAssistantName();
   const [flow, setFlow] = useState<null | "picker" | "google" | "imap">(null);
+  const flowOpen = flow === "google" || flow === "imap";
+  useEffect(() => onFlowChange?.(flowOpen), [flowOpen, onFlowChange]);
   const accountsQuery = useQuery({
     queryKey: queryKeys.connectors.accounts,
     queryFn: listConnectorAccounts,
@@ -277,10 +285,12 @@ function ConnectedPane() {
 
   return (
     <>
-      <PaneHead
-        title="Connected accounts"
-        desc={`The external accounts ${assistantName} can reach, and how healthy each connection is.`}
-      />
+      {embedded ? null : (
+        <PaneHead
+          title="Connected accounts"
+          desc={`The external accounts ${assistantName} can reach, and how healthy each connection is.`}
+        />
+      )}
       <Group
         title="Accounts"
         action={
@@ -330,7 +340,7 @@ function formatLastSync(at: string | null, lastError?: string): string {
   return lastError ? `Last sync failed: ${relative}` : `Last sync: ${relative}`;
 }
 
-function SourcesPane() {
+function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
   const queryClient = useQueryClient();
   const { toast, confirm } = useFeedback();
   const { pendingNotesDelete, openActionRequest } = useChatControls();
@@ -392,6 +402,7 @@ function SourcesPane() {
   const linkedPath = notesSourceQuery.data?.path ?? null;
   const lastSync = notesLastSyncQuery.data?.lastSync ?? null;
   const [choosing, setChoosing] = useState(false);
+  useEffect(() => onFlowChange?.(choosing), [choosing, onFlowChange]);
 
   const choose = (folder: string) => {
     putNotesSourceMutation.mutate(
@@ -428,13 +439,13 @@ function SourcesPane() {
 
   return (
     <>
-      <PaneHead title="Data sources" />
+      {embedded ? null : <PaneHead title="Data sources" />}
 
       <Group
         title={
           <span className="src-title">
-            <NotebookText size={18} aria-hidden="true" />
-            Notes &amp; documents
+            {embedded ? null : <NotebookText size={18} aria-hidden="true" />}
+            {embedded ? "Notes folder" : "Notes & documents"}
           </span>
         }
         desc={`Point ${assistantName} at a folder of notes on this server — a Markdown vault, a plain folder of text files, anything.`}

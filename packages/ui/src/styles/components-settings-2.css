@@ -142,9 +142,10 @@
   color: var(--accent-fg);
 }
 .prov {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
 }
 .prov__mark {
   border-radius: 10px;

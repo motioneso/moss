@@ -82,8 +82,7 @@ describe("command palette model", () => {
     ).toEqual([
       "settings:root",
       "settings:modules",
-      "settings:connected",
-      "settings:sources",
+      "settings:connections",
       "settings:notifications"
     ]);
 
@@ -119,7 +118,7 @@ describe("command palette model", () => {
     expect(filterCommandPaletteCommands(commands, "accounts")).toEqual([
       expect.objectContaining({
         label: "Settings",
-        items: [expect.objectContaining({ id: "settings:connected" })]
+        items: [expect.objectContaining({ id: "settings:connections" })]
       })
     ]);
 
@@ -131,10 +130,10 @@ describe("command palette model", () => {
     ]);
   });
 
-  // #1441 — the data-sources description names the assistant, so it has to come
+  // #1441 — the connections description names the assistant, so it has to come
   // from the caller's configured name. A hardcoded literal here would still pass
   // a test that only checked the command exists.
-  it("names the configured assistant in the data-sources description", () => {
+  it("names the configured assistant in the connections description", () => {
     const commands = buildCommandPaletteCommands({
       assistantName: "Alfred",
       modules: [],
@@ -147,9 +146,9 @@ describe("command palette model", () => {
       }
     });
 
-    const sources = commands.find((item) => item.id === "settings:sources");
+    const connections = commands.find((item) => item.id === "settings:connections");
 
-    expect(sources?.description).toBe("Choose what Alfred can read");
+    expect(connections?.description).toContain("Alfred");
   });
 });
 

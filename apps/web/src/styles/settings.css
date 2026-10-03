@@ -38,16 +38,38 @@
   padding: 24px 40px 88px;
 }
 
-/* ---- Top bar: Personal/Admin toggle + Advanced switch ---- */
+/* ---- Masthead: plain title with the mode toggle and search on its right ---- */
+.set2__mast {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.set2__masttitle {
+  margin: 0;
+  word-spacing: 0.12em;
+  letter-spacing: -0.022em;
+  line-height: 1;
+}
 .set2__bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding-bottom: 18px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border-subtle);
+}
+@media (max-width: 860px) {
+  .set2__bar {
+    width: 100%;
+  }
+}
+.set2__picker,
+.set2__sheethead,
+.set2__scrim {
+  display: none;
 }
 .set2__adv {
   display: flex;
@@ -89,24 +111,82 @@
   overflow-y: auto;
 }
 @media (max-width: 860px) {
+  .set2__picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    margin: 16px 0 12px;
+    padding: 0 14px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .set2__pickername {
+    flex: 1;
+    min-width: 0;
+  }
+  .set2__scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    padding: 0;
+    cursor: default;
+  }
   .set2__nav {
+    display: none;
+  }
+  /* Nothing chosen yet: the full section list shows in the page and the pane waits. */
+  .set2--nolist .set2__nav {
+    display: flex;
     position: static;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 12px;
+    max-height: none;
+    overflow: visible;
+  }
+  .set2--nolist .set2__picker,
+  .set2--nolist .set2__sheethead,
+  .set2--nolist .set2__pane {
+    display: none;
+  }
+  .set2__nav.is-open {
+    display: flex;
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 61;
+    max-height: 78vh;
+    overflow-y: auto;
+    padding: 14px 18px 24px;
+    gap: 2px;
+  }
+  .set2__sheethead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 8px;
+  }
+  .set2__sheetclose {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
   }
 }
 .set2__navgroup {
   letter-spacing: 0.09em;
   text-transform: uppercase;
   padding: 4px 11px 8px;
+  margin-top: 14px;
 }
-@media (max-width: 860px) {
-  .set2__navgroup {
-    flex: 0 0 100%;
-    padding: 10px 4px 2px;
-  }
+.set2__nav > .set2__navgroup:first-of-type,
+.set2__sheethead + .set2__navgroup {
+  margin-top: 0;
 }
 .set2__navitem {
   display: flex;
@@ -153,9 +233,7 @@
     gap: 6px;
   }
   .set2__navitem {
-    width: auto;
-    flex: 0 1 auto;
-    padding: 7px 10px;
+    padding: 11px 10px;
   }
 }
 
@@ -167,7 +245,6 @@
   margin-bottom: 4px;
 }
 .pane__title {
-  letter-spacing: -0.012em;
   margin: 0;
 }
 .pane__desc {
@@ -177,37 +254,35 @@
 }
 
 .pane__card {
-  margin-top: 18px;
+  margin-top: 40px;
+  padding: 18px 0 0;
 }
 .pane__cardhead {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 16px;
-  padding: 16px 22px 12px;
+  padding: 0 0 6px;
 }
 .pane__cardheadmain {
   flex: 1;
   min-width: 0;
 }
-.pane__cardtitle {
-  letter-spacing: -0.004em;
-}
 .pane__carddesc {
-  margin-top: 3px;
+  margin-top: 4px;
   line-height: 1.5;
-  max-width: 64ch;
+  max-width: 70ch;
 }
 .pane__cardaction {
   flex: none;
 }
 .pane__cardbody {
-  padding: 0 22px 12px;
+  padding: 0;
 }
 
-/* Compact the shared set-row inside cards */
+/* Compact the shared set-row inside sections */
 .pane__cardbody .set-row {
-  padding: 14px 0;
-  gap: 18px;
+  padding: 16px 0;
+  gap: 24px;
 }
 
 /* ---- Stacked fields ---- */
@@ -273,13 +348,56 @@
 
 /* ---- Top bar: settings search ---- */
 .set2__search {
-  flex: 1 1 240px;
-  max-width: 380px;
+  flex: 0 0 300px;
   margin-left: auto;
+}
+@media (max-width: 860px) {
+  .set2__search {
+    flex: 1 1 200px;
+    margin-left: 0;
+  }
 }
 .set2__search .jds-combobox__option {
   justify-content: space-between;
 }
 .set2__search-group {
   flex: 0 0 auto;
+}
+
+/* A note above the pane head keeps clear of the title. */
+.set2__pane > .set2-note {
+  margin-bottom: 20px;
+}
+
+/* Persona controls sit beside their live preview when the pane has room, and stack when not. */
+.psona {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: flex-start;
+}
+.psona__controls {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.psona > .ppv {
+  flex: 0 1 380px;
+  min-width: min(280px, 100%);
+}
+
+/* Connections: a count per kind above the sections. */
+.conn__counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 24px 0 0;
+}
+.conn__count {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+.conn__count dd,
+.conn__count dt {
+  margin: 0;
 }

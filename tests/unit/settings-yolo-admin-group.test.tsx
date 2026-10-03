@@ -39,7 +39,7 @@ describe("YoloAdminGroup", () => {
     const html = renderWithQuery(createElement(YoloAdminGroup), client);
 
     // Admin-only surface / Group title
-    expect(html).toContain("YOLO / auto-approval");
+    expect(html).toContain("Auto-approve actions");
 
     // Searchable input
     expect(html).toContain("Search members (Enter to add)");

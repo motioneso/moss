@@ -26,7 +26,7 @@ import { IntegrationClassifierSection } from "./settings-integrations-classifier
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Switch } from "./settings-ui";
 
-export function SettingsIntegrationsPane() {
+export function SettingsIntegrationsPane({ embedded }: { readonly embedded?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get("integration"); // null | "new" | id
   const queryClient = useQueryClient();
@@ -62,9 +62,9 @@ export function SettingsIntegrationsPane() {
 
   return (
     <>
-      <PaneHead title="Integrations" />
+      {embedded ? null : <PaneHead title="Integrations" />}
       <Group
-        title="Connections"
+        title={embedded ? "Apps & services" : "Connections"}
         action={
           <Button variant="secondary" size="sm" onClick={() => openIntegration("new")}>
             Add connection

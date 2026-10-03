@@ -79,7 +79,7 @@ describe("one folder chooser everywhere (#2268)", () => {
   it("defaults to the notes source heading and back label", () => {
     const html = renderChooser();
     expect(html).toContain("Choose a notes folder");
-    expect(html).toContain("Data sources");
+    expect(html).toContain("Connections");
   });
 
   it("takes a heading and back label from the screen that opened it", () => {

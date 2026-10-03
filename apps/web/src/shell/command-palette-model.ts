@@ -139,22 +139,23 @@ export function buildCommandPaletteCommands(input: {
       action: { kind: "navigate", to: settingsSectionHref("modules") }
     },
     {
-      id: "settings:connected",
+      id: "settings:connections",
       group: "Settings",
-      label: "Open connected accounts",
-      description: "Manage your external accounts",
-      keywords: ["settings", "accounts", "connectors", "google"],
+      label: "Open connections",
+      description: `Accounts, notes folder and services ${input.assistantName} can reach`,
+      keywords: [
+        "settings",
+        "accounts",
+        "connectors",
+        "google",
+        "sources",
+        "email",
+        "calendar",
+        "notes",
+        "integrations"
+      ],
       icon: "link-2",
-      action: { kind: "navigate", to: settingsSectionHref("connected") }
-    },
-    {
-      id: "settings:sources",
-      group: "Settings",
-      label: "Open data sources",
-      description: `Choose what ${input.assistantName} can read`,
-      keywords: ["settings", "sources", "email", "calendar", "notes"],
-      icon: "database",
-      action: { kind: "navigate", to: settingsSectionHref("sources") }
+      action: { kind: "navigate", to: settingsSectionHref("connections") }
     }
   );
 

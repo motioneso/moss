@@ -493,7 +493,7 @@ const ASSISTANT_FIX: ConnectorNotWorkingFix = {
 
 const SYNC_NOW_FIX: ConnectorNotWorkingFix = {
   label: "Sync now",
-  path: "/settings?section=connected"
+  path: "/settings?section=connections"
 };
 
 const WAITING_FOR_WORKER_REASON = "the background worker has not picked up the sync";
