@@ -411,8 +411,11 @@ export function registerChatRoutes(
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
           tokens: {
-            mint: (actorUserId, correlationId, allowedToolNames) =>
-              wiring.tokens.mint(
+            mint: (actorUserId, correlationId, allowedToolNames) => {
+              // #2956: the shadow passes its turn id as the correlation id, so the
+              // gate session files its tool rows under the chat turn. Revoke clears it.
+              wiring.tokens.setCurrentTurnId(`classifier-gate:${correlationId}`, correlationId);
+              return wiring.tokens.mint(
                 {
                   actorUserId,
                   chatSessionId: `classifier-gate:${correlationId}`,
@@ -421,9 +424,12 @@ export function registerChatRoutes(
                 // #2907 QA N2: the short fixed lifetime, exactly like the 4.1 gate token, so a
                 // skipped revoke leaves it stale after a minute instead of an hour.
                 { ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true }
-              ),
-            revoke: (correlationId) =>
-              wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`)
+              );
+            },
+            revoke: (correlationId) => {
+              wiring.tokens.clearCurrentTurnId(`classifier-gate:${correlationId}`);
+              wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`);
+            }
           },
           listToolNames: async (actorUserId) =>
             (await wiring.gateway.listToolsForActor(actorUserId)).map((tool) => tool.name),
@@ -475,6 +481,12 @@ export function registerChatRoutes(
           },
           revoke: (chatSessionId: string) => wiring.tokens.revokeBySessionId(chatSessionId),
           touch: (chatSessionId: string) => wiring.tokens.touchBySessionId(chatSessionId),
+          // #2956: the chat manager files a session's tool rows under its
+          // running turn; the gateway reads the same map at tool time.
+          setCurrentTurn: (chatSessionId: string, turnId: string) =>
+            wiring.tokens.setCurrentTurnId(chatSessionId, turnId),
+          clearCurrentTurn: (chatSessionId: string) =>
+            wiring.tokens.clearCurrentTurnId(chatSessionId),
           // #342 (§5.3 steps 2/4) — orphan-token reconciliation + the source-of-truth session-id list.
           // Forwarded to the manager (reconcileMcpTokens / listMcpTokenSessionIds) so a (re)connect or
           // bootId change revokes tokens for sessions the cli-runner no longer holds — even after an api
