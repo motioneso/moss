@@ -555,7 +555,6 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0259",
           name: "0259_audit_log_turn_id.sql"
-        },
         }
       ]);
     } finally {
