@@ -18,8 +18,8 @@ Spec: `docs/superpowers/specs/2026-09-20-trail-marker-focus-judgment.md` section
 
 ## Decisions
 
-1. **Migration** `infra/postgres/migrations/02NN_focus_judgments_retention.sql` (number taken
-   at PR time; 0256/0257 are claimed by #2956):
+1. **Migration** `infra/postgres/migrations/0257_focus_judgments_retention.sql` (0257
+   reserved for this lane by the coordinator; #2956 renumbered to 0258/0259):
    - `CREATE POLICY focus_judgments_retention_select` and `..._retention_delete` on
      `app.focus_judgments` `TO jarvis_migration_owner` with
      `USING (created_at < now() - interval '30 days')`. The policy itself carries the age rule,
