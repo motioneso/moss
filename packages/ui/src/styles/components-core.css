@@ -142,7 +142,7 @@
 
 .jds-btn--danger {
   background: var(--danger);
-  color: var(--white);
+  color: var(--danger-on);
   border-color: var(--danger);
 }
 .jds-btn--danger:hover {
