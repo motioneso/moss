@@ -181,23 +181,24 @@ describe("activity grouping (#2956 slice C)", () => {
     const tool = audit({ id: "tool-1", turnId: "turn-1" });
     const rows = groupActivity([answer, check], [tool]);
     expect(rows).toHaveLength(1);
-    expect(rows[0].kind).toBe("line");
-    if (rows[0].kind === "line") {
-      expect(rows[0].children.map((child) => child.id)).toEqual(["check-1"]);
-      expect(rows[0].tools.map((entry) => entry.id)).toEqual(["tool-1"]);
+    const first = rows[0];
+    expect(first?.kind).toBe("line");
+    if (first?.kind === "line") {
+      expect(first.children.map((child) => child.id)).toEqual(["check-1"]);
+      expect(first.tools.map((entry) => entry.id)).toEqual(["tool-1"]);
     }
   });
 
   it("keeps tools outside any turn as their own rows", () => {
     const rows = groupActivity([], [audit({ id: "tool-9", turnId: null })]);
     expect(rows).toHaveLength(1);
-    expect(rows[0].kind).toBe("tool");
+    expect(rows[0]?.kind).toBe("tool");
   });
 
   it("keeps turn-linked tools visible when their answer line is missing", () => {
     const rows = groupActivity([], [audit({ id: "tool-9", turnId: "turn-gone" })]);
     expect(rows).toHaveLength(1);
-    expect(rows[0].kind).toBe("tool");
+    expect(rows[0]?.kind).toBe("tool");
   });
 
   it("orders rows newest first", () => {
