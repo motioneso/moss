@@ -13,7 +13,7 @@
 | Item | Issue | Tier | Status | Pane label | Pane | Branch | PR | Relays |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | building | 2939 chat drawer tests | w1:p0Q | fix-2939-drawer-tests | - | 0 |
-| Coverage guard gaps | #2933 | routine | building | 2933 coverage guard | w1:p0R | fix-2933-coverage-guard | - | 0 |
+| Coverage guard gaps | #2933 | routine | in QA (qa-2962, w1:p0W, QA tab w1:t9K) | 2933 coverage guard | w1:p0R | fix-2933-coverage-guard | #2962 | 0 |
 | New chat stops running turn | #2934 | security | building | 2934 new chat stops turn | w1:p0S | fix-2934-newchat-stop | - | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands) | - | - | - | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
