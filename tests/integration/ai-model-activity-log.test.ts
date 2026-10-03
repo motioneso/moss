@@ -368,17 +368,19 @@ describe("activity history storage (#2956)", () => {
   it("records an owned entry inside the owner's data context, like the install sites do", async () => {
     const repository = new AiRepository();
     const runner = new DataContextRunner(appDb);
+    // Same routing the API and worker install sites use: owned entries write inside the
+    // owner's data context, ownerless entries on the root handle.
+    const productionShapedRecorder = createDbModelActivityRecorder(async (entry) => {
+      if (entry.ownerUserId) {
+        await runner.withDataContext({ actorUserId: entry.ownerUserId }, (scopedDb) =>
+          repository.insertModelActivity(scopedDb.db, entry)
+        );
+      } else {
+        await repository.insertModelActivity(appDb, entry);
+      }
+    });
     try {
-      const recorder = createDbModelActivityRecorder(async (entry) => {
-        if (entry.ownerUserId) {
-          await runner.withDataContext({ actorUserId: entry.ownerUserId }, (scopedDb) =>
-            repository.insertModelActivity(scopedDb.db, entry)
-          );
-        } else {
-          await repository.insertModelActivity(appDb, entry);
-        }
-      });
-      installModelActivityRecorder(recorder);
+      installModelActivityRecorder(productionShapedRecorder);
       recordModelActivity({
         kind: "chat",
         action: "recorder-owner-probe",
@@ -407,7 +409,8 @@ describe("activity history storage (#2956)", () => {
       );
       expect(detail?.quote).toBe("through the recorder");
     } finally {
-      installModelActivityRecorder(null);
+      // Leave the process-wide recorder as the API installed it, for the probe test below.
+      installModelActivityRecorder(productionShapedRecorder);
     }
   });
 
