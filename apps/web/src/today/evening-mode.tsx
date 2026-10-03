@@ -9,7 +9,7 @@ import {
 import { Check } from "lucide-react";
 import { useState } from "react";
 
-import { Card } from "@moss/ui";
+import { Card, Eyebrow, SectionHead } from "@moss/ui";
 
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { targetTimeFor } from "../briefings/briefing-settings-model.js";
@@ -220,11 +220,14 @@ function EveningRecapSection(props: {
   if (!props.loading && !hasSummary) return null;
   return (
     <section className="ev-study ev-recap" id="evening-recap">
-      <div className="ev-head">
-        <span className="ev-head__number">{EVENING_RECAP_KICKER}</span>
-        <h2 className="ev-head__title">{EVENING_RECAP_HEADING}</h2>
-        {props.dateLabel !== "" ? <span className="ev-head__meta">{props.dateLabel}</span> : null}
-      </div>
+      <SectionHead
+        className="ev-head"
+        align="center"
+        number={EVENING_RECAP_KICKER}
+        title={EVENING_RECAP_HEADING}
+        titleClassName="ev-head__title"
+        meta={props.dateLabel !== "" ? props.dateLabel : null}
+      />
       {props.loading ? (
         <div className="agenda-clear" role="status">
           Gathering your evening review…
@@ -449,7 +452,9 @@ export function EveningTomorrowSection(props: {
   const empty = props.events.length === 0 && props.tasks.length === 0;
   return (
     <section className="ev-tomorrow" aria-label="Tomorrow">
-      <span className="ev-tomorrow__eyebrow">{props.dateLabel}</span>
+      <Eyebrow tone="accent" className="ev-tomorrow__eyebrow">
+        {props.dateLabel}
+      </Eyebrow>
       <h3 className="ev-tomorrow__title">{EVENING_RAIL_HEADING}</h3>
       <p className="ev-tomorrow__dek">
         {empty ? "No events or due tasks found for tomorrow." : tomorrowCountText(props)}

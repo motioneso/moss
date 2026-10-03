@@ -1,5 +1,7 @@
 import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
 
+import { Note } from "@moss/ui";
+
 import { ampm, timeLabel } from "./today-labels.js";
 
 /** The next timed, not-yet-started event today that names a place, other than
@@ -36,11 +38,11 @@ export function PracticalNote(props: {
   if (!event) return null;
   const time = `${timeLabel(event.startsAt, props.locale)} ${ampm(event.startsAt, props.locale)}`;
   return (
-    <div className="cmd-practical" aria-label="A little practical context">
+    <Note variant="practical" className="cmd-practical" aria-label="A little practical context">
       <p>
         <strong>A little practical context</strong>
         {`${event.title} at ${time} is at ${event.location?.trim()}.`}
       </p>
-    </div>
+    </Note>
   );
 }

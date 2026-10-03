@@ -199,12 +199,12 @@ Today invented these locally; they now live in `@moss/ui` and Today uses them. A
 needs one uses the shared piece and never copies Today's local rules. Screens own width and margins
 only. All text sits at or above the 11px floor.
 
-| Pattern               | Shared piece                                                                             | Replaces                                                                                 |
-| --------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Numbered section head | `<SectionHead number title meta rule align>`, `.jds-section-head`                        | `.tl-head`, `.desk-head`, `.ev-head`                                                     |
-| Eyebrow               | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px               | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow` |
-| Notes                 | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`                           | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               |
-| Text-link buttons     | `<Button variant="link">` (retint with `--btn-link-color`) and `<Button variant="rail">` | `.today-hero__link`, `.cmd-next__link`, `.well__btn`                                     |
+| Pattern               | Shared piece                                                               | Replaces                                                                                 |
+| --------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Numbered section head | `<SectionHead number title meta rule align>`, `.jds-section-head`          | `.tl-head`, `.desk-head`, `.ev-head`                                                     |
+| Eyebrow               | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow` |
+| Notes                 | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`             | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               |
+| Text-link buttons     | `<Button variant="link">` (retint with `--btn-link-color`)                 | `.today-hero__link`, `.cmd-next__link`                                                   |
 
 ### Known Today defects
 

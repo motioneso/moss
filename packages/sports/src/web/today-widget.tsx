@@ -1,3 +1,4 @@
+import { SectionHead } from "@moss/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
@@ -156,11 +157,14 @@ export function SportsTodayWidget(): ReactNode {
 
   return (
     <section className="jds-brief jds-brief--sports" aria-label="Sports desk">
-      <div className="desk-head">
-        <span className="desk-number">03</span>
-        <h2 className="desk-title">From the sidelines</h2>
-        <span className="desk-meta">Sports desk</span>
-      </div>
+      <SectionHead
+        className="desk-head"
+        rule
+        number="03"
+        title="From the sidelines"
+        titleClassName="desk-title"
+        meta="Sports desk"
+      />
       {hasScores ? (
         <div className="desk-scores" aria-label="Scores">
           <div className="desk-scores__head">

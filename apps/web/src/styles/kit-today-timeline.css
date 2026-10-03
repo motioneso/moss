@@ -4,44 +4,11 @@
    Rail overrides scope under .cmd-aside so the shared feed styles keep
    owning their look everywhere else. Tokens only, no literals. */
 
-/* --- Section head: number, title, dateline --- */
+/* --- Section head: layout only; look comes from SectionHead and Note --- */
 .jds-brief--timeline .tl-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
   margin-bottom: 4px;
 }
-.jds-brief--timeline .tl-number {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--accent-fg);
-  border-bottom: 2px solid var(--gold);
-  padding-bottom: 5px;
-}
-.jds-brief--timeline .tl-title {
-  font-family: var(--font-display);
-  font-size: 25px;
-  line-height: 1.18;
-  letter-spacing: -0.7px;
-  margin: 0;
-}
-.jds-brief--timeline .tl-meta {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-size: 10px;
-  text-align: right;
-}
-
-/* --- Plan note: review control and authored notices share one line --- */
 .jds-brief--timeline .tl-note {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  background: var(--forest-soft);
-  border-top: 1px solid var(--line);
-  font-size: 11px;
   margin: 14px 0 6px;
 }
 .jds-brief--timeline .tl-note .cmd-empty {
@@ -53,7 +20,7 @@
   display: flex;
   gap: 19px;
   flex-wrap: wrap;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   padding: 14px 0 4px;
 }
@@ -110,7 +77,7 @@
 }
 .jds-brief--timeline .tl-time small {
   display: block;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 400;
   color: var(--text-muted);
   margin-top: 2px;
@@ -173,7 +140,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   margin-top: 5px;
 }
@@ -186,7 +153,7 @@
 
 /* --- Rail: block heading, next-meeting time, quick-action rows --- */
 .cmd-aside .rail-block__head {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -217,13 +184,6 @@
   padding-bottom: 16px;
   border-bottom: 2px solid var(--accent-rule);
   margin-bottom: 4px;
-}
-:is(.cmd-aside, .cmd-dock) .well__eyebrow {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--accent-fg);
 }
 :is(.cmd-aside, .cmd-dock) .well__title {
   font-size: 11px;
@@ -258,7 +218,7 @@
   white-space: nowrap;
 }
 :is(.cmd-aside, .cmd-dock) .well__sub {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   margin-top: 4px;
   line-height: 1.45;
@@ -267,7 +227,7 @@
   flex: none;
 }
 :is(.cmd-aside, .cmd-dock) .well__count {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 8px;
@@ -320,14 +280,11 @@
    sits inside the rail column: placed tasks on sage with a forest edge,
    proposed ones dashed, calendar commitments bare. */
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-head {
-  align-items: center;
   margin-bottom: 18px;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-note {
   flex-wrap: nowrap;
   margin: 0 0 18px;
-  background: var(--sage-light);
-  color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"])
   .cmd-main
@@ -448,7 +405,7 @@
   .jds-brief--timeline
   .day-ev__where {
   margin-top: 5px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"])
@@ -465,7 +422,7 @@
   border: 1px solid var(--line);
   background: var(--bone);
   color: var(--accent-fg);
-  font-size: 9px;
+  font-size: var(--text-2xs);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline {
   padding-top: 0;
@@ -494,7 +451,7 @@
   margin-bottom: 11px;
   padding-bottom: 0;
   border-bottom: none;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 1.5px;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-next__v {
@@ -545,15 +502,10 @@
 
 /* --- Morning rail: practical context note, study .support-note --- */
 .cmd-practical {
-  padding: 14px;
-  background: var(--sage-light);
-  border-left: 2px solid var(--gold);
+  margin: 0;
 }
 .cmd-practical p {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--accent-fg);
 }
 .cmd-practical strong {
   display: block;
@@ -588,7 +540,7 @@
   min-height: 40px;
   padding: 9px 11px;
   border-radius: 2px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
 }
 .cmd-dock .well__btn--primary:hover {
@@ -615,7 +567,7 @@
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-glance__title,
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__title {
   margin-bottom: 11px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -629,7 +581,7 @@
   margin-bottom: 0;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-card__meta {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--muted);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-glance__grid {
@@ -651,7 +603,7 @@
   border-left: 1px solid var(--line);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile__label {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--muted);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile__value {
@@ -680,7 +632,7 @@
   width: auto;
   margin-bottom: 3px;
   padding-top: 0;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--accent-fg);
 }
@@ -691,12 +643,12 @@
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__sub {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__now {
   margin-top: 5px;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row__now-dot {
@@ -729,7 +681,7 @@
   }
   .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-legend {
     gap: 14px;
-    font-size: 9px;
+    font-size: var(--text-2xs);
   }
   .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-main .jds-brief--timeline .tl-slot {
     grid-template-columns: 51px minmax(0, 1fr);
@@ -762,13 +714,13 @@
     .cmd-main
     .jds-brief--timeline
     .day-ev__where {
-    font-size: 9px;
+    font-size: var(--text-2xs);
   }
   .cmd-grid:is([data-mode="day"], [data-mode="evening"])
     .cmd-main
     .jds-brief--timeline
     .jds-task__state {
-    font-size: 8px;
+    font-size: var(--text-2xs);
   }
 }
 
@@ -780,30 +732,7 @@
   margin-top: 0;
 }
 .ev-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   margin-bottom: 18px;
-}
-.ev-head__number {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--accent-fg);
-  border-bottom: 2px solid var(--gold);
-  padding-bottom: 5px;
-}
-.ev-head__title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 25px;
-  line-height: 1.18;
-  letter-spacing: -0.7px;
-}
-.ev-head__meta {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-size: 10px;
-  text-align: right;
 }
 .ev-recap__intro {
   max-width: 640px;
@@ -857,11 +786,6 @@
 .ev-tomorrow__eyebrow {
   display: block;
   margin-bottom: 11px;
-  color: var(--accent-fg);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
 }
 .ev-tomorrow__title {
   margin: 0;
@@ -898,13 +822,13 @@ button.ev-tomorrow__item {
   display: block;
   margin-bottom: 3px;
   color: var(--accent-fg);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 .ev-tomorrow__item small {
   display: block;
   margin-top: 3px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 .ev-tomorrow__note {
   margin: 11px 0 0;

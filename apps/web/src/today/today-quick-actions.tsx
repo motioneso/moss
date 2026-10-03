@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { localDay } from "@moss/shared";
+import { Eyebrow } from "@moss/ui";
 
 import { createWellnessCheckin, getMedicationSchedule } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -87,7 +88,9 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
       {props.enabled ? (
         <div className="well">
           <div className="well__head">
-            <span className="well__eyebrow">Quick actions</span>
+            <Eyebrow tone="accent" className="well__eyebrow">
+              Quick actions
+            </Eyebrow>
             <span className="well__title">Wellness</span>
           </div>
           <div className="well__row">

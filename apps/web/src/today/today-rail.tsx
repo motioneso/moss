@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import type { BriefingRunDto, LocaleSettingsDto } from "@moss/shared";
 import type { CalendarEventDto, TaskDto } from "@moss/shared";
 
@@ -151,15 +152,14 @@ export function TodayRail(props: TodayRailProps) {
                 <p className="cmd-next__note">{preparationNote(minutes)}</p>
               );
             })()}
-            <button
-              type="button"
-              className="cmd-next__link"
+            <Button
+              variant="link"
               onClick={() =>
                 props.onNavigate(`/calendar?event=${encodeURIComponent(nextEvent.id)}`)
               }
             >
               See meeting ↗
-            </button>
+            </Button>
           </div>
         ) : null}
 

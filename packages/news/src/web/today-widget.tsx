@@ -1,6 +1,7 @@
 // Side-effect CSS import so .nw-twlist is styled on /today even when /news was never visited
 // (sports' widget gets its CSS transitively by importing from sports-page; this one doesn't).
 import "./styles/news-2.css";
+import { Eyebrow, Note, SectionHead } from "@moss/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
@@ -75,11 +76,14 @@ export function NewsTodayWidget(): ReactNode {
 
   return (
     <section className="jds-brief jds-brief--news" aria-label="News desk">
-      <div className="desk-head">
-        <span className="desk-number">02</span>
-        <h2 className="desk-title">The wider world</h2>
-        <span className="desk-meta">News desk</span>
-      </div>
+      <SectionHead
+        className="desk-head"
+        rule
+        number="02"
+        title="The wider world"
+        titleClassName="desk-title"
+        meta="News desk"
+      />
       <div className="desk-cols">
         <div className="desk-leadcol">
           {/* Lead story — broadsheet treatment. Photo (when present), source tag, display headline,
@@ -150,12 +154,14 @@ export function NewsTodayWidget(): ReactNode {
                 </li>
               ))}
             </ul>
-            <div className="nw-twnote">
-              <span className="nw-twnote__eyebrow">Your news, in context</span>
+            <Note variant="pull" className="nw-twnote">
+              <Eyebrow tone="accent" className="nw-twnote__eyebrow">
+                Your news, in context
+              </Eyebrow>
               <p className="nw-twnote__text">
                 A few stories worth knowing, with the reporting a click away.
               </p>
-            </div>
+            </Note>
           </div>
         ) : null}
       </div>

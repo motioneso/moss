@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { CalendarEventDto, GetDayPlanResponse, LocaleSettingsDto } from "@moss/shared";
 
-import { Button } from "@moss/ui";
+import { Button, Note, SectionHead as HeadRow } from "@moss/ui";
 
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
@@ -162,11 +162,14 @@ function SectionHead(props: {
   if (props.editorial === true) {
     if (props.showEditorialHeading === false) return null;
     return (
-      <div className="tl-head">
-        <span className="tl-number">01</span>
-        <h2 className="tl-title">Your day, laid out</h2>
-        {props.dateline ? <span className="tl-meta">{props.dateline}</span> : null}
-      </div>
+      <HeadRow
+        className="tl-head"
+        align="center"
+        number="01"
+        title="Your day, laid out"
+        titleClassName="tl-title"
+        meta={props.dateline}
+      />
     );
   }
   return (
@@ -304,14 +307,14 @@ export function DayPlanSection(props: DayPlanSectionProps) {
           dateline={props.dateline}
         />
         {showReview || notice ? (
-          <div className="tl-note">
+          <Note variant="plan" className="tl-note">
             {status}
             {notice}
             {/* Placed blocks on the Today page need no button, as in the mockup. */}
             {showReview && !(today && !proposed) ? (
               <ReviewButton onReview={props.onReview!} solid={today} />
             ) : null}
-          </div>
+          </Note>
         ) : null}
         {items.length === 0 ? (
           props.calendarError ? null : (
