@@ -312,6 +312,7 @@
   --container: 1240px;
   --nav-w: 194px;
   --topbar-h: 60px;
+  --chatd-gutter: 16px;
 
   /* ============ MOTION ============ */
   --dur-instant: 80ms;

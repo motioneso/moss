@@ -38,6 +38,31 @@
   .chatd--docked .chatd__status {
     white-space: nowrap;
   }
+
+  /* Expanded: header, thread and composer share one centred reading column. */
+  .chatd.chatd--expanded {
+    width: auto;
+    --chatd-gutter: max(16px, calc((100% - min(960px, 78%)) / 2));
+  }
+
+  /* Message rows and the empty state share the gutter edge. The empty state's own side inset is
+     dropped so its cards line up with the message rows. */
+  .chatd--expanded .chatd__body {
+    padding-inline: var(--chatd-gutter);
+  }
+
+  .chatd--expanded .chatd-empty {
+    padding-inline: 0;
+  }
+
+  .chatd--expanded .chatd__composer {
+    padding-inline: var(--chatd-gutter);
+  }
+
+  /* Header text lines up with the column; the buttons stay pinned to the right edge. */
+  .chatd--expanded .chatd__head {
+    padding-inline: var(--chatd-gutter) 16px;
+  }
 }
 
 @keyframes chatd-in {

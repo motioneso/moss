@@ -617,6 +617,17 @@ button.module-link {
     overflow-y: auto;
     height: 100%;
   }
+
+  /* Expanded chat replaces the topbar and page, so it takes the full window height. */
+  .topbar[hidden],
+  .workspace-body--expanded .content-surface[hidden] {
+    display: none;
+  }
+
+  .workspace-body--expanded {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100dvh;
+  }
 }
 
 /* Today editorial empty-state line */

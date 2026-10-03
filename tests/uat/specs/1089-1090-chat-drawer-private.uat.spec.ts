@@ -1,6 +1,22 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
+/** Opens the "More chat options" menu, picks one item, and leaves the menu closed (it closes itself). */
+async function pickChatMenuItem(drawer: Locator, name: string) {
+  await drawer.getByRole("button", { name: "More chat options" }).click();
+  await drawer.getByRole("menuitemcheckbox", { name }).click();
+}
+
+/** Opens the menu, checks the private item's state, and closes the menu again. */
+async function expectPrivateChecked(drawer: Locator, checked: boolean) {
+  await drawer.getByRole("button", { name: "More chat options" }).click();
+  await expect(
+    drawer.getByRole("menuitemcheckbox", { name: /^(Start|Leave) private chat$/ })
+  ).toHaveAttribute("aria-checked", String(checked));
+  await drawer.page().keyboard.press("Escape");
+  await expect(drawer.getByRole("menu")).toHaveCount(0);
+}
+
 export const uatLevel = {
   level: "admin+data",
   without: [],
@@ -62,22 +78,16 @@ test("resuming a History thread while private clears the stale privateMode flag 
   const drawer = await openChat(page);
 
   await sendAndAwaitReply(page, drawer, FIRST_MESSAGE);
-  await drawer.getByRole("button", { name: "Start private chat" }).click();
+  await pickChatMenuItem(drawer, "Start private chat");
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  );
-  await drawer.getByRole("button", { name: "Show chat history" }).click();
+  await expectPrivateChecked(drawer, true);
+  await pickChatMenuItem(drawer, "Show chat history");
   const threadRow = drawer.getByRole("button", { name: new RegExp(FIRST_MESSAGE) });
   await expect(threadRow).toBeVisible();
   await threadRow.click();
 
   await expect(drawer.getByText(FIRST_MESSAGE)).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(
-    "aria-pressed",
-    "false"
-  );
+  await expectPrivateChecked(drawer, false);
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
   await sendAndAwaitReply(page, drawer, CONTINUATION_MESSAGE);
   await expect(drawer.getByText(CONTINUATION_MESSAGE, { exact: true })).toBeVisible();
@@ -107,7 +117,7 @@ test("private activation blocks send until the server confirms, then allows it (
   try {
     await signIn(page);
     const drawer = await openChat(page);
-    await drawer.getByRole("button", { name: "Start private chat" }).click();
+    await pickChatMenuItem(drawer, "Start private chat");
 
     await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
     await drawer.getByLabel("Message Moss").fill(ACTIVATION_MESSAGE);
@@ -118,10 +128,7 @@ test("private activation blocks send until the server confirms, then allows it (
     expect(clearRoute).toBeDefined();
     releaseClear?.();
     await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toBeVisible();
-    await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    await expectPrivateChecked(drawer, true);
     await sendAndAwaitReply(page, drawer, AFTER_ACTIVATION_MESSAGE);
     await expect.poll(() => turnRequestMethods).toEqual(["POST"]);
   } finally {
