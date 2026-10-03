@@ -57,6 +57,9 @@ async function main(): Promise<void> {
   // the var) reads as absent, same as every other optional docker -e value here.
   const briefingWriterAiProviderBaseUrl =
     resolveMossEnv(process.env, "JARVIS_UAT_BRIEFING_WRITER_AI_BASE_URL") || undefined;
+  // #2907 (plan 3.5): empty string reads as absent, same as every other optional docker -e value.
+  const classifierFixtureAiProviderBaseUrl =
+    resolveMossEnv(process.env, "MOSS_UAT_CLASSIFIER_FIXTURE_AI_BASE_URL") || undefined;
   const sportsPublicSourceFixtures =
     resolveMossEnv(process.env, "JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES") === "1";
   const workflowApprovalFixture =
@@ -75,6 +78,7 @@ async function main(): Promise<void> {
     withoutNewsJsonBinding,
     jobSearchAiProviderBaseUrl,
     briefingWriterAiProviderBaseUrl,
+    classifierFixtureAiProviderBaseUrl,
     sportsPublicSourceFixtures,
     workflowApprovalFixture,
     activityOutcomeFixture,

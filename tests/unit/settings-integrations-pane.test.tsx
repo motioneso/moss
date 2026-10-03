@@ -129,7 +129,7 @@ describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
     expect(html).not.toContain("Refresh tools rereads");
   });
 
-  it("renders a repeat-call switch for each tool in the flat (ungrouped) list", () => {
+  it("renders only the on/off switch, no repeat-call switch, for each tool in the flat (ungrouped) list", () => {
     currentDetail.value = baseDetail({
       groupOptIn: false,
       tools: [tool({ name: "ToolA" })]
@@ -137,10 +137,11 @@ describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
-    expect(html).toContain("Allow repeated identical calls to ToolA");
+    expect(html).toContain("Enable ToolA");
+    expect(html).not.toContain("repeated");
   });
 
-  it("renders a repeat-call switch for each tool in the grouped list", () => {
+  it("renders only the on/off switch, no repeat-call switch, for each tool in the grouped list", () => {
     currentDetail.value = baseDetail({
       groupOptIn: true,
       enabledGroups: ["Group A"],
@@ -149,7 +150,8 @@ describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
-    expect(html).toContain("Allow repeated identical calls to ToolA");
+    expect(html).toContain("Enable ToolA");
+    expect(html).not.toContain("repeated");
   });
 
   it("mounts the classifier section without changing the ordinary tool controls (#2899)", () => {
@@ -161,6 +163,6 @@ describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
 
     expect(html).toContain("Let the classifier use this connection");
     expect(html).toContain("Enable ToolA");
-    expect(html).toContain("Allow repeated identical calls to ToolA");
+    expect(html).not.toContain("repeated");
   });
 });

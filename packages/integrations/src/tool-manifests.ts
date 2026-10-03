@@ -20,7 +20,7 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 
-import { callMemory, requestBudget, type CallMemory, type RequestBudget } from "./call-memory.js";
+import { requestBudget, type CallMemory, type RequestBudget } from "./call-memory.js";
 import {
   candidateCache,
   loadCachedCandidates,
@@ -88,7 +88,7 @@ export interface IntegrationsActiveModulesResolverDeps {
   readonly logger: ToolManifestLogger;
   /** Test seam — defaults to a real IntegrationsRepository. */
   readonly repository?: IntegrationsRepository;
-  /** Test seam — defaults to the module-level `callMemory` singleton (#2175 Task 3). */
+  /** Unused: integration tools no longer suppress repeated identical calls. */
   readonly callMemory?: CallMemory;
   /** Test seam — defaults to the module-level `requestBudget` singleton (#2175 Task 4). */
   readonly requestBudget?: RequestBudget;
@@ -230,11 +230,9 @@ function buildToolManifest(
   cipher: JsonSecretCipher | null,
   classifierByTool: ReadonlyMap<string, EligibleClassifierTool>
 ): ModuleAssistantToolManifest {
-  const memory = deps.callMemory ?? callMemory;
   const budget = deps.requestBudget ?? requestBudget;
   const action: IntegrationOutcomeEnvelope["action"] =
     tool.readOnly === true ? "read" : "performed";
-  const skipSuppression = tool.idempotent === true || conn.unsuppressedTools.includes(tool.name);
   const classifierEntry = classifierByTool.get(tool.name);
   // Plan 2b.5: a connected read tool's reply can only be the fixed envelope summary with no
   // content ("Read succeeded."), so it cannot count as handled and stays off the menu. It can
@@ -243,19 +241,7 @@ function buildToolManifest(
     classifierEntry !== undefined && classifierEntry.risk !== "read" ? classifierEntry : undefined;
 
   const execute: ToolExecute = async (scopedDb, input, ctx: ToolContext): Promise<ToolResult> => {
-    const scope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
-    const key = memory.callKey(conn.id, tool.name, input);
-    const decision = memory.check(scope, conn.id, key, action, skipSuppression);
-    if (decision.kind === "serve") {
-      const envelope: IntegrationOutcomeEnvelope = {
-        status: "ok",
-        action,
-        summary: decision.summary,
-        detail: decision.detail
-      };
-      return { data: envelope as unknown as Record<string, unknown> };
-    }
-
+    // Identical repeated calls are never blocked or served from memory.
     const budgetScope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
     if (!budget.reserveCall(budgetScope)) {
       const envelope: IntegrationOutcomeEnvelope = {
@@ -323,12 +309,6 @@ function buildToolManifest(
           summary: INTEGRATION_SUMMARY.callFailed,
           detail: cappedData
         };
-    memory.record(scope, conn.id, key, {
-      ok: outcome.ok,
-      action,
-      summary: envelope.summary,
-      detail: envelope.detail
-    });
     return { data: envelope as unknown as Record<string, unknown> };
   };
 

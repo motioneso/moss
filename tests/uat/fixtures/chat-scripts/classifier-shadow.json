@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["uatfix"],
+      "calls": [{ "tool": "calendar.listVisibleEvents", "arguments": { "window": "today" } }],
+      "reply": "You have events on your calendar today."
+    },
+    {
+      "expectIncludes": ["uatdead"],
+      "calls": [],
+      "reply": "I checked."
+    },
+    {
+      "expectIncludes": ["uatoff"],
+      "calls": [],
+      "reply": "All set."
+    }
+  ]
+}

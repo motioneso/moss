@@ -61,6 +61,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withActivityOutcomeFixture: false,
       withBriefingWriterFixture: false,
+      withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: undefined
     });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
@@ -105,6 +107,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withActivityOutcomeFixture: false,
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
+      withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -156,6 +160,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withActivityOutcomeFixture: false,
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
+      withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: undefined
     });
   });
@@ -185,8 +191,35 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withActivityOutcomeFixture: false,
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
+      withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: "phase1-smoke"
     });
+  });
+
+  it("threads the classifier fixture origin flag after the briefing-writer flag", async () => {
+    mocks.readFile.mockResolvedValue(
+      `export const uatLevel = {
+        level: "admin+data",
+        without: [],
+        withoutNewsJsonBinding: true,
+        chatScript: "classifier-shadow",
+        withClassifierFixture: true
+      } as const;`
+    );
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.provisionForUat).toHaveBeenCalledWith(
+      "admin+data",
+      expect.objectContaining({
+        chatScript: "classifier-shadow",
+        withClassifierFixture: true,
+        withClassifierMcpFixture: false,
+        withBriefingWriterFixture: false
+      })
+    );
   });
 
   it("#2164: captures bounded failure evidence before teardown when a spec fails", async () => {

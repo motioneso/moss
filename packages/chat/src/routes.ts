@@ -21,6 +21,7 @@ import {
   AssistantToolGateway,
   ConfirmationRegistry,
   SessionTokenRegistry,
+  createAiSecretCipher,
   type ActiveModulesResolver,
   type GatewaySessionRecord,
   type PlatformDiagnosticsService,
@@ -85,9 +86,13 @@ import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
 import { RuntimeConfigResolver } from "@moss/settings";
 import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
-import { buildClassifierGateRunner } from "./live/classifier-gate-runner.js";
+import { buildClassifierGateRunner, GATE_TOKEN_TTL_MS } from "./live/classifier-gate-runner.js";
 import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
-import type { GateMode } from "./live/classifier-gate.js";
+import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
+import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
+import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
+import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
+import { ClassifierReleaseRepository } from "./classifier-release-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 
 export {
@@ -341,11 +346,31 @@ export function registerChatRoutes(
   if (wiring) dependencies.adoptChatGateway?.(wiring.gateway);
 
   /**
-   * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting
-   * only. `buildClassifierGateRunner` owns the session-id shape, the empty allowlist and the short
-   * token lifetime; the ports factory is intentionally left unset, so today every gated message
-   * declines and falls through to the default model. Nothing here can become reachable until an
-   * approved release exists, which no code path writes yet.
+   * #2907 (plan 3.5) — the production ports factory for the gate: the actor's tool menu, the
+   * classifier calls, candidate hooks, the dry-run gateway call and the approved-release check.
+   * Shared by the handled-turn runner (4.1) and the shadow runner, so neither copies wiring.
+   */
+  const classifierGatePorts = wiring
+    ? createClassifierGatePortsFactory({
+        resolveActiveModules: resolveActiveModules as ActiveModulesResolver,
+        dataContext: dependencies.dataContext,
+        gateway: wiring.gateway,
+        classifierDeps: {
+          repository: wiring.aiRepository,
+          cipher: createAiSecretCipher(),
+          createCliStructuredAdapter: createCliStructuredAdapterFactory(
+            dependencies.chatEngineFactory
+          )
+        },
+        releaseRepository: new ClassifierReleaseRepository()
+      })
+    : undefined;
+
+  /**
+   * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
+   * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
+   * read. `on` is unreachable until an approved release exists (no writer yet), so passing the real
+   * ports factory cannot run a tool today.
    */
   const classifierGate = wiring
     ? buildClassifierGateRunner({
@@ -355,12 +380,51 @@ export function registerChatRoutes(
               CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
             )
           ),
-        tokens: wiring.tokens
+        tokens: wiring.tokens,
+        createPorts: classifierGatePorts
       })
     : undefined;
 
   if (classifierGate) dependencies.adoptClassifierGate?.(classifierGate);
 
+  /**
+   * #2907 (plan 3.5) — the classifier gate's shadow runner. One short-lived token is minted per
+   * attempt (scoped to the actor and a fresh correlation id) and revoked in `finally`; shadows only,
+   * so no tool ever executes and no card is ever raised.
+   */
+  const classifierGateShadow =
+    wiring && classifierGatePorts
+      ? createClassifierGateShadowRunner({
+          readMode: (actorUserId) =>
+            dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
+              new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
+                CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+              )
+            ),
+          createPorts: classifierGatePorts,
+          repository: classifierShadowRepository,
+          dataContext: dependencies.dataContext,
+          tokens: {
+            mint: (actorUserId, correlationId, allowedToolNames) =>
+              wiring.tokens.mint(
+                {
+                  actorUserId,
+                  chatSessionId: `classifier-gate:${correlationId}`,
+                  allowedToolNames
+                },
+                // #2907 QA N2: the short fixed lifetime, exactly like the 4.1 gate token, so a
+                // skipped revoke leaves it stale after a minute instead of an hour.
+                { ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true }
+              ),
+            revoke: (correlationId) =>
+              wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`)
+          },
+          listToolNames: async (actorUserId) =>
+            (await wiring.gateway.listToolsForActor(actorUserId)).map((tool) => tool.name),
+          thresholdVersion: THRESHOLD_VERSION,
+          now: () => Date.now()
+        })
+      : undefined;
   const runtime = createChatSessionRuntime({
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
@@ -383,6 +447,8 @@ export function registerChatRoutes(
     priorityPreferences: dependencies.priorityPreferences,
     // Task 4.1 (#2901) — attach the classifier gate seam. Undefined when the gateway is not wired.
     classifierGate,
+    // #2907 (plan 3.5) — attach the shadow runner. Undefined when the gateway is not wired.
+    classifierGateShadow,
     mcpTokenLifecycle: wiring
       ? {
           mint: async (actorUserId: string, chatSessionId: string) => {

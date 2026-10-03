@@ -190,7 +190,6 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
       enabledGroups?: readonly string[];
       enabledTools?: readonly string[];
       mutedTools?: readonly string[];
-      unsuppressedTools?: readonly string[];
     }) => updateIntegration(id, body),
     onSuccess: () => invalidateDetail(),
     onError: (error) => toast(readError(error), { tone: "drift" })
@@ -257,12 +256,6 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
     } else {
       curationMutation.mutate({ enabledTools: withMember(detail.enabledTools, toolName, false) });
     }
-  };
-
-  const toggleUnsuppressed = (toolName: string, allow: boolean) => {
-    curationMutation.mutate({
-      unsuppressedTools: withMember(detail.unsuppressedTools, toolName, allow)
-    });
   };
 
   // Absent hint fields mean the connection's tools were discovered before Task 1 added
@@ -336,7 +329,6 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
             onToggleGroup={toggleGroup}
             onToggleMute={toggleMute}
             onToggleExplicitTool={toggleExplicitTool}
-            onToggleUnsuppressed={toggleUnsuppressed}
           />
         ) : (
           <Group title="Tools">
@@ -346,18 +338,11 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
                 name={tool.name}
                 desc={tool.description}
                 control={
-                  <>
-                    <Switch
-                      ariaLabel={`Enable ${tool.name}`}
-                      checked={!detail.mutedTools.includes(tool.name)}
-                      onChange={(checked) => toggleMute(tool.name, checked)}
-                    />
-                    <Switch
-                      ariaLabel={`Allow repeated identical calls to ${tool.name}`}
-                      checked={detail.unsuppressedTools.includes(tool.name)}
-                      onChange={(checked) => toggleUnsuppressed(tool.name, checked)}
-                    />
-                  </>
+                  <Switch
+                    ariaLabel={`Enable ${tool.name}`}
+                    checked={!detail.mutedTools.includes(tool.name)}
+                    onChange={(checked) => toggleMute(tool.name, checked)}
+                  />
                 }
               />
             ))}
@@ -380,7 +365,6 @@ function IntegrationGroupedTools(props: {
   readonly onToggleGroup: (groupName: string, enabled: boolean) => void;
   readonly onToggleMute: (toolName: string, unmuted: boolean) => void;
   readonly onToggleExplicitTool: (toolName: string, enabled: boolean) => void;
-  readonly onToggleUnsuppressed: (toolName: string, allow: boolean) => void;
 }) {
   const { detail } = props;
   // Mutually exclusive: a connection that opted into grouping either starts fresh (everything
@@ -425,22 +409,15 @@ function IntegrationGroupedTools(props: {
                     name={tool.name}
                     desc={tool.description}
                     control={
-                      <>
-                        <Switch
-                          ariaLabel={`Enable ${tool.name}`}
-                          checked={checked}
-                          onChange={(next) =>
-                            groupEnabled
-                              ? props.onToggleMute(tool.name, next)
-                              : props.onToggleExplicitTool(tool.name, next)
-                          }
-                        />
-                        <Switch
-                          ariaLabel={`Allow repeated identical calls to ${tool.name}`}
-                          checked={detail.unsuppressedTools.includes(tool.name)}
-                          onChange={(next) => props.onToggleUnsuppressed(tool.name, next)}
-                        />
-                      </>
+                      <Switch
+                        ariaLabel={`Enable ${tool.name}`}
+                        checked={checked}
+                        onChange={(next) =>
+                          groupEnabled
+                            ? props.onToggleMute(tool.name, next)
+                            : props.onToggleExplicitTool(tool.name, next)
+                        }
+                      />
                     }
                   />
                 );

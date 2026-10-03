@@ -116,7 +116,7 @@ async function buildTools(
   return Object.fromEntries(manifestTools.map((t) => [t.name.split(".").pop(), t.execute!]));
 }
 
-describe("integration in-burst duplicate suppression (#2175 Task 3)", () => {
+describe("integration repeated identical calls", () => {
   let close: (() => Promise<void>) | undefined;
 
   afterEach(async () => {
@@ -124,7 +124,7 @@ describe("integration in-burst duplicate suppression (#2175 Task 3)", () => {
     close = undefined;
   });
 
-  it("serves a repeated read from the store instead of calling the service again", async () => {
+  it("calls the service again for an identical repeated read", async () => {
     const started = await startServer((_req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ on: true }));
@@ -135,20 +135,9 @@ describe("integration in-burst duplicate suppression (#2175 Task 3)", () => {
     const first = await get_state!({}, {}, ctx);
     const second = await get_state!({}, {}, ctx);
 
-    expect(started.calls).toHaveLength(1);
-    expect(first.data).toMatchObject({
-      status: "ok",
-      action: "read",
-      summary: INTEGRATION_SUMMARY.readOk
-    });
-    expect(second.data).toMatchObject({
-      status: "ok",
-      action: "read",
-      summary: INTEGRATION_SUMMARY.blockedRead
-    });
-    expect((second.data as { detail: unknown }).detail).toEqual(
-      (first.data as { detail: unknown }).detail
-    );
+    expect(started.calls).toHaveLength(2);
+    expect(first.data).toMatchObject({ status: "ok", summary: INTEGRATION_SUMMARY.readOk });
+    expect(second.data).toMatchObject({ status: "ok", summary: INTEGRATION_SUMMARY.readOk });
   });
 
   it("re-runs a read for real once a performed call on the connection succeeds", async () => {
@@ -171,7 +160,7 @@ describe("integration in-burst duplicate suppression (#2175 Task 3)", () => {
     expect(stateCalls).toHaveLength(2);
   });
 
-  it("blocks a repeated performed call and reports it plainly", async () => {
+  it("never blocks an identical repeated performed call", async () => {
     const started = await startServer((_req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
@@ -182,13 +171,9 @@ describe("integration in-burst duplicate suppression (#2175 Task 3)", () => {
     const first = await turn_off!({}, {}, ctx);
     const second = await turn_off!({}, {}, ctx);
 
-    expect(started.calls).toHaveLength(1);
+    expect(started.calls).toHaveLength(2);
     expect(first.data).toMatchObject({ status: "ok", summary: INTEGRATION_SUMMARY.performedOk });
-    expect(second.data).toMatchObject({
-      status: "ok",
-      summary: INTEGRATION_SUMMARY.blockedPerformed
-    });
-    expect((second.data as { detail: unknown }).detail).toBeUndefined();
+    expect(second.data).toMatchObject({ status: "ok", summary: INTEGRATION_SUMMARY.performedOk });
   });
 
   it("re-runs a repeated performed call the service marked idempotent", async () => {
@@ -203,22 +188,6 @@ describe("integration in-burst duplicate suppression (#2175 Task 3)", () => {
     ]);
     await skip_track!({}, {}, ctx);
     await skip_track!({}, {}, ctx);
-
-    expect(started.calls).toHaveLength(2);
-  });
-
-  it("re-runs a repeated performed call for a tool named in the connection's escape hatch", async () => {
-    const started = await startServer((_req, res) => {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
-    });
-    close = started.close;
-
-    const { volume_up } = await buildTools(started.baseUrl, [performedTool("volume_up")], {
-      unsuppressedTools: ["volume_up"]
-    });
-    await volume_up!({}, {}, ctx);
-    await volume_up!({}, {}, ctx);
 
     expect(started.calls).toHaveLength(2);
   });
