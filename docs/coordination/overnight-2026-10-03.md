@@ -6,14 +6,14 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 ## Queue
 
 | Item | Issue | Tier | Status | Pane label | Pane | Branch | PR | Relays |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | building | 2939 chat drawer tests | w1:p0Q | fix-2939-drawer-tests | - | 0 |
-| Coverage guard gaps | #2933 | routine | in QA (qa-2962, w1:p0W, QA tab w1:t9K) | 2933 coverage guard | w1:p0R | fix-2933-coverage-guard | #2962 | 0 |
+| Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | building | 2934 new chat stops turn | w1:p0S | fix-2934-newchat-stop | - | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | queued (after #2939 lands) | - | - | - | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
@@ -37,7 +37,17 @@ None.
 
 ## Merge audit
 
+- **PR #2962** (coverage guard gaps, #2933):
+  - QA verdict + model: GREEN, merge-ready, no blocking findings; Opus (qa-2962).
+  - Live-path proof: N/A, tests only, no user-facing surface.
+  - Session id at merge matched lock anchor: y
+  - Worktree check: `VERDICT: REAPABLE .../fix-2933-coverage-guard (gates clear; ahead=2)`
+  - Pane teardown recorded: y
+
 ## Reaped sessions
+
+- w1:p0R "2933 coverage guard" (Muse builder) - built #2933; landed as PR #2962 (6f9d95af6); closed after merge.
+- w1:p0W "QA 2962 coverage guard" (Opus QA) - reviewed PR #2962, verdict GREEN posted on the PR; closed after merge.
 
 ## Continuation note
 
