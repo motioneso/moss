@@ -14,7 +14,7 @@
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
-| New chat stops running turn | #2934 | security | QA round 2 of 2 running in qa-2963 (w1:p0Y): fixes at dfaca34dd (rebased; range-diff from 846bd1082); QA told to challenge the claim that model-backed browser halves still fail on main after #2939 merged; park for Ben whatever the verdict | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
+| New chat stops running turn | #2934 | security | QA round 2 RED (failure budget reached): round-1 fixes confirmed; 1 blocking: retry after failed send re-sends private text into a new normal chat if a new chat lands during reconnect (no stop/privacy re-check after heal), comment 5970117903. Builder fixing only that; then ONE fresh Opus arbiter scoped to that fix only; then park for Ben | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (plan approved: new-chat hint in refusal text; condition: prove the open chat can see and call the new tool, else kill gate -> chat-screen notice; plan to be committed) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
@@ -77,6 +77,7 @@ None.
 - w1:p00 "QA 2964 shadow report" (Opus QA, qa-2964) - rounds 1 (RED) and 2 (GREEN) on PR 2964, verdicts posted on the PR; closed and QA worktree removed after round 2.
 - w1:p0X "2957 shadow report" (Muse builder) - built #2957; landed as PR #2964 (a968e0a1f); orphaned dev server watcher pid 2946226 killed by PID; reap check REAPABLE; worktree and branch removed.
 - w1:p113 "Coordinator (old)" (session 9dcc4a5e-af83-4e58-9566-5e42f99b6825) - relay-1 coordinator; merged #2964 on Ben's sign-off, spawned #2942; work recorded in this manifest; closed by relay-2 successor.
+- w1:p0Y "QA 2963 new chat stop" (Opus QA, qa-2963) - rounds 1 and 2 (both RED) on PR 2963, verdicts on the PR; closed, QA worktree removed.
 - w1:p118 "2891 weather test wording" (Opus builder) - built #2891; landed as PR #2968 (05769bf43); worktree and branch removed.
 - w1:p119 "QA 2968 weather test" (Opus QA) - GREEN verdict on PR #2968; closed, QA worktree removed.
 
