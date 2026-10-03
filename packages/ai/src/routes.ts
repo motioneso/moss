@@ -8,6 +8,7 @@ import {
   type DataContextDb,
   type DataContextRunner,
   type MossActionAuditLog,
+  type MossActivityDetail,
   type MossModelActivityLog
 } from "@moss/db";
 
@@ -70,6 +71,9 @@ import {
   listActionAuditLogRouteSchema,
   type ActionAuditLogEntryDto,
   type ListActionAuditLogResponse,
+  listActivityLinesRouteSchema,
+  type ActivityLineDto,
+  type ListActivityLinesResponse,
   listModelActivityRouteSchema,
   type ModelActivityEntryDto,
   type ListModelActivityResponse
@@ -826,6 +830,47 @@ export function registerAiRoutes(
     }
   );
 
+  const ACTIVITY_LINES_DEFAULT_LIMIT = 200;
+  const ACTIVITY_LINES_MAX_LIMIT = 200;
+
+  // #2956 (slice C): the viewer's own activity lines with unexpired detail. Owner-scoped:
+  // no admin check — row security limits each person to their own lines (admins additionally
+  // read ownerless System lines). Tool steps for a chat answer ride the existing action-audit
+  // endpoint (turnId) and join client-side on the turn.
+  server.get<{ Querystring: { since?: string; limit?: number } }>(
+    "/api/ai/activity-lines",
+    { schema: listActivityLinesRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const limit = Math.min(
+          request.query.limit ?? ACTIVITY_LINES_DEFAULT_LIMIT,
+          ACTIVITY_LINES_MAX_LIMIT
+        );
+        const since =
+          parseOptionalTimestamp(request.query.since) ??
+          new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        const response: ListActivityLinesResponse = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const lines = await repository.listActivityLines(scopedDb, { since, limit });
+            const details = await repository.listActivityDetails(
+              scopedDb,
+              lines.map((line) => line.id)
+            );
+            const detailById = new Map(details.map((detail) => [detail.activity_id, detail]));
+            return {
+              entries: lines.map((line) => serializeActivityLine(line, detailById.get(line.id)))
+            };
+          }
+        );
+        return response;
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
   const MODEL_ACTIVITY_MAX_LIMIT = 200;
   const MODEL_ACTIVITY_DEFAULT_LIMIT = 100;
 
@@ -1449,11 +1494,53 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
     errorClass: row.error_class ?? null,
     requestId: row.request_id ?? null,
     chatSessionId: row.chat_session_id ?? null,
+    turnId: row.turn_id ?? null,
     sourceSurface: row.source_surface as ActionAuditLogEntryDto["sourceSurface"],
     inputSummary: row.input_summary as ActionAuditLogEntryDto["inputSummary"],
     durationMs: row.duration_ms ?? null,
     occurredAt:
       row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at)
+  };
+}
+
+function serializeActivityLine(
+  row: MossModelActivityLog,
+  detail: MossActivityDetail | undefined
+): ActivityLineDto {
+  return {
+    id: row.id,
+    occurredAt:
+      row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at),
+    kind: row.kind,
+    action: row.action,
+    outcome: row.outcome as ActivityLineDto["outcome"],
+    modelName: row.model_name,
+    result: row.result,
+    ownerUserId: row.owner_user_id,
+    actionCode: row.action_code,
+    turnId: row.turn_id,
+    parentId: row.parent_id,
+    durationMs: row.duration_ms,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    failureCode: row.failure_code,
+    factCounts: (row.fact_counts as ActivityLineDto["factCounts"]) ?? null,
+    detail: detail
+      ? {
+          quote: detail.quote,
+          resultLine: detail.result_line,
+          steps: detail.steps.map((step) => ({
+            title: step.title,
+            result: step.result,
+            ...(step.askedFor ? { askedFor: step.askedFor } : {}),
+            ...(step.returned ? { returned: step.returned } : {})
+          })),
+          expiresAt:
+            detail.expires_at instanceof Date
+              ? detail.expires_at.toISOString()
+              : String(detail.expires_at)
+        }
+      : null
   };
 }
 

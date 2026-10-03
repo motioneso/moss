@@ -81,6 +81,8 @@ export const queryKeys = {
     // #1224). Deleted rather than left orphaned.
     actionAuditLog: (params?: { since?: string; family?: string; limit?: number }) =>
       ["ai", "action-audit-log", params] as const,
+    activityLines: (params?: { since?: string; limit?: number }) =>
+      ["ai", "activity-lines", params] as const,
     modelActivity: (params?: {
       kind?: string;
       model?: string;

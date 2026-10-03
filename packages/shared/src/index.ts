@@ -12,6 +12,7 @@ export * from "./ai-service-binding-api.js";
 export * from "./ai-voice-api.js";
 export * from "./ai-chat-favorites-api.js";
 export * from "./ai-audit-api.js";
+export * from "./ai-activity-lines-api.js";
 export * from "./ai-model-activity-api.js";
 export * from "./ai-summary-api.js";
 export * from "./briefings-api.js";
