@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Chat panel works better with the keyboard.** Opening the chat puts the cursor in the message box, Escape closes it and takes you back to where you were, and on a phone the Tab key no longer wanders off behind the chat. [PR #2938](https://github.com/motioneso/moss/pull/2938)
 - **Quieter Today on empty days.** When your briefing, priorities and evening review are all empty, Today now shows a single short line instead of three separate empty messages. [PR #2931](https://github.com/motioneso/moss/pull/2931)
 - **Model activity log now lists every model call.** The admin Model activity page now also shows chat replies, background jobs, memory embeddings, and account checks, not just some of the calls Moss makes. [PR #2904](https://github.com/motioneso/moss/pull/2904)
 - **Settings fills the screen and reads more plainly.** Settings now uses the full width of your screen, the Activity page describes what Moss did in plain words, and a few Settings pages have clearer names: Your assistant, AI providers and What's new. [PR #2930](https://github.com/motioneso/moss/pull/2930)
