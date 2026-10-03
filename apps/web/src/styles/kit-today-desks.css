@@ -253,12 +253,16 @@
   overflow-wrap: anywhere;
 }
 
-/* Phone: 44px tap area for story links; the padding is cancelled by the
-   negative margin so the lines keep their spacing. */
+/* Phone: each story link is a 44px-tall tap area. Its padding takes the row
+   height, so stacked links sit 8px apart and never overlap. */
 @media (max-width: 680px) {
+  .jds-brief--sports .sp-tkgrid .sp-tk .sp-tk__stories {
+    gap: 8px;
+    padding-top: 0;
+  }
+
   .jds-brief--sports .sp-tkgrid .sp-tk__storylink {
     padding-block: 14px;
-    margin-block: -14px;
   }
 }
 
