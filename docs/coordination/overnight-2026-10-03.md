@@ -14,15 +14,15 @@
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
-| New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | w1:p11F (lane told to stop; reap) | fix-2934-newchat-stop | #2963 | 0 |
+| New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | reaped | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | draft PR #2974 (head a26fdff31); full gate running; must rebase over #2963; then QA + live proof + matched UAT (sensitive), auto-merge | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | #2974 | 1 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | rebased, migrations 0258/0259 (5888cd2fb); full gate GO given 08:50; then draft PR, then coordinator plan section 6 continue-or-stop call before slice B | 2956 activity history (Opus) | w1:p11G | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
 | Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | gate found export bug (worker cannot read table); fixing with actor-scoped worker read rule + red proof; migration 0257 reserved; needs coordinator GO for full gate; then PR, Opus adversarial QA, PARK for Ben (not delegated) | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | - | 0 |
 | Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
-| Classifier review storage hardening | #2893 | routine | PR #2973; gate green except known flake #1673 (rerun green); Opus QA subagent running (look for a 'QA:' comment on the PR; if none, spawn QA) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
-| Job search browser test signs in real chat | #2735 | routine (test-only) | building (Opus, spawned 07:52) | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
+| Classifier review storage hardening | #2893 | routine | PR #2973; gate green except known flake #1673 (rerun green); QA pane qa-2973 (w1:p11K, QA tab, Opus) spawned 08:45 by relay 3; CI integration still running | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
+| Job search browser test signs in real chat | #2735 | routine (test-only) | PR #2975 code-complete, not green: final UAT run was killed for low memory; lane HOLDING for coordinator GO to rerun | 2735 job search test (Opus) | w1:p11E | fix-2735-jobsearch-uat | - | 0 |
 
 ## Dependency / merge order
 
@@ -89,6 +89,7 @@ None.
 - w1:p0Y "QA 2963 new chat stop" (Opus QA, qa-2963) - rounds 1 and 2 (both RED) on PR 2963, verdicts on the PR; closed, QA worktree removed.
 - w1:p118 "2891 weather test wording" (Opus builder) - built #2891; landed as PR #2968 (05769bf43); worktree and branch removed.
 - w1:p119 "QA 2968 weather test" (Opus QA) - GREEN verdict on PR #2968; closed, QA worktree removed.
+- w1:p11F "2934 new chat stops turn" (Opus builder) - built #2934; landed as PR #2963 (b861a8093); reap check REAPABLE; worktree and branch removed.
 - w1:p115 "Coordinator (old)" (session 3748ecb9-3142-49d8-8078-38dc9a19429b) - relay-2 coordinator; merged #2968 and #2963 (Ben's delegated sign-off); work recorded in this manifest; closed by relay-3 successor.
 
 ## Continuation note
@@ -143,4 +144,4 @@ RELAY POINT 3 (relay after security merge of #2963, session 3748ecb9). Successor
 9. Memory service (iii) climbs to ~10 GB within 20 min of restart; tracing turned off, not the cause. Do not restart it again for memory.
 10. Morning report ~/.coord-briefs/overnight-2026-10-03-report.md; end-coordination at the end.
 
-Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed.
+Relay 3 (session 759a1a1a): lock claimed, old coordinator (w1:p115) closed. 2934 lane reaped. QA for 2973 spawned. 2942 gate start waits on a slow Postgres checkpoint (database drop), 2956 queued behind it; told to wait. 2735 holds for a GO to rerun its UAT once a gate slot frees.
