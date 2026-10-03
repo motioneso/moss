@@ -21,6 +21,8 @@ import type {
   ChatSkillResponse,
   ConfirmDayPlanApplyRequest,
   CreateChatSkillRequest,
+  ClassifierShadowReportRange,
+  GetClassifierShadowReportResponse,
   ListChatSkillsResponse,
   SetChatSkillEnabledRequest,
   UpdateChatSkillRequest,
@@ -1173,6 +1175,15 @@ export async function getChatPrivacyState(
 ): Promise<GetChatPrivacyStateResponse> {
   const query = surface ? `?surface=${encodeURIComponent(surface)}` : "";
   return requestJson<GetChatPrivacyStateResponse>(`/api/chat/privacy${query}`);
+}
+
+// Temporary classifier shadow report (#2957): the viewer's own numbers and disagreements.
+export async function getClassifierShadowReport(
+  days: ClassifierShadowReportRange
+): Promise<GetClassifierShadowReportResponse> {
+  return requestJson<GetClassifierShadowReportResponse>(
+    `/api/chat/classifier/shadow-report?days=${encodeURIComponent(days)}`
+  );
 }
 
 export function beaconEndPrivateChat(): void {

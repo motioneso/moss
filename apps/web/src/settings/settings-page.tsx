@@ -84,6 +84,7 @@ type PersonalSectionId =
 type AdminSectionId =
   | "people"
   | "aiproviders"
+  | "shadowreport"
   | "instmods"
   | "audit"
   | "modelactivity"
@@ -129,6 +130,12 @@ const PeoplePane = lazyPane(() =>
 );
 const AiProvidersPane = lazyPane(() =>
   import("./settings-ai-admin-pane").then((module) => ({ default: module.AiProvidersPane }))
+);
+// Temporary classifier shadow report (#2957). Not a permanent section: do not extend it.
+const ShadowReportPane = lazyPane(() =>
+  import("./settings-shadow-report-pane").then((module) => ({
+    default: module.ShadowReportPane
+  }))
 );
 const InstanceModulesPane = lazyPane(() =>
   import("./settings-instance-modules-pane").then((module) => ({
@@ -282,6 +289,13 @@ const ADMIN_GROUPS = [
         Pane: AiProvidersPane
       },
       {
+        id: "shadowreport",
+        icon: GitCommitHorizontal,
+        label: "Shadow report",
+        description: coreSettingDescription("shadowreport"),
+        Pane: ShadowReportPane
+      },
+      {
         id: "instmods",
         icon: Package,
         label: "Instance modules",
@@ -383,6 +397,7 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],
   modelactivity: ["model", "ai", "calls", "log", "activity", "classifier"],
+  shadowreport: ["shadow", "classifier", "agreement", "report"],
   host: ["server", "domain", "url", "backup", "advanced"],
   enckeys: ["encryption", "keys", "secret", "credentials", "setup"]
 };
