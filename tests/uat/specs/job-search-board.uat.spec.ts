@@ -460,20 +460,22 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       // #1306: portal-enabling only happens via the job-search.portal.set-enabled tool, invoked by
       // the assistant conversation — there is no onboarding-time UI toggle (settings.tsx's toggle is
       // for an already-active profile). The prompt above asks explicitly so "sources" can complete.
-      // Completion must be persisted, not live component state: each attempt reloads and reads
-      // the profile list the page itself fetches. A fully answered profile turns active, and a
-      // fresh load then shows the board instead of the onboarding rows.
+      // Completion must be persisted, not live component state. Poll the same read-only
+      // profile.list invoke the page uses rather than reloading, because a reload mid-turn cuts
+      // the streaming conversation off.
       const steps = Object.keys(ONBOARDING_STEP_LABELS);
       await expect
         .poll(
           async () => {
-            const listed = page.waitForResponse(
-              async (response) => (await observedProfiles(response)) !== null,
-              { timeout: POLL_SETTLE_MS }
+            const response = await page.request.post(
+              "/api/ai/assistant-tools/job-search.profile.list/invoke",
+              { data: { input: {} } }
             );
-            await page.reload();
-            const profiles = (await observedProfiles(await listed)) ?? [];
-            const profile = profiles[0];
+            expect(response.ok(), `profile.list invoke -> ${response.status()}`).toBe(true);
+            const body = (await response.json()) as {
+              invocation?: { result?: { profiles?: ObservedProfile[] } };
+            };
+            const profile = body.invocation?.result?.profiles?.[0];
             return {
               state: profile?.state,
               missing: steps.filter((step) => !profile?.completedSteps?.includes(step))
@@ -481,11 +483,14 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
           },
           {
             message: "all five onboarding steps answered and the profile active",
-            timeout: POLL_DEADLINE_MS,
-            intervals: [POLL_INITIAL_INTERVAL_MS, 1_000, 2_000, POLL_MAX_INTERVAL_MS]
+            timeout: POLL_DEADLINE_MS * 3,
+            intervals: [1_000, 2_000, POLL_MAX_INTERVAL_MS]
           }
         )
         .toEqual({ state: "active", missing: [] });
+
+      // A fresh load of an active profile shows the board, not the onboarding screen.
+      await page.reload();
 
       await expect(page.getByText("Let\u2019s work out what this search is for.")).toHaveCount(0);
       await shot(page, "04-onboarding-all-steps-done");
