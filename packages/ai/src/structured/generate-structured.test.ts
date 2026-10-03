@@ -208,3 +208,24 @@ describe("generateStructured", () => {
     expect(result).toEqual({ ok: false, error: "aborted" });
   });
 });
+
+describe("generateStructured activity context", () => {
+  it("forwards the turn link to the provider adapter", async () => {
+    const capture: { input?: GenerateStructuredProviderInput } = {};
+    const result = await generateStructured(
+      scopedDb,
+      {
+        service: "module.job-fit",
+        schema: { type: "object", properties: {} },
+        prompt: "score this",
+        turnId: "turn-1",
+        parentId: "answer-1"
+      },
+      buildDeps(capture)
+    );
+
+    expect(result.ok).toBe(true);
+    expect(capture.input?.turnId).toBe("turn-1");
+    expect(capture.input?.parentId).toBe("answer-1");
+  });
+});

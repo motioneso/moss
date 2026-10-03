@@ -133,7 +133,8 @@ export function createDefaultPersonaPreview(
                 schema,
                 maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS,
                 acpAgentId: provider.acp_agent_id,
-                actorUserId: input.actorUserId
+                actorUserId: input.actorUserId,
+                actionCode: "module.build"
               })
             );
           } catch (error) {
@@ -173,7 +174,9 @@ export function createDefaultPersonaPreview(
             await adapter.generateChat({
               model: modelInput,
               messages,
-              maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS
+              maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS,
+              actionCode: "module.build",
+              ownerUserId: input.actorUserId
             })
           ).text;
         } catch {

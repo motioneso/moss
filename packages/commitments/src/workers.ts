@@ -96,7 +96,9 @@ export async function registerCommitmentExtractionWorker(
             provider_model_id: model.provider_model_id
           },
           messages: messages as GenerateChatInput["messages"],
-          maxOutputTokens: EXTRACTION_MAX_OUTPUT_TOKENS
+          maxOutputTokens: EXTRACTION_MAX_OUTPUT_TOKENS,
+          actionCode: "task.commitment-extract",
+          ownerUserId: actorUserId
         });
 
       const state = await deps.repository.getExtractionState(scopedDb, actorUserId, sourceKind);
