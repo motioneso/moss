@@ -183,3 +183,5 @@ blocking	packages/chat/src/live/classifier-gate-shadow.ts	tests/uat/specs/classi
 blocking	packages/chat/src/routes.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
 blocking	tests/uat/seed/chunks/classifier-ai.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
 blocking	tests/uat/fixtures/classifier-fixture-server.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
+# #2942 mid-conversation tools: session-allowlist refusal hint and its live proof.
+blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/2942-midchat-tools.uat.spec.ts
