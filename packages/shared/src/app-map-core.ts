@@ -372,6 +372,14 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     description: "An agent action was not approved, so it was not done."
   },
   {
+    code: "core.ai.tool_added_after_chat_started",
+    class: "prerequisite",
+    remediationRef: "core.ai.start_new_chat",
+    description:
+      "A chat keeps the tools it had when it started. A tool from an integration connected " +
+      "or switched on later is refused in that chat, or not offered at all."
+  },
+  {
     code: "core.ai.cli_version_too_old",
     class: "prerequisite",
     remediationRef: "core.ai.check_cli_version",
@@ -461,6 +469,12 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
   {
     id: "core.ai.ask_user",
     description: "Ask the user to approve the action before trying it again.",
+    path: "/",
+    scope: "user"
+  },
+  {
+    id: "core.ai.start_new_chat",
+    description: "Start a new chat. A new chat picks up every tool connected and switched on now.",
     path: "/",
     scope: "user"
   },
