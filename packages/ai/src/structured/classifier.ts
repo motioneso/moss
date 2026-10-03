@@ -6,7 +6,7 @@ import { isSystemOneProviderKind, type ModuleServiceKey } from "@moss/shared";
 import type { ProviderKind } from "../adapters/transcript-reader.js";
 import type { AiSecretCipher } from "../crypto.js";
 import type { AiRepository } from "../repository.js";
-import { generateChoices } from "./generate-choices.js";
+import { generateChoices, type GenerateChoicesActivity } from "./generate-choices.js";
 import {
   generateStructured,
   type GenerateStructuredExplicitModel,
@@ -141,6 +141,8 @@ export async function askClassifierChoice(
     readonly state: Record<string, unknown>;
     readonly question: ClassifierChoiceQuestion;
     readonly signal?: AbortSignal;
+    /** #2956: the gate passes its turn so the check line joins the answer. */
+    readonly activity?: GenerateChoicesActivity;
   },
   deps: ClassifierDeps
 ): Promise<ClassifierChoiceResult> {
@@ -177,6 +179,8 @@ export async function extractClassifierValues(
     readonly state: Record<string, unknown>;
     readonly schema: Record<string, unknown>;
     readonly signal?: AbortSignal;
+    /** #2956: the gate passes its turn so the check line joins the answer. */
+    readonly activity?: GenerateChoicesActivity;
   },
   deps: ClassifierDeps
 ): Promise<ClassifierExtractionResult> {
@@ -194,7 +198,8 @@ export async function extractClassifierValues(
       `UNTRUSTED DATA:\n${JSON.stringify(input.state)}`
     ].join("\n"),
     input.signal,
-    deps
+    deps,
+    input.activity
   );
   if (input.signal?.aborted) return { ok: false, error: "aborted" };
   if (!result.ok) return result;
@@ -219,6 +224,7 @@ async function runChoiceOnly(
     readonly state: Record<string, unknown>;
     readonly question: ClassifierChoiceQuestion;
     readonly signal?: AbortSignal;
+    readonly activity?: GenerateChoicesActivity;
   },
   deps: ClassifierDeps
 ): Promise<RawOutcome> {
@@ -229,7 +235,8 @@ async function runChoiceOnly(
       state: input.state,
       questions: { choice: input.question },
       explicitModel: handle.model,
-      ...(input.signal ? { signal: input.signal } : {})
+      ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.activity ? { activity: input.activity } : {})
     },
     {
       repository: deps.repository,
@@ -260,6 +267,7 @@ async function runStructuredChoice(
     readonly state: Record<string, unknown>;
     readonly question: ClassifierChoiceQuestion;
     readonly signal?: AbortSignal;
+    readonly activity?: GenerateChoicesActivity;
   },
   options: readonly string[],
   deps: ClassifierDeps
@@ -276,7 +284,8 @@ async function runStructuredChoice(
       `OPTIONS:\n${JSON.stringify(input.question.criteria)}`
     ].join("\n"),
     input.signal,
-    deps
+    deps,
+    input.activity
   );
   if (!result.ok) return result;
   const object = result.object as Record<string, unknown>;
@@ -298,7 +307,8 @@ async function runStructured(
   schema: Record<string, unknown>,
   prompt: string,
   signal: AbortSignal | undefined,
-  deps: ClassifierDeps
+  deps: ClassifierDeps,
+  activity?: GenerateChoicesActivity
 ): Promise<
   | { readonly ok: true; readonly object: unknown; readonly usage: ClassifierUsage }
   | { readonly ok: false; readonly error: ClassifierFailure }
@@ -313,7 +323,9 @@ async function runStructured(
       explicitModel: handle.model,
       servedByLabel: "sorting",
       singleAttempt: true,
-      ...(signal ? { signal } : {})
+      ...(signal ? { signal } : {}),
+      ...(activity?.turnId ? { turnId: activity.turnId } : {}),
+      ...(activity?.parentId ? { parentId: activity.parentId } : {})
     },
     {
       repository: deps.repository,
