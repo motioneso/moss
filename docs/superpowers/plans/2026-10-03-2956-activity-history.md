@@ -25,9 +25,9 @@
   `turnId` through (`packages/chat/src/live/classifier-gate-shadow.ts:32`). One value
   across shadow record, audit row, and activity line is achievable; slice A task 6 confirms
   the exact value before wiring.
-- Highest migration on `origin/main` is 0255
-  (`packages/chat/sql/0255_chat_classifier_shadow_retention.sql`). New files take 0256 and
-  0257 provisionally; the coordinator confirms landing order before push (collision rule).
+- Migration numbers (renumbered 2026-10-03 on rebase): `origin/main` holds 0256
+  (proactive monitoring) and 0257 is reserved for the focus history purge lane (#2637).
+  New files take 0258 and 0259; re-check `origin/main` before every push.
 - DRIFT FOUND (not a re-scope, resolved here): spec section 5.6 says to follow the 0251
   purge function, but 0255 deleted that function and #2911 retired its queue
   (`packages/chat/src/jobs.ts:74-76`). The live pattern is the audit-log purge queue
@@ -64,7 +64,7 @@
 
 ## 2. Slice A: storage, purge schedule, recording API, integration tests
 
-### DDL decision (migration 0256, `packages/ai/sql/0256_activity_owner_lines.sql`)
+### DDL decision (migration 0258, `packages/ai/sql/0258_activity_owner_lines.sql`)
 
 Bare line `app.moss_model_activity_log` gains nullable columns: `owner_user_id` uuid
 (FK `app.users`, on delete cascade), `action_code` text (CHECK non-blank, max 64),
@@ -88,7 +88,7 @@ admin)). INSERT WITH CHECK: actor set AND (`owner_user_id` = actor OR `owner_use
 IS NULL). No UPDATE, no DELETE policy on the bare table: still append-only, kept
 forever.
 
-### DDL decision (same migration 0256, detail table)
+### DDL decision (same migration 0258, detail table)
 
 `app.moss_activity_detail`: `activity_id` uuid PK (FK to the log, on delete cascade),
 `owner_user_id` uuid NOT NULL (FK `app.users`, on delete cascade; CHECK equals the
@@ -101,12 +101,12 @@ used: actor set AND owner = actor). No admin policy. UPDATE trigger rejects chan
 `owner_user_id` and `expires_at`. Reads filter `expires_at > now()` in the repository,
 not in policy, so the purge and the page agree.
 
-### DDL decision (migration 0257, `packages/ai/sql/0257_audit_log_turn_id.sql`)
+### DDL decision (migration 0259, `packages/ai/sql/0259_audit_log_turn_id.sql`)
 
 Action audit log gains `turn_id` text null (CHECK max 128), plus an index on
 `(turn_id)` for the per-turn join. No policy change.
 
-### Purge decision (migration 0256, function + schedule)
+### Purge decision (migration 0258, function + schedule)
 
 `app.purge_expired_moss_activity_detail()`: SECURITY DEFINER, no arguments, deletes
 detail rows with `expires_at <= now()`, returns the count. EXECUTE to
@@ -135,7 +135,7 @@ detail rows with `expires_at <= now()`, returns the count. EXECUTE to
 
 ### Slice A test cases (integration, via the verify-gate skill on an isolated gate DB)
 
-1. Old rows vanish: seed a 0254-shaped row, run 0256, the bare table is empty. Fails if
+1. Old rows vanish: seed a 0254-shaped row, run 0258, the bare table is empty. Fails if
    the DELETE runs after the column add or is omitted.
 2. Owner sees own lines only: two users plus an admin; each sees exactly their rows.
    Fails without the owner-only SELECT.
@@ -158,7 +158,7 @@ detail rows with `expires_at <= now()`, returns the count. EXECUTE to
 11. Recorder writes through: `recordModelActivity` with owner plus detail produces one
     bare row and one detail row under the owner's context. Fails if the detail write
     runs outside owner context.
-12. Existing catalog test updated: `foundation-schema-catalog` gains the 0256/0257
+12. Existing catalog test updated: `foundation-schema-catalog` gains the 0258/0259
     entries; the old `ai-model-activity-log` expectations for admin-wide read are
     rewritten to owner-only.
 13. Schedule registered: worker boot registers `ai-purge-activity-detail` with a daily
@@ -238,8 +238,8 @@ recording). In that case the coordinator re-slices; no slice B work starts.
 - `parent_id` is a plain uuid with no FK: the answer line is written after its steps,
   so a FK would need deferred constraints inside a fire-and-forget writer. Decision,
   taken in this plan; revisit only if orphan steps appear in slice B e2e.
-- New migrations are 0256/0257 provisionally; the coordinator confirms landing order
-  before push. Collision rule, not a decision.
+- New migrations are 0258/0259; re-check `origin/main` before every push.
+  Collision rule, not a decision.
 
 ## Review checklist
 
