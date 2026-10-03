@@ -136,6 +136,38 @@ test("assigning a tag from the task modal renders a chip", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove urgent" })).toBeVisible();
 });
 
+test("a tag is never filed before the task loads, then lands in the task's own list", async ({
+  page
+}) => {
+  let releaseTask: () => void = () => {};
+  const taskGate = new Promise<void>((resolve) => (releaseTask = resolve));
+  await page.route("**/api/tasks/t-someday", async (route) => {
+    await taskGate;
+    await route.fallback();
+  });
+  const tagPosts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && /\/api\/tasks\/lists\/[^/]+\/tags$/.test(request.url())) {
+      tagPosts.push(request.url());
+    }
+  });
+
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Open Learn cello" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Task details" });
+  const tagInput = dialog.getByRole("textbox", { name: "Add a tag" });
+  await tagInput.fill("cellist");
+  await tagInput.press("Enter");
+  expect(tagPosts).toEqual([]);
+
+  releaseTask();
+  await expect(dialog.getByRole("textbox", { name: "Task title" })).toHaveValue("Learn cello");
+  await tagInput.fill("cellist");
+  await tagInput.press("Enter");
+  await expect(dialog.getByRole("button", { name: "Remove cellist" })).toBeVisible();
+  expect(tagPosts).toEqual([expect.stringContaining("/api/tasks/lists/list-2/tags")]);
+});
+
 test("task details window is named, closes on Escape and returns focus", async ({ page }) => {
   await page.goto("/tasks");
   const opener = page.getByRole("button", { name: "Open File taxes" }).first();

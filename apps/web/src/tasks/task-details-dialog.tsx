@@ -134,7 +134,9 @@ export function TaskDetailsDialog(props: {
     queryFn: () => listTaskActivity(requireTaskId())
   });
   const task = taskQuery.data?.task;
-  const tagsListId = task?.listId ?? form.listId;
+
+  // An existing task's tags live in its own list, unknown until the task loads.
+  const tagsListId = isNew ? form.listId : (task?.listId ?? "");
   const listTagsQuery = useQuery({
     enabled: props.open && Boolean(tagsListId),
     queryKey: queryKeys.tasks.tags(tagsListId),
@@ -264,7 +266,7 @@ export function TaskDetailsDialog(props: {
     if (isNew) {
       setNewTags((t) => (t.includes(name) ? t : [...t, name]));
       setTagDraft("");
-    } else {
+    } else if (tagsListId) {
       assignTagMutation.mutate(name);
     }
   };
@@ -273,7 +275,7 @@ export function TaskDetailsDialog(props: {
     const name = normalizeTagName(rawName);
     if (!name) return;
     if (isNew) setNewTags((t) => (t.includes(name) ? t : [...t, name]));
-    else assignTagMutation.mutate(name);
+    else if (tagsListId) assignTagMutation.mutate(name);
   };
 
   const addExistingSubtask = () => {
