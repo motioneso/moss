@@ -18,6 +18,8 @@
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | building (plan approved: new-chat hint in refusal text; condition: prove the open chat can see and call the new tool, else kill gate -> chat-screen notice; plan to be committed) | 2942 mid-chat tools | w1:p114 | fix-2942-midchat-tools | - | 0 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
+| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | building (Opus 5.5) | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | - | 0 |
+| Weather test stale wording | #2891 | routine (test-only) | building (Opus 5.5) | 2891 weather test wording | w1:p118 | fix-2891-weather-spec | - | 0 |
 
 ## Dependency / merge order
 
@@ -25,7 +27,7 @@
 - #2942 after #2939 (shared drawer); rebase over #2934 (shared session manager).
 - #2956 after #2955 merges; only lane with migrations (after 0255). Slices: A schema/row security/purge, B writers + guard, C activity page, D filters + retire old page + app map.
 - #2957 overlaps #2956 slice D on settings and app map; rebase whichever lands second.
-- Merge order: #2933, #2939, #2934, #2942, #2957, #2956.
+- Merge order: #2933, #2939, #2934, #2942, #2957, #2956. Added 06:40: #2912, #2891 independent (Builders 2 tab w1:t9N). Candidate next: #2637 (focus-judgment 30-day purge, sensitive, migration after #2956's 0256/0257), pending disk check.
 
 ## CI waivers
 
