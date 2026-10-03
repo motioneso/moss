@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Chat now sits beside the page on wide screens.** On a wide screen, opening chat now makes room for it next to what you are looking at, so you can see your day while you ask about it. [PR #2941](https://github.com/motioneso/moss/pull/2941)
 - **Settings has a new look and one Connections page.** Settings now matches the rest of the app, your connected accounts, notes folder and services live together on one Connections page, and on phones you pick a section from a menu. [PR #2935](https://github.com/motioneso/moss/pull/2935)
 - **Chat panel works better with the keyboard.** Opening the chat puts the cursor in the message box, Escape closes it and takes you back to where you were, and on a phone the Tab key no longer wanders off behind the chat. [PR #2938](https://github.com/motioneso/moss/pull/2938)
 - **Quieter Today on empty days.** When your briefing, priorities and evening review are all empty, Today now shows a single short line instead of three separate empty messages. [PR #2931](https://github.com/motioneso/moss/pull/2931)
