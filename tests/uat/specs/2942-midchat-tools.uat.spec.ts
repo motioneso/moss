@@ -204,6 +204,9 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
       await chat.bringToFront();
       await chat.getByRole("button", { name: "New chat" }).click();
       await chat.waitForTimeout(8_000);
+      // The fresh protocol session starts in the background; sending before the composer
+      // is enabled dispatches nothing.
+      await expect(chat.getByRole("textbox", { name: /^Message/ })).toBeEnabled();
       await sendTurn(
         chat,
         'Use the smart hub connection tool to turn the light named exactly "Porch light" on. Do it now, no questions.',
