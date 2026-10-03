@@ -117,8 +117,10 @@ describe("model activity recording (plan 3.6a, #2889)", () => {
 
     expect(JSON.stringify(entries)).not.toContain(SENTINEL);
     // The entry carries only the short fields plus the centrally measured duration.
+    // #2956 slice B: every line also carries its fixed action code.
     expect(Object.keys(entries[0]!).sort()).toEqual([
       "action",
+      "actionCode",
       "durationMs",
       "kind",
       "modelName",
