@@ -44,6 +44,7 @@ import {
   patchAiActionPolicyRequestSchema,
   patchAiActionPolicyResponseSchema,
   listActionAuditLogRouteSchema,
+  listActivityLinesRouteSchema,
   listModelActivityRouteSchema,
   approveModuleBuildResponseSchema,
   listMyModuleBuildsResponseSchema
@@ -584,6 +585,14 @@ export const aiModuleManifest = {
       path: "/api/ai/model-activity",
       responseSchema: listModelActivityRouteSchema.response[200],
       permissionId: "ai.manage"
+    },
+    {
+      // #2956 (slice C): the viewer's own activity lines the Activity page reads.
+      // Owner-scoped like the audit log above, so it carries the same permission.
+      method: "GET",
+      path: "/api/ai/activity-lines",
+      responseSchema: listActivityLinesRouteSchema.response[200],
+      permissionId: "ai.assistant-actions"
     },
     {
       // #1888 — the "Build it" button on the plan card the workshop.buildModule tool returns.
