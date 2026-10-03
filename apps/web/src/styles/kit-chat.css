@@ -17,7 +17,7 @@
    would leave no room for the draft on a phone, so the drawer stays the app's normal pop-up
    there instead of copying the mockup's always-stacked layout. */
 @media (min-width: 721px) {
-  .chatd--docked {
+  .chatd.chatd--docked {
     position: static;
     top: auto;
     right: auto;
@@ -26,6 +26,19 @@
     max-width: none;
     height: 100%;
     animation: none;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* The docked width is narrow, so the header gives its status line room to stay on one line. */
+  .chatd--docked .chatd__head {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .chatd--docked .chatd__status {
+    white-space: nowrap;
   }
 }
 
@@ -93,6 +106,7 @@
   content: "";
   width: 6px;
   height: 6px;
+  flex: none;
 }
 
 .chatd__body-wrap {
@@ -359,6 +373,12 @@
 
 .chatd-input.is-readonly {
   opacity: 0.72;
+}
+
+.chatd-input textarea:focus,
+.chatd-input textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .chatd-input textarea {
