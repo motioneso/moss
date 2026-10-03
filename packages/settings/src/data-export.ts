@@ -24,6 +24,7 @@ import {
   connectorAccountsQuery,
   emailMessagesQuery,
   entitiesQuery,
+  focusJudgmentsQuery,
   jarvisActionAuditLogQuery,
   jarvisGoalEvidenceQuery,
   jarvisGoalsQuery,
@@ -106,6 +107,7 @@ export interface UserDataExportTables {
   readonly connectorAccounts: readonly ExportRow[];
   readonly emailMessages: readonly ExportRow[];
   readonly entities: readonly ExportRow[];
+  readonly focusJudgments: readonly ExportRow[];
   readonly medicationLogs: readonly ExportRow[];
   readonly medications: readonly ExportRow[];
   readonly memoryChunks: readonly ExportRow[];
@@ -291,6 +293,7 @@ async function readExportTables(
     sportsSources: sportsSourcesSection,
     usefulnessFeedbackSignals: await readRows(scopedDb.db, usefulnessFeedbackSignalsQuery(userId)),
     usefulnessFeedbackTargets: await readRows(scopedDb.db, usefulnessFeedbackTargetsQuery(userId)),
+    focusJudgments: await readRows(scopedDb.db, focusJudgmentsQuery(userId)),
     newsPersonalization: newsPersonalizationSection,
     wellnessCheckins: wellnessSection.checkins,
     medications: await readRows(scopedDb.db, medicationsQuery(userId)),

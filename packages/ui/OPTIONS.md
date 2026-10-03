@@ -79,6 +79,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## disclosure-toggle
+
+- **expanded** (required boolean flag)
+
 ## divider
 
 - **orientation** (optional, default `horizontal`): `horizontal`, `vertical`
@@ -148,6 +152,10 @@ _No enum or boolean props._
 _No enum or boolean props._
 
 ## peek-panel
+
+_No enum or boolean props._
+
+## row-button
 
 _No enum or boolean props._
 

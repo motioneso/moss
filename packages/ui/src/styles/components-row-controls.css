@@ -1,0 +1,44 @@
+/* Row button: a whole row acting as one button. Native button chrome removed; the screen sets
+   spacing, width and hover. */
+.jds-rowbtn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* Disclosure toggle: a text button that expands and collapses a region. The screen sets the type,
+   the marker and the spacing. */
+.jds-disclosure {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* Phone tap area: a short control grows an invisible 44px hit zone centred on itself, so the
+   look and the layout stay put. Controls already 44px or taller get no extra reach. */
+@media (max-width: 640px) {
+  .jds-rowbtn,
+  .jds-disclosure {
+    position: relative;
+  }
+
+  .jds-rowbtn::after,
+  .jds-disclosure::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: max(44px, 100%);
+    transform: translateY(-50%);
+  }
+}

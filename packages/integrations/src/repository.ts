@@ -15,6 +15,16 @@ import {
 } from "./classifier-settings.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 
+/**
+ * True when the stored map has the shape `parsePreparationMap` reads (version 1, object entries).
+ * Anything else reads as empty, so a write starts a clean map instead of patching a damaged one.
+ */
+const WELL_FORMED_PREPARATION = sql`(
+  jsonb_typeof(classifier_preparation) = 'object'
+  AND classifier_preparation->'version' = '1'::jsonb
+  AND jsonb_typeof(classifier_preparation->'entries') = 'object'
+)`;
+
 export interface ConnectionRow {
   readonly id: string;
   readonly ownerUserId: string;
@@ -157,6 +167,17 @@ export class IntegrationsRepository {
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
+  private async lockConnection(scopedDb: DataContextDb, id: string): Promise<ConnectionRow | null> {
+    const result = await sql<ConnectionSqlRow>`
+      SELECT ${sql.raw(SELECT_COLUMNS)}
+      FROM app.integration_connections
+      WHERE id = ${id}::uuid
+      FOR UPDATE
+    `.execute(scopedDb.db);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
   async updateConnection(
     scopedDb: DataContextDb,
     id: string,
@@ -270,7 +291,9 @@ export class IntegrationsRepository {
   ): Promise<SaveClassifierToolReviewResult> {
     assertDataContextDb(scopedDb);
 
-    const row = await this.getConnection(scopedDb, id);
+    // Lock the row for the rest of the request transaction, so the cap and version below are read
+    // and written as one step. A concurrent save waits here, then sees this save's entry.
+    const row = await this.lockConnection(scopedDb, id);
     if (!row) return { status: "not_found" };
     const tool = row.discoveredTools.find((candidate) => candidate.name === toolName);
     if (!tool) return { status: "conflict", reason: "unknown_tool" };
@@ -314,8 +337,7 @@ export class IntegrationsRepository {
     const result = await sql<ConnectionSqlRow>`
       UPDATE app.integration_connections
       SET classifier_preparation = CASE
-            WHEN jsonb_typeof(classifier_preparation) = 'object'
-             AND jsonb_typeof(classifier_preparation->'entries') = 'object'
+            WHEN ${WELL_FORMED_PREPARATION}
             THEN classifier_preparation #- ARRAY['entries', ${toolName}]
             ELSE classifier_preparation
           END,
@@ -342,17 +364,10 @@ export class IntegrationsRepository {
     const result = await sql<ConnectionSqlRow>`
       UPDATE app.integration_connections
       SET classifier_preparation = jsonb_set(
-            jsonb_set(
-              CASE
-                WHEN jsonb_typeof(classifier_preparation) = 'object'
-                 AND jsonb_typeof(classifier_preparation->'entries') = 'object'
-                THEN classifier_preparation
-                ELSE '{"version": 1, "entries": {}}'::jsonb
-              END,
-              '{entries}',
-              COALESCE(classifier_preparation->'entries', '{}'::jsonb),
-              true
-            ),
+            CASE
+              WHEN ${WELL_FORMED_PREPARATION} THEN classifier_preparation
+              ELSE '{"version": 1, "entries": {}}'::jsonb
+            END,
             ARRAY['entries', ${toolName}],
             ${entryJson}::jsonb,
             true

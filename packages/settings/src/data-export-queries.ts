@@ -679,6 +679,24 @@ export function usefulnessFeedbackTargetsQuery(userId: string) {
   `;
 }
 
+export function focusJudgmentsQuery(userId: string) {
+  return sql<Record<string, unknown>>`
+    SELECT
+      id::text AS id,
+      owner_user_id::text AS "ownerUserId",
+      device_id::text AS "deviceId",
+      block_ref AS "blockRef",
+      label,
+      reason,
+      nudged,
+      correction,
+      created_at AS "createdAt"
+    FROM app.focus_judgments
+    WHERE owner_user_id = ${userId}::uuid
+    ORDER BY created_at, id
+  `;
+}
+
 export function medicationsQuery(userId: string) {
   return sql<Record<string, unknown>>`
     SELECT

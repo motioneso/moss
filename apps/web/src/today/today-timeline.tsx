@@ -1,4 +1,5 @@
 import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
+import { RowButton } from "@moss/ui";
 
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import type { ScheduleClosingLine, ScheduleGapRow } from "./day-plan-gaps.js";
@@ -80,11 +81,7 @@ export function TimelineRow(props: {
       <TimelineTime item={item} locale={props.locale} />
       <div className="tl-body">
         {item.taskId !== null && !item.unavailable ? (
-          <button
-            type="button"
-            className="jds-task__main"
-            onClick={() => props.onOpenTask(item.taskId!)}
-          >
+          <RowButton className="jds-task__main" onClick={() => props.onOpenTask(item.taskId!)}>
             <div className={`jds-task__title${item.state === "completed" ? " tl-done" : ""}`}>
               {item.title}
             </div>
@@ -99,7 +96,7 @@ export function TimelineRow(props: {
               <span className="jds-task__state">{stateText}</span>
               {item.tag !== null ? <span className="jds-task__source">{item.tag}</span> : null}
             </div>
-          </button>
+          </RowButton>
         ) : (
           <div className="jds-task__main">
             <div className={`jds-task__title${item.state === "completed" ? " tl-done" : ""}`}>
@@ -275,13 +272,9 @@ export function SnapshotRow(props: {
     >
       <span className="brief-snapshot__time">{start}</span>
       {item.taskId !== null && !item.unavailable ? (
-        <button
-          type="button"
-          className="brief-snapshot__main"
-          onClick={() => props.onOpenTask(item.taskId!)}
-        >
+        <RowButton className="brief-snapshot__main" onClick={() => props.onOpenTask(item.taskId!)}>
           {body}
-        </button>
+        </RowButton>
       ) : (
         <div className="brief-snapshot__main">{body}</div>
       )}

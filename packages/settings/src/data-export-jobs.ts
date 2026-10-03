@@ -132,6 +132,8 @@ export async function handleExportBuildJob(
           definitions: userExport.tables.briefingDefinitions,
           runs: userExport.tables.briefingRuns
         },
+        // #2637: kept 30 days, then purged nightly.
+        focus_judgments: userExport.tables.focusJudgments,
         vault_files: []
       }
     };

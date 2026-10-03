@@ -1,4 +1,4 @@
-import { Button } from "@moss/ui";
+import { Button, RowButton } from "@moss/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Clock, Flag, Reply } from "lucide-react";
 
@@ -159,11 +159,7 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
                 <span className="jds-task__check">
                   <Flag size={15} aria-hidden="true" />
                 </span>
-                <button
-                  type="button"
-                  className="jds-task__main"
-                  onClick={() => props.onOpenTask(task.id)}
-                >
+                <RowButton className="jds-task__main" onClick={() => props.onOpenTask(task.id)}>
                   <div className="jds-task__title">{task.title}</div>
                   <div className="jds-task__meta">
                     <span className={driftClass}>
@@ -172,7 +168,7 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
                     </span>
                     <span className="jds-task__source">{task.source}</span>
                   </div>
-                </button>
+                </RowButton>
               </div>
             );
           })}
@@ -260,15 +256,11 @@ function ActionRow(props: {
       <span className="loose-row__ic">
         <Icon size={15} aria-hidden="true" />
       </span>
-      <button
-        type="button"
-        className="loose-row__main"
-        onClick={() => props.onOpenTask(row.taskId)}
-      >
+      <RowButton className="loose-row__main" onClick={() => props.onOpenTask(row.taskId)}>
         <div className="loose-row__title">{row.title}</div>
         <div className="loose-row__meta">{row.explanation}</div>
         <div className="loose-row__meta">{metaLabel(row, props.locale)}</div>
-      </button>
+      </RowButton>
       <div className="loose-row__act">
         {liveStatus === "suggested" ? (
           <>

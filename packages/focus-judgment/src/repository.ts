@@ -1,5 +1,5 @@
-import { sql } from "kysely";
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import { sql, type Kysely } from "kysely";
+import { assertDataContextDb, type DataContextDb, type MossDatabase } from "@moss/db";
 import type { FocusLabel } from "@moss/shared";
 
 import type { RecentJudgment } from "./nudge-rules.js";
@@ -107,5 +107,17 @@ export class FocusJudgmentRepository implements FocusJudgmentStore {
       .where("id", "=", judgmentId)
       .executeTakeFirst();
     return Number(result.numUpdatedRows) > 0;
+  }
+
+  /**
+   * Deletes every person's judgments older than 30 days and returns how many went. Runs on the
+   * worker connection, which can only call the no-argument purge function; the cutoff lives in
+   * the database, so no caller can widen it.
+   */
+  async purgeExpired(workerDb: Kysely<MossDatabase>): Promise<number> {
+    const result = await sql<{ count: number }>`
+      SELECT app.purge_expired_focus_judgments() AS count
+    `.execute(workerDb);
+    return Number(result.rows[0]?.count ?? 0);
   }
 }

@@ -218,6 +218,15 @@
       "flags": []
     },
     {
+      "name": "disclosure-toggle",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/disclosure-toggle.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["DisclosureToggle"],
+      "options": [],
+      "flags": [{ "prop": "expanded", "optional": false }]
+    },
+    {
       "name": "divider",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/divider.tsx", "type": "registry:ui" }],
@@ -437,6 +446,15 @@
       "files": [{ "path": "packages/ui/src/peek-panel.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["PeekPanel"],
+      "options": [],
+      "flags": []
+    },
+    {
+      "name": "row-button",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/row-button.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["RowButton"],
       "options": [],
       "flags": []
     },
