@@ -15,33 +15,11 @@
   background: transparent;
 }
 
-/* --- Desk head (both desks) --- */
-.jds-brief--news .desk-head,
-.jds-brief--sports .desk-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  border-bottom: 1px solid var(--line-strong);
-  padding-bottom: 12px;
-}
-.jds-brief--news .desk-number,
-.jds-brief--sports .desk-number {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--accent-fg);
-  border-bottom: 2px solid var(--gold);
-  padding-bottom: 5px;
-}
+/* --- Desk head (both desks): layout only; look comes from SectionHead --- */
 .jds-brief--news .desk-title,
 .jds-brief--sports .desk-title {
   position: relative;
   top: -3px;
-  font-family: var(--font-display);
-  font-size: 25px;
-  font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: -0.7px;
-  margin: 0;
 }
 /* Phone titles wrap to two lines and sit 2 rows lower than desktop against
    the mockup, so the same raise is 5 rows here. The offset moves only the
@@ -51,13 +29,6 @@
   .jds-brief--sports .desk-title {
     top: -5px;
   }
-}
-.jds-brief--news .desk-meta,
-.jds-brief--sports .desk-meta {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-size: 10px;
-  text-align: right;
 }
 
 /* --- News two-column desk --- */
@@ -74,21 +45,11 @@
 .jds-brief--news .nw-twnote {
   max-width: 290px;
   margin-top: 19px;
-  padding: 3px 0 3px 16px;
-  border-left: 2px solid var(--gold);
-  color: var(--accent-fg);
-}
-.jds-brief--news .nw-twnote__eyebrow {
-  color: var(--accent-fg);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
 }
 .jds-brief--news .nw-twnote__text {
   margin: 8px 0 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 .jds-brief--news .nw-twlead__title {
@@ -262,6 +223,8 @@
   }
 
   .jds-brief--sports .sp-tkgrid .sp-tk__storylink {
+    box-sizing: border-box;
+    min-height: 44px;
     padding-block: 14px;
   }
 }
@@ -339,7 +302,7 @@
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--news .nw-twlist__tag {
   margin-bottom: 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 1px;
 }
@@ -484,7 +447,7 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__kicker {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -494,7 +457,7 @@
   font-variant-numeric: tabular-nums;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-tonight__note {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   text-align: left;
 }
 @media (max-width: 1080px) {
@@ -539,11 +502,11 @@
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__statusline {
   color: var(--accent-fg);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-scores__recap {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.4;
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-brief--sports .sp-lead__photo {

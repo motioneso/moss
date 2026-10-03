@@ -140,9 +140,9 @@ async function renderEveningToday(): Promise<void> {
 }
 
 function heroButton(label: string): HTMLButtonElement {
-  const button = [...document.querySelectorAll<HTMLButtonElement>(".today-hero__link")].find(
-    (candidate) => candidate.textContent === label
-  );
+  const button = [
+    ...document.querySelectorAll<HTMLButtonElement>(".today-hero__links .jds-btn--link")
+  ].find((candidate) => candidate.textContent === label);
   if (!button) throw new Error(`no hero link named ${label}`);
   return button;
 }

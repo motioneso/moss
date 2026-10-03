@@ -3,7 +3,7 @@ import { MoreHorizontal, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useState } from "react";
 
 import type { UsefulnessFeedbackDto, UsefulnessFeedbackKind } from "@moss/shared";
-import { Menu } from "@moss/ui";
+import { Button, Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys.js";
 import {
@@ -82,13 +82,13 @@ export function BriefingFeedbackMenu(props: {
       {last ? (
         <span className="today-feedback__status">
           Saved
-          <button
-            type="button"
+          <Button
+            variant="link"
             onClick={() => undoMutation.mutate(last.id)}
             disabled={undoMutation.isPending}
           >
             Undo
-          </button>
+          </Button>
         </span>
       ) : null}
     </div>

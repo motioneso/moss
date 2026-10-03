@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, X } from "lucide-react";
 
+import { IconButton } from "@moss/ui";
+
 import type { ProactiveCardDto } from "@moss/shared";
 
 import { getProactiveCards } from "../api/client";
@@ -79,16 +81,14 @@ function ProactiveCardRow(props: {
           {card.summary ? <span className="jds-task__time">{card.summary}</span> : null}
         </div>
       </div>
-      <button
-        type="button"
-        className="well__nudge-x"
+      <IconButton
+        size="sm"
         aria-label={`Dismiss: ${card.title}`}
         disabled={props.isDismissing}
         onClick={props.onDismiss}
-        style={{ marginLeft: 8 }}
       >
         <X size={14} aria-hidden="true" />
-      </button>
+      </IconButton>
     </div>
   );
 }

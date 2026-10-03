@@ -179,7 +179,7 @@ describe("TodayRail preparation line", () => {
     });
     const button = renderer!.root.findAll(
       (node: ReactTestInstance) =>
-        node.type === "button" && node.props.className === "cmd-next__link"
+        node.type === "button" && node.props.className === "jds-btn jds-btn--link"
     )[0]!;
     act(() => {
       button.props.onClick();

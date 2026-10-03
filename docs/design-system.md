@@ -193,34 +193,49 @@ the bottom; an artifact panel beside it whose tabs appear only once they have co
 | Pull note      | Straight 2px gold left rule, eyebrow, `--text-xs` muted text, about 290px wide                      | "Your news, in context" in the news desk |
 | Practical note | `--sage-light` fill, straight 2px gold left rule, `--text-xs` text in `--accent-fg`                 | "A little practical context" in the rail |
 
-### Patterns waiting for primitives (#2918)
+### Today's shared pieces (#2918)
 
-Today invented these locally. They are the intended shared primitives; #2918 moves them into
-`@moss/ui`. Today's local copies are not a licence to copy. A new screen that needs one of these
-adds the shared primitive or `<Button>` variant first, in `packages/ui/`, and uses it; linking
-#2918 is not an exemption. The primitives follow Today's look from this file, with the 11px floor
-and the contrast rules applied.
+Today invented these locally; they now live in `@moss/ui` and Today uses them. A new screen that
+needs one uses the shared piece and never copies Today's local rules. Screens own width and margins
+only. All text sits at or above the 11px floor.
 
-| Pattern               | Today copies                                                                             | Intended primitive                                      |
-| --------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Numbered section head | `.tl-head`, `.desk-head`, `.ev-head`                                                     | Section head with number, title, meta and optional rule |
-| Eyebrow               | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow` | `.jds-eyebrow` tones at 11px, bold                      |
-| Notes                 | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               | Note with plan, pull and practical variants             |
-| Text-link buttons     | `.today-hero__link`, `.cmd-next__link`, `.well__btn`                                     | `<Button>` link and rail variants                       |
+| Pattern               | Shared piece                                                               | Replaces                                                                                 |
+| --------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Numbered section head | `<SectionHead number title meta rule align>`, `.jds-section-head`          | `.tl-head`, `.desk-head`, `.ev-head`                                                     |
+| Eyebrow               | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow` |
+| Notes                 | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`             | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                               |
+| Text-link buttons     | `<Button variant="link">` (retint with `--btn-link-color`)                 | `.today-hero__link`, `.cmd-next__link`                                                   |
+
+### Hand-built Today buttons (#2918)
+
+Moved onto shared pieces: the hero, meeting and evening-plan text links, Check in, Done, the
+evening choice buttons (`chip` look), Plan tomorrow, Chat, the briefing Accept, Dismiss, Reply,
+Close and report-picker buttons, Undo and Retry (`link` look), and the medication plus, nudge
+dismiss and medications dialog close (`IconButton`, retinted with `--iconbtn-*` variables).
+
+Left as they are:
+
+- Briefing tabs (`brief-reader__tab`). They are true tabs with tab roles, arrow-key movement and
+  a panel link, so the shared `Segmented` control would change their look and keyboard behaviour.
+
+Split out to issue #2949, because each needs a shared piece that does not exist yet:
+
+- Clickable rows and cards with their own layout (`ev-done__main`, `ev-loop__open`,
+  `ev-tomorrow__item`, `plan-review__titlelink`, `loose-row__main`, `brief-snapshot__main`, and
+  the `jds-task__main` rows). They need a shared row-button piece.
+- Expand and collapse toggles (`brief-reader__schedule-toggle`, `brief-reader__callout-disclosure`).
+- The evening planning step strip buttons (`evening-plan__strip`).
 
 ### Known Today defects
 
 These ship on Today today. They are not rules; follow the corrected rule.
 
-| Defect                                                                  | Rule instead                                    | Issue    |
-| ----------------------------------------------------------------------- | ----------------------------------------------- | -------- |
-| Wrapped link rows (hero links, section index) only 6px apart vertically | `--space-2` minimum gap                         | None yet |
-| Text at 8-10px (eyebrows, meta, numbers, phone section links)           | 11px floor, `--text-2xs`                        | #2918    |
-| Raw pixel sizes and visual rules in the Today sheets                    | Type role tokens; screen CSS does layout only   | #2918    |
-| 42 hand-built buttons                                                   | `<Button>`, extended where a variant is missing | #2918    |
-| Notes in raw `--forest` text, 1.8:1 in dark mode                        | `--accent-fg`                                   | #2914    |
-| Gold warning number in plain `--gold`, 2.7:1                            | `--gold-strong`                                 | #2914    |
-| Hero eyebrow and accent line in raw `--sage`, fixed per theme           | `--hero-fg`; muted only for large text          | None yet |
+| Defect                                                                  | Rule instead                           | Issue    |
+| ----------------------------------------------------------------------- | -------------------------------------- | -------- |
+| Wrapped link rows (hero links, section index) only 6px apart vertically | `--space-2` minimum gap                | None yet |
+| Notes in raw `--forest` text, 1.8:1 in dark mode                        | `--accent-fg`                          | #2914    |
+| Gold warning number in plain `--gold`, 2.7:1                            | `--gold-strong`                        | #2914    |
+| Hero eyebrow and accent line in raw `--sage`, fixed per theme           | `--hero-fg`; muted only for large text | None yet |
 
 ## Primitives
 

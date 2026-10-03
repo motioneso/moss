@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Button, Eyebrow } from "@moss/ui";
+
 import type { BriefingRunDto, LocaleSettingsDto, SourceFreshnessV1 } from "@moss/shared";
 
 import { BriefingProse, type TodayMode } from "./evening-mode.js";
@@ -223,20 +225,12 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
 function MorningHeroLinks(props: { readonly onOpenReader: (anchor: HTMLElement) => void }) {
   return (
     <>
-      <button
-        type="button"
-        className="today-hero__link"
-        onClick={(event) => props.onOpenReader(event.currentTarget)}
-      >
+      <Button variant="link" onClick={(event) => props.onOpenReader(event.currentTarget)}>
         {MORNING_READ_FULL_LABEL}
-      </button>
-      <button
-        type="button"
-        className="today-hero__link"
-        onClick={(event) => props.onOpenReader(event.currentTarget)}
-      >
+      </Button>
+      <Button variant="link" onClick={(event) => props.onOpenReader(event.currentTarget)}>
         {MORNING_SOURCES_LABEL}
-      </button>
+      </Button>
     </>
   );
 }
@@ -248,20 +242,15 @@ export function EveningHeroLinks(props: {
 }) {
   return (
     <>
-      <button
-        type="button"
-        className="today-hero__link"
-        onClick={(event) => props.onOpenReader(event.currentTarget)}
-      >
+      <Button variant="link" onClick={(event) => props.onOpenReader(event.currentTarget)}>
         {EVENING_READ_FULL_LABEL}
-      </button>
-      <button
-        type="button"
-        className="today-hero__link"
+      </Button>
+      <Button
+        variant="link"
         onClick={(event) => props.onOpenReader(event.currentTarget, "sources")}
       >
         {EVENING_SOURCES_LABEL}
-      </button>
+      </Button>
     </>
   );
 }
@@ -275,7 +264,9 @@ export function TodayHero(props: TodayHeroProps) {
   return (
     <>
       <section className="today-hero" data-mode={props.mode}>
-        <p className="today-hero__eyebrow">{props.eyebrow}</p>
+        <Eyebrow as="p" tone="hero" className="today-hero__eyebrow">
+          {props.eyebrow}
+        </Eyebrow>
         <h1 className="today-hero__title">{props.headline}</h1>
         <div className="today-hero__summary" id="assessment">
           {props.summary}

@@ -19,9 +19,14 @@
   gap: 5px;
   white-space: nowrap;
 }
-.today-feedback__status button {
-  cursor: pointer;
-  padding: 0;
+
+/* Phone: 44px tap area; the negative margin keeps the line height. */
+@media (max-width: 680px) {
+  .today-feedback__status .jds-btn--link,
+  .cmd-empty .jds-btn--link {
+    padding-block: 13px;
+    margin-block: -13px;
+  }
 }
 
 .top3 {

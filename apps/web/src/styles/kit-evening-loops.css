@@ -32,29 +32,24 @@
   gap: 8px;
   margin-top: 4px;
 }
-.ev-loop__actions button,
-.ev-loop__picker button {
-  padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.ev-loop__actions button:disabled,
-.ev-loop__picker button:disabled {
-  opacity: 0.5;
-}
 .ev-loop__picker {
   align-items: center;
   margin-top: 10px;
 }
+.ev-loop__actions .jds-btn,
+.ev-loop__picker .jds-btn {
+  min-height: 32px;
+}
+@media (max-width: 680px) {
+  .ev-loop__actions .jds-btn,
+  .ev-loop__picker .jds-btn {
+    min-height: 44px;
+  }
+}
 .ev-loop__topic {
   display: block;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 1px;
   text-transform: uppercase;

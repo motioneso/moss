@@ -484,19 +484,6 @@
 .well__line b {
   font-weight: 700;
 }
-.well__btn {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--forest-soft-2);
-  background: var(--surface);
-  color: var(--forest-ink);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.well__btn:hover {
-  border-color: var(--accent-fg);
-  background: var(--hover-raise);
-}
 .np-photo {
   border-radius: var(--radius-lg);
   background: linear-gradient(135deg, var(--forest-soft) 0%, var(--surface-2) 78%);
@@ -510,7 +497,7 @@
 }
 .np-photo__cap {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
 }
 .np-photo__crest {
   border-radius: 8px;
@@ -625,15 +612,6 @@
   border-radius: var(--radius-md);
   background: var(--amber-soft);
   border: 1px solid var(--amber-soft-2);
-}
-.well__nudge-x {
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--amber-ink);
-}
-.well__nudge-x:hover {
-  background: var(--amber-soft-2);
 }
 .bfresh__item {
   font-size: 12px;

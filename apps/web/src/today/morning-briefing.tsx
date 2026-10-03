@@ -533,16 +533,15 @@ function ReportBody(props: {
           <ul>
             {props.runs.map((entry) => (
               <li key={entry.id}>
-                <button
-                  type="button"
-                  className="jds-btn jds-btn--quiet"
+                <Button
+                  variant="quiet"
                   disabled={entry.id === props.selectedRunId}
                   onClick={() => props.onSelectRun(entry.id)}
                 >
                   Report from{" "}
                   {formatDate(entry.createdAt, props.locale, { month: "long", day: "numeric" })}
                   {entry.id === props.selectedRunId ? " (open)" : ""}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

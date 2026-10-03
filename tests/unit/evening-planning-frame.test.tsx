@@ -684,8 +684,8 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(document.body.querySelector(".brief-reader__footer")?.textContent).toContain(
       "Back to Today"
     );
-    const handoff = [...document.body.querySelectorAll("button.evening-plan__link")].find(
-      (button) => button.textContent?.startsWith("Preview the morning handoff")
+    const handoff = [...document.body.querySelectorAll("button.jds-btn--link")].find((button) =>
+      button.textContent?.startsWith("Preview the morning handoff")
     ) as HTMLButtonElement;
     await act(async () => {
       handoff.click();

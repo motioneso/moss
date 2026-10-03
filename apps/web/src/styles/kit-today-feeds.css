@@ -88,15 +88,3 @@
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-.well__btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 9px 10px;
-  cursor: pointer;
-  transition: var(--transition-control);
-}
-.well__btn .ic {
-  display: inline-flex;
-}

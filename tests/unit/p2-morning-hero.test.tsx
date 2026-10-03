@@ -89,7 +89,7 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
     );
     expect(markup).toContain("Read the full morning briefing");
     expect(markup).toContain("What informed this?");
-    expect((markup.match(/class="today-hero__link"/g) ?? []).length).toBe(2);
+    expect((markup.match(/class="jds-btn jds-btn--link"/g) ?? []).length).toBe(2);
   });
 
   it("uses the morning kicker form and keeps the day hero in mockup order", () => {
@@ -227,7 +227,7 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     expect(block).toContain(
       '.today-hero:is([data-mode="day"], [data-mode="evening"]) { margin: 7px 6px 0; padding: 23px 22px; }'
     );
-    expect(block).toContain("margin-bottom: 21px; font-size: 9px;");
+    expect(block).toContain("margin-bottom: 21px; font-size: var(--text-2xs);");
     expect(block).toContain(
       '.today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__summary { margin-top: 18px; }'
     );
