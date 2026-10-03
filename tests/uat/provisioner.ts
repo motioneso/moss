@@ -7,12 +7,18 @@ import { fileURLToPath } from "node:url";
 import { resolveMossEnv } from "@moss/db";
 
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
-import { BRIEFING_WRITER_FIXTURE_CONTAINER_PORT } from "./fixtures/briefing-writer-fixture-server.js";
+import * as briefingWriter from "./briefing-writer-container.js";
+
+export {
+  briefingWriterFixtureBaseUrlFor,
+  briefingWriterFixtureContainerName
+} from "./briefing-writer-container.js";
 import {
   classifierFixtureBaseUrlFor,
   removeClassifierFixtureContainer,
   startClassifierFixtureContainer
 } from "./fixtures/classifier-fixture-container.js";
+import * as mcpFixture from "./classifier-mcp-fixture-container.js";
 import {
   REAL_CHAT_CONFIGURED_ENV,
   installUatRealChatCodexAuth,
@@ -137,65 +143,6 @@ export async function removeJobSearchFixtureContainer(projectName: string): Prom
     () => "unknown" // Discovery failure must not prevent the cleanup attempt.
   );
   if (existing.trim()) await runCommand("docker", ["rm", "--force", name]).catch(() => {});
-}
-
-/**
- * [task:p8-briefing-writer-unreachable]: same in-network container shape as the job-search
- * fixture above, on its own name and port. The worker's synthesis call reaches it by name.
- */
-export function briefingWriterFixtureContainerName(projectName: string): string {
-  return `${projectName}-bwfixture`;
-}
-
-/** The URL the `jarv1s` worker container uses to reach the briefing-writer origin. */
-export function briefingWriterFixtureBaseUrlFor(projectName: string): string {
-  return `http://${briefingWriterFixtureContainerName(projectName)}:${BRIEFING_WRITER_FIXTURE_CONTAINER_PORT}`;
-}
-
-/** The line briefing-writer-fixture-cli.ts prints once its listen() has resolved. */
-const BRIEFING_WRITER_FIXTURE_READY_LOG = "[briefing-writer-fixture] listening on";
-const BRIEFING_WRITER_FIXTURE_READY_TIMEOUT_MS = 30_000;
-
-/**
- * [task:p8-briefing-writer-unreachable]: starts the briefing-writer fixture origin and waits
- * for its readiness line. A fixture that dies at startup surfaces here as a named timeout,
- * not later as a fallback dump with no obvious cause.
- */
-export async function startBriefingWriterFixtureContainer(projectName: string): Promise<void> {
-  const name = briefingWriterFixtureContainerName(projectName);
-  await runCommand("docker", [
-    "run",
-    "--detach",
-    "--name",
-    name,
-    "--network",
-    `${projectName}_jarv1s`,
-    `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG ?? "uat-smoke"}`,
-    "node_modules/.bin/tsx",
-    "tests/uat/fixtures/briefing-writer-fixture-cli.ts"
-  ]);
-
-  const deadline = Date.now() + BRIEFING_WRITER_FIXTURE_READY_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const logs = await runCapture("docker", ["logs", name]).catch(() => "");
-    if (logs.includes(BRIEFING_WRITER_FIXTURE_READY_LOG)) {
-      return;
-    }
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
-  }
-  throw new Error(
-    `briefing-writer fixture container ${name} never reported ready; ` +
-      `check \`docker logs ${name}\` before it is removed`
-  );
-}
-
-/** Removes the briefing-writer fixture container. MUST run before `docker compose down -v`. Idempotent and never throws. */
-export async function removeBriefingWriterFixtureContainer(projectName: string): Promise<void> {
-  await runCommand("docker", [
-    "rm",
-    "--force",
-    briefingWriterFixtureContainerName(projectName)
-  ]).catch(() => {});
 }
 
 // #1024/#1000: prod's fixed host port is 1533 (JARVIS_WEB_PORT default). Rather than editing the
@@ -670,6 +617,7 @@ export interface UatProvisionOptions {
   // fixture origin and its synthesis provider, so briefing cards render fixed prose.
   readonly withBriefingWriterFixture?: boolean;
   readonly withClassifierFixture?: boolean;
+  readonly withClassifierMcpFixture?: boolean;
   /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
   readonly withSportsPublicSourceFixtures?: boolean;
   /** #2015: opt-in pending workflow approval used only by its live-path spec. */
@@ -798,7 +746,7 @@ export async function provisionForUat(
         : undefined;
     // [task:p8-briefing-writer-unreachable]: per-attempt container on THIS attempt's network.
     const briefingWriterFixtureBaseUrl = opts?.withBriefingWriterFixture
-      ? briefingWriterFixtureBaseUrlFor(projectName)
+      ? briefingWriter.briefingWriterFixtureBaseUrlFor(projectName)
       : undefined;
     const classifierFixtureBaseUrl = opts?.withClassifierFixture
       ? classifierFixtureBaseUrlFor(projectName)
@@ -840,11 +788,12 @@ export async function provisionForUat(
       }
       // Only fixtures this attempt started. The ESPN fixture shares the job-search container.
       if (briefingWriterFixtureBaseUrl !== undefined) {
-        await removeBriefingWriterFixtureContainer(projectName);
+        await briefingWriter.removeBriefingWriterFixtureContainer(projectName, runCommand);
       }
       if (classifierFixtureBaseUrl !== undefined) {
         await removeClassifierFixtureContainer(projectName, { runCommand, runCapture });
       }
+      await mcpFixture.removeClassifierMcpFixtureContainer(projectName, runCommand);
       if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
@@ -918,11 +867,20 @@ export async function provisionForUat(
         console.log(
           `[uat] starting briefing-writer fixture origin at ${briefingWriterFixtureBaseUrl}`
         );
-        await startBriefingWriterFixtureContainer(projectName);
+        await briefingWriter.startBriefingWriterFixtureContainer(projectName, {
+          runCommand,
+          runCapture
+        });
       }
       if (classifierFixtureBaseUrl !== undefined) {
         console.log(`[uat] starting classifier fixture origin at ${classifierFixtureBaseUrl}`);
         await startClassifierFixtureContainer(projectName, { runCommand, runCapture });
+      }
+      if (opts?.withClassifierMcpFixture) {
+        await mcpFixture.startClassifierMcpFixtureContainer(projectName, {
+          runCommand,
+          runCapture
+        });
       }
       await composeSeedHook(
         buildSeedHookInput(
