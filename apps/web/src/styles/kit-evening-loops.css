@@ -36,6 +36,16 @@
   align-items: center;
   margin-top: 10px;
 }
+.ev-loop__actions .jds-btn,
+.ev-loop__picker .jds-btn {
+  min-height: 32px;
+}
+@media (max-width: 680px) {
+  .ev-loop__actions .jds-btn,
+  .ev-loop__picker .jds-btn {
+    min-height: 44px;
+  }
+}
 .ev-loop__topic {
   display: block;
   color: var(--text-muted);
