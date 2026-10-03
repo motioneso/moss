@@ -113,6 +113,7 @@ export const queryKeys = {
     memorySettings: ["chat", "memory-settings"] as const,
     memoryFacts: ["chat", "memory-facts"] as const,
     memoryCorrections: ["chat", "memory-corrections"] as const,
+    classifierShadowReport: (days: number) => ["chat", "classifier-shadow-report", days] as const,
     skills: ["chat", "skills"] as const
   },
   email: {

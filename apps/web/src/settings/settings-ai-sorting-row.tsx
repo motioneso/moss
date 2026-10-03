@@ -153,9 +153,14 @@ export function SortingModelRow(props: {
     groups.set(model.providerDisplayName, list);
   }
 
+  // Temporary shadow report (#2957): while the gate is in Shadow, the badge and the
+  // note below link to the report. The Shadow switch option itself only changes the mode.
+  const shadowReportHref = "/settings?section=shadowreport";
   const badge =
     savedGateMode === "shadow" ? (
-      <Badge tone="amber">Shadow</Badge>
+      <a href={shadowReportHref} aria-label="See shadow results">
+        <Badge tone="amber">Shadow</Badge>
+      </a>
     ) : savedGateMode === "on" ? (
       <Badge tone="forest">On</Badge>
     ) : null;
@@ -240,7 +245,10 @@ export function SortingModelRow(props: {
           />
         </Field>
         {!gateDisabled && !canChooseOn ? (
-          <div className="rt__desc">On opens after shadow review.</div>
+          <div className="rt__desc">
+            On opens after shadow review.{" "}
+            {savedGateMode === "shadow" ? <a href={shadowReportHref}>See shadow results</a> : null}
+          </div>
         ) : null}
       </div>
     </div>

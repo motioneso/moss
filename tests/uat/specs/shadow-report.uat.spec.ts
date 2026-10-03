@@ -1,0 +1,184 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+
+// Temporary shadow report (#2957). Drives real chat turns through the production shadow wiring
+// (same harness as the #2907 live proof: scripted chat backend plus the fixture classifier
+// origin, both test-only stand-ins for external models; every shadow record is written by the
+// shipped gate code observing a real turn): one match, one genuine mismatch, one missed tool.
+// Then opens the report from the Classifier row's Shadow link and proves non-zero counts plus
+// the disagreement row, with a screenshot for the PR.
+export const uatLevel = {
+  level: "admin+data",
+  without: [],
+  withoutNewsJsonBinding: true,
+  chatScript: "classifier-shadow",
+  withClassifierFixture: true
+} as const;
+
+function requireBaseURL(): string {
+  const baseURL = process.env.JARVIS_UAT_BASE_URL;
+  if (!baseURL) throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
+  return baseURL;
+}
+
+async function signIn(page: Page): Promise<void> {
+  await page.goto(requireBaseURL());
+  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
+  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
+  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
+  const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const userMenu = page.locator(".jds-usermenu__trigger");
+  await expect(skipSetup.or(userMenu).first()).toBeVisible();
+  if (await skipSetup.isVisible()) {
+    await skipSetup.click();
+    try {
+      await page.getByRole("button", { name: "Skip anyway" }).click({ timeout: 5_000 });
+    } catch {
+      // No confirmation dialog on this instance.
+    }
+  }
+  await expect(userMenu).toBeVisible({ timeout: 30_000 });
+}
+
+async function openAssistantAndAiSettings(page: Page): Promise<void> {
+  await page.locator(".jds-usermenu__trigger").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Admin / Setup" }).click();
+  await page.getByRole("button", { name: "AI providers" }).click();
+}
+
+const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
+const gateButton = (page: Page, name: string) =>
+  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+
+async function chooseClassifier(page: Page, label: string): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/api/ai/services/sorting/binding") &&
+      response.request().method() === "PUT",
+    { timeout: 30_000 }
+  );
+  await classifierSelect(page).selectOption({ label });
+  expect((await saved).status()).toBe(200);
+  await expect(classifierSelect(page)).toHaveValue(/^model:/);
+}
+
+async function setGate(page: Page, name: string): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(
+        "/api/admin/runtime-config/chat.classifier_gate_mode"
+      ) && response.request().method() === "PUT",
+    { timeout: 30_000 }
+  );
+  await gateButton(page, name).click();
+  expect((await saved).status()).toBe(200);
+  await expect(gateButton(page, name)).toHaveAttribute("aria-pressed", "true");
+}
+
+async function openChat(page: Page): Promise<Locator> {
+  await page.locator(".topbar-actions button").click();
+  const drawer = page.locator("aside.chatd");
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
+
+async function sendMessage(page: Page, drawer: Locator, message: string): Promise<number> {
+  const turnResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
+      response.request().method() === "POST",
+    { timeout: 180_000 }
+  );
+  const composer = drawer.getByLabel("Message Moss");
+  await composer.fill(message);
+  await composer.press("Enter");
+  return (await turnResponse).status();
+}
+
+async function reportCounts(
+  page: Page,
+  days: number
+): Promise<{ status: number; report: Record<string, unknown> }> {
+  return page.evaluate(
+    async ({ days }) => {
+      const response = await fetch(`/api/chat/classifier/shadow-report?days=${days}`);
+      return { status: response.status, report: (await response.json()).report };
+    },
+    { days }
+  );
+}
+
+test("the shadow report counts real shadow records and lists the disagreement (#2957)", async ({
+  page
+}) => {
+  test.setTimeout(420_000);
+  await signIn(page);
+
+  // Fixture classifier plus Shadow gate through the real settings row.
+  await openAssistantAndAiSettings(page);
+  await chooseClassifier(page, "UAT Classifier Fixture Model");
+  await setGate(page, "Shadow");
+  await expect(page.getByRole("link", { name: "See shadow results" }).first()).toBeVisible();
+  await expect(page.getByText("On opens after shadow review.")).toBeVisible();
+
+  // 1. Match: the fixture picks calendar.listVisibleEvents and the model calls it.
+  await page.goto(requireBaseURL());
+  let drawer = await openChat(page);
+  expect(await sendMessage(page, drawer, "uatfix what is on my calendar today?")).toBe(200);
+  await expect(drawer.getByText("You have events on your calendar today.").last()).toBeVisible({
+    timeout: 60_000
+  });
+
+  // 2. Genuine mismatch: the fixture still picks calendar.listVisibleEvents while the model
+  // calls tasks.list. Both sides are real production observations of this turn.
+  await page.goto(requireBaseURL());
+  drawer = await openChat(page);
+  expect(await sendMessage(page, drawer, "uatmiss show me my tasks")).toBe(200);
+  await expect(drawer.getByText("Here are your tasks.").last()).toBeVisible({ timeout: 60_000 });
+
+  // 3. Missed tool: the unreachable classifier fails, but the model still uses a tool.
+  await openAssistantAndAiSettings(page);
+  await chooseClassifier(page, "UAT Classifier Unreachable Model");
+  await page.goto(requireBaseURL());
+  drawer = await openChat(page);
+  expect(await sendMessage(page, drawer, "uatfix what is on my calendar today?")).toBe(200);
+  await expect(drawer.getByText("You have events on your calendar today.").last()).toBeVisible({
+    timeout: 60_000
+  });
+
+  // The report API reflects all three turns once the async shadow writes land.
+  await expect
+    .poll(async () => (await reportCounts(page, 30)).report.checked as number, {
+      timeout: 30_000
+    })
+    .toBe(3);
+  const api = await reportCounts(page, 30);
+  expect(api.status).toBe(200);
+  expect(api.report).toMatchObject({
+    days: 30,
+    checked: 3,
+    pickedTool: 2,
+    agreed: 1,
+    comparable: 2,
+    missedTool: 1
+  });
+  expect((api.report.disagreements as unknown[]).length).toBe(1);
+
+  // Open the report from the Shadow note link and prove the numbers and the row on screen.
+  await openAssistantAndAiSettings(page);
+  await page.getByRole("link", { name: "See shadow results" }).last().click();
+  await expect(page).toHaveURL(/section=shadowreport/);
+  await expect(page.getByRole("heading", { name: "Shadow report" })).toBeVisible();
+  await expect(page.getByText("Messages checked")).toBeVisible();
+  await expect(page.getByText("calendar.listvisibleevents led to tasks.list")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("shadow-report-live.png") });
+
+  // The 7 and 90-day views carry the same three turns.
+  for (const days of [7, 90]) {
+    const ranged = await reportCounts(page, days);
+    expect(ranged.status).toBe(200);
+    expect(ranged.report.checked).toBe(3);
+    expect((ranged.report.disagreements as unknown[]).length).toBe(1);
+  }
+});

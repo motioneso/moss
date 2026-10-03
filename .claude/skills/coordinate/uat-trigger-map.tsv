@@ -38,6 +38,12 @@ blocking	packages/chat/src/jobs.ts	tests/uat/specs/2911-shadow-delete.uat.spec.t
 blocking	packages/chat/src/jobs.ts	tests/uat/specs/2911-shadow-purge-queue.uat.spec.ts
 blocking	infra/postgres/grants/**	tests/uat/specs/2911-shadow-purge-queue.uat.spec.ts
 blocking	packages/chat/**	tests/uat/specs/runtime-context.uat.spec.ts
+# #2957: the temporary classifier shadow report page and its owner-only report route.
+blocking	packages/chat/src/classifier-shadow-repository.ts	tests/uat/specs/shadow-report.uat.spec.ts
+blocking	packages/chat/src/routes.ts	tests/uat/specs/shadow-report.uat.spec.ts
+blocking	packages/chat/src/route-serializers.ts	tests/uat/specs/shadow-report.uat.spec.ts
+blocking	apps/web/src/settings/settings-shadow-report-pane.tsx	tests/uat/specs/shadow-report.uat.spec.ts
+blocking	apps/web/src/settings/settings-ai-sorting-row.tsx	tests/uat/specs/shadow-report.uat.spec.ts
 blocking	packages/notes/**	tests/uat/specs/notes-default-retrieval.uat.spec.ts
 blocking	packages/notes/**	tests/uat/specs/notes-path-recheck.uat.spec.ts
 blocking	packages/chat/src/live/notes-retrieval.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts

@@ -6,6 +6,37 @@ import type { DataContextDb } from "@moss/db";
 /** Hard cap on one review read. Callers may ask for fewer. */
 export const SHADOW_RECORD_REVIEW_LIMIT = 200;
 
+/** Hard cap on disagreement rows in one shadow report. */
+export const SHADOW_REPORT_DISAGREEMENT_LIMIT = 50;
+
+/** Day ranges the temporary shadow report (#2957) offers. */
+export type ShadowReportRange = 7 | 30 | 90;
+
+export interface ShadowDisagreement {
+  readonly id: string;
+  readonly createdAt: Date;
+  /** Lowercased `module.tool` the classifier picked, or null when it named none. */
+  readonly classifierTool: string | null;
+  /** Lowercased `module.tool` the main model used first, or null when it used none. */
+  readonly modelTool: string | null;
+  readonly confidence: number | null;
+}
+
+export interface ShadowReport {
+  readonly days: ShadowReportRange;
+  /** Rows recorded in range. */
+  readonly checked: number;
+  /** Rows where the classifier picked a tool (`would_handle`). */
+  readonly pickedTool: number;
+  /** Rows where the main model agreed (`match`). */
+  readonly agreed: number;
+  /** Rows comparable either way (`match` or `mismatch`). */
+  readonly comparable: number;
+  /** Rows where the classifier named no tool but the model used one. */
+  readonly missedTool: number;
+  readonly disagreements: readonly ShadowDisagreement[];
+}
+
 export type ShadowDecision =
   | "would_handle"
   | "declined"
@@ -254,6 +285,72 @@ export class ClassifierShadowRepository {
       LIMIT ${limit}
     `.execute(scopedDb.db);
     return result.rows.map(mapRow);
+  }
+
+  /**
+   * Temporary shadow report (#2957). Counts the caller's own records in the day window and
+   * lists the disagreements, newest first. Row-level security supplies the owner filter from
+   * the actor data context — no owner id and no admin path — so another owner's rows and an
+   * admin's view of them can never appear here.
+   */
+  async getReportForOwner(
+    scopedDb: DataContextDb,
+    options: { readonly days: ShadowReportRange }
+  ): Promise<ShadowReport> {
+    assertDataContextDb(scopedDb);
+    const days = options.days;
+    const counts = await sql<{
+      checked: string;
+      picked_tool: string;
+      agreed: string;
+      comparable: string;
+      missed_tool: string;
+    }>`
+      SELECT count(*)::text AS checked,
+        count(*) FILTER (WHERE decision = 'would_handle')::text AS picked_tool,
+        count(*) FILTER (WHERE comparison_status = 'match')::text AS agreed,
+        count(*) FILTER (WHERE comparison_status IN ('match', 'mismatch'))::text AS comparable,
+        count(*) FILTER (
+          WHERE decision <> 'would_handle' AND model_tool_id IS NOT NULL
+        )::text AS missed_tool
+      FROM app.chat_classifier_shadow_records
+      WHERE created_at >= now() - (${days} || ' days')::interval
+    `.execute(scopedDb.db);
+    const mismatches = await sql<{
+      id: string;
+      created_at: Date;
+      classifier_tool: string | null;
+      model_tool_id: string | null;
+      confidence: number | null;
+    }>`
+      SELECT id, created_at,
+        CASE WHEN module_id IS NOT NULL AND tool_name IS NOT NULL
+          THEN lower(module_id || '.' || tool_name)
+          ELSE NULL
+        END AS classifier_tool,
+        model_tool_id, confidence
+      FROM app.chat_classifier_shadow_records
+      WHERE comparison_status = 'mismatch'
+        AND created_at >= now() - (${days} || ' days')::interval
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${SHADOW_REPORT_DISAGREEMENT_LIMIT}
+    `.execute(scopedDb.db);
+    const row = counts.rows[0];
+    return {
+      days,
+      checked: Number(row?.checked ?? 0),
+      pickedTool: Number(row?.picked_tool ?? 0),
+      agreed: Number(row?.agreed ?? 0),
+      comparable: Number(row?.comparable ?? 0),
+      missedTool: Number(row?.missed_tool ?? 0),
+      disagreements: mismatches.rows.map((mismatch) => ({
+        id: mismatch.id,
+        createdAt: mismatch.created_at,
+        classifierTool: mismatch.classifier_tool,
+        modelTool: mismatch.model_tool_id,
+        confidence: mismatch.confidence
+      }))
+    };
   }
 
   /**

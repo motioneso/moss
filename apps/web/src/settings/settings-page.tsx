@@ -84,6 +84,7 @@ type PersonalSectionId =
 type AdminSectionId =
   | "people"
   | "aiproviders"
+  | "shadowreport"
   | "instmods"
   | "audit"
   | "modelactivity"
@@ -129,6 +130,12 @@ const PeoplePane = lazyPane(() =>
 );
 const AiProvidersPane = lazyPane(() =>
   import("./settings-ai-admin-pane").then((module) => ({ default: module.AiProvidersPane }))
+);
+// Temporary classifier shadow report (#2957). Not a permanent section: do not extend it.
+const ShadowReportPane = lazyPane(() =>
+  import("./settings-shadow-report-pane").then((module) => ({
+    default: module.ShadowReportPane
+  }))
 );
 const InstanceModulesPane = lazyPane(() =>
   import("./settings-instance-modules-pane").then((module) => ({
@@ -447,6 +454,19 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const requestedAdmin = isAdmin
     ? ADMIN_SECTIONS.find((section) => section.id === requested)
     : undefined;
+  // Temporary shadow report (#2957): reached by direct link from the Classifier row, never
+  // from the sidebar, so it stays out of ADMIN_GROUPS while ?section=shadowreport keeps working.
+  // It carries the full section shape (the icon is unused) so the pane lookup below typechecks.
+  const requestedHiddenAdmin: SettingsSection<AdminSectionId> | undefined =
+    isAdmin && requested === "shadowreport"
+      ? {
+          id: "shadowreport",
+          icon: GitCommitHorizontal,
+          label: "Shadow report",
+          description: coreSettingDescription("shadowreport"),
+          Pane: ShadowReportPane
+        }
+      : undefined;
 
   useEffect(() => {
     if (requestedPersonal) {
@@ -455,15 +475,26 @@ export function SettingsPage({ me }: SettingsPageProps) {
     } else if (requestedAdmin) {
       setMode("admin");
       setCategoryAdmin(requestedAdmin.id);
+    } else if (requestedHiddenAdmin) {
+      setMode("admin");
     }
-  }, [requestedAdmin, requestedPersonal]);
+  }, [requestedAdmin, requestedHiddenAdmin, requestedPersonal]);
 
-  const adminMode = requestedAdmin ? true : requestedPersonal ? false : isAdmin && mode === "admin";
+  const adminMode =
+    requestedAdmin || requestedHiddenAdmin
+      ? true
+      : requestedPersonal
+        ? false
+        : isAdmin && mode === "admin";
   const groups = adminMode ? ADMIN_GROUPS : PERSONAL_GROUPS;
   const sections = adminMode ? ADMIN_SECTIONS : PERSONAL_SECTIONS;
   const active =
-    requestedAdmin?.id ?? requestedPersonal?.id ?? (adminMode ? categoryAdmin : categoryPersonal);
-  const activeSection = sections.find((section) => section.id === active) ?? sections[0]!;
+    requestedAdmin?.id ??
+    requestedHiddenAdmin?.id ??
+    requestedPersonal?.id ??
+    (adminMode ? categoryAdmin : categoryPersonal);
+  const activeSection =
+    sections.find((section) => section.id === active) ?? requestedHiddenAdmin ?? sections[0]!;
   const Pane = activeSection.Pane;
 
   const [sheetOpen, setSheetOpen] = useState(false);
