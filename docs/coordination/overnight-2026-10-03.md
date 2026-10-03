@@ -14,7 +14,7 @@
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- | ------ |
 | Chat drawer browser tests | #2939 | routine (UI, live proof) | merged (5eef54630) | - | reaped | - | #2965 | 0 |
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
-| New chat stops running turn | #2934 | security | QA round 2 RED (failure budget reached): round-1 fixes confirmed; 1 blocking: retry after failed send re-sends private text into a new normal chat if a new chat lands during reconnect (no stop/privacy re-check after heal), comment 5970117903. Builder fixing only that; then ONE fresh Opus arbiter scoped to that fix only; then park for Ben | 2934 new chat stops turn | w1:p0S (kept for fixes) | fix-2934-newchat-stop | #2963 | 0 |
+| New chat stops running turn | #2934 | security | round-2 fix c0bd0f32 pushed; scoped Opus arbiter running on that fix only; Opus lane rebasing + full gate; then park for Ben | 2934 new chat stops turn (Opus) | w1:p11F | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | Muse lane replaced by Opus 07:50 per Ben (handoff-2942.md); branch at 091e4410a, rebase then PR; gap (tools listed once per session) to its own issue | 2942 mid-chat tools (Opus) | w1:p11B | fix-2942-midchat-tools | - | 1 |
 | Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | building (session 1: plan + slice A) | 2956 activity history | w1:p0T | feat-2956-activity-history | - | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
@@ -116,3 +116,4 @@ Relay 2 (session 3748ecb9): lock claimed, old coordinator (w1:p113) closed. All 
 07:22 PDT: box load 80-117 on 16 cores. No more lanes until load drops; slowness timeouts under load are not branch failures.
 
 - 07:50 Ben: use up usage before 11:00 with several builders; replace Muse lanes with Opus via handoff notes. 2942 replaced; 2934 and 2956 handoffs requested. Gates may queue on load.
+- 08:00 2934 Muse lane replaced by Opus (w1:p11F, rebase + gate only). Scoped arbiter (subagent) checking c0bd0f32. 2893 plan approved with a __proto__ round-trip condition; 2735 plan approved.
