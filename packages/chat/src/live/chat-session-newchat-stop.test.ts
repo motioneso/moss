@@ -8,6 +8,7 @@ import {
   type Clock
 } from "./chat-session-manager.js";
 import { ClassifierGate, type GateOutcome, type GateRequest } from "./classifier-gate.js";
+import { CliChatUnavailableError } from "./errors.js";
 import type { ClassifierGateShadowTurnInput } from "./classifier-gate-shadow.js";
 import type { CliChatEngine, TranscriptRecord } from "./types.js";
 import type { ChatSurface } from "./chat-surface.js";
@@ -400,6 +401,74 @@ describe("#2934 new chat must stop a running turn", () => {
     await turn;
     expect(persistence.recordedTurns).toEqual([]);
     expect(engine.interruptCalls).toBe(1);
+  });
+
+  it("T7 (round 2): a new chat during the reconnect heal never re-sends private text", async () => {
+    // Adapted from QA's round-2 probe: a private turn whose first send fails as
+    // unavailable heals ("reconnecting") and would resubmit once. A real new
+    // chat lands inside the heal, so the healed session belongs to the new
+    // normal thread. The retry must refuse instead of re-sending private text.
+    const persistence = new FlipFlopPersistence();
+    persistence.setPrivate();
+
+    class FailingPrivateEngine extends BlockingEngine {
+      submitCalls = 0;
+      async purgeTranscripts(): Promise<void> {}
+      override async submit(_text: string): Promise<void> {
+        this.submitCalls += 1;
+        throw new CliChatUnavailableError("daemon gone");
+      }
+    }
+    class HealedEngine extends BlockingEngine {
+      async purgeTranscripts(): Promise<void> {}
+    }
+    const dead = new FailingPrivateEngine();
+    const healed = new HealedEngine();
+
+    let factoryCalls = 0;
+    let releaseHeal!: () => void;
+    const healGate = new Promise<void>((resolve) => {
+      releaseHeal = resolve;
+    });
+    const manager = new ChatSessionManager(
+      baseDeps(persistence, dead, {
+        engineFactory: (async () => {
+          factoryCalls += 1;
+          if (factoryCalls === 1) return dead;
+          await healGate;
+          return healed;
+        }) as unknown as ChatSessionManagerDeps["engineFactory"]
+      })
+    );
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (record) => seen.push(record));
+
+    const turn = manager.submitTurn("user-1", "Ben", "private text");
+    // Wait until the turn is inside the heal (second launch parked).
+    const parkedAt = Date.now();
+    while (factoryCalls < 2 && Date.now() - parkedAt < 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(factoryCalls).toBeGreaterThanOrEqual(2);
+    // The user presses New chat while "reconnecting" shows.
+    await manager.clear("user-1");
+    releaseHeal();
+    // Give the retry time to (incorrectly) resubmit, then drain the read loop
+    // in case the guard is missing and the turn kept going.
+    const submitAt = Date.now();
+    while (healed.submits.length === 0 && Date.now() - submitAt < 500) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await settleTurn(healed);
+
+    const result = await turn;
+    expect(result.reply).toBe("");
+    expect(healed.submits).toEqual([]);
+    expect(persistence.recordedTurns).toEqual([]);
+    expect(persistence.recordedHandled).toEqual([]);
+    expect(seen).toContainEqual(
+      expect.objectContaining({ kind: "status", text: "Stopped by user." })
+    );
   });
 
   it("T3: the real gate declines a private request before any classifier call", async () => {

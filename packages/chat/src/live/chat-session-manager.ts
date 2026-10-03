@@ -484,6 +484,13 @@ export class ChatSessionManager {
             userName,
             session
           );
+          // #2934 round 2 — a new chat may have landed inside the heal, so the
+          // healed session can belong to a new normal thread. Re-check the stop
+          // and the privacy match before the retry submits.
+          if (controller.signal.aborted)
+            return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
+          if (session.incognito !== requestIncognito)
+            return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
           await assertProviderIdentityForPendingTurn(
             turnProviderIdentity,
             session.providerIdentity
