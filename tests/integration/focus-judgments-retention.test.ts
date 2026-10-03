@@ -107,6 +107,32 @@ describe("30-day retention purge", () => {
     expect(remaining).not.toContain(old);
   });
 
+  it("the purge function is owned by the migration owner, a definer, with a pinned search path", async () => {
+    const result = await bootstrap.query<{ owner: string; definer: boolean; config: string[] }>(
+      `SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef AS definer, p.proconfig AS config
+       FROM pg_proc p
+       WHERE p.oid = 'app.purge_expired_focus_judgments()'::regprocedure`
+    );
+    expect(result.rows).toEqual([
+      { owner: "jarvis_migration_owner", definer: true, config: ["search_path=app, public"] }
+    ]);
+  });
+
+  it("only the worker may run the purge", async () => {
+    for (const connectionString of [connectionStrings.app, connectionStrings.auth]) {
+      const client = new Client({ connectionString });
+      await client.connect();
+      try {
+        // Refused at the function, not later at the table.
+        await expect(client.query("SELECT app.purge_expired_focus_judgments()")).rejects.toThrow(
+          /permission denied for function purge_expired_focus_judgments/i
+        );
+      } finally {
+        await client.end();
+      }
+    }
+  });
+
   it("the worker reads only the current person's judgments and can never delete them", async () => {
     const ownA = await insertAged(ids.userA, 2);
     await insertAged(ids.userB, 2);
