@@ -197,6 +197,7 @@
   --danger: var(--red);
   --danger-hover: var(--red-hover);
   --danger-fg: var(--red-ink);
+  --danger-on: var(--white); /* text on a solid --danger fill */
   --danger-soft: var(--red-soft);
   --danger-soft-fg: var(--red-ink);
 
@@ -441,7 +442,7 @@
   /* Dark-theme subtle/faint TEXT (see :root note). Raw ink-4 read ~3.4:1 on the
      dark --paper; these clear WCAG AA. ink-3/ink-4 primitives stay for non-text. #354. */
   --text-subtle: #9b968a; /* 5.9:1 on dark --paper */
-  --text-faint: #8b8578; /* 4.8:1 on dark --paper */
+  --text-faint: #9a9589; /* 4.5:1 on dark --surface-3, the lightest surface it sits on */
 
   /* Dark keeps the real accent ramp for fills (buttons, hero, active nav).
      Only the grounds and the text tints below are dark-specific. */
@@ -468,6 +469,7 @@
   --red-hover: #db6e60;
   --red-soft: #3a211c;
   --red-ink: #e89a8e;
+  --danger-on: var(--paper); /* 4.9:1 on dark --danger, 5.3:1 on hover */
 
   --steel: #7e9ebe;
   --steel-soft: #20303f;

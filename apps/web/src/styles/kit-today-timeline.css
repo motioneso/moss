@@ -543,7 +543,7 @@
   margin: 0;
   font-size: 12px;
   line-height: 1.65;
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .cmd-practical strong {
   display: block;
@@ -652,7 +652,7 @@
   color: var(--accent-fg);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .jds-stat-tile--warn .jds-stat-tile__value {
-  color: var(--gold);
+  color: var(--gold-strong);
 }
 .cmd-grid:is([data-mode="day"], [data-mode="evening"]) .cmd-aside .jds-agenda-row {
   padding: 12px 0;

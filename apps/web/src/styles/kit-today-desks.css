@@ -76,10 +76,10 @@
   margin-top: 19px;
   padding: 3px 0 3px 16px;
   border-left: 2px solid var(--gold);
-  color: var(--forest);
+  color: var(--accent-fg);
 }
 .jds-brief--news .nw-twnote__eyebrow {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 1px;
