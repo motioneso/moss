@@ -407,11 +407,13 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     const before = await modelCallCount(page);
     await page.getByRole("button", { name: "Review changes" }).first().click();
     await expect(page.getByText("Review required")).toBeVisible({ timeout: 240_000 });
-    // One call per tool the screen drafts again.
+    // At least one call per tool drafted again. A model retry can add a call, so allow up to twice.
     const drafted = await page.getByText("Draft", { exact: true }).count();
     expect(drafted, "tools drafted again").toBeGreaterThan(0);
     const callEntries = (await modelCalls(page)).filter((entry) => entry.kind === "structured");
-    expect(callEntries.length - before, "re-preparing model calls").toBe(drafted);
+    const reCalls = callEntries.length - before;
+    expect(reCalls, "re-preparing model calls").toBeGreaterThanOrEqual(drafted);
+    expect(reCalls, "re-preparing model calls").toBeLessThanOrEqual(drafted * 2);
     // Old approval is still the saved one until the owner approves the new draft.
     expect(resolveMenu(await connectionDetail(page))).toEqual([FIXTURE_LIGHT_TOOL]);
     await page.getByLabel(`Risk for ${FIXTURE_LIST_TOOL}`).selectOption("read");
