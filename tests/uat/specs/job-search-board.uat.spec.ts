@@ -64,6 +64,15 @@ const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED
 const POLL_DEADLINE_MS = 120_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
 const POLL_MAX_INTERVAL_MS = 4_000;
+// Onboarding step keys (profile.completedSteps) and the row labels the screen announces.
+const ONBOARDING_STEP_LABELS = {
+  role: "Role",
+  want: "What you want",
+  where: "Where",
+  comp: "Pay",
+  sources: "Job boards"
+} as const;
+
 // How long one poll cycle waits for the reloaded page to render what it is looking for. Generous
 // because the board's data arrives over two sequential fetches (profile list, then matches).
 const POLL_SETTLE_MS = 5_000;
@@ -107,7 +116,12 @@ async function openJobSearch(page: Page): Promise<void> {
   await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Job Search" }).click();
 }
 
-async function observedProfiles(response: Response): Promise<Array<{ state?: string }> | null> {
+interface ObservedProfile {
+  state?: string;
+  completedSteps?: string[];
+}
+
+async function observedProfiles(response: Response): Promise<ObservedProfile[] | null> {
   if (
     !response.url().endsWith("/api/ai/assistant-tools/job-search.profile.list/invoke") ||
     response.request().method() !== "POST" ||
@@ -116,7 +130,7 @@ async function observedProfiles(response: Response): Promise<Array<{ state?: str
     return null;
   }
   const body = (await response.json()) as {
-    invocation?: { status?: string; result?: { profiles?: Array<{ state?: string }> } };
+    invocation?: { status?: string; result?: { profiles?: ObservedProfile[] } };
   };
   return body.invocation?.status === "succeeded" && Array.isArray(body.invocation.result?.profiles)
     ? body.invocation.result.profiles
@@ -424,9 +438,11 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       });
       await expect(page.locator(".jsm-board-list")).toHaveCount(0);
 
-      // The five onboarding chips render as plain-text spans, not-done styled until completed.
-      for (const step of ["role", "want", "where", "comp", "sources"]) {
-        await expect(page.getByText(step, { exact: true })).toBeVisible();
+      // Each of the five step rows announces its label and "still needed" until answered.
+      for (const label of Object.values(ONBOARDING_STEP_LABELS)) {
+        await expect(
+          page.getByRole("listitem", { name: `${label} \u2014 still needed`, exact: true })
+        ).toBeVisible();
       }
       await shot(page, "03-onboarding-screen");
     });
@@ -444,29 +460,34 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       // #1306: portal-enabling only happens via the job-search.portal.set-enabled tool, invoked by
       // the assistant conversation — there is no onboarding-time UI toggle (settings.tsx's toggle is
       // for an already-active profile). The prompt above asks explicitly so "sources" can complete.
-      const done = new Set(["role", "want", "where", "comp", "sources"]);
-      await pollWithReload(
-        page,
-        async () => {
-          const state: Record<string, boolean> = {};
-          for (const step of done) {
-            const chip = page.getByText(step, { exact: true });
-            const className = (await chip.getAttribute("class")) ?? "";
-            state[step] = className.includes("jds-badge--forest");
+      // Completion must be persisted, not live component state: each attempt reloads and reads
+      // the profile list the page itself fetches. A fully answered profile turns active, and a
+      // fresh load then shows the board instead of the onboarding rows.
+      const steps = Object.keys(ONBOARDING_STEP_LABELS);
+      await expect
+        .poll(
+          async () => {
+            const listed = page.waitForResponse(
+              async (response) => (await observedProfiles(response)) !== null,
+              { timeout: POLL_SETTLE_MS }
+            );
+            await page.reload();
+            const profiles = (await observedProfiles(await listed)) ?? [];
+            const profile = profiles[0];
+            return {
+              state: profile?.state,
+              missing: steps.filter((step) => !profile?.completedSteps?.includes(step))
+            };
+          },
+          {
+            message: "all five onboarding steps answered and the profile active",
+            timeout: POLL_DEADLINE_MS,
+            intervals: [POLL_INITIAL_INTERVAL_MS, 1_000, 2_000, POLL_MAX_INTERVAL_MS]
           }
-          return state;
-        },
-        (state) => Object.values(state).every(Boolean),
-        "all five onboarding chips (role, want, where, comp, sources) reaching done"
-      );
+        )
+        .toEqual({ state: "active", missing: [] });
 
-      // Explicit reload + re-check: chip completion must survive a fresh page load, not just live
-      // component state left over from the conversation.
-      await page.reload();
-      for (const step of done) {
-        const chip = page.getByText(step, { exact: true });
-        await expect(chip).toHaveClass(/jds-badge--forest/);
-      }
+      await expect(page.getByText("Let\u2019s work out what this search is for.")).toHaveCount(0);
       await shot(page, "04-onboarding-all-steps-done");
     });
   } else {
