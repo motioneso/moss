@@ -41,10 +41,15 @@ import {
 
 import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.js";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
 import { execUatSql } from "./job-search-board-sql.js";
-import { bringUpRealChatModel } from "./real-chat-signin.js";
+import {
+  bringUpRealChatModel,
+  requireUatBaseURL as requireBaseURL,
+  requireUatProjectName as requireProjectName,
+  signInUatAdmin as signIn
+} from "./real-chat-signin.js";
 
 export const uatLevel = {
   level: "admin+data",
@@ -76,34 +81,6 @@ const ONBOARDING_STEP_LABELS = {
 // How long one poll cycle waits for the reloaded page to render what it is looking for. Generous
 // because the board's data arrives over two sequential fetches (profile list, then matches).
 const POLL_SETTLE_MS = 5_000;
-
-function requireBaseURL(): string {
-  const baseURL = process.env.JARVIS_UAT_BASE_URL;
-  if (!baseURL) {
-    throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
-  }
-  return baseURL;
-}
-
-function requireProjectName(): string {
-  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
-  if (!projectName) {
-    throw new Error("JARVIS_UAT_PROJECT_NAME must be set by run-uat.ts");
-  }
-  return projectName;
-}
-
-// Copied (not imported) from finance-feed.uat.spec.ts / real-chat-onboarding.uat.spec.ts — the
-// harness's established pattern for avoiding cross-file test() registration. admin+data lands
-// directly on AppShell (no first-run wizard), so no Skip-setup handling is needed here, unlike the
-// solo-admin copies.
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
-}
 
 async function openInstanceModules(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
