@@ -123,7 +123,9 @@ The proof must run against real data. Never intercept, stub, rewrite or replay n
 responses prove only that the UI renders the fake; they skip the API and the service, which is where
 the assembled path breaks. When a state cannot happen on demand, create it through the real data path
 (records the app itself reads), state exactly what was set up in the PR comment, and remove it
-afterwards. When the state cannot be reached for real at all, report that and leave the PR
+afterwards. A stand-in for a third-party service (for example the repo's test tool server) is
+allowed when the claim is about what Moss sends to it, because Moss's own path still runs unaltered;
+disclose it on the PR. When the state cannot be reached for real at all, report that and leave the PR
 **code-complete, unverified**. Reviewers treat faked proof data as a must-fix finding. Ben's ruling,
 2026-10-03, after a proof rewrote API fields and never showed the service receiving the calls.
 
