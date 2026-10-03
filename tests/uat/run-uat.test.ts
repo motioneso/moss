@@ -62,6 +62,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withActivityOutcomeFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: undefined
     });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
@@ -107,6 +108,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -159,6 +161,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: undefined
     });
   });
@@ -189,6 +192,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withClassifierMcpFixture: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -212,6 +216,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       expect.objectContaining({
         chatScript: "classifier-shadow",
         withClassifierFixture: true,
+        withClassifierMcpFixture: false,
         withBriefingWriterFixture: false
       })
     );
