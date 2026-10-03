@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { ActionAuditLogEntryDto, ActivityLineDto, LocaleSettingsDto } from "@moss/shared";
+import { localDay } from "@moss/shared";
 import { Button } from "@moss/ui";
 
 import { listActionAuditLog, listActivityLines } from "../api/client.js";
@@ -61,14 +62,8 @@ function approvalLabel(mode: ActionAuditLogEntryDto["approvalMode"]): string {
 }
 
 function dayKey(iso: string, locale: LocaleSettingsDto, now: Date): string {
-  const parts = (date: Date): string =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: locale.timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(date);
-  return parts(new Date(iso)) === parts(now) ? "today" : parts(new Date(iso));
+  const key = localDay(iso, locale.timezone);
+  return key === localDay(now, locale.timezone) ? "today" : key;
 }
 
 function dayLabel(key: string, sample: string, locale: LocaleSettingsDto): string {
