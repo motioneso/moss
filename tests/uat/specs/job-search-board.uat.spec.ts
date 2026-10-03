@@ -418,7 +418,8 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     // --- Phase 3: onboarding screen renders while state === "in_conversation" ---
     await test.step("Phase 3: onboarding screen appears, no board list yet", async () => {
       await page.reload();
-      await expect(page.getByText("Let's work out what this search is for.")).toBeVisible({
+      // The heading renders a typographic apostrophe (&rsquo;).
+      await expect(page.getByText("Let\u2019s work out what this search is for.")).toBeVisible({
         timeout: POLL_DEADLINE_MS
       });
       await expect(page.locator(".jsm-board-list")).toHaveCount(0);
@@ -957,7 +958,8 @@ test("nav badge reflects unread matches and clears on mark-read (#1285)", async 
     expect(await badge.textContent()).toBe(String(seeded.unreadByModule["job-search"]));
 
     await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Notifications" }).click();
+    // The account trigger's label also mentions notifications, so target the menu item.
+    await page.locator(".jds-usermenu__item").getByText("Notifications").click();
     const notice = page.locator("article.jds-task").filter({
       has: page.getByText(notificationTitle, { exact: true })
     });
