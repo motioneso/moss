@@ -41,4 +41,4 @@ None.
 
 ## Continuation note
 
-Wave 1 spawned. #2933 and #2934 plans approved (2934 must show each protection failing when removed). Waiting on #2939 plan. #2955 merged; #2956 session 1 started (plan for all slices, then slice A only, draft PR).
+Wave 1 spawned. #2933, #2934, #2956 plans approved. #2934 must show each protection failing when removed. #2956: migrations 0256/0257 confirmed, slice A only then draft PR; kill gate after slice A is mine (plan section 6). Opus QA on #2956 should probe the owner-or-null insert rule (spec 5.1 allows any user to write an admin-visible System line). Waiting on #2939 plan.
