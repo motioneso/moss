@@ -50,7 +50,9 @@ const activityLineEntrySchema = {
     inputTokens: { type: ["integer", "null"] },
     outputTokens: { type: ["integer", "null"] },
     failureCode: { type: ["string", "null"] },
-    factCounts: { type: ["object", "null"] },
+    // Free-form numbers and booleans; the database CHECK is the strict guard. Declared open
+    // (not per-key) because fast-json-stringify drops undeclared object properties as {}.
+    factCounts: { type: ["object", "null"], additionalProperties: true },
     detail: { ...activityLineDetailSchema, type: ["object", "null"] }
   }
 } as const;
