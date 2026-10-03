@@ -25,7 +25,8 @@ import { describe, expect, it } from "vitest";
  *    the quote-anchored check above cannot see.
  *  - EVERY file that names a shared command-runner helper (`createRealTmuxIo`,
  *    `createSanitizedTmuxIo`, `createOwnerIo`, `runBounded`, `perUserSessionIo`,
- *    `createModuleBuildIo`, `AcpExecManager`) must be in the runner allow-list, with a reason. The
+ *    `createModuleBuildIo`, `AcpExecManager`, `preparePerUserStructuredLaunch`) must be in the
+ *    runner allow-list, with a reason. The
  *    names match as bare identifiers, so a call, an import, a renamed import, a dynamic-import
  *    destructure and a variable that stores the helper all match. The finder skips a helper's own
  *    definition (`function X`, `class X`), comment lines and `export { ... } from` re-export
@@ -49,7 +50,7 @@ import { describe, expect, it } from "vitest";
  *    allow-listed with a reason, and a reviewer weighing that reason is the safety net.
  *  - The process-start check is anchored on import syntax. These routes to the library are NOT
  *    caught: `createRequire(...)` followed by a require, and `process.getBuiltinModule(...)`.
- *  - The runner check matches only the seven names above. A new runner helper is not caught until
+ *  - The runner check matches only the eight names above. A new runner helper is not caught until
  *    its name is added to the pattern.
  *  - A runner passed in as a parameter or a dependency (for example a `createSlotIo` dependency)
  *    is not caught in the file that receives it. Only the file that names the helper is checked.
@@ -406,7 +407,7 @@ const CHILD_PROCESS_IMPORT_RE =
  * `export { ... } from` re-export lines.
  */
 const RUNNER_NAME_RE =
-  /(?<!function\s)(?<!class\s)\b(?:createRealTmuxIo|createSanitizedTmuxIo|createOwnerIo|runBounded|perUserSessionIo|createModuleBuildIo|AcpExecManager)\b/g;
+  /(?<!function\s)(?<!class\s)\b(?:createRealTmuxIo|createSanitizedTmuxIo|createOwnerIo|runBounded|perUserSessionIo|createModuleBuildIo|AcpExecManager|preparePerUserStructuredLaunch)\b/g;
 
 /** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
 const CHAT_ENGINE_RE =
@@ -638,6 +639,10 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
     ],
     ["the per-user session runner", `const io = slot.perUserSessionIo(deps, key, params);`],
     ["the module-build runner", `const io = createModuleBuildIo(deps);`],
+    [
+      "the launch-prep helper",
+      `const l = await preparePerUserStructuredLaunch(deps, key, params);\nawait l.io.run(bin, ["--print", p]);`
+    ],
     [
       "a renamed import",
       `import { runBounded as go } from "./per-user-structured.js";\ngo(bin, []);`
