@@ -6,7 +6,7 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 ## Queue
 
@@ -91,6 +91,11 @@ None.
   - CI 11 pass / 3 skipping, CLEAN; live browser run GREEN on ab8d3de49 (PR comment, real chat, nothing intercepted).
   - Session id at merge matched lock anchor: y (6fb239b6). Merged a1369fbed. Issue closed, board Done.
 
+- #2970 (issue #2912, notes browser tests) - routine, test-only
+  - QA verdict + model: GREEN, merge-ready, no blocking findings; Opus high (qa-2970), comment 5972662413. Non-blocking: compose comment peak figure stale (4.38 GiB seen), owner lookup duplicates a helper.
+  - CI: fully green on 678a44e2a. Local gate run 2 red only on the gateway timer flake (issue 1673), accepted.
+  - Session id at merge matched lock anchor: y (b1e6e877). Merged ba84d9387. Issue closed, board Done.
+
 ## Reaped sessions
 
 - w1:p11B "2942 mid-chat tools (Opus)" (opus-2942) - built PR #2974, merged a1369fbed; closed, worktree removed (reap check: REAPABLE, gates clear; ahead=13), branch deleted local+remote.
@@ -121,6 +126,8 @@ None.
 - w1:p119 "QA 2968 weather test" (Opus QA) - GREEN verdict on PR #2968; closed, QA worktree removed.
 - w1:p11F "2934 new chat stops turn" (Opus builder) - built #2934; landed as PR #2963 (b861a8093); reap check REAPABLE; worktree and branch removed.
 - w1:p115 "Coordinator (old)" (session 3748ecb9-3142-49d8-8078-38dc9a19429b) - relay-2 coordinator; merged #2968 and #2963 (Ben's delegated sign-off); work recorded in this manifest; closed by relay-3 successor.
+- w1:p11W "QA 2970 notes tests (Opus)" (qa-2970) - GREEN on PR 2970, verdict on the PR; closed, QA worktree removed.
+- w1:p117 "2912 notes browser tests" (Opus builder, fix-2912-notes-specs) - landed as PR #2970 (ba84d9387); reap check REAPABLE; worktree and branch removed.
 - w1:p11N "Coordinator (old)" (session 6fb239b6, relay 4 coordinator) - merged #2975 and #2974; relayed at RELAY POINT 5; closed by relay 5.
 
 ## Continuation note
@@ -224,3 +231,5 @@ RELAY POINT 5 (relay after 2nd merge since relay 4, session 6fb239b6). Successor
 Relay 5 (session b1e6e877): lock claimed, old coordinator w1:p11N closed.
 
 2912: second full gate red only on the gateway pattern timer flake (issue 1673, load 47; file 26/26 alone). Coordinator accepted run-1 unit green + file rerun + CI fully green on 678a44e2a (evidence comment 5972647949). PR 2970 marked ready. Opus QA qa-2970 spawned in w1:p11W "QA 2970 notes tests (Opus)", new QA tab w1:t9S, worktree .claude/worktrees/qa-2970 (detached). On GREEN: merge (routine, test-only, no live UI proof needed) = merge 1 since relay 5.
+
+2970 merged ba84d9387 (routine). merges_since_relay 1: next routine/sensitive merge triggers relay.
