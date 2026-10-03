@@ -13,7 +13,7 @@ export const meetingsModuleManifest = {
   publisher: "Moss",
   lifecycle: "optional",
   compatibility: { jarv1s: ">=0.0.0" },
-  availability: { defaultEnabled: false, required: false, supportsUserDisable: true },
+  availability: { defaultEnabled: true, required: false, supportsUserDisable: true },
   database: {
     migrations: ["sql/0260_meeting_records.sql"],
     migrationDirectories: ["packages/meetings/sql"],

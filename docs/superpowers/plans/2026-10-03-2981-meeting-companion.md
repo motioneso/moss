@@ -130,7 +130,7 @@ Independent review found that changing a source ID could bypass transcript epoch
 that finding was corrected with switched-source regression cases. This is a domain foundation,
 not an actual recording controller or a claim that native devices have been stopped.
 
-The initial persistence checkpoint adds an optional, default-disabled Meetings module with
+The initial persistence checkpoint adds an optional Meetings module with
 browser-authenticated draft-record endpoints: create, list, read, and versioned personal-note
 writes. It does not add a navigation item, enable recording, or widen companion grants.
 The manifest's feature/error declarations describe only this implemented draft API.
@@ -161,3 +161,10 @@ DB-touching command. Use the project-pinned pnpm version and its frozen lockfile
   integration gate through registry migration discovery.
 - Do not run migrations/tests against a shared/live database by hand. No native capture or
   provider test should use real workplace audio before its separate approval.
+
+The built-in module compatibility gate uses deny-only enablement and requires
+`defaultEnabled: true`. Meetings therefore registers as an optional, default-enabled draft
+API and can be disabled through the existing module controls. This does not start capture,
+contact providers, or add a recording UI. This repository compatibility rule was verified
+in `packages/module-registry/src/compat-gate.ts`; a default-disabled built-in would prevent
+application startup and must not be used.
