@@ -22,7 +22,6 @@ vi.mock("@moss/settings", () => ({
 }));
 
 vi.mock("@moss/memory", () => ({
-  CpuIsolatedEmbeddingProvider: class {},
   createEmbeddingProvider: vi.fn(),
   embedChunks: vi.fn(async (_provider: unknown, chunks: readonly { text: string }[]) => {
     embedCalls.push(chunks.length);

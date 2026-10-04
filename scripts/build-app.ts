@@ -112,12 +112,11 @@ async function buildTarget(target: Target): Promise<void> {
   };
 
   await buildBundle(entry, outfile);
-  if (target === "worker") {
-    await buildBundle(
-      "packages/memory/src/local-embedding-worker.ts",
-      "dist/local-embedding-worker.js"
-    );
-  }
+  // #3027: both processes embed on this worker thread, so each bundle ships it.
+  await buildBundle(
+    "packages/memory/src/local-embedding-worker.ts",
+    "dist/local-embedding-worker.js"
+  );
   if (target === "api") {
     const workerSource = resolve(
       dirname(chatRequire.resolve("pdf-parse/worker")),
