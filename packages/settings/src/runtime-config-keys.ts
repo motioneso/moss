@@ -23,6 +23,7 @@ export const EMBED_MODEL_CONFIG_KEY = "ai.embed_model";
 export const BRAVE_API_KEY_CONFIG_KEY = "ai.brave_api_key";
 export const CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY = "chat.persistent_pool_cap";
 export const CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY = "chat.persistent_idle_reap_minutes";
+export const BACKTRACK_STORAGE_CONFIG_KEY = "backtrack.storage";
 
 export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
   {
@@ -101,6 +102,26 @@ export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
     envVar: "MOSS_CHAT_CLASSIFIER_GATE_MODE",
     enumValues: ["off", "shadow", "on"],
     moduleOwner: "chat"
+  },
+  // Backtrack phase 2a decision 1 (plan 2026-10-03-backtrack-phase2.md §3, §4.3): an instance
+  // switch, not a per-user or manifest feature flag — nothing checks a feature flag at request
+  // time, and per-user enablement would let disabling the module hide delete too, which a person
+  // must always be able to reach. Default "off" everywhere until Phase 4; Ben's dev instance turns
+  // it on through Settings for the live proof. Not set in any compose/env file on purpose: the
+  // default is "off" and nothing fails closed without it, so this needs no deployment-config
+  // change (CLAUDE.md "a PR must never break prod").
+  {
+    key: BACKTRACK_STORAGE_CONFIG_KEY,
+    label: "Backtrack storage",
+    type: "enum",
+    description:
+      "Whether this Moss stores Backtrack day memory. On stores every opted-in person's screen " +
+      "text for up to 37 days, plus up to one hourly run. Off refuses new uploads; the hourly " +
+      "purge still runs.",
+    defaultValue: "off",
+    envVar: "MOSS_BACKTRACK_STORAGE",
+    enumValues: ["off", "on"],
+    moduleOwner: "backtrack"
   }
 ] as const;
 
