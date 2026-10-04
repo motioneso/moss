@@ -57,7 +57,6 @@ async function gateRisks(tools: ReturnType<typeof connectedTool>[]) {
       },
       cipher: { decryptJson: vi.fn() }
     } as unknown as ClassifierDeps,
-    releaseRepository: { hasEligibleRelease: vi.fn(), listEligibleReleases: vi.fn(async () => []) },
     now: () => 0
   });
   const listed = await factory("actor-1", "jst_gate").listTools();
