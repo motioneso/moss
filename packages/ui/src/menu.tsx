@@ -9,6 +9,8 @@ export interface MenuItem {
   readonly ariaLabel?: string;
   /** When set, the item is a toggle and reports this state to assistive tech. */
   readonly checked?: boolean;
+  /** A muted second line under the label that says what the item does. */
+  readonly description?: ReactNode;
 }
 
 export interface MenuProps {
@@ -82,7 +84,14 @@ export function Menu(props: MenuProps) {
               }}
             >
               {item.icon}
-              {item.label}
+              {item.description === undefined ? (
+                item.label
+              ) : (
+                <span className="jds-menu__text">
+                  <span>{item.label}</span>
+                  <span className="jds-menu__desc">{item.description}</span>
+                </span>
+              )}
             </button>
           ))}
         </div>

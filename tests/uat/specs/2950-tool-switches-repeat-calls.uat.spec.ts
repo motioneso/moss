@@ -182,8 +182,11 @@ test("tool rows have one switch and repeated identical calls reach the service (
       )
     );
     await openConnection(page);
-    await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
-    await expect(page.getByLabel("Enable group light")).toBeAttached({ timeout: 30_000 });
+    await page
+      .getByRole("button", { name: /^(Check for new tools|Check again)$/ })
+      .first()
+      .click();
+    await expect(page.getByLabel("Enable light_01")).toBeAttached({ timeout: 30_000 });
     await expect(page.getByLabel(/repeated/i)).toHaveCount(0);
     for (const [name, size] of [
       ["desktop", { width: 1440, height: 900 }],

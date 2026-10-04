@@ -100,6 +100,15 @@
   }
 }
 
+/* One open connection: the pane takes the whole grid. */
+.set2--wide .set2__grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.set2--wide .set2__nav,
+.set2--wide .set2__picker {
+  display: none;
+}
+
 /* ---- Sub-nav ---- */
 .set2__nav {
   position: sticky;

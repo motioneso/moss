@@ -37,12 +37,30 @@ Ben's answer to question 2. When a connection is added, Moss runs one cheap pass
 1. Off.
 2. Turning it on: the one-time notice, using the shipped wording of what is sent, who reads it, the cost, and what is and is not sent.
 3. Preparing, with progress. Quick requests use the default model until it finishes.
-4. Ready: "74 of 75 tools can answer quick requests. 6 always ask you before they run."
+4. Ready: "74 of 75 tools can answer quick requests. 12 always ask you before they run." The count covers Sensitive tools and Sends things out tools you have not allowed. A line under it says YOLO mode skips the asking.
 5. A tool changed: it is prepared again by itself, and its row says "Preparing again".
 6. Couldn't prepare, with "Try again".
 7. Connection lost: paused, and it resumes by itself.
 
 There is no Prepare button, no per-tool risk choice and no per-tool review row. Every tool that is on stays on; the user only switches tools off.
+
+## Sending without asking (issue 2984, slice R2.5)
+
+Added for Ben's sign-off before the screen is built. Spec section 8.3 has the rules.
+
+- Sends things out tools now show "Asks first" in section 2, like Sensitive ones.
+- Section 2 shows one tool, "Ring my phone", already allowed. Its "Asks first" chip gives way to a faint "Sends without asking" note.
+- A Sends things out tool's menu gains "Send without asking" above "Keep out of the classifier". Once chosen, the item reads "Ask before sending".
+- The group header gains "Send all without asking", which confirms once, inline: "Let chat send with these 7 tools without checking with you?" with Allow and Cancel.
+- While any tool in the group is allowed, the header shows "Ask first for all". When some tools are allowed and some still ask, it shows both links.
+- New section 6 draws the group close up in four states, at the tools column's width and at phone width: asking with the menu open, one tool allowed with its menu open, the confirm open, and all allowed.
+- Sensitive tools never get the choice.
+
+Other spec 8.3 and 8.6 gaps filled at the same time:
+
+- The always-ask count in the classifier rail and the list screen now includes sending tools that ask, so it reads 12, not 6.
+- The tools intro and the Ready state each say YOLO mode skips the asking.
+- The sorting line says the model read each tool's name, description and inputs, as the spec says. It said name and description.
 
 ## Decided
 

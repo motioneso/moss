@@ -305,6 +305,15 @@
   color: var(--accent-soft-fg);
   font-weight: var(--weight-semibold);
 }
+.jds-menu__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.jds-menu__desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
 .jds-menu__list button:disabled {
   color: var(--ink-4);
   cursor: not-allowed;

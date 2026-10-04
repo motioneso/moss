@@ -72,9 +72,10 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByRole("button", { name: "Connect", exact: true }).click();
 
     // Detail view: discovery really happened against the live HA MCP server.
-    await expect(page.getByText(/^\d+ tools on$/)).toBeVisible({ timeout: 60_000 });
+    const toolsMeta = page.getByText(/^\d+ of \d+ on, \d+ always ask$/);
+    await expect(toolsMeta).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText("Connected").first()).toBeVisible();
-    const toolsOn = (await page.getByText(/^\d+ tools on$/).textContent()) ?? "";
+    const toolsOn = (await toolsMeta.textContent()) ?? "";
     expect(Number.parseInt(toolsOn, 10)).toBeGreaterThan(0);
 
     // The credential must never come back to the browser.
@@ -128,19 +129,23 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByLabel("Spec").fill(readFileSync(RADARR_SPEC_FILE, "utf8"));
     await page.getByRole("button", { name: "Connect", exact: true }).click();
 
-    // Radarr's spec converts to far more than 30 tools, so groups start off.
-    await expect(page.getByText("Groups start off. Turn on the ones Moss should use.")).toBeVisible(
-      { timeout: 60_000 }
-    );
-    await expect(page.getByText("0 tools on")).toBeVisible();
+    // Radarr's spec converts to far more than 30 tools, so every tool starts off.
+    await expect(
+      page.getByText("This app has a lot of tools, so they start off.", { exact: false })
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/^0 of \d+ on, \d+ always ask$/)).toBeVisible();
 
-    // Turn on the Movie group through the real switch.
-    // The switch's real checkbox input is visually hidden; the user clicks the styled label.
-    await page
-      .getByRole("checkbox", { name: "Enable group Movie", exact: true })
-      .locator("xpath=ancestor::label")
-      .click();
-    await expect(page.getByText(/^[1-9]\d* tools on$/)).toBeVisible({ timeout: 15_000 });
+    // Turn on the movie tools through their real switches. Each switch's checkbox input is
+    // visually hidden; the user clicks the styled label.
+    await page.getByLabel("Search tools").fill("movie");
+    const switches = page.getByRole("checkbox", { name: /^Enable / });
+    await expect(switches.first()).toBeAttached();
+    for (const box of await switches.all()) {
+      if (!(await box.isChecked())) await box.locator("xpath=ancestor::label").click();
+    }
+    await expect(page.getByText(/^[1-9]\d* of \d+ on, \d+ always ask$/)).toBeVisible({
+      timeout: 15_000
+    });
 
     // The credential must never come back to the browser.
     const pageText = (await page.locator("body").textContent()) ?? "";
