@@ -41,7 +41,7 @@ function slot(name, desc, value, opts) {
   opts = opts || {};
   var chip = opts.line
     ? '<span class="linechip" style="--lc:' + value + ";--lw:" + (opts.lw || "1px") + '"><i></i></span>'
-    : '<input type="color" value="' + value + '" aria-label="' + name + ' color" style="width:36px;height:36px;padding:2px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)">';
+    : '<input type="color" class="colorbox" value="' + value + '" aria-label="' + name + ' color"' + (opts.colorAttr || "") + ">";
   return (
     '<div class="slot' +
     (opts.selected ? " is-selected" : "") +
@@ -51,7 +51,9 @@ function slot(name, desc, value, opts) {
     desc +
     '</div></div><div class="slot__ctl">' +
     chip +
-    '<input class="jds-input jds-input--sm" value="' +
+    '<input class="jds-input jds-input--sm"' +
+    (opts.hexAttr || "") +
+    ' value="' +
     value +
     '" aria-label="' +
     name +
@@ -121,14 +123,12 @@ function paneMarkup() {
       slot("Line", "Around cards and fields", "#c9d1da", { line: true }),
       slot("Firm line", "Under the top bar, heavy rules", "#9aa6b3", { line: true, lw: "2px" })
     ]) +
-    group("Accent and gold", "The accent fills the Today band, buttons and the selected nav item. Gold draws the rules under it, never text.", [
+    group("Accent and highlight", "The accent fills the Today band, buttons and the selected nav item. The highlight draws the rules under it, never text.", [
       slot("Accent", "Buttons, links, the Today band", "#2c5d8a", { selected: true }),
-      slot("Gold", "Rules and markers only", "#d39b3c")
+      slot("Highlight", "Rules and markers only", "#d39b3c")
     ]) +
     '<section class="navgroup" id="navgroup"><h4 class="slotgroup__title">Nav bar</h4><p class="slotgroup__hint">The column of links down the left side. On a phone it also colors the top bar and the menu. Text and icons pick dark or light by themselves.</p>' +
-    '<div class="navpick" role="radiogroup" aria-label="Nav bar color">' +
-    swatchesMarkup() +
-    '<span class="colorfield"><input type="color" data-nav-color aria-label="Custom nav color"><input class="jds-input jds-input--sm" data-nav-hex aria-label="Nav color value"></span></div>' +
+    slot("Background", "Behind the links, icons and the Moss mark", "#dfe6ee", { colorAttr: " data-nav-color", hexAttr: " data-nav-hex" }) +
     '<div class="navstrip" data-nav-scope aria-hidden="true">' +
     navStripMarkup() +
     '</div><div class="navrow-foot"><p class="readout" data-readout></p><button class="jds-btn jds-btn--quiet jds-btn--sm" data-reset>Reset to Harbor default</button></div></section>' +
@@ -143,7 +143,7 @@ function paneMarkup() {
     '<li><span>Faint text on the page</span><span class="ok">Reads well, 4.6 to 1</span></li>' +
     '<li><span>Accent links on the page</span><span class="ok">Reads well, 6.2 to 1</span></li>' +
     '<li><span>Text on the Today band and buttons</span><span class="ok">Reads well, 6.9 to 1</span></li>' +
-    '<li><span>Gold rules on the page</span><span class="low">Faint, 2.1 to 1. Aim for 3 to 1</span></li>' +
+    '<li><span>Highlight rules on the page</span><span class="low">Faint, 2.1 to 1. Aim for 3 to 1</span></li>' +
     "</ul></div></aside></div>" +
     '<div class="editor-foot"><span></span><div class="editor-foot__buttons"><button class="jds-btn jds-btn--quiet jds-btn--sm">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm">Save changes</button></div></div></section>'
   );

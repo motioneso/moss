@@ -21,11 +21,13 @@ styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder 
 
 | Today's editor | Mockup |
 | --- | --- |
-| No nav color control | A "Nav bar" group inside the custom theme editor: six swatches, a custom color, a live nav strip, a contrast readout and "Reset to Harbor default" |
+| No nav color control | A "Nav bar" group inside the custom theme editor: a color box and hex field like Accent and Highlight, a live nav strip, a contrast readout and "Reset to Harbor default" |
+| Color boxes show a gap between the border and the color | Every color box is solid: the color fills the whole box |
+| The rule color is called Gold | It is called Highlight on screen; the saved setting keeps its old name so existing themes load |
 | Each color slot boxed in its own card | Hairline-ruled rows, name and purpose on the left, picker and value on the right |
 | Technical slot names (surface-2, ink-3, line-strong) | Plain names with a one-line purpose: Page, Card, Soft card, Track, Text, Soft text and so on |
 | Line colors with transparency show as white swatches | Line slots show a ruled sample at the real weight |
-| Preview is a generic "Daily plan" card | Preview is a small Today screen: nav, Today band with its gold rule, numbered section head, rows, a card, buttons |
+| Preview is a generic "Daily plan" card | Preview is a small Today screen: nav, Today band with its highlight rule, numbered section head, rows, a card, buttons |
 | "On track" badge and accent note unreadable in dark mode | Dropped from the preview; the soft accent text gets fixed in the build |
 | Accent ramp listed with internal names | Removed; the preview shows the ramp in use |
 | Warnings like "Accent on paper 1.79:1" | "Can people read it?" list: each pairing in words, "Reads well, 6.2 to 1" or "Faint, 2.1 to 1. Aim for 3 to 1" |

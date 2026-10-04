@@ -197,7 +197,9 @@ function readHash() {
     });
 }
 
+/* state.nav is "default", a review-bar choice, or a hex typed into the editor. */
 function navGround(choice) {
+  if (/^#[0-9a-fA-F]{6}$/.test(choice)) return choice;
   var c = NAV_CHOICES.filter(function (x) {
     return x[0] === choice;
   })[0];
@@ -214,7 +216,7 @@ function render() {
   else root.removeAttribute("data-theme");
   root.classList.toggle("is-harbor", harbor);
   setVars(root, HARBOR, harbor);
-  history.replaceState(null, "", "#mode=" + state.mode + "&theme=" + state.theme + "&nav=" + state.nav);
+  history.replaceState(null, "", "#mode=" + state.mode + "&theme=" + state.theme + "&nav=" + encodeURIComponent(state.nav));
 
   /* The nav color belongs to Harbor: the editor always shows it, the app only while Harbor is applied. */
   var ground = navGround(state.nav);
@@ -240,12 +242,8 @@ function render() {
       ? "Built-in themes only. Your own themes keep their saved colors in light mode."
       : "Applies to every built-in theme.";
   });
-  document.querySelectorAll("[data-navswatch]").forEach(function (b) {
-    b.setAttribute("aria-checked", String(b.dataset.navswatch === state.nav));
-  });
   document.querySelectorAll("[data-nav-hex]").forEach(function (el) {
-    el.value = ground || "";
-    el.placeholder = "Harbor default";
+    if (el !== document.activeElement) el.value = ground || HARBOR_DEFAULT_NAV["--nv-bg"];
   });
   document.querySelectorAll("[data-nav-color]").forEach(function (el) {
     el.value = ground || HARBOR_DEFAULT_NAV["--nv-bg"];
@@ -293,30 +291,16 @@ function bar(title, links) {
     render();
   });
   document.addEventListener("click", function (e) {
-    var s = e.target.closest("[data-navswatch]");
-    if (s) {
-      state.nav = s.dataset.navswatch;
-      render();
-    }
     var r = e.target.closest("[data-reset]");
     if (r) {
       state.nav = "default";
       render();
     }
   });
-}
-
-function swatchesMarkup() {
-  return NAV_CHOICES.map(function (c) {
-    var bg = c[2] === "accent" ? HARBOR["--forest"] : c[2] || HARBOR_DEFAULT_NAV["--nv-bg"];
-    return (
-      '<button class="swatch" role="radio" data-navswatch="' +
-      c[0] +
-      '" style="--sw:' +
-      bg +
-      '"><span class="swatch__dot"></span>' +
-      c[1] +
-      "</button>"
-    );
-  }).join("");
+  document.addEventListener("input", function (e) {
+    var v = e.target.value.trim();
+    if (!e.target.matches("[data-nav-color], [data-nav-hex]") || !/^#[0-9a-fA-F]{6}$/.test(v)) return;
+    state.nav = v.toLowerCase();
+    render();
+  });
 }

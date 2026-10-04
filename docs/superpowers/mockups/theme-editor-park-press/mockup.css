@@ -401,56 +401,6 @@ body {
 .navgroup .slotgroup__hint {
   margin-bottom: var(--space-1);
 }
-.navpick {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-.swatch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 36px;
-  padding: 0 var(--space-3) 0 var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  cursor: pointer;
-}
-.swatch__dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--border-strong);
-  background: var(--sw);
-}
-.swatch[aria-checked="true"] {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  color: var(--accent-fg);
-}
-.colorfield {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.colorfield input[type="color"] {
-  width: 36px;
-  height: 36px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-}
-.colorfield .jds-input {
-  width: 8.5rem;
-}
-
 /* Live nav strip under the control: the real nav at real size, laid sideways. */
 .navstrip {
   display: flex;
@@ -550,6 +500,31 @@ body {
   color: var(--accent-fg);
   font-weight: 600;
   font-size: var(--text-xs);
+}
+/* Color boxes are solid: the chosen color fills the whole box, hairline outside. */
+.colorbox {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  background: none;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.colorbox::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.colorbox::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+.colorbox::-moz-color-swatch {
+  border: 0;
+  border-radius: 0;
 }
 /* Line slots show a ruled sample on the page colour instead of a flat swatch. */
 .linechip {
