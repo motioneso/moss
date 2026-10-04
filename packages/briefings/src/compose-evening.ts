@@ -36,7 +36,12 @@ import { planSection } from "./plan-prose.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveEmailSignals } from "./signals.js";
 import { renderExternalBlock, sanitizeExternal, TRUST_BOUNDARY } from "./trust-boundary.js";
-import { buildEmailCatchUp, filterEmailItems, gatherActionRows } from "./action-rows.js";
+import {
+  buildEmailCatchUp,
+  filterEmailItems,
+  gatherActionRows,
+  loadCatchUpHandledRefs
+} from "./action-rows.js";
 import {
   buildMorningEmailLines,
   gatherCommitmentSuggestions,
@@ -389,7 +394,8 @@ export async function composeEveningBriefing(
         rawEmail.rawItems ?? [],
         actionRows.sourceRefs,
         deps.connectorSyncAt,
-        { since: null, includes: (receivedAt) => withinLocalDay(receivedAt, now, timeZone) }
+        { since: null, includes: (receivedAt) => withinLocalDay(receivedAt, now, timeZone) },
+        await loadCatchUpHandledRefs(scopedDb, definition.owner_user_id, deps)
       )
     : null;
   const structuredPayload = {

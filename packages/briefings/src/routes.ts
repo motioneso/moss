@@ -53,7 +53,7 @@ import {
 } from "./run-status.js";
 import { projectPlanContext, type DayPlanReadPort } from "./plan-context.js";
 import { reconcileOwnedSchedules, reconcileSchedule, timezoneFor } from "./schedule.js";
-import { deriveBriefingFeedbackItems } from "./feedback-targets.js";
+import { CATCH_UP_HANDLED_KINDS, deriveBriefingFeedbackItems } from "./feedback-targets.js";
 import { displaySummaryText } from "./run-display.js";
 
 export interface BriefingsRoutesDependencies {
@@ -830,7 +830,7 @@ async function listHandledCatchUpRefs(
       actorUserId,
       "briefing_item",
       "briefing",
-      ["dismiss", "more_like_this"]
+      CATCH_UP_HANDLED_KINDS
     )) ?? new Set<string>()
   );
 }

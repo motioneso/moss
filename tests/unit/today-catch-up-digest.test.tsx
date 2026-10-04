@@ -98,6 +98,22 @@ async function click(button: ReactTestInstance) {
 
 const allText = () => textOf(renderer.root);
 
+async function settle() {
+  await act(async () => {
+    for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
+  });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (cause: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   api.createTask.mockResolvedValue({ task: { id: "task-9" } });
   api.updateTask.mockResolvedValue({ task: { id: "task-9" } });
@@ -178,6 +194,68 @@ describe("BriefingCatchUp", () => {
     });
     expect(feedback.undoUsefulnessFeedback).toHaveBeenCalledWith("fb-more_like_this");
     expect(api.updateTask).toHaveBeenCalledWith("task-9", { status: "archived" });
+  });
+
+  it("runs one save per row and keeps Undo off until the save lands", async () => {
+    const created = deferred<{ task: { id: string } }>();
+    api.createTask.mockReturnValueOnce(created.promise);
+    render();
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    expect(buttonIn(rowOf("Oakridge Water"), "Undo").props.disabled).toBe(true);
+    await click(buttonIn(rowOf("Oakridge Water"), "Undo"));
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Added to your tasks");
+
+    created.resolve({ task: { id: "task-9" } });
+    await settle();
+    expect(buttonIn(rowOf("Oakridge Water"), "Undo").props.disabled).toBe(false);
+
+    const undone = deferred<{ feedback: { id: string } }>();
+    feedback.undoUsefulnessFeedback.mockReturnValueOnce(undone.promise);
+    await click(buttonIn(rowOf("Oakridge Water"), "Undo"));
+    expect(buttonIn(rowOf("Oakridge Water"), "Add task").props.disabled).toBe(true);
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+
+    undone.resolve({ feedback: { id: "fb" } });
+    await settle();
+    expect(api.createTask).toHaveBeenCalledTimes(1);
+    expect(feedback.createUsefulnessFeedback).toHaveBeenCalledTimes(1);
+    expect(api.updateTask).toHaveBeenCalledWith("task-9", { status: "archived" });
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Add task");
+  });
+
+  it("puts the row back when the task fails to save", async () => {
+    const created = deferred<{ task: { id: string } }>();
+    api.createTask.mockReturnValueOnce(created.promise);
+    render();
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    created.reject(new Error("offline"));
+    await settle();
+
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Add task");
+    expect(allText()).toContain("That did not save. Try again.");
+    expect(feedback.createUsefulnessFeedback).not.toHaveBeenCalled();
+  });
+
+  it("reuses a task it could not archive instead of creating another", async () => {
+    feedback.createUsefulnessFeedback.mockRejectedValueOnce(new Error("offline"));
+    api.updateTask.mockRejectedValueOnce(new Error("offline"));
+    render();
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    await settle();
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Add task");
+    expect(allText()).toContain("That did not save. Try again.");
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    await settle();
+    expect(api.createTask).toHaveBeenCalledTimes(1);
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Added to your tasks");
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Undo"));
+    await settle();
+    expect(api.updateTask).toHaveBeenLastCalledWith("task-9", { status: "archived" });
   });
 
   it("puts the row back and says so when saving fails", async () => {

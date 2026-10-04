@@ -52,7 +52,8 @@ import {
   buildEmailCatchUp,
   catchUpWindowSince,
   filterEmailItems,
-  gatherActionRows
+  gatherActionRows,
+  loadCatchUpHandledRefs
 } from "./action-rows.js";
 import {
   buildMorningEmailLines,
@@ -451,7 +452,8 @@ export async function composeBriefing(
         deps.connectorSyncAt,
         catchUpWindowSince(
           input.previousMorningRunAt ?? new Date(now.getTime() - CATCH_UP_FALLBACK_MS)
-        )
+        ),
+        await loadCatchUpHandledRefs(scopedDb, definition.owner_user_id, deps)
       )
     : null;
   const structuredPayload = {

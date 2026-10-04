@@ -5,9 +5,12 @@ import { composeEveningBriefing } from "../../packages/briefings/src/compose-eve
 import {
   buildEmailCatchUp,
   catchUpWindowSince,
+  emailSourceRefForItem,
   gatherActionRows,
+  loadCatchUpHandledRefs,
   projectActionRows
 } from "../../packages/briefings/src/action-rows.js";
+import { catchUpEntryId } from "../../packages/briefings/src/feedback-targets.js";
 import {
   FIXED_NOW,
   definition,
@@ -208,14 +211,20 @@ describe("structured briefing action rows", () => {
     bulk: false,
     ...overrides
   });
-  const digest = (items: readonly Record<string, unknown>[], excluded: string[] = []) =>
+  const digest = (
+    items: readonly Record<string, unknown>[],
+    excluded: string[] = [],
+    handled: ReadonlySet<string> = new Set()
+  ) =>
     buildEmailCatchUp(
       fakeScopedDb,
       items,
       new Set(excluded),
       async () => asOf,
-      catchUpWindowSince(since)
+      catchUpWindowSince(since),
+      handled
     );
+  const entryIdOf = (item: Record<string, unknown>) => catchUpEntryId(emailSourceRefForItem(item)!);
 
   it("lists important informational mail with sender, summary, reason and a hashed id", async () => {
     const catchUp = await digest(
@@ -348,6 +357,40 @@ describe("structured briefing action rows", () => {
       mail("junk", { sourceHref: "not a url" })
     ]);
     expect(catchUp?.entries.map((entry) => entry.openHref)).toEqual([null, null, null]);
+  });
+
+  it("skips handled emails before the cap so they never take a slot", async () => {
+    const items = Array.from({ length: 10 }, (_, index) =>
+      mail(`fyi-${index}`, { receivedAt: `2026-06-13T1${index}:00:00.000Z` })
+    );
+    const handled = new Set(items.slice(2).map(entryIdOf));
+
+    const catchUp = await digest(items, [], handled);
+
+    expect(catchUp?.entries.map((entry) => entry.summary)).toEqual([
+      "fyi-1 summary",
+      "fyi-0 summary"
+    ]);
+    expect(catchUp?.itemCount).toBe(2);
+  });
+
+  it("loads handled ids for the owner and treats a failed load as none", async () => {
+    const asked: string[] = [];
+    const handled = await loadCatchUpHandledRefs(fakeScopedDb, "owner-1", {
+      catchUpHandledRefs: async (_db, owner) => {
+        asked.push(owner);
+        return new Set(["email-digest:a"]);
+      }
+    });
+    expect([...handled]).toEqual(["email-digest:a"]);
+    expect(asked).toEqual(["owner-1"]);
+
+    const failed = await loadCatchUpHandledRefs(fakeScopedDb, "owner-1", {
+      catchUpHandledRefs: async () => {
+        throw new Error("offline");
+      }
+    });
+    expect(failed.size).toBe(0);
   });
 
   it("omits catch-up when nothing important arrived", async () => {

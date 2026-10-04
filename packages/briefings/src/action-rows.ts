@@ -251,6 +251,24 @@ export function catchUpWindowSince(since: Date): CatchUpWindow {
   };
 }
 
+/**
+ * Catch-up entry ids the owner already dismissed or turned into a task, so they never take
+ * one of the capped slots. Best-effort: the runs route filters the same ids on read.
+ */
+export async function loadCatchUpHandledRefs(
+  scopedDb: DataContextDb,
+  ownerUserId: string,
+  deps: Pick<ComposeDeps, "catchUpHandledRefs">
+): Promise<ReadonlySet<string>> {
+  const load = deps.catchUpHandledRefs;
+  if (!load) return new Set();
+  try {
+    return await withToolSavepoint(scopedDb, () => load(scopedDb, ownerUserId));
+  } catch {
+    return new Set();
+  }
+}
+
 const LEFT_OUT_ACTIONABILITY = new Set(["noise", "receipt_or_notice"]);
 
 /**
@@ -266,7 +284,8 @@ export async function buildEmailCatchUp(
   items: readonly Record<string, unknown>[],
   actionRowSourceRefs: ReadonlySet<string>,
   connectorSyncAt: ComposeDeps["connectorSyncAt"],
-  window: CatchUpWindow
+  window: CatchUpWindow,
+  handledRefs: ReadonlySet<string> = new Set()
 ): Promise<BriefingCatchUpDto | null> {
   const candidates = filterEmailItems(items, actionRowSourceRefs).filter((item) =>
     window.includes(item.receivedAt)
@@ -291,7 +310,7 @@ export async function buildEmailCatchUp(
     .sort(compareCatchUpItems)
     .flatMap((item) => {
       const entry = catchUpEntry(item);
-      return entry ? [entry] : [];
+      return entry && !handledRefs.has(entry.id) ? [entry] : [];
     })
     .slice(0, CATCH_UP_ENTRY_CAP);
   if (entries.length === 0) return null;

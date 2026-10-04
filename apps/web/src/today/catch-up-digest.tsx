@@ -35,6 +35,9 @@ export interface CatchUpDigestProps {
   readonly sinceLabel: string;
   readonly leftOutCount: number;
   readonly statusById: Readonly<Record<string, CatchUpDigestStatus>>;
+
+  /** Rows with a save in flight; their buttons are disabled until it settles. */
+  readonly busyIds: ReadonlySet<string>;
   readonly chatAvailable: boolean;
   readonly error: string | null;
   readonly onReply: (id: string) => void;
@@ -118,13 +121,14 @@ function EntryMeta(
   }
 ) {
   const { entry, status } = props;
+  const busy = props.busyIds.has(entry.id);
   if (status !== "open") {
     return (
       <>
         <span className="jds-caption">
           {status === "added" ? "Added to your tasks" : "Dismissed"}
         </span>
-        <Button size="sm" variant="link" onClick={() => props.onUndo(entry.id)}>
+        <Button size="sm" variant="link" disabled={busy} onClick={() => props.onUndo(entry.id)}>
           Undo
         </Button>
       </>
@@ -154,13 +158,14 @@ function EntryMeta(
           Reply
         </Button>
       ) : null}
-      <Button size="sm" variant="quiet" onClick={() => props.onAddTask(entry.id)}>
+      <Button size="sm" variant="quiet" disabled={busy} onClick={() => props.onAddTask(entry.id)}>
         Add task
       </Button>
       <IconButton
         size="sm"
         aria-label={`Dismiss email from ${entry.senderName}`}
         title="Dismiss"
+        disabled={busy}
         onClick={() => props.onDismiss(entry.id)}
       >
         <X size={14} aria-hidden="true" />
@@ -186,14 +191,27 @@ export function BriefingCatchUp(props: {
 }) {
   const queryClient = useQueryClient();
   const [statusById, setStatusById] = useState<Record<string, CatchUpDigestStatus>>({});
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  // Each handled entry keeps the promise of its saved feedback, so Undo works mid-save.
-  const handled = useRef(new Map<string, Promise<HandledRecord>>());
+  // One save per row at a time. The ref guards clicks that land before the re-render.
+  const busy = useRef(new Set<string>());
+
+  // Saved feedback per handled row, set only once the save succeeds.
+  const records = useRef(new Map<string, HandledRecord>());
+
+  // Tasks created for a row that could not be archived again; Add task reuses them.
+  const strayTasks = useRef(new Map<string, string>());
+
   const now = props.now ?? new Date();
   const byId = new Map(props.catchUp.entries.map((entry) => [entry.id, entry]));
   const setStatus = (id: string, status: CatchUpDigestStatus) =>
     setStatusById((current) => ({ ...current, [id]: status }));
+  const setBusy = (id: string, on: boolean) => {
+    if (on) busy.current.add(id);
+    else busy.current.delete(id);
+    setBusyIds(new Set(busy.current));
+  };
 
   const recordFeedback = async (id: string, kind: "dismiss" | "more_like_this") =>
     (
@@ -205,57 +223,88 @@ export function BriefingCatchUp(props: {
       })
     ).feedback.id;
 
-  const act = (id: string, status: CatchUpDigestStatus, work: () => Promise<HandledRecord>) => {
+  /** Archives a row's task; on failure keeps it as a stray so it is never duplicated. */
+  const archiveTask = async (id: string, taskId: string): Promise<boolean> => {
+    try {
+      await updateTask(taskId, { status: "archived" });
+      strayTasks.current.delete(id);
+      return true;
+    } catch {
+      strayTasks.current.set(id, taskId);
+      return false;
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
+    }
+  };
+
+  /**
+   * Shows `pending` at once, runs `work`, then shows the status it returns. A failure shows
+   * `fallback` and the save error.
+   */
+  const run = (
+    id: string,
+    pending: CatchUpDigestStatus,
+    fallback: CatchUpDigestStatus,
+    work: () => Promise<CatchUpDigestStatus>
+  ) => {
+    if (busy.current.has(id)) return;
+    setBusy(id, true);
     setError(null);
-    setStatus(id, status);
-    const pending = work();
-    handled.current.set(id, pending);
-    pending.catch(() => {
-      if (handled.current.get(id) !== pending) return;
-      handled.current.delete(id);
-      setStatus(id, "open");
-      setError(ACTION_FAILED);
-    });
+    setStatus(id, pending);
+    void work()
+      .then(
+        (status) => setStatus(id, status),
+        () => {
+          setStatus(id, fallback);
+          setError(ACTION_FAILED);
+        }
+      )
+      .finally(() => setBusy(id, false));
   };
 
   const addTask = (id: string) => {
     const entry = byId.get(id);
     if (!entry) return;
-    act(id, "added", async () => {
-      const { task } = await createTask({
-        title: `Follow up with ${entry.senderName}`,
-        description: entry.summary
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
+    run(id, "added", "open", async () => {
+      let taskId = strayTasks.current.get(id);
+      if (!taskId) {
+        const { task } = await createTask({
+          title: `Follow up with ${entry.senderName}`,
+          description: entry.summary
+        });
+        taskId = task.id;
+        strayTasks.current.set(id, taskId);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
+      }
       try {
-        return { feedbackId: await recordFeedback(id, "more_like_this"), taskId: task.id };
+        records.current.set(id, {
+          feedbackId: await recordFeedback(id, "more_like_this"),
+          taskId
+        });
       } catch (cause) {
-        await updateTask(task.id, { status: "archived" }).catch(() => undefined);
+        await archiveTask(id, taskId);
         throw cause;
       }
+      strayTasks.current.delete(id);
+      return "added";
     });
   };
 
+  const dismiss = (id: string) =>
+    run(id, "dismissed", "open", async () => {
+      records.current.set(id, { feedbackId: await recordFeedback(id, "dismiss"), taskId: null });
+      return "dismissed";
+    });
+
   const undo = (id: string) => {
-    const pending = handled.current.get(id);
-    if (!pending) return;
-    const previous = statusById[id] ?? "open";
-    handled.current.delete(id);
-    setError(null);
-    setStatus(id, "open");
-    void pending
-      .then(async (record) => {
-        await undoUsefulnessFeedback(record.feedbackId);
-        if (record.taskId) {
-          await updateTask(record.taskId, { status: "archived" });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
-        }
-      })
-      .catch(() => {
-        handled.current.set(id, pending);
-        setStatus(id, previous);
-        setError(ACTION_FAILED);
-      });
+    const record = records.current.get(id);
+    if (!record) return;
+    run(id, "open", statusById[id] ?? "open", async () => {
+      await undoUsefulnessFeedback(record.feedbackId);
+      records.current.delete(id);
+      if (record.taskId && !(await archiveTask(id, record.taskId))) setError(ACTION_FAILED);
+      return "open";
+    });
   };
 
   return (
@@ -272,6 +321,7 @@ export function BriefingCatchUp(props: {
       sinceLabel={sinceLabel(props.catchUp.since, props.locale, now)}
       leftOutCount={props.catchUp.leftOutCount}
       statusById={statusById}
+      busyIds={busyIds}
       chatAvailable={props.chatAvailable}
       error={error}
       onReply={(id) => {
@@ -279,12 +329,7 @@ export function BriefingCatchUp(props: {
         if (cacheMessageId) props.onOpenChat(buildReplyChatPrompt(cacheMessageId));
       }}
       onAddTask={addTask}
-      onDismiss={(id) =>
-        act(id, "dismissed", async () => ({
-          feedbackId: await recordFeedback(id, "dismiss"),
-          taskId: null
-        }))
-      }
+      onDismiss={dismiss}
       onUndo={undo}
     />
   );
