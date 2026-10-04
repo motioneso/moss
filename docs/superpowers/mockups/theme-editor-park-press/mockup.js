@@ -246,7 +246,14 @@ function render() {
     if (el !== document.activeElement) el.value = ground || HARBOR_DEFAULT_NAV["--nv-bg"];
   });
   document.querySelectorAll("[data-nav-color]").forEach(function (el) {
-    el.value = ground || HARBOR_DEFAULT_NAV["--nv-bg"];
+    el.style.setProperty("--cb", ground || HARBOR_DEFAULT_NAV["--nv-bg"]);
+  });
+  document.querySelectorAll("[data-staged]").forEach(function (el) {
+    el.innerHTML = paletteColors()
+      .map(function (c) {
+        return '<span class="psw" style="--sw:' + c + '" title="' + c + '"></span>';
+      })
+      .join("");
   });
   document.querySelectorAll("[data-reset]").forEach(function (el) {
     el.disabled = state.nav === "default";
@@ -299,8 +306,179 @@ function bar(title, links) {
   });
   document.addEventListener("input", function (e) {
     var v = e.target.value.trim();
-    if (!e.target.matches("[data-nav-color], [data-nav-hex]") || !/^#[0-9a-fA-F]{6}$/.test(v)) return;
-    state.nav = v.toLowerCase();
-    render();
+    if (e.target.matches("[data-palette]")) return render();
+    if (!e.target.matches("[data-hex], .cpop__any") || !/^#[0-9a-fA-F]{6}$/.test(v)) return;
+    setField(e.target.dataset.hex || e.target.dataset.key, v.toLowerCase(), e.target);
   });
 }
+
+/* ---- Color picker: every color box and every preview part opens it ---- */
+
+/* Preview variables each editor field drives. */
+var PV_VARS = {
+  page: ["--paper", "--bg"],
+  card: ["--surface"],
+  text: ["--text", "--ink"],
+  "soft-text": ["--text-muted"],
+  hairline: ["--border-subtle"],
+  line: ["--border"],
+  accent: ["--forest", "--accent", "--accent-fg", "--btn-primary-bg"],
+  highlight: ["--gold"]
+};
+
+function paletteColors() {
+  var box = document.querySelector("[data-palette]");
+  var seen = {};
+  return ((box && box.value.match(/#[0-9a-fA-F]{6}\b/g)) || [])
+    .map(function (c) {
+      return c.toLowerCase();
+    })
+    .filter(function (c) {
+      return seen[c] ? false : (seen[c] = true);
+    });
+}
+
+function fieldValue(key, from) {
+  var scope = from.closest(".phone") || document;
+  var hex = scope.querySelector('[data-hex="' + key + '"]');
+  return hex ? hex.value.toLowerCase() : "#000000";
+}
+
+function fieldName(key, from) {
+  var scope = from.closest(".phone") || document;
+  var box = scope.querySelector('[data-colorbox="' + key + '"]');
+  return box ? box.dataset.name : key;
+}
+
+function setField(key, hex, from) {
+  var scope = (from && from.closest(".phone")) || document;
+  if (key === "nav") {
+    state.nav = hex;
+    render();
+  } else {
+    scope.querySelectorAll('[data-hex="' + key + '"]').forEach(function (el) {
+      if (el !== document.activeElement) el.value = hex;
+    });
+    scope.querySelectorAll('[data-colorbox="' + key + '"]').forEach(function (el) {
+      el.style.setProperty("--cb", hex);
+    });
+    scope.querySelectorAll("[data-pv]").forEach(function (pv) {
+      (PV_VARS[key] || []).forEach(function (v) {
+        pv.parentNode.style.setProperty(v, hex);
+      });
+    });
+  }
+  var pop = document.querySelector(".cpop");
+  if (pop && pop.dataset.key === key) {
+    if (from && pop.contains(from)) pop.querySelector(".cpop__val").textContent = hex;
+    else fillPicker(pop, key, pop._from);
+  }
+}
+
+function closePicker() {
+  document.querySelectorAll(".cpop").forEach(function (el) {
+    el.remove();
+  });
+  document.querySelectorAll('[aria-expanded="true"]').forEach(function (el) {
+    el.setAttribute("aria-expanded", "false");
+  });
+  document.querySelectorAll("[data-part].is-open").forEach(function (el) {
+    el.classList.remove("is-open");
+  });
+}
+
+function fillPicker(pop, key, from) {
+  var value = fieldValue(key, from);
+  var colors = paletteColors();
+  pop.innerHTML =
+    '<div class="cpop__head"><span class="cpop__title">' +
+    fieldName(key, from) +
+    '</span><span class="cpop__val">' +
+    value +
+    "</span></div>" +
+    '<div class="cpop__label">From your palette</div>' +
+    (colors.length
+      ? '<div class="cpop__row">' +
+        colors
+          .map(function (c) {
+            return (
+              '<button type="button" class="cpop__sw" style="--sw:' +
+              c +
+              '" data-use="' +
+              c +
+              '" aria-pressed="' +
+              (c === value) +
+              '" aria-label="Use ' +
+              c +
+              '"></button>'
+            );
+          })
+          .join("") +
+        "</div>"
+      : '<p class="cpop__empty">Paste a palette above and its colors show here.</p>') +
+    '<div class="cpop__label">Any color</div>' +
+    '<input type="color" class="colorbox cpop__any" data-key="' +
+    key +
+    '" value="' +
+    value +
+    '" aria-label="Any color">';
+}
+
+/* Opens the picker for one field under the element that was clicked. */
+function openPicker(key, anchor) {
+  closePicker();
+  var inSlot = anchor.closest(".cbwrap");
+  var host = inSlot || anchor.closest(".side");
+  var pop = document.createElement("div");
+  pop.className = "cpop";
+  pop.setAttribute("role", "dialog");
+  pop.dataset.key = key;
+  fillPicker(pop, key, anchor);
+  host.appendChild(pop);
+  var a = anchor.getBoundingClientRect();
+  var h = host.getBoundingClientRect();
+  var w = pop.offsetWidth;
+  var frame = (anchor.closest(".phone") || document.body).getBoundingClientRect();
+  var left = inSlot ? a.right - h.left - w : Math.min(a.left - h.left, h.width - w);
+  left = Math.max(left, frame.left + 12 - h.left);
+  pop.style.left = left + "px";
+  pop.style.top = a.bottom - h.top + 8 + "px";
+  if (anchor.matches("[aria-expanded]")) anchor.setAttribute("aria-expanded", "true");
+  if (anchor.matches("[data-part]")) anchor.classList.add("is-open");
+  pop._from = anchor;
+}
+
+document.addEventListener("click", function (e) {
+  var use = e.target.closest("[data-use]");
+  if (use) {
+    var pop = use.closest(".cpop");
+    setField(pop.dataset.key, use.dataset.use, pop._from);
+    return closePicker();
+  }
+  if (e.target.closest(".cpop")) return;
+  var box = e.target.closest("[data-colorbox]");
+  if (box) return openPicker(box.dataset.colorbox, box);
+  var part = e.target.closest("[data-part]");
+  if (part) return openPicker(part.dataset.part, part);
+  closePicker();
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") closePicker();
+});
+
+/* Hover marks the innermost part and names its field in the line above the preview. */
+document.addEventListener("mouseover", function (e) {
+  var part = e.target.closest("[data-part]");
+  document.querySelectorAll("[data-part].is-hot").forEach(function (el) {
+    if (el !== part) el.classList.remove("is-hot");
+  });
+  var pv = e.target.closest("[data-pv]");
+  var hint = pv && pv.closest(".side").querySelector("[data-pv-hint]");
+  document.querySelectorAll("[data-pv-hint]").forEach(function (el) {
+    if (el !== hint) el.textContent = "Click any part to change its color.";
+  });
+  if (!part) return;
+  part.classList.add("is-hot");
+  if (hint) hint.textContent = "Click to change " + part.dataset.label;
+});

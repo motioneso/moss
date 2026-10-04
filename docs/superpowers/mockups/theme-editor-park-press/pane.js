@@ -39,19 +39,30 @@ function tcard(name, theme, opts) {
 
 function slot(name, desc, value, opts) {
   opts = opts || {};
+  var key = opts.key || name.toLowerCase().replace(/\s+/g, "-");
   var chip = opts.line
     ? '<span class="linechip" style="--lc:' + value + ";--lw:" + (opts.lw || "1px") + '"><i></i></span>'
-    : '<input type="color" class="colorbox" value="' + value + '" aria-label="' + name + ' color"' + (opts.colorAttr || "") + ">";
+    : '<span class="cbwrap"><button type="button" class="colorbox" data-colorbox="' +
+      key +
+      '" data-name="' +
+      name +
+      '" style="--cb:' +
+      value +
+      '" aria-haspopup="dialog" aria-expanded="false" aria-label="' +
+      name +
+      ' color"' +
+      (opts.colorAttr || "") +
+      "></button></span>";
   return (
-    '<div class="slot' +
-    (opts.selected ? " is-selected" : "") +
-    '"><div><div class="slot__name">' +
+    '<div class="slot"><div><div class="slot__name">' +
     name +
     '</div><div class="slot__desc">' +
     desc +
     '</div></div><div class="slot__ctl">' +
     chip +
-    '<input class="jds-input jds-input--sm"' +
+    '<input class="jds-input jds-input--sm" data-hex="' +
+    key +
+    '"' +
     (opts.hexAttr || "") +
     ' value="' +
     value +
@@ -75,14 +86,14 @@ function group(title, hint, slots) {
 
 function previewMarkup() {
   return (
-    '<div class="pv"><div class="pv__nav"><div class="pv__brand">Moss</div>' +
+    '<div class="pv" data-pv><div class="pv__nav" data-part="nav" data-label="Nav bar"><div class="pv__brand">Moss</div>' +
     '<span class="pv__link is-active">Today</span><span class="pv__link">The Workshop</span><span class="pv__link">Tasks</span><span class="pv__link">Calendar</span><span class="pv__link">News</span></div>' +
-    '<div class="pv__main"><div class="pv__hero"><div class="pv__eyebrow">Good morning, Ben</div><p class="pv__headline">A clear run<br>to lunch</p><p class="pv__summary">Two meetings, one errand, nothing overdue.</p></div>' +
-    '<div class="pv__head"><span class="pv__num">01</span><span class="pv__title">Your day, laid out</span></div>' +
-    '<div><div class="pv__row"><span class="pv__time">9:00</span><span>Morning review<br><span class="pv__meta">30 minutes</span></span></div>' +
-    '<div class="pv__row"><span class="pv__time">2:30 pm</span><span>Call the vet<br><span class="pv__meta">Task, due today</span></span></div></div>' +
+    '<div class="pv__main" data-part="page" data-label="Page"><div><div class="pv__hero" data-part="accent" data-label="Accent"><div class="pv__eyebrow">Good morning, Ben</div><p class="pv__headline">A clear run<br>to lunch</p><p class="pv__summary">Two meetings, one errand, nothing overdue.</p></div><div class="pv__rule" data-part="highlight" data-label="Highlight"></div></div>' +
+    '<div class="pv__head"><span class="pv__num">01</span><span class="pv__title" data-part="text" data-label="Text">Your day, laid out</span></div>' +
+    '<div><div class="pv__row"><span class="pv__time" data-part="accent" data-label="Accent">9:00</span><span>Morning review<br><span class="pv__meta" data-part="soft-text" data-label="Soft text">30 minutes</span></span></div>' +
+    '<div class="pv__row"><span class="pv__time" data-part="accent" data-label="Accent">2:30 pm</span><span>Call the vet<br><span class="pv__meta" data-part="soft-text" data-label="Soft text">Task, due today</span></span></div></div>' +
     '<div class="pv__note">The evening is open after 3:30.</div>' +
-    '<div class="pv__card"><span>Medications <span class="pv__meta">0 of 1 logged</span></span><span class="jds-btn jds-btn--primary jds-btn--sm">Check in</span></div>' +
+    '<div class="pv__card" data-part="card" data-label="Card"><span>Medications <span class="pv__meta">0 of 1 logged</span></span><span class="jds-btn jds-btn--primary jds-btn--sm" data-part="accent" data-label="Accent">Check in</span></div>' +
     '<div class="pv__actions"><span class="jds-btn jds-btn--secondary jds-btn--sm">Secondary</span><a class="jds-btn jds-btn--link jds-btn--sm" href="#">See meeting</a></div>' +
     "</div></div>"
   );
@@ -106,6 +117,8 @@ function paneMarkup() {
     /* Editor */
     '<section class="pane__card" id="editor"><header class="pane__cardhead"><div class="pane__cardheadmain"><div class="pane__cardtitle">Edit Harbor</div><div class="pane__carddesc">The preview changes as you type. Nothing is applied until you save.</div></div></header>' +
     '<div class="editor"><div class="slots"><div class="jds-field slots__name"><label class="jds-label">Name</label><input class="jds-input" value="Harbor"></div>' +
+    '<section class="palette"><h4 class="slotgroup__title">Paste a palette</h4><p class="slotgroup__hint">Paste colors from a palette tool. They show at the top of every color box below, ready to pick.</p>' +
+    '<textarea class="jds-textarea" data-palette aria-label="Paste palette">#2c5d8a #d39b3c #eef1f4 #1d2733 #b8664a</textarea><div class="staged" data-staged></div></section>' +
     group("Page and cards", "The page behind everything, then the cards and wells that sit on it.", [
       slot("Page", "The paper behind every screen", "#eef1f4"),
       slot("Card", "Cards, menus and dialogs", "#f8fafb"),
@@ -124,18 +137,16 @@ function paneMarkup() {
       slot("Firm line", "Under the top bar, heavy rules", "#9aa6b3", { line: true, lw: "2px" })
     ]) +
     group("Accent and highlight", "The accent fills the Today band, buttons and the selected nav item. The highlight draws the rules under it, never text.", [
-      slot("Accent", "Buttons, links, the Today band", "#2c5d8a", { selected: true }),
+      slot("Accent", "Buttons, links, the Today band", "#2c5d8a"),
       slot("Highlight", "Rules and markers only", "#d39b3c")
     ]) +
     '<section class="navgroup" id="navgroup"><h4 class="slotgroup__title">Nav bar</h4><p class="slotgroup__hint">The column of links down the left side. On a phone it also colors the top bar and the menu. Text and icons pick dark or light by themselves.</p>' +
-    slot("Background", "Behind the links, icons and the Moss mark", "#dfe6ee", { colorAttr: " data-nav-color", hexAttr: " data-nav-hex" }) +
+    slot("Background", "Behind the links, icons and the Moss mark", "#dfe6ee", { key: "nav", colorAttr: " data-nav-color", hexAttr: " data-nav-hex" }) +
     '<div class="navstrip" data-nav-scope aria-hidden="true">' +
     navStripMarkup() +
     '</div><div class="navrow-foot"><p class="readout" data-readout></p><button class="jds-btn jds-btn--quiet jds-btn--sm" data-reset>Reset to Harbor default</button></div></section>' +
-    '<section class="palette"><h4 class="slotgroup__title">Paste a palette</h4><p class="slotgroup__hint">Paste colors from a palette tool, then click one to put it in the slot you last touched (Accent).</p><textarea class="jds-textarea" aria-label="Paste palette">#2c5d8a #d39b3c #eef1f4 #1d2733 #b8664a</textarea>' +
-    '<div class="staged"><button style="--sw:#2c5d8a" aria-label="Use #2c5d8a"></button><button style="--sw:#d39b3c" aria-label="Use #d39b3c"></button><button style="--sw:#eef1f4" aria-label="Use #eef1f4"></button><button style="--sw:#1d2733" aria-label="Use #1d2733"></button><button style="--sw:#b8664a" aria-label="Use #b8664a"></button></div></section>' +
     "</div>" +
-    '<aside class="side"><div><h4 class="side__title">Preview</h4><div class="harbor" data-nav-scope style="--paper:#eef1f4;--bg:#eef1f4;--surface:#f8fafb;--text:#1d2733;--ink:#1d2733;--text-muted:#4d5a69;--border:#c9d1da;--border-subtle:#dde3ea;--forest:#2c5d8a;--accent:#2c5d8a;--accent-fg:#2c5d8a;--gold:#d39b3c;--hero-fg:#ffffff;--sage-light:#e3eaf2;--btn-primary-bg:#2c5d8a">' +
+    '<aside class="side"><div><h4 class="side__title">Preview</h4><p class="side__hint" data-pv-hint>Click any part to change its color.</p><div class="harbor" data-nav-scope style="--paper:#eef1f4;--bg:#eef1f4;--surface:#f8fafb;--text:#1d2733;--ink:#1d2733;--text-muted:#4d5a69;--border:#c9d1da;--border-subtle:#dde3ea;--forest:#2c5d8a;--accent:#2c5d8a;--accent-fg:#2c5d8a;--gold:#d39b3c;--hero-fg:#ffffff;--sage-light:#e3eaf2;--btn-primary-bg:#2c5d8a">' +
     previewMarkup() +
     "</div></div>" +
     '<div><h4 class="side__title">Can people read it?</h4><ul class="checks">' +

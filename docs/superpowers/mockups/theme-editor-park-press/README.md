@@ -9,8 +9,8 @@ mode, which theme is applied (Harbor is the custom theme being edited) and Harbo
 
 | File | Shows |
 | --- | --- |
-| `desktop.html` | The full Appearance pane at 1440 wide, inside the real app frame |
-| `phone.html` | Three 390 wide screens: top of the pane, Harbor's nav color, the menu open |
+| `desktop.html` | The full Appearance pane at 1440 wide, inside the real app frame, with the Today band clicked in the preview |
+| `phone.html` | Three 390 wide screens: top of the pane, the nav color box open, the menu open |
 | `nav-colors.html` | Harbor's nav at full size on seven colors, with the contrast each one reaches |
 
 `app.css` and `fonts/` are a frozen copy of the shipped tokens, `@moss/ui` styles, settings
@@ -23,7 +23,9 @@ styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder 
 | --- | --- |
 | No nav color control | A "Nav bar" group inside the custom theme editor: a color box and hex field like Accent and Highlight, a live nav strip, a contrast readout and "Reset to Harbor default" |
 | Color boxes show a gap between the border and the color | Every color box is solid: the color fills the whole box |
-| The rule color is called Gold | It is called Highlight on screen; the saved setting keeps its old name so existing themes load |
+| The rule color is called Gold | It is called Highlight on screen and in the saved theme |
+| Pasting a palette, then clicking a color fills the slot you last touched | Pasting fills nothing. The paste box shows the colors it found, and every color box opens a picker with a "From your palette" row on top and "Any color" below |
+| The preview is only a picture | Clicking a part of the preview (page, text, Today band, buttons, highlight rule, card, nav) opens the picker for the color that paints it. Hover outlines the part and the line above the preview names its color |
 | Each color slot boxed in its own card | Hairline-ruled rows, name and purpose on the left, picker and value on the right |
 | Technical slot names (surface-2, ink-3, line-strong) | Plain names with a one-line purpose: Page, Card, Soft card, Track, Text, Soft text and so on |
 | Line colors with transparency show as white swatches | Line slots show a ruled sample at the real weight |

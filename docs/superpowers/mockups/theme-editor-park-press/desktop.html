@@ -38,6 +38,11 @@
   bar("Theme editor - desktop 1440", '<a href="phone.html">Phone</a> <a href="nav-colors.html">Nav colors</a> <a href="README.md">Notes</a>');
   readHash();
   render();
+  /* Shown open: the Today band was clicked in the preview. */
+  var band = document.querySelector(".pv__hero");
+  band.classList.add("is-hot");
+  document.querySelector("[data-pv-hint]").textContent = "Click to change Accent";
+  openPicker("accent", band);
 </script>
 </body>
 </html>

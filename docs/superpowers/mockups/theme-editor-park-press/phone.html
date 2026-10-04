@@ -14,7 +14,7 @@
     <div class="phone" id="p1"></div>
   </div>
   <div>
-    <p class="phone__cap">2. Editing Harbor: its nav bar color</p>
+    <p class="phone__cap">2. Nav color box tapped: the palette on top</p>
     <div class="phone" id="p2"></div>
   </div>
   <div>
@@ -43,6 +43,8 @@
   render();
   var ed = p2.querySelector("#navgroup");
   p2.scrollTop = ed.offsetTop - 64;
+  /* Shown open: the nav color box was tapped. */
+  openPicker("nav", p2.querySelector('[data-colorbox="nav"]'));
 </script>
 </body>
 </html>
