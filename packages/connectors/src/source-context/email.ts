@@ -341,15 +341,18 @@ async function readAccountLive(
         : stored;
     } else if (triageBudget > 0 && triageDeadline - nowMs(deps) > 0) {
       triageBudget -= 1;
-      const callTimeoutMs = Math.min(triageDeadline - nowMs(deps), resolveEmailLlmTimeoutMs());
       // Extraction reads the AI settings and swallows model errors, so it runs in a savepoint.
       // A failed database read then leaves this message untriaged instead of breaking the
-      // transaction for every later message.
+      // transaction for every later message. The budget is rechecked after the savepoint opens,
+      // because opening it is a database round trip that can spend the rest of the budget.
       let extracted: Awaited<ReturnType<typeof extractEmailSignals>> | null;
       try {
-        extracted = await withSavepoint(scopedDb, () =>
-          extractEmailSignals(message, extractDeps, { callTimeoutMs })
-        );
+        extracted = await withSavepoint(scopedDb, async () => {
+          const remainingMs = triageDeadline - nowMs(deps);
+          if (remainingMs <= 0) return null;
+          const callTimeoutMs = Math.min(remainingMs, resolveEmailLlmTimeoutMs());
+          return extractEmailSignals(message, extractDeps, { callTimeoutMs });
+        });
       } catch (error) {
         if (error instanceof EmailExtractNeedsConfigurationError) throw error;
         extracted = null;
