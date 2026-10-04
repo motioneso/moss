@@ -106,9 +106,11 @@ Debug gates 2b must lift: `App/AppDelegate.swift:19-29, 51-53, 76-80, 143-154`;
 
 Open questions, each with an owner:
 
-- **Q6 (2a builder):** the local embedder's input limit (`packages/memory/src/local-embedding-provider.ts`).
-  A segment is at most 8 KB of text. If that exceeds the limit, split with `parseDocument` and keep
-  every chunk under one `sourcePath`; otherwise one chunk per segment, as chat does.
+- **Q6, answered by review round 1:** the local embedder caps input at 512 tokens, and a segment
+  can hold 8 KB. So the index job splits `windowTitle + address + body` into chunks that fit 512
+  tokens, and every chunk gets the segment's `sourcePath`. The builder reuses memory's own
+  chunking if it can be bounded by tokens, and otherwise writes a token-bounded splitter in the
+  backtrack package.
 - **Q7 (2b builder):** whether the heartbeat runs often enough (`Model/ConnectionMachine.swift`) to
   carry the storage and pause state, or whether the upload response alone must carry it. The upload
   response carries it either way (§5.2).
@@ -120,7 +122,8 @@ Open questions, each with an owner:
    Mac hides Backtrack (Release) and the Moss screen says it isn't available. The purge runs anyway.
    _Rejected: a manifest feature flag_, because nothing checks one at request time. _Rejected:
    per-user enablement (`packages/settings/sql/0065`)_, because disabling the module would also
-   hide delete, and a person must always be able to delete.
+   hide delete, and a person must always be able to delete. Decision 12 makes the module
+   impossible to disable for the same reason.
 2. **Retention runs per owner, inside the owner's data context, not as one `SECURITY DEFINER` delete.**
    The newest precedent (`0257:15-46`, after `packages/ai/sql/0245`) gives the worker `EXECUTE` on a
    definer function and no `DELETE`. Steelman: one statement, atomic, no row access for the worker.
@@ -129,7 +132,11 @@ Open questions, each with an owner:
    isolation. So: a definer function returns only the **owner ids** that have expired segments
    (metadata, no content); the worker then opens each owner's data context and deletes segments and
    their chunks in one transaction through memory's public API. The worker gets `DELETE` on
-   segments, limited by the same owner-only policy.
+   segments, limited by the same owner-only policy. The definer is owned by
+   `jarvis_migration_owner`, which doesn't bypass forced row security, so, as in `0257:11-28`, it
+   gets a `SELECT` policy of its own whose condition is the same expired-or-stale rule. That way it
+   sees only rows needing upkeep, and no runtime role gains a cross-owner read (review round 1,
+   S1).
 3. **Segments and their embeddings are deleted in one transaction, serialised per owner.** Index,
    purge and user delete each take `pg_advisory_xact_lock(hashtextextended('backtrack:' || owner, 0))`
    first. Delete order is segments (`RETURNING id`), then their chunks. The index job re-reads the
@@ -157,6 +164,34 @@ Open questions, each with an owner:
    Phase 4; showing either would describe something that isn't there. Phase 4 adds both.
 9. **Search stays out of Phase 2.** The generated `tsvector` and the `screen` embeddings are built
    now, so Phase 3 starts with data. Nothing reads them until Phase 3's tool.
+10. **A deletion stays deleted (review round 1, spec 1).** Every user delete writes a deletion marker
+    `[from, to)`. "Everything" writes `(-infinity, deleted_at]`. Ingest runs under the same owner
+    lock as delete. It drops any segment whose `[started_at, ended_at]` overlaps a marker and counts
+    it as `discarded`. A batch whose response was lost, then retried after a delete, or an offline
+    second Mac uploading later, can't bring deleted text back. Markers are kept 38 days, longer than
+    any segment ingest still accepts (decision 11). _Rejected: relying on the unique key_, because
+    the delete removes the key that made a retry idempotent.
+11. **Ingest bounds client time, and retention also counts from receipt (review round 1, spec 5).**
+    A segment is accepted only when `started_at` is no more than 26 hours old (the 24-hour buffer
+    plus slack) and `ended_at` is no more than 5 minutes ahead of server time. Anything else is
+    dropped and counted as `rejected_clock`. The purge removes rows past 37 days by `started_at`
+    **or** by `created_at`, so a wrong clock can't stretch the life of a row. The promise is "37
+    days, plus up to one hourly run", stated in exactly those words wherever it appears (consent,
+    app map, settings).
+12. **The module can't be disabled (review round 1, spec 3).** `lifecycle: "required"` and
+    `availability: { defaultEnabled: true, required: true, supportsUserDisable: false,
+supportsWorkspaceDisable: false }`, as calendar is (`packages/calendar/src/manifest.ts:87`). Its
+    status, pause and delete routes are therefore always reachable. Recording is controlled only by
+    the instance switch, the person's pause and the Mac's own consent and switches. _Rejected:
+    session-authenticated cleanup routes outside the module guard._ That would split one module's
+    routes across two guard regimes. And a disabled module that still accepts uploads (ingest is a
+    platform route) would be worse than one that can't be disabled.
+13. **Upload batches fit an explicit byte limit (review round 1, spec 4).** The route sets
+    `bodyLimit: 2 MiB`. The uploader packs at most 200 segments **and** at most 1.5 MiB of encoded
+    JSON per request, measuring the encoded bytes rather than estimating them. Two kinds of
+    response are permanent: a 413 or a schema 400 for a batch. The uploader halves that batch and
+    retries; a single segment that still fails is dropped from the buffer and counted, so one bad
+    segment can't block the backlog.
 
 ## 4. Phase 2a: server
 
@@ -215,19 +250,39 @@ CREATE TABLE app.backtrack_preferences (
 );
 -- ENABLE + FORCE RLS; owner-only SELECT, INSERT, UPDATE for jarvis_app_runtime; SELECT for jarvis_worker_runtime.
 
--- Owner ids only, for the hourly job (decision 2). Fixed cutoffs, no arguments.
+-- Deletion markers (decision 10). Owner-only; app runtime inserts and reads, worker reads and deletes.
+CREATE TABLE app.backtrack_deletions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
+  range tstzrange NOT NULL,                       -- '[from,to)', or '(,deleted_at]' for everything
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX backtrack_deletions_owner ON app.backtrack_deletions (owner_user_id);  -- a person has few markers
+-- ENABLE + FORCE RLS; owner-only SELECT, INSERT for jarvis_app_runtime; SELECT, DELETE for jarvis_worker_runtime.
+
+-- Owner ids only, for the hourly job (decision 2). Fixed cutoffs, no arguments. Owned by
+-- jarvis_migration_owner; it sees rows only through the bounded maintenance policies below.
+CREATE POLICY backtrack_segments_upkeep_select ON app.backtrack_segments FOR SELECT TO jarvis_migration_owner
+  USING (started_at < now() - interval '37 days' OR created_at < now() - interval '37 days'
+         OR (indexed_at IS NULL AND created_at < now() - interval '10 minutes'));
+CREATE POLICY backtrack_deletions_upkeep_select ON app.backtrack_deletions FOR SELECT TO jarvis_migration_owner
+  USING (created_at < now() - interval '38 days');
 CREATE FUNCTION app.backtrack_owners_needing_upkeep()
   RETURNS TABLE (owner_user_id uuid) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, app
-  AS $$ SELECT DISTINCT owner_user_id FROM app.backtrack_segments
-        WHERE started_at < now() - interval '37 days'
-           OR (indexed_at IS NULL AND created_at < now() - interval '10 minutes') $$;
+  AS $$ SELECT owner_user_id FROM app.backtrack_segments
+        WHERE started_at < now() - interval '37 days' OR created_at < now() - interval '37 days'
+           OR (indexed_at IS NULL AND created_at < now() - interval '10 minutes')
+        UNION
+        SELECT owner_user_id FROM app.backtrack_deletions WHERE created_at < now() - interval '38 days' $$;
+ALTER FUNCTION app.backtrack_owners_needing_upkeep() OWNER TO jarvis_migration_owner;
 REVOKE ALL ON FUNCTION app.backtrack_owners_needing_upkeep() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.backtrack_owners_needing_upkeep() TO jarvis_worker_runtime;
 ```
 
-Manifest: `id: "backtrack"`; `features` (Backtrack day memory, flag-off wording); `settings`
+Manifest: `id: "backtrack"`; `lifecycle: "required"` and the non-disableable `availability` from
+decision 12; `features` (Backtrack day memory, flag-off wording); `settings`
 (`path: "/settings?section=modules&module=backtrack"`, `scope: "user"`, `entry: "./settings"`);
-`dataLifecycle` with `deletion: { strategy: "cascade", tables: ["app.backtrack_segments", "app.backtrack_preferences"] }`
+`dataLifecycle` with `deletion: { strategy: "cascade", tables: ["app.backtrack_segments", "app.backtrack_preferences", "app.backtrack_deletions"] }`
 and an export section for segments (all columns but `search`, `body_hash` as hex). Queues:
 `backtrack.index`, `backtrack.upkeep`.
 
@@ -240,7 +295,13 @@ Tests (each fails against the named broken build):
 - Cross-owner `SELECT` and `DELETE` return nothing, as `jarvis_app_runtime` and as
   `jarvis_worker_runtime` (fails if a policy omits the actor check or a role).
 - The worker can't `INSERT` or update any column except `indexed_at`.
-- `backtrack_owners_needing_upkeep()` returns ids only, and only for expired or stale-unindexed rows.
+- `backtrack_owners_needing_upkeep()`, called as the real `jarvis_worker_runtime` with **no actor
+  set**, returns both owners when two owners each have a qualifying row (expired by `started_at`,
+  expired by `created_at`, stale-unindexed, or an old marker), and nobody else. It fails without
+  the maintenance policies, which is the S1 failure. Also as the worker with no actor: a plain
+  `SELECT` on the table returns no rows.
+- The module can't be disabled: the instance and user enablement resolvers both report it enabled,
+  and status and delete answer while Backtrack storage is off.
 - Account deletion removes the user's segments, preferences and `screen` chunks; export includes
   segments (the existing lifecycle tests, extended).
 
@@ -259,17 +320,20 @@ Tests (each fails against the named broken build):
   - `BacktrackSegmentUpload { startedAt: string; endedAt: string; appName: string; bundleId: string; windowTitle: string; address?: string; body: string }`
   - `BacktrackUploadRequest { segments: readonly BacktrackSegmentUpload[] }`, 1 to 200 segments,
     `additionalProperties: false`, string `maxLength`s as character pre-checks.
-  - `BacktrackUploadResponse { accepted: number; duplicates: number; state: BacktrackState }`
+  - `BacktrackUploadResponse { accepted: number; duplicates: number; discarded: number; rejectedClock: number; state: BacktrackState }`
+    (`discarded`: overlaps a deletion marker, decision 10; `rejectedClock`: outside the time window,
+    decision 11)
   - `BacktrackState = { storage: "off" | "on"; paused: boolean }`
   - `CompanionHeartbeatResponse` gains optional `backtrack?: BacktrackState` (optional so older Macs
     and servers keep working).
   - Error codes: `backtrack_unavailable` (409, switch off), `backtrack_paused` (409).
 - Route `POST /api/companion/backtrack` in `apps/api/src/companion-routes.ts`, after the focus routes:
-  `requireCompanion` → switch check → in the owner's data context: pause check, `redactSecrets` on
-  title, address and body, byte-length check, `body_hash`, insert with `ON CONFLICT DO NOTHING`
+  `requireCompanion` → switch check → in the owner's data context, under the owner lock: pause
+  check, time window (decision 11), deletion markers (decision 10), `redactSecrets` on title,
+  address and body, byte-length check, `body_hash`, insert with `ON CONFLICT DO NOTHING`
   `RETURNING id` → `sendJob(boss, "backtrack.index", { actorUserId, segmentIds })` after commit.
-  `ipRateLimit(10)` a minute. Added to `PLATFORM_UNGUARDED_ROUTES`. `boss` added to
-  `CompanionRouteDeps`.
+  Route `bodyLimit: 2 MiB` (decision 13; Fastify's default is 1 MiB). `ipRateLimit(10)` a minute.
+  Added to `PLATFORM_UNGUARDED_ROUTES`. `boss` added to `CompanionRouteDeps`.
 - The handler logs counts and the request id only.
 - `segmentIds` added to `ALLOWED_PAYLOAD_KEYS`; the send site checks at most 200 entries, each a UUID.
 
@@ -286,12 +350,22 @@ Tests:
   captured Fastify log and the enqueued payload never contain it, including for a schema-invalid
   request (observed failing with a deliberate `request.log.info(body)` added).
 - 201 segments rejected; a 9 KB body rejected.
+- A batch of 200 maximum-size segments, encoded to just under 2 MiB, is accepted. That one test
+  fails at Fastify's default 1 MiB limit; round 1 reproduced a 1,669,014-byte batch getting
+  `FST_ERR_CTP_BODY_TOO_LARGE`.
+- **Lost-response retry:** a batch is stored, then deleted through "Today", then sent again
+  unchanged. Nothing is stored and no chunk is created; the batch is counted `discarded`.
+- **Late second Mac:** after "Everything", another device uploads segments timed before the
+  delete. They are discarded. Segments timed after the delete are accepted.
+- A segment starting 27 hours ago, or ending 6 minutes in the future, is counted `rejectedClock`
+  and not stored.
 
 ### 4.5 Index job
 
 `registerDataContextWorker` for `backtrack.index`, payload `{ actorUserId, segmentIds }`. In the
 owner's context, under the owner lock (decision 3): read the listed segments still present and
-younger than 37 days; build `windowTitle + address + body`; embed (Q6); upsert chunks with
+younger than 37 days; build `windowTitle + address + body` and split it to fit 512 tokens (Q6);
+embed; upsert chunks with
 `sourceKind: "screen"`, `sourcePath: "backtrack/<segment id>"`; set `indexed_at`.
 
 Tests: indexes only the actor's rows; a segment deleted before the job runs gets no chunk; a
@@ -303,15 +377,17 @@ a `screen` chunk even when it is the best match (fails if the default kind is wi
 
 `boss.schedule("backtrack.upkeep", "7 * * * *")` in `registerWorkers`. Calls
 `app.backtrack_owners_needing_upkeep()`; for each owner, in their context under the lock: delete
-segments with `started_at < now() - 37 days` `RETURNING id`, then
-`deleteChunksForSources(..., "screen")` for those ids; then enqueue `backtrack.index` for segments
-unindexed after 10 minutes (in batches of 200). It runs whether or not the switch is on.
+segments with `started_at` **or** `created_at` older than 37 days `RETURNING id`, then
+`deleteChunksForSources(..., "screen")` for those ids; delete deletion markers older than 38 days;
+then enqueue `backtrack.index` for segments unindexed after 10 minutes (in batches of 200). It runs
+whether or not the switch is on.
 
-Tests: the 37-day boundary (36 d 23 h kept, 37 d 1 m removed); chunks go with their segments;
-another owner's rows untouched; runs with the switch off; a stale unindexed segment is re-enqueued
-once.
+Tests: the 37-day boundary (36 d 23 h kept, 37 d 1 m removed), by `started_at` and separately by
+`created_at` with a future `started_at` written directly; chunks go with their segments; another
+owner's rows untouched; runs with the switch off; a stale unindexed segment is re-enqueued once;
+a 38-day-old marker is removed and a younger one kept.
 
-### 4.7 User routes (module routes, session auth, guarded)
+### 4.7 User routes (module routes, session auth; always reachable, decision 12)
 
 In `packages/shared/src/backtrack-api.ts`:
 
@@ -320,11 +396,13 @@ In `packages/shared/src/backtrack-api.ts`:
   uses sessions for "is any Mac linked".
 - `PUT /api/backtrack/preferences` `{ paused: boolean }`.
 - `DELETE /api/backtrack/segments` `{ from?: string; to?: string }` → `{ deleted: number }`.
-  Both or neither; `from < to`; at most 31 days apart unless both absent (everything). Deletes
-  segments and their chunks under the lock, like the purge.
+  Both or neither; `from < to`; at most 31 days apart unless both absent (everything). Under the
+  lock, it writes the deletion marker and then deletes segments and their chunks, in one
+  transaction, like the purge.
 
-Tests: delete removes rows and chunks in range only, for the actor only; a half range is rejected;
-pause stops ingest within one request; status counts only the actor's rows.
+Tests: delete removes rows and chunks in range only, for the actor only, and writes its marker; a
+half range is rejected; pause stops ingest within one request; status counts only the actor's
+rows; status and delete work with storage off.
 
 ### 4.8 Moss Settings → Backtrack (screens D and E, minus decision 8)
 
@@ -332,12 +410,15 @@ pause stops ingest within one request; status counts only the actor's rows.
 `Switch`, `Badge` (settings-ui), `Button` (`secondary`, `danger`), `Dialog` and `EmptyState`
 (`@moss/ui`). No new classes; the `design-system` skill's audit runs on it.
 
-- **Linked Mac, switch on:** a "Recording" switch (the pause, across all Macs), a badge
+- **History or a linked Mac, switch on:** a "Recording" switch (the pause, across all Macs), a badge
   "On · N Mac(s)", "Days kept" and "Stored" rows, "Last received". Delete row: "Last hour",
   "Today", "Choose a day…" (native `type="date"`, as `tasks/task-details-dialog.tsx:415` does),
   danger "Everything…".
 - **Everything…** opens `Dialog` E: "Delete all of Backtrack?", Cancel, danger "Delete everything".
-- **No Mac linked:** `EmptyState` pointing to Trail Marker for Mac.
+- **No Mac linked but history stored** (for example, after revoking the only Mac; decision 4): the
+  storage rows and the Delete row as above, with a `Note` that no Mac is linked. Deleting never
+  needs a linked Mac (review round 1, spec 2).
+- **No Mac linked and no history:** `EmptyState` pointing to Trail Marker for Mac.
 - **Switch off on the instance:** a `Note` saying Backtrack storage isn't available on this Moss yet,
   plus the Delete row if any rows exist (from a time it was on).
 - **Loading:** the settings skeleton used by other module panes; **error:** a `Note` with retry.
@@ -347,24 +428,30 @@ pause stops ingest within one request; status counts only the actor's rows.
 ### 4.9 App map, release note, specs
 
 - `app-map-core.ts:100`: Backtrack can store history in Moss when the instance allows it, where to
-  delete it, that it's kept 37 days at most for now; trimmed to the 240-character cap.
+  delete it, that it's kept for 37 days, plus up to one hourly run, for now; trimmed to the
+  240-character cap.
 - Module manifest `features` and `settings` entries; `tests/unit/app-map-integrity.test.ts` passes.
 - Release note: `Category: N/A` for 2a while the switch is off everywhere it ships (nothing
   user-visible changes). 2b likewise. The note that announces Backtrack comes with Phase 4, when the
   switch turns on.
-- Spec §6 amended in the 2a PR: retention backstop is 37 days until Phase 4; revoke keeps rows;
-  deletion by explicit range; no notes row before Phase 4.
+- Spec §6 amended in the 2a PR: retention is 37 days, plus up to one hourly run, until Phase 4;
+  revoke keeps rows; deletion by explicit range and permanent (markers); uploads bounded by time
+  and size; no notes row before Phase 4.
 
 ## 5. Phase 2b: Mac
 
 ### 5.1 Contracts
 
 - `final class BacktrackUploader: BacktrackSink` (`Backtrack/BacktrackUploader.swift`):
-  `requiredConsentVersion = 2`; `accept` appends to the buffer; a 60 s timer sends up to 200 oldest
-  segments through `CompanionClient.backtrackUpload(credential:_:) async throws -> BacktrackUploadResponse`;
-  removes them from the buffer on 2xx; keeps them on network errors; drops them and stops on
-  `backtrack_unavailable` or `backtrack_paused`; drops everything and stops on credential invalid.
-  No send while Pause All, the Backtrack switch, lock or sleep is in effect.
+  `requiredConsentVersion = 2`; `accept` appends to the buffer; a 60 s timer sends the oldest
+  segments, up to 200 **and** 1.5 MiB of encoded JSON (measured, decision 13), through
+  `CompanionClient.backtrackUpload(credential:_:) async throws -> BacktrackUploadResponse`;
+  removes them from the buffer on 2xx (whatever the `discarded` and `rejectedClock` counts); keeps
+  them on network errors; on 413 or a schema 400, halves the batch, and drops a single segment that
+  still fails; drops them and stops on `backtrack_unavailable` or `backtrack_paused`; drops
+  everything and stops on credential invalid. When `rejectedClock` is more than zero, the status
+  line says the Mac's clock looks wrong. No send while Pause All, the Backtrack switch, lock or
+  sleep is in effect.
 - `struct BacktrackBuffer` (`Backtrack/BacktrackBuffer.swift`): AES-GCM (CryptoKit) with a 256-bit
   key in the Keychain (new item beside `storeVisionKey`, `KeychainStore.swift:66-107`), file in
   Application Support with `.completeUntilFirstUserAuthentication` protection, capped at 24 hours
@@ -372,7 +459,7 @@ pause stops ingest within one request; status counts only the actor's rows.
 - `BacktrackSegment` → upload mapping: `body` is `lines.joined("\n")` cut at 8192 UTF-8 bytes on a
   character boundary; `device_id` comes from the credential on the server, not the body.
 - Consent: `BacktrackRuntime.consentVersion = 2`. The version-2 sheet (mockup C copy: what is read,
-  that it's sent to Moss, kept up to 37 days for now, deletable in Moss). A stored version 1 shows
+  that it's sent to Moss, kept for 37 days plus up to an hour for now, deletable in Moss). A stored version 1 shows
   the sheet again before anything is sent.
 - `CompanionClient` gains `backtrackUpload`; `CompanionError` maps the two 409 codes.
 - Settings → Backtrack: status line gains "Last sent …" and "Paused from Moss"; an "Open in Moss…"
@@ -392,6 +479,9 @@ pause stops ingest within one request; status counts only the actor's rows.
 - Offline: segments survive in the buffer and send in order when the fake transport recovers; the
   24 h and 20 MB caps drop oldest first.
 - The buffer file contains no plaintext marker string (fails if written unencrypted).
+- A 1,000-segment backlog of maximum-size segments goes out as several requests, none over 1.5 MiB
+  encoded. A fake 413 halves the batch. A single segment that is always rejected is dropped, and
+  the rest arrive.
 - `backtrack_paused` stops sending and empties the buffer; `backtrack_unavailable` hides the tab in
   Release.
 - Release build: contains `BacktrackUploader`, not `BacktrackDebugRing` (an `nm` check replaces the
@@ -433,7 +523,9 @@ Live path on Ben's Mac against the dev instance with the switch on (spec §10 st
    checked with SQL, not only in the UI.
 3. A fake API key and a Luhn-valid test card number on screen are stored redacted.
 4. Tailscale off for ten minutes, then on: the buffered segments arrive, none lost.
-5. "Delete today" in Moss leaves no rows or `screen` chunks for today.
+5. "Delete today" in Moss leaves no rows or `screen` chunks for today, and stays that way after
+   the Mac reconnects from ten minutes offline.
+   5a. Revoke the Mac in Moss: the Backtrack page still shows its history and "Everything" deletes it.
 6. Moss's Recording switch off: the Mac shows "Paused from Moss" and sends nothing.
 7. CPU over a working day stays within Phase 1's gate (≤3% mean), uploads included.
 
@@ -448,6 +540,17 @@ After a week of Ben's real use on the dev instance with the switch on:
 
 If any fails, the line stops or returns to design before Phase 3 is planned.
 
-## 10. Review
+## 10. Review and rulings ledger
 
-Not yet reviewed. The rulings ledger starts here and carries every finding, valid or not.
+Round 1 (Codex, 2026-10-03, on `2373b14a6`). All six findings were checked against the code at
+`350669936`. All six are **valid**, and each is folded into this revision.
+
+| #   | Finding                                                                     | Ruling                                                                                                                                                                                                                                                     |
+| --- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | The upkeep definer sees nothing under forced RLS                            | **Valid.** `0257:11-28` adds `jarvis_migration_owner` maintenance policies for exactly this; `0257:11-13` says that owner doesn't bypass forced row security. → decision 2, bounded maintenance `SELECT` policies, a no-actor worker test with two owners. |
+| 1   | A retry or a late upload can undo a delete                                  | **Valid.** The unique key goes when the row is deleted. → decision 10: deletion markers checked by ingest under the owner lock; lost-response and late-second-Mac tests.                                                                                   |
+| 2   | No delete controls once the last Mac is revoked                             | **Valid.** Decision 4 keeps rows, so this is an ordinary state. → §4.8: the storage and delete rows show whenever history exists; live step 5a.                                                                                                            |
+| 3   | Disabling the module blocks delete but not ingest                           | **Valid.** Module routes 404 when disabled; ingest is a platform route. → decision 12, a required, non-disableable module (calendar's pattern, `packages/calendar/src/manifest.ts:87`); tests with storage off.                                            |
+| 4   | 200 × 8 KB exceeds Fastify's 1 MiB default                                  | **Valid**, and reproduced (1,669,014 bytes → `FST_ERR_CTP_BODY_TOO_LARGE`). → decision 13: route `bodyLimit` of 2 MiB, a 1.5 MiB encoded budget in the uploader, halving on 413/400, a poison segment dropped.                                             |
+| 5   | Client clocks can stretch retention; "37 days at most" overstates the bound | **Valid.** → decision 11: a time window at ingest, a purge by `started_at` or `created_at`, and the wording "37 days, plus up to one hourly run".                                                                                                          |
+| Q6  | The local embedder caps input at 512 tokens                                 | **Accepted as the answer to Q6.** → §4.5 splits each segment to fit.                                                                                                                                                                                       |
