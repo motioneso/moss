@@ -19,12 +19,10 @@ import {
 import type { EmbeddingProvider } from "@moss/memory";
 import {
   createEmbeddingProvider,
-  CpuIsolatedEmbeddingProvider,
   embedChunks,
   getEmbeddingProviderConfig,
   MemoryRepository,
   parseDocument,
-  withEmbeddingActivity,
   type NewChunkData
 } from "@moss/memory";
 import {
@@ -591,11 +589,8 @@ async function defaultEmbeddingProviderFactory(
     source: "notes",
     ...(scopedOwner ? { ownerUserId: scopedOwner } : {})
   };
-  // Plan 3.6b (#2890): record one model activity row per embedding job. The local path builds a
-  // CpuIsolatedEmbeddingProvider directly (the factory skips it), so wrap it here too.
-  return config.kind === "local"
-    ? withEmbeddingActivity(new CpuIsolatedEmbeddingProvider(config.modelId), undefined, activity)
-    : createEmbeddingProvider(config, process.env, undefined, activity);
+  // Plan 3.6b (#2890): record one model activity row per embedding job.
+  return createEmbeddingProvider(config, process.env, undefined, activity);
 }
 
 export async function runNotesAfterSyncHook(

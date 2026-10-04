@@ -58,51 +58,84 @@ type WorkerResponse = {
   readonly error?: string;
 };
 
+/**
+ * One worker thread per model, shared by every isolated provider in the process.
+ *
+ * #3027: onnxruntime-node runs inference synchronously on the calling thread, so an in-process
+ * embedding stalls the event loop for ~0.5 s per chunk. In prod those stalls starved the worker's
+ * pg-boss and Kysely pools into "timeout exceeded when trying to connect". Inference therefore
+ * runs here, off the main thread, for every local embedding.
+ *
+ * The thread starts on first use. A thread that exits or errors rejects its pending requests and
+ * drops out of the cache, so the next call starts a fresh one instead of waiting forever.
+ */
 class EmbeddingWorkerClient {
   private nextRequestId = 0;
   private readonly pending = new Map<
     number,
     { resolve: (embedding: number[]) => void; reject: (error: Error) => void }
   >();
-  private readonly worker: Worker;
+  private worker: Worker | undefined;
+  private closed = false;
 
   constructor(
+    private readonly key: string,
     private readonly modelId: string,
-    workerUrl: URL
-  ) {
-    this.worker = new Worker(workerUrl);
-    this.worker.unref();
-    this.worker.on("message", (response: WorkerResponse) => {
+    private readonly workerUrl: URL
+  ) {}
+
+  embed(prefix: "search_document" | "search_query", text: string): Promise<number[]> {
+    const worker = this.start();
+    const id = this.nextRequestId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      worker.postMessage({ id, modelId: this.modelId, prefix, text });
+    });
+  }
+
+  close(): void {
+    this.retire(new Error("Embedding worker closed"));
+  }
+
+  private start(): Worker {
+    if (this.closed) throw new Error("Embedding worker closed");
+    if (this.worker) return this.worker;
+    const worker = spawnEmbeddingWorker(this.workerUrl);
+    worker.unref();
+    worker.on("message", (response: WorkerResponse) => {
       const request = this.pending.get(response.id);
       if (!request) return;
       this.pending.delete(response.id);
       if (response.error) request.reject(new Error(response.error));
       else request.resolve(response.embedding ?? []);
     });
-    this.worker.on("error", (error) => this.rejectPending(error));
-    this.worker.on("exit", (code) => {
-      if (code !== 0) this.rejectPending(new Error(`Embedding worker exited with code ${code}`));
-    });
+    worker.on("error", (error) => this.retire(error));
+    worker.on("exit", (code) =>
+      this.retire(new Error(`Embedding worker exited with code ${code}`))
+    );
+    this.worker = worker;
+    return worker;
   }
 
-  embed(prefix: "search_document" | "search_query", text: string): Promise<number[]> {
-    const id = this.nextRequestId++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      this.worker.postMessage({ id, modelId: this.modelId, prefix, text });
-    });
-  }
-
-  close(): void {
-    this.rejectPending(new Error("Embedding worker closed"));
-    void this.worker.terminate();
-  }
-
-  private rejectPending(error: unknown): void {
+  private retire(error: unknown): void {
+    if (this.closed) return;
+    this.closed = true;
+    if (workerClients.get(this.key) === this) workerClients.delete(this.key);
     const failure = error instanceof Error ? error : new Error(String(error));
     for (const request of this.pending.values()) request.reject(failure);
     this.pending.clear();
+    void this.worker?.terminate();
   }
+}
+
+/**
+ * Source mode (tsx dev servers, vitest) hands us the .ts worker. tsx's loader hooks do not reach
+ * worker threads, so the thread registers tsx itself before importing the worker module.
+ */
+function spawnEmbeddingWorker(workerUrl: URL): Worker {
+  if (!workerUrl.pathname.endsWith(".ts")) return new Worker(workerUrl);
+  const bootstrap = `import("tsx/esm/api").then((tsx) => { tsx.register(); return import(${JSON.stringify(workerUrl.href)}); });`;
+  return new Worker(bootstrap, { eval: true });
 }
 
 const workerClients = new Map<string, EmbeddingWorkerClient>();
@@ -111,11 +144,18 @@ const DEFAULT_EMBEDDING_WORKER_URL = new URL(
   import.meta.url
 );
 
+let embeddingWorkerUrlOverride: URL | undefined;
+
+/** Test-only: point default-constructed isolated providers at a fixture worker. */
+export function setEmbeddingWorkerUrlForTests(url: URL | undefined): void {
+  embeddingWorkerUrlOverride = url;
+}
+
 function getEmbeddingWorkerClient(modelId: string, workerUrl: URL): EmbeddingWorkerClient {
   const key = `${workerUrl.href}:${modelId}`;
   const cached = workerClients.get(key);
   if (cached) return cached;
-  const client = new EmbeddingWorkerClient(modelId, workerUrl);
+  const client = new EmbeddingWorkerClient(key, modelId, workerUrl);
   workerClients.set(key, client);
   return client;
 }
@@ -183,27 +223,34 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-/** Embedding provider for queue handlers whose native inference must not share the main loop. */
+/** Local embedding provider whose native inference runs on a shared worker thread (#1590, #3027). */
 export class CpuIsolatedEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = 768;
   readonly modelName: string;
   readonly modelVersion = "1.5";
-  private readonly client: EmbeddingWorkerClient;
+  private readonly workerUrl: URL;
 
-  constructor(modelId: string = DEFAULT_MODEL_ID, workerUrl: URL = DEFAULT_EMBEDDING_WORKER_URL) {
+  constructor(
+    modelId: string = DEFAULT_MODEL_ID,
+    workerUrl: URL = embeddingWorkerUrlOverride ?? DEFAULT_EMBEDDING_WORKER_URL
+  ) {
     this.modelName = modelId;
-    this.client = getEmbeddingWorkerClient(modelId, workerUrl);
+    this.workerUrl = workerUrl;
   }
 
-  embedDocument(text: string): Promise<number[]> {
-    return this.client.embed("search_document", text);
+  async embedDocument(text: string): Promise<number[]> {
+    return this.client().embed("search_document", text);
   }
 
-  embedQuery(text: string): Promise<number[]> {
-    return this.client.embed("search_query", text);
+  async embedQuery(text: string): Promise<number[]> {
+    return this.client().embed("search_query", text);
   }
 
   close(): void {
-    this.client.close();
+    this.client().close();
+  }
+
+  private client(): EmbeddingWorkerClient {
+    return getEmbeddingWorkerClient(this.modelName, this.workerUrl);
   }
 }

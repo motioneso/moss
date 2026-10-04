@@ -2,7 +2,7 @@ import { resolveMossEnv } from "@moss/db";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
 import { StubEmbeddingProvider } from "./embedding-provider.js";
-import { LocalEmbeddingProvider } from "./local-embedding-provider.js";
+import { CpuIsolatedEmbeddingProvider } from "./local-embedding-provider.js";
 
 export type EmbeddingProviderKind = "local" | "stub";
 
@@ -156,7 +156,7 @@ function buildEmbeddingProvider(
 ): EmbeddingProvider {
   switch (config.kind) {
     case "local":
-      return new LocalEmbeddingProvider(config.modelId);
+      return new CpuIsolatedEmbeddingProvider(config.modelId);
     case "stub":
       if (!isStubEmbeddingAllowed(env)) {
         // #1313: loud, unmissable startup/first-use warning — an instance silently running the
@@ -169,7 +169,7 @@ function buildEmbeddingProvider(
             "VITEST=true / JARVIS_ALLOW_STUB_EMBEDDINGS=1 signal present). Falling back to " +
             '"local" instead — semantic search would otherwise silently return noise.'
         );
-        return new LocalEmbeddingProvider(config.modelId);
+        return new CpuIsolatedEmbeddingProvider(config.modelId);
       }
       return new StubEmbeddingProvider();
   }

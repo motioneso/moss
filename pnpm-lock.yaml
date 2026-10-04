@@ -818,6 +818,9 @@ importers:
       pg-boss:
         specifier: ^12.18.2
         version: 12.18.2
+      tsx:
+        specifier: ^4.21.0
+        version: 4.22.4
 
   packages/module-css-confine: {}
 
