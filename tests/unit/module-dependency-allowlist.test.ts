@@ -67,6 +67,7 @@ const PLATFORM_PACKAGES = new Set([
 
 /** Feature: a distinct, user-recognizable product capability. */
 const FEATURE_PACKAGES = new Set([
+  "@moss/backtrack", // Trail Marker day memory stored in Moss (#2638), its own settings screen
   "@moss/briefings",
   "@moss/calendar",
   "@moss/chat",
