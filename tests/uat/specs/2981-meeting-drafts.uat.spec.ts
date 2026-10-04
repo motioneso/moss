@@ -118,7 +118,9 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     fixtureId = null;
   } finally {
     if (fixtureId)
-      expect((await page.request.delete(`/api/meetings/records/${fixtureId}`)).status()).toBe(204);
+      expect
+        .soft((await page.request.delete(`/api/meetings/records/${fixtureId}`)).status())
+        .toBe(204);
     expect((await page.request.put("/api/meetings/preferences", { data: original })).status()).toBe(
       200
     );
@@ -226,6 +228,8 @@ test("Retained transcript review shows real source labels and immutable earlier 
     await expect(evidence).toHaveCount(0);
   } finally {
     if (fixtureId)
-      expect((await page.request.delete(`/api/meetings/records/${fixtureId}`)).status()).toBe(204);
+      expect
+        .soft((await page.request.delete(`/api/meetings/records/${fixtureId}`)).status())
+        .toBe(204);
   }
 });

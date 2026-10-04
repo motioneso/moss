@@ -57,7 +57,8 @@ export const chatModuleManifest = {
       "sql/0174_chat_surface.sql",
       "sql/0251_chat_classifier_shadow_records.sql",
       "sql/0252_chat_classifier_release_eligibility.sql",
-      "sql/0255_chat_classifier_shadow_retention.sql"
+      "sql/0255_chat_classifier_shadow_retention.sql",
+      "sql/0263_meeting_chat_cleanup.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
