@@ -57,7 +57,8 @@ export const chatModuleManifest = {
       "sql/0174_chat_surface.sql",
       "sql/0251_chat_classifier_shadow_records.sql",
       "sql/0252_chat_classifier_release_eligibility.sql",
-      "sql/0255_chat_classifier_shadow_retention.sql"
+      "sql/0255_chat_classifier_shadow_retention.sql",
+      "sql/0271_chat_classifier_shadow_reviews.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -66,7 +67,8 @@ export const chatModuleManifest = {
       "app.chat_user_memory_settings",
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
-      "app.chat_classifier_release_eligibility"
+      "app.chat_classifier_release_eligibility",
+      "app.chat_classifier_shadow_reviews"
     ]
   },
   permissions: [

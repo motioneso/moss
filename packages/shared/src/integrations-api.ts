@@ -221,10 +221,9 @@ export interface IntegrationClassifierToolDraftFailure {
 }
 
 /**
- * Reply to `POST /api/integrations/:id/classifier/prepare`. `status` is the whole-run outcome:
- * `unavailable` (no default chat model) and `unsupported_model` (the selected model cannot produce
- * a structured draft) make zero model calls and force the screen to show a setup failure — the
- * model is never silently switched. Nothing here is persisted.
+ * Reply to `POST /api/integrations/:id/classifier/prepare`, the owner's Try again (#2984 R2.4).
+ * The request queues a background run that saves each prepared tool itself, so the reply carries
+ * no drafts.
  */
 export interface PrepareIntegrationClassifierResponse {
   readonly disclosure: IntegrationClassifierPreparationDisclosure;

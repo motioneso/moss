@@ -158,7 +158,7 @@ export function createIntegrationsActiveModulesResolver(
         enabledTools: conn.enabledTools,
         mutedTools: conn.mutedTools
       };
-      // Plan 2b.5 (#2905): the reviewed classifier menu for this connection, computed once. A
+      // Plan 2b.5 (#2905): the classifier menu for this connection, computed once. A
       // tool's `classifier` declaration and output schema are added only when it is currently
       // eligible, so ordinary manifests and curation are untouched for every other tool.
       const classifierState: ClassifierConnectionState = {
@@ -169,7 +169,9 @@ export function createIntegrationsActiveModulesResolver(
         enabledGroups: conn.enabledGroups,
         enabledTools: conn.enabledTools,
         mutedTools: conn.mutedTools,
-        classifierPreparation: conn.classifierPreparation
+        classifierPreparation: conn.classifierPreparation,
+        classifierSort: conn.classifierSort,
+        classifierKeptOutTools: conn.classifierKeptOutTools
       };
       const classifierByTool = new Map(
         effectiveClassifierTools(classifierState).map((entry) => [entry.tool.name, entry] as const)

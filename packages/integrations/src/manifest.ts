@@ -8,6 +8,7 @@ export const integrationsModuleSqlMigrationDirectory = fileURLToPath(
 );
 
 export const INTEGRATION_CLASSIFIER_SORT_QUEUE = "integrations.classifier-sort";
+export const INTEGRATION_CLASSIFIER_PREPARE_QUEUE = "integrations.classifier-prepare";
 
 export const integrationsModuleManifest = {
   id: INTEGRATIONS_MODULE_ID,
@@ -32,7 +33,10 @@ export const integrationsModuleManifest = {
     { method: "POST", path: "/api/integrations/:id/classifier/sort" },
     { method: "PUT", path: "/api/integrations/:id/classifier/send-without-asking" }
   ],
-  jobs: [{ queueName: INTEGRATION_CLASSIFIER_SORT_QUEUE, metadataOnly: true }],
+  jobs: [
+    { queueName: INTEGRATION_CLASSIFIER_SORT_QUEUE, metadataOnly: true },
+    { queueName: INTEGRATION_CLASSIFIER_PREPARE_QUEUE, metadataOnly: true }
+  ],
   dataLifecycle: {
     exportSections: [],
     deletion: {
@@ -61,6 +65,11 @@ export const integrationsModuleManifest = {
       description: "Sorted a connection's tools"
     },
     {
+      // The Activity history line title for the background tool-preparation call.
+      id: "structured.integrations.tool-prepare",
+      description: "Prepared a connection's tool for quick requests"
+    },
+    {
       id: "integrations.connection_detail_grouped_tools",
       description:
         "A connection's tool list is grouped, with one on or off switch per tool. Moss never " +
@@ -70,23 +79,22 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_classifier_opt_in",
       description:
-        "A connection can be opted into the chat classifier, one tool at a time. Each opt-in " +
-        "needs an owner-reviewed risk; a tool with no confirmed label stays out, a changed tool " +
-        "definition marks the review stale, and each unusable tool names why."
+        "With a connection's classifier switch on, each tool on for chat answers quick requests " +
+        "once sorted and prepared. A kept-out tool stays out; a changed tool drops out until it " +
+        "is prepared again."
     },
     {
       id: "integrations.connection_classifier_review",
       description:
-        "Before Prepare sends tool definitions to a model, the classifier section shows what is " +
-        "sent and its cost. It reviews each tool's description, reply and risk; every unusable " +
-        "tool names why, and the connection switch never opts a tool in."
+        "The classifier section shows what is sent to a model and what it costs. Prepared " +
+        "tools are saved without a review step, and every unusable tool names why."
     },
     {
       id: "integrations.connection_classifier_preparation",
       description:
-        "Prepares a connection's tools for the chat classifier: the owner's own model drafts " +
-        "each tool's description and reply from its definition once. Preparing costs model " +
-        "usage; a model that cannot draft shows a setup failure.",
+        "Turning the classifier switch on prepares sorted tools in the background on the " +
+        "owner's model; a changed tool is prepared again. A tool whose text holds the " +
+        "credential is not sent. It costs model usage; a failed tool waits for Try again.",
       remediations: [
         {
           id: "integrations.connection_classifier_preparation.choose_chat_model",
@@ -115,14 +123,14 @@ export const integrationsModuleManifest = {
       id: "integrations.connection_classifier_candidates",
       description:
         "When the gate is active, a tool that needs a device or area name can pick from the " +
-        "connection's list, read through the reviewed read-only listing tool and cached briefly " +
-        "for its owner. A missing or expired list keeps the tool out.",
+        "connection's list, read through a prepared tool sorted as Looks things up and cached " +
+        "briefly for its owner. A missing or expired list keeps the tool out.",
       remediations: [
         {
           id: "integrations.connection_classifier_candidates.refresh",
           description:
-            "Review the connection's device-listing tool as Only reads and switch it on for the " +
-            "classifier.",
+            "Switch on the connection's device-listing tool and make sure it is not kept out of " +
+            "the classifier.",
           path: "/settings?section=integrations"
         }
       ],

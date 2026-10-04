@@ -98,7 +98,7 @@ import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
 import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
-import { ClassifierReleaseRepository } from "./classifier-release-repository.js";
+import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 
 export {
@@ -353,7 +353,7 @@ export function registerChatRoutes(
 
   /**
    * #2907 (plan 3.5) — the production ports factory for the gate: the actor's tool menu, the
-   * classifier calls, candidate hooks, the dry-run gateway call and the approved-release check.
+   * classifier calls, candidate hooks and the dry-run gateway call.
    * Shared by the handled-turn runner (4.1) and the shadow runner, so neither copies wiring.
    */
   const classifierGatePorts = wiring
@@ -367,29 +367,40 @@ export function registerChatRoutes(
           createCliStructuredAdapter: createCliStructuredAdapterFactory(
             dependencies.chatEngineFactory
           )
-        },
-        releaseRepository: new ClassifierReleaseRepository()
+        }
       })
+    : undefined;
+
+  /**
+   * #2984 R2.4 — the admin mode as the gate runs it: a stored `on` reads as `shadow` until the
+   * current classifier selection has a shadow review. Shared by both runners.
+   */
+  const readGateMode = wiring
+    ? (actorUserId: string) =>
+        dependencies.dataContext.withDataContext({ actorUserId }, async (scopedDb) =>
+          resolveEffectiveGateMode(
+            scopedDb,
+            await new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
+              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+            ),
+            { classifierDeps: { repository: wiring.aiRepository } }
+          )
+        )
     : undefined;
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
    * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
-   * read. `on` is unreachable until an approved release exists (no writer yet), so passing the real
-   * ports factory cannot run a tool today.
+   * read. `on` runs only while the current classifier selection has a shadow review.
    */
-  const classifierGate = wiring
-    ? buildClassifierGateRunner({
-        readMode: (actorUserId) =>
-          dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
-            new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
-              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
-            )
-          ),
-        tokens: wiring.tokens,
-        createPorts: classifierGatePorts
-      })
-    : undefined;
+  const classifierGate =
+    wiring && readGateMode
+      ? buildClassifierGateRunner({
+          readMode: readGateMode,
+          tokens: wiring.tokens,
+          createPorts: classifierGatePorts
+        })
+      : undefined;
 
   if (classifierGate) dependencies.adoptClassifierGate?.(classifierGate);
 
@@ -399,14 +410,9 @@ export function registerChatRoutes(
    * so no tool ever executes and no card is ever raised.
    */
   const classifierGateShadow =
-    wiring && classifierGatePorts
+    wiring && classifierGatePorts && readGateMode
       ? createClassifierGateShadowRunner({
-          readMode: (actorUserId) =>
-            dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
-              new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
-                CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
-              )
-            ),
+          readMode: readGateMode,
           createPorts: classifierGatePorts,
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,

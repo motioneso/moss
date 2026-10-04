@@ -138,7 +138,7 @@ export interface ClassifierGatePorts {
       mode: "execute" | "dry-run"
     ): Promise<GatewayGateOutcome>;
   };
-  /** Whether Ben has approved this tool for live use. Only consulted in `on` mode. */
+  /** Whether this tool is released for live use. Only consulted in `on` mode. */
   isReleased(tool: GateTool): boolean;
   now(): number;
 }

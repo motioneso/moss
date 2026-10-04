@@ -15,6 +15,7 @@ import {
   withSendWithoutAsking,
   withSortResult,
   type ClassifierPreparationEntry,
+  type ClassifierPreparationFailure,
   type ClassifierPreparationMap,
   type ClassifierSortMap,
   type ClassifierSortResult,
@@ -353,6 +354,55 @@ export class IntegrationsRepository {
     return updated ? { status: "saved", connection: updated } : { status: "not_found" };
   }
 
+  /**
+   * Record that automatic preparation failed for one tool (#2984 R2.4). The failure is tied to the
+   * definition it was attempted against, so the job leaves it for the owner's Try again. Only a
+   * discovered tool is recorded, and the stored failures stay within the entry cap.
+   */
+  async saveClassifierPreparationFailure(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string,
+    failure: ClassifierPreparationFailure
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row?.discoveredTools.some((tool) => tool.name === toolName)) return false;
+    const failures = row.classifierPreparation.failures ?? {};
+    if (
+      !Object.prototype.hasOwnProperty.call(failures, toolName) &&
+      Object.keys(failures).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
+    ) {
+      return false;
+    }
+
+    const failureJson = JSON.stringify({
+      reason: failure.reason,
+      definitionFingerprint: failure.definitionFingerprint,
+      failedAt: failure.failedAt
+    });
+    const result = await sql`
+      UPDATE app.integration_connections
+      SET classifier_preparation = jsonb_set(
+            CASE
+              WHEN ${WELL_FORMED_PREPARATION} THEN classifier_preparation
+              ELSE '{"version": 1, "entries": {}}'::jsonb
+            END,
+            ARRAY['failures'],
+            CASE
+              WHEN ${WELL_FORMED_PREPARATION}
+                AND jsonb_typeof(classifier_preparation->'failures') = 'object'
+              THEN classifier_preparation->'failures'
+              ELSE '{}'::jsonb
+            END || jsonb_build_object(${toolName}::text, ${failureJson}::jsonb),
+            true
+          ),
+          updated_at = now()
+      WHERE id = ${id}::uuid
+    `.execute(scopedDb.db);
+    return (result.numAffectedRows ?? 0n) > 0n;
+  }
+
   /** Remove one saved classifier preparation entry (opt-out / discard a stale review). */
   async removeClassifierToolReview(
     scopedDb: DataContextDb,
@@ -467,9 +517,9 @@ export class IntegrationsRepository {
   }
 
   /**
-   * Write a single reviewed entry with `jsonb_set`, touching only that tool's key. Two tabs saving
-   * different tools therefore merge instead of overwriting each other's map (the whole-map write
-   * this replaces could lose the other tab's review).
+   * Write a single entry with `jsonb_set`, touching only that tool's key, and clear the tool's
+   * stored failure. Two writers saving different tools therefore merge instead of overwriting each
+   * other's map.
    */
   private async writePreparationEntry(
     scopedDb: DataContextDb,
@@ -488,7 +538,7 @@ export class IntegrationsRepository {
             ARRAY['entries', ${toolName}],
             ${entryJson}::jsonb,
             true
-          ),
+          ) #- ARRAY['failures', ${toolName}],
           updated_at = now()
       WHERE id = ${id}::uuid
       RETURNING ${sql.raw(SELECT_COLUMNS)}

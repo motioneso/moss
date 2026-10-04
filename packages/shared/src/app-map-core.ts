@@ -271,10 +271,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "The Services group ends with a Classifier row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider, plus a Chat gate choice of Off, " +
       "Shadow or On. The Chat gate is an instance-wide setting held through the admin " +
-      "configuration boundary; On cannot be chosen until an approved tool release exists, so it " +
-      "stays unavailable in the row meanwhile. The chat path that would run an approved tool " +
-      "and answer from its result, without asking the main model, is built but cannot run yet; " +
-      "every message still goes to the main model. Once a model is chosen, a line " +
+      "configuration boundary. On needs a shadow review recorded for the current classifier, " +
+      "and changing the classifier drops On back to Shadow until the new one is reviewed. No " +
+      "review can be recorded yet, so On stays unavailable in the row meanwhile and every " +
+      "message still goes to the main model. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +
       "sender, dates and text go to that model first and to the main model if it does not " +
       "answer. For a System One model the line instead says it answers the News, Sports and " +

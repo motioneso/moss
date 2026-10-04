@@ -218,21 +218,6 @@ export const CLASSIFIER_GATE_MODE_DEFAULT: ClassifierGateMode = "off";
 export const CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY = "chat.classifier_gate_mode";
 
 /**
- * One approved tool release record. The gate may only be turned `on` when at least one of these
- * exists; the review step (plan task 4.2) is the writer. Empty by default. `classifierConfigVersion`
- * records the reviewed classifier/configuration version. Task 1.2 counts rows only; the match that
- * stops an old approval surviving a classifier change is enforced by task 4.2.
- */
-export interface ClassifierToolReleaseRecord {
-  readonly moduleId: string;
-  readonly toolName: string;
-  readonly classifierConfigVersion: string;
-  /** ISO-8601 timestamp of approval. */
-  readonly approvedAt: string;
-  readonly approvedByUserId: string;
-}
-
-/**
  * Task 4.1 (#2901) — where a completed assistant turn came from. A turn the classifier gate handled
  * carries this instead of a model execution stamp: the reply was rendered by code from the validated
  * tool result (or a fixed failure string), so no provider/model/usage may be recorded for it. Old

@@ -13,10 +13,12 @@ import {
   IntegrationsRepository,
   registerIntegrationsRoutes,
   toolDefinitionFingerprint,
+  toolRiskInputs,
+  toolSortFingerprint,
   type ConnectionRow,
   type ResolverCache
 } from "@moss/integrations";
-import type { IntegrationToolDescriptor } from "@moss/shared";
+import type { IntegrationClassifierRisk, IntegrationToolDescriptor } from "@moss/shared";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const repository = new IntegrationsRepository();
@@ -87,6 +89,30 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     );
   }
 
+  /** Store a current sort for each tool, so only the rule under test decides eligibility. */
+  function sortAs(
+    id: string,
+    risk: IntegrationClassifierRisk,
+    tools: readonly IntegrationToolDescriptor[] = [TURN_ON]
+  ) {
+    return dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.saveClassifierToolSorts(
+        scopedDb,
+        id,
+        tools.map((tool) => ({
+          toolName: tool.name,
+          result: {
+            status: "current" as const,
+            risk,
+            readableName: "Turn on",
+            sortFingerprint: toolSortFingerprint(toolRiskInputs(tool)),
+            sortedAt: new Date().toISOString()
+          }
+        }))
+      )
+    );
+  }
+
   it("defaults off and keeps a connection owner-only, administrators included", async () => {
     const conn = await createConnection(ids.userA, "Owner A Default");
     expect(conn.classifierEnabled).toBe(false);
@@ -133,11 +159,14 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     );
     expect(enabled?.classifierEnabled).toBe(true);
     if (!enabled) return;
+    // Prepared but never sorted: still asks.
+    expect(effectiveClassifierTools(enabled)).toEqual([]);
 
-    const eligible = effectiveClassifierTools(enabled);
+    await sortAs(conn.id, "write");
+    const eligible = effectiveClassifierTools((await load(ids.userA, conn.id))!);
     expect(eligible.map((tool) => tool.tool.name)).toEqual(["turn_on"]);
-    expect(eligible[0]?.risk).toBe("read");
-    expect(enabled.classifierPreparation.entries["turn_on"]?.optIn).toBe(true);
+    // The risk comes from the sort, not the saved review's old reviewed risk.
+    expect(eligible[0]?.risk).toBe("write");
   });
 
   it("refuses a save whose fingerprint no longer matches the discovered tool", async () => {
@@ -206,6 +235,8 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
       repository.updateConnection(scopedDb, conn.id, { classifierEnabled: true })
     );
+    await sortAs(conn.id, "write");
+    expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
 
     const drifted = { ...TURN_ON, description: "Turn a light on, now with a warning" };
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
@@ -232,6 +263,8 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
       repository.updateConnection(scopedDb, conn.id, { classifierEnabled: true })
     );
+    await sortAs(conn.id, "write");
+    expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
       repository.saveDiscovery(scopedDb, conn.id, null, "fetch failed")
     );
@@ -256,6 +289,7 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
       repository.updateConnection(scopedDb, conn.id, { classifierEnabled: true })
     );
+    await sortAs(conn.id, "write");
     expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
 
     await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
@@ -267,6 +301,28 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
       repository.updateConnection(scopedDb, conn.id, { mutedTools: [] })
     );
     expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
+  });
+
+  it("drops eligibility while a tool is kept out and restores it when let back in", async () => {
+    const conn = await createConnection(ids.userA, "Owner A Kept Out");
+    await saveReviewed(conn.id, TURN_ON);
+    await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.updateConnection(scopedDb, conn.id, { classifierEnabled: true })
+    );
+    await sortAs(conn.id, "write");
+    expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
+
+    const keptOut = await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.setClassifierToolKeptOut(scopedDb, conn.id, "turn_on", true)
+    );
+    expect(keptOut?.classifierKeptOutTools).toEqual(["turn_on"]);
+    expect(effectiveClassifierTools(keptOut!)).toEqual([]);
+
+    const letIn = await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
+      repository.setClassifierToolKeptOut(scopedDb, conn.id, "turn_on", false)
+    );
+    expect(letIn?.classifierKeptOutTools).toEqual([]);
+    expect(effectiveClassifierTools(letIn!)).toHaveLength(1);
   });
 
   it("keeps both reviews when two saves start at the same moment", async () => {
@@ -492,6 +548,48 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
         expect(removed.statusCode).toBe(200);
         expect(removed.json().classifierPreparation).toEqual([]);
         expect(cache.get(ids.userA)).toBeUndefined();
+        // Removing a review keeps the tool out, so automatic preparation cannot bring it back.
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual(["turn_on"]);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it("keeps an opted-out tool out and lets an opted-in save bring it back", async () => {
+      const app = buildApp(ids.userA, createResolverCache());
+      try {
+        const conn = await createConnection(ids.userA, "Owner A Route Kept Out");
+        const optedIn = await app.inject({
+          method: "PUT",
+          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
+          payload: reviewFor(TURN_ON)
+        });
+        expect(optedIn.statusCode).toBe(200);
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
+
+        const optedOut = await app.inject({
+          method: "PUT",
+          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
+          payload: reviewFor(TURN_ON, { optIn: false })
+        });
+        expect(optedOut.statusCode).toBe(200);
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual(["turn_on"]);
+
+        const backIn = await app.inject({
+          method: "PUT",
+          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
+          payload: reviewFor(TURN_ON)
+        });
+        expect(backIn.statusCode).toBe(200);
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
+
+        // A name that is not discovered never joins the kept-out list.
+        const unknown = await app.inject({
+          method: "DELETE",
+          url: `/api/integrations/${conn.id}/classifier/tools/not_discovered`
+        });
+        expect(unknown.statusCode).toBe(200);
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
       } finally {
         await app.close();
       }

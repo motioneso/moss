@@ -7,6 +7,8 @@ import {
 } from "@moss/db";
 import type { CredentialPlacement } from "@moss/shared";
 
+import type { IntegrationsRepository } from "./repository.js";
+
 export function createIntegrationsCipher(env: NodeJS.ProcessEnv = process.env): JsonSecretCipher {
   return new JsonSecretCipher(
     resolveKeyring(
@@ -52,6 +54,25 @@ export async function resolveIntegrationsCipher(
     if (keyring) return createIntegrationsCipherFromKeyring(keyring);
   }
   return null;
+}
+
+/**
+ * A connection's decrypted credential for the classifier jobs' credential check, held in memory
+ * only. `null` when the connection has none; `undefined` when it has one but no key is set up to
+ * read it.
+ */
+export async function loadClassifierCheckCredential(
+  scopedDb: DataContextDb,
+  repository: IntegrationsRepository,
+  connectionId: string,
+  sources: IntegrationsCipherSources
+): Promise<string | null | undefined> {
+  const envelope = await repository.loadCredentialEnvelope(scopedDb, connectionId);
+  if (!envelope) return null;
+  const cipher = await resolveIntegrationsCipher(scopedDb, sources);
+  if (!cipher) return undefined;
+  const secret = cipher.decryptJson(cipher.parseEnvelope(envelope)).secret;
+  return typeof secret === "string" ? secret : null;
 }
 
 export function applyCredential(

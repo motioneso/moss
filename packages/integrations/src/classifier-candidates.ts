@@ -139,12 +139,12 @@ export function createCandidateCache(deps: CandidateCacheDeps = {}): CandidateCa
 export const candidateCache: CandidateCache = createCandidateCache();
 
 /**
- * The reviewed read-only listing tool a candidateSource names, or null.
+ * The read-only listing tool a candidateSource names, or null.
  *
  * This reuses `effectiveClassifierTools`, so the same fail-closed rules that keep a tool out of the
  * menu keep it out of the candidate path: connection enabled, classifier switch on, no discovery
- * error, still discovered, ordinary-chat enabled, a saved review with `optIn:true`,
- * `reviewedRisk:"read"` and a current fingerprint. A server `readOnly` hint alone never qualifies.
+ * error, still discovered, ordinary-chat enabled, not kept out, a current sort of `read` and a
+ * current preparation. A server `readOnly` hint alone never qualifies.
  */
 export function resolveCandidateListingTool(
   state: ClassifierConnectionState,

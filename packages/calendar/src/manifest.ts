@@ -806,15 +806,14 @@ export const calendarModuleManifest = {
     {
       id: "calendar.list_visible_events_classifier",
       description:
-        "Today's or tomorrow's calendar can be answered by the classifier gate instead of the main " +
-        "model, with a bounded event list. It declines when the list is cut short or any account used " +
-        "cached or unavailable data. Not released for live use.",
+        "While the classifier gate is On, it can answer today's or tomorrow's calendar instead of the " +
+        "main model, with a bounded event list. It declines when the list is cut short or any account " +
+        "used cached or unavailable data.",
       errors: [
         {
           code: "classifier_gate_not_released",
           class: "prerequisite",
-          description:
-            "The classifier gate is not switched on for any tool yet, so it never answers a message.",
+          description: "The classifier gate is not On, so it never answers a message.",
           remediationRef: "calendar.classifier_gate_unavailable"
         }
       ],
@@ -822,7 +821,7 @@ export const calendarModuleManifest = {
         {
           id: "calendar.classifier_gate_unavailable",
           description:
-            "Nothing to do yet; the main model answers messages as usual until the gate is released.",
+            "Nothing to do; the main model answers messages as usual until an admin turns the gate On.",
           path: "/settings?section=aiproviders"
         }
       ]

@@ -8,6 +8,7 @@ import {
   createIntegrationsCipher,
   createResolverCache,
   emptyPreparationMap,
+  emptySortMap,
   extractCandidatesFromListing,
   INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA,
   loadCachedCandidates,
@@ -15,16 +16,21 @@ import {
   resolveCandidateListingTool,
   refreshConnectionCandidates,
   toolDefinitionFingerprint,
+  toolRiskInputs,
+  toolSortFingerprint,
+  withSortResult,
   type CandidateCache,
   type CandidateListingPort,
   type ClassifierConnectionState,
   type ClassifierPreparationEntry,
-  type ClassifierPreparationMap
+  type ClassifierPreparationMap,
+  type ClassifierSortMap,
+  type RiskInputSource
 } from "@moss/integrations";
 import type { ConnectionRow } from "@moss/integrations";
 import type { DiscoveredTool } from "@moss/integrations";
 import { checkClassifierEligibility } from "@moss/module-sdk";
-import type { IntegrationToolDescriptor } from "@moss/shared";
+import type { IntegrationClassifierRisk, IntegrationToolDescriptor } from "@moss/shared";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -64,16 +70,37 @@ function mapWith(toolName: string, value: ClassifierPreparationEntry): Classifie
   return { version: 1, entries: { [toolName]: value } };
 }
 
+/** A current sort for each tool, made against its present risk inputs. */
+function sortedAs(
+  tools: readonly (readonly [RiskInputSource, IntegrationClassifierRisk])[]
+): ClassifierSortMap {
+  let map = emptySortMap();
+  for (const [t, risk] of tools) {
+    map = withSortResult(map, t.name, {
+      status: "current",
+      risk,
+      readableName: "List lights",
+      sortFingerprint: toolSortFingerprint(toolRiskInputs(t)),
+      sortedAt: "2026-10-03T00:00:00.000Z"
+    })!;
+  }
+  return map;
+}
+
+/** Every discovered tool defaults to a current sort as read. */
 function state(overrides: Partial<ClassifierConnectionState> = {}): ClassifierConnectionState {
+  const discoveredTools = overrides.discoveredTools ?? [listingTool()];
   return {
     enabled: true,
     classifierEnabled: true,
     lastError: null,
-    discoveredTools: [listingTool()],
+    discoveredTools,
     enabledGroups: [],
     enabledTools: [],
     mutedTools: [],
     classifierPreparation: emptyPreparationMap(),
+    classifierSort: sortedAs(discoveredTools.map((t) => [t, "read"] as const)),
+    classifierKeptOutTools: [],
     ...overrides
   };
 }
@@ -91,7 +118,7 @@ const ok = (result: unknown) => ({ ok: true as const, result });
 // ---------------------------------------------------------------------------
 
 describe("candidate source resolution", () => {
-  it("resolves only a reviewed read-only opted-in listing tool", () => {
+  it("resolves only a prepared listing tool sorted as read and not kept out", () => {
     const tool = listingTool();
     const fingerprint = toolDefinitionFingerprint(tool);
     const reviewed = mapWith("list_lights", entry(fingerprint));
@@ -104,18 +131,27 @@ describe("candidate source resolution", () => {
     ).toBe("list_lights");
 
     const cases: ClassifierConnectionState[] = [
-      state({ discoveredTools: [tool] }), // no review at all
+      state({ discoveredTools: [tool] }), // no preparation at all
       state({
         discoveredTools: [tool],
-        classifierPreparation: mapWith("list_lights", entry(fingerprint, { optIn: false }))
+        classifierPreparation: reviewed,
+        classifierKeptOutTools: ["list_lights"]
       }),
       state({
         discoveredTools: [tool],
-        classifierPreparation: mapWith("list_lights", entry(fingerprint, { reviewedRisk: "write" }))
+        classifierPreparation: reviewed,
+        classifierSort: sortedAs([[tool, "write"]])
       }),
       state({
         discoveredTools: [tool],
-        classifierPreparation: mapWith("list_lights", entry(fingerprint, { reviewedRisk: null }))
+        classifierPreparation: reviewed,
+        classifierSort: emptySortMap()
+      }),
+      state({
+        discoveredTools: [tool],
+        classifierPreparation: reviewed,
+        // Sorted against an older definition: stale, so it asks.
+        classifierSort: sortedAs([[listingTool({ description: "Old listing" }), "read"]])
       }),
       state({
         discoveredTools: [tool],
@@ -135,23 +171,36 @@ describe("candidate source resolution", () => {
     expect(resolveCandidateListingTool(state(), "")).toBeNull();
   });
 
+  it("ignores the old per-tool opt-in and reviewed risk", () => {
+    const tool = listingTool();
+    const fingerprint = toolDefinitionFingerprint(tool);
+    const oldFields = mapWith(
+      "list_lights",
+      entry(fingerprint, { optIn: false, reviewedRisk: "write" })
+    );
+    expect(
+      resolveCandidateListingTool(
+        state({ discoveredTools: [tool], classifierPreparation: oldFields }),
+        "list_lights"
+      )?.risk
+    ).toBe("read");
+  });
+
   it("does not treat a server read-only hint as authority", () => {
     const tool = listingTool({ readOnly: true });
     const fingerprint = toolDefinitionFingerprint(tool);
-    // The server says read-only, the owner reviewed it as a write: not a candidate source.
+    // The server says read-only, the sort says write: not a candidate source.
     expect(
       resolveCandidateListingTool(
         state({
           discoveredTools: [tool],
-          classifierPreparation: mapWith(
-            "list_lights",
-            entry(fingerprint, { reviewedRisk: "write" })
-          )
+          classifierPreparation: mapWith("list_lights", entry(fingerprint)),
+          classifierSort: sortedAs([[tool, "write"]])
         }),
         "list_lights"
       )
     ).toBeNull();
-    // A discovered read-only tool with no review is not a candidate source either.
+    // A discovered read-only tool with no preparation is not a candidate source either.
     expect(
       resolveCandidateListingTool(state({ discoveredTools: [tool] }), "list_lights")
     ).toBeNull();
@@ -401,7 +450,7 @@ describe("explicit candidate refresh", () => {
     ).toEqual([{ id: "a", label: "A" }]);
   });
 
-  it("makes no call when no reviewed read-only listing tool resolves", async () => {
+  it("makes no call when no prepared read listing tool resolves", async () => {
     const cache = createCandidateCache();
     let calls = 0;
     const result = await refreshConnectionCandidates({
@@ -631,13 +680,16 @@ describe("runtime classifier menu on synthetic tools", () => {
     const switchFingerprint = toolDefinitionFingerprint(switchTool as IntegrationToolDescriptor);
     return connection({
       discoveredTools: [listing, switchTool],
+      classifierSort: sortedAs([
+        [listing, "read"],
+        [switchTool, "write"]
+      ]),
       classifierPreparation: {
         version: 1,
         entries: {
           list_lights: entry(listingFingerprint),
           turn_on: entry(switchFingerprint, {
             description: "Turn one light on.",
-            reviewedRisk: "write",
             arguments: { target: { kind: "candidates", candidateSource: "list_lights" } },
             replyTemplate
           })
@@ -671,7 +723,7 @@ describe("runtime classifier menu on synthetic tools", () => {
     expect(turnOn.outputSchema).toEqual(INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA);
     expect(checkClassifierEligibility(turnOn).eligible).toBe(true);
 
-    // The device-listing tool itself is read-reviewed, so it stays off the menu and only serves
+    // The device-listing tool itself is sorted as read, so it stays off the menu and only serves
     // as a candidate source.
     const listingTool = (synthetic.assistantTools ?? []).find(
       (tool) => tool.name === "home.list_lights"
@@ -680,9 +732,9 @@ describe("runtime classifier menu on synthetic tools", () => {
     expect(listingTool.outputSchema).toBeUndefined();
   });
 
-  it("keeps a read-reviewed tool off the menu even though it stays a candidate source", async () => {
+  it("keeps a read-sorted tool off the menu even though it stays a candidate source", async () => {
     // The plan forbids handling an informational read on the fixed "Read succeeded." reply. The
-    // listing tool is reviewed read and opted in, so it is a valid candidate source, but it must
+    // listing tool is sorted as read and not kept out, so it is a valid candidate source, but it must
     // never gain a classifier declaration. This assertion fails if a read tool returns to the menu.
     const modules = await build([reviewedConnection()], createCandidateCache())("actor-1");
     const synthetic = modules.find((module) => module.id === "integration-home")!;
@@ -692,15 +744,19 @@ describe("runtime classifier menu on synthetic tools", () => {
     expect(listingTool.classifier).toBeUndefined();
     expect(checkClassifierEligibility(listingTool).eligible).toBe(false);
 
-    // A tool reviewed as read loses the declaration even with arguments and a template.
+    // A tool sorted as read loses the declaration even with arguments and a template.
     const switchFingerprint = toolDefinitionFingerprint(switchTool as IntegrationToolDescriptor);
     const readSwitch = connection({
       discoveredTools: [listing, switchTool],
+      classifierSort: sortedAs([
+        [listing, "read"],
+        [switchTool, "read"]
+      ]),
       classifierPreparation: {
         version: 1,
         entries: {
           list_lights: entry(toolDefinitionFingerprint(listing as IntegrationToolDescriptor)),
-          turn_on: entry(switchFingerprint, { reviewedRisk: "read" })
+          turn_on: entry(switchFingerprint)
         }
       }
     });
@@ -746,18 +802,21 @@ describe("runtime classifier menu on synthetic tools", () => {
     expect(eligibility.eligible).toBe(false);
   });
 
-  it("does not attach a candidates hook when the listing tool is not reviewed as read", async () => {
+  it("does not attach a candidates hook when the listing tool is not sorted as read", async () => {
     const listingFingerprint = toolDefinitionFingerprint(listing as IntegrationToolDescriptor);
     const switchFingerprint = toolDefinitionFingerprint(switchTool as IntegrationToolDescriptor);
     const writeListing = connection({
       discoveredTools: [listing, switchTool],
+      classifierSort: sortedAs([
+        [listing, "write"],
+        [switchTool, "write"]
+      ]),
       classifierPreparation: {
         version: 1,
         entries: {
-          list_lights: entry(listingFingerprint, { reviewedRisk: "write" }),
+          list_lights: entry(listingFingerprint),
           turn_on: entry(switchFingerprint, {
             description: "Turn one light on.",
-            reviewedRisk: "write",
             arguments: { target: { kind: "candidates", candidateSource: "list_lights" } },
             replyTemplate: "Turned {summary}"
           })
@@ -782,6 +841,11 @@ describe("runtime classifier menu on synthetic tools", () => {
     });
     const multiSource = connection({
       discoveredTools: [lights, locks, act],
+      classifierSort: sortedAs([
+        [lights, "read"],
+        [locks, "read"],
+        [act, "write"]
+      ]),
       classifierPreparation: {
         version: 1,
         entries: {
@@ -789,7 +853,6 @@ describe("runtime classifier menu on synthetic tools", () => {
           list_locks: entry(toolDefinitionFingerprint(locks as IntegrationToolDescriptor)),
           act: entry(toolDefinitionFingerprint(act as IntegrationToolDescriptor), {
             description: "Set a light and a lock.",
-            reviewedRisk: "write",
             arguments: {
               light: { kind: "candidates", candidateSource: "list_lights" },
               lock: { kind: "candidates", candidateSource: "list_locks" }

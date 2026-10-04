@@ -25,10 +25,7 @@ import {
 import { resolveIntegrationsCipher } from "./credentials.js";
 import { candidateCache } from "./classifier-candidates.js";
 import { enqueueClassifierSort, type ClassifierSortJobOp } from "./classifier-sort-jobs.js";
-import {
-  prepareClassifierToolDrafts,
-  type ClassifierPreparationPort
-} from "./classifier-preparation.js";
+import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
 import { parseReviewedEntry } from "./classifier-settings.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
@@ -57,14 +54,8 @@ export interface IntegrationsRouteDependencies {
   /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
   readonly resolverCache?: ResolverCache;
   /**
-   * Plan 2b.3 (#2894): the composition-layer port that drafts tool preparation on the owner's
-   * default chat model. Absent (older wiring/tests) means preparation reports unavailable and
-   * calls no model.
-   */
-  readonly preparationPort?: ClassifierPreparationPort;
-  /**
-   * #2984 R2.2: queues the background tool sort. Absent (older wiring/tests) means no sort is
-   * queued and the Try again request answers 503.
+   * #2984 R2.2, R2.4: queues the background tool sort and preparation. Absent (older wiring/tests)
+   * means nothing is queued and the Try again requests answer 503.
    */
   readonly boss?: PgBoss;
 }
@@ -223,6 +214,7 @@ export function registerIntegrationsRoutes(
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
       candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
+      // Turning the switch on queues a sort, and every sort is followed by preparation.
       if (value.classifierEnabled === true) {
         await queueSort(request, accessContext.actorUserId, updated.id);
       }
@@ -320,13 +312,26 @@ export function registerIntegrationsRoutes(
         if (!parsed.ok) {
           return reply.code(400).send({ error: parsed.problems.join("; ") });
         }
-        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.saveClassifierToolReview(
-            scopedDb,
-            request.params.id,
-            request.params.toolName,
-            parsed.value
-          )
+        // #2984 R2.4: eligibility no longer reads opt-in, so the screen's opt-in choice is kept
+        // as the kept-out list instead. An opted-out tool must not return by automatic preparation.
+        const result = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const saved = await repository.saveClassifierToolReview(
+              scopedDb,
+              request.params.id,
+              request.params.toolName,
+              parsed.value
+            );
+            if (saved.status !== "saved") return saved;
+            const updated = await repository.setClassifierToolKeptOut(
+              scopedDb,
+              request.params.id,
+              request.params.toolName,
+              !parsed.value.optIn
+            );
+            return updated ? { ...saved, connection: updated } : saved;
+          }
         );
         if (result.status === "not_found") {
           return reply.code(404).send({ error: "Integration not found" });
@@ -351,18 +356,36 @@ export function registerIntegrationsRoutes(
     }
   );
 
-  /** Remove one saved classifier preparation entry (opt-out). */
+  /**
+   * Remove one saved classifier preparation entry (opt-out). The tool is also kept out, so
+   * automatic preparation does not bring it back.
+   */
   server.delete<{ Params: ClassifierToolParams }>(
     "/api/integrations/:id/classifier/tools/:toolName",
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const updated = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.removeClassifierToolReview(
-            scopedDb,
-            request.params.id,
-            request.params.toolName
-          )
+        const updated = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const removed = await repository.removeClassifierToolReview(
+              scopedDb,
+              request.params.id,
+              request.params.toolName
+            );
+            if (!removed) return null;
+            // Only a discovered name is kept out, so the list cannot grow with arbitrary names.
+            const discovered = removed.discoveredTools.some(
+              (tool) => tool.name === request.params.toolName
+            );
+            if (!discovered) return removed;
+            return repository.setClassifierToolKeptOut(
+              scopedDb,
+              request.params.id,
+              request.params.toolName,
+              true
+            );
+          }
         );
         if (!updated) return reply.code(404).send({ error: "Integration not found" });
         cache.drop(accessContext.actorUserId);
@@ -433,11 +456,9 @@ export function registerIntegrationsRoutes(
   );
 
   /**
-   * Plan 2b.3 (#2894): draft the owner-reviewed classifier preparation for this connection on the
-   * owner's current default chat model. Transient — nothing is stored here; the owner saves each
-   * reviewed draft through PUT .../classifier/tools/:toolName. When there is no default chat model,
-   * or it cannot produce the structured draft, this reports a setup failure and calls no model;
-   * there is no fallback to the classifier or another model.
+   * #2984 R2.4: the owner's Try again for preparation. Queues a background run that also re-sends
+   * tools whose last preparation failed; nothing else resends them. The reply keeps the earlier
+   * draft shape with nothing in it, because the job saves each prepared tool itself.
    */
   server.post<{ Params: IdParams }>(
     "/api/integrations/:id/classifier/prepare",
@@ -448,50 +469,28 @@ export function registerIntegrationsRoutes(
         if ("force" in body && typeof body.force !== "boolean") {
           throw new HttpError(400, "force must be a boolean");
         }
-        const force = body.force === true;
-
-        const controller = new AbortController();
-        const abort = () => controller.abort();
-        request.raw.once("aborted", abort);
-        try {
-          return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-            const row = await repository.getConnection(scopedDb, request.params.id);
-            if (!row) throw new HttpError(404, "Integration not found");
-            if (!row.classifierEnabled) {
-              throw new HttpError(
-                409,
-                "Turn on the connection classifier before preparing its tools."
-              );
-            }
-            if (!dependencies.preparationPort) {
-              return {
-                disclosure: INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
-                status: "unavailable",
-                drafts: [],
-                reused: [],
-                failed: [],
-                remaining: 0
-              } satisfies PrepareIntegrationClassifierResponse;
-            }
-            return prepareClassifierToolDrafts(
-              scopedDb,
-              {
-                discoveredTools: row.discoveredTools,
-                preparation: row.classifierPreparation,
-                curation: {
-                  enabledGroups: row.enabledGroups,
-                  enabledTools: row.enabledTools,
-                  mutedTools: row.mutedTools
-                },
-                force,
-                signal: controller.signal
-              },
-              dependencies.preparationPort
-            );
-          });
-        } finally {
-          request.raw.off("aborted", abort);
+        if (!dependencies.boss) throw new HttpError(503, "Tool preparation is not available.");
+        const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.getConnection(scopedDb, request.params.id)
+        );
+        if (!row) throw new HttpError(404, "Integration not found");
+        if (!row.classifierEnabled) {
+          throw new HttpError(409, "Turn on the connection classifier before preparing its tools.");
         }
+        await enqueueClassifierPreparation(
+          dependencies.boss,
+          accessContext.actorUserId,
+          row.id,
+          "retry"
+        );
+        return reply.code(202).send({
+          disclosure: INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
+          status: "ok",
+          drafts: [],
+          reused: [],
+          failed: [],
+          remaining: 0
+        } satisfies PrepareIntegrationClassifierResponse);
       } catch (error) {
         return handleRouteError(error, reply);
       }
