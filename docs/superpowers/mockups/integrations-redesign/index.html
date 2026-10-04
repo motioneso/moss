@@ -60,7 +60,7 @@
       <span class="seg" data-target="m2" data-key="cstate"><span data-v="new">Just added</span><span data-v="off">Off</span><span data-v="confirm">Turning on</span><span data-v="preparing">Preparing</span><span class="on" data-v="ready">Ready</span><span data-v="reprep">A tool changed</span><span data-v="failed">Failed</span><span data-v="down">Disconnected</span></span></div>
     <div class="mock__note">
       <p><b>What changed.</b> The connection opens as its own full-width screen, with no settings list and a "Back to connections" link at the top. The tools fill the main column; the connection's status and the classifier switch sit in a rail on the right, so they stay in view while you scroll. Tools are grouped by what they do, each group shows six and folds the rest, and a search and an on/off filter sit on top. Group switches are gone; "Turn all off" says exactly what it does.</p>
-      <p><b>Sorting, with the classifier off.</b> When a connection is added, Moss runs one cheap pass that sorts its tools by what they do, whether or not the classifier is on. "Just added" shows the list while that runs, A to Z. The rail's Connection block then says when the tools were sorted.</p>
+      <p><b>Sorting, with the classifier off.</b> When a connection is added, Moss runs one cheap pass that sorts its tools by what they do, whether or not the classifier is on. "Just added" shows the list while that runs, A to Z. The rail's Connection block says when the tools were sorted, and that the default chat model read each tool's name and description.</p>
       <p><b>Why.</b> Today this page is about sixteen screens tall, lists all 75 tools twice, and the only action in the classifier section sits 7,000 pixels down. The group switches also show the wrong state. Use the buttons above to see each classifier state in place.</p>
     </div>
     <div class="frames">
@@ -110,12 +110,12 @@
   <section class="mock" id="qs">
     <div class="mock__head"><h2 class="mock__title">Questions for you</h2></div>
     <ol class="qs" style="margin-top:18px">
-      <li><b>One switch per tool, or two?</b> <i>Decided.</i> One switch per tool, plus "Keep out of the classifier" in the tool's menu for the rare case where chat should use a tool but quick answers should not. The mockups already show it.</li>
+      <li><b>One switch per tool, or two?</b> <i>Decided.</i> One switch per tool, plus "Keep out of the classifier" in the tool's menu for the rare case where chat should use a tool but the classifier should not. The mockups already show it.</li>
       <li><b>Grouping before the classifier runs.</b> <i>Answered.</i> Moss runs a cheap sorting pass that groups tools by what they do, even with the classifier off. The mockups now show it.</li>
       <li><b>Full-width screen for one connection.</b> <i>Decided.</i> A connection's screen hides the settings list so the tools get the full width, with "Back to connections" at the top.</li>
       <li><b>Model-written names.</b> <i>Decided.</i> Both. The free rule gives "Add task work" at once, and the sorting pass replaces it with "Add a work task" in the call it already makes.</li>
-      <li><b>The word "classifier".</b> The switch reads "Let the classifier use this connection". Would a plainer name read better, for example "Quick answers"?</li>
-      <li><b>A notice for the sorting pass.</b> Sorting sends each tool's name and description to your default chat model, and to its provider if it is hosted. The classifier shows a notice before it sends the same kind of thing. Should adding a connection say this once too, or is the line in the Connection block enough?</li>
+      <li><b>The word "classifier".</b> <i>Decided.</i> Keep "classifier". The switch reads "Let the classifier use this connection".</li>
+      <li><b>A notice for the sorting pass.</b> <i>Decided.</i> No one-time notice. A line in the Connection block says what sorting sends and who reads it.</li>
     </ol>
   </section>
 </div>
@@ -250,7 +250,9 @@ function classifierBlock(state, { app = "Home Assistant", n = 75, on = 74 } = {}
 }
 
 function connBlock({ app, kind, host, tools, down, sort }) {
-  const sorted = sort === "sorting" ? "Sorting now" : sort === "done" ? "By what they do, 2 October" : "";
+  const who = "Your default chat model reads each tool's name and description, and so does its provider if the model is hosted.";
+  const sorted = sort === "sorting" ? `<p class="blk__help">Moss is sorting these tools. ${who}</p>`
+    : sort === "done" ? `<p class="blk__help">Sorted by what they do on 2 October. ${who.replace("reads", "read").replace("does", "did")}</p>` : "";
   const status = down
     ? `<p><span class="pill pill--bad">Can't reach it</span>&nbsp; since 14:02</p><p>Check that ${app} is running, then check again.</p>`
     : `<p><span class="pill pill--ok">Connected</span>&nbsp; checked 4 minutes ago</p>`;
@@ -261,7 +263,7 @@ function connBlock({ app, kind, host, tools, down, sort }) {
     <div class="blk__eyebrow">Connection</div>
     <div class="blk__line"><h3 class="blk__title">Use ${app}</h3>${tog(true)}</div>
     <div class="blk__state">${status}</div>
-    <dl class="kv"><dt>Connects as</dt><dd>${kind}</dd><dt>Address</dt><dd>${host}</dd><dt>Tools found</dt><dd>${tools}, last checked 2 October</dd>${sorted ? `<dt>Sorted</dt><dd>${sorted}</dd>` : ""}</dl>
+    <dl class="kv"><dt>Connects as</dt><dd>${kind}</dd><dt>Address</dt><dd>${host}</dd><dt>Tools found</dt><dd>${tools}, last checked 2 October</dd></dl>${sorted}
     <div class="blk__acts">${acts}</div>
   </div>`;
 }
