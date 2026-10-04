@@ -79,6 +79,11 @@ beforeEach(() => {
         );
       if (!path.startsWith("/api/meetings/records/"))
         throw new Error(`Unexpected unit request: ${path}`);
+      if (path.endsWith("/outputs"))
+        return new Response(
+          JSON.stringify({ artifacts: [], candidates: [], headVersion: 0, templates: [] })
+        );
+      if (path.endsWith("/exports")) return new Response(JSON.stringify({ receipts: [] }));
       if (path.includes("/transcript"))
         return new Response('{"code":"meeting_transcript_unavailable"}', { status: 404 });
       try {

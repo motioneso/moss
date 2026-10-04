@@ -794,6 +794,9 @@ importers:
       '@moss/module-web-sdk':
         specifier: workspace:*
         version: link:../module-web-sdk
+      '@moss/notes':
+        specifier: workspace:*
+        version: link:../notes
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
@@ -1084,6 +1087,9 @@ importers:
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state
+      '@moss/vault':
+        specifier: workspace:*
+        version: link:../vault
       fastify:
         specifier: ^5.6.2
         version: 5.8.5

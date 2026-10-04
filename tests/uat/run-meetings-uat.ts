@@ -35,7 +35,8 @@ async function main(): Promise<void> {
             "tsx",
             "tests/uat/run-uat.ts",
             "2981-meeting-drafts.uat.spec.ts",
-            "2981-meeting-chat.uat.spec.ts"
+            "2981-meeting-chat.uat.spec.ts",
+            "2981-meeting-outputs.uat.spec.ts"
           ],
           { env, stdio: "inherit" }
         );

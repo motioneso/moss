@@ -1,0 +1,389 @@
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { promisify } from "node:util";
+import { expect, test, type Page } from "@playwright/test";
+import type {
+  MeetingActionCandidate,
+  MeetingExportReceipt,
+  MeetingOutputArtifact
+} from "@moss/shared";
+import { buildUatComposeArgs } from "../provisioner.js";
+import { UAT_ADMIN_ID } from "../seed/admin.js";
+import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
+import {
+  OUTPUT_FIXTURE_PORT,
+  OUTPUT_FIXTURE_MODEL,
+  OUTPUT_FIXTURE_TEXT,
+  OUTPUT_FIXTURE_OVERVIEW,
+  OUTPUT_FIXTURE_DECISION,
+  OUTPUT_FIXTURE_MANUAL
+} from "../fixtures/meeting-outputs-fixture-server.js";
+
+test.use({ trace: "off", screenshot: "off", video: "off" });
+export const uatLevel = { level: "solo-admin", without: [] } as const;
+const exec = promisify(execFile);
+interface Outputs {
+  headVersion: number;
+  artifacts: MeetingOutputArtifact[];
+  candidates: MeetingActionCandidate[];
+}
+interface VaultEvidence {
+  file: string;
+  hash: string;
+  generatedOverview: boolean;
+  manualOverview: boolean;
+}
+async function readOutputs(page: Page, path: string): Promise<Outputs> {
+  const response = await page.request.get(`${path}/outputs`);
+  expect(response.status()).toBe(200);
+  return response.json() as Promise<Outputs>;
+}
+async function vaultEvidence(project: string, meetingId: string): Promise<VaultEvidence[]> {
+  const { stdout } = await exec(
+    "docker",
+    buildUatComposeArgs(project, [
+      "exec",
+      "-T",
+      "jarv1s",
+      "node_modules/.bin/tsx",
+      "tests/uat/fixtures/meeting-outputs-vault-evidence-cli.ts",
+      UAT_ADMIN_ID,
+      meetingId
+    ])
+  );
+  return JSON.parse(stdout) as VaultEvidence[];
+}
+async function clickCommand(page: Page, name: string, path: string, method = "POST") {
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith(path) && r.request().method() === method
+  );
+  await page.getByRole("button", { name, exact: true }).click();
+  const result = await response;
+  expect(result.status()).toBe(200);
+  return result;
+}
+async function assertReceipt(page: Page, receipt: MeetingExportReceipt, version: number) {
+  expect(receipt).toMatchObject({
+    artifactVersion: version,
+    destination: "private-vault",
+    audience: "owner",
+    writeStatus: "saved"
+  });
+  expect(receipt.noteReference).toMatch(new RegExp(`/v${version}\\.md$`));
+  // A durable write and acknowledged indexing request are different outcomes, never "Indexed".
+  expect(["queued", "delayed"]).toContain(receipt.indexStatus);
+  if (receipt.indexStatus === "queued") expect(receipt.indexJobId).toBeTruthy();
+  if (receipt.indexStatus === "delayed") expect(receipt.errorCode).toBe("meeting_index_delayed");
+  await expect(page.getByRole("region", { name: "Save to vault", exact: true })).toContainText(
+    `Saved to Moss private vault. Search indexing ${receipt.indexStatus}`
+  );
+}
+
+// Live-path scope: real login/UI, API/services, configured synthetic third-party HTTP model,
+// Task API and public VaultContext reads. No Moss response interception. Bounded source only:
+// this does not prove hosted-model quality, audio/ASR, or whole long-meeting coverage. The
+// runtime's escaped prompt has a 65,536-byte ceiling, independently exercised by pure tests.
+test("reviewed summary versions create independent Tasks and private vault copies (#2981)", async ({
+  page
+}) => {
+  test.setTimeout(180_000);
+  const project = requireUatProjectName();
+  if (!project.startsWith("uat-")) throw new Error("Use isolated UAT provisioner");
+  const fixtureName = `${project}-meeting-outputs-fixture`;
+  let meetingId: string | undefined;
+  let providerId: string | undefined;
+  let modelId: string | undefined;
+  await signInUatAdmin(page);
+  const pinPath = `/api/admin/users/${UAT_ADMIN_ID}/ai-pin`;
+  const prior = await page.request.get(pinPath);
+  expect(prior.status()).toBe(200);
+  const { pin } = (await prior.json()) as {
+    pin: { pinnedModelId: string | null; pinnedProviderId: string | null };
+  };
+  try {
+    await exec("docker", [
+      "run",
+      "--detach",
+      "--name",
+      fixtureName,
+      "--network",
+      `${project}_jarv1s`,
+      `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG ?? "uat-smoke"}`,
+      "node_modules/.bin/tsx",
+      "tests/uat/fixtures/meeting-outputs-fixture-cli.ts"
+    ]);
+    await expect
+      .poll(
+        async () =>
+          (await exec("docker", ["logs", fixtureName])).stdout.includes(
+            "[meeting-outputs-fixture] ready"
+          ),
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+    const provider = await page.request.post("/api/ai/providers", {
+      data: {
+        providerKind: "openai-compatible",
+        displayName: "Synthetic meeting output HTTP provider",
+        baseUrl: `http://${fixtureName}:${OUTPUT_FIXTURE_PORT}`,
+        authMethod: "api_key",
+        credentialPayload: { apiKey: "synthetic-uat-not-a-provider-credential" }
+      }
+    });
+    expect(provider.status()).toBe(201);
+    providerId = (await provider.json()).provider.id as string;
+    const model = await page.request.post("/api/ai/models", {
+      data: {
+        providerConfigId: providerId,
+        providerModelId: OUTPUT_FIXTURE_MODEL,
+        displayName: "Synthetic summary JSON model",
+        capabilities: ["summarization", "json"],
+        status: "active",
+        tier: "economy"
+      }
+    });
+    expect(model.status()).toBe(201);
+    modelId = (await model.json()).model.id as string;
+    expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
+    const title = `Synthetic Orchid summary ${randomUUID()}`;
+    const created = await page.request.post("/api/meetings/records", {
+      data: { requestKey: randomUUID(), title }
+    });
+    expect(created.status()).toBe(201);
+    meetingId = (await created.json()).meeting.id as string;
+    const path = `/api/meetings/records/${meetingId}`;
+    const segmentId = randomUUID();
+    const posted = await page.request.post(`${path}/transcript`, {
+      data: {
+        requestKey: randomUUID(),
+        expectedVersion: 0,
+        sources: [
+          {
+            sourceId: "synthetic-mic",
+            epoch: 1,
+            kind: "microphone",
+            label: "Synthetic source",
+            startMs: 0,
+            endMs: 10000
+          }
+        ],
+        events: [
+          {
+            cursor: 1,
+            segment: {
+              meetingId,
+              segmentId,
+              sourceId: "synthetic-mic",
+              epoch: 1,
+              startMs: 1000,
+              endMs: 4000,
+              revision: 1,
+              text: OUTPUT_FIXTURE_TEXT,
+              finality: "final",
+              provenance: "transcription",
+              speakerId: null
+            }
+          }
+        ],
+        stopCutoffMs: 10000
+      }
+    });
+    expect(posted.status()).toBe(201);
+    await page.getByRole("link", { name: "Meetings", exact: true }).click();
+    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
+    await page.getByRole("button", { name: title, exact: true }).click();
+    const summary = page.getByRole("region", { name: "Summary and actions", exact: true });
+    await expect(summary).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Generate summary", exact: true })
+    ).toBeDisabled();
+    await page.getByLabel("Summary template", { exact: true }).selectOption("general");
+    await clickCommand(page, "Generate summary", `${path}/outputs`);
+    await expect(summary).toContainText(OUTPUT_FIXTURE_OVERVIEW);
+    await expect(summary).toContainText(OUTPUT_FIXTURE_DECISION);
+    let outputs = await readOutputs(page, path);
+    expect(outputs.headVersion).toBe(1);
+    expect(outputs.candidates).toHaveLength(1);
+    const original = outputs.artifacts[0]!;
+    expect(original.content.decisions[0]!.evidence).toEqual([
+      {
+        kind: "transcript",
+        meetingId,
+        segmentId,
+        segmentRevision: 1,
+        startCharacter: 0,
+        endCharacter: OUTPUT_FIXTURE_TEXT.length
+      }
+    ]);
+    const candidate = outputs.candidates[0]!;
+    expect(candidate.reviewState).toBe("pending");
+    expect(candidate.acceptedTaskId).toBeNull();
+    const taskList = async () => {
+      const response = await page.request.get("/api/tasks");
+      expect(response.status()).toBe(200);
+      const { tasks } = (await response.json()) as {
+        tasks: { id: string; sourceRef: string | null; title: string; dueAt: string | null }[];
+      };
+      return tasks.filter((task) => task.sourceRef === meetingId);
+    };
+    expect(await taskList()).toHaveLength(0);
+    // Follow exact source evidence through the real transcript UI.
+    await summary
+      .getByRole("link", { name: /^Transcript ·/ })
+      .first()
+      .click();
+    await expect(
+      page.getByRole("region", { name: "Transcript evidence", exact: true })
+    ).toContainText(OUTPUT_FIXTURE_TEXT);
+    expect(new URL(page.url()).searchParams.get("segmentRevision")).toBe("1");
+    await expect(page.getByRole("button", { name: "Accept Task", exact: true })).toBeDisabled();
+    const reviewedTitle = "Owner reviewed Orchid action";
+    await page.getByLabel("Suggested Task · version 1", { exact: true }).fill(reviewedTitle);
+    await page
+      .getByRole("checkbox", { name: "Create in my Tasks after owner review", exact: true })
+      .click();
+    const review = await clickCommand(
+      page,
+      "Accept Task",
+      `${path}/actions/${candidate.id}/review`
+    );
+    const accepted = (await review.json()) as MeetingActionCandidate;
+    expect(accepted.acceptedTaskId).toBeTruthy();
+    expect(await taskList()).toEqual([
+      expect.objectContaining({ id: accepted.acceptedTaskId, title: reviewedTitle, dueAt: null })
+    ]);
+    // Same command and a fresh acceptance request both reconcile to the same Task.
+    for (const requestKey of [review.request().postDataJSON().requestKey as string, randomUUID()]) {
+      const replay = await page.request.post(`${path}/actions/${candidate.id}/review`, {
+        data: {
+          ...review.request().postDataJSON(),
+          requestKey
+        }
+      });
+      expect(replay.status()).toBe(200);
+      expect((await replay.json()).acceptedTaskId).toBe(accepted.acceptedTaskId);
+    }
+    const firstSave = await clickCommand(page, "Save new private version", `${path}/exports`);
+    const firstReceipt = (await firstSave.json()).receipt as MeetingExportReceipt;
+    await assertReceipt(page, firstReceipt, 1);
+    const firstFiles = await vaultEvidence(project, meetingId);
+    expect(firstFiles).toEqual([
+      {
+        file: "v1.md",
+        hash: firstReceipt.contentHash,
+        generatedOverview: true,
+        manualOverview: false
+      }
+    ]);
+    const retrySave = await clickCommand(page, "Retry private save", `${path}/exports`);
+    const repeated = (await retrySave.json()).receipt as MeetingExportReceipt;
+    expect(repeated.noteReference).toBe(firstReceipt.noteReference);
+    expect(repeated.contentHash).toBe(firstReceipt.contentHash);
+    expect(await vaultEvidence(project, meetingId)).toEqual(firstFiles);
+    // Owner changes the independent Task, then regenerates. It must not be overwritten.
+    const changedTitle = "Independent Task edited after acceptance";
+    expect(
+      (
+        await page.request.patch(`/api/tasks/${accepted.acceptedTaskId}`, {
+          data: { title: changedTitle }
+        })
+      ).status()
+    ).toBe(200);
+    await clickCommand(page, "Generate new version", `${path}/outputs`);
+    outputs = await readOutputs(page, path);
+    expect(outputs.headVersion).toBe(2);
+    expect(outputs.candidates).toHaveLength(1);
+    expect(outputs.candidates[0]!.acceptedTaskId).toBe(accepted.acceptedTaskId);
+    expect(await taskList()).toEqual([
+      expect.objectContaining({ id: accepted.acceptedTaskId, title: changedTitle })
+    ]);
+    await expect(page.getByLabel("Saved version", { exact: true })).toHaveValue("2");
+    await page.getByRole("button", { name: "Edit this version", exact: true }).click();
+    await page.getByLabel("Overview", { exact: true }).fill(OUTPUT_FIXTURE_MANUAL);
+    await clickCommand(page, "Save edits as new version", `${path}/outputs`, "PUT");
+    outputs = await readOutputs(page, path);
+    expect(outputs.headVersion).toBe(3);
+    expect(outputs.artifacts.find((artifact) => artifact.version === 1)).toEqual(original);
+    expect(outputs.artifacts.find((artifact) => artifact.version === 3)).toMatchObject({
+      origin: "manual",
+      content: { overview: OUTPUT_FIXTURE_MANUAL }
+    });
+    expect(await vaultEvidence(project, meetingId)).toEqual(firstFiles);
+    await expect(page.getByLabel("Saved version", { exact: true })).toHaveValue("3");
+    const manualSave = await clickCommand(page, "Save new private version", `${path}/exports`);
+    const manualReceipt = (await manualSave.json()).receipt as MeetingExportReceipt;
+    await assertReceipt(page, manualReceipt, 3);
+    expect(manualReceipt.noteReference).not.toBe(firstReceipt.noteReference);
+    const finalFiles = await vaultEvidence(project, meetingId);
+    expect(finalFiles).toEqual([
+      ...firstFiles,
+      {
+        file: "v3.md",
+        hash: manualReceipt.contentHash,
+        generatedOverview: false,
+        manualOverview: true
+      }
+    ]);
+    await clickCommand(page, "Retry private save", `${path}/exports`);
+    expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
+    const receipts = await page.request.get(`${path}/exports`);
+    expect(receipts.status()).toBe(200);
+    expect((await receipts.json()).receipts).toHaveLength(2);
+    const { stdout } = await exec("docker", [
+      "exec",
+      fixtureName,
+      "node",
+      "--input-type=module",
+      "-e",
+      `const r=await fetch('http://127.0.0.1:${OUTPUT_FIXTURE_PORT}/evidence'); if(!r.ok)process.exit(1); console.log(await r.text());`
+    ]);
+    const { observations } = JSON.parse(stdout) as { observations: { promptBytes: number }[] };
+    expect(observations).toHaveLength(2);
+    for (const observation of observations) {
+      expect(observation).toMatchObject({
+        model: OUTPUT_FIXTURE_MODEL,
+        hasTools: false,
+        hasSearch: false,
+        exactSource: true,
+        sourceCount: 1
+      });
+      expect(observation.promptBytes).toBeLessThanOrEqual(65536);
+    }
+    // Meeting deletion removes provenance, never independently accepted Tasks/private copies.
+    expect((await page.request.delete(path)).status()).toBe(204);
+    expect((await page.request.get(`${path}/outputs`)).status()).toBe(404);
+    expect(await taskList()).toEqual([
+      expect.objectContaining({ id: accepted.acceptedTaskId, title: changedTitle })
+    ]);
+    expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
+    meetingId = undefined;
+    console.log(
+      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. No whole long-meeting/model-quality/audio proof."
+    );
+  } finally {
+    try {
+      if (meetingId)
+        expect((await page.request.delete(`/api/meetings/records/${meetingId}`)).status()).toBe(
+          204
+        );
+      expect((await page.request.put(pinPath, { data: { modelId: null } })).status()).toBe(200);
+      if (pin.pinnedModelId || pin.pinnedProviderId)
+        expect(
+          (
+            await page.request.put(pinPath, {
+              data: { modelId: pin.pinnedModelId, providerId: pin.pinnedProviderId }
+            })
+          ).status()
+        ).toBe(200);
+      if (modelId)
+        expect((await page.request.delete(`/api/ai/models/${modelId}`)).status()).toBe(200);
+      if (providerId)
+        expect((await page.request.post(`/api/ai/providers/${providerId}/revoke`)).status()).toBe(
+          200
+        );
+      // Independent copies intentionally survive. The isolated provisioner destroys fixture DB/volumes.
+    } finally {
+      await exec("docker", ["rm", "--force", fixtureName]);
+    }
+  }
+});

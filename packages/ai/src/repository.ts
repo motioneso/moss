@@ -1334,6 +1334,8 @@ export class AiRepository {
       capability: AiModelCapability;
       tierHint?: AiModelTier;
       requireExplicitBinding?: boolean;
+      /** Privacy-sensitive calls must not degrade a missing fixed binding to another model. */
+      rejectUnavailableFixedBinding?: true;
     }
   ): Promise<AiCapabilityRouteResolution> {
     assertDataContextDb(scopedDb);
@@ -1374,10 +1376,12 @@ export class AiRepository {
 
         // #1083 F2: service bindings store row UUIDs without an FK. A legitimate catalog removal
         // can leave one dangling, so degrade inside the configured default provider instead of
-        // breaking structured module work or silently jumping to another provider.
-        const defaultProviderId = requireExplicitBinding
-          ? null
-          : await this.resolveDefaultProviderId(scopedDb);
+        // breaking structured module work or silently jumping to another provider. Privacy-sensitive
+        // callers may forbid that replacement while preserving the normal hard-pin precedence.
+        const defaultProviderId =
+          requireExplicitBinding || options.rejectUnavailableFixedBinding
+            ? null
+            : await this.resolveDefaultProviderId(scopedDb);
         if (defaultProviderId) {
           const fallback = await this.selectModelInProviderForCapability(
             scopedDb,

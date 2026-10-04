@@ -30,6 +30,10 @@ export function DeleteMeetingDialog({
       clearMeetingChat(meeting.id);
       client.removeQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       client.removeQueries({ queryKey: meetingKeys.editor(meeting.id), exact: true });
+      client.removeQueries({ queryKey: ["meetings", "output-session", meeting.id] });
+      client.removeQueries({ queryKey: ["meetings", "outputs", meeting.id] });
+      client.removeQueries({ queryKey: ["meetings", "exports", meeting.id] });
+      client.removeQueries({ queryKey: ["meetings", "output-artifact", meeting.id] });
       void client.invalidateQueries({ queryKey: meetingKeys.history });
       if (active.current) onDeleted();
     }
@@ -85,8 +89,9 @@ export function DeleteMeetingDialog({
       }
     >
       <p>
-        “{meeting.title}” and its personal notes and retained transcript revisions will be
-        permanently deleted. This cannot be undone. Any unsaved edits will also be lost.
+        “{meeting.title}”, its personal notes, transcript revisions, generated versions, and meeting
+        chat will be permanently deleted. This cannot be undone. Unsaved edits will be lost.
+        Accepted Tasks and saved vault copies remain.
       </p>
       {mutation.isError ? (
         <p role="alert" className="jds-hint jds-hint--error">

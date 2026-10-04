@@ -109,7 +109,7 @@ Expected exit code is 0 for each applicable command; keep exit codes unpiped:
 - `pnpm exec prettier --check <changed files>`
 - `pnpm exec tsc --noEmit`
 - `pnpm verify:static`
-- Full DB gate only using `.claude/skills/verify-gate/SKILL.md` and `scripts/run-gate.sh`.
+- DB gates require a disposable Postgres server per run under issue #2989. Current local wrapper commands are withheld until that implementation lands; never use a separate database on the shared dev server.
 - Required CI on the exact published commit; real UI UAT and actual native OS proof remain
   independent gates. No merge/deployment is authorized.
 
@@ -156,7 +156,7 @@ DB-touching command. Use the project-pinned pnpm version and its frozen lockfile
 
 - Branch: `feat/2981-meeting-companion`
 - Focused tests: `pnpm test:unit tests/unit/meeting-api-schema.test.ts tests/unit/meeting-lifecycle.test.ts tests/unit/meeting-transcript.test.ts tests/unit/meeting-record-routes.test.ts`
-- Full isolated gate: `scripts/run-gate.sh start`, then `scripts/run-gate.sh wait --follow`.
+- Local full gate is withheld pending the per-server isolation implementation in #2989. Follow the updated supported wrapper after it lands; current GitHub-hosted CI runs on disposable job-isolated servers.
 - Integration suite `tests/integration/meeting-records.test.ts` is included in the normal
   integration gate through registry migration discovery.
 - Do not run migrations/tests against a shared/live database by hand. No native capture or

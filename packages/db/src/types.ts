@@ -214,6 +214,54 @@ export interface MeetingTranscriptBatchesTable {
   created_at: TimestampColumn;
 }
 
+export interface MeetingExportReceiptsTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  artifact_version: number;
+  content_hash: string;
+  receipt_json: string;
+}
+export interface MeetingExportRequestsTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  artifact_version: number;
+  result_json: string | null;
+}
+
+export interface MeetingOutputRequestsTable {
+  expires_at: TimestampColumn;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  input_json: string;
+  result_json: string | null;
+}
+export interface MeetingOutputArtifactsTable {
+  id: ColumnType<string, string | undefined, never>;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  version: number;
+  artifact_json: string;
+  inactive: boolean;
+  created_at: TimestampColumn;
+}
+export interface MeetingActionCandidatesTable {
+  id: ColumnType<string, string | undefined, never>;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  identity_key: string;
+  artifact_version: number;
+  proposal_json: string;
+  possible_match_ids: ColumnType<string[], string[], never>;
+  review_state: ColumnType<
+    "pending" | "accepted" | "dismissed",
+    "pending" | undefined,
+    "pending" | "accepted" | "dismissed"
+  >;
+  accepted_task_id: string | null;
+}
+
 export interface WorkshopProjectsTable {
   feed_sequence: ColumnType<string, string | undefined, string>;
   id: ColumnType<string, string | undefined, never>;
@@ -1757,6 +1805,11 @@ export interface MossDatabase {
   "app.module_enablement": ModuleEnablementTable;
   "app.external_modules": ExternalModulesTable;
   "app.module_builds": ModuleBuildsTable;
+  "app.meeting_export_receipts": MeetingExportReceiptsTable;
+  "app.meeting_export_requests": MeetingExportRequestsTable;
+  "app.meeting_output_requests": MeetingOutputRequestsTable;
+  "app.meeting_output_artifacts": MeetingOutputArtifactsTable;
+  "app.meeting_action_candidates": MeetingActionCandidatesTable;
   "app.meeting_records": MeetingRecordsTable;
   "app.meeting_note_writes": MeetingNoteWritesTable;
   "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;

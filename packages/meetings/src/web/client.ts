@@ -1,3 +1,4 @@
+import { invalidateOutputAccess } from "./output-access.js";
 import type { QueryClient } from "@tanstack/react-query";
 import { ApiError, requestJson } from "@moss/module-web-sdk";
 import type {
@@ -43,8 +44,14 @@ export function meetingRecordQueryOptions(id: string) {
       } catch (error) {
         // Invalidate pending save identities before the denial reaches observers.
         // A later success from an earlier save must not restore inaccessible content.
-        if (isMeetingAccessDenied(error))
+        if (!signal?.aborted && isMeetingAccessDenied(error)) {
+          invalidateOutputAccess(client, id);
           client.removeQueries({ queryKey: meetingKeys.editor(id), exact: true });
+          client.removeQueries({ queryKey: ["meetings", "output-session", id] });
+          client.removeQueries({ queryKey: ["meetings", "outputs", id] });
+          client.removeQueries({ queryKey: ["meetings", "exports", id] });
+          client.removeQueries({ queryKey: ["meetings", "output-artifact", id] });
+        }
         throw error;
       }
     },

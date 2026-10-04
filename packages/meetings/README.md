@@ -14,12 +14,14 @@ This package is not yet a meeting recorder. The current checkpoint contains:
 - Authenticated text-only transcript ingestion, immutable revisions, bounded snapshots and evidence.
 - Read-only transcript review with source labels, provisional status and revision navigation.
 - Meeting questions in the existing chat drawer using the selected API-key model and exact evidence.
+- Explicit generated/manual summary versions, source-grounded decisions and owner-reviewed Tasks.
+- Explicit versioned, create-only copies in Moss private vault with separate write/index receipts.
 
 The AI-owned clip transcription API separately supports an explicit timestamp request and
 cancellation. That adapter is not yet wired to meeting capture or a persisted meeting transcript.
-There is no claimed streaming, speaker separation, summary, Tasks or vault-export
-implementation in this checkpoint. Meeting questions are the bounded API-key-only stage below. Setup links to existing AI providers configuration and does
-not present an unvalidated meeting profile as ready.
+There is no claimed streaming, speaker separation or native recording implementation in this
+checkpoint. Meeting questions and summaries are bounded API-key-only stages below. Setup links to
+existing AI providers configuration and does not present an unvalidated meeting profile as ready.
 
 ## Draft API
 
@@ -35,7 +37,10 @@ start capture, contact a provider, or create/expand companion grants.
   key with identical input returns the original saved snapshot, even after later edits; fetch
   the record again for its current version. Reusing a key with different input conflicts.
 - `DELETE /api/meetings/records/:id`: permanently remove the owner's draft and cascading note
-  receipts, transcript revisions and derived meeting-chat threads atomically. Repeated and inaccessible deletion requests return the same 204 response. The UI
+  receipts, transcript revisions, summaries, action candidates, export receipts and derived
+  meeting-chat threads atomically. Independently accepted Tasks and saved private vault copies
+  survive deletion; their source evidence can become unavailable. Repeated and inaccessible
+  deletion requests return the same 204 response. The UI
   requires confirmation and explains the retained content and unsaved edits that will be lost.
 - `GET` / `PUT /api/meetings/preferences`: `{ defaultCaptureMode }`, where the value is
   `microphone-only`, `selected-app`, `computer-audio`, or `null` to clear the explicit default.
@@ -115,39 +120,94 @@ accepts `meetingContext: { meetingId, selectionId }` with its canonical meeting 
 and citation reads recheck meeting access; general engine seed, stream, switch and resume paths
 cannot operate on that reserved surface. `GET /api/chat/meeting-context?surface=...` checks access.
 
+## Summary, Task review and private export checkpoint
+
+Review offers explicit template selection and Generate; merely opening a meeting does not run a
+model. Generation resolves the configured active API-key model with both `summarization` and
+`json` capabilities, respecting the routing/pin contract. It makes one structured HTTP attempt,
+without executable tools, native search, CLI engines or repair/fallback attempts. The model's
+claims must bind to the retained input's exact meeting, revision and UTF-16 evidence ranges.
+A proposal never authorizes an action.
+
+The escaped structured prompt is limited to **65,536 UTF-8 bytes**, including guidance and JSON
+encoding. The input snapshot is independently bounded to 500 whole segments/100,000 characters;
+personal notes and escaping also consume the prompt budget. An oversized prompt is rejected
+before model dispatch, not silently truncated. These are bounded retained-evidence summaries,
+not proof of whole long-meeting coverage or of any particular model's summary quality.
+
+Generated summaries and manual edits append immutable versions. Historical evidence remains
+attached to its original version; source changes mark summaries stale. Exact repeated action
+proposals reuse candidates, while possible nonexact overlaps require separate review. Acceptance
+requires an owner-reviewed title and explicit owner acknowledgment in the UI. Owner/date phrases
+are suggestions: relative dates are not automatically resolved, and this UI sets no Task due date.
+Accepted Tasks are independent; regeneration does not overwrite subsequent Task edits.
+
+Save to vault explicitly copies the selected artifact version into **Moss private vault**, owner
+only. This stage is versioned and create-only: a later summary version creates a separate note,
+not an in-place update or merge. Repeated saves reconcile identical bytes without creating another
+copy; changed/removed destination content produces a conflict rather than an overwrite. The UI
+shows an opaque note reference because there is no supported open-note URL for these exports.
+Write receipts distinguish `saved` from indexing `queued`, `delayed` or `conflict`; queued is not
+proof that content has been indexed. Failed/delayed indexing does not undo a completed private
+write. Independent saved copies and accepted Tasks survive meeting deletion.
+
 ## Local verification
 
 Use a separate checkout/worktree if another agent is editing your local tree. Read the
 repository's `shared-checkout` and `verify-gate` skills. Use the pinned pnpm version and run
 `pnpm install --frozen-lockfile`.
 
-Focused checks (expected exit 0):
+Focused database-free checks (expected exit 0):
 
 ```sh
-pnpm test:unit tests/unit/meeting-transcript-storage.test.ts tests/unit/meeting-api-schema.test.ts tests/unit/meeting-lifecycle.test.ts tests/unit/meeting-transcript.test.ts tests/unit/meeting-record-routes.test.ts tests/unit/meeting-preferences-routes.test.ts tests/unit/meeting-manifest.test.ts tests/unit/meeting-web.test.tsx tests/unit/meeting-web-interaction.test.tsx tests/unit/ai-transcription-routes.test.ts tests/unit/ai-transcription-timestamps.test.ts
+node_modules/.bin/vitest run tests/unit/meeting-transcript.test.ts tests/unit/meeting-output-runtime.test.ts tests/unit/meeting-outputs-fixture.test.ts tests/unit/meeting-summary-web.test.tsx tests/unit/meeting-export.test.ts
 pnpm verify:static
 ```
 
-Full isolated database gate (expected exit 0):
+**Local database gates are withheld pending
+[#2989](https://github.com/motioneso/moss/issues/2989).** Each DB gate must have its own disposable
+Postgres server, share none with development or another gate, and clean up on every outcome.
+The current `scripts/run-gate.sh` only creates a separate database on the configured existing
+server (default `jarv1s-postgres`); that does not meet the new requirement. It also retains failed
+gate databases. Do not launch local foundation, integration, migration, seed or UAT commands until
+the supported per-run server wrapper and cleanup land. Do not bypass this by invoking DB commands
+directly or by hand-building an alternative wrapper.
 
-```sh
-scripts/run-gate.sh start
-scripts/run-gate.sh wait --follow
-```
+### CI-only real UI acceptance
 
-Real UI acceptance uses the existing UAT harness and its own disposable fixture, without
-rewriting network responses. The dedicated Meetings wrapper points the harness at an absent
-auth file in a fresh temporary directory, so this draft-only test does not read or copy the
-host’s real chat login. Use this wrapper rather than invoking the general UAT command directly. Through the supported gate wrapper:
+The current GitHub-hosted workflows allocate fresh `ubuntu-latest` jobs. Each integration shard
+starts its own Compose pgvector server and uses `if: always()` cleanup with `down -v`. The Meetings
+workflow's outer gate server is likewise job-local, and the UAT provisioner starts separate
+uniquely named `uat-*` Compose projects with private Postgres containers/volumes. Its teardown
+removes project-scoped model fixtures, calls `down -v`, and checks for leaked containers, volumes
+and networks. The workflow also stops the outer gate and removes its Compose volumes. This
+job-level isolation does not make the current local shared-server wrapper safe and does not prove
+#2989's future concurrent local-gate acceptance criteria.
+
+After its job-local database startup, the existing Meetings workflow invokes:
 
 ```sh
 scripts/run-gate.sh start --gate test:uat:2981-meetings
 scripts/run-gate.sh wait --follow
 ```
 
-Do not hand-run database reset/migration/integration commands against the shared development
-database. The cloud development workspace has no Docker/Postgres stack, so local DB/UAT commands
-could not run there. Exact CI results, commits and remaining blockers are on PR #2982.
+The underlying `test:uat:2981-meetings` command runs `tests/uat/run-meetings-uat.ts`, which includes
+`2981-meeting-drafts.uat.spec.ts`, `2981-meeting-chat.uat.spec.ts` and the new
+`2981-meeting-outputs.uat.spec.ts`. These commands are documented for the CI workflow, **not for
+local execution before #2989**. The dedicated wrapper selects an absent host-login file in a fresh
+temporary directory; it never needs real provider credentials, host chat login, audio or a user's
+vault. The chat/summary tests disclose local third-party HTTP stand-ins while exercising Moss's
+real UI, APIs and services without intercepting Moss responses. Trace, screenshots and video are
+off; evidence uses executable assertions and bounded text.
+
+The output UAT covers Review → Generate → exact source evidence → explicit Task review and
+acceptance, retry/regeneration deduplication, independent Task edits, immutable manual summary
+versions, explicit create-only private saves, separate write/index receipts, repeated-save
+stability and independent copies surviving meeting deletion. Vault assertions use public
+`VaultContext` operations. Real APIs clean up meeting/configuration fixtures; the provisioner
+removes the isolated DB and volumes, including deliberately surviving synthetic Task/note copies.
+This is the implemented acceptance path, not a claim of a passing live run. Exact-commit results
+and remaining blockers belong on [PR #2982](https://github.com/motioneso/moss/pull/2982).
 
 ## Remaining release proof
 
@@ -157,13 +217,13 @@ receipts. The transcript suite includes a rollback-only protection-removal probe
 transaction, verifies runtime role/actor, requires the same owner assertion to detect its
 synthetic leaked row, rolls back, then rechecks RLS and owner isolation. This must pass in CI;
 it has not run in the Docker-free cloud workspace. Earlier draft-table negative proof remains
-separate. Run through `scripts/run-gate.sh start --gate test:integration`, then
-`scripts/run-gate.sh wait --follow`; never invoke DB tests directly.
+separate. Current DB proof must come from the isolated GitHub-hosted CI jobs described above;
+local DB gates remain withheld until #2989 provides per-run server isolation and cleanup.
 Draft-only real UI acceptance is verified at `468aaa8` by
 [CI](https://github.com/motioneso/moss/actions/runs/37165385320) and
 [UI UAT](https://github.com/motioneso/moss/actions/runs/37165385348). This does not verify the
-new transcript storage/review and meeting-question slices. Exact-commit CI, database and live-path
-results for those slices are recorded on [PR #2982](https://github.com/motioneso/moss/pull/2982).
+new transcript storage/review, meeting-question or summary/Task/private-export slices.
+Exact-commit CI, database and live-path results for those slices are recorded on [PR #2982](https://github.com/motioneso/moss/pull/2982).
 The meeting-chat UAT uses a disclosed local HTTP provider stand-in to inspect real outbound requests,
 not real provider credentials or rewritten Moss responses. Chat cleanup uses a bounded database
 function; direct runtime deletion remains unavailable and thread surfaces are immutable. The

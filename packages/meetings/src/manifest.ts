@@ -18,13 +18,20 @@ export const meetingsModuleManifest = {
     migrations: [
       "sql/0260_meeting_records.sql",
       "sql/0261_meeting_draft_delete.sql",
-      "sql/0262_meeting_transcript_batches.sql"
+      "sql/0262_meeting_transcript_batches.sql",
+      "sql/0265_meeting_outputs.sql",
+      "sql/0266_meeting_exports.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
       "app.meeting_records",
       "app.meeting_note_writes",
-      "app.meeting_transcript_batches"
+      "app.meeting_transcript_batches",
+      "app.meeting_output_requests",
+      "app.meeting_output_artifacts",
+      "app.meeting_action_candidates",
+      "app.meeting_export_receipts",
+      "app.meeting_export_requests"
     ]
   },
   permissions: [
@@ -58,6 +65,20 @@ export const meetingsModuleManifest = {
     }
   ],
   routes: [
+    { method: "POST", path: "/api/meetings/records/:id/exports", permissionId: "meetings.write" },
+    { method: "GET", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.read" },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/outputs/:version",
+      permissionId: "meetings.read"
+    },
+    { method: "POST", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.write" },
+    { method: "PUT", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.write" },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/actions/:candidateId/review",
+      permissionId: "meetings.write"
+    },
     {
       method: "POST",
       path: "/api/meetings/records/:id/transcript",
@@ -78,6 +99,138 @@ export const meetingsModuleManifest = {
     { method: "PUT", path: "/api/meetings/records/:id/notes", permissionId: "meetings.write" }
   ],
   features: [
+    {
+      id: "meetings.private_exports",
+      description:
+        "Explicitly save an immutable output version into the Moss private vault. Each version has its own file. Unchanged repeats are a no-op; manual edits cause a conflict. Saved and search-index queued/delayed statuses are separate.",
+      errors: [
+        {
+          code: "meeting_vault_write_failed",
+          class: "transient",
+          description:
+            "The private vault write failed. Retry the same request after checking vault availability."
+        },
+        {
+          code: "meeting_vault_conflict",
+          class: "validation",
+          description:
+            "The destination file differs from this output. Preserve manual edits and export another version instead."
+        },
+        {
+          code: "meeting_index_delayed",
+          class: "transient",
+          description:
+            "The file was saved but search indexing could not be queued. Retry to reconcile the saved file and queue only the missing stage."
+        }
+      ]
+    },
+    {
+      id: "meetings.grounded_outputs",
+      description:
+        "Generate summaries and evidence-checked decisions/actions with four templates. Compare recent versions and load exact candidate sources; edits create new versions. Requires an API-key summarization route; CLI unavailable.",
+      errors: [
+        {
+          code: "meeting_output_unavailable",
+          class: "validation",
+          description:
+            "This output version is unavailable to the owner. Refresh the meeting and review another retained version."
+        },
+        {
+          code: "meeting_output_route_unavailable",
+          class: "validation",
+          description:
+            "Choose an available API-key summarization model with structured-output support in AI settings. Subscription CLI routes are unavailable for meeting outputs."
+        },
+        {
+          code: "meeting_output_route_changed",
+          class: "transient",
+          description:
+            "The configured AI route or credentials changed during generation. Review AI settings and start a new request."
+        },
+        {
+          code: "meeting_output_input_too_large",
+          class: "validation",
+          description:
+            "The selected transcript and notes exceed the safe prompt budget. No provider request was sent; use a shorter retained input."
+        },
+        {
+          code: "meeting_output_module_unavailable",
+          class: "validation",
+          description:
+            "Meetings is unavailable for this owner. Check module settings before retrying."
+        },
+        {
+          code: "meeting_action_tasks_unavailable",
+          class: "validation",
+          description:
+            "Tasks is unavailable for this owner. Enable Tasks in module settings before accepting this candidate."
+        },
+        {
+          code: "meeting_output_interrupted",
+          class: "transient",
+          description:
+            "Generation was interrupted or its reservation expired. Start a new explicit request; replaying the old key will not run it again."
+        },
+        {
+          code: "meeting_output_generation_failed",
+          class: "transient",
+          description:
+            "Generation failed or its result was invalid. Review provider settings, then explicitly start a new request; no fallback provider is used."
+        },
+        {
+          code: "meeting_output_version_conflict",
+          class: "transient",
+          description:
+            "The transcript, notes or output changed. Reload current revisions before generating or editing."
+        },
+        {
+          code: "meeting_output_request_conflict",
+          class: "validation",
+          description:
+            "This request key identifies another mutation. Use a new key for different input."
+        },
+        {
+          code: "meeting_output_invalid_input",
+          class: "validation",
+          description:
+            "Correct the output shape, exact evidence anchors, template version or reviewed Task fields."
+        },
+        {
+          code: "meeting_output_evidence_unavailable",
+          class: "validation",
+          description:
+            "Retained evidence is unavailable. Add notes or retained transcript before generation."
+        },
+        {
+          code: "meeting_output_limit",
+          class: "validation",
+          description:
+            "The meeting output storage limit was reached. Existing output remains available."
+        },
+        {
+          code: "meeting_action_match_review_required",
+          class: "validation",
+          description:
+            "This proposal may overlap an existing candidate. Review previous decisions and explicitly confirm a distinct Task before acceptance."
+        },
+        {
+          code: "meeting_action_review_conflict",
+          class: "validation",
+          description:
+            "The candidate already has a different review decision. Existing accepted Tasks and dismissals are preserved."
+        },
+        {
+          code: "meeting_action_unavailable",
+          class: "validation",
+          description: "This candidate is unavailable to the signed-in owner."
+        }
+      ]
+    },
+    {
+      id: "meetings.reviewed_tasks",
+      description:
+        "Explicit owner-reviewed acceptance creates a personal Task. Retries preserve its edits; regeneration preserves decisions and flags uncertain matches. No remote assignments. Accepted Tasks survive meeting deletion."
+    },
     {
       id: "meetings.questions",
       description:
@@ -138,12 +291,12 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.delete_draft",
       description:
-        "Permanently delete a draft, personal notes, retained transcript revisions and meeting chat after confirmation. Cancellation preserves unsaved edits; deletion cannot be undone."
+        "Permanently delete a draft, personal notes, retained transcript revisions and meeting chat, generated outputs and candidates after confirmation; accepted Tasks remain. Cancellation preserves unsaved edits; deletion cannot be undone."
     },
     {
       id: "meetings.draft_records",
       description:
-        "Create titled drafts, browse history, and save personal notes with version checks and retry-safe requests at /meetings. Native recording, summaries, Tasks and vault export remain unavailable.",
+        "Create drafts, browse history, save personal notes, review transcripts and generated summaries, accept reviewed Tasks, and save private-vault copies at /meetings. Native recording remains unavailable.",
       errors: [
         {
           code: "meeting_request_conflict",
@@ -178,7 +331,12 @@ export const meetingsModuleManifest = {
       tables: [
         { table: "app.meeting_records", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_note_writes", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_transcript_batches", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_transcript_batches", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_output_requests", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_output_artifacts", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_action_candidates", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_export_receipts", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_export_requests", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

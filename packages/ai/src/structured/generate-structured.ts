@@ -229,6 +229,62 @@ export async function generateStructured(
   return result.ok ? { ...result, servedBy: input.servedByLabel ?? "main" } : result;
 }
 
+/**
+ * Prepare one API-key structured attempt while a short actor transaction is open. The
+ * returned one-shot closure owns transport state, but performs no database work and may
+ * only be invoked after that transaction completes. Caller owns route authorization and
+ * must use a freshly checked explicit model plus a guarded credential lookup.
+ */
+export async function prepareStructuredApiGeneration(
+  scopedDb: DataContextDb,
+  input: Pick<
+    GenerateStructuredInput,
+    "service" | "schema" | "prompt" | "maxOutputTokens" | "signal"
+  > & {
+    readonly explicitModel: GenerateStructuredExplicitModel;
+  },
+  deps: Pick<GenerateStructuredDeps, "cipher"> & {
+    readonly repository: Pick<AiRepository, "selectProviderWithCredential">;
+  }
+): Promise<() => Promise<GenerateStructuredResult>> {
+  const request: GenerateStructuredInput = {
+    service: input.service,
+    schema: input.schema,
+    prompt: input.prompt,
+    maxOutputTokens: input.maxOutputTokens,
+    signal: input.signal,
+    explicitModel: input.explicitModel,
+    singleAttempt: true
+  };
+  assertBoundedStructuredSchema(request.schema);
+  assertBoundedStructuredPrompt(request.prompt);
+  const run = await prepareRunOnModel(
+    scopedDb,
+    request,
+    {
+      cipher: deps.cipher,
+      repository: {
+        async resolveModelForService() {
+          throw new Error("Prepared generation cannot resolve another route");
+        },
+        async selectProviderWithCredential(db, id) {
+          const provider = await deps.repository.selectProviderWithCredential(db, id);
+          return provider?.auth_method === "api_key" ? provider : undefined;
+        }
+      }
+    },
+    input.explicitModel,
+    { maxAttempts: 1, signal: input.signal, servedBy: "main" }
+  );
+  let consumed = false;
+  return async () => {
+    if (consumed) return { ok: false, error: "provider_error" };
+    consumed = true;
+    const result = await run();
+    return result.ok ? { ...result, servedBy: "main" } : result;
+  };
+}
+
 async function runOnModel(
   scopedDb: DataContextDb,
   input: GenerateStructuredInput,
@@ -236,11 +292,21 @@ async function runOnModel(
   model: GenerateStructuredExplicitModel,
   options: RunOptions
 ): Promise<GenerateStructuredResult> {
+  return (await prepareRunOnModel(scopedDb, input, deps, model, options))();
+}
+
+async function prepareRunOnModel(
+  scopedDb: DataContextDb,
+  input: GenerateStructuredInput,
+  deps: GenerateStructuredDeps,
+  model: GenerateStructuredExplicitModel,
+  options: RunOptions
+): Promise<() => Promise<GenerateStructuredResult>> {
   const provider = await deps.repository.selectProviderWithCredential(
     scopedDb,
     model.provider_config_id
   );
-  if (!provider) return { ok: false, error: "needs_config" };
+  if (!provider) return async () => ({ ok: false, error: "needs_config" });
 
   if (
     model.provider_kind !== "anthropic" &&
@@ -251,7 +317,7 @@ async function runOnModel(
       { service: input.service, providerKind: model.provider_kind },
       "ai.structured unsupported provider kind"
     );
-    return { ok: false, error: "provider_error" };
+    return async () => ({ ok: false, error: "provider_error" });
   }
   const providerKind = model.provider_kind as ProviderKind;
   let adapter: StructuredProviderAdapter;
@@ -259,7 +325,7 @@ async function runOnModel(
   if (provider.auth_method === "cli") {
     // #982/#869/#981 D3: CLI credentials are sealed markers, not API keys. Route before decrypt so
     // AES-GCM can never see `{ cli: true }`; composition root supplies chat's CLI implementation.
-    if (!deps.createCliStructuredAdapter) return { ok: false, error: "needs_config" };
+    if (!deps.createCliStructuredAdapter) return async () => ({ ok: false, error: "needs_config" });
     adapter = deps.createCliStructuredAdapter(providerKind);
     // #2674: the CLI runs in this user's per-user slot.
     actorUserId = await readScopedActorUserId(scopedDb);
@@ -273,9 +339,9 @@ async function runOnModel(
         { service: input.service, providerKind },
         "ai.structured credential could not be decrypted"
       );
-      return { ok: false, error: "needs_config" };
+      return async () => ({ ok: false, error: "needs_config" });
     }
-    if (!credential) return { ok: false, error: "needs_config" };
+    if (!credential) return async () => ({ ok: false, error: "needs_config" });
     const createAdapter =
       deps.createAdapter ??
       ((kind: ProviderKind, apiKey: string, baseUrl: string | null) =>
@@ -283,6 +349,30 @@ async function runOnModel(
     adapter = createAdapter(providerKind, credential.apiKey, provider.base_url ?? null);
   }
 
+  const transport = {
+    adapter,
+    providerKind,
+    actorUserId,
+    acpAgentId: provider.auth_method === "cli" ? provider.acp_agent_id : undefined
+  };
+  // Pass only execution values to a separate function: no closed DataContext is reused.
+  const logger = deps.logger;
+  return () => runPreparedModel(input, logger, model, options, transport);
+}
+
+async function runPreparedModel(
+  input: GenerateStructuredInput,
+  logger: GenerateStructuredDeps["logger"],
+  model: GenerateStructuredExplicitModel,
+  options: RunOptions,
+  transport: {
+    adapter: StructuredProviderAdapter;
+    providerKind: ProviderKind;
+    actorUserId: string | undefined;
+    acpAgentId: string | null | undefined;
+  }
+): Promise<GenerateStructuredResult> {
+  const { adapter, providerKind, actorUserId, acpAgentId } = transport;
   const signal = options.signal;
   const ajv = new Ajv({ strict: false, validateFormats: false });
   const validate = ajv.compile(input.schema);
@@ -309,7 +399,7 @@ async function runOnModel(
           priority: input.priority,
           scope: input.scope,
           closeScope: input.closeScope,
-          ...(provider.auth_method === "cli" ? { acpAgentId: provider.acp_agent_id } : {}),
+          ...(acpAgentId !== undefined ? { acpAgentId } : {}),
           ...(actorUserId ? { actorUserId } : {})
         }),
         signal
@@ -351,7 +441,7 @@ async function runOnModel(
         input.telemetry?.emit({ kind: "repair" });
         continue;
       }
-      deps.logger?.warn(
+      logger?.warn(
         {
           service: input.service,
           name: error instanceof Error ? error.name : "UnknownError",
@@ -374,7 +464,7 @@ async function runOnModel(
     if (Buffer.byteLength(serialized, "utf8") > STRUCTURED_RESULT_MAX_BYTES) break;
 
     if (validate(result.rawObject)) {
-      deps.logger?.info(
+      logger?.info(
         {
           service: input.service,
           servedBy: options.servedBy,

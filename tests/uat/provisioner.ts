@@ -800,6 +800,9 @@ export async function provisionForUat(
       await runCommand("docker", ["rm", "--force", `${projectName}-meeting-chat-fixture`]).catch(
         () => {}
       );
+      await runCommand("docker", ["rm", "--force", `${projectName}-meeting-outputs-fixture`]).catch(
+        () => {}
+      );
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
           console.error(`teardown failed for ${projectName}:`, error);

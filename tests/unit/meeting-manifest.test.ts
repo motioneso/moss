@@ -14,7 +14,12 @@ describe("meetings composition", () => {
     expect(meeting?.database?.ownedTables).toEqual([
       "app.meeting_records",
       "app.meeting_note_writes",
-      "app.meeting_transcript_batches"
+      "app.meeting_transcript_batches",
+      "app.meeting_output_requests",
+      "app.meeting_output_artifacts",
+      "app.meeting_action_candidates",
+      "app.meeting_export_receipts",
+      "app.meeting_export_requests"
     ]);
     expect(meeting?.navigation).toEqual([
       expect.objectContaining({
@@ -25,6 +30,12 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "POST /api/meetings/records/:id/exports",
+      "GET /api/meetings/records/:id/outputs",
+      "GET /api/meetings/records/:id/outputs/:version",
+      "POST /api/meetings/records/:id/outputs",
+      "PUT /api/meetings/records/:id/outputs",
+      "POST /api/meetings/records/:id/actions/:candidateId/review",
       "POST /api/meetings/records/:id/transcript",
       "GET /api/meetings/records/:id/transcript",
       "GET /api/meetings/records/:id/transcript/evidence",
@@ -37,6 +48,9 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.private_exports",
+      "meetings.grounded_outputs",
+      "meetings.reviewed_tasks",
       "meetings.questions",
       "meetings.transcript_storage",
       "meetings.transcript_review",

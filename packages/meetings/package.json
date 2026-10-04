@@ -14,6 +14,7 @@
     "@moss/db": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/module-web-sdk": "workspace:*",
+    "@moss/notes": "workspace:*",
     "@moss/shared": "workspace:*",
     "@moss/structured-state": "workspace:*",
     "@moss/ui": "workspace:*",

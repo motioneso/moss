@@ -21,6 +21,7 @@ import {
 } from "./editor-state.js";
 import { TranscriptEvidence } from "./transcript-evidence.js";
 import { MeetingTranscript, useMeetingTranscript } from "./meeting-transcript.js";
+import { MeetingSummary } from "./meeting-summary.js";
 import { DeleteMeetingDialog } from "./delete-meeting-dialog.js";
 
 export function MeetingRecord({
@@ -283,12 +284,22 @@ export function MeetingNotes({
             </Button>
           </div>
         </section>
+        <MeetingSummary
+          meeting={meeting}
+          transcriptRevision={transcript.data?.snapshot.transcriptRevision ?? 0}
+          sourceLoading={
+            transcript.isFetching ||
+            (transcript.isError &&
+              !(transcript.error instanceof ApiError && transcript.error.status === 404))
+          }
+          unsavedNotes={dirty}
+        />
       </div>
       <aside className="meetings-section">
         <SectionHead number="03" title="Meeting details" rule />
         <Note variant="practical">
-          Native audio capture and summaries are not available. Retained transcript text, when
-          available, is shown separately from your personal notes.
+          Native audio capture is not available. Review saved notes and retained transcript before
+          generating a summary.
         </Note>
         <Button
           variant="secondary"

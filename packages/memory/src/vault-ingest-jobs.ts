@@ -166,6 +166,50 @@ export async function applyVaultIngestNudge(
   }
 }
 
+export type VaultIngestEnqueueResult =
+  | { readonly status: "queued"; readonly jobId: string }
+  | { readonly status: "delayed" };
+
+export interface VaultIngestEnqueueOptions {
+  /** SHA256 identity derived from actor and resource metadata, never note content. */
+  readonly deduplicationKey: string;
+}
+
+/**
+ * Acknowledges queue acceptance only, never successful indexing. No private error detail.
+ * Optional deduplication suppresses repeats within a five-minute pg-boss time bucket;
+ * it is not permanent exactly-once delivery. A suppressed/null send remains delayed.
+ */
+export async function enqueueVaultIngestNudge(
+  boss: PgBoss,
+  payload: VaultIngestNudgePayload,
+  options?: VaultIngestEnqueueOptions
+): Promise<VaultIngestEnqueueResult> {
+  assertMetadataOnlyPayload(payload);
+  if (
+    options &&
+    (options.deduplicationKey.length !== 64 || !/^[a-f0-9]{64}$/.test(options.deduplicationKey))
+  ) {
+    throw new Error("Vault ingest deduplication identity must be a SHA256 digest");
+  }
+  try {
+    const jobId = await sendJob(
+      boss,
+      VAULT_INGEST_NUDGE_QUEUE,
+      payload,
+      options
+        ? {
+            singletonKey: options.deduplicationKey,
+            singletonSeconds: 300
+          }
+        : undefined
+    );
+    return jobId ? { status: "queued", jobId } : { status: "delayed" };
+  } catch {
+    return { status: "delayed" };
+  }
+}
+
 /**
  * Best-effort scheduling wrapper — callers (e.g. notes-service.ts after a vault write) must not
  * fail their own operation because nudge scheduling failed.
