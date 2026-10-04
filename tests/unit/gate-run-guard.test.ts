@@ -40,4 +40,41 @@ describe("assertGateRunDatabaseAccess (#2989)", () => {
       expect(() => assertGateRunDatabaseAccess(env as NodeJS.ProcessEnv)).toThrow();
     }
   });
+
+  describe("UAT stack seed container", () => {
+    const stackUrls = {
+      JARVIS_BOOTSTRAP_DATABASE_URL: "postgres://postgres:postgres@postgres:5432/jarv1s",
+      JARVIS_MIGRATION_DATABASE_URL: "postgres://m:pw@postgres:5432/jarv1s",
+      JARVIS_APP_DATABASE_URL: "postgres://a:pw@postgres:5432/jarv1s",
+      JARVIS_AUTH_DATABASE_URL: "postgres://u:pw@postgres:5432/jarv1s",
+      JARVIS_WORKER_DATABASE_URL: "postgres://w:pw@postgres:5432/jarv1s"
+    };
+
+    it("allows the seed flag when every URL names the stack's own database", () => {
+      expect(() =>
+        assertGateRunDatabaseAccess({
+          ...stackUrls,
+          JARVIS_UAT_SEED_CONFIRM: "1"
+        } as NodeJS.ProcessEnv)
+      ).not.toThrow();
+    });
+
+    it("refuses the seed flag against the shared dev database", () => {
+      // Defaults resolve to the dev host, and a single stray URL is enough to refuse.
+      expect(() =>
+        assertGateRunDatabaseAccess({ JARVIS_UAT_SEED_CONFIRM: "1" } as NodeJS.ProcessEnv)
+      ).toThrow();
+      expect(() =>
+        assertGateRunDatabaseAccess({
+          ...stackUrls,
+          JARVIS_APP_DATABASE_URL: "postgres://a:pw@jarv1s-postgres:55433/jarv1s",
+          JARVIS_UAT_SEED_CONFIRM: "1"
+        } as NodeJS.ProcessEnv)
+      ).toThrow();
+    });
+
+    it("refuses stack URLs without the seed flag", () => {
+      expect(() => assertGateRunDatabaseAccess(stackUrls as NodeJS.ProcessEnv)).toThrow();
+    });
+  });
 });
