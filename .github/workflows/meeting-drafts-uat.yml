@@ -56,9 +56,23 @@ jobs:
       - name: Record bounded test evidence
         if: always()
         run: |
-          if [ -d /tmp/jarv1s-gate ]; then
-            find /tmp/jarv1s-gate -maxdepth 1 -name '*.log' -type f -exec tail -n 160 {} \;
-          fi
+          python - <<'PYCODE'
+          from pathlib import Path
+          import re
+          for path in Path("/tmp/jarv1s-gate").glob("*.log"):
+              lines = re.sub(r"\x1b\[[0-9;]*m", "", path.read_text(errors="replace")).splitlines()
+              selected = set(range(max(0, len(lines) - 60), len(lines)))
+              matches = 0
+              for index, line in enumerate(lines):
+                  if re.search(r"Error:|TimeoutError|expect\(|[0-9]+\) \[chromium\]|MEETINGS_UAT|\[uat\] running|[0-9]+ passed|[0-9]+ failed", line):
+                      selected.update(range(max(0, index - 4), min(len(lines), index + 35)))
+                      matches += 1
+                      if matches >= 12:
+                          break
+              print(f"Evidence from {path.name}")
+              for index in sorted(selected)[:500]:
+                  print(lines[index])
+          PYCODE
       - name: Stop the gate and its development containers
         if: always()
         timeout-minutes: 3

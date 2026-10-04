@@ -289,6 +289,7 @@ describe("M3 auth, users, settings", () => {
       "/wellness",
       "/sports",
       "/news",
+      "/meetings",
       "/workshop"
     ]);
   });

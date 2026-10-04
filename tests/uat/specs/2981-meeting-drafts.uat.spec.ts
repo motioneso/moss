@@ -14,6 +14,10 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
   if (!requireUatProjectName().startsWith("uat-"))
     throw new Error("Use the isolated UAT provisioner");
   await signInUatAdmin(page);
+  console.log("MEETINGS_UAT signed in", {
+    path: new URL(page.url()).pathname,
+    navigation: await page.locator(".module-link").allTextContents()
+  });
   const originalResponse = await page.request.get("/api/meetings/preferences");
   expect(originalResponse.status()).toBe(200);
   const original = (await originalResponse.json()) as MeetingCapturePreferences;
