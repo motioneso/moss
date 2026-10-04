@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AestheticThemeTokens } from "@moss/shared";
 import {
   applyThemeTokens,
+  deriveHeaderColors,
   deriveNavColors,
   isSolidThemeColor,
   type CSSStyleDeclarationLike
@@ -156,5 +157,43 @@ describe("top bar ground (#3012)", () => {
     expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
     applyThemeTokens(style, null);
     expect(style.values.has("--topbar-muted")).toBe(false);
+  });
+});
+
+describe("page header colors (#3019)", () => {
+  const HEADER_VARS = [
+    "--header-bg",
+    "--header-fg",
+    "--header-muted",
+    "--header-line",
+    "--header-hover"
+  ];
+
+  it("keeps title and secondary text at 4.5:1 on light, dark and mid grounds", () => {
+    for (const ground of ["#ffffff", "#f6f1e4", "#1c1a16", "#000000", "#7a7a7a", "#2f6a4c"]) {
+      const colors = deriveHeaderColors(ground)!;
+      expect(ratio(colors.vars["--header-fg"]!, ground)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(colors.vars["--header-muted"]!, ground)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("sets the header vars only when a header color is present, and clears them", () => {
+    const style = fakeStyle();
+    applyThemeTokens(style, baseTokens);
+    for (const name of HEADER_VARS) expect(style.values.has(name)).toBe(false);
+    applyThemeTokens(style, { ...baseTokens, header: "#1c1a16" });
+    for (const name of HEADER_VARS) expect(style.values.has(name)).toBe(true);
+    applyThemeTokens(style, baseTokens);
+    for (const name of HEADER_VARS) expect(style.values.has(name)).toBe(false);
+  });
+
+  it("leaves the bar ground alone when a header color is set", () => {
+    const style = fakeStyle();
+    applyThemeTokens(style, { ...baseTokens, header: "#1c1a16" });
+    expect(style.values.get("--topbar-bg")).toBe("rgb(238 241 244 / 0.85)");
+  });
+
+  it("returns null for a color that is not solid", () => {
+    expect(deriveHeaderColors("rgba(28, 26, 22, 0.5)")).toBeNull();
   });
 });

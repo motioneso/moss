@@ -41,6 +41,15 @@ const NAV_VARS = [
   "--nav-brand"
 ] as const;
 
+/* Page header vars (desktop top bar). Unset, the bar keeps wearing the theme's paper. */
+const HEADER_VARS = [
+  "--header-bg",
+  "--header-fg",
+  "--header-muted",
+  "--header-line",
+  "--header-hover"
+] as const;
+
 /* House ink and bone; nav text uses whichever reads better on the chosen ground. */
 const NAV_DARK_TEXT: Rgb = { r: 0x28, g: 0x2c, b: 0x25 };
 const NAV_LIGHT_TEXT: Rgb = { r: 0xed, g: 0xe5, b: 0xd2 };
@@ -72,7 +81,8 @@ const CLEARED_RUNTIME_VARS = [
   "--gold-soft",
   "--gold-soft-2",
   "--gold-ink",
-  ...NAV_VARS
+  ...NAV_VARS,
+  ...HEADER_VARS
 ] as const;
 
 export function isThemeColor(value: string): boolean {
@@ -167,6 +177,40 @@ export function deriveNavColors(nav: string, accent: string): NavColors | null {
   };
 }
 
+export interface HeaderColors {
+  readonly vars: Record<(typeof HEADER_VARS)[number], string>;
+  readonly textRatio: number;
+  readonly mutedRatio: number;
+  readonly textKind: "dark" | "light";
+  /** True when neither house color reached 4.5:1 and text fell back to black or white. */
+  readonly strongText: boolean;
+}
+
+/**
+ * Derives readable page header colors for any ground, with the same text rule as the nav:
+ * house ink or bone (black or white on mid-tones), and quieter labels dimmed only as far
+ * as 4.5:1 allows. The title, date line and settings cog all draw from these.
+ */
+export function deriveHeaderColors(header: string): HeaderColors | null {
+  const bg = parseThemeColor(header);
+  if (!bg) return null;
+  const fg = readableText(bg);
+  const muted = dimTextOn(fg, bg);
+  return {
+    vars: {
+      "--header-bg": rgbToHex(bg),
+      "--header-fg": rgbToHex(fg),
+      "--header-muted": rgbToHex(muted),
+      "--header-line": rgbToHex(mix(bg, fg, 0.2)),
+      "--header-hover": rgbToHex(shade(bg, fg, 0.08))
+    },
+    textRatio: ratio(fg, bg),
+    mutedRatio: ratio(muted, bg),
+    textKind: fg === NAV_DARK_TEXT || fg === BLACK ? "dark" : "light",
+    strongText: fg === BLACK || fg === WHITE
+  };
+}
+
 export function applyThemeTokens(
   style: CSSStyleDeclarationLike,
   tokens: AestheticThemeTokens | null
@@ -220,6 +264,13 @@ export function applyThemeTokens(
     const nav = deriveNavColors(tokens.nav, tokens.accent);
     if (nav) {
       for (const [name, value] of Object.entries(nav.vars)) style.setProperty(name, value);
+    }
+  }
+
+  if (tokens.header) {
+    const header = deriveHeaderColors(tokens.header);
+    if (header) {
+      for (const [name, value] of Object.entries(header.vars)) style.setProperty(name, value);
     }
   }
 }

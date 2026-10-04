@@ -61,3 +61,18 @@ styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder 
 2. The phone's top bar and the menu both take the nav color.
 3. Custom themes have no separate light and dark colors (checked in the app shell), so there is
    one nav color per custom theme.
+
+## Page header color (#3019)
+
+- A "Page header" group in the custom theme editor sets the color of the strip across the top of
+  every page: page title, date line and settings cog. It has a color box and hex field like the
+  nav, a miniature of the strip, a contrast readout and "Reset to default". The color must be
+  solid.
+- The live preview has a header strip, and clicking it opens the picker for this color.
+- Desktop only. At 920px wide or less the strip keeps following the Nav bar color, and the
+  Page header color is ignored there.
+- Without a header color the strip keeps today's look: the theme's page color, with text taken
+  from the theme's text color. Saved themes without the value are unchanged.
+- Text uses the same rule as the nav: house ink or bone, full black or white on a middle tone,
+  and the quieter date and cog labels dimmed only as far as 4.5 to 1 allows. The "Page header"
+  box is separate from the "Nav bar" box; the two do not share a value.

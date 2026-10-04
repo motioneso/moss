@@ -5,6 +5,7 @@ import {
   CheckSquare,
   Copy,
   House,
+  Settings,
   Palette,
   PencilLine,
   Plus,
@@ -24,6 +25,7 @@ import {
 import { queryKeys } from "../api/query-keys";
 import {
   applyThemeTokens,
+  deriveHeaderColors,
   deriveNavColors,
   isSolidThemeColor,
   isThemeColor,
@@ -59,6 +61,7 @@ interface SaveThemeDraftDeps {
    shell draws for a custom theme without a nav color. */
 const DEFAULT_HIGHLIGHT = "#c2872b";
 const DEFAULT_NAV = "#e7ebdf";
+/* No default color for the header: unset, the strip follows the theme's page color. */
 
 interface FieldSpec {
   readonly key: EditorTokenKey;
@@ -118,18 +121,31 @@ const NAV_FIELD: FieldSpec = {
   desc: "Behind the links, icons and the Moss mark"
 };
 
+const HEADER_FIELD: FieldSpec = {
+  key: "header",
+  name: "Background",
+  desc: "Behind the page title, the date line and the settings cog"
+};
+
 const FIELD_NAMES = Object.fromEntries(
-  [...FIELD_GROUPS.flatMap((group) => group.fields), NAV_FIELD].map((field) => [
+  [...FIELD_GROUPS.flatMap((group) => group.fields), NAV_FIELD, HEADER_FIELD].map((field) => [
     field.key,
     field.name
   ])
 ) as Record<EditorTokenKey, string>;
+/* Nav and header boxes are both labelled Background in their own groups. Pickers and errors
+   name them in full so the two cannot be confused. */
+FIELD_NAMES.nav = "Nav bar background";
+FIELD_NAMES.header = "Page header background";
 
 /* The nav derives its text contrast from its own ground, so it must be opaque. */
 export function themeColorError(key: EditorTokenKey, value: string): string | null {
   if (!isThemeColor(value)) return "Use #rrggbb or rgb(r, g, b).";
   if (key === "nav" && !isSolidThemeColor(value)) {
     return "The nav needs a solid color. Use #rrggbb, rgb(r, g, b), or rgba with alpha 1.";
+  }
+  if (key === "header" && !isSolidThemeColor(value)) {
+    return "The page header needs a solid color. Use #rrggbb, rgb(r, g, b), or rgba with alpha 1.";
   }
   return null;
 }
@@ -199,6 +215,7 @@ export function AppearancePane() {
     if (!draft) return "";
     if (key === "highlight") return draft.tokens.highlight ?? DEFAULT_HIGHLIGHT;
     if (key === "nav") return draft.tokens.nav ?? DEFAULT_NAV;
+    if (key === "header") return draft.tokens.header ?? draft.tokens.paper;
     return draft.tokens[key];
   };
   const updateToken = (key: EditorTokenKey, value: string) => {
@@ -213,6 +230,15 @@ export function AppearancePane() {
       if (!current) return current;
       const tokens = { ...current.tokens };
       delete tokens.nav;
+      return { ...current, tokens };
+    });
+    setStatus(null);
+  };
+  const resetHeader = () => {
+    setDraft((current) => {
+      if (!current) return current;
+      const tokens = { ...current.tokens };
+      delete tokens.header;
       return { ...current, tokens };
     });
     setStatus(null);
@@ -237,7 +263,12 @@ export function AppearancePane() {
   };
   const saveDraft = () => {
     if (!draft) return;
-    for (const key of [...AESTHETIC_THEME_TOKEN_KEYS, "highlight" as const, "nav" as const]) {
+    for (const key of [
+      ...AESTHETIC_THEME_TOKEN_KEYS,
+      "highlight" as const,
+      "nav" as const,
+      "header" as const
+    ]) {
       const value = draft.tokens[key];
       const problem = value === undefined ? null : themeColorError(key, value);
       if (problem) {
@@ -296,6 +327,7 @@ export function AppearancePane() {
   const builtIn = themesQuery.data?.builtIn ?? [];
   const custom = themesQuery.data?.custom ?? [];
   const navColors = draft ? deriveNavColors(fieldValue("nav"), draft.tokens.accent) : null;
+  const headerColors = draft ? deriveHeaderColors(fieldValue("header")) : null;
 
   const colorBox = (field: FieldSpec) => (
     <span className="theme-field__control">
@@ -523,6 +555,50 @@ export function AppearancePane() {
                     size="sm"
                     disabled={draft.tokens.nav === undefined}
                     onClick={resetNav}
+                  >
+                    Reset to default
+                  </Button>
+                </div>
+              </section>
+
+              <section className="theme-fields">
+                <h4 className="theme-fields__title">Page header</h4>
+                <p className="theme-fields__hint">
+                  The strip across the top of every page, with the page title, the date line and the
+                  settings cog. It applies on a computer. On a phone the strip follows the Nav bar
+                  color. Text picks dark or light by itself.
+                </p>
+                <Row
+                  name={HEADER_FIELD.name}
+                  desc={HEADER_FIELD.desc}
+                  control={colorBox(HEADER_FIELD)}
+                />
+                <div
+                  className="theme-headerstrip"
+                  style={(headerColors?.vars ?? {}) as CSSProperties}
+                  aria-hidden="true"
+                >
+                  <span className="theme-headerstrip__title">Today</span>
+                  <span className="theme-headerstrip__date">Sunday, October 4</span>
+                  <span className="theme-headerstrip__cog">
+                    <Settings size={15} />
+                  </span>
+                </div>
+                <div className="theme-navstrip__foot">
+                  <p className="theme-fields__hint">
+                    {draft.tokens.header && headerColors
+                      ? `Text switches to ${headerColors.textKind} on this color. The title reads at ${headerColors.textRatio.toFixed(1)} to 1, the date and cog at ${headerColors.mutedRatio.toFixed(1)} to 1. Both clear the 4.5 to 1 floor.${
+                          headerColors.strongText
+                            ? ` This is a middle tone, so Moss uses full ${headerColors.textKind === "dark" ? "black" : "white"} text.`
+                            : ""
+                        }`
+                      : "Using the theme's page color."}
+                  </p>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={draft.tokens.header === undefined}
+                    onClick={resetHeader}
                   >
                     Reset to default
                   </Button>

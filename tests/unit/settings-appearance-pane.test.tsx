@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -170,5 +171,30 @@ describe("appearance pane helpers", () => {
     expect(css["--paper"]).toBe("#ffffff");
     expect(css["--accent"]).toBe("#2f6a4c");
     expect(css["--red"]).toBeUndefined();
+  });
+});
+
+describe("page header editing (#3019)", () => {
+  it("lists the header as a clickable preview part and rejects non-solid values", () => {
+    expect(PREVIEW_PARTS.header.key).toBe("header");
+    expect(themeColorError("header", "#1c1a16")).toBeNull();
+    expect(themeColorError("header", "rgba(28, 26, 22, 0.5)")).not.toBeNull();
+  });
+
+  it("gives a draft with no header value no header vars, as after Reset to default", () => {
+    const withHeader = tokensToCssVars({ ...tokens, header: "#1c1a16" });
+    expect(withHeader["--header-bg"]).toBeDefined();
+    const { header: _dropped, ...reset } = { ...tokens, header: "#1c1a16" };
+    expect(Object.keys(tokensToCssVars(reset)).some((name) => name.startsWith("--header-"))).toBe(
+      false
+    );
+  });
+
+  it("clears the applied theme's header vars on the preview so a reset draft shows its own page color", () => {
+    const css = readFileSync("packages/ui/src/styles/components-theme-editor.css", "utf8");
+    const block = /\.theme-pv,[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    for (const name of ["bg", "fg", "muted", "line", "hover"]) {
+      expect(block).toContain(`--header-${name}: initial;`);
+    }
   });
 });
