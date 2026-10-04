@@ -10,7 +10,7 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 // Needs a database: run through the verify-gate skill, scoped to this file (#2638 plan §4.1).
 //
 // Backtrack's screen history is embedded under a new memory source_kind, 'screen'. This file
-// proves the widened CHECK (0268) and the new deleteChunksForSources primitive backtrack uses
+// proves the widened CHECK (0281) and the new deleteChunksForSources primitive backtrack uses
 // instead of ever touching app.memory_chunks itself.
 
 const { Client } = pg;
@@ -58,15 +58,15 @@ async function stillExists(id: string): Promise<boolean> {
 }
 
 describe("memory_chunks source_kind CHECK", () => {
-  it("the migration 0268 file is applied", async () => {
+  it("the migration 0281 file is applied", async () => {
     const result = await bootstrap.query<{ name: string }>(
-      `SELECT name FROM app.schema_migrations WHERE version = '0268'`
+      `SELECT name FROM app.schema_migrations WHERE version = '0281'`
     );
-    expect(result.rows).toEqual([{ name: "0268_memory_screen_source_kind.sql" }]);
+    expect(result.rows).toEqual([{ name: "0281_memory_screen_source_kind.sql" }]);
   });
 
   it("the pre-migration constraint rejected 'screen'; the migrated constraint accepts it", async () => {
-    // Reproduce the pre-0268 constraint to prove this migration is what fixes it, then restore
+    // Reproduce the pre-0281 constraint to prove this migration is what fixes it, then restore
     // the real migrated constraint in a `finally` so later tests in this file see the real state.
     await bootstrap.query(
       `ALTER TABLE app.memory_chunks DROP CONSTRAINT memory_chunks_source_kind_check`

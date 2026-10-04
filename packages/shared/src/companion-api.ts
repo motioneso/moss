@@ -571,7 +571,7 @@ export interface BacktrackUploadResponse {
 }
 
 // Character pre-checks only (ajv counts JS string length, not UTF-8 bytes): the same numeric
-// bound as the column's `octet_length` CHECK (packages/backtrack/sql/0269), so anything that
+// bound as the column's `octet_length` CHECK (packages/backtrack/sql/0282), so anything that
 // could possibly be too long in bytes is already too long in characters and is rejected here,
 // cheaply, before the route does the exact byte-length check on the (post-redaction) text.
 const BACKTRACK_TIMESTAMP_SCHEMA = { type: "string", minLength: 1, maxLength: 40 } as const;

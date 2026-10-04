@@ -34,7 +34,7 @@ export const backtrackModuleManifest: MossModuleManifest = {
   },
   compatibility: { jarv1s: ">=0.0.0" },
   database: {
-    migrations: ["sql/0269_backtrack_segments.sql"],
+    migrations: ["sql/0282_backtrack_segments.sql"],
     migrationDirectories: ["packages/backtrack/sql"],
     ownedTables: ["app.backtrack_segments", "app.backtrack_preferences", "app.backtrack_deletions"]
   },
