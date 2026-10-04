@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import type { AestheticThemeTokens } from "@moss/shared";
+import { ColorBox } from "@moss/ui";
 import {
   AppearancePane,
   contrastRatio,
@@ -12,6 +13,7 @@ import {
   tokensToCssVars
 } from "../../apps/web/src/settings/settings-appearance-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
+import { PREVIEW_PARTS, ThemePreview } from "../../apps/web/src/settings/settings-theme-preview.js";
 import { parsePalette } from "../../apps/web/src/theme/theme-runtime.js";
 
 function renderAppearancePane(): string {
@@ -63,16 +65,51 @@ describe("parsePalette (auto-staging)", () => {
   });
 });
 
-describe("AppearancePane — palette auto-staging wiring", () => {
-  it("never renders a Stage colors button in any state", () => {
-    // The editor section (including the paste textarea) is only visible when draft
-    // state is set via user interaction — not directly settable via QueryClient.
-    // Without jsdom + @testing-library/react there is no DOM event machinery to
-    // simulate the click that opens the editor. The deepest assertion available in
-    // this SSR-only suite: "Stage colors" is absent everywhere in the output,
-    // confirming the button was removed and auto-staging is unconditional.
-    const html = renderAppearancePane();
-    expect(html).not.toContain("Stage colors");
+describe("ColorBox", () => {
+  const box = (open: boolean, palette: string[]) =>
+    renderToString(
+      createElement(ColorBox, {
+        label: "Accent",
+        value: "#2C5D8A",
+        palette,
+        open,
+        onOpenChange: () => undefined,
+        onChange: () => undefined
+      })
+    );
+
+  it("fills the whole box with the color and keeps the picker closed", () => {
+    const html = box(false, ["#2c5d8a"]);
+    expect(html).toContain("--jds-colorbox:#2C5D8A");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("From your palette");
+  });
+
+  it("opens with the pasted palette on top and marks the current color", () => {
+    const html = box(true, ["#2c5d8a", "#d39b3c"]);
+    expect(html).toContain("From your palette");
+    expect(html).toContain('aria-label="Use #2c5d8a" aria-pressed="true"');
+    expect(html).toContain('aria-label="Use #d39b3c" aria-pressed="false"');
+    expect(html).toContain("Any color");
+  });
+
+  it("asks for a palette when none was pasted", () => {
+    expect(box(true, [])).toContain("Paste a palette and its colors show here.");
+  });
+});
+
+describe("ThemePreview", () => {
+  it("says the preview is clickable and marks every part with its field", () => {
+    const html = renderToString(
+      createElement(ThemePreview, { style: {}, openPart: "rule", onPick: () => undefined })
+    );
+    expect(html).toContain("Click any part to change its color.");
+    for (const part of Object.keys(PREVIEW_PARTS)) {
+      expect(html).toContain(`data-part="${part}"`);
+    }
+    expect(html).toContain('class="theme-pv__rule is-open"');
+    expect(PREVIEW_PARTS.rule.key).toBe("highlight");
+    expect(PREVIEW_PARTS.nav.key).toBe("nav");
   });
 });
 

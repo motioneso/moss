@@ -66,6 +66,10 @@ _No enum or boolean props._
 - **toggle** (optional boolean flag)
 - **selected** (optional boolean flag)
 
+## color-box
+
+- **open** (required boolean flag)
+
 ## combobox
 
 - **disabled** (optional boolean flag)

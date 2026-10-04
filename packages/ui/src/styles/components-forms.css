@@ -264,3 +264,135 @@
   color: var(--ink-3);
   font-size: var(--text-sm);
 }
+
+/* Color box: the chosen color fills the whole box; the hairline sits outside. */
+.jds-colorbox-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.jds-colorbox {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--jds-colorbox, transparent);
+  box-shadow: 0 0 0 var(--border-w) var(--border-strong);
+  overflow: hidden;
+  cursor: pointer;
+  appearance: none;
+}
+.jds-colorbox::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.jds-colorbox::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+.jds-colorbox::-moz-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+.jds-colorbox:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Line colors draw a rule on the page color at the line's real weight. */
+.jds-colorbox--rule {
+  display: grid;
+  align-content: center;
+  background: var(--paper);
+}
+.jds-colorbox--rule i {
+  display: block;
+  margin: 0 5px;
+  border-top: var(--colorbox-rule-weight, 1px) solid var(--colorbox-rule-color);
+}
+
+.jds-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--jds-swatch);
+  box-shadow: 0 0 0 var(--border-w) var(--border-strong);
+}
+
+/* Picker panel: pasted palette on top, any color below. */
+.jds-colorpop {
+  position: absolute;
+  z-index: 30;
+  width: 240px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--surface);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+.jds-colorpop--under {
+  top: calc(100% + var(--space-2));
+  right: 0;
+}
+.jds-colorpop__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+.jds-colorpop__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--weight-heavy);
+}
+.jds-colorpop__value {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.jds-colorpop__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+}
+.jds-colorpop__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 2px;
+}
+.jds-colorpop__swatch {
+  cursor: pointer;
+}
+.jds-colorpop__swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 var(--border-w) var(--border-strong),
+    0 0 0 3px var(--surface),
+    0 0 0 5px var(--text);
+}
+.jds-colorpop__swatch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+.jds-colorpop__empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.jds-colorpop__any {
+  width: 100%;
+  height: 32px;
+}

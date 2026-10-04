@@ -188,6 +188,15 @@
       ]
     },
     {
+      "name": "color-box",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/color-box.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["ColorBox", "ColorPopover"],
+      "options": [],
+      "flags": [{ "prop": "open", "optional": false }]
+    },
+    {
       "name": "combobox",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/combobox.tsx", "type": "registry:ui" }],
