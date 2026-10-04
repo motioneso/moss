@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Theme editor, phone - mockup</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+<div class="phones">
+  <div>
+    <p class="phone__cap">1. Top of Appearance, Harbor applied</p>
+    <div class="phone" id="p1"></div>
+  </div>
+  <div>
+    <p class="phone__cap">2. Nav color box tapped: the palette on top</p>
+    <div class="phone" id="p2"></div>
+  </div>
+  <div>
+    <p class="phone__cap">3. Menu open in Harbor's nav color</p>
+    <div class="phone" id="p3"></div>
+  </div>
+</div>
+<script src="mockup.js"></script>
+<script src="pane.js"></script>
+<script>
+  function shell(inner) {
+    return '<div class="topbar topbar--nav"><span class="topbar__btn">' + svg("menu") + '</span><span class="topbar__title">Settings</span><span class="topbar__btn">' + svg("chat") + '</span></div>' + inner;
+  }
+  var pane = '<div class="settings"><h1 class="settings__title">Settings</h1><div class="settings__grid"><div id="X"></div></div></div>';
+  ["p1", "p2"].forEach(function (id) {
+    document.getElementById(id).innerHTML = shell(pane.replace("X", id + "-pane"));
+    document.getElementById(id + "-pane").innerHTML = paneMarkup();
+  });
+  /* Frame 2 starts at the editor. */
+  var p2 = document.getElementById("p2");
+  p2.addEventListener("scroll", function () {}, { passive: true });
+  document.getElementById("p3").innerHTML = shell(pane.replace("X", "p3-pane")) + '<div class="scrim"></div><nav class="nav drawer">' + navMarkup() + "</nav>";
+  document.getElementById("p3-pane").innerHTML = paneMarkup();
+  bar("Theme editor - phone 390", '<a href="desktop.html">Desktop</a> <a href="nav-colors.html">Nav colors</a> <a href="README.md">Notes</a>');
+  readHash();
+  render();
+  var ed = p2.querySelector("#navgroup");
+  p2.scrollTop = ed.offsetTop - 64;
+  /* Shown open: the nav color box was tapped. */
+  openPicker("nav", p2.querySelector('[data-colorbox="nav"]'));
+</script>
+</body>
+</html>
