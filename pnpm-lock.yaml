@@ -129,6 +129,9 @@ importers:
       '@moss/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@moss/backtrack':
+        specifier: workspace:*
+        version: link:../../packages/backtrack
       '@moss/chat':
         specifier: workspace:*
         version: link:../../packages/chat

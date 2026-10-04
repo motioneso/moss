@@ -227,6 +227,45 @@ export class BacktrackRepository {
     `.execute(scopedDb.db);
   }
 
+  /**
+   * Decision 10's "one predicate, in two places": given a batch of candidate segments (already
+   * shifted to server time), returns the `index` of every one whose `[startedAt, endedAt]`
+   * overlaps any of the owner's deletion markers. The ingest route (Task B) drops those as
+   * `discarded` before insert; `deleteSegmentsInRange` above is the same predicate's other half,
+   * run at delete time. One round trip for the whole batch rather than one query per segment.
+   */
+  async findOverlappingDeletionMarkerIndexes(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    segments: readonly {
+      readonly index: number;
+      readonly startedAt: Date;
+      readonly endedAt: Date;
+    }[]
+  ): Promise<ReadonlySet<number>> {
+    assertDataContextDb(scopedDb);
+    if (segments.length === 0) return new Set();
+
+    const rows = sql.join(
+      segments.map(
+        (segment) =>
+          sql`(${segment.index}::int, ${segment.startedAt}::timestamptz, ${segment.endedAt}::timestamptz)`
+      )
+    );
+
+    const result = await sql<{ idx: number }>`
+      SELECT c.idx
+      FROM (VALUES ${rows}) AS c(idx, started_at, ended_at)
+      WHERE EXISTS (
+        SELECT 1 FROM app.backtrack_deletions d
+        WHERE d.owner_user_id = ${ownerUserId}::uuid
+          AND d.range && tstzrange(c.started_at, c.ended_at, '[]')
+      )
+    `.execute(scopedDb.db);
+
+    return new Set(result.rows.map((row) => Number(row.idx)));
+  }
+
   /** Every deletion marker for one owner, oldest first. */
   async listDeletionMarkers(
     scopedDb: DataContextDb,

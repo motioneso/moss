@@ -68,6 +68,11 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("POST", "/api/companion/focus/context"),
   routeKey("POST", "/api/companion/focus/judge"),
   routeKey("POST", "/api/companion/focus/correct"),
+  // #2638 Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.4): screen-history ingest.
+  // Platform for the same reason as focus above (companion-credential auth, which a guarded
+  // route can't accept) — and backtrack is a required, non-disableable module anyway (decision
+  // 12), so gating this on module enablement would be redundant, never protective.
+  routeKey("POST", "/api/companion/backtrack"),
   // settings: pre-auth bootstrap + own profile
   routeKey("GET", "/api/bootstrap/status"),
   routeKey("GET", "/api/me"),

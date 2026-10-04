@@ -164,7 +164,10 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "trigger",
   "notificationId",
   "recipientUserId",
-  "releaseAt"
+  "releaseAt",
+  // #2638 Backtrack phase 2a §4.4: ids only, never the segment text — the index job re-reads
+  // each row by id under the owner's own data context.
+  "segmentIds"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {

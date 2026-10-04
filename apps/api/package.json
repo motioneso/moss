@@ -12,6 +12,7 @@
     "@fastify/websocket": "^11.3.0",
     "@moss/ai": "workspace:*",
     "@moss/auth": "workspace:*",
+    "@moss/backtrack": "workspace:*",
     "@moss/chat": "workspace:*",
     "@moss/connectors": "workspace:*",
     "@moss/db": "workspace:*",
