@@ -905,6 +905,9 @@ button.module-link {
     inset: 0 auto 0 0;
     z-index: 20;
     width: min(19rem, 88vw);
+    /* inset 0 pins the bottom to the visible area; the base 100vh would
+       overshoot it while a phone browser toolbar is showing. */
+    height: auto;
     transform: translateX(-100%);
     transition: transform 160ms ease;
     overflow-y: hidden;
