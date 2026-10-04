@@ -19,15 +19,8 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## People sync: which notes count as a person? (2026-10-04, run overnight-2026-10-03)
-
-People sync skipped 56 of 59 notes because it only reads Moss's own strict note format (issue #2997).
-The fix reads ordinary person notes, takes the name from the file name or heading, and keeps other
-fields when it writes back. Blocked: which notes in the People folder it should treat as people.
-
-- Option A: every note in the People folder is a person.
-- Option B: only notes marked `type: person` (53 of the 59 are).
-- Recommendation: B, because it skips stray index or template notes and already covers almost all of them.
+<!-- Resolved 2026-10-04: People sync, which notes count as a person. Ben ruled every note in the
+People folder is a person (option A). Ruling recorded on issue #2997. -->
 
 <!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
 Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
