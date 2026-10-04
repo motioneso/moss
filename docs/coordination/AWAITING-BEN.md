@@ -75,4 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-- 2026-10-03 17:15, run overnight-2026-10-03, issue #2956 (PR #2976): the activity detail popup has "asked for" and "returned" rows that nothing fills, because the spec never says what they hold. Options: (1) hide those rows when nothing is recorded, in slice D; (2) define what they show per step kind and have the writers fill them, as a spec addition and a follow-up issue; (3) both, hide now and fill later. Coordinator recommends 3. Not blocking slice D.
+Nothing open.
+
+<!-- RESOLVED 2026-10-03: 2026-10-03 17:15, run overnight-2026-10-03, issue #2956 (PR #2976): the activity detail popup has "asked for" and "returned" rows that nothing fills, because the spec never says what they hold. Options: (1) hide those rows when nothing is recorded, in slice D; (2) define what they show per step kind and have the writers fill them, as a spec addition and a follow-up issue; (3) both, hide now and fill later. Coordinator recommends 3. Not blocking slice D. Ben chose 3: slice D hides the rows; filling them is https://github.com/motioneso/moss/issues/2987. -->
