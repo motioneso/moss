@@ -561,6 +561,16 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0260",
           name: "0260_activity_detail_no_reparent.sql"
+        },
+        // #2984 R2.1 — per-tool sort records and keep-out list on connected services.
+        {
+          version: "0268",
+          name: "0268_integration_classifier_sort.sql"
+        },
+        // #2984 R2.1 — one-time conversion of old opt-in and reviewed-risk settings.
+        {
+          version: "0269",
+          name: "0269_integration_classifier_sort_convert.sql"
         }
       ]);
     } finally {
