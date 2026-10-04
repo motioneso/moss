@@ -40,7 +40,7 @@ function makeServer(options?: {
   readonly initialSettings?: readonly [string, Record<string, unknown>][];
   readonly env?: NodeJS.ProcessEnv;
   readonly isAdmin?: boolean;
-  readonly hasEligibleRelease?: boolean;
+  readonly hasShadowReview?: boolean;
   /** When false, no activation port is wired (exercises the fail-closed default). */
   readonly wireActivationPort?: boolean;
   /** When true, the activation port's database read throws (exercises fail-closed on error). */
@@ -98,9 +98,9 @@ function makeServer(options?: {
       ? {}
       : {
           classifierActivation: {
-            hasEligibleRelease: async () => {
-              if (options?.activationPortThrows) throw new Error("release read failed");
-              return options?.hasEligibleRelease ?? false;
+            hasShadowReviewForCurrentClassifier: async () => {
+              if (options?.activationPortThrows) throw new Error("shadow review read failed");
+              return options?.hasShadowReview ?? false;
             }
           }
         })
@@ -278,8 +278,8 @@ describe("runtime config admin routes", () => {
     expect(shadowRes.json()).toEqual({ config: { value: "shadow", source: "instance" } });
   });
 
-  it("rejects turning the classifier gate on without an approved tool release (#2881)", async () => {
-    const made = makeServer({ hasEligibleRelease: false });
+  it("rejects a forged admin PUT of on without a shadow review for the current classifier (#2984)", async () => {
+    const made = makeServer({ hasShadowReview: false });
     server = made.server;
 
     const res = await server.inject({
@@ -289,12 +289,15 @@ describe("runtime config admin routes", () => {
     });
 
     expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe(
+      "The classifier gate cannot be turned on: no shadow review is recorded for the current classifier."
+    );
     // No write and no audit row may happen on the rejection path.
     expect(made.upserts).toEqual([]);
   });
 
-  it("accepts the classifier gate on when an approved tool release exists (#2881)", async () => {
-    const made = makeServer({ hasEligibleRelease: true });
+  it("accepts the classifier gate on when the current classifier has a shadow review (#2984)", async () => {
+    const made = makeServer({ hasShadowReview: true });
     server = made.server;
 
     const res = await server.inject({
@@ -323,7 +326,7 @@ describe("runtime config admin routes", () => {
   });
 
   it("rejects a non-admin writing the classifier gate (#2881)", async () => {
-    const made = makeServer({ isAdmin: false, hasEligibleRelease: true });
+    const made = makeServer({ isAdmin: false, hasShadowReview: true });
     server = made.server;
 
     const res = await server.inject({
@@ -336,9 +339,9 @@ describe("runtime config admin routes", () => {
     expect(made.upserts).toEqual([]);
   });
 
-  // #2881: if the release read fails, the activation check must fail closed — the `on` write is
+  // #2881: if the shadow review read fails, the activation check must fail closed — the `on` write is
   // never stored. This is the "database read errors" path the security review asked to cover.
-  it("fails closed when the release check's database read throws (#2881)", async () => {
+  it("fails closed when the shadow review database read throws (#2881)", async () => {
     const made = makeServer({ activationPortThrows: true });
     server = made.server;
 

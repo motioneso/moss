@@ -7,14 +7,16 @@ import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import {
   emptyPreparationMap,
   emptySortMap,
-  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   parsePreparationMap,
   parseSortMap,
   preparationEntry,
+  preparationHasRoom,
   withoutStaleSendChoices,
+  withPreparationFailure,
   withSendWithoutAsking,
   withSortResult,
   type ClassifierPreparationEntry,
+  type ClassifierPreparationFailure,
   type ClassifierPreparationMap,
   type ClassifierSortMap,
   type ClassifierSortResult,
@@ -331,12 +333,7 @@ export class IntegrationsRepository {
 
     const map = row.classifierPreparation;
     const existing = preparationEntry(map, toolName);
-    if (
-      existing === undefined &&
-      Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
-    ) {
-      return { status: "too_many" };
-    }
+    if (!preparationHasRoom(map, toolName)) return { status: "too_many" };
     const entry: ClassifierPreparationEntry = {
       optIn: input.optIn,
       reviewedRisk: input.reviewedRisk,
@@ -351,6 +348,46 @@ export class IntegrationsRepository {
 
     const updated = await this.writePreparationEntry(scopedDb, id, toolName, entry);
     return updated ? { status: "saved", connection: updated } : { status: "not_found" };
+  }
+
+  /**
+   * Record that automatic preparation failed for one tool (#2984 R2.4). The failure is tied to the
+   * definition it was attempted against, so the job leaves it for the owner's Try again. Only a
+   * discovered tool is recorded. Failures that can no longer block a run are dropped in the same
+   * write, and the row lock keeps the rewrite of the whole failure set from losing another write.
+   */
+  async saveClassifierPreparationFailure(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string,
+    failure: ClassifierPreparationFailure
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row?.discoveredTools.some((tool) => tool.name === toolName)) return false;
+    const failures = withPreparationFailure(
+      row.classifierPreparation,
+      row.discoveredTools,
+      toolName,
+      failure
+    );
+    if (!failures) return false;
+
+    const result = await sql`
+      UPDATE app.integration_connections
+      SET classifier_preparation = jsonb_set(
+            CASE
+              WHEN ${WELL_FORMED_PREPARATION} THEN classifier_preparation
+              ELSE '{"version": 1, "entries": {}}'::jsonb
+            END,
+            ARRAY['failures'],
+            ${JSON.stringify(failures)}::jsonb,
+            true
+          ),
+          updated_at = now()
+      WHERE id = ${id}::uuid
+    `.execute(scopedDb.db);
+    return (result.numAffectedRows ?? 0n) > 0n;
   }
 
   /** Remove one saved classifier preparation entry (opt-out / discard a stale review). */
@@ -467,9 +504,9 @@ export class IntegrationsRepository {
   }
 
   /**
-   * Write a single reviewed entry with `jsonb_set`, touching only that tool's key. Two tabs saving
-   * different tools therefore merge instead of overwriting each other's map (the whole-map write
-   * this replaces could lose the other tab's review).
+   * Write a single entry with `jsonb_set`, touching only that tool's key, and clear the tool's
+   * stored failure. Two writers saving different tools therefore merge instead of overwriting each
+   * other's map.
    */
   private async writePreparationEntry(
     scopedDb: DataContextDb,
@@ -488,7 +525,7 @@ export class IntegrationsRepository {
             ARRAY['entries', ${toolName}],
             ${entryJson}::jsonb,
             true
-          ),
+          ) #- ARRAY['failures', ${toolName}],
           updated_at = now()
       WHERE id = ${id}::uuid
       RETURNING ${sql.raw(SELECT_COLUMNS)}

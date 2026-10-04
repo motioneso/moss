@@ -2,9 +2,10 @@ import type { FastifyBaseLogger } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { PgBoss, WorkOptions } from "pg-boss";
 
-import type { AccessContext, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
+import type { AccessContext, DataContextRunner, MossDatabase } from "@moss/db";
 import { sendJob, toAccessContext, type QueueDefinition } from "@moss/jobs";
 
+import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
 import type { ClassifierPreparationPort, PreparationChatModel } from "./classifier-preparation.js";
 import {
   credentialMatcher,
@@ -15,14 +16,14 @@ import {
   sortingTargets,
   type SortingCallTool
 } from "./classifier-sorting.js";
-import { resolveIntegrationsCipher, type IntegrationsCipherSources } from "./credentials.js";
+import { loadClassifierCheckCredential, type IntegrationsCipherSources } from "./credentials.js";
 import { INTEGRATION_CLASSIFIER_SORT_QUEUE } from "./manifest.js";
 import { IntegrationsRepository } from "./repository.js";
 
 /**
  * The sorting job (spec 8.2, #2984 R2.2). It runs on connection add, on a discovery refresh, when
  * the classifier switch turns on, on the owner's Try again, and from a sweep at worker start. It
- * runs whether the classifier is on or off.
+ * runs whether the classifier is on or off, and queues a preparation run when it finishes.
  *
  * The payload carries the owner id, the connection id and the job kind only. Logs carry counts
  * and the connection id; they never carry tool text, the model's answer or the credential.
@@ -119,7 +120,12 @@ export async function runClassifierSortJob(
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
       if (!selection?.structured) return { status: "no_model" };
 
-      const credential = await loadCredential(scopedDb, repository, connectionId, deps);
+      const credential = await loadClassifierCheckCredential(
+        scopedDb,
+        repository,
+        connectionId,
+        deps.cipherSources
+      );
       if (credential === undefined) return { status: "credentials_paused" };
 
       const plan = planSortingCalls(targets, credentialMatcher(credential));
@@ -154,24 +160,6 @@ export async function runClassifierSortJob(
     written += results.length;
   }
   return { status: "sorted", calls, written };
-}
-
-/**
- * The decrypted credential, held in memory for the check only. `null` when the connection has
- * none; `undefined` when it has one but no key is set up to read it.
- */
-async function loadCredential(
-  scopedDb: DataContextDb,
-  repository: IntegrationsRepository,
-  connectionId: string,
-  deps: ClassifierSortJobDeps
-): Promise<string | null | undefined> {
-  const envelope = await repository.loadCredentialEnvelope(scopedDb, connectionId);
-  if (!envelope) return null;
-  const cipher = await resolveIntegrationsCipher(scopedDb, deps.cipherSources);
-  if (!cipher) return undefined;
-  const secret = cipher.decryptJson(cipher.parseEnvelope(envelope)).secret;
-  return typeof secret === "string" ? secret : null;
 }
 
 /**
@@ -218,6 +206,19 @@ export async function registerClassifierSortWorkers(
         { connectionId: job.data.resourceId, op, ...outcome },
         "integrations: tool sorting finished"
       );
+      // Preparation needs a current sort, so every sort is followed by one. The preparation job
+      // stops at once when the connection's classifier switch is off.
+      try {
+        await enqueueClassifierPreparation(boss, job.data.actorUserId, job.data.resourceId);
+      } catch (error) {
+        deps.logger?.warn(
+          {
+            connectionId: job.data.resourceId,
+            error: error instanceof Error ? error.message : "unknown"
+          },
+          "integrations: could not queue tool preparation"
+        );
+      }
     }
   );
 

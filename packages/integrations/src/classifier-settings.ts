@@ -18,12 +18,12 @@ import {
 import { effectiveEnabledTools } from "./curation.js";
 
 /**
- * Owner storage, opt-in and invalidation for the connected-tool classifier (plan 2b.2, #2884).
+ * Owner storage and invalidation for the connected-tool classifier (#2884, #2984).
  *
- * The stored shape is a single versioned map keyed by discovered tool name on the owner-only
- * connection row. This module is pure: it validates untrusted input, reads the stored map
+ * Preparation and sorting are versioned maps keyed by discovered tool name on the owner-only
+ * connection row. This module is pure: it validates untrusted input, reads the stored maps
  * defensively, and decides which tools are currently eligible. It never calls a model and never
- * writes — persistence and cache invalidation live in repository.ts and routes.ts.
+ * writes. Persistence and cache invalidation live in repository.ts and routes.ts.
  */
 
 export const INTEGRATION_CLASSIFIER_PREPARATION_VERSION = 1 as const;
@@ -59,7 +59,38 @@ export interface ClassifierPreparationEntry {
 export interface ClassifierPreparationMap {
   readonly version: typeof INTEGRATION_CLASSIFIER_PREPARATION_VERSION;
   readonly entries: Readonly<Record<string, ClassifierPreparationEntry>>;
+  /** Automatic preparations that failed, keyed by tool name. Only the owner's Try again resends them. */
+  readonly failures?: Readonly<Record<string, ClassifierPreparationFailure>>;
 }
+
+/**
+ * Why automatic preparation failed. `unsafe` means the tool's text held the stored credential.
+ * `unsupported_shape` means the prepared entry could never be stored, and `too_many_tools` means
+ * the connection already holds the most prepared tools it can store.
+ */
+export type ClassifierPreparationFailureReason =
+  | "unsafe"
+  | "provider_error"
+  | "invalid_draft"
+  | "definition_too_large"
+  | "unsupported_shape"
+  | "too_many_tools";
+
+export interface ClassifierPreparationFailure {
+  readonly reason: ClassifierPreparationFailureReason;
+  /** The definition fingerprint the failed attempt was made against. */
+  readonly definitionFingerprint: string;
+  readonly failedAt: string;
+}
+
+const PREPARATION_FAILURE_REASONS: readonly ClassifierPreparationFailureReason[] = [
+  "unsafe",
+  "provider_error",
+  "invalid_draft",
+  "definition_too_large",
+  "unsupported_shape",
+  "too_many_tools"
+];
 
 /**
  * Tool names are attacker-influenced (a connected server chooses them), so they are looked up as
@@ -332,7 +363,101 @@ export function parsePreparationMap(raw: unknown): ClassifierPreparationMap {
     const parsed = parseStoredEntry(value);
     if (parsed) entries[toolName] = parsed;
   }
-  return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
+  const failures = parseFailures(raw.failures);
+  return {
+    version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION,
+    entries,
+    ...(failures ? { failures } : {})
+  };
+}
+
+function parseFailures(raw: unknown): Record<string, ClassifierPreparationFailure> | null {
+  if (!isRecord(raw)) return null;
+  const out = Object.create(null) as Record<string, ClassifierPreparationFailure>;
+  for (const [toolName, value] of Object.entries(raw)) {
+    if (!isIdentifier(toolName) || !isRecord(value)) continue;
+    const reason = PREPARATION_FAILURE_REASONS.find((candidate) => candidate === value.reason);
+    if (!reason) continue;
+    if (typeof value.definitionFingerprint !== "string" || value.definitionFingerprint === "") {
+      continue;
+    }
+    if (typeof value.failedAt !== "string" || value.failedAt === "") continue;
+    out[toolName] = {
+      reason,
+      definitionFingerprint: value.definitionFingerprint,
+      failedAt: value.failedAt
+    };
+  }
+  return out;
+}
+
+/** The stored failure for a tool name, only when it is an own key. */
+export function preparationFailure(
+  map: ClassifierPreparationMap,
+  toolName: string
+): ClassifierPreparationFailure | undefined {
+  return map.failures && Object.prototype.hasOwnProperty.call(map.failures, toolName)
+    ? map.failures[toolName]
+    : undefined;
+}
+
+/** Whether the map can take an entry for this tool: it replaces one, or the cap has room. */
+export function preparationHasRoom(map: ClassifierPreparationMap, toolName: string): boolean {
+  return (
+    preparationEntry(map, toolName) !== undefined ||
+    Object.keys(map.entries).length < INTEGRATION_CLASSIFIER_MAX_ENTRIES
+  );
+}
+
+/**
+ * Failures that can still block a run: those for a discovered tool at its present definition.
+ * A failure for a removed tool or an earlier definition never blocks anything, so it is dropped.
+ */
+function blockingFailures(
+  map: ClassifierPreparationMap,
+  discoveredTools: readonly IntegrationToolDescriptor[]
+): Record<string, ClassifierPreparationFailure> {
+  const fingerprints = new Map(
+    discoveredTools.map((tool) => [tool.name, toolDefinitionFingerprint(tool)])
+  );
+  const kept = Object.create(null) as Record<string, ClassifierPreparationFailure>;
+  for (const [toolName, failure] of Object.entries(map.failures ?? {})) {
+    if (fingerprints.get(toolName) === failure.definitionFingerprint) kept[toolName] = failure;
+  }
+  return kept;
+}
+
+/**
+ * Whether a failure for this tool can be remembered. The job checks this before any model call,
+ * because a failure it cannot remember would be charged again on the next run.
+ */
+export function preparationFailureHasRoom(
+  map: ClassifierPreparationMap,
+  discoveredTools: readonly IntegrationToolDescriptor[],
+  toolName: string
+): boolean {
+  const kept = blockingFailures(map, discoveredTools);
+  return (
+    Object.prototype.hasOwnProperty.call(kept, toolName) ||
+    Object.keys(kept).length < INTEGRATION_CLASSIFIER_MAX_FAILURES
+  );
+}
+
+/** The failure history with one tool's failure recorded, or null when it has no room. */
+export function withPreparationFailure(
+  map: ClassifierPreparationMap,
+  discoveredTools: readonly IntegrationToolDescriptor[],
+  toolName: string,
+  failure: ClassifierPreparationFailure
+): Record<string, ClassifierPreparationFailure> | null {
+  if (!preparationFailureHasRoom(map, discoveredTools, toolName)) return null;
+  const failures = blockingFailures(map, discoveredTools);
+  failures[toolName] = {
+    reason: failure.reason,
+    definitionFingerprint: failure.definitionFingerprint,
+    failedAt: failure.failedAt
+  };
+  return failures;
 }
 
 /** Merge one reviewed entry, keeping at most the bounded number of entries. */
@@ -345,7 +470,7 @@ export function withPreparationEntry(
   entries[toolName] = entry;
   const names = Object.keys(entries);
   if (names.length > INTEGRATION_CLASSIFIER_MAX_ENTRIES) return map;
-  return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
+  return { ...map, version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
 }
 
 export function withoutPreparationEntry(
@@ -355,23 +480,26 @@ export function withoutPreparationEntry(
   if (!Object.prototype.hasOwnProperty.call(map.entries, toolName)) return map;
   const entries = entriesRecord(map.entries);
   delete entries[toolName];
-  return { version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
+  return { ...map, version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
 }
 
 export interface ClassifierConnectionState {
   readonly enabled: boolean;
   readonly classifierEnabled: boolean;
   readonly lastError: string | null;
-  readonly discoveredTools: readonly IntegrationToolDescriptor[];
+  readonly discoveredTools: readonly RiskInputSource[];
   /** Ordinary-chat curation: a tool the owner switched off for chat is not classifier-eligible. */
   readonly enabledGroups: readonly string[];
   readonly enabledTools: readonly string[];
   readonly mutedTools: readonly string[];
   readonly classifierPreparation: ClassifierPreparationMap;
+  readonly classifierSort: ClassifierSortMap;
+  readonly classifierKeptOutTools: readonly string[];
 }
 
 export interface EligibleClassifierTool {
   readonly tool: IntegrationToolDescriptor;
+  /** The current sort's risk, after the code rule and the old reviewed floor. */
   readonly risk: IntegrationClassifierRisk;
   readonly description: string;
   readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
@@ -380,20 +508,19 @@ export interface EligibleClassifierTool {
 }
 
 /**
- * The tools the classifier may offer for this connection, in discovered order.
+ * The tools the classifier may offer for this connection, in discovered order (spec 8.5). This is
+ * the connected-tool release: the gate offers exactly these.
  *
  * Fail-closed everywhere: a disabled connection, the switch off, a failed discovery, a tool that
- * is no longer discovered, a tool the owner switched off for ordinary chat, no saved opt-in, an
- * unknown risk, or a definition that no longer matches the reviewed fingerprint all remove the
- * tool. A changed definition therefore reads as stale immediately, and a discovery failure cannot
- * preserve eligibility just because ordinary chat keeps its old tool list.
+ * is no longer discovered, a tool the owner switched off for ordinary chat, a kept-out tool, a
+ * sort that is not current against the tool's risk inputs, or a preparation that is missing or
+ * made against another definition all remove the tool. A changed tool therefore drops out at once
+ * and returns only after it is sorted and prepared again.
  */
 export function effectiveClassifierTools(
   state: ClassifierConnectionState
 ): EligibleClassifierTool[] {
   if (!state.enabled || !state.classifierEnabled || state.lastError !== null) return [];
-  // A tool the owner muted (or, over the group-opt-in threshold, never enabled) is off for
-  // ordinary chat and must not become classifier-eligible behind that switch.
   const ordinaryEnabled = new Set(
     effectiveEnabledTools(state.discoveredTools, {
       enabledGroups: state.enabledGroups,
@@ -401,15 +528,17 @@ export function effectiveClassifierTools(
       mutedTools: state.mutedTools
     }).map((tool) => tool.name)
   );
+  const keptOut = new Set(state.classifierKeptOutTools);
   const out: EligibleClassifierTool[] = [];
   for (const tool of state.discoveredTools) {
-    if (!ordinaryEnabled.has(tool.name)) continue;
+    if (!ordinaryEnabled.has(tool.name) || keptOut.has(tool.name)) continue;
+    const sort = toolSortState(state.classifierSort, tool);
+    if (sort.status !== "current") continue;
     const entry = preparationEntry(state.classifierPreparation, tool.name);
-    if (!entry || !entry.optIn || entry.reviewedRisk === null) continue;
-    if (entry.definitionFingerprint !== toolDefinitionFingerprint(tool)) continue;
+    if (!entry || entry.definitionFingerprint !== toolDefinitionFingerprint(tool)) continue;
     out.push({
       tool,
-      risk: entry.reviewedRisk,
+      risk: sort.risk,
       description: entry.description,
       arguments: entry.arguments,
       replyTemplate: entry.replyTemplate,
@@ -421,7 +550,7 @@ export function effectiveClassifierTools(
 
 /** The API view: one row per discovered tool that has a saved review, with derived state. */
 export function classifierPreparationView(
-  state: ClassifierConnectionState
+  state: Pick<ClassifierConnectionState, "discoveredTools" | "classifierPreparation">
 ): IntegrationClassifierToolPreparation[] {
   const view: IntegrationClassifierToolPreparation[] = [];
   for (const tool of state.discoveredTools) {
@@ -448,6 +577,9 @@ export const INTEGRATION_CLASSIFIER_SORT_VERSION = 1 as const;
 
 /** Bound on the stored sort map. Every discovered tool needs an entry, so this sits well above the opt-in bound. */
 export const INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES = 1000;
+
+/** Bound on stored preparation failures. Only a sorted tool is prepared, so it matches the sort bound. */
+export const INTEGRATION_CLASSIFIER_MAX_FAILURES = INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES;
 
 export const INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS = 80;
 

@@ -11,6 +11,7 @@ import {
 import type {
   ClassifierPreparationPort,
   PreparationChatModel,
+  PreparationDefinitionPayload,
   PreparationStructuredOutcome
 } from "./classifier-preparation.js";
 import {
@@ -214,9 +215,12 @@ function payloadStrings(value: unknown, out: string[]): void {
   }
 }
 
-/** True when any string the payload would send, or its serialized form, holds the credential. */
+/**
+ * True when any string the payload would send, or its serialized form, holds the credential.
+ * Sorting and preparation both run this on the exact payload they put in the prompt.
+ */
 export function payloadHoldsCredential(
-  payload: SortingToolPayload,
+  payload: SortingToolPayload | PreparationDefinitionPayload,
   matcher: CredentialMatcher
 ): boolean {
   const strings: string[] = [];

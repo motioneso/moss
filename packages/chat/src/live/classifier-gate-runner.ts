@@ -50,7 +50,7 @@ export interface ClassifierGateWiringDeps {
   /**
    * #2907 (plan 3.5) — the production attempt ports: the actor's tool menu, the classifier calls,
    * candidate hooks and the gateway call (already bound to `token`). Absent ⇒ every attempt declines
-   * without ports. `on` remains unreachable until an approved release exists.
+   * without ports. `on` runs only while the current classifier selection has a shadow review.
    */
   readonly createPorts?: ClassifierGateRunnerDeps["createPorts"];
   now?(): number;

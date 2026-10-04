@@ -858,6 +858,14 @@ export interface ChatClassifierReleaseEligibilityTable {
   approved_by_user_id: string;
 }
 
+export interface ChatClassifierShadowReviewsTable {
+  id: ColumnType<string, string | undefined, string>;
+  classifier_model_id: string;
+  classifier_provider_model_id: string;
+  reviewed_at: TimestampColumn;
+  reviewed_by_user_id: string;
+}
+
 export interface ChatMessagesTable {
   id: string;
   thread_id: string;
@@ -1805,6 +1813,7 @@ export interface MossDatabase {
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;
+  "app.chat_classifier_shadow_reviews": ChatClassifierShadowReviewsTable;
   "app.chat_skills": ChatSkillsTable;
   "app.briefing_definitions": BriefingDefinitionsTable;
   "app.briefing_runs": BriefingRunsTable;

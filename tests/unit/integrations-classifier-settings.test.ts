@@ -4,6 +4,12 @@ import {
   classifierPreparationView,
   effectiveClassifierTools,
   emptyPreparationMap,
+  emptySortMap,
+  preparationFailure,
+  toolRiskInputs,
+  toolSortFingerprint,
+  withSortResult,
+  type ClassifierSortMap,
   INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   parsePreparationMap,
   parseReviewedEntry,
@@ -12,7 +18,7 @@ import {
   type ClassifierPreparationEntry,
   type ClassifierPreparationMap
 } from "@moss/integrations";
-import type { IntegrationToolDescriptor } from "@moss/shared";
+import type { IntegrationClassifierRisk, IntegrationToolDescriptor } from "@moss/shared";
 
 function tool(overrides: Partial<IntegrationToolDescriptor> = {}): IntegrationToolDescriptor {
   return {
@@ -45,6 +51,24 @@ function mapWith(toolName: string, value: ClassifierPreparationEntry): Classifie
   return { version: 1, entries: { [toolName]: value } };
 }
 
+/** A current sort of `risk` for each tool, made against its present risk inputs. */
+function sortedAs(
+  tools: readonly IntegrationToolDescriptor[],
+  risk: IntegrationClassifierRisk = "write"
+): ClassifierSortMap {
+  let map = emptySortMap();
+  for (const t of tools) {
+    map = withSortResult(map, t.name, {
+      status: "current",
+      risk,
+      readableName: "Turn on",
+      sortFingerprint: toolSortFingerprint(toolRiskInputs(t)),
+      sortedAt: "2026-10-03T00:00:00.000Z"
+    })!;
+  }
+  return map;
+}
+
 function state(
   overrides: {
     enabled?: boolean;
@@ -55,17 +79,22 @@ function state(
     enabledTools?: readonly string[];
     mutedTools?: readonly string[];
     classifierPreparation?: ClassifierPreparationMap;
+    classifierSort?: ClassifierSortMap;
+    classifierKeptOutTools?: readonly string[];
   } = {}
 ) {
+  const discoveredTools = overrides.discoveredTools ?? [tool()];
   return {
     enabled: overrides.enabled ?? true,
     classifierEnabled: overrides.classifierEnabled ?? true,
     lastError: overrides.lastError ?? null,
-    discoveredTools: overrides.discoveredTools ?? [tool()],
+    discoveredTools,
     enabledGroups: overrides.enabledGroups ?? [],
     enabledTools: overrides.enabledTools ?? [],
     mutedTools: overrides.mutedTools ?? [],
-    classifierPreparation: overrides.classifierPreparation ?? emptyPreparationMap()
+    classifierPreparation: overrides.classifierPreparation ?? emptyPreparationMap(),
+    classifierSort: overrides.classifierSort ?? sortedAs(discoveredTools),
+    classifierKeptOutTools: overrides.classifierKeptOutTools ?? []
   };
 }
 
@@ -172,21 +201,27 @@ describe("stored map reading fails closed", () => {
   });
 });
 
-describe("effectiveClassifierTools invalidation", () => {
-  it("returns a current, opted-in, classified tool", () => {
+describe("effectiveClassifierTools eligibility (spec 8.5)", () => {
+  const prepared = (t: IntegrationToolDescriptor) =>
+    mapWith(t.name, entry(toolDefinitionFingerprint(t), { optIn: true, reviewedRisk: null }));
+
+  it("returns a sorted, prepared tool with the sorted risk, ignoring the old opt-in fields", () => {
     const current = tool();
     const tools = effectiveClassifierTools(
       state({
-        classifierPreparation: mapWith("turn_on", entry(toolDefinitionFingerprint(current)))
+        classifierPreparation: mapWith(
+          "turn_on",
+          entry(toolDefinitionFingerprint(current), { optIn: false, reviewedRisk: null })
+        ),
+        classifierSort: sortedAs([current], "read")
       })
     );
     expect(tools.map((t) => t.tool.name)).toEqual(["turn_on"]);
-    expect(tools[0]?.risk).toBe("write");
+    expect(tools[0]?.risk).toBe("read");
   });
 
   it("is empty when the connection or the classifier switch is off", () => {
-    const current = tool();
-    const prep = mapWith("turn_on", entry(toolDefinitionFingerprint(current)));
+    const prep = prepared(tool());
     expect(
       effectiveClassifierTools(state({ enabled: false, classifierPreparation: prep }))
     ).toEqual([]);
@@ -195,60 +230,78 @@ describe("effectiveClassifierTools invalidation", () => {
     ).toEqual([]);
   });
 
-  it("excludes an un-opted, unclassified, removed, or newly discovered tool", () => {
+  it("drops a kept-out tool and returns it when it is let back in", () => {
+    const prep = prepared(tool());
+    expect(
+      effectiveClassifierTools(
+        state({ classifierPreparation: prep, classifierKeptOutTools: ["turn_on"] })
+      )
+    ).toEqual([]);
+    expect(effectiveClassifierTools(state({ classifierPreparation: prep }))).toHaveLength(1);
+  });
+
+  it("drops an unsorted, failed or stale-sorted tool", () => {
     const current = tool();
+    const prep = prepared(current);
+    expect(
+      effectiveClassifierTools(
+        state({ classifierPreparation: prep, classifierSort: emptySortMap() })
+      )
+    ).toEqual([]);
+    const failed = withSortResult(emptySortMap(), "turn_on", {
+      status: "failed",
+      failure: "error",
+      sortFingerprint: toolSortFingerprint(toolRiskInputs(current)),
+      sortedAt: "2026-10-03T00:00:00.000Z"
+    })!;
+    expect(
+      effectiveClassifierTools(state({ classifierPreparation: prep, classifierSort: failed }))
+    ).toEqual([]);
+    // A sort made against other risk inputs (here, a different method) is stale.
+    const sortedAsPost = sortedAs([{ ...current, invoke: { method: "POST" } } as never]);
     expect(
       effectiveClassifierTools(
         state({
-          classifierPreparation: mapWith(
-            "turn_on",
-            entry(toolDefinitionFingerprint(current), { optIn: false })
-          )
+          discoveredTools: [{ ...current, invoke: { method: "DELETE" } } as never],
+          classifierPreparation: prep,
+          classifierSort: sortedAsPost
         })
       )
     ).toEqual([]);
-    expect(
-      effectiveClassifierTools(
-        state({
-          classifierPreparation: mapWith(
-            "turn_on",
-            entry(toolDefinitionFingerprint(current), { reviewedRisk: null })
-          )
-        })
-      )
-    ).toEqual([]);
+  });
+
+  it("drops an unprepared, removed or changed tool and returns it after re-preparation", () => {
+    // Newly discovered and sorted, but not prepared yet.
+    expect(effectiveClassifierTools(state())).toEqual([]);
     // Entry saved for a tool that is no longer discovered.
     expect(
       effectiveClassifierTools(
-        state({
-          discoveredTools: [],
-          classifierPreparation: mapWith("gone", entry("sha256:abc"))
-        })
+        state({ discoveredTools: [], classifierPreparation: mapWith("gone", entry("sha256:abc")) })
       )
     ).toEqual([]);
-    // Newly discovered tool with no entry at all.
-    expect(effectiveClassifierTools(state())).toEqual([]);
-  });
-
-  it("excludes a tool whose definition moved on since the review", () => {
+    // The definition changed: re-sorted, but the preparation was made for the old definition.
     const changed = tool({ description: "Now a different action" });
-    const stale = mapWith("turn_on", entry(toolDefinitionFingerprint(tool())));
+    const old = prepared(tool());
     expect(
-      effectiveClassifierTools(state({ discoveredTools: [changed], classifierPreparation: stale }))
+      effectiveClassifierTools(state({ discoveredTools: [changed], classifierPreparation: old }))
     ).toEqual([]);
+    // Automatic re-preparation saves an entry for the new definition, and the tool is back.
+    expect(
+      effectiveClassifierTools(
+        state({ discoveredTools: [changed], classifierPreparation: prepared(changed) })
+      ).map((t) => t.tool.name)
+    ).toEqual(["turn_on"]);
   });
 
-  it("excludes everything after a failed discovery even when ordinary chat keeps the tools", () => {
-    const current = tool();
-    const prep = mapWith("turn_on", entry(toolDefinitionFingerprint(current)));
+  it("drops everything after a failed discovery even when ordinary chat keeps the tools", () => {
+    const prep = prepared(tool());
     expect(
       effectiveClassifierTools(state({ lastError: "fetch failed", classifierPreparation: prep }))
     ).toEqual([]);
   });
 
-  it("excludes a tool the owner switched off for ordinary chat", () => {
-    const current = tool();
-    const prep = mapWith("turn_on", entry(toolDefinitionFingerprint(current)));
+  it("drops a tool the owner switched off for ordinary chat", () => {
+    const prep = prepared(tool());
     // Under the group-opt-in threshold a muted tool is off for chat.
     expect(
       effectiveClassifierTools(state({ mutedTools: ["turn_on"], classifierPreparation: prep }))
@@ -259,9 +312,26 @@ describe("effectiveClassifierTools invalidation", () => {
       discoveredTools: many,
       enabledGroups: [],
       enabledTools: [],
-      classifierPreparation: mapWith("tool_0", entry(toolDefinitionFingerprint(many[0]!)))
+      classifierPreparation: prepared(many[0]!)
     });
     expect(effectiveClassifierTools(bigState)).toEqual([]);
+  });
+});
+
+describe("stored preparation failures", () => {
+  it("reads well-formed failures and drops malformed ones", () => {
+    const parsed = parsePreparationMap({
+      version: 1,
+      entries: {},
+      failures: {
+        turn_on: { reason: "unsafe", definitionFingerprint: "sha256:a", failedAt: "t" },
+        bad_reason: { reason: "nope", definitionFingerprint: "sha256:a", failedAt: "t" },
+        no_print: { reason: "unsafe", failedAt: "t" }
+      }
+    });
+    expect(Object.keys(parsed.failures ?? {})).toEqual(["turn_on"]);
+    expect(preparationFailure(parsed, "turn_on")?.reason).toBe("unsafe");
+    expect(preparationFailure(parsed, "toString")).toBeUndefined();
   });
 });
 

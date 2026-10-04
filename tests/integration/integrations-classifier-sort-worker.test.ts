@@ -12,7 +12,10 @@ import {
 } from "@moss/db";
 import {
   createIntegrationsCipher,
+  INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
+  INTEGRATION_CLASSIFIER_SORT_QUEUE,
   IntegrationsRepository,
+  registerClassifierSortWorkers,
   runClassifierSortJob,
   sortEntry,
   sweepClassifierSorts,
@@ -215,6 +218,58 @@ describe("integrations classifier sorting worker (#2984 R2.2)", () => {
         "sort"
       )
     ).toEqual({ status: "nothing_to_sort" });
+  });
+
+  it("queues a preparation run for the same owner and connection after each sort", async () => {
+    const lamp = tool("lamp");
+    const conn = await createConnection(ids.userA, "Worker queues preparation", [lamp]);
+    const port: ClassifierPreparationPort = {
+      selectDefaultChatModel: async () => ({
+        model: { id: "m", providerConfigId: "p", providerKind: "k", providerModelId: "x" },
+        structured: true
+      }),
+      runStructuredDraft: async () => ({
+        ok: true,
+        object: { tools: [{ id: "t1", group: "changes_things", name: "Turn the lamp on" }] },
+        usage: { inputTokens: 1, outputTokens: 1 }
+      })
+    };
+
+    type Handler = (jobs: readonly unknown[]) => Promise<void>;
+    const handlers = new Map<string, Handler>();
+    const sent: { queue: string; data: unknown; options: unknown }[] = [];
+    const boss = {
+      work: async (queue: string, _options: unknown, handler: Handler) => {
+        handlers.set(queue, handler);
+        return `worker:${queue}`;
+      },
+      send: async (queue: string, data: unknown, options: unknown) => {
+        sent.push({ queue, data, options });
+        return "job";
+      }
+    } as unknown as PgBoss;
+
+    await registerClassifierSortWorkers(boss, {
+      dataContext: worker,
+      port,
+      cipherSources: { cipher },
+      rootDb: workerDb
+    });
+    sent.length = 0;
+
+    await handlers.get(INTEGRATION_CLASSIFIER_SORT_QUEUE)!([
+      { id: "job-1", data: { actorUserId: ids.userA, resourceId: conn.id, op: "sort" } }
+    ]);
+
+    const row = await as(app, ids.userA, (scopedDb) => repository.getConnection(scopedDb, conn.id));
+    expect(sortEntry(row!.classifierSort, "lamp")).toMatchObject({ status: "current" });
+    expect(sent).toEqual([
+      {
+        queue: INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
+        data: { actorUserId: ids.userA, resourceId: conn.id, op: "prepare" },
+        options: { singletonKey: `classifier-prepare:${conn.id}` }
+      }
+    ]);
   });
 
   it("sweeps existing connections with unsorted tools, by id only, once each", async () => {
