@@ -44,6 +44,8 @@ import {
   registerWorkflowWorkers
 } from "@moss/workflows";
 import { registerWorkflowsRoutes } from "@moss/workflows/routes";
+import { registerBacktrackRoutes } from "@moss/backtrack/routes";
+import { registerBacktrackWorkers } from "@moss/backtrack/workers";
 import { registerCommitmentsRoutes } from "@moss/commitments/routes";
 import { registerCommitmentExtractionWorker } from "@moss/commitments/workers";
 import {
@@ -2949,16 +2951,27 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       })
   },
   {
-    // #2638 Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.2): table, RLS and the
-    // repository land in this task. The ingest route, the index/upkeep jobs and the user routes
-    // are a later task's commits on this same branch -- registerRoutes/registerWorkers are
-    // deliberately absent here, not stubbed, so their eventual presence is a real diff.
+    // #2638 Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.5-§4.7): the index and
+    // hourly upkeep jobs and the session-authenticated status/pause/delete routes. The companion
+    // ingest route is a platform route in apps/api, not registered here.
     manifest: backtrackModuleManifest,
     sqlMigrationDirectories: [backtrackModuleSqlMigrationDirectory],
     queueDefinitions: [
-      { name: BACKTRACK_INDEX_QUEUE, options: {} },
+      { name: BACKTRACK_INDEX_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
       { name: BACKTRACK_UPKEEP_QUEUE, options: {} }
-    ]
+    ],
+    registerRoutes: (server, deps) =>
+      registerBacktrackRoutes(server, {
+        resolveAccessContext: deps.resolveAccessContext,
+        dataContext: deps.dataContext
+      }),
+    registerWorkers: (boss, deps) =>
+      registerBacktrackWorkers(boss, {
+        dataContext: deps.dataContext,
+        rootDb: deps.rootDb,
+        embeddingProviderFactory: createRuntimeEmbeddingProvider,
+        logger: deps.logger ? createModuleLogger(deps.logger, "backtrack") : undefined
+      })
   }
 ];
 

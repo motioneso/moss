@@ -51,6 +51,14 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/auth/src/index.ts", import.meta.url))
       },
       {
+        find: "@moss/backtrack/routes",
+        replacement: fileURLToPath(new URL("./packages/backtrack/src/routes.ts", import.meta.url))
+      },
+      {
+        find: "@moss/backtrack/workers",
+        replacement: fileURLToPath(new URL("./packages/backtrack/src/jobs.ts", import.meta.url))
+      },
+      {
         find: "@moss/backtrack",
         replacement: fileURLToPath(new URL("./packages/backtrack/src/index.ts", import.meta.url))
       },

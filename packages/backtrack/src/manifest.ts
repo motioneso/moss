@@ -6,9 +6,9 @@ import { collectBacktrackSegmentsExportSection } from "./data-lifecycle.js";
 
 export const BACKTRACK_MODULE_ID = "backtrack";
 
-/** The index job: embed a batch of just-ingested segments (plan §4.5, built by a later task). */
+/** The index job: embed a batch of just-ingested segments (plan §4.5). */
 export const BACKTRACK_INDEX_QUEUE = "backtrack.index";
-/** The hourly retention/upkeep sweep (plan §4.6, built by a later task). */
+/** The hourly retention/upkeep sweep (plan §4.6). */
 export const BACKTRACK_UPKEEP_QUEUE = "backtrack.upkeep";
 
 export const backtrackModuleSqlMigrationDirectory = fileURLToPath(
@@ -82,6 +82,11 @@ export const backtrackModuleManifest: MossModuleManifest = {
       scope: "user",
       actions: ["view", "update", "delete"]
     }
+  ],
+  routes: [
+    { method: "GET", path: "/api/backtrack/status", permissionId: "backtrack.manage" },
+    { method: "PUT", path: "/api/backtrack/preferences", permissionId: "backtrack.manage" },
+    { method: "DELETE", path: "/api/backtrack/segments", permissionId: "backtrack.manage" }
   ],
   jobs: [
     { queueName: BACKTRACK_INDEX_QUEUE, metadataOnly: true },

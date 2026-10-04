@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./routes": "./src/routes.ts",
+    "./workers": "./src/jobs.ts",
     "./settings": "./src/settings/index.tsx"
   },
   "scripts": {
@@ -12,9 +14,15 @@
   },
   "dependencies": {
     "@moss/db": "workspace:*",
+    "@moss/jobs": "workspace:*",
+    "@moss/memory": "workspace:*",
     "@moss/module-sdk": "workspace:*",
+    "@moss/settings": "workspace:*",
     "@moss/settings-ui": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "fastify": "^5.8.5",
     "kysely": "^0.29.2",
+    "pg-boss": "^12.18.2",
     "react": "^19.0.0"
   }
 }

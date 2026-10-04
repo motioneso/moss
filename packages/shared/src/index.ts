@@ -17,6 +17,7 @@ export * from "./ai-summary-api.js";
 export * from "./briefings-api.js";
 export * from "./briefing-action-rows.js";
 export * from "./calendar-briefing-settings-api.js";
+export * from "./backtrack-api.js";
 export * from "./calendar-api.js";
 export * from "./day-plan-api.js";
 export * from "./day-plan-changes-api.js";

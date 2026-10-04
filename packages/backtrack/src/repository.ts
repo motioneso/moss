@@ -176,6 +176,86 @@ export class BacktrackRepository {
   }
 
   /**
+   * The listed segments that still count as stored: present, and with neither `started_at` nor
+   * `created_at` past the 37-day retention cutoff (decision 11). The index job reads through this
+   * under the owner lock, so a segment a purge or delete just removed — or one the hourly purge
+   * has not reached yet — never gets a chunk.
+   */
+  async selectLiveSegmentsByIds(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    ids: readonly string[]
+  ): Promise<readonly BacktrackSegment[]> {
+    assertDataContextDb(scopedDb);
+    if (ids.length === 0) return [];
+
+    const result = await sql<SegmentRow>`
+      SELECT id, owner_user_id, device_id, started_at, ended_at, app_name, bundle_id,
+             window_title, address, body, body_hash, indexed_at, created_at, client_started_at
+      FROM app.backtrack_segments
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ANY(${[...ids]}::uuid[])
+        AND started_at >= now() - interval '37 days'
+        AND created_at >= now() - interval '37 days'
+    `.execute(scopedDb.db);
+
+    return result.rows.map(rowToSegment);
+  }
+
+  /** Stamp `indexed_at` on segments whose chunks are written (decision 5; column-level grant). */
+  async markIndexed(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    ids: readonly string[]
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    if (ids.length === 0) return;
+    await sql`
+      UPDATE app.backtrack_segments
+      SET indexed_at = now()
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ANY(${[...ids]}::uuid[])
+    `.execute(scopedDb.db);
+  }
+
+  /**
+   * The hourly purge's row half (decision 11): delete every segment past 37 days by `started_at`
+   * **or** by `created_at`, returning the ids so the caller can remove their chunks.
+   */
+  async deleteExpiredSegments(
+    scopedDb: DataContextDb,
+    ownerUserId: string
+  ): Promise<readonly string[]> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<{ id: string }>`
+      DELETE FROM app.backtrack_segments
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND (started_at < now() - interval '37 days' OR created_at < now() - interval '37 days')
+      RETURNING id
+    `.execute(scopedDb.db);
+
+    return result.rows.map((row) => row.id);
+  }
+
+  /** Ids of segments still unindexed ten minutes after receipt (decision 5), oldest first. */
+  async listStaleUnindexedSegmentIds(
+    scopedDb: DataContextDb,
+    ownerUserId: string
+  ): Promise<readonly string[]> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<{ id: string }>`
+      SELECT id
+      FROM app.backtrack_segments
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND indexed_at IS NULL
+        AND created_at < now() - interval '10 minutes'
+      ORDER BY created_at ASC
+    `.execute(scopedDb.db);
+
+    return result.rows.map((row) => row.id);
+  }
+
+  /**
    * Delete every segment of one owner whose `[started_at, ended_at]` overlaps `[from, to)`,
    * returning the deleted ids (the caller removes their memory chunks separately, by id, through
    * memory's public API — this module never touches `app.memory_chunks`). `from`/`to` both null
