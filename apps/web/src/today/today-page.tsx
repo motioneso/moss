@@ -72,7 +72,6 @@ import {
   buildHeadline,
   buildLede,
   byStart,
-  shortDatelineLabel,
   dueTs,
   eveningHeroKicker,
   firstName,
@@ -669,7 +668,6 @@ export function TodayPage(props: {
                 calendarError={eventsQuery.isError}
                 editorial
                 todayLayout
-                dateline={shortDatelineLabel(now, locale)}
                 onOpenTask={(id) => setDialog({ id })}
                 onReview={(anchor) => {
                   openDayPlanReview(anchor, false);
