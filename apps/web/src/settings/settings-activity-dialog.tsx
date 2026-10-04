@@ -150,14 +150,18 @@ export function ActivityDialog(props: {
                     <dd>{value}</dd>
                   </div>
                 ))}
-                <div className="act-facts__row">
-                  <dt>Asked for</dt>
-                  <dd>{step.askedFor ?? "Not recorded"}</dd>
-                </div>
-                <div className="act-facts__row">
-                  <dt>Returned</dt>
-                  <dd>{step.returned ?? "Not recorded"}</dd>
-                </div>
+                {step.askedFor !== null && step.askedFor !== undefined && (
+                  <div className="act-facts__row">
+                    <dt>Asked for</dt>
+                    <dd>{step.askedFor}</dd>
+                  </div>
+                )}
+                {step.returned !== null && step.returned !== undefined && (
+                  <div className="act-facts__row">
+                    <dt>Returned</dt>
+                    <dd>{step.returned}</dd>
+                  </div>
+                )}
               </dl>
               {data.expiresAt && <p className="act-expiry">{expiryNote(data.expiresAt, locale)}</p>}
             </div>

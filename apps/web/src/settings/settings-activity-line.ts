@@ -22,6 +22,23 @@ export type ActivityRow =
     }
   | { readonly kind: "tool"; readonly entry: ActionAuditLogEntryDto };
 
+/**
+ * Title vocabulary for structured calls (spec section 9): each title is declared in the
+ * calling module's manifest `features` metadata under the action code, so the line title
+ * and the app map agree. Unknown services fall back to "Ran a structured task".
+ */
+export const STRUCTURED_ACTIVITY_TITLES: Record<string, string> = {
+  "structured.briefings": "Prepared a briefing",
+  "structured.connectors.email-sort": "Sorted new email",
+  "structured.connectors.email-extract": "Checked new email for follow-ups",
+  "structured.commitments.email-judgement": "Checked what new email asks of you",
+  "structured.news": "Ranked your news stories",
+  "structured.sports": "Ranked your sports stories",
+  "structured.workshop": "Replied to a Workshop project",
+  "structured.web-research": "Researched the web",
+  "structured.moss.workshop-build-plan": "Planned a module build"
+};
+
 /** Title vocabulary (spec section 4): a fixed sentence per action code. */
 export function activityTitle(actionCode: string | null, action: string): string {
   switch (actionCode) {
@@ -40,7 +57,9 @@ export function activityTitle(actionCode: string | null, action: string): string
   }
   if (!actionCode) return "Model activity";
   if (actionCode.startsWith("embed.")) return "Indexed notes for search";
-  if (actionCode.startsWith("structured.")) return "Ran a structured task";
+  if (actionCode.startsWith("structured.")) {
+    return STRUCTURED_ACTIVITY_TITLES[actionCode] ?? "Ran a structured task";
+  }
   if (actionCode.startsWith("task.")) return humanize(actionCode.slice("task.".length));
   void action;
   return "Model activity";

@@ -130,6 +130,11 @@ export const aiModuleManifest = {
   // #2208: Moss's app map for the Providers card's model controls (Settings > AI providers).
   features: [
     {
+      // #2956: the Activity history line title for the module-build planning call.
+      id: "structured.moss.workshop-build-plan",
+      description: "Planned a module build"
+    },
+    {
       id: "ai.refresh_provider_models",
       description:
         "Refresh models: ask a provider for its current model list and store it. Vanished discovered " +

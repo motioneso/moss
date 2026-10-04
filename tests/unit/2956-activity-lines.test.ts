@@ -68,8 +68,9 @@ describe("activity titles (#2956 slice C)", () => {
     expect(activityTitle("probe.reachable", "probe")).toBe("Checked that a model is reachable");
   });
 
-  it("falls back to a fixed sentence for structured and background codes", () => {
-    expect(activityTitle("structured.briefings", "briefings")).toBe("Ran a structured task");
+  it("titles known structured services from their module manifest, unknown ones fixed", () => {
+    expect(activityTitle("structured.briefings", "briefings")).toBe("Prepared a briefing");
+    expect(activityTitle("structured.something_new", "new")).toBe("Ran a structured task");
     expect(activityTitle("task.morning_briefing", "task")).toBe("Morning briefing");
     expect(activityTitle(null, "chat")).toBe("Model activity");
   });
