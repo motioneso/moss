@@ -584,11 +584,10 @@ export const aiModuleManifest = {
       permissionId: "ai.assistant-actions"
     },
     {
-      // #2956 (slice D): the old admin-only model activity endpoint retired with its
-      // page. Admins read the same rows through this route, which is owner-scoped
-      // by row security instead of an admin-wide read policy.
-      // #2956 (slice C): the viewer's own activity lines the Activity page reads.
+      // #2956: the viewer's own activity lines the Activity page reads.
       // Owner-scoped like the audit log above, so it carries the same permission.
+      // Slice D retired the old admin-only model-activity endpoint with its page;
+      // admins read the same rows through this route instead.
       method: "GET",
       path: "/api/ai/activity-lines",
       responseSchema: listActivityLinesRouteSchema.response[200],

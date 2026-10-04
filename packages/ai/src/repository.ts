@@ -300,17 +300,6 @@ export interface AttachModelActivityFactsInput {
   readonly steps?: readonly ActivityDetailStep[];
 }
 
-export interface ListModelActivityOptions {
-  readonly kind?: string;
-  readonly modelName?: string;
-  readonly outcome?: string;
-  readonly since?: Date;
-  readonly before?: Date;
-  /** Tiebreak for `before`: only rows with an id below this value at the same instant. */
-  readonly beforeId?: string;
-  readonly limit: number;
-}
-
 export interface RecordErrorInput {
   readonly id: string;
   readonly feature: string;
@@ -2526,46 +2515,6 @@ export class AiRepository {
       SELECT app.purge_expired_moss_activity_detail() AS count
     `.execute(workerDb);
     return Number(result.rows[0]?.count ?? 0);
-  }
-
-  /**
-   * Plan 3.6a (#2889): admin read with time paging and kind/model/result/time filters. Runs on the
-   * actor-scoped handle so the admin-only SELECT policy is a second lock behind the route's 403.
-   */
-  async listModelActivity(
-    scopedDb: DataContextDb,
-    opts: ListModelActivityOptions
-  ): Promise<MossModelActivityLog[]> {
-    assertDataContextDb(scopedDb);
-    let query = scopedDb.db
-      .selectFrom("app.moss_model_activity_log")
-      .selectAll()
-      .orderBy("occurred_at", "desc")
-      .orderBy("id", "desc")
-      .limit(opts.limit);
-
-    if (opts.kind) query = query.where("kind", "=", opts.kind);
-    if (opts.modelName) query = query.where("model_name", "=", opts.modelName);
-    if (opts.outcome) query = query.where("outcome", "=", opts.outcome);
-    if (opts.since) query = query.where("occurred_at", ">=", opts.since);
-    if (opts.before) {
-      // Keyset page in (occurred_at DESC, id DESC) order. The id tiebreak means rows sharing the
-      // boundary millisecond are not skipped when a page ends inside a tie.
-      const before = opts.before;
-      const beforeId = opts.beforeId;
-      if (beforeId) {
-        query = query.where((eb) =>
-          eb.or([
-            eb("occurred_at", "<", before),
-            eb.and([eb("occurred_at", "=", before), eb("id", "<", beforeId)])
-          ])
-        );
-      } else {
-        query = query.where("occurred_at", "<", before);
-      }
-    }
-
-    return query.execute();
   }
 
   async purgeActionAuditLog(appDb: Kysely<MossDatabase>, olderThan: Date): Promise<number> {

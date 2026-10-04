@@ -155,9 +155,14 @@ describe("activity turn join (#2956 slice B)", () => {
     expect(typeof turnId).toBe("string");
 
     const answer = await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      new AiRepository()
-        .listModelActivity(scopedDb, { limit: 10 })
-        .then((rows) => rows.find((row) => row.action_code === "chat.answer"))
+      scopedDb.db
+        .selectFrom("app.moss_model_activity_log")
+        .selectAll()
+        .where("action_code", "=", "chat.answer")
+        .orderBy("occurred_at", "desc")
+        .limit(10)
+        .execute()
+        .then((rows) => rows[0])
     );
     expect(answer).toBeDefined();
     expect(answer?.id).toBe(turnId);

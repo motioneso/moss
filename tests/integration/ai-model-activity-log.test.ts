@@ -354,6 +354,33 @@ describe("activity history storage (#2956)", () => {
     ).rejects.toThrow(/30 days/i);
   });
 
+  it("refuses a detail insert that dates creation in the future", async () => {
+    const runner = new DataContextRunner(appDb);
+    const futureId = randomUUID();
+    await runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      sql`
+        INSERT INTO app.moss_model_activity_log
+          (id, kind, action, outcome, model_name, result, owner_user_id)
+        VALUES (${futureId}, 'chat', 'chat', 'ok', 'uat-model-alpha', 'completed', ${ids.userA})
+      `.execute(scopedDb.db)
+    );
+    // Creation in 2099 with expiry 30 days after that would never purge: the
+    // trigger forces creation to now(), so the far-future expiry then fails
+    // the 30-day cap instead of keeping the quoted words for decades.
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+        sql`
+          INSERT INTO app.moss_activity_detail
+            (activity_id, owner_user_id, steps, created_at, expires_at)
+          VALUES (
+            ${futureId}, ${ids.userA}, '[]'::jsonb,
+            '2099-01-01T00:00:00Z', '2099-01-31T00:00:00Z'
+          )
+        `.execute(scopedDb.db)
+      )
+    ).rejects.toThrow(/30 days|creation/i);
+  });
+
   it("keeps detail owner-only: others cannot read or change it", async () => {
     const repository = new AiRepository();
     const runner = new DataContextRunner(appDb);

@@ -222,14 +222,17 @@ CREATE TRIGGER moss_activity_detail_sync_owner
 BEFORE INSERT ON app.moss_activity_detail
 FOR EACH ROW EXECUTE FUNCTION app.moss_activity_detail_sync_owner();
 
--- Expiry is capped at 30 days after creation: a raw insert cannot keep quoted
--- words forever. UPDATE cannot move expiry (the lock trigger above), so this
--- fires on INSERT only.
+-- Expiry is capped at 30 days after creation, and creation is the insert time:
+-- the trigger forces created_at to now() because the inserter may set it, and a
+-- future-dated creation would otherwise push expiry past the purge forever.
+-- UPDATE cannot move expiry (the lock trigger above), so this fires on INSERT
+-- only. With creation forced, a raw insert cannot keep quoted words past the cap.
 CREATE OR REPLACE FUNCTION app.moss_activity_detail_cap_expiry()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  NEW.created_at := now();
   IF NEW.expires_at > NEW.created_at + interval '30 days' THEN
     RAISE EXCEPTION 'moss_activity_detail: expires_at is at most 30 days after creation';
   END IF;
