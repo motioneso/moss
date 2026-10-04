@@ -95,6 +95,10 @@ test("a real model saves a Workshop project from chat and offers a link to open 
   // The link goes where it says it goes, and the saved request is on the project's own screen.
   await openProject.click();
   await expect(page).toHaveURL(new RegExp(`${destination}$`));
-  await expect(page.getByText("No plan yet", { exact: true })).toBeVisible();
-  await expect(page.getByText(/water/i).first()).toBeVisible();
+  const conversation = page.getByRole("region", { name: "Project conversation", exact: true });
+  await expect(conversation).toBeVisible();
+  await expect(
+    conversation.getByRole("textbox", { name: "Add to your project", exact: true })
+  ).toBeVisible();
+  await expect(conversation).toContainText(/water/i);
 });

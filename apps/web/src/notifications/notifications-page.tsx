@@ -8,6 +8,7 @@ import { Link } from "react-router";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { formatDateTime, useUserLocale } from "../locale/locale-format";
+import { personalize } from "../api/use-assistant-name.js";
 
 type NotificationFilter = "all" | "unread";
 
@@ -114,8 +115,8 @@ function NotificationRow(props: {
         <Bell size={22} />
       </div>
       <div className="jds-task__main">
-        <div className="jds-task__title">{props.notification.title}</div>
-        {props.notification.body ? <p>{props.notification.body}</p> : null}
+        <div className="jds-task__title">{personalize(props.notification.title)}</div>
+        {props.notification.body ? <p>{personalize(props.notification.body)}</p> : null}
         {upgrade ? (
           <Link className={buttonLinkClassName("secondary", "sm")} to="/settings?section=host">
             View changes
@@ -135,7 +136,7 @@ function NotificationRow(props: {
       </div>
       <div className="tk-row-actions">
         <IconButton
-          aria-label={`Mark ${props.notification.title} read`}
+          aria-label={`Mark ${personalize(props.notification.title)} read`}
           disabled={props.isUpdating || !unread}
           title="Mark read"
           onClick={props.onMarkRead}

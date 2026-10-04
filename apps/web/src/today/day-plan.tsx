@@ -18,6 +18,7 @@ import {
   TimelineRow
 } from "./today-timeline.js";
 import type { DayItem } from "./day-plan-view-model.js";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export interface DayPlanSectionProps {
   readonly dayPlan: GetDayPlanResponse | undefined;
@@ -290,8 +291,8 @@ export function DayPlanSection(props: DayPlanSectionProps) {
           </p>
         ) : (
           <p className="tl-note__text">
-            <strong>Your task blocks are on the calendar.</strong> Moss can adjust its blocks when
-            the day changes.
+            <strong>Your task blocks are on the calendar.</strong> {assistantName()} can adjust its
+            blocks when the day changes.
           </p>
         )
       ) : null;

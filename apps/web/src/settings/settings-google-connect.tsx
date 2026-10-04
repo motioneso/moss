@@ -12,7 +12,7 @@ import {
 import { useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { importCredentialsJson } from "../connectors/google-credentials";
 import { useGoogleConnectFlow } from "../connectors/use-google-connect-flow";
 import { useFeedback } from "./settings-feedback";

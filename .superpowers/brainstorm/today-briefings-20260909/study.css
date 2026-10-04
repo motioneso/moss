@@ -196,6 +196,20 @@ main {
   padding: 29px 34px 30px;
   border-bottom: 3px solid var(--gold);
 }
+.masthead {
+  isolation: isolate;
+  overflow: hidden;
+}
+.masthead::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url("assets/hero-contours.svg") right center / cover no-repeat;
+  opacity: 0.2;
+  mask-image: linear-gradient(to right, transparent 18%, var(--forest) 60%);
+  pointer-events: none;
+}
 .masthead-top {
   display: flex;
   justify-content: space-between;

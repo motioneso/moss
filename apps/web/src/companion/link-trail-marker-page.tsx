@@ -8,7 +8,7 @@ import { COMPANION_PRODUCT_NAME, type PairAttemptSummaryResponse } from "@moss/s
 
 import { decideCompanionPairAttempt, getCompanionPairAttempt } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 
 /**
  * The heading for the state the screen is in. The shell already labels the page, so this

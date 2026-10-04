@@ -129,6 +129,9 @@ importers:
       '@moss/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@moss/backtrack':
+        specifier: workspace:*
+        version: link:../../packages/backtrack
       '@moss/chat':
         specifier: workspace:*
         version: link:../../packages/chat
@@ -171,6 +174,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@moss/backtrack':
+        specifier: workspace:*
+        version: link:../../packages/backtrack
       '@moss/calendar':
         specifier: workspace:*
         version: link:../../packages/calendar
@@ -380,6 +386,48 @@ importers:
       pg:
         specifier: ^8.21.0
         version: 8.21.0
+
+  packages/backtrack:
+    dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
+      '@moss/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@moss/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@moss/module-sdk':
+        specifier: workspace:*
+        version: link:../module-sdk
+      '@moss/settings':
+        specifier: workspace:*
+        version: link:../settings
+      '@moss/settings-ui':
+        specifier: workspace:*
+        version: link:../settings-ui
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.101.0(react@19.2.7)
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
+      pg-boss:
+        specifier: ^12.18.2
+        version: 12.18.2
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
 
   packages/briefings:
     dependencies:
@@ -861,6 +909,9 @@ importers:
       pg-boss:
         specifier: ^12.18.2
         version: 12.18.2
+      tsx:
+        specifier: ^4.21.0
+        version: 4.22.4
 
   packages/module-css-confine: {}
 
@@ -869,6 +920,9 @@ importers:
       '@moss/ai':
         specifier: workspace:*
         version: link:../ai
+      '@moss/backtrack':
+        specifier: workspace:*
+        version: link:../backtrack
       '@moss/briefings':
         specifier: workspace:*
         version: link:../briefings

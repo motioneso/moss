@@ -28,6 +28,7 @@ export const emailToolMessageOutputSchema = {
     "subject",
     "receivedAt",
     "threadId",
+    "sourceHref",
     "snippet",
     "summary",
     "actionability",
@@ -37,6 +38,7 @@ export const emailToolMessageOutputSchema = {
     "dueDate",
     "suggestedTasks",
     "awaitingJudgement",
+    "bulk",
     "source",
     "degradedReason"
   ],
@@ -50,6 +52,7 @@ export const emailToolMessageOutputSchema = {
     subject: { type: "string" },
     receivedAt: { type: "string" },
     threadId: nullableStringSchema,
+    sourceHref: { ...nullableStringSchema, description: "Provider web link, when one exists" },
     snippet: nullableStringSchema,
     summary: nullableStringSchema,
     actionability: {
@@ -82,6 +85,7 @@ export const emailToolMessageOutputSchema = {
       type: "boolean",
       description: "The sorter handed this message to the Commitments closer look"
     },
+    bulk: { type: "boolean", description: "Sent to a list rather than to this person" },
     source: { type: "string", enum: ["live", "cache"] },
     degradedReason: nullableStringSchema
   }
@@ -103,6 +107,7 @@ interface EmailContextItemShape {
   readonly subject: string;
   readonly receivedAt: string;
   readonly threadId: string | null;
+  readonly sourceHref: string | null;
   readonly snippet: string | null;
   readonly summary: string | null;
   readonly actionability: string;
@@ -115,6 +120,7 @@ interface EmailContextItemShape {
     readonly dueDate: string | null;
   }>;
   readonly awaitingJudgement?: boolean;
+  readonly bulk?: boolean;
   readonly source: "live" | "cache";
   readonly degradedReason: string | null;
   readonly cacheMessageId: string | null;
@@ -152,6 +158,7 @@ function serializeEmailContextItem(item: EmailContextItemShape) {
     subject: item.subject,
     receivedAt: item.receivedAt,
     threadId: item.threadId,
+    sourceHref: item.sourceHref,
     snippet: item.snippet,
     summary: item.summary,
     actionability: item.actionability,
@@ -164,6 +171,7 @@ function serializeEmailContextItem(item: EmailContextItemShape) {
       dueDate: task.dueDate
     })),
     awaitingJudgement: item.awaitingJudgement === true,
+    bulk: item.bulk === true,
     source: item.source,
     degradedReason: item.degradedReason
   };

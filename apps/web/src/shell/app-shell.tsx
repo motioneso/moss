@@ -17,7 +17,7 @@ import {
 import { useLocation, useNavigate } from "react-router";
 
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { buildShellNavigation, resolvePageHeading, webRoutes } from "../app-route-metadata";
 import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";
@@ -318,6 +318,14 @@ export function AppShell(props: AppShellProps) {
     );
     document.documentElement.setAttribute("data-color-mode", mode);
     applyThemeTokens(document.documentElement.style, customTheme?.tokens ?? null);
+    document.documentElement.toggleAttribute(
+      "data-nav-color",
+      document.documentElement.style.getPropertyValue("--nav-bg") !== ""
+    );
+    document.documentElement.toggleAttribute(
+      "data-header-color",
+      document.documentElement.style.getPropertyValue("--header-bg") !== ""
+    );
     saveShellTheme(activeThemeId);
     saveShellColorMode(mode);
   }, [activeThemeId, colorMode, themesQuery.data?.custom, themesQuery.data?.mode]);

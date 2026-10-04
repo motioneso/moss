@@ -38,7 +38,7 @@ import {
   sendChatTurn
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import {
   DEFAULT_CHAT_SURFACE,
   type ChatAttachmentDto,

@@ -39,7 +39,7 @@
     </div>
   </header>
   <nav class="doc__toc">
-    <a href="#m1">1. Apps and services list</a><a href="#m2">2. A connection's screen</a><a href="#m3">3. Classifier states</a><a href="#m4">4. A very big connection</a><a href="#m5">5. Readable tool names</a><a href="#qs">Questions for you</a>
+    <a href="#m1">1. Apps and services list</a><a href="#m2">2. A connection's screen</a><a href="#m3">3. Classifier states</a><a href="#m4">4. A very big connection</a><a href="#m5">5. Readable tool names</a><a href="#m6">6. Sending without asking</a><a href="#qs">Questions for you</a>
   </nav>
 
   <section class="mock" id="m1">
@@ -107,6 +107,15 @@
     </ol>
   </section>
 
+  <section class="mock" id="m6">
+    <div class="mock__head"><h2 class="mock__title">6. Sending without asking</h2></div>
+    <div class="mock__note">
+      <p><b>What changed.</b> Tools that send things out of Moss now ask you first, like Sensitive ones, and show "Asks first". You can let chat send with one tool without checking, from that tool's menu, or with the whole group from its header. Undo is one click, either in the tool's menu or with "Ask first for all", and needs no confirm because it only adds asking.</p>
+      <p><b>Not a standing rule.</b> "Send all without asking" covers the tools in the group now. A tool that joins the group later, or changes, asks first again until you allow it. Sensitive tools never get this choice. The four states below are the Sends things out group from section 2, close up.</p>
+    </div>
+    <div id="sendStates"></div>
+  </section>
+
   <section class="mock" id="qs">
     <div class="mock__head"><h2 class="mock__title">Questions for you</h2></div>
     <ol class="qs" style="margin-top:18px">
@@ -165,19 +174,30 @@ function ruleName(raw) {
 const nice = (raw) => NICE[raw] || ruleName(raw);
 const OFF = new Set(["HassVacuumStart"]);
 
+/* Sends things out tools the owner lets chat send with, without checking first. */
+const SEND_OK = new Set(["FindPhone"]);
+
 const GROUPS = [
   { key: "read", title: "Looks things up", help: "Only reads. Never changes anything." },
   { key: "change", title: "Changes things at home", help: "Turns things on and off, plays media, adds tasks." },
-  { key: "send", title: "Sends things out", help: "Sends a message, a notification or a request outside Moss." },
+  { key: "send", title: "Sends things out", help: "Sends a message, a notification or a request outside Moss. Asks you first unless you allow it." },
   { key: "risky", title: "Sensitive", help: "Unlocks, removes or cancels. Always asks you before it runs." },
 ];
 
 /* ---------- Pieces ---------- */
 
-function toolRow(raw, { desc, flag = "", off = false, menu = false, codeDesc = false } = {}) {
+/* send: "ask" or "ok" on a Sends things out row, which adds the sending item to its menu. */
+
+function toolMenu(send) {
+  const sendItem = send === "ask" ? `<span>Send without asking<small>Chat sends with this tool without checking with you</small></span>`
+    : send === "ok" ? `<span>Ask before sending<small>Chat checks with you first</small></span>` : "";
+  return `<div class="tmenu">${sendItem}<span>Keep out of the classifier<small>Chat can still use it</small></span><span>Show full description</span></div>`;
+}
+
+function toolRow(raw, { desc, flag = "", off = false, menu = false, codeDesc = false, send } = {}) {
   const d = desc ?? DESC[raw];
   const descHtml = d ? `<div class="tool__desc">${codeDesc ? `<span class="code">${d}</span>` : d}</div>` : `<div class="tool__desc none">No description from the app</div>`;
-  const menuHtml = menu ? `<div class="tmenu"><span>Keep out of the classifier<small>Chat can still use it</small></span><span>Show full description</span></div>` : "";
+  const menuHtml = menu ? toolMenu(send) : "";
   return `<div class="tool${off ? " off" : ""}${menu ? " menu-open" : ""}">
     <div class="tool__id"><div class="tool__name">${nice(raw)}</div><div class="tool__meta"><span class="tool__raw">${raw}</span>${flag}</div></div>
     ${descHtml}
@@ -186,20 +206,31 @@ function toolRow(raw, { desc, flag = "", off = false, menu = false, codeDesc = f
   </div>`;
 }
 
-function haGroup(g, menuOn, cstate) {
+const ASKS = `<span class="chip chip--ask">Asks first</span>`;
+
+function haGroup(g, { menuTool, cstate, sendOk = SEND_OK, confirmAll = false, showAll = false } = {}) {
   const all = HA[g.key];
-  const shown = all.slice(0, 6);
+  const shown = showAll ? all : all.slice(0, 6);
   const on = all.filter((t) => !OFF.has(t)).length;
-  const flag = g.key === "risky" ? `<span class="chip chip--ask">Asks first</span>` : "";
-  const rows = shown.map((t, i) => {
-    let f = flag;
+  const isSend = g.key === "send";
+  const rows = shown.map((t) => {
+    const send = isSend ? (sendOk.has(t) ? "ok" : "ask") : undefined;
+    let f = g.key === "risky" || send === "ask" ? ASKS : send === "ok" ? `<span class="tool__note">${ic("check")}Sends without asking</span>` : "";
     if (cstate === "reprep" && t === "AddTaskWork") f = `<span class="chip chip--prep">Preparing again</span>`;
-    return toolRow(t, { flag: f, off: OFF.has(t), menu: menuOn && g.key === "change" && i === 0 });
+    return toolRow(t, { flag: f, off: OFF.has(t), menu: t === menuTool, send });
   }).join("");
-  const more = all.length > 6 ? `<div class="grp__more"><span class="linkbtn">Show ${all.length - 6} more</span></div>` : "";
+  const more = shown.length < all.length ? `<div class="grp__more"><span class="linkbtn">Show ${all.length - shown.length} more</span></div>` : "";
+  const allowed = isSend ? all.filter((t) => sendOk.has(t)).length : 0;
+  const acts = [
+    isSend && allowed < all.length ? `<span class="linkbtn${confirmAll ? " linkbtn--on" : ""}">Send all without asking</span>` : "",
+    isSend && allowed > 0 ? `<span class="linkbtn">Ask first for all</span>` : "",
+    `<span class="linkbtn">Turn all off</span>`,
+  ].join("");
+  const confirm = confirmAll ? `<div class="gconfirm"><p>Let chat send with these ${all.length} tools without checking with you?</p>
+      <div class="gconfirm__acts"><span class="btn btn--primary btn--sm">Allow</span><span class="btn btn--quiet btn--sm">Cancel</span></div></div>` : "";
   return `<div class="grp">
-    <div class="grp__head"><h3 class="grp__title">${g.title}</h3><span class="grp__count">${on} of ${all.length} on</span><span class="linkbtn">Turn all off</span></div>
-    <div class="grp__help">${g.help}</div>
+    <div class="grp__head"><h3 class="grp__title">${g.title}</h3><span class="grp__count">${on} of ${all.length} on</span><span class="grp__acts">${acts}</span></div>
+    ${confirm}<div class="grp__help">${g.help}</div>
     ${rows}${more}
   </div>`;
 }
@@ -228,7 +259,8 @@ function classifierBlock(state, { app = "Home Assistant", n = 75, on = 74 } = {}
       <p>You can leave this page. Until it finishes, quick requests go through your default model.</p>`;
   } else if (state === "ready" || state === "reprep") {
     body = `<p><span class="pill pill--ok">Ready</span></p>
-      <p><b>${on} of ${n} tools</b> can answer quick requests. <b>6</b> always ask you before they run.</p>`;
+      <p><b>${on} of ${n} tools</b> can answer quick requests. <b>12</b> always ask you before they run.</p>
+      <p class="muted">YOLO mode skips the asking.</p>`;
     body += state === "reprep"
       ? `<p><b>1 tool changed</b> and is being prepared again. It goes through your default model until then.</p>`
       : `<p class="muted">Prepared on 2 October by your default chat model.</p>`;
@@ -250,7 +282,7 @@ function classifierBlock(state, { app = "Home Assistant", n = 75, on = 74 } = {}
 }
 
 function connBlock({ app, kind, host, tools, down, sort }) {
-  const who = "Your default chat model reads each tool's name and description, and so does its provider if the model is hosted.";
+  const who = "Your default chat model reads each tool's name, description and inputs, and so does its provider if the model is hosted.";
   const sorted = sort === "sorting" ? `<p class="blk__help">Moss is sorting these tools. ${who}</p>`
     : sort === "done" ? `<p class="blk__help">Sorted by what they do on 2 October. ${who.replace("reads", "read").replace("does", "did")}</p>` : "";
   const status = down
@@ -297,7 +329,7 @@ function listScreen(frame) {
       ${o.alert || ""}
     </div>`;
   const rows = [
-    { mark: "HA", name: "Home Assistant", host: "homeassistant.local:8123", status: `<span class="pill pill--ok">Connected</span>`, tools: "74 of 75 tools on", toolsSub: "1 switched off", quick: "Ready", quickSub: "6 ask first", hover: true },
+    { mark: "HA", name: "Home Assistant", host: "homeassistant.local:8123", status: `<span class="pill pill--ok">Connected</span>`, tools: "74 of 75 tools on", toolsSub: "1 switched off", quick: "Ready", quickSub: "12 ask first", hover: true },
     { mark: "AM", name: "Agentmail", host: "mcp.agentmail.to", status: `<span class="pill pill--ok">Connected</span>`, tools: "22 of 31 tools on", toolsSub: "1 section off", quick: "Off", quickSub: "Not prepared" },
     problem
       ? { mark: "RA", name: "Radarr", host: "radarr.local:7878", status: `<span class="pill pill--bad">Can't reach it</span><span>since 14:02</span>`, tools: "5 of 237 tools on", toolsSub: "1 of 71 sections", quick: "Off", quickSub: "Not prepared",
@@ -337,7 +369,7 @@ function haScreen(frame) {
   const cstate = frame.dataset.cstate || "ready";
   const menu = frame.dataset.menu === "1";
   const fresh = cstate === "new";
-  const groups = fresh ? sortingList() : GROUPS.map((g) => haGroup(g, menu, cstate)).join("");
+  const groups = fresh ? sortingList() : GROUPS.map((g) => haGroup(g, { menuTool: menu ? HA.change[0] : null, cstate })).join("");
   return shell(`
     <div class="crumb"><a>${ic("back")}Back to connections</a></div>
     <div class="dmh"><span class="mark mark--lg">HA</span>
@@ -346,7 +378,7 @@ function haScreen(frame) {
     <div class="detail">
       <div class="detail__main">
         <section class="sec"><div class="sec__head"><span class="sec__num">01</span><h2 class="sec__title">Tools</h2><span class="sec__meta">${fresh ? "75 of 75 on" : "74 of 75 on"}</span></div>
-          <p class="sec__sub">Every tool starts on. Switch one off and Moss stops using it everywhere. Tools marked Asks first check with you before they run.</p>
+          <p class="sec__sub">Every tool starts on. Switch one off and Moss stops using it everywhere. Tools marked Asks first check with you before they run. YOLO mode skips the asking.</p>
           <div class="toolbar"><span class="field field--grow">${ic("search")}Search 75 tools</span>
             <span class="seg"><span class="on">All 75</span><span>On ${fresh ? 75 : 74}</span><span>Off ${fresh ? 0 : 1}</span></span>
             <span class="field select">${fresh ? "A to Z" : "Group by what it does"}${ic("down")}</span></div>
@@ -401,7 +433,7 @@ function radarrScreen() {
             <span class="seg"><span class="on">All 237</span><span>On 5</span><span>Off 232</span></span>
             <span class="field select">Group by Radarr's sections${ic("down")}</span></div>
           <div class="grp">
-            <div class="grp__head"><h3 class="grp__title">Movie</h3><span class="grp__count">5 of 5 on</span><span class="linkbtn">Turn all off</span></div>
+            <div class="grp__head"><h3 class="grp__title">Movie</h3><span class="grp__count">5 of 5 on</span><span class="grp__acts"><span class="linkbtn">Turn all off</span></span></div>
             ${movie}
           </div>
           <div class="grp">
@@ -434,6 +466,22 @@ function stateCell([s, cap]) {
 document.getElementById("statesDesk").innerHTML = STATES.map(stateCell).join("");
 document.getElementById("statesPhone").innerHTML = STATES.map(stateCell).join("");
 
+/* Section 6: the Sends things out group close up, in four states. */
+
+const SEND = GROUPS.find((g) => g.key === "send");
+const SEND_STATES = [
+  ["1. Asks first, the default. One tool's menu open.", { menuTool: "HassBroadcast", sendOk: new Set() }],
+  ["2. One tool allowed. Its menu open.", { menuTool: "FindPhone", sendOk: new Set(["FindPhone"]) }],
+  ["3. Send all without asking, confirming once.", { sendOk: new Set(), confirmAll: true }],
+  ["4. All allowed. Ask first for all undoes it.", { sendOk: new Set(HA.send) }],
+];
+document.getElementById("sendStates").innerHTML = SEND_STATES.map(([cap, o]) => {
+  const grp = haGroup(SEND, { ...o, showAll: true });
+  return `<div class="closeup"><p class="state__cap"><b>${cap}</b></p><div class="closeup__row">
+    <div class="frame-wrap"><p class="frame-cap">Wide window, the tools column</p><div class="frame frame--part">${grp}</div></div>
+    <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><div class="frame frame--part frame--partphone">${grp}</div></div></div></div>`;
+}).join("");
+
 const NAMES = [
   ["intent_script__AddTaskWork", "Add task work", "Add a work task"],
   ["HassClimateSetTemperature", "Climate set temperature", "Set the temperature"],
@@ -451,11 +499,11 @@ document.getElementById("namesTable").innerHTML =
 /* Fit the frames to the window, or show them at their real size. */
 let size = "fit";
 function fit() {
-  document.querySelectorAll(".frames").forEach((row) => {
+  document.querySelectorAll(".frames, .closeup__row").forEach((row) => {
     const wraps = [...row.children];
     if (size === "full") { wraps.forEach((w) => (w.style.zoom = 1)); row.style.overflowX = "auto"; return; }
     row.style.overflowX = "visible";
-    const natural = wraps.reduce((s, w) => s + (w.querySelector(".frame--desk") ? 1442 : 392), 0) + 32 * (wraps.length - 1) + 4;
+    const natural = wraps.reduce((s, w) => s + (w.querySelector(".frame--desk") ? 1442 : w.querySelector(".frame--part:not(.frame--partphone)") ? 824 : 392), 0) + 32 * (wraps.length - 1) + 4;
     const z = Math.min(1, row.clientWidth / natural);
     wraps.forEach((w) => (w.style.zoom = z));
   });

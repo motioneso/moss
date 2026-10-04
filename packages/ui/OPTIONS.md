@@ -70,6 +70,10 @@ _No enum or boolean props._
 - **toggle** (optional boolean flag)
 - **selected** (optional boolean flag)
 
+## color-box
+
+- **open** (required boolean flag)
+
 ## combobox
 
 - **disabled** (optional boolean flag)
@@ -133,7 +137,8 @@ _No enum or boolean props._
 
 ## masthead
 
-- **pm** (optional boolean flag)
+- **tone** (optional, default `default`): `default`, `field`
+- **compact** (optional boolean flag)
 
 ## menu
 
@@ -145,7 +150,7 @@ _No enum or boolean props._
 
 ## nav-index
 
-- **selected** (optional boolean flag)
+_No enum or boolean props._
 
 ## note
 
@@ -173,7 +178,8 @@ _No enum or boolean props._
 
 ## row-index
 
-_No enum or boolean props._
+- **variant** (optional): `default`, `facts`
+- **density** (optional): `default`, `compact`
 
 ## section-head
 

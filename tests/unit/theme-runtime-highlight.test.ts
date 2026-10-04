@@ -21,10 +21,10 @@ const baseTokens: AestheticThemeTokens = {
   accent: "#294b39"
 };
 
-describe("custom-theme gold slot", () => {
+describe("custom-theme highlight slot", () => {
   it("applies --gold and a derived gold ramp when provided", () => {
     const style = fakeStyle();
-    applyThemeTokens(style, { ...baseTokens, gold: "#c2872b" });
+    applyThemeTokens(style, { ...baseTokens, highlight: "#c2872b" });
 
     expect(style.values.get("--gold")).toBe("#c2872b");
     for (const v of ["--gold-strong", "--gold-soft", "--gold-soft-2", "--gold-ink"]) {
@@ -41,7 +41,7 @@ describe("custom-theme gold slot", () => {
 
   it("clears a previously applied gold ramp", () => {
     const style = fakeStyle();
-    applyThemeTokens(style, { ...baseTokens, gold: "#c2872b" });
+    applyThemeTokens(style, { ...baseTokens, highlight: "#c2872b" });
     applyThemeTokens(style, null);
 
     expect(style.values.size).toBe(0);

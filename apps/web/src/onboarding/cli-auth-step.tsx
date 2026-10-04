@@ -19,7 +19,7 @@ import {
   pollOnboardingProviderLogin,
   submitOnboardingProviderLoginToken
 } from "../api/onboarding-connect-client";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import {
   deriveCardModel,
   IDLE_LOGIN,

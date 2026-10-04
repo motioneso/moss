@@ -19,9 +19,15 @@ export interface RecordedQuery {
  * A data-context database that compiles every Kysely query to SQL and records it instead of
  * talking to Postgres. Tests pin the exact statement and parameters a repository method runs.
  * By default the fake connection returns no rows; pass `rows` when the method under test maps a
- * returned row (every query in the test gets the same rows back).
+ * returned row (every query in the test gets the same rows back). Pass `beforeQuery` to delay or
+ * fail a statement before it is recorded.
  */
-export function makeRecordingDb(options: { rows?: readonly Record<string, unknown>[] } = {}): {
+export function makeRecordingDb(
+  options: {
+    rows?: readonly Record<string, unknown>[];
+    beforeQuery?: (sql: string) => Promise<void>;
+  } = {}
+): {
   scoped: DataContextDb;
   queries: RecordedQuery[];
 } {
@@ -29,6 +35,7 @@ export function makeRecordingDb(options: { rows?: readonly Record<string, unknow
   const rows = options.rows ?? [];
   const connection = {
     executeQuery: async (compiled: CompiledQuery) => {
+      await options.beforeQuery?.(compiled.sql);
       queries.push({ sql: compiled.sql, parameters: compiled.parameters });
       return { rows: [...rows], numAffectedRows: BigInt(rows.length) };
     },

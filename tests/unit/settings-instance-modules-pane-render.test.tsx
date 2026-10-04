@@ -151,7 +151,7 @@ function seedClient(
 describe("InstanceModulesPane external-modules group (#1084)", () => {
   it("shows the trusted-operator warning for a discovered-but-unpublished module", () => {
     const html = renderWithQuery(seedClient());
-    expect(html).toContain("External modules are not reviewed by Moss");
+    expect(html.replaceAll("<!-- -->", "")).toContain("External modules are not reviewed by Moss");
     expect(html).toContain("Acme Undeclared");
   });
 
@@ -255,13 +255,15 @@ describe("InstanceModulesPane external-modules trust warning (#1187 decision 5)"
 
   it("hides the External modules group entirely when no module is actually undeclared", () => {
     const html = renderWithQuery(seedNoUndeclaredExternal());
-    expect(html).not.toContain("External modules are not reviewed by Moss");
+    expect(html.replaceAll("<!-- -->", "")).not.toContain(
+      "External modules are not reviewed by Moss"
+    );
     expect(html).not.toContain("External modules");
   });
 
   it("still shows the warning when an undeclared module is present (existing behavior)", () => {
     const html = renderWithQuery(seedClient());
-    expect(html).toContain("External modules are not reviewed by Moss");
+    expect(html.replaceAll("<!-- -->", "")).toContain("External modules are not reviewed by Moss");
   });
 });
 

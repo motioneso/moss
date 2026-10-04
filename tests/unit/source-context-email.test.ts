@@ -334,6 +334,72 @@ describe("listEmailContext", () => {
     }
   });
 
+  // #3027: each inline triage could run up to the 120 s model timeout, one after another, so a
+  // slow model held one chat tool call for minutes.
+  it("stops live triage when the read's time budget runs out", async () => {
+    const runChat = vi.fn(
+      (_prompt: string, signal?: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        })
+    );
+    const deps = makeDeps({
+      googleProvider: fakeProvider<string>(
+        Array.from({ length: 4 }, (_, index) => parsed({ externalId: `slow-${index}` }))
+      ),
+      emailRepository: { listVisibleForBriefing: async () => [] },
+      makeEmailExtractDeps: () => ({ runChat }),
+      now: () => new Date(),
+      liveTriageBudgetMs: 200
+    });
+
+    const startedAt = Date.now();
+    const result = await listEmailContext(scopedDb, deps, {});
+
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    expect(runChat).toHaveBeenCalledTimes(1);
+    expect(result.items).toHaveLength(4);
+    expect(result.items.every((item) => item.actionability === "unknown")).toBe(true);
+  });
+
+  it("starts no triage when opening the savepoint spends the time budget", async () => {
+    // Only the savepoints opened after the message is fetched are slow, so the budget is still
+    // open when triage is chosen and spent by the time the savepoint is ready.
+    let messageFetched = false;
+    const slowSavepointDb = makeRecordingDb({
+      beforeQuery: async (sql) => {
+        if (messageFetched && sql.startsWith("SAVEPOINT")) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+    }).scoped;
+    const provider = fakeProvider<string>([parsed({ externalId: "late-0" })]);
+    const getMessage = provider.getMessage.bind(provider);
+    provider.getMessage = async (credential, key) => {
+      messageFetched = true;
+      return getMessage(credential, key);
+    };
+    const runChat = vi.fn(
+      (_prompt: string, signal?: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        })
+    );
+    const deps = makeDeps({
+      googleProvider: provider,
+      emailRepository: { listVisibleForBriefing: async () => [] },
+      makeEmailExtractDeps: () => ({ runChat }),
+      now: () => new Date(),
+      liveTriageBudgetMs: 200
+    });
+
+    const result = await listEmailContext(slowSavepointDb, deps, {});
+
+    expect(runChat).not.toHaveBeenCalled();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.actionability).toBe("unknown");
+  });
+
   it("never exposes a body and keeps summaries bounded", async () => {
     const deps = makeDeps({
       googleProvider: fakeProvider<string>([parsed({ body: "SECRET BODY ".repeat(200) })]),

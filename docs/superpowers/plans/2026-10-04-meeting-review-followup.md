@@ -96,3 +96,25 @@ The existing chat and output UAT cases now include six encoded-route rejection r
 real capability-failure recovery through the Moss API. Neither was run locally in this cloud
 workspace; exact published-commit CI and UAT results belong in the PR proof, not in these local
 test counts. No live provider authentication, database mutation or capture was performed here.
+
+## Owner-run real-provider follow-up and main reconciliation
+
+The owner-run [result on `10cee6f8`](https://github.com/motioneso/moss/pull/2982#issuecomment-5984601520)
+reported three executed real-provider passes (Sports and both Notes cases), zero skips, a failing
+Workshop case and successful disposable-stack cleanup. This is not a four-spec pass. Workshop
+saved and opened the project, then awaited the removed `No plan yet` label. Source and the
+`b396d1021` removal confirm [#3035](https://github.com/motioneso/moss/issues/3035): the current
+screen is a named Project conversation region, not a Plan heading. The repaired assertion checks
+that region, its project composer and the saved request there, retaining the real-model save,
+exact project link and project-list checks. It does not fake responses or relax provider gating.
+
+Reconcile main `8ce21ae` without editing any migration: Meetings keeps 0273–0280 and main keeps
+0281–0282. Preserve both Backtrack and Meetings registration, their complete expected migration
+order, and both shared RowIndex options (Meeting facts and main's compact rows). Regenerate the
+UI catalogue and cover the option combinations. New CI, macOS and assembled-UI evidence must
+use the reconciled head; prior results do not establish this tree's behavior.
+
+A clean owner-controlled four-spec real-provider rerun remains required. The report names Claude
+Opus 5.5 (Anthropic); the builder is OpenAI. That reported identity does not independently verify
+the reviewer's upstream proxy or supply a current detailed security re-review. Do not claim
+verified cross-provider approval, real capture readiness or merge clearance from this report.

@@ -3,14 +3,19 @@ import { type ReactNode } from "react";
 export interface RowIndexProps {
   readonly children: ReactNode;
   readonly variant?: "default" | "facts";
+  /** Compact rows sit inside a section block: body-size title, tighter padding, no trailing gap. */
+  readonly density?: "default" | "compact";
 }
 
 export function RowIndex(props: RowIndexProps) {
-  return (
-    <div className={props.variant === "facts" ? "jds-index jds-index--facts" : "jds-index"}>
-      {props.children}
-    </div>
-  );
+  const className = [
+    "jds-index",
+    props.variant === "facts" ? "jds-index--facts" : "",
+    props.density === "compact" ? "jds-index--compact" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return <div className={className}>{props.children}</div>;
 }
 
 export interface RowIndexItemProps {

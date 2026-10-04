@@ -243,6 +243,11 @@ export const settingsModuleManifest: MossModuleManifest = {
       permissionId: "settings.view"
     },
     {
+      method: "GET",
+      path: "/api/me/install-manifest",
+      permissionId: "settings.view"
+    },
+    {
       method: "PUT",
       path: "/api/me/persona",
       permissionId: "settings.write"

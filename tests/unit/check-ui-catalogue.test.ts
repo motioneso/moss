@@ -119,6 +119,64 @@ describe("build-ui-catalogue extraction (#1388)", () => {
     ]);
   });
 
+  it("keeps RowIndex options when a later sibling declares item props", async () => {
+    const dir = await buildFixtureDir({
+      "row-index.tsx": [
+        "export interface RowIndexProps {",
+        '  readonly variant?: "default" | "facts";',
+        '  readonly density?: "default" | "compact";',
+        "}",
+        "export function RowIndex(props: RowIndexProps) { return props; }",
+        "export interface RowIndexItemProps { readonly title: string; }",
+        "export function RowIndexItem(props: RowIndexItemProps) { return props; }"
+      ].join("\n")
+    });
+
+    const catalogue = buildUiCatalogue(dir);
+
+    expect(catalogue.items[0]?.options).toEqual([
+      {
+        prop: "variant",
+        kind: "enum",
+        values: ["default", "facts"],
+        optional: true,
+        default: null
+      },
+      {
+        prop: "density",
+        kind: "enum",
+        values: ["default", "compact"],
+        optional: true,
+        default: null
+      }
+    ]);
+    expect(catalogue.items[0]?.exports).toEqual(["RowIndex", "RowIndexItem"]);
+  });
+
+  it("preserves the last props interface fallback when no component name matches", async () => {
+    const dir = await buildFixtureDir({
+      "collection.tsx": [
+        "export interface FirstProps { readonly disabled?: boolean; }",
+        "export function First(props: FirstProps) { return props; }",
+        'export interface LastProps { readonly tone?: "neutral" | "steel"; }',
+        "export function Last(props: LastProps) { return props; }"
+      ].join("\n")
+    });
+
+    const catalogue = buildUiCatalogue(dir);
+
+    expect(catalogue.items[0]?.flags).toEqual([]);
+    expect(catalogue.items[0]?.options).toEqual([
+      {
+        prop: "tone",
+        kind: "enum",
+        values: ["neutral", "steel"],
+        optional: true,
+        default: null
+      }
+    ]);
+  });
+
   it("matches the checked-in packages/ui/catalogue.json and OPTIONS.md against the real tree", async () => {
     const repoRoot = join(import.meta.dirname, "../..");
     const componentsDir = join(repoRoot, "packages/ui/src");

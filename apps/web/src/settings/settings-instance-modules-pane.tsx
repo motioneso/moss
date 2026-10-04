@@ -14,7 +14,7 @@ import {
   setExternalModuleEnabled
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import { ModuleCredentialsSection } from "./module-credentials-section";
 import { ModuleRegistrySection } from "./settings-module-registry-section";
@@ -161,8 +161,8 @@ export function InstanceModulesPane() {
                 the same access as built-in features. Uses the authored <Note> primitive (no
                 `tone` prop exists) with a warning icon. */}
             <Note icon={<AlertTriangle size={13} aria-hidden="true" />}>
-              External modules are not reviewed by Moss. Only enable modules you authored or fully
-              trust — an enabled module runs with the same access as built-in features.
+              External modules are not reviewed by {assistantName}. Only enable modules you authored
+              or fully trust — an enabled module runs with the same access as built-in features.
             </Note>
             {undeclaredExternalModules.map((module) => {
               // #917: surface WHY a module is inactive. Drift auto-disable (package changed

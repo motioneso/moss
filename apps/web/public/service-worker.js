@@ -1,5 +1,11 @@
-const CACHE_NAME = "jarv1s-shell-v2";
-const APP_SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE_NAME = "jarv1s-shell-v3";
+const APP_SHELL_URLS = [
+  "/",
+  "/offline.html",
+  "/offline-name.js",
+  "/manifest.webmanifest",
+  "/icons/icon.svg"
+];
 const IMAGE_RETRY_DELAYS_MS = [250, 1000];
 // register-service-worker.ts registers this script as "/service-worker.js?dev=1" outside
 // production so push notifications can be exercised on a dev instance — the query string

@@ -1,17 +1,21 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import type { AestheticThemeTokens } from "@moss/shared";
+import { ColorBox } from "@moss/ui";
 import {
   AppearancePane,
   contrastRatio,
   saveThemeDraft,
   slugifyThemeId,
+  themeColorError,
   tokensToCssVars
 } from "../../apps/web/src/settings/settings-appearance-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
+import { PREVIEW_PARTS, ThemePreview } from "../../apps/web/src/settings/settings-theme-preview.js";
 import { parsePalette } from "../../apps/web/src/theme/theme-runtime.js";
 
 function renderAppearancePane(): string {
@@ -63,16 +67,51 @@ describe("parsePalette (auto-staging)", () => {
   });
 });
 
-describe("AppearancePane — palette auto-staging wiring", () => {
-  it("never renders a Stage colors button in any state", () => {
-    // The editor section (including the paste textarea) is only visible when draft
-    // state is set via user interaction — not directly settable via QueryClient.
-    // Without jsdom + @testing-library/react there is no DOM event machinery to
-    // simulate the click that opens the editor. The deepest assertion available in
-    // this SSR-only suite: "Stage colors" is absent everywhere in the output,
-    // confirming the button was removed and auto-staging is unconditional.
-    const html = renderAppearancePane();
-    expect(html).not.toContain("Stage colors");
+describe("ColorBox", () => {
+  const box = (open: boolean, palette: string[]) =>
+    renderToString(
+      createElement(ColorBox, {
+        label: "Accent",
+        value: "#2C5D8A",
+        palette,
+        open,
+        onOpenChange: () => undefined,
+        onChange: () => undefined
+      })
+    );
+
+  it("fills the whole box with the color and keeps the picker closed", () => {
+    const html = box(false, ["#2c5d8a"]);
+    expect(html).toContain("--jds-colorbox:#2C5D8A");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("From your palette");
+  });
+
+  it("opens with the pasted palette on top and marks the current color", () => {
+    const html = box(true, ["#2c5d8a", "#d39b3c"]);
+    expect(html).toContain("From your palette");
+    expect(html).toContain('aria-label="Use #2c5d8a" aria-pressed="true"');
+    expect(html).toContain('aria-label="Use #d39b3c" aria-pressed="false"');
+    expect(html).toContain("Any color");
+  });
+
+  it("asks for a palette when none was pasted", () => {
+    expect(box(true, [])).toContain("Paste a palette and its colors show here.");
+  });
+});
+
+describe("ThemePreview", () => {
+  it("says the preview is clickable and marks every part with its field", () => {
+    const html = renderToString(
+      createElement(ThemePreview, { style: {}, openPart: "rule", onPick: () => undefined })
+    );
+    expect(html).toContain("Click any part to change its color.");
+    for (const part of Object.keys(PREVIEW_PARTS)) {
+      expect(html).toContain(`data-part="${part}"`);
+    }
+    expect(html).toContain('class="theme-pv__rule is-open"');
+    expect(PREVIEW_PARTS.rule.key).toBe("highlight");
+    expect(PREVIEW_PARTS.nav.key).toBe("nav");
   });
 });
 
@@ -109,6 +148,13 @@ describe("appearance pane helpers", () => {
     expect(calls).toEqual(["put:my-blue:My Blue", "active:my-blue"]);
   });
 
+  it("refuses a see-through nav color but allows one elsewhere", () => {
+    expect(themeColorError("nav", "rgba(0, 0, 0, 0.5)")).toMatch(/solid color/);
+    expect(themeColorError("nav", "rgba(0, 0, 0, 1)")).toBeNull();
+    expect(themeColorError("accent", "rgba(0, 0, 0, 0.5)")).toBeNull();
+    expect(themeColorError("nav", "navy")).toMatch(/#rrggbb/);
+  });
+
   it("slugifies theme names into route-safe ids", () => {
     expect(slugifyThemeId(" Coolors Sunset! ")).toBe("coolors-sunset");
     expect(slugifyThemeId("!!!")).toMatch(/^theme-/);
@@ -125,5 +171,30 @@ describe("appearance pane helpers", () => {
     expect(css["--paper"]).toBe("#ffffff");
     expect(css["--accent"]).toBe("#2f6a4c");
     expect(css["--red"]).toBeUndefined();
+  });
+});
+
+describe("page header editing (#3019)", () => {
+  it("lists the header as a clickable preview part and rejects non-solid values", () => {
+    expect(PREVIEW_PARTS.header.key).toBe("header");
+    expect(themeColorError("header", "#1c1a16")).toBeNull();
+    expect(themeColorError("header", "rgba(28, 26, 22, 0.5)")).not.toBeNull();
+  });
+
+  it("gives a draft with no header value no header vars, as after Reset to default", () => {
+    const withHeader = tokensToCssVars({ ...tokens, header: "#1c1a16" });
+    expect(withHeader["--header-bg"]).toBeDefined();
+    const { header: _dropped, ...reset } = { ...tokens, header: "#1c1a16" };
+    expect(Object.keys(tokensToCssVars(reset)).some((name) => name.startsWith("--header-"))).toBe(
+      false
+    );
+  });
+
+  it("clears the applied theme's header vars on the preview so a reset draft shows its own page color", () => {
+    const css = readFileSync("packages/ui/src/styles/components-theme-editor.css", "utf8");
+    const block = /\.theme-pv,[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    for (const name of ["bg", "fg", "muted", "line", "hover"]) {
+      expect(block).toContain(`--header-${name}: initial;`);
+    }
   });
 });

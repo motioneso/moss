@@ -21,7 +21,7 @@ import {
   uploadChatAttachment
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import {
   ATTACHMENT_ACCEPT,
   CLIENT_MAX_ATTACHMENTS_PER_TURN,

@@ -3,7 +3,13 @@ import type { PgBoss } from "pg-boss";
 import type { UsefulnessFeedbackRepository } from "@moss/usefulness-feedback";
 
 import { listAssistantToolsFromManifests } from "@moss/ai";
-import type { AccessContext, BriefingDefinition, BriefingRun, DataContextRunner } from "@moss/db";
+import type {
+  AccessContext,
+  BriefingDefinition,
+  BriefingRun,
+  DataContextDb,
+  DataContextRunner
+} from "@moss/db";
 import {
   HttpError,
   handleRouteError as handleModuleRouteError,
@@ -23,6 +29,8 @@ import {
   type BriefingPlanContextV1,
   type BriefingRunDto,
   type BriefingRunPlanStateDto,
+  type BriefingCatchUpDto,
+  type BriefingCatchUpEntryDto,
   type BriefingStructuredPayloadV1,
   type BriefingType,
   type GetBriefingRunResponse,
@@ -45,7 +53,7 @@ import {
 } from "./run-status.js";
 import { projectPlanContext, type DayPlanReadPort } from "./plan-context.js";
 import { reconcileOwnedSchedules, reconcileSchedule, timezoneFor } from "./schedule.js";
-import { deriveBriefingFeedbackItems } from "./feedback-targets.js";
+import { CATCH_UP_HANDLED_KINDS, deriveBriefingFeedbackItems } from "./feedback-targets.js";
 import { displaySummaryText } from "./run-display.js";
 
 export interface BriefingsRoutesDependencies {
@@ -57,7 +65,7 @@ export interface BriefingsRoutesDependencies {
   readonly repository?: BriefingsRepository;
   readonly feedbackRepository?: Pick<
     UsefulnessFeedbackRepository,
-    "upsertTarget" | "listActiveDismissedRefs"
+    "upsertTarget" | "listActiveDismissedRefs" | "listActiveRefs"
   >;
 }
 
@@ -257,9 +265,16 @@ export function registerBriefingsRoutes(
                 "briefing_item",
                 "briefing"
               )) ?? new Set<string>();
+            const handledCatchUp = await listHandledCatchUpRefs(
+              dependencies,
+              scopedDb,
+              accessContext.actorUserId
+            );
             const runs = await repository.listRuns(scopedDb, definition.id);
             const visibleRuns = runs.filter((run) => !dismissedRuns.has(run.id));
-            const serializedRuns = visibleRuns.map((run) => serializeRun(run, { dismissedItems }));
+            const serializedRuns = visibleRuns.map((run) =>
+              serializeRun(run, { dismissedItems, handledCatchUp })
+            );
             if (dependencies.feedbackRepository) {
               for (const run of visibleRuns) {
                 await dependencies.feedbackRepository.upsertTarget(scopedDb, {
@@ -284,6 +299,12 @@ export function registerBriefingsRoutes(
                   metadata: item.metadata
                 });
               }
+              await upsertCatchUpTargets(
+                dependencies,
+                scopedDb,
+                accessContext.actorUserId,
+                visibleRuns
+              );
             }
 
             return { definition, runs: serializedRuns };
@@ -322,7 +343,15 @@ export function registerBriefingsRoutes(
                 "briefing_item",
                 "briefing"
               )) ?? new Set<string>();
-            return { definition, run, firstRunId: runs[0]?.id, dismissedItems };
+            const handledCatchUp = await listHandledCatchUpRefs(
+              dependencies,
+              scopedDb,
+              accessContext.actorUserId
+            );
+            if (run && run.definition_id === definition.id) {
+              await upsertCatchUpTargets(dependencies, scopedDb, accessContext.actorUserId, [run]);
+            }
+            return { definition, run, firstRunId: runs[0]?.id, dismissedItems, handledCatchUp };
           }
         );
 
@@ -381,7 +410,8 @@ export function registerBriefingsRoutes(
             .send({ error: RUN_NOT_AVAILABLE_ERROR, code: RUN_NOT_AVAILABLE_CODE });
         }
         const serialized = serializeRun(readyRun, {
-          dismissedItems: snapshot.dismissedItems
+          dismissedItems: snapshot.dismissedItems,
+          handledCatchUp: snapshot.handledCatchUp
         });
         const stored = readPlanContext(serialized.structuredPayload);
         const plan = await readRunPlanState(
@@ -740,13 +770,20 @@ function serializeDefinition(definition: BriefingDefinition): BriefingDefinition
 
 function serializeRun(
   run: BriefingRun,
-  options: { readonly dismissedItems?: ReadonlySet<string> } = {}
+  options: {
+    readonly dismissedItems?: ReadonlySet<string>;
+    readonly handledCatchUp?: ReadonlySet<string>;
+  } = {}
 ): BriefingRunDto {
   const { structuredPayload: storedPayload, ...sourceMetadata } = run.source_metadata;
-  const structuredPayload =
+  const stored =
     storedPayload && typeof storedPayload === "object"
       ? (storedPayload as BriefingStructuredPayloadV1)
       : { version: 1 as const, actionRows: [], catchUp: null };
+  const structuredPayload = {
+    ...stored,
+    catchUp: visibleCatchUp(stored.catchUp, options.handledCatchUp)
+  };
   const feedbackItems = deriveBriefingFeedbackItems(run.source_metadata).filter(
     (item) => !options.dismissedItems?.has(item.feedbackItemId)
   );
@@ -763,6 +800,67 @@ function serializeRun(
     structuredPayload,
     createdAt: toIsoString(run.created_at)
   };
+}
+
+/** Catch-up entries from a stored payload; runs stored before #3028 carry none. */
+function storedCatchUpEntries(catchUp: unknown): readonly BriefingCatchUpEntryDto[] {
+  if (!catchUp || typeof catchUp !== "object") return [];
+  const entries = (catchUp as { entries?: unknown }).entries;
+  return Array.isArray(entries) ? (entries as BriefingCatchUpEntryDto[]) : [];
+}
+
+/** Drops dismissed or added entries, and the whole block once none remain. */
+function visibleCatchUp(
+  catchUp: BriefingCatchUpDto | null | undefined,
+  handled: ReadonlySet<string> | undefined
+): BriefingCatchUpDto | null {
+  const entries = storedCatchUpEntries(catchUp).filter((entry) => !handled?.has(entry.id));
+  if (!catchUp || entries.length === 0) return null;
+  return { ...catchUp, itemCount: entries.length, entries };
+}
+
+async function listHandledCatchUpRefs(
+  dependencies: BriefingsRoutesDependencies,
+  scopedDb: DataContextDb,
+  actorUserId: string
+): Promise<Set<string>> {
+  return (
+    (await dependencies.feedbackRepository?.listActiveRefs(
+      scopedDb,
+      actorUserId,
+      "briefing_item",
+      "briefing",
+      CATCH_UP_HANDLED_KINDS
+    )) ?? new Set<string>()
+  );
+}
+
+/** Registers each catch-up entry as a feedback target so Dismiss and Add task can record on it. */
+async function upsertCatchUpTargets(
+  dependencies: BriefingsRoutesDependencies,
+  scopedDb: DataContextDb,
+  actorUserId: string,
+  runs: readonly BriefingRun[]
+): Promise<void> {
+  if (!dependencies.feedbackRepository) return;
+  const refs = new Set(
+    runs.flatMap((run) =>
+      storedCatchUpEntries(
+        (run.source_metadata.structuredPayload as { catchUp?: unknown } | undefined)?.catchUp
+      ).map((entry) => entry.id)
+    )
+  );
+  for (const ref of refs) {
+    await dependencies.feedbackRepository.upsertTarget(scopedDb, {
+      ownerUserId: actorUserId,
+      targetKind: "briefing_item",
+      targetRef: ref,
+      surface: "briefing",
+      sourceKind: "email",
+      sourceLabel: "Catch-up",
+      metadata: { catchUp: true }
+    });
+  }
 }
 
 function toNullableIsoString(value: Date | string | null): string | null {

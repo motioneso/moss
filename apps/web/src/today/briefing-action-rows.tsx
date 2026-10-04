@@ -17,12 +17,16 @@ import { formatDate } from "../locale/locale-format";
 import { useChatControls } from "../shell/chat-controls-context";
 
 import { BriefingStaleBanner } from "./briefing-freshness";
+import { buildReplyChatPrompt } from "./briefing-reply-prompt";
+import { BriefingCatchUp } from "./catch-up-digest";
 import { driftOf } from "./today-labels.js";
 
 const DRIFT_CLASS: Record<NonNullable<ReturnType<typeof driftOf>>, string> = {
   atrisk: "jds-drift jds-drift--atrisk",
   overdue: "jds-drift jds-drift--overdue"
 };
+
+export { buildReplyChatPrompt };
 
 export interface BriefingActionRowsSectionProps {
   readonly run: BriefingRunDto | null;
@@ -37,15 +41,6 @@ export interface BriefingActionRowsSectionProps {
 export interface DisplayedActionRow {
   readonly row: BriefingActionRowDto;
   readonly liveStatus: "suggested" | "accepted" | "dismissed";
-}
-
-/**
- * The reply prompt takes ONLY the opaque cache id. Row title, explanation and source label are
- * model-authored text; interpolating any of them here would let a crafted email rewrite the
- * instruction the assistant receives.
- */
-export function buildReplyChatPrompt(cacheMessageId: string): string {
-  return `Draft a reply to the cached email ${cacheMessageId} using email.draftReply.`;
 }
 
 /**
@@ -74,53 +69,6 @@ const CATEGORY_ICON: Record<BriefingActionCategory, typeof Reply> = {
   needs_action: Flag,
   time_sensitive_info: Clock
 };
-
-const CATCH_UP_PREVIEW_MAX_LENGTH = 180;
-const CATCH_UP_ENTITIES: Readonly<Record<string, string>> = {
-  amp: "&",
-  apos: "'",
-  gt: ">",
-  hellip: "…",
-  ldquo: "“",
-  lsquo: "‘",
-  lt: "<",
-  mdash: "—",
-  nbsp: " ",
-  ndash: "–",
-  quot: '"',
-  rdquo: "”",
-  rsquo: "’"
-};
-
-function compactCatchUpSummary(summaryText: string): string {
-  const summary = summaryText
-    .split(/[\r\n]+/)
-    .map(decodeCatchUpEntities)
-    .map((part) => part.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join(" · ");
-  if (summary.length <= CATCH_UP_PREVIEW_MAX_LENGTH) return summary;
-  return `${summary.slice(0, CATCH_UP_PREVIEW_MAX_LENGTH - 1).trimEnd()}…`;
-}
-
-function decodeCatchUpEntities(text: string): string {
-  return text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, reference: string) => {
-    if (reference.startsWith("#")) {
-      const codePoint = reference.toLowerCase().startsWith("#x")
-        ? Number.parseInt(reference.slice(2), 16)
-        : Number.parseInt(reference.slice(1), 10);
-      if (
-        !Number.isInteger(codePoint) ||
-        codePoint < 0 ||
-        codePoint > 0x10ffff ||
-        (codePoint >= 0xd800 && codePoint <= 0xdfff)
-      )
-        return entity;
-      return String.fromCodePoint(codePoint);
-    }
-    return CATCH_UP_ENTITIES[reference.toLowerCase()] ?? entity;
-  });
-}
 
 export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps) {
   const queryClient = useQueryClient();
@@ -222,18 +170,14 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
         </div>
       ) : null}
       {looseEndsSection}
-      {catchUp && catchUp.itemCount > 0 ? (
-        <div className="briefing-catchup">
-          <div className="jds-brief__head">
-            <span className="jds-brief__kicker">Catch-up</span>
-            <span className="jds-caption">
-              {catchUp.itemCount} informational {catchUp.itemCount === 1 ? "message" : "messages"}
-            </span>
-          </div>
-          <p className="cmd-leadin">
-            {compactCatchUpSummary(catchUp.summaryText) || "No safe summary is available yet."}
-          </p>
-        </div>
+      {catchUp && catchUp.entries.length > 0 ? (
+        <BriefingCatchUp
+          key={props.run?.id}
+          catchUp={catchUp}
+          locale={props.locale}
+          chatAvailable={props.chatAvailable}
+          onOpenChat={chat.openChatWith}
+        />
       ) : null}
     </section>
   );

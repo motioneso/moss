@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@moss/ai": "workspace:*",
+    "@moss/backtrack": "workspace:*",
     "@moss/briefings": "workspace:*",
     "@moss/calendar": "workspace:*",
     "@moss/chat": "workspace:*",

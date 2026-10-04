@@ -23,6 +23,12 @@ import {
   MeetingExportService
 } from "@moss/meetings";
 import {
+  backtrackModuleManifest,
+  backtrackModuleSqlMigrationDirectory,
+  BACKTRACK_INDEX_QUEUE,
+  BACKTRACK_UPKEEP_QUEUE
+} from "@moss/backtrack";
+import {
   commitmentsModuleManifest,
   commitmentsModuleSqlMigrationDirectory,
   COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
@@ -53,6 +59,8 @@ import {
   registerWorkflowWorkers
 } from "@moss/workflows";
 import { registerWorkflowsRoutes } from "@moss/workflows/routes";
+import { registerBacktrackRoutes } from "@moss/backtrack/routes";
+import { registerBacktrackWorkers } from "@moss/backtrack/workers";
 import { registerCommitmentsRoutes } from "@moss/commitments/routes";
 import { registerCommitmentExtractionWorker } from "@moss/commitments/workers";
 import {
@@ -108,6 +116,7 @@ import {
 import { isBehaviorEnabled, type SourceBehaviorPreferencesPort } from "@moss/source-behaviors";
 import {
   BRIEFINGS_QUEUE_DEFINITIONS,
+  CATCH_UP_HANDLED_KINDS,
   projectPlanContext,
   BriefingsRepository,
   briefingsModuleManifest,
@@ -2320,6 +2329,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             const name = row?.name?.trim();
             return name && name.length > 0 ? name : actorUserId;
           },
+          catchUpHandledRefs: (scopedDb, ownerUserId) =>
+            usefulnessFeedbackRepository.listActiveRefs(
+              scopedDb,
+              ownerUserId,
+              "briefing_item",
+              "briefing",
+              CATCH_UP_HANDLED_KINDS
+            ),
           memoryRetriever: runtimeMemoryRetriever as unknown as MemoryRetriever,
           logger: briefingsLogger,
           connectorSyncAt: async (scopedDb, kind) => {
@@ -2990,6 +3007,29 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         aiRepository: new AiRepository(),
         cipher: createAiSecretCipher(),
         createCliStructuredAdapter: deps.createCliStructuredAdapter
+      })
+  },
+  {
+    // #2638 Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.5-§4.7): the index and
+    // hourly upkeep jobs and the session-authenticated status/pause/delete routes. The companion
+    // ingest route is a platform route in apps/api, not registered here.
+    manifest: backtrackModuleManifest,
+    sqlMigrationDirectories: [backtrackModuleSqlMigrationDirectory],
+    queueDefinitions: [
+      { name: BACKTRACK_INDEX_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
+      { name: BACKTRACK_UPKEEP_QUEUE, options: {} }
+    ],
+    registerRoutes: (server, deps) =>
+      registerBacktrackRoutes(server, {
+        resolveAccessContext: deps.resolveAccessContext,
+        dataContext: deps.dataContext
+      }),
+    registerWorkers: (boss, deps) =>
+      registerBacktrackWorkers(boss, {
+        dataContext: deps.dataContext,
+        rootDb: deps.rootDb,
+        embeddingProviderFactory: createRuntimeEmbeddingProvider,
+        logger: deps.logger ? createModuleLogger(deps.logger, "backtrack") : undefined
       })
   }
 ];

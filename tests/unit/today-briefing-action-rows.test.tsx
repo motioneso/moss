@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type {
   BriefingActionRowDto,
+  BriefingCatchUpDto,
+  BriefingCatchUpEntryDto,
   BriefingRunDto,
   BriefingStructuredPayloadV1,
   LocaleSettingsDto,
@@ -61,12 +63,10 @@ describe("BriefingActionRowsSection", () => {
       actionRow({ taskId: "task-accepted" }),
       actionRow({ taskId: "task-dismissed" })
     ];
-    const catchUp = {
-      source: "email" as const,
-      itemCount: 4,
-      summaryText: `The garden walk moved to Saturday &amp; volunteers should arrive &quot;early&quot;.\n${"Routine digests arrived too. ".repeat(12)}`,
-      asOf: null
-    };
+    const catchUp = catchUpPayload([
+      catchUpEntry({ id: "email-digest:1", senderName: "Garden Club" }),
+      catchUpEntry({ id: "email-digest:2", senderName: "Library" })
+    ]);
     const looseEnds = [
       task({
         id: "loose-overdue",
@@ -97,14 +97,10 @@ describe("BriefingActionRowsSection", () => {
     expect(html).toContain("Renew the garden-tool loan");
     expect(html).toContain("Return the library books");
     expect(html.indexOf('id="loose-ends"')).toBeLessThan(html.indexOf("Catch-up"));
-    expect(html).toMatch(/4(?:<!-- -->)? informational (?:<!-- -->)?messages/);
-    expect(html).toContain("The garden walk moved to Saturday &amp; volunteers");
-    expect(html).toContain(" · Routine digests arrived too.");
-    expect(html).not.toContain("&amp;amp;");
+    expect(html).toContain("Garden Club");
+    expect(html).toContain("Library");
     expect(html.match(/<a\b/g)?.length).toBe(1);
     expect(html).toContain('href="https://mail.example.com/thread/1"');
-    const summaryMarkup = html.match(/<p class="cmd-leadin">([\s\S]*?)<\/p>/)?.[1] ?? "";
-    expect(summaryMarkup).toMatch(/…$/);
   });
 
   it("shows the loose-end count without claiming there is nothing waiting", () => {
@@ -357,16 +353,14 @@ describe("BriefingActionRowsSection", () => {
     const withCatchUp = renderSection({
       run: run({
         rows: [],
-        catchUp: {
-          source: "email",
-          itemCount: 4,
-          summaryText: "Four newsletters and a receipt.",
-          asOf: "2026-07-30T18:00:00.000Z"
-        }
+        catchUp: catchUpPayload([
+          catchUpEntry({ summary: "The plumber confirmed Tuesday morning." })
+        ])
       }),
       tasks: []
     });
-    expect(withCatchUp).toContain("Four newsletters and a receipt.");
+    expect(withCatchUp).toContain("Catch-up");
+    expect(withCatchUp).toContain("The plumber confirmed Tuesday morning.");
 
     const stale = renderSection({
       run: run({
@@ -388,15 +382,7 @@ describe("BriefingActionRowsSection", () => {
     expect(fresh).not.toContain("Some sources are over a day old");
 
     const zeroCatchUp = renderSection({
-      run: run({
-        rows: [],
-        catchUp: {
-          source: "email",
-          itemCount: 0,
-          summaryText: "No safe summary is available yet.",
-          asOf: null
-        }
-      }),
+      run: run({ rows: [], catchUp: catchUpPayload([]) }),
       tasks: []
     });
     expect(zeroCatchUp).not.toContain("Catch-up");
@@ -542,6 +528,30 @@ function actionRow(overrides: Partial<BriefingActionRowDto> = {}): BriefingActio
     computedAt: new Date().toISOString(),
     resurfaceReason: null,
     ...overrides
+  };
+}
+
+function catchUpEntry(overrides: Partial<BriefingCatchUpEntryDto> = {}): BriefingCatchUpEntryDto {
+  return {
+    id: "email-digest:0",
+    senderName: "Priya Raman",
+    summary: "The signed lease is attached.",
+    receivedAt: new Date().toISOString(),
+    reason: null,
+    cacheMessageId: "cache-1",
+    openHref: null,
+    ...overrides
+  };
+}
+
+function catchUpPayload(entries: readonly BriefingCatchUpEntryDto[]): BriefingCatchUpDto {
+  return {
+    source: "email",
+    itemCount: entries.length,
+    since: null,
+    leftOutCount: 0,
+    asOf: null,
+    entries
   };
 }
 

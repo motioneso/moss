@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -7,24 +8,26 @@ import { ReleasedPane } from "../../apps/web/src/settings/settings-released-pane
 describe("ReleasedPane", () => {
   it("renders the bundled release history", () => {
     const html = renderToString(
-      <ReleasedPane
-        me={{
-          user: {
-            id: "user-1",
-            email: "user@example.test",
-            emailVerified: true,
-            name: "User",
-            status: "active",
-            isInstanceAdmin: false,
-            isBootstrapOwner: false,
-            createdAt: "2026-06-01T00:00:00.000Z",
-            updatedAt: "2026-06-01T00:00:00.000Z"
-          },
-          profilePrefs: { addressed: null },
-          hasPasswordCredential: false
-        }}
-        onNavigate={() => undefined}
-      />
+      <QueryClientProvider client={new QueryClient()}>
+        <ReleasedPane
+          me={{
+            user: {
+              id: "user-1",
+              email: "user@example.test",
+              emailVerified: true,
+              name: "User",
+              status: "active",
+              isInstanceAdmin: false,
+              isBootstrapOwner: false,
+              createdAt: "2026-06-01T00:00:00.000Z",
+              updatedAt: "2026-06-01T00:00:00.000Z"
+            },
+            profilePrefs: { addressed: null },
+            hasPasswordCredential: false
+          }}
+          onNavigate={() => undefined}
+        />
+      </QueryClientProvider>
     );
 
     expect(html).toContain("What&#x27;s new");

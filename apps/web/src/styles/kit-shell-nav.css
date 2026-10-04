@@ -159,3 +159,111 @@
 [data-color-mode="dark"] .rail-foot {
   border-top-color: var(--line);
 }
+
+/* Custom theme nav color. The theme runtime sets the --nav-* vars and the
+   data-nav-color flag together; text, hover and selected colors are derived
+   so they clear 4.5:1 on any ground. */
+[data-nav-color] .sidebar {
+  background: var(--nav-bg);
+  border-right-color: var(--nav-line);
+  color: var(--nav-fg);
+}
+
+[data-nav-color] .brand-lockup,
+[data-nav-color] .brand-mark {
+  color: var(--nav-brand);
+}
+
+[data-nav-color] .nav-group__label,
+[data-nav-color] .nav-count,
+[data-nav-color] .nav-loading,
+[data-nav-color] .module-link,
+[data-nav-color] .sidebar .jds-usermenu__chev {
+  color: var(--nav-muted);
+}
+
+[data-nav-color] .module-link:hover {
+  background: var(--nav-hover);
+  color: var(--nav-fg);
+}
+
+[data-nav-color] .module-link.active {
+  background: var(--nav-active-bg);
+  color: var(--nav-active-fg);
+}
+
+[data-nav-color] .sidebar .jds-usermenu__trigger {
+  color: var(--nav-fg);
+}
+
+[data-nav-color] .sidebar .jds-iconbtn {
+  --iconbtn-color: var(--nav-muted);
+  --iconbtn-hover-bg: var(--nav-hover);
+  --iconbtn-hover-color: var(--nav-fg);
+}
+
+[data-nav-color] .rail-foot {
+  border-top-color: var(--nav-line);
+}
+
+[data-nav-color] .sidebar :focus-visible {
+  outline-color: var(--nav-fg);
+}
+
+/* On a phone the top bar wears the nav color too. Its icon buttons keep their
+   own raised ground, so only text sitting on the bar is re-tinted. */
+@media (max-width: 920px) {
+  [data-nav-color] .topbar {
+    background: var(--nav-bg);
+    border-bottom-color: var(--nav-line);
+    color: var(--nav-fg);
+  }
+
+  [data-nav-color] .topbar-title,
+  [data-nav-color] .topbar-crumb__now,
+  [data-nav-color] .topbar-title--link:hover,
+  [data-nav-color] .topbar-settings-button:hover {
+    color: var(--nav-fg);
+  }
+
+  [data-nav-color] .topbar-subtitle,
+  [data-nav-color] .topbar-title--link,
+  [data-nav-color] .topbar-crumb__sep,
+  [data-nav-color] .topbar-crumb__meta,
+  [data-nav-color] .topbar-settings-button {
+    color: var(--nav-muted);
+  }
+
+  [data-nav-color] .topbar-settings-button:hover {
+    background: var(--nav-hover);
+  }
+}
+
+/* Custom theme page header color: the desktop top bar only. At 920px and under the nav
+   color (above) paints the bar, so these rules stand down. */
+@media (min-width: 921px) {
+  [data-header-color] .topbar {
+    background: var(--header-bg);
+    border-bottom-color: var(--header-line);
+    color: var(--header-fg);
+  }
+
+  [data-header-color] .topbar-subtitle,
+  [data-header-color] .topbar-title--link,
+  [data-header-color] .topbar-crumb__sep,
+  [data-header-color] .topbar-crumb__meta,
+  [data-header-color] .topbar-settings-button {
+    color: var(--header-muted);
+  }
+
+  [data-header-color] .topbar-title,
+  [data-header-color] .topbar-crumb__now,
+  [data-header-color] .topbar-title--link:hover,
+  [data-header-color] .topbar-settings-button:hover {
+    color: var(--header-fg);
+  }
+
+  [data-header-color] .topbar-settings-button:hover {
+    background: var(--header-hover);
+  }
+}

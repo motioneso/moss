@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Theme editor, desktop - mockup</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+<div class="app app--frame">
+  <nav class="nav" id="nav"></nav>
+  <div class="work">
+    <div class="topbar"><span class="topbar__title">Settings</span><span class="topbar__btn" id="chatbtn"></span></div>
+    <div class="settings">
+      <h1 class="settings__title">Settings</h1>
+      <div class="settings__grid">
+        <div class="subnav">
+          <div class="subnav__label">Your account</div>
+          <div class="subnav__item">Account &amp; preferences</div>
+          <div class="subnav__item is-active">Appearance</div>
+          <div class="subnav__label">Moss</div>
+          <div class="subnav__item">Your assistant</div>
+          <div class="subnav__item">Priorities</div>
+          <div class="subnav__item">Memory &amp; context</div>
+        </div>
+        <div id="pane"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="mockup.js"></script>
+<script src="pane.js"></script>
+<script>
+  document.getElementById("nav").innerHTML = navMarkup();
+  document.getElementById("chatbtn").innerHTML = svg("chat");
+  document.getElementById("pane").innerHTML = paneMarkup();
+  bar("Theme editor - desktop 1440", '<a href="phone.html">Phone</a> <a href="nav-colors.html">Nav colors</a> <a href="README.md">Notes</a>');
+  readHash();
+  render();
+  /* Shown open: the Today band was clicked in the preview. */
+  var band = document.querySelector(".pv__hero");
+  band.classList.add("is-hot");
+  document.querySelector("[data-pv-hint]").textContent = "Click to change Accent";
+  openPicker("accent", band);
+</script>
+</body>
+</html>

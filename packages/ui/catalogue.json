@@ -197,6 +197,15 @@
       ]
     },
     {
+      "name": "color-box",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/color-box.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["ColorBox", "ColorPopover"],
+      "options": [],
+      "flags": [{ "prop": "open", "optional": false }]
+    },
+    {
       "name": "combobox",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/combobox.tsx", "type": "registry:ui" }],
@@ -393,8 +402,16 @@
       "files": [{ "path": "packages/ui/src/masthead.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["Masthead", "MastheadClock", "MastheadDateline"],
-      "options": [],
-      "flags": [{ "prop": "pm", "optional": true }]
+      "options": [
+        {
+          "prop": "tone",
+          "kind": "enum",
+          "values": ["default", "field"],
+          "optional": true,
+          "default": "default"
+        }
+      ],
+      "flags": [{ "prop": "compact", "optional": true }]
     },
     {
       "name": "menu",
@@ -421,7 +438,7 @@
       "dependencies": [],
       "exports": ["NavIndex", "NavIndexItem"],
       "options": [],
-      "flags": [{ "prop": "selected", "optional": true }]
+      "flags": []
     },
     {
       "name": "note",
@@ -491,7 +508,22 @@
       "files": [{ "path": "packages/ui/src/row-index.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["RowIndex", "RowIndexItem"],
-      "options": [],
+      "options": [
+        {
+          "prop": "variant",
+          "kind": "enum",
+          "values": ["default", "facts"],
+          "optional": true,
+          "default": null
+        },
+        {
+          "prop": "density",
+          "kind": "enum",
+          "values": ["default", "compact"],
+          "optional": true,
+          "default": null
+        }
+      ],
       "flags": []
     },
     {
