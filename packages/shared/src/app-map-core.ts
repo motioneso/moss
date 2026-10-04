@@ -174,7 +174,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "tools while it does and what is sent, then Sorted by what they do on a date, naming the " +
       "model or models that read each tool's name, description and inputs, saying how many " +
       "tools Moss sorted itself without sending them, or giving only the date when how they " +
-      "were sorted is not recorded; tools whose sort failed get a Try again. Below the " +
+      "were sorted is not recorded; tools whose sort failed get a Try again, except that a sort " +
+      "that failed only because no model was set up runs again by itself once one is chosen. " +
+      "Below the " +
       "Connection panel a Classifier panel has a Let the classifier use this connection switch " +
       "and shows one of eight states: Off; a one-time confirmation before anything is sent, " +
       "listing what is sent, who reads it, what it costs and what is not sent, with Turn on and " +
@@ -184,7 +186,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "many are being prepared again; Couldn't prepare, saying why (for example the default chat " +
       "model did not answer) with Try again, which also sorts again any tool whose sort " +
       "failed, plus Change default model, which opens Your assistant, when no model is set " +
-      "up or the model did not answer properly; No tools left, when every tool is off, kept " +
+      "up or the model did not answer properly. Once a model is chosen, tools that failed only " +
+      "for want of one are sorted and prepared by themselves, without Try again, when the " +
+      "connection is opened again or the model settings change while it is open; a call cut " +
+      "off part way still waits for Try again. The other states are No tools left, when every tool is off, kept " +
       "out, failed to sort or cannot be prepared, so quick requests go through the default " +
       "model; and Paused, when the app can't be reached, which picks up again by itself. " +
       "While it is on, a What is sent, and what it costs link shows the same notice. The notice " +

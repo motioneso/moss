@@ -1,11 +1,13 @@
 import type {
   IntegrationClassifierArgument,
+  IntegrationClassifierPreparationFailure,
   IntegrationClassifierRisk,
   IntegrationClassifierToolSort,
   IntegrationClassifierToolState,
   IntegrationToolDescriptor
 } from "@moss/shared";
 
+import { attemptLive } from "./classifier-attempt.js";
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import { readableToolNames } from "./classifier-readable-name.js";
 import type { RiskInputSource } from "./classifier-risk-inputs.js";
@@ -17,6 +19,7 @@ import {
   type ClassifierPreparationEntry,
   type ClassifierPreparationFailureReason,
   type ClassifierPreparationMap,
+  type ClassifierSortFailure,
   type ClassifierSortMap,
   type ClassifierToolSortState
 } from "./classifier-settings.js";
@@ -95,13 +98,32 @@ type ToolStanding = { readonly tool: RiskInputSource } & (
     }
 );
 
+interface StandingOptions {
+  readonly modelReady: boolean;
+  readonly now: Date;
+}
+
+/**
+ * A tool's sort as the page reads it. A sorting call that may still be running reads as not yet
+ * sorted; one that stopped without a result reads as an ordinary failure.
+ */
+function shownSort(sort: ClassifierToolSortState, now: Date): ClassifierToolSortState {
+  if (sort.status !== "failed" || sort.failure !== "interrupted") return sort;
+  return attemptLive(sort.failedAt, now)
+    ? { status: "never_tried" }
+    : { ...sort, failure: "error" };
+}
+
 /**
  * Each discovered tool's classifier standing, in discovered order. `ready` is exactly the
  * eligibility rule of spec 8.5 apart from the connection being enabled and reachable, so the page
  * and the gate cannot disagree. A tool with a root-combinator schema is never prepared, so it is
  * `not_used` unless an older preparation for its current definition already makes it ready.
  */
-function toolStandings(state: ClassifierStandingInput, modelReady = false): ToolStanding[] {
+function toolStandings(
+  state: ClassifierStandingInput,
+  { modelReady, now }: StandingOptions = { modelReady: false, now: new Date() }
+): ToolStanding[] {
   const ordinaryEnabled = new Set(
     effectiveEnabledTools(state.discoveredTools, {
       enabledGroups: state.enabledGroups,
@@ -111,7 +133,7 @@ function toolStandings(state: ClassifierStandingInput, modelReady = false): Tool
   );
   const keptOut = new Set(state.classifierKeptOutTools);
   return state.discoveredTools.map((tool): ToolStanding => {
-    const sort = toolSortState(state.classifierSort, tool);
+    const sort = shownSort(toolSortState(state.classifierSort, tool), now);
     if (!state.classifierEnabled) return { tool, sort, state: "off" };
     if (keptOut.has(tool.name)) return { tool, sort, state: "kept_out" };
     if (!ordinaryEnabled.has(tool.name)) return { tool, sort, state: "not_used" };
@@ -136,7 +158,8 @@ function toolStandings(state: ClassifierStandingInput, modelReady = false): Tool
     const failure = preparationFailure(state.classifierPreparation, tool.name);
     if (
       failure?.definitionFingerprint === fingerprint &&
-      !(modelReady && failure.reason === "no_model")
+      !(modelReady && failure.reason === "no_model") &&
+      !(failure.reason === "interrupted" && attemptLive(failure.failedAt, now))
     ) {
       return { tool, sort, state: "failed", reason: failure.reason, failedAt: failure.failedAt };
     }
@@ -202,6 +225,20 @@ export interface ClassifierSortViewOptions {
    * failure for want of a model reads as preparing.
    */
   readonly modelReady?: boolean;
+  readonly now?: Date;
+}
+
+/** A call that stopped without a result is shown as the failure it stands for. */
+function shownSortFailure(
+  failure: ClassifierSortFailure
+): IntegrationClassifierToolSort["failure"] {
+  return failure === "interrupted" ? "error" : failure;
+}
+
+function shownPreparationFailure(
+  reason: ClassifierPreparationFailureReason
+): IntegrationClassifierPreparationFailure {
+  return reason === "interrupted" ? "provider_error" : reason;
 }
 
 /**
@@ -214,14 +251,18 @@ export function classifierSortView(
 ): IntegrationClassifierToolSort[] {
   const freeNames = readableToolNames(state.discoveredTools);
   const keptOut = new Set(state.classifierKeptOutTools);
-  return toolStandings(state, options.modelReady).map((standing) => {
+  const standings = toolStandings(state, {
+    modelReady: options.modelReady ?? false,
+    now: options.now ?? new Date()
+  });
+  return standings.map((standing) => {
     const { tool, sort } = standing;
     const current = sort.status === "current";
     return {
       toolName: tool.name,
       status: sort.status,
       risk: current ? sort.risk : null,
-      failure: sort.status === "failed" ? sort.failure : null,
+      failure: sort.status === "failed" ? shownSortFailure(sort.failure) : null,
       sendWithoutAsking: current && sort.sendWithoutAsking,
       asksFirst: !sortRunsWithoutAsking(sort),
       readableName: current ? sort.readableName : (freeNames.get(tool.name) ?? tool.name),
@@ -236,7 +277,8 @@ export function classifierSortView(
             : null,
       keptOut: keptOut.has(tool.name),
       classifierState: standing.state,
-      preparationFailure: standing.state === "failed" ? standing.reason : null,
+      preparationFailure:
+        standing.state === "failed" ? shownPreparationFailure(standing.reason) : null,
       preparedAt: standing.state === "ready" ? standing.entry.reviewedAt : null
     };
   });

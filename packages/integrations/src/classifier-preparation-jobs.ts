@@ -4,6 +4,7 @@ import type { PgBoss, WorkOptions } from "pg-boss";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { sendJob, toAccessContext, type QueueDefinition } from "@moss/jobs";
 
+import { CLASSIFIER_ATTEMPT_LIVE_MS } from "./classifier-attempt.js";
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import {
   preparationJobTargets,
@@ -11,10 +12,11 @@ import {
   type ClassifierPreparationPort,
   type PreparationChatModel
 } from "./classifier-preparation.js";
+import type { RiskInputSource } from "./classifier-risk-inputs.js";
 import {
   preparationFailureHasRoom,
   preparationHasRoom,
-  type ClassifierPreparationFailureReason
+  type ClassifierPreparationFailureReason as FailureReason
 } from "./classifier-settings.js";
 import { credentialMatcher, type CredentialMatcher } from "./classifier-sorting.js";
 import { loadClassifierCheckCredential, type IntegrationsCipherSources } from "./credentials.js";
@@ -23,8 +25,9 @@ import { IntegrationsRepository, type ConnectionRow } from "./repository.js";
 
 /**
  * The preparation job (spec 8.4, #2984 R2.4). It runs when the classifier switch turns on, after
- * every sort while the switch is on, and on the owner's Try again. Each prepared tool is saved
- * directly; a tool that fails waits for Try again.
+ * every sort while the switch is on, on the owner's Try again and once a missing model is chosen.
+ * Each prepared tool is saved directly. A tool that failed for want of a model is resent by a
+ * `model_ready` run; any other failure waits for Try again.
  *
  * The payload carries the owner id, the connection id and the job kind only. Logs carry counts
  * and the connection id; they never carry tool text, the model's answer or the credential.
@@ -37,7 +40,7 @@ export const INTEGRATION_CLASSIFIER_PREPARE_QUEUE_DEFINITION: QueueDefinition = 
     policy: "stately",
     // A provider charge is never repeated automatically.
     retryLimit: 0,
-    expireInSeconds: 1800,
+    expireInSeconds: CLASSIFIER_ATTEMPT_LIVE_MS / 1000,
     deleteAfterSeconds: 300,
     retentionSeconds: 3600
   }
@@ -100,7 +103,7 @@ interface PreparationRun {
 }
 
 /** The connection's tools this run should prepare, read from the row as it is now. */
-function targetsFor(row: ConnectionRow, op: ClassifierPreparationJobOp) {
+function targetsFor(row: ConnectionRow, op: ClassifierPreparationJobOp, now: Date) {
   return preparationJobTargets({
     discoveredTools: row.discoveredTools,
     preparation: row.classifierPreparation,
@@ -112,7 +115,8 @@ function targetsFor(row: ConnectionRow, op: ClassifierPreparationJobOp) {
       mutedTools: row.mutedTools
     },
     retryFailed: op === "retry",
-    retryNoModel: op === "model_ready"
+    retryNoModel: op === "model_ready",
+    now
   });
 }
 
@@ -122,9 +126,10 @@ function classifierActive(row: ConnectionRow): boolean {
 
 /**
  * Prepare one connection's tools. The first transaction reads the row, picks the targets, selects
- * the model and loads the credential for the check. Each tool then runs in its own transaction,
- * which re-reads the row so a tool switched off, kept out or changed mid-run is skipped, and saves
- * its own result.
+ * the model and loads the credential for the check. Each tool then runs in two transactions. The
+ * first locks and re-reads the row, so a tool switched off, kept out, changed or taken by another
+ * run mid-run is skipped, and marks the tool as a started call, so no other run sends it and a
+ * call that never saves leaves it for Try again. The second makes the call and saves its result.
  */
 export async function runClassifierPreparationJob(
   deps: ClassifierPreparationJobDeps,
@@ -142,14 +147,14 @@ export async function runClassifierPreparationJob(
   const failRemaining = async (
     scopedDb: DataContextDb,
     toolNames: readonly string[],
-    reason: ClassifierPreparationFailureReason
+    reason: FailureReason
   ): Promise<number> => {
     if (toolNames.length === 0) return 0;
     const row = await repository.getConnection(scopedDb, connectionId);
     if (!row || !classifierActive(row)) return 0;
     const names = new Set(toolNames);
     let recorded = 0;
-    for (const tool of targetsFor(row, op)) {
+    for (const tool of targetsFor(row, op, now())) {
       if (!names.has(tool.name)) continue;
       const saved = await repository.saveClassifierPreparationFailure(
         scopedDb,
@@ -173,7 +178,7 @@ export async function runClassifierPreparationJob(
     ): Promise<PreparationRun | Exclude<ClassifierPreparationJobOutcome, { prepared: number }>> => {
       const row = await repository.getConnection(scopedDb, connectionId);
       if (!row || !classifierActive(row)) return { status: "switched_off" };
-      const targets = targetsFor(row, op);
+      const targets = targetsFor(row, op, now());
       if (targets.length === 0) return { status: "nothing_to_prepare" };
 
       // Without a model that can draft, every target fails so the page leaves Preparing and
@@ -210,17 +215,18 @@ export async function runClassifierPreparationJob(
   let prepared = 0;
   let failed = 0;
   for (const [index, toolName] of run.toolNames.entries()) {
-    const step = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-      const row = await repository.getConnection(scopedDb, connectionId);
+    const fail = (scopedDb: DataContextDb, tool: RiskInputSource, reason: FailureReason) =>
+      repository.saveClassifierPreparationFailure(scopedDb, connectionId, toolName, {
+        reason,
+        definitionFingerprint: toolDefinitionFingerprint(tool),
+        failedAt: now().toISOString()
+      });
+
+    const claim = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
+      const row = await repository.getConnectionForUpdate(scopedDb, connectionId);
       if (!row || !classifierActive(row)) return "switched_off" as const;
-      const tool = targetsFor(row, op).find((candidate) => candidate.name === toolName);
+      const tool = targetsFor(row, op, now()).find((candidate) => candidate.name === toolName);
       if (!tool) return "skipped" as const;
-      const fail = (reason: ClassifierPreparationFailureReason) =>
-        repository.saveClassifierPreparationFailure(scopedDb, connectionId, toolName, {
-          reason,
-          definitionFingerprint: toolDefinitionFingerprint(tool),
-          failedAt: now().toISOString()
-        });
 
       // A failure that could not be remembered would be charged again on every run, so the tool
       // is not attempted unless its failure can be stored.
@@ -230,34 +236,50 @@ export async function runClassifierPreparationJob(
 
       // A full preparation store cannot take this tool, so it fails before any model charge.
       if (!preparationHasRoom(row.classifierPreparation, toolName)) {
-        return (await fail("too_many_tools")) ? ("failed" as const) : ("unrecorded" as const);
+        return (await fail(scopedDb, tool, "too_many_tools"))
+          ? ("failed" as const)
+          : ("unrecorded" as const);
       }
 
-      const outcome = await prepareClassifierTool(
-        scopedDb,
-        tool,
-        run.model,
-        deps.port,
-        run.matcher
-      );
-      if (outcome.kind === "prepared") {
-        const saved = await repository.saveClassifierToolReview(scopedDb, connectionId, toolName, {
-          optIn: true,
-          reviewedRisk: null,
-          description: outcome.entry.description,
-          arguments: outcome.entry.arguments,
-          replyTemplate: outcome.entry.replyTemplate,
-          reviewedFingerprint: outcome.entry.definitionFingerprint
-        });
-        if (saved.status === "saved") return "prepared" as const;
-        if (saved.status !== "too_many") return "skipped" as const;
-        return (await fail("too_many_tools")) ? ("failed" as const) : ("unrecorded" as const);
-      }
-      if (!(await fail(outcome.reason))) return "unrecorded" as const;
-      return outcome.reason === "provider_error"
-        ? ("provider_error" as const)
-        : ("failed" as const);
+      return (await fail(scopedDb, tool, "interrupted")) ? tool : ("unrecorded" as const);
     });
+
+    const step =
+      typeof claim === "string"
+        ? claim
+        : await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
+            const outcome = await prepareClassifierTool(
+              scopedDb,
+              claim,
+              run.model,
+              deps.port,
+              run.matcher
+            );
+            if (outcome.kind === "failure") {
+              if (!(await fail(scopedDb, claim, outcome.reason))) return "unrecorded" as const;
+              return outcome.reason === "provider_error"
+                ? ("provider_error" as const)
+                : ("failed" as const);
+            }
+            const saved = await repository.saveClassifierToolReview(
+              scopedDb,
+              connectionId,
+              toolName,
+              {
+                optIn: true,
+                reviewedRisk: null,
+                description: outcome.entry.description,
+                arguments: outcome.entry.arguments,
+                replyTemplate: outcome.entry.replyTemplate,
+                reviewedFingerprint: outcome.entry.definitionFingerprint
+              }
+            );
+            if (saved.status === "saved") return "prepared" as const;
+            if (saved.status !== "too_many") return "skipped" as const;
+            return (await fail(scopedDb, claim, "too_many_tools"))
+              ? ("failed" as const)
+              : ("unrecorded" as const);
+          });
     if (step === "switched_off") return { status: "stopped", prepared, failed };
     if (step === "unrecorded") return { status: "failure_history_full", prepared, failed };
     if (step === "prepared") prepared += 1;

@@ -48,8 +48,8 @@ export const integrationsModuleManifest = {
       id: "integrations.connection_tool_sorting",
       description:
         "When a connection is added or refreshed, the owner's chat model sorts each tool by what " +
-        "it does and names it. A tool whose text holds the credential is not sent; delete is " +
-        "always sensitive; failed tools wait for Try again."
+        "it does and names it. A tool holding the credential is not sent; delete is always " +
+        "sensitive. Failures wait for Try again, unless no model was set up."
     },
     {
       id: "integrations.connection_tools_ask_first",
@@ -105,15 +105,15 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_classifier_preparation",
       description:
-        "With the classifier switch on, sorted chat tools are prepared in the background on " +
-        "the owner's model, again when changed or switched on. A tool whose text holds the " +
-        "credential is not sent. A failed tool waits for Try again.",
+        "With the classifier switch on, sorted chat tools are prepared on the owner's model, " +
+        "again when changed. A tool holding the credential is not sent. Failures wait for " +
+        "Try again, unless no model was set up; those resume once one is.",
       remediations: [
         {
           id: "integrations.connection_classifier_preparation.choose_chat_model",
           description:
             "Choose a chat model that supports structured output in Settings, Your assistant, " +
-            "then prepare again.",
+            "then open the connection again. Tools that waited for a model prepare by themselves.",
           path: "/settings?section=assistant"
         }
       ],

@@ -287,7 +287,8 @@ function targetsInput(overrides: Partial<PreparationJobTargetsInput> = {}) {
     keptOut: [],
     curation: CURATION,
     retryFailed: false,
-    ...overrides
+    ...overrides,
+    now: overrides.now ?? new Date()
   } satisfies PreparationJobTargetsInput;
 }
 

@@ -66,7 +66,8 @@ export interface ClassifierPreparationMap {
  * Why automatic preparation failed. `unsafe` means the tool's text held the stored credential.
  * `unsupported_shape` means the prepared entry could never be stored, `too_many_tools` means the
  * connection already holds the most prepared tools it can store, and `no_model` means no default
- * chat model that can draft was selected.
+ * chat model that can draft was selected. `interrupted` marks a model call that started and has
+ * not saved a result (see classifier-attempt.ts).
  */
 export type ClassifierPreparationFailureReason =
   | "unsafe"
@@ -75,7 +76,8 @@ export type ClassifierPreparationFailureReason =
   | "definition_too_large"
   | "unsupported_shape"
   | "too_many_tools"
-  | "no_model";
+  | "no_model"
+  | "interrupted";
 
 export interface ClassifierPreparationFailure {
   readonly reason: ClassifierPreparationFailureReason;
@@ -91,7 +93,8 @@ const PREPARATION_FAILURE_REASONS: readonly ClassifierPreparationFailureReason[]
   "definition_too_large",
   "unsupported_shape",
   "too_many_tools",
-  "no_model"
+  "no_model",
+  "interrupted"
 ];
 
 /**
@@ -509,11 +512,17 @@ export type ClassifierSortStatus = "current" | "failed" | "never_tried";
 
 /**
  * Why a sort failed. `unsafe` means the tool's text held the stored credential and was not sent.
- * `no_model` means no default chat model that can sort was selected.
+ * `no_model` means no default chat model that can sort was selected. `interrupted` marks a model
+ * call that started and has not saved a result (see classifier-attempt.ts).
  */
-export type ClassifierSortFailure = "error" | "unsafe" | "no_model";
+export type ClassifierSortFailure = "error" | "unsafe" | "no_model" | "interrupted";
 
-const SORT_FAILURES: readonly ClassifierSortFailure[] = ["error", "unsafe", "no_model"];
+const SORT_FAILURES: readonly ClassifierSortFailure[] = [
+  "error",
+  "unsafe",
+  "no_model",
+  "interrupted"
+];
 
 /**
  * How a current sort was made. `model` means a model read the tool's text; `local` means Moss

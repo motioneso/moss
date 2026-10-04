@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AccessContext, DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
 import {
+  CLASSIFIER_ATTEMPT_LIVE_MS,
+  classifierSortView,
   effectiveClassifierTools,
   emptyPreparationMap,
   emptySortMap,
@@ -110,8 +112,13 @@ function readBack(row: ConnectionRow): ConnectionRow {
 function fakeRepository(initial: ConnectionRow) {
   const state = { row: initial };
   const failures: { toolName: string; failure: ClassifierPreparationFailure }[] = [];
+  /** Tools marked as a started call, in order. */
+  const marks: string[] = [];
   const repository = {
     getConnection: vi.fn(async (_db: DataContextDb, id: string) =>
+      id === state.row.id ? readBack(state.row) : null
+    ),
+    getConnectionForUpdate: vi.fn(async (_db: DataContextDb, id: string) =>
       id === state.row.id ? readBack(state.row) : null
     ),
     loadCredentialEnvelope: vi.fn(async () => "envelope"),
@@ -154,7 +161,8 @@ function fakeRepository(initial: ConnectionRow) {
           failure
         );
         if (!next) return false;
-        failures.push({ toolName, failure });
+        if (failure.reason === "interrupted") marks.push(toolName);
+        else failures.push({ toolName, failure });
         state.row = {
           ...state.row,
           classifierPreparation: { ...state.row.classifierPreparation, failures: next }
@@ -170,6 +178,7 @@ function fakeRepository(initial: ConnectionRow) {
       }
     },
     failures,
+    marks,
     repository: repository as unknown as IntegrationsRepository
   };
 }
@@ -530,5 +539,115 @@ describe("runClassifierPreparationJob", () => {
     expect(outcome).toEqual({ status: "no_model" });
     expect(port.runStructuredDraft).not.toHaveBeenCalled();
     expect(failures.map((f) => f.failure.reason)).toEqual(["no_model"]);
+  });
+});
+
+describe("a preparation call that started", () => {
+  const started = new Date("2026-10-04T00:00:00.000Z");
+
+  /** One sorted tool whose preparation failed for want of a model. */
+  function noModelFake() {
+    const lamp = discovered("lamp");
+    return fakeRepository(
+      row({
+        discoveredTools: [lamp],
+        classifierPreparation: {
+          ...emptyPreparationMap(),
+          failures: {
+            lamp: {
+              reason: "no_model",
+              definitionFingerprint: toolDefinitionFingerprint(lamp),
+              failedAt: "2026-10-03T00:00:00.000Z"
+            }
+          }
+        }
+      })
+    );
+  }
+
+  function runOn(
+    fake: ReturnType<typeof fakeRepository>,
+    op: ClassifierPreparationJobOp,
+    port: ReturnType<typeof fakePort>,
+    at = started
+  ) {
+    return runClassifierPreparationJob(
+      { dataContext, port, cipherSources: { cipher }, repository: fake.repository, now: () => at },
+      ACCESS,
+      fake.state.row.id,
+      op
+    );
+  }
+
+  it("is not resent by a model being added after the provider call was cut off", async () => {
+    const fake = noModelFake();
+    const port = fakePort();
+    const aborted = new Error("The operation was aborted");
+    aborted.name = "AbortError";
+    port.runStructuredDraft.mockRejectedValueOnce(aborted);
+    await expect(runOn(fake, "model_ready", port)).rejects.toThrow("aborted");
+    expect(await runOn(fake, "model_ready", port)).toEqual({ status: "nothing_to_prepare" });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+    expect(fake.marks).toEqual(["lamp"]);
+  });
+
+  it("is not resent when its result could not be saved", async () => {
+    const fake = noModelFake();
+    const port = fakePort();
+    vi.mocked(fake.repository.saveClassifierToolReview).mockRejectedValueOnce(
+      new Error("connection lost")
+    );
+    await expect(runOn(fake, "model_ready", port)).rejects.toThrow("connection lost");
+    expect(await runOn(fake, "model_ready", port)).toEqual({ status: "nothing_to_prepare" });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a run that starts meanwhile from sending the same tool", async () => {
+    const fake = noModelFake();
+    const port = fakePort();
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    port.runStructuredDraft.mockImplementationOnce(async () => {
+      await held;
+      return {
+        ok: true as const,
+        object: { description: "Turn one light on", replyTemplate: "{summary}" },
+        usage: { inputTokens: 1, outputTokens: 1 }
+      };
+    });
+    const retry = runOn(fake, "retry", port);
+    await vi.waitFor(() => expect(port.runStructuredDraft).toHaveBeenCalledTimes(1));
+    expect(await runOn(fake, "model_ready", port)).toEqual({ status: "nothing_to_prepare" });
+    expect(await runOn(fake, "retry", port)).toEqual({ status: "nothing_to_prepare" });
+    release();
+    expect(await retry).toEqual({ status: "prepared", prepared: 1, failed: 0 });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows as preparing while it may run, then as a failure only Try again resends", async () => {
+    const fake = noModelFake();
+    const port = fakePort();
+    port.runStructuredDraft.mockRejectedValueOnce(new Error("worker stopped"));
+    await expect(runOn(fake, "model_ready", port)).rejects.toThrow("worker stopped");
+
+    const running = new Date(started.getTime() + CLASSIFIER_ATTEMPT_LIVE_MS - 1);
+    expect(classifierSortView(fake.state.row, { now: running })[0]).toMatchObject({
+      classifierState: "preparing",
+      preparationFailure: null
+    });
+
+    const over = new Date(started.getTime() + CLASSIFIER_ATTEMPT_LIVE_MS);
+    expect(classifierSortView(fake.state.row, { now: over })[0]).toMatchObject({
+      classifierState: "failed",
+      preparationFailure: "provider_error"
+    });
+    expect(await runOn(fake, "model_ready", port, over)).toEqual({ status: "nothing_to_prepare" });
+    expect(await runOn(fake, "prepare", port, over)).toEqual({ status: "nothing_to_prepare" });
+    expect(await runOn(fake, "retry", port, over)).toEqual({
+      status: "prepared",
+      prepared: 1,
+      failed: 0
+    });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(2);
   });
 });

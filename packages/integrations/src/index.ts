@@ -1,4 +1,5 @@
 export * from "./call-memory.js";
+export * from "./classifier-attempt.js";
 export * from "./classifier-candidates.js";
 export * from "./classifier-fingerprint.js";
 export * from "./classifier-preparation.js";

@@ -1,6 +1,7 @@
 import type { DataContextDb } from "@moss/db";
 import type { IntegrationClassifierRisk, IntegrationClassifierSortedBy } from "@moss/shared";
 
+import { attemptLive } from "./classifier-attempt.js";
 import { readableToolNames } from "./classifier-readable-name.js";
 import {
   higherRisk,
@@ -379,18 +380,21 @@ export interface SortingTargetsInput {
   readonly retryFailed: boolean;
   /** A model was added: also re-send tools whose sort failed for want of one, which cost nothing. */
   readonly retryNoModel?: boolean;
+  readonly now: Date;
 }
 
 /**
  * Tools without a current sort: never tried, or stale because a risk input changed. A tool whose
  * sort failed against its current inputs waits for Try again; the only other path that resends it
- * is a model being added after a `no_model` failure, which never reached a provider.
+ * is a model being added after a `no_model` failure, which never reached a provider. A tool whose
+ * call may still be running is left to that call.
  */
 export function sortingTargets(input: SortingTargetsInput): readonly DiscoveredTool[] {
   return input.discoveredTools.filter((tool) => {
     const state = toolSortState(input.sort, tool);
     if (state.status === "never_tried" || state.status === "stale") return true;
     if (state.status !== "failed") return false;
+    if (state.failure === "interrupted" && attemptLive(state.failedAt, input.now)) return false;
     return input.retryFailed || (input.retryNoModel === true && state.failure === "no_model");
   });
 }
@@ -564,8 +568,8 @@ export function freeReadableNames(tools: readonly DiscoveredTool[]): ReadonlyMap
 /**
  * Run one sorting call. A provider or answer-shape failure, or a thrown error, marks the call's
  * tools failed. A tool the answer skips, or answers invalidly, is Sensitive under its free name.
- * `null` means the model is not set up or the call was cancelled: write nothing, so the tools
- * stay unsorted.
+ * A model that turns out not to be set up was never reached, so the tools fail as `no_model`.
+ * `null` means the call was cancelled: write nothing, so the tools keep their started-call mark.
  */
 export async function runSortingCall(
   scopedDb: DataContextDb,
@@ -592,8 +596,9 @@ export async function runSortingCall(
   }
   const sortedAt = now().toISOString();
   if (!outcome.ok) {
-    if (outcome.error === "needs_config" || outcome.error === "aborted") return null;
-    return call.map((entry) => failedResult(entry.tool, "error", sortedAt));
+    if (outcome.error === "aborted") return null;
+    const failure = outcome.error === "needs_config" ? "no_model" : "error";
+    return call.map((entry) => failedResult(entry.tool, failure, sortedAt));
   }
 
   const answers = parseSortingAnswer(

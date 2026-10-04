@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { generateStructured, modelActivityStructuredCode } from "@moss/ai";
 import type { DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
 import { assertMetadataOnlyPayload } from "@moss/jobs";
 import {
+  CLASSIFIER_ATTEMPT_LIVE_MS,
   classifierSortView,
   enqueueClassifierSort,
   INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL,
@@ -164,6 +165,8 @@ function harness(
     structured?: boolean | null;
     credential?: string | null;
     displayNames?: { model: string; provider: string };
+    /** Saving a call's results throws, as a lost database connection would. */
+    resultSaveFails?: () => boolean;
   } = {}
 ) {
   const state = { row };
@@ -201,6 +204,7 @@ function harness(
   };
   const repository = {
     getConnection: async () => state.row,
+    getConnectionForUpdate: async () => state.row,
     loadCredentialEnvelope: async () =>
       config.credential === null ? null : { secret: config.credential ?? CREDENTIAL },
     saveClassifierToolSorts: async (
@@ -208,6 +212,10 @@ function harness(
       _id: string,
       results: readonly { toolName: string; result: ClassifierSortResult }[]
     ) => {
+      const marking = results.every(
+        ({ result }) => result.status === "failed" && result.failure === "interrupted"
+      );
+      if (!marking && config.resultSaveFails?.()) throw new Error("connection lost");
       let sort = state.row.classifierSort;
       for (const { toolName, result } of results) {
         sort = withSortResult(sort, toolName, result) ?? sort;
@@ -225,9 +233,15 @@ function harness(
       fn({} as DataContextDb)
   } as unknown as DataContextRunner;
 
-  const run = (op: ClassifierSortJobOp = "sort") =>
+  const run = (op: ClassifierSortJobOp = "sort", at?: Date) =>
     runClassifierSortJob(
-      { dataContext, port, repository, cipherSources: { cipher } },
+      {
+        dataContext,
+        port,
+        repository,
+        cipherSources: { cipher },
+        ...(at ? { now: () => at } : {})
+      },
       ACTOR,
       CONNECTION_ID,
       op
@@ -640,12 +654,12 @@ describe("what gets sent, and when", () => {
     expect(entry(h.state, "a")).toMatchObject({ status: "current", sortedBy: null });
   });
 
-  it("writes nothing when the model turns out not to be set up", async () => {
+  it("fails as no model when the model turns out not to be set up, since none was reached", async () => {
     const h = harness(connection([tool("a")]), {
       answer: () => ({ ok: false, error: "needs_config" })
     });
-    expect(await h.run()).toMatchObject({ status: "stopped" });
-    expect(entry(h.state, "a")).toBeUndefined();
+    expect(await h.run()).toMatchObject({ status: "sorted" });
+    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "no_model" });
   });
 
   it("batches large connections and bounds each call", async () => {
@@ -793,6 +807,99 @@ describe("through the real structured router", () => {
     ).toMatchObject({
       status: "current"
     });
+  });
+});
+
+describe("a sorting call that started", () => {
+  const failedAt = "2026-10-03T00:00:00.000Z";
+
+  /** One tool whose sort failed for want of a model, so a model being added resends it. */
+  function noModelRow(): ConnectionRow {
+    const lamp = tool("a");
+    const sort = withSortResult(emptySortMap(), lamp.name, {
+      status: "failed",
+      failure: "no_model",
+      sortFingerprint: toolSortFingerprint(toolRiskInputs(lamp)),
+      sortedAt: failedAt
+    })!;
+    return connection([lamp], { classifierSort: sort });
+  }
+
+  function abortError(): Error {
+    const error = new Error("The operation was aborted");
+    error.name = "AbortError";
+    return error;
+  }
+
+  it("is not resent by a model being added after the provider call was cut off", async () => {
+    const h = harness(noModelRow(), {
+      answer: (_ids, input) =>
+        throughRouter(input, () => {
+          throw abortError();
+        })
+    });
+    expect(await h.run("model_ready")).toMatchObject({ status: "stopped" });
+    expect(await h.run("model_ready")).toEqual({ status: "nothing_to_sort" });
+    expect(h.runs).toHaveLength(1);
+    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "interrupted" });
+  });
+
+  it("is not resent when its results could not be saved", async () => {
+    let saveFails = true;
+    const h = harness(noModelRow(), { resultSaveFails: () => saveFails });
+    await expect(h.run("model_ready")).rejects.toThrow("connection lost");
+    saveFails = false;
+    await h.run("model_ready");
+    expect(h.runs).toHaveLength(1);
+  });
+
+  it("keeps a run that starts meanwhile from sending the same tool", async () => {
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const h = harness(noModelRow(), {
+      answer: async (ids) => {
+        if (h.runs.length === 1) await held;
+        return {
+          ok: true,
+          object: { tools: ids.map((id) => ({ id, group: "reads_things", name: "Lamp" })) },
+          usage: { inputTokens: 1, outputTokens: 1 }
+        };
+      }
+    });
+    const retry = h.run("retry");
+    await vi.waitFor(() => expect(h.runs).toHaveLength(1));
+    expect(await h.run("model_ready")).toEqual({ status: "nothing_to_sort" });
+    expect(await h.run("retry")).toEqual({ status: "nothing_to_sort" });
+    release();
+    await retry;
+    expect(h.runs).toHaveLength(1);
+    expect(entry(h.state, "a")).toMatchObject({ status: "current" });
+  });
+
+  it("shows as waiting while it may run, then as a failure only Try again resends", async () => {
+    const h = harness(noModelRow(), { answer: () => ({ ok: false, error: "aborted" }) });
+    const started = new Date("2026-10-04T00:00:00.000Z");
+    await h.run("model_ready", started);
+    const marked = entry(h.state, "a")!;
+    expect(marked).toMatchObject({ failure: "interrupted", sortedAt: started.toISOString() });
+
+    const running = new Date(started.getTime() + CLASSIFIER_ATTEMPT_LIVE_MS - 1);
+    expect(classifierSortView(h.state.row, { now: running })[0]).toMatchObject({
+      status: "never_tried",
+      failure: null,
+      failedAt: null
+    });
+    expect(await h.run("retry", running)).toEqual({ status: "nothing_to_sort" });
+
+    const over = new Date(started.getTime() + CLASSIFIER_ATTEMPT_LIVE_MS);
+    expect(classifierSortView(h.state.row, { now: over })[0]).toMatchObject({
+      status: "failed",
+      failure: "error"
+    });
+    expect(await h.run("model_ready", over)).toEqual({ status: "nothing_to_sort" });
+    expect(await h.run("sort", over)).toEqual({ status: "nothing_to_sort" });
+    await h.run("retry", over);
+    expect(h.runs).toHaveLength(2);
   });
 });
 

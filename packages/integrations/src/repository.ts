@@ -197,6 +197,15 @@ export class IntegrationsRepository {
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
+  /**
+   * Read the connection and lock its row for the rest of the transaction, so a classifier run
+   * picks and marks its tools as one step.
+   */
+  async getConnectionForUpdate(scopedDb: DataContextDb, id: string): Promise<ConnectionRow | null> {
+    assertDataContextDb(scopedDb);
+    return this.lockConnection(scopedDb, id);
+  }
+
   private async lockConnection(scopedDb: DataContextDb, id: string): Promise<ConnectionRow | null> {
     const result = await sql<ConnectionSqlRow>`
       SELECT ${sql.raw(SELECT_COLUMNS)}

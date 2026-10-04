@@ -302,7 +302,8 @@ Ruling 7's line names inputs as well as name and description, because the pass s
 - **Existing connections.** Connections made before sorting ships have no sort. A one-time check at
   worker start enqueues one sorting job per connection that has never-tried tools, keyed so it runs
   once per connection. Discovery and turning the classifier switch on also enqueue a sort for any
-  never-tried tool. A failed tool waits for "Try again" and is never retried by these paths. Until
+  never-tried tool. A failed tool waits for "Try again" and is never retried by these paths,
+  except a failure for want of a model (section 8.4). Until
   sorted, a tool asks, as every connected tool does today.
 - **On screen.** While the pass runs, tools list A to Z with a "Sorting" note. Afterwards they group by
   what they do. A web-service connection keeps its own sections on screen; its risk still follows
@@ -393,6 +394,11 @@ Today every connected tool asks with YOLO off, because its synthetic manifest ca
   for want of a model never reached a provider, so it resumes by itself once the owner adds one.
   The connection's page starts it again when it next reads the connection, and re-reads when the
   model settings change.
+- Before a sorting or preparation call goes out, its tools are saved as a started call, under the
+  connection's row lock and in their own transaction. The call's result replaces that mark. A call
+  cut off, or whose result cannot be saved, leaves the mark, so only "Try again" sends the tool
+  again. For the job's 30-minute expiry no run sends a marked tool and the page shows it as
+  waiting; after that it shows as an ordinary failure.
 - A lost connection pauses the classifier for it, which resumes by itself after the next successful
   discovery.
 
