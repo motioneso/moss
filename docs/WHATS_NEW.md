@@ -40,6 +40,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Catch-up shows the emails worth your attention.** The catch-up section on Today now lists each email worth knowing about, who it is from and what it says, with buttons to open it, reply, turn it into a task, or dismiss it. [PR #3031](https://github.com/motioneso/moss/pull/3031)
 - **A clearer page for each connection.** Opening a connection now uses the full width, groups its tools by what they do, marks the ones that ask before running, and lets you allow sending tools to send without asking. [PR #3014](https://github.com/motioneso/moss/pull/3014)
 - **Today header contour lines are back.** The faint contour lines behind the Today header are back. [PR #3017](https://github.com/motioneso/moss/pull/3017)
 - **Connection tools get ready for the classifier on their own.** When you turn on the classifier for a connection, Moss now prepares that connection's tools in the background, and again whenever you switch a tool back on, so you no longer review each tool by hand before it can be used. [PR #3009](https://github.com/motioneso/moss/pull/3009)
