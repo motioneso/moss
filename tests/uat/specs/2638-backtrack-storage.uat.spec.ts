@@ -394,11 +394,20 @@ test("A Mac's uploads are indexed, deleted from Settings, and stay deleted on re
     expect(markerCount()).toBe(1);
   });
 
-  // Segments captured after the Today delete fall past its marker, so they're accepted.
+  // Segments captured after the Today delete start past its marker's end, so they're accepted.
+  const markerEnd = new Date(
+    psql(
+      projectName,
+      `SELECT to_char(upper(range) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM app.backtrack_deletions WHERE owner_user_id = '${adminId}'`
+    )
+  ).getTime();
+  expect(Number.isNaN(markerEnd)).toBe(false);
   const later: UploadSegment[] = [
-    { startedAt: new Date(Date.now() - 3_000), body: "uat afternoon page one" },
-    { startedAt: new Date(Date.now() - 2_000), body: "uat afternoon page two" }
+    { startedAt: new Date(markerEnd + 1_000), body: "uat afternoon page one" },
+    { startedAt: new Date(markerEnd + 1_500), body: "uat afternoon page two" }
   ];
+  // Each segment lasts a second and must have ended before the upload is received.
+  await expect.poll(() => Date.now(), { timeout: 10_000 }).toBeGreaterThan(markerEnd + 3_000);
 
   await test.step("captures made after that delete are accepted and indexed", async () => {
     expect(await upload(baseURL, credential, later)).toMatchObject({ accepted: 2, discarded: 0 });
