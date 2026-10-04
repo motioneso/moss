@@ -224,18 +224,72 @@ describe("BriefingCatchUp", () => {
     expect(textOf(rowOf("Oakridge Water"))).toContain("Add task");
   });
 
-  it("puts the row back when the task fails to save", async () => {
+  it("ignores Undo while the task is saving and puts the row back if the save fails", async () => {
     const created = deferred<{ task: { id: string } }>();
     api.createTask.mockReturnValueOnce(created.promise);
     render();
 
     await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    await click(buttonIn(rowOf("Oakridge Water"), "Undo"));
     created.reject(new Error("offline"));
     await settle();
 
     expect(textOf(rowOf("Oakridge Water"))).toContain("Add task");
     expect(allText()).toContain("That did not save. Try again.");
     expect(feedback.createUsefulnessFeedback).not.toHaveBeenCalled();
+  });
+
+  it("puts the row back when a pending dismissal fails", async () => {
+    const saved = deferred<{ feedback: { id: string } }>();
+    feedback.createUsefulnessFeedback.mockReturnValueOnce(saved.promise);
+    render();
+
+    await click(buttonIn(rowOf("Priya Raman"), "Dismiss"));
+    await click(buttonIn(rowOf("Priya Raman"), "Undo"));
+    saved.reject(new Error("offline"));
+    await settle();
+
+    expect(feedback.undoUsefulnessFeedback).not.toHaveBeenCalled();
+    expect(textOf(rowOf("Priya Raman"))).toContain("Add task");
+    expect(allText()).toContain("That did not save. Try again.");
+  });
+
+  it("keeps Undo when the task does not archive, and the retry only archives it", async () => {
+    render();
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    await settle();
+
+    api.updateTask.mockRejectedValueOnce(new Error("offline"));
+    await click(buttonIn(rowOf("Oakridge Water"), "Undo"));
+    await settle();
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Added to your tasks");
+    expect(allText()).toContain("That did not save. Try again.");
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Undo"));
+    await settle();
+    expect(feedback.undoUsefulnessFeedback).toHaveBeenCalledTimes(1);
+    expect(api.updateTask).toHaveBeenCalledTimes(2);
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Add task");
+    expect(allText()).not.toContain("That did not save.");
+  });
+
+  it("archives a leftover task before dismissing the row", async () => {
+    feedback.createUsefulnessFeedback.mockRejectedValueOnce(new Error("offline"));
+    api.updateTask.mockRejectedValueOnce(new Error("offline"));
+    render();
+    await click(buttonIn(rowOf("Oakridge Water"), "Add task"));
+    await settle();
+
+    expect(api.updateTask).toHaveBeenCalledTimes(1);
+
+    await click(buttonIn(rowOf("Oakridge Water"), "Dismiss"));
+    await settle();
+    expect(api.updateTask).toHaveBeenCalledTimes(2);
+    expect(api.updateTask).toHaveBeenLastCalledWith("task-9", { status: "archived" });
+    expect(feedback.createUsefulnessFeedback).toHaveBeenLastCalledWith(
+      expect.objectContaining({ targetRef: "email-digest:bbbb", kind: "dismiss" })
+    );
+    expect(textOf(rowOf("Oakridge Water"))).toContain("Dismissed");
   });
 
   it("reuses a task it could not archive instead of creating another", async () => {

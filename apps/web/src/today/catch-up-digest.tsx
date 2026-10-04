@@ -175,7 +175,8 @@ function EntryMeta(
 }
 
 interface HandledRecord {
-  readonly feedbackId: string;
+  /** Null once Undo has removed the feedback but the task still needs archiving. */
+  readonly feedbackId: string | null;
   readonly taskId: string | null;
 }
 
@@ -200,7 +201,8 @@ export function BriefingCatchUp(props: {
   // Saved feedback per handled row, set only once the save succeeds.
   const records = useRef(new Map<string, HandledRecord>());
 
-  // Tasks created for a row that could not be archived again; Add task reuses them.
+  // Tasks created for a row whose save failed and could not be archived again. Add task
+  // reuses them and Dismiss archives them first.
   const strayTasks = useRef(new Map<string, string>());
 
   const now = props.now ?? new Date();
@@ -223,15 +225,9 @@ export function BriefingCatchUp(props: {
       })
     ).feedback.id;
 
-  /** Archives a row's task; on failure keeps it as a stray so it is never duplicated. */
-  const archiveTask = async (id: string, taskId: string): Promise<boolean> => {
+  const archiveTask = async (taskId: string) => {
     try {
       await updateTask(taskId, { status: "archived" });
-      strayTasks.current.delete(id);
-      return true;
-    } catch {
-      strayTasks.current.set(id, taskId);
-      return false;
     } finally {
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
     }
@@ -282,7 +278,10 @@ export function BriefingCatchUp(props: {
           taskId
         });
       } catch (cause) {
-        await archiveTask(id, taskId);
+        await archiveTask(taskId).then(
+          () => strayTasks.current.delete(id),
+          () => undefined
+        );
         throw cause;
       }
       strayTasks.current.delete(id);
@@ -292,6 +291,11 @@ export function BriefingCatchUp(props: {
 
   const dismiss = (id: string) =>
     run(id, "dismissed", "open", async () => {
+      const strayTaskId = strayTasks.current.get(id);
+      if (strayTaskId) {
+        await archiveTask(strayTaskId);
+        strayTasks.current.delete(id);
+      }
       records.current.set(id, { feedbackId: await recordFeedback(id, "dismiss"), taskId: null });
       return "dismissed";
     });
@@ -299,10 +303,14 @@ export function BriefingCatchUp(props: {
   const undo = (id: string) => {
     const record = records.current.get(id);
     if (!record) return;
+    // A failure keeps the row handled, so Undo retries only the step that did not save.
     run(id, "open", statusById[id] ?? "open", async () => {
-      await undoUsefulnessFeedback(record.feedbackId);
+      if (record.feedbackId) {
+        await undoUsefulnessFeedback(record.feedbackId);
+        records.current.set(id, { feedbackId: null, taskId: record.taskId });
+      }
+      if (record.taskId) await archiveTask(record.taskId);
       records.current.delete(id);
-      if (record.taskId && !(await archiveTask(id, record.taskId))) setError(ACTION_FAILED);
       return "open";
     });
   };
