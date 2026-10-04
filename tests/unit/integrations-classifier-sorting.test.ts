@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { generateStructured, modelActivityStructuredCode } from "@moss/ai";
-import type { DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
+import { modelActivityStructuredCode } from "@moss/ai";
 import { assertMetadataOnlyPayload } from "@moss/jobs";
 import {
-  CLASSIFIER_ATTEMPT_LIVE_MS,
   classifierSortView,
   enqueueClassifierSort,
   INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL,
@@ -12,248 +10,36 @@ import {
   INTEGRATION_CLASSIFIER_SORT_SERVICE,
   integrationsModuleManifest,
   reduceSortingInputSchema,
-  runClassifierSortJob,
   emptySortMap,
-  sortEntry,
   toolRiskInputs,
   toolSortFingerprint,
   toolSortState,
   withSortResult,
-  type ClassifierPreparationPort,
-  type ClassifierSortJobOp,
-  type ClassifierSortResult,
-  type ConnectionRow,
   type DiscoveredTool,
-  type IntegrationsRepository,
   type PreparationStructuredOutcome
 } from "@moss/integrations";
 import type { PgBoss } from "pg-boss";
 
-const ACTOR = { actorUserId: "00000000-0000-4000-8000-00000000000a", requestId: "test" };
-const CONNECTION_ID = "00000000-0000-4000-8000-0000000000c1";
+import {
+  ACTOR,
+  connection,
+  CONNECTION_ID,
+  CREDENTIAL,
+  entry,
+  harness,
+  promptIds,
+  sentSchemas,
+  throughRouter,
+  tool,
+  webTool
+} from "./helpers/integrations-classifier-sorting-harness.js";
 
-// Chosen so its plain, base64 and URL-encoded forms all differ.
-const CREDENTIAL = "tok/en+val=ue&x";
 const CREDENTIAL_FORMS = [
   CREDENTIAL,
   Buffer.from(CREDENTIAL).toString("base64"),
   Buffer.from(CREDENTIAL).toString("base64url"),
   encodeURIComponent(CREDENTIAL)
 ];
-
-function tool(name: string, overrides: Partial<DiscoveredTool> = {}): DiscoveredTool {
-  return {
-    name,
-    description: `Does ${name}`,
-    group: "Home",
-    inputSchema: { type: "object", properties: { id: { type: "string" } } },
-    ...overrides
-  };
-}
-
-function webTool(name: string, method: string, overrides: Partial<DiscoveredTool> = {}) {
-  return tool(name, {
-    invoke: { method, path: `/api/${name}`, params: [], hasBody: false },
-    ...overrides
-  });
-}
-
-function connection(
-  tools: DiscoveredTool[],
-  overrides: Partial<ConnectionRow> = {}
-): ConnectionRow {
-  return {
-    id: CONNECTION_ID,
-    ownerUserId: ACTOR.actorUserId,
-    name: "Home",
-    kind: "mcp",
-    transport: "http",
-    url: "https://owner:hunter2@home.internal.example/mcp?token=query-secret",
-    credentialPlacement: { kind: "header", name: "X-Home-Key" },
-    hasCredential: true,
-    enabled: true,
-    baseUrl: "https://home.internal.example",
-    specPasted: false,
-    enabledGroups: [],
-    enabledTools: [],
-    mutedTools: [],
-    unsuppressedTools: [],
-    classifierEnabled: false,
-    classifierPreparation: { version: 1, entries: {} },
-    classifierSort: { version: 1, entries: {} },
-    classifierKeptOutTools: [],
-    discoveredTools: tools,
-    lastDiscoveryAt: null,
-    lastError: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides
-  };
-}
-
-type RunInput = Parameters<ClassifierPreparationPort["runStructuredDraft"]>[1];
-
-/** The ids in one call's prompt. */
-function promptIds(prompt: string): string[] {
-  const data = prompt.slice(prompt.indexOf("UNTRUSTED DATA:\n") + 16);
-  return (JSON.parse(data) as { id: string }[]).map((entry) => entry.id);
-}
-
-/**
- * Runs the call through the real structured router, as the production port does: its prompt size
- * check and its answer check both apply. Only the provider's reply is scripted.
- */
-/** Every schema the scripted provider was sent. */
-const sentSchemas: Record<string, unknown>[] = [];
-
-async function throughRouter(
-  input: RunInput,
-  reply: (ids: string[]) => unknown
-): Promise<PreparationStructuredOutcome> {
-  const result = await generateStructured(
-    {} as DataContextDb,
-    {
-      service: input.service ?? "module.integrations",
-      schema: input.schema,
-      prompt: input.prompt,
-      explicitModel: {
-        id: "m1",
-        provider_config_id: "p1",
-        provider_kind: "anthropic",
-        provider_model_id: "opaque-model"
-      },
-      maxOutputTokens: input.maxOutputTokens,
-      singleAttempt: true,
-      servedByLabel: "main",
-      ...(input.replySchema ? { replySchema: input.replySchema } : {})
-    },
-    {
-      repository: {
-        selectProviderWithCredential: async () => ({
-          id: "p1",
-          auth_method: "api_key",
-          base_url: null,
-          encrypted_credential: {}
-        })
-      } as never,
-      cipher: { decryptJson: () => ({ apiKey: "sk-test" }) },
-      createAdapter: () => ({
-        generateStructured: async (request: { schema: Record<string, unknown> }) => {
-          sentSchemas.push(request.schema);
-          return {
-            rawObject: reply(promptIds(input.prompt)),
-            usage: { inputTokens: 1, outputTokens: 1 }
-          };
-        }
-      })
-    }
-  );
-  return result.ok
-    ? { ok: true, object: result.object, usage: result.usage }
-    : { ok: false, error: result.error };
-}
-
-/** Answers every tool in the call with `group`, unless `answer` overrides the reply. */
-function harness(
-  row: ConnectionRow,
-  config: {
-    group?: string;
-    answer?: (
-      ids: string[],
-      input: RunInput
-    ) => PreparationStructuredOutcome | Promise<PreparationStructuredOutcome>;
-    structured?: boolean | null;
-    credential?: string | null;
-    displayNames?: { model: string; provider: string };
-    /** Saving a call's results throws, as a lost database connection would. */
-    resultSaveFails?: () => boolean;
-    /** Decides each model selection: false means no model is set up. */
-    select?: () => Promise<boolean>;
-  } = {}
-) {
-  const state = { row };
-  const runs: RunInput[] = [];
-  const port: ClassifierPreparationPort = {
-    selectDefaultChatModel: async () =>
-      config.structured === null || (config.select && !(await config.select()))
-        ? null
-        : {
-            model: {
-              id: "m1",
-              providerConfigId: "p1",
-              providerKind: "opaque-kind",
-              providerModelId: "opaque-model"
-            },
-            structured: config.structured ?? true,
-            ...(config.displayNames ? { displayNames: config.displayNames } : {})
-          },
-    runStructuredDraft: async (_db, input) => {
-      runs.push(input);
-      const ids = promptIds(input.prompt);
-      if (config.answer) return config.answer(ids, input);
-      return {
-        ok: true,
-        object: {
-          tools: ids.map((id) => ({
-            id,
-            group: config.group ?? "changes_things",
-            name: `Name ${id}`
-          }))
-        },
-        usage: { inputTokens: 1, outputTokens: 1 }
-      };
-    }
-  };
-  const repository = {
-    getConnection: async () => state.row,
-    getConnectionForUpdate: async () => state.row,
-    loadCredentialEnvelope: async () =>
-      config.credential === null ? null : { secret: config.credential ?? CREDENTIAL },
-    saveClassifierToolSorts: async (
-      _db: DataContextDb,
-      _id: string,
-      results: readonly { toolName: string; result: ClassifierSortResult }[]
-    ) => {
-      const marking = results.every(
-        ({ result }) => result.status === "failed" && result.failure === "interrupted"
-      );
-      if (!marking && config.resultSaveFails?.()) throw new Error("connection lost");
-      let sort = state.row.classifierSort;
-      for (const { toolName, result } of results) {
-        sort = withSortResult(sort, toolName, result) ?? sort;
-      }
-      state.row = { ...state.row, classifierSort: sort };
-      return state.row;
-    }
-  } as unknown as IntegrationsRepository;
-  const cipher = {
-    parseEnvelope: (envelope: unknown) => envelope,
-    decryptJson: (envelope: { secret: string }) => ({ secret: envelope.secret })
-  } as unknown as JsonSecretCipher;
-  const dataContext = {
-    withDataContext: (_ctx: unknown, fn: (db: DataContextDb) => Promise<unknown>) =>
-      fn({} as DataContextDb)
-  } as unknown as DataContextRunner;
-
-  const run = (op: ClassifierSortJobOp = "sort", at?: Date) =>
-    runClassifierSortJob(
-      {
-        dataContext,
-        port,
-        repository,
-        cipherSources: { cipher },
-        ...(at ? { now: () => at } : {})
-      },
-      ACTOR,
-      CONNECTION_ID,
-      op
-    );
-  return { state, runs, run };
-}
-
-function entry(state: { row: ConnectionRow }, name: string) {
-  return sortEntry(state.row.classifierSort, name);
-}
 
 describe("reduced input schema sent for sorting", () => {
   const FORBIDDEN = [
@@ -809,133 +595,6 @@ describe("through the real structured router", () => {
     ).toMatchObject({
       status: "current"
     });
-  });
-});
-
-describe("a sorting call that started", () => {
-  const failedAt = "2026-10-03T00:00:00.000Z";
-
-  /** One tool whose sort failed for want of a model, so a model being added resends it. */
-  function noModelRow(): ConnectionRow {
-    const lamp = tool("a");
-    const sort = withSortResult(emptySortMap(), lamp.name, {
-      status: "failed",
-      failure: "no_model",
-      sortFingerprint: toolSortFingerprint(toolRiskInputs(lamp)),
-      sortedAt: failedAt
-    })!;
-    return connection([lamp], { classifierSort: sort });
-  }
-
-  function abortError(): Error {
-    const error = new Error("The operation was aborted");
-    error.name = "AbortError";
-    return error;
-  }
-
-  it("is not resent by a model being added after the provider call was cut off", async () => {
-    const h = harness(noModelRow(), {
-      answer: (_ids, input) =>
-        throughRouter(input, () => {
-          throw abortError();
-        })
-    });
-    expect(await h.run("model_ready")).toMatchObject({ status: "stopped" });
-    expect(await h.run("model_ready")).toEqual({ status: "nothing_to_sort" });
-    expect(h.runs).toHaveLength(1);
-    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "interrupted" });
-  });
-
-  it("is not resent when its results could not be saved", async () => {
-    let saveFails = true;
-    const h = harness(noModelRow(), { resultSaveFails: () => saveFails });
-    await expect(h.run("model_ready")).rejects.toThrow("connection lost");
-    saveFails = false;
-    await h.run("model_ready");
-    expect(h.runs).toHaveLength(1);
-  });
-
-  it("keeps a run that starts meanwhile from sending the same tool", async () => {
-    let release = () => {};
-    const held = new Promise<void>((resolve) => (release = resolve));
-    const h = harness(noModelRow(), {
-      answer: async (ids) => {
-        if (h.runs.length === 1) await held;
-        return {
-          ok: true,
-          object: { tools: ids.map((id) => ({ id, group: "reads_things", name: "Lamp" })) },
-          usage: { inputTokens: 1, outputTokens: 1 }
-        };
-      }
-    });
-    const retry = h.run("retry");
-    await vi.waitFor(() => expect(h.runs).toHaveLength(1));
-    expect(await h.run("model_ready")).toEqual({ status: "nothing_to_sort" });
-    expect(await h.run("retry")).toEqual({ status: "nothing_to_sort" });
-    release();
-    await retry;
-    expect(h.runs).toHaveLength(1);
-    expect(entry(h.state, "a")).toMatchObject({ status: "current" });
-  });
-
-  // The reviewer's order: an older run reads its targets, then waits on model selection while a
-  // newer run claims the tool and reaches the provider. The older run's no-model write must not
-  // put the tool back where a model being added would send it again.
-  it.each([
-    ["was cut off", () => ({ ok: false, error: "aborted" }) as const, "interrupted"],
-    ["was sorted", undefined, "current"]
-  ] as const)(
-    "keeps an older run's no-model write off a tool whose call %s",
-    async (_case, answer, after) => {
-      let olderSelect = (_found: boolean) => {};
-      const olderSelection = new Promise<boolean>((resolve) => (olderSelect = resolve));
-      const selections: Promise<boolean>[] = [olderSelection];
-      const h = harness(noModelRow(), {
-        select: () => selections.shift() ?? Promise.resolve(true),
-        ...(answer ? { answer } : {})
-      });
-
-      const older = h.run("retry");
-      await vi.waitFor(() => expect(selections).toHaveLength(0));
-      await h.run("model_ready");
-      expect(h.runs).toHaveLength(1);
-      olderSelect(false);
-      expect(await older).toEqual({ status: "no_model" });
-
-      expect(entry(h.state, "a")).toMatchObject({
-        status: after === "current" ? "current" : "failed"
-      });
-      if (after === "interrupted")
-        expect(entry(h.state, "a")).toMatchObject({ failure: "interrupted" });
-      expect(await h.run("model_ready")).toEqual({ status: "nothing_to_sort" });
-      expect(h.runs).toHaveLength(1);
-    }
-  );
-
-  it("shows as waiting while it may run, then as a failure only Try again resends", async () => {
-    const h = harness(noModelRow(), { answer: () => ({ ok: false, error: "aborted" }) });
-    const started = new Date("2026-10-04T00:00:00.000Z");
-    await h.run("model_ready", started);
-    const marked = entry(h.state, "a")!;
-    expect(marked).toMatchObject({ failure: "interrupted", sortedAt: started.toISOString() });
-
-    const running = new Date(started.getTime() + CLASSIFIER_ATTEMPT_LIVE_MS - 1);
-    expect(classifierSortView(h.state.row, { now: running })[0]).toMatchObject({
-      status: "never_tried",
-      failure: null,
-      failedAt: null
-    });
-    expect(await h.run("retry", running)).toEqual({ status: "nothing_to_sort" });
-
-    const over = new Date(started.getTime() + CLASSIFIER_ATTEMPT_LIVE_MS);
-    expect(classifierSortView(h.state.row, { now: over })[0]).toMatchObject({
-      status: "failed",
-      failure: "error"
-    });
-    expect(await h.run("model_ready", over)).toEqual({ status: "nothing_to_sort" });
-    expect(await h.run("sort", over)).toEqual({ status: "nothing_to_sort" });
-    await h.run("retry", over);
-    expect(h.runs).toHaveLength(2);
   });
 });
 

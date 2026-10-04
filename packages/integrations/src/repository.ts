@@ -14,7 +14,7 @@ import {
   withoutStaleSendChoices,
   withPreparationFailure,
   withSendWithoutAsking,
-  withSortResult,
+  withToolSortResults,
   type ClassifierPreparationEntry,
   type ClassifierPreparationFailure,
   type ClassifierPreparationMap,
@@ -408,8 +408,9 @@ export class IntegrationsRepository {
 
   /**
    * Store sorting results for some of a connection's tools (#2984). A result for a tool that is no
-   * longer discovered, or whose shape is not storable, is skipped. The row is locked for the
-   * request transaction, so the whole-map write cannot lose a concurrent change.
+   * longer discovered, made for an older definition, or whose shape is not storable, is skipped.
+   * The row is locked for the request transaction, so the whole-map write cannot lose a
+   * concurrent change.
    */
   async saveClassifierToolSorts(
     scopedDb: DataContextDb,
@@ -420,12 +421,7 @@ export class IntegrationsRepository {
 
     const row = await this.lockConnection(scopedDb, id);
     if (!row) return null;
-    const discovered = new Set(row.discoveredTools.map((tool) => tool.name));
-    let sort = row.classifierSort;
-    for (const { toolName, result } of results) {
-      if (!discovered.has(toolName)) continue;
-      sort = withSortResult(sort, toolName, result) ?? sort;
-    }
+    const sort = withToolSortResults(row.classifierSort, row.discoveredTools, results);
     return this.writeSort(scopedDb, id, sort);
   }
 

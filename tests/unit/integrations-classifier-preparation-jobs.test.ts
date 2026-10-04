@@ -124,6 +124,10 @@ function fakeRepository(initial: ConnectionRow) {
     loadCredentialEnvelope: vi.fn(async () => "envelope"),
     saveClassifierToolReview: vi.fn(
       async (_db: DataContextDb, _id: string, toolName: string, input: ReviewedEntryInput) => {
+        const tool = state.row.discoveredTools.find((candidate) => candidate.name === toolName);
+        if (!tool || toolDefinitionFingerprint(tool) !== input.reviewedFingerprint) {
+          return { status: "conflict" as const, reason: "stale" as const };
+        }
         const entries = state.row.classifierPreparation.entries;
         if (
           !Object.prototype.hasOwnProperty.call(entries, toolName) &&
@@ -175,6 +179,10 @@ function fakeRepository(initial: ConnectionRow) {
     state: {
       get row() {
         return readBack(state.row);
+      },
+      /** Replace the stored row, as a discovery refresh and its sort would. */
+      set row(next: ConnectionRow) {
+        state.row = next;
       }
     },
     failures,
@@ -667,6 +675,74 @@ describe("a preparation call that started", () => {
       expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
     }
   );
+
+  // The same orders with a discovery refresh in the wait, and the changed tool sorted again. The
+  // older run's save is for the old definition, so it must not displace the newer run's call.
+  function changeLamp(fake: ReturnType<typeof fakeRepository>) {
+    const changed = discovered("lamp", { description: "Run lamp, now differently" });
+    fake.state.row = {
+      ...fake.state.row,
+      discoveredTools: [changed],
+      classifierSort: sortedAs([changed])
+    };
+  }
+
+  function abortError(): Error {
+    const aborted = new Error("The operation was aborted");
+    aborted.name = "AbortError";
+    return aborted;
+  }
+
+  it("keeps an older run's no-model write for an old definition off a newer call", async () => {
+    const fake = noModelFake();
+    const port = fakePort();
+    port.runStructuredDraft.mockRejectedValueOnce(abortError());
+
+    const save = vi.mocked(fake.repository.saveClassifierPreparationFailure);
+    const apply = save.getMockImplementation()!;
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    save.mockImplementationOnce(async (...args) => {
+      await held;
+      return apply(...args);
+    });
+    const olderPort = fakePort();
+    vi.mocked(olderPort.selectDefaultChatModel).mockResolvedValue(null);
+    const older = runOn(fake, "retry", olderPort);
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+
+    changeLamp(fake);
+    await expect(runOn(fake, "model_ready", port)).rejects.toThrow("aborted");
+    release();
+    expect(await older).toEqual({ status: "no_model" });
+
+    expect(await runOn(fake, "model_ready", port)).toEqual({ status: "nothing_to_prepare" });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a late failure for an old definition off a newer call", async () => {
+    const fake = noModelFake();
+    const port = fakePort();
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    port.runStructuredDraft
+      .mockImplementationOnce(async () => {
+        await held;
+        return { ok: false as const, error: "provider_error" as const };
+      })
+      .mockRejectedValueOnce(abortError());
+
+    const older = runOn(fake, "model_ready", port);
+    await vi.waitFor(() => expect(port.runStructuredDraft).toHaveBeenCalledTimes(1));
+    changeLamp(fake);
+    await expect(runOn(fake, "model_ready", port)).rejects.toThrow("aborted");
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(2);
+    release();
+    await older;
+
+    expect(await runOn(fake, "model_ready", port)).toEqual({ status: "nothing_to_prepare" });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(2);
+  });
 
   it("shows as preparing while it may run, then as a failure only Try again resends", async () => {
     const fake = noModelFake();

@@ -403,6 +403,9 @@ Today every connected tool asks with YOLO off, because its synthetic manifest ca
   when the tool already holds a started call, a result or any other failure for its current
   definition, so a run that found no model cannot undo a newer run's call. A call that finds the
   model is not set up after all keeps its started-call mark.
+- Every save of a tool's sort or preparation state checks, under the row lock, that it was made
+  for the tool's current definition, and does nothing otherwise. A run that read the tool before
+  a discovery refresh changed it cannot displace a newer run's call for the new definition.
 - A lost connection pauses the classifier for it, which resumes by itself after the next successful
   discovery.
 

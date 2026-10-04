@@ -470,8 +470,10 @@ function noModelFailureRefused(
 }
 
 /**
- * The failure history with one tool's failure recorded, or null when it has no room. A refused
- * `no_model` failure leaves the history as it is.
+ * The failure history with one tool's failure recorded, or null when it has no room. Every
+ * preparation failure save goes through here, under the row lock. A failure made for a definition
+ * that is no longer the tool's current one, and a refused `no_model` failure, leave the history
+ * as it is, so a late save from an older run cannot displace a newer run's call.
  */
 export function withPreparationFailure(
   map: ClassifierPreparationMap,
@@ -481,6 +483,8 @@ export function withPreparationFailure(
 ): Record<string, ClassifierPreparationFailure> | null {
   if (!preparationFailureHasRoom(map, discoveredTools, toolName)) return null;
   const failures = blockingFailures(map, discoveredTools);
+  const tool = discoveredTools.find((candidate) => candidate.name === toolName);
+  if (!tool || toolDefinitionFingerprint(tool) !== failure.definitionFingerprint) return failures;
   if (noModelFailureRefused(map, toolName, failure)) return failures;
   failures[toolName] = {
     reason: failure.reason,
@@ -770,6 +774,28 @@ export function toolSortState(
     sortMethod: entry.sortMethod,
     sendWithoutAsking: entry.sendWithoutAsking && risk === "outbound"
   };
+}
+
+/**
+ * Store sorting results against the connection's current tools. Every sort save goes through
+ * here, under the row lock. A result for a tool no longer discovered, or made for a definition
+ * that has since changed, is skipped, so a late save from an older run cannot displace a newer
+ * run's call for the current definition.
+ */
+export function withToolSortResults(
+  map: ClassifierSortMap,
+  discoveredTools: readonly RiskInputSource[],
+  results: readonly { readonly toolName: string; readonly result: ClassifierSortResult }[]
+): ClassifierSortMap {
+  const current = new Map(
+    discoveredTools.map((tool) => [tool.name, toolSortFingerprint(toolRiskInputs(tool))])
+  );
+  let sort = map;
+  for (const { toolName, result } of results) {
+    if (current.get(toolName) !== result.sortFingerprint) continue;
+    sort = withSortResult(sort, toolName, result) ?? sort;
+  }
+  return sort;
 }
 
 /**
