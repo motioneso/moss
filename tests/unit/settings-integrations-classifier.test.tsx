@@ -105,6 +105,7 @@ function baseDetail(overrides: Partial<IntegrationDetail> = {}): IntegrationDeta
     specPasted: false,
     classifierEnabled: false,
     classifierPreparation: [],
+    classifierTools: [],
     ...overrides
   };
 }

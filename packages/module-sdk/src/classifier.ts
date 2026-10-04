@@ -10,7 +10,7 @@
  * Node-free, so the barrel stays browser-safe.
  */
 
-import type { JsonSchema, ToolContext } from "./index.js";
+import type { JsonSchema, ModuleAssistantToolRisk, ToolContext } from "./index.js";
 
 /** Size bounds for everything the classifier sees or a hook returns. */
 export const CLASSIFIER_LIMITS = {
@@ -69,6 +69,13 @@ export interface ModuleAssistantToolClassifier {
    * boolean. The classifier never writes reply text.
    */
   readonly replyTemplate: string;
+  /**
+   * The risk group Moss sorted a connected tool into. The gate uses it for the confidence bar in
+   * place of the manifest risk. Set only by the integrations module's synthetic manifests; the gate
+   * ignores it on a tool whose `isExternal` is not `true`, and external module declarations never
+   * carry it.
+   */
+  readonly sortedRisk?: ModuleAssistantToolRisk;
 }
 
 export type ClassifierEligibility =

@@ -1,6 +1,6 @@
 import type { CredentialPlacement, IntegrationDetail, IntegrationKind } from "@moss/shared";
 
-import { classifierPreparationView } from "./classifier-settings.js";
+import { classifierPreparationView, classifierSortView } from "./classifier-settings.js";
 import {
   effectiveEnabledTools,
   isGroupOptIn,
@@ -73,7 +73,8 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     groupOptIn: isGroupOptIn(tools),
     specPasted: row.specPasted,
     classifierEnabled: row.classifierEnabled,
-    classifierPreparation: classifierPreparationView(classifierState)
+    classifierPreparation: classifierPreparationView(classifierState),
+    classifierTools: classifierSortView(row.classifierSort, tools)
   };
 }
 
