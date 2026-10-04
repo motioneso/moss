@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Connected tools are sorted by what they do.** When you add or refresh a connection, Moss now asks your chat model to sort each of its tools by what it does, which uses some of your model allowance and shows up in your activity history. [PR #3006](https://github.com/motioneso/moss/pull/3006)
 - **One activity history for everything Moss does.** Your Activity page now shows every kind of work Moss did for you, with what happened, how long it took, and the details of each step. Filter by time, module, or model; your choices are remembered. [PR #2976](https://github.com/motioneso/moss/pull/2976)
 
 ### 2026-10-03
