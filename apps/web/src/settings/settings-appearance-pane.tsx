@@ -1,6 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Palette, PencilLine, Plus, Save, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  CalendarDays,
+  Check,
+  CheckSquare,
+  Copy,
+  House,
+  Palette,
+  PencilLine,
+  Plus,
+  Save,
+  Trash2,
+  X
+} from "lucide-react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
   deleteCustomTheme,
@@ -12,16 +24,24 @@ import {
 import { queryKeys } from "../api/query-keys";
 import {
   applyThemeTokens,
-  deriveAccentRamp,
+  deriveNavColors,
+  isSolidThemeColor,
   isThemeColor,
   parsePalette,
   readCurrentAestheticTokens
 } from "../theme/theme-runtime";
-import type { AestheticThemeTokenKey, AestheticThemeTokens } from "@moss/shared";
+import type { AestheticThemeTokens } from "@moss/shared";
 import { AESTHETIC_THEME_TOKEN_KEYS } from "@moss/shared";
 import { useFeedback } from "./settings-feedback";
+import {
+  PREVIEW_PARTS,
+  ReadabilityList,
+  ThemePreview,
+  type EditorTokenKey,
+  type PreviewPart
+} from "./settings-theme-preview";
 import { Field, Group, Note, PaneHead, Row } from "./settings-ui";
-import { Badge, Button, Divider, Segmented } from "@moss/ui";
+import { Badge, BrandMark, Button, ColorBox, ColorPopover, Segmented } from "@moss/ui";
 
 interface DraftTheme {
   readonly id: string;
@@ -34,56 +54,97 @@ interface SaveThemeDraftDeps {
   readonly setActiveTheme: typeof setActiveTheme;
 }
 
-type EditorTokenKey = AestheticThemeTokenKey | "gold";
+/* Highlight and nav are optional in the contract. The editor shows these
+   defaults until the user sets them: the built-in gold, and the pale nav the
+   shell draws for a custom theme without a nav color. */
+const DEFAULT_HIGHLIGHT = "#c2872b";
+const DEFAULT_NAV = "#e7ebdf";
 
-/* Gold is optional in the contract: themes saved without it keep the built-in
-   constant, so the editor seeds a default instead of requiring a value. */
-const DEFAULT_GOLD = "#c2872b";
+interface FieldSpec {
+  readonly key: EditorTokenKey;
+  readonly name: string;
+  readonly desc: string;
+  /** Line colors show a rule at this weight instead of a flat fill. */
+  readonly rule?: string;
+}
 
-const TOKEN_LABELS: Record<EditorTokenKey, string> = {
-  paper: "Paper",
-  surface: "Surface",
-  surface2: "Surface soft",
-  surface3: "Surface track",
-  ink: "Ink",
-  ink2: "Ink soft",
-  ink3: "Ink faint",
-  ink4: "Ink quiet",
-  line: "Line",
-  lineSubtle: "Line soft",
-  lineStrong: "Line strong",
-  accent: "Accent",
-  gold: "Gold"
-};
-
-/* Slots grouped by the job they do, so the editor reads top-down like the page
-   does: what sits behind everything, what you read, what separates, what pops. */
-const SLOT_GROUPS: readonly {
+const FIELD_GROUPS: readonly {
   readonly title: string;
   readonly hint: string;
-  readonly keys: readonly EditorTokenKey[];
+  readonly fields: readonly FieldSpec[];
 }[] = [
   {
-    title: "Backgrounds",
-    hint: "Page ground, then the cards and wells that sit on it.",
-    keys: ["paper", "surface", "surface2", "surface3"]
+    title: "Page and cards",
+    hint: "The page behind everything, then the cards and wells that sit on it.",
+    fields: [
+      { key: "paper", name: "Page", desc: "The paper behind every screen" },
+      { key: "surface", name: "Card", desc: "Cards, menus and dialogs" },
+      { key: "surface2", name: "Soft card", desc: "Quiet wells and inset blocks" },
+      { key: "surface3", name: "Track", desc: "Switch tracks and progress bars" }
+    ]
   },
   {
     title: "Text",
-    hint: "Headline ink first, then progressively quieter body and hint text.",
-    keys: ["ink", "ink2", "ink3", "ink4"]
+    hint: "Headline text first, then quieter body, hint and placeholder text.",
+    fields: [
+      { key: "ink", name: "Text", desc: "Headlines and body" },
+      { key: "ink2", name: "Soft text", desc: "Descriptions and secondary lines" },
+      { key: "ink3", name: "Faint text", desc: "Times, counts and meta" },
+      { key: "ink4", name: "Quiet text", desc: "Placeholders and disabled labels" }
+    ]
   },
   {
     title: "Lines",
-    hint: "Dividers and borders, from barely-there to emphasised.",
-    keys: ["line", "lineSubtle", "lineStrong"]
+    hint: "Rules between rows and around cards, from barely there to firm.",
+    fields: [
+      { key: "lineSubtle", name: "Hairline", desc: "Between rows", rule: "1px" },
+      { key: "line", name: "Line", desc: "Around cards and fields", rule: "1px" },
+      { key: "lineStrong", name: "Firm line", desc: "Under the top bar, heavy rules", rule: "2px" }
+    ]
   },
   {
-    title: "Accent and gold",
-    hint: "Accent drives buttons and links. Gold is decorative only.",
-    keys: ["accent", "gold"]
+    title: "Accent and highlight",
+    hint: "The accent fills the Today band, buttons and the selected nav item. The highlight draws the rules under it, never text.",
+    fields: [
+      { key: "accent", name: "Accent", desc: "Buttons, links, the Today band" },
+      { key: "highlight", name: "Highlight", desc: "Rules and markers only" }
+    ]
   }
 ];
+
+const NAV_FIELD: FieldSpec = {
+  key: "nav",
+  name: "Background",
+  desc: "Behind the links, icons and the Moss mark"
+};
+
+const FIELD_NAMES = Object.fromEntries(
+  [...FIELD_GROUPS.flatMap((group) => group.fields), NAV_FIELD].map((field) => [
+    field.key,
+    field.name
+  ])
+) as Record<EditorTokenKey, string>;
+
+/* The nav derives its text contrast from its own ground, so it must be opaque. */
+export function themeColorError(key: EditorTokenKey, value: string): string | null {
+  if (!isThemeColor(value)) return "Use #rrggbb or rgb(r, g, b).";
+  if (key === "nav" && !isSolidThemeColor(value)) {
+    return "The nav needs a solid color. Use #rrggbb, rgb(r, g, b), or rgba with alpha 1.";
+  }
+  return null;
+}
+
+type PickerState =
+  | { readonly key: EditorTokenKey; readonly from: "box" }
+  | {
+      readonly key: EditorTokenKey;
+      readonly from: "preview";
+      readonly part: PreviewPart;
+      readonly left: number;
+      readonly top: number;
+    };
+
+const PICKER_WIDTH = 240;
 
 export function AppearancePane() {
   const queryClient = useQueryClient();
@@ -91,14 +152,16 @@ export function AppearancePane() {
   const themesQuery = useQuery({ queryKey: queryKeys.settings.themes, queryFn: listThemes });
   const [draft, setDraft] = useState<DraftTheme | null>(null);
   const [draftIsNew, setDraftIsNew] = useState(true);
-  const [selectedSlot, setSelectedSlot] = useState<EditorTokenKey>("accent");
   const [paletteText, setPaletteText] = useState("");
-  const [staged, setStaged] = useState<readonly string[]>([]);
+  const [picker, setPicker] = useState<PickerState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const sideRef = useRef<HTMLElement>(null);
+  const previewAnchorRef = useRef<HTMLElement | null>(null);
   const activeId = themesQuery.data?.activeId ?? "light";
   const activeMode = themesQuery.data?.mode ?? "light";
   const activeIsBuiltIn = themesQuery.data?.builtIn.some((theme) => theme.id === activeId) ?? true;
+  const palette = useMemo(() => parsePalette(paletteText), [paletteText]);
 
   const refreshThemes = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.settings.themes });
@@ -132,38 +195,33 @@ export function AppearancePane() {
     onError: (err) => toast(readError(err))
   });
 
-  const contrastWarnings = useMemo(() => {
-    if (!draft) return [];
-    return [
-      ["Ink on paper", contrastRatio(draft.tokens.ink, draft.tokens.paper)],
-      ["Accent on paper", contrastRatio(draft.tokens.accent, draft.tokens.paper)],
-      ["Paper on accent", contrastRatio(draft.tokens.paper, draft.tokens.accent)]
-    ].flatMap(([label, ratio]) =>
-      typeof ratio === "number" && ratio < 4.5 ? [`${label} ${ratio.toFixed(2)}:1`] : []
-    );
-  }, [draft]);
-
-  const goldWarning = useMemo(() => {
-    if (!draft?.tokens.gold) return null;
-    const ratio = contrastRatio(draft.tokens.gold, draft.tokens.paper);
-    return ratio < 3
-      ? `Gold on paper ${ratio.toFixed(2)}:1. Gold is decorative; aim for at least 3:1 on paper.`
-      : null;
-  }, [draft]);
-
+  const fieldValue = (key: EditorTokenKey): string => {
+    if (!draft) return "";
+    if (key === "highlight") return draft.tokens.highlight ?? DEFAULT_HIGHLIGHT;
+    if (key === "nav") return draft.tokens.nav ?? DEFAULT_NAV;
+    return draft.tokens[key];
+  };
   const updateToken = (key: EditorTokenKey, value: string) => {
     setDraft((current) =>
       current ? { ...current, tokens: { ...current.tokens, [key]: value } } : current
     );
     setStatus(null);
-    setError(isThemeColor(value) ? null : "Use #rrggbb or rgb(r, g, b).");
+    setError(themeColorError(key, value));
+  };
+  const resetNav = () => {
+    setDraft((current) => {
+      if (!current) return current;
+      const tokens = { ...current.tokens };
+      delete tokens.nav;
+      return { ...current, tokens };
+    });
+    setStatus(null);
   };
   const openEditor = (next: DraftTheme, isNew: boolean) => {
-    setDraft({ ...next, tokens: { gold: DEFAULT_GOLD, ...next.tokens } });
+    setDraft({ ...next, tokens: { highlight: DEFAULT_HIGHLIGHT, ...next.tokens } });
     setDraftIsNew(isNew);
-    setSelectedSlot("accent");
     setPaletteText("");
-    setStaged([]);
+    setPicker(null);
     setError(null);
     setStatus(null);
   };
@@ -173,26 +231,92 @@ export function AppearancePane() {
   const closeEditor = () => {
     setDraft(null);
     setPaletteText("");
-    setStaged([]);
+    setPicker(null);
     setError(null);
     setStatus(null);
   };
   const saveDraft = () => {
     if (!draft) return;
-    const invalid = AESTHETIC_THEME_TOKEN_KEYS.find((key) => !isThemeColor(draft.tokens[key]));
-    if (invalid) {
-      setError(`${TOKEN_LABELS[invalid]} must be #rrggbb or rgb(r, g, b).`);
-      return;
-    }
-    if (draft.tokens.gold !== undefined && !isThemeColor(draft.tokens.gold)) {
-      setError(`${TOKEN_LABELS.gold} must be #rrggbb or rgb(r, g, b).`);
-      return;
+    for (const key of [...AESTHETIC_THEME_TOKEN_KEYS, "highlight" as const, "nav" as const]) {
+      const value = draft.tokens[key];
+      const problem = value === undefined ? null : themeColorError(key, value);
+      if (problem) {
+        setError(`Check ${FIELD_NAMES[key]}. ${problem}`);
+        return;
+      }
     }
     saveMutation.mutate(draft);
   };
+  const openFromPreview = (part: PreviewPart, anchor: HTMLElement) => {
+    if (picker?.from === "preview" && picker.part === part) {
+      setPicker(null);
+      return;
+    }
+    const side = sideRef.current?.getBoundingClientRect();
+    const box = anchor.getBoundingClientRect();
+    if (!side) return;
+    previewAnchorRef.current = anchor;
+    setPicker({
+      key: PREVIEW_PARTS[part].key,
+      from: "preview",
+      part,
+      left: Math.max(0, Math.min(box.left - side.left, side.width - PICKER_WIDTH)),
+      top: box.bottom - side.top + 8
+    });
+  };
+
+  const readability = useMemo(() => {
+    if (!draft) return [];
+    const { tokens } = draft;
+    return [
+      { label: "Text on the page", ratio: contrastRatio(tokens.ink, tokens.paper), floor: 4.5 },
+      {
+        label: "Faint text on the page",
+        ratio: contrastRatio(tokens.ink3, tokens.paper),
+        floor: 4.5
+      },
+      {
+        label: "Accent links on the page",
+        ratio: contrastRatio(tokens.accent, tokens.paper),
+        floor: 4.5
+      },
+      {
+        label: "Labels on the accent",
+        ratio: contrastRatio(tokens.paper, tokens.accent),
+        floor: 4.5
+      },
+      {
+        label: "Highlight rules on the page",
+        ratio: contrastRatio(tokens.highlight ?? DEFAULT_HIGHLIGHT, tokens.paper),
+        floor: 3
+      }
+    ];
+  }, [draft]);
 
   const builtIn = themesQuery.data?.builtIn ?? [];
   const custom = themesQuery.data?.custom ?? [];
+  const navColors = draft ? deriveNavColors(fieldValue("nav"), draft.tokens.accent) : null;
+
+  const colorBox = (field: FieldSpec) => (
+    <span className="theme-field__control">
+      <ColorBox
+        label={field.name}
+        value={fieldValue(field.key)}
+        rule={field.rule}
+        palette={palette}
+        open={picker?.from === "box" && picker.key === field.key}
+        onOpenChange={(open) => setPicker(open ? { key: field.key, from: "box" } : null)}
+        onChange={(color) => updateToken(field.key, color)}
+      />
+      <input
+        className="jds-input jds-input--sm theme-field__hex"
+        value={fieldValue(field.key)}
+        aria-label={`${field.name} value`}
+        aria-invalid={!isThemeColor(fieldValue(field.key))}
+        onChange={(event) => updateToken(field.key, event.target.value)}
+      />
+    </span>
+  );
 
   return (
     <>
@@ -201,8 +325,8 @@ export function AppearancePane() {
         desc="Pick a color theme for this account, or build your own. Warning and error colors stay fixed so they always read correctly."
       />
       <Group
-        title="Themes"
-        desc="The current theme is marked. Built-in themes follow the light or dark setting; custom themes carry their own fixed palette."
+        title="Theme"
+        desc="Built-in themes follow light or dark. Your own themes keep the colors you saved, nav bar included."
         action={
           <Button
             variant="secondary"
@@ -224,7 +348,7 @@ export function AppearancePane() {
           desc={
             activeIsBuiltIn
               ? "Applies to every built-in theme."
-              : "Unavailable while a custom theme is current: custom themes use their saved palette as-is."
+              : "Built-in themes only. Your own themes keep their saved colors in light mode."
           }
           control={
             <Segmented
@@ -290,13 +414,14 @@ export function AppearancePane() {
       {draft ? (
         <Group
           title={draftIsNew ? "New theme" : `Edit ${draft.name}`}
-          desc="Changes show in the preview as you type. Nothing is applied until you save."
+          desc="The preview changes as you type. Nothing is applied until you save."
         >
           <div className="theme-editor">
             <div className="theme-editor__form">
-              <Field label="Name">
+              <Field label="Name" className="theme-editor__name">
                 <input
                   className="jds-input"
+                  aria-label="Theme name"
                   value={draft.name}
                   onChange={(event) =>
                     setDraft({
@@ -308,160 +433,125 @@ export function AppearancePane() {
                 />
               </Field>
 
-              {SLOT_GROUPS.map((group) => (
-                <section className="theme-slot-group" key={group.title}>
-                  <div className="theme-slot-group__head">
-                    <div className="jds-eyebrow">{group.title}</div>
-                    <div className="theme-slot-group__hint">{group.hint}</div>
-                  </div>
-                  <div className="theme-token-grid">
-                    {group.keys.map((key) => {
-                      const value = draft.tokens[key] ?? DEFAULT_GOLD;
-                      return (
-                        <label
-                          className={`theme-token ${selectedSlot === key ? "is-selected" : ""}`}
-                          key={key}
-                        >
-                          <span className="theme-token__label">{TOKEN_LABELS[key]}</span>
-                          <span className="theme-token__controls">
-                            <input
-                              aria-label={`${TOKEN_LABELS[key]} color picker`}
-                              type="color"
-                              value={toHexInput(value)}
-                              onFocus={() => setSelectedSlot(key)}
-                              onChange={(event) => updateToken(key, event.target.value)}
-                            />
-                            <input
-                              className="jds-input jds-input--sm"
-                              value={value}
-                              aria-invalid={!isThemeColor(value)}
-                              onFocus={() => setSelectedSlot(key)}
-                              onChange={(event) => updateToken(key, event.target.value)}
-                            />
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-
-              <section className="theme-slot-group">
-                <div className="theme-slot-group__head">
-                  <div className="jds-eyebrow">Paste a palette</div>
-                  <div className="theme-slot-group__hint">
-                    Drop in colors from a palette tool. Click a swatch to assign it to the slot you
-                    last touched ({TOKEN_LABELS[selectedSlot]}).
-                  </div>
-                </div>
+              <section className="theme-fields">
+                <h4 className="theme-fields__title">Paste a palette</h4>
+                <p className="theme-fields__hint">
+                  Paste colors from a palette tool. They show at the top of every color box below,
+                  ready to pick.
+                </p>
                 <textarea
-                  className="jds-textarea"
+                  className="jds-textarea theme-palette__input"
                   aria-label="Paste palette"
                   placeholder="#541388 / #f038ff / rgb(56, 163, 165)"
                   value={paletteText}
-                  onChange={(event) => {
-                    const text = event.target.value;
-                    setPaletteText(text);
-                    const colors = parsePalette(text);
-                    setStaged(colors);
-                    if (colors.length > 0) setError(null);
-                  }}
-                  onPaste={(event) => {
-                    const pasted = event.clipboardData.getData("text");
-                    if (pasted.trim().length > 0 && parsePalette(pasted).length === 0) {
-                      setError("Paste #rrggbb or rgb(r, g, b) values.");
-                    }
-                  }}
+                  onChange={(event) => setPaletteText(event.target.value)}
                 />
-                {staged.length ? (
-                  <div className="theme-staged" aria-label="Staged palette">
-                    {staged.map((color) => (
-                      <button
-                        className="theme-swatch"
+                {palette.length ? (
+                  <div className="theme-palette__found" aria-label="Colors found">
+                    {palette.map((color) => (
+                      <span
                         key={color}
-                        type="button"
-                        style={{ "--st-swatch": color } as React.CSSProperties}
-                        title={`Assign ${color} to ${TOKEN_LABELS[selectedSlot]}`}
-                        onClick={() => updateToken(selectedSlot, color)}
+                        className="jds-swatch"
+                        title={color}
+                        style={{ "--jds-swatch": color } as CSSProperties}
                       />
                     ))}
                   </div>
+                ) : paletteText.trim() ? (
+                  <p className="theme-fields__hint">
+                    No colors found. Paste #rrggbb or rgb(r, g, b) values.
+                  </p>
                 ) : null}
+              </section>
+
+              {FIELD_GROUPS.map((group) => (
+                <section className="theme-fields" key={group.title}>
+                  <h4 className="theme-fields__title">{group.title}</h4>
+                  <p className="theme-fields__hint">{group.hint}</p>
+                  {group.fields.map((field) => (
+                    <Row
+                      key={field.key}
+                      name={field.name}
+                      desc={field.desc}
+                      control={colorBox(field)}
+                    />
+                  ))}
+                </section>
+              ))}
+
+              <section className="theme-fields">
+                <h4 className="theme-fields__title">Nav bar</h4>
+                <p className="theme-fields__hint">
+                  The column of links down the left side. On a phone it also colors the top bar and
+                  the menu. Text and icons pick dark or light by themselves.
+                </p>
+                <Row name={NAV_FIELD.name} desc={NAV_FIELD.desc} control={colorBox(NAV_FIELD)} />
+                <div
+                  className="theme-navstrip"
+                  style={(navColors?.vars ?? {}) as CSSProperties}
+                  aria-hidden="true"
+                >
+                  <span className="theme-navstrip__brand">
+                    <BrandMark size={18} />
+                    Moss
+                  </span>
+                  <span className="theme-navstrip__link is-active">
+                    <House size={15} />
+                    Today
+                  </span>
+                  <span className="theme-navstrip__link">
+                    <CheckSquare size={15} />
+                    Tasks
+                  </span>
+                  <span className="theme-navstrip__link">
+                    <CalendarDays size={15} />
+                    Calendar
+                  </span>
+                </div>
+                <div className="theme-navstrip__foot">
+                  <p className="theme-fields__hint">
+                    {draft.tokens.nav && navColors
+                      ? `Text and icons switch to ${navColors.textKind} on this color. Labels read at ${navColors.textRatio.toFixed(1)} to 1, quieter links at ${navColors.mutedRatio.toFixed(1)} to 1. Both clear the 4.5 to 1 floor.${
+                          navColors.strongText
+                            ? ` This is a middle tone, so Moss uses full ${navColors.textKind === "dark" ? "black" : "white"} text.`
+                            : ""
+                        }`
+                      : "Using the default pale nav."}
+                  </p>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={draft.tokens.nav === undefined}
+                    onClick={resetNav}
+                  >
+                    Reset to default
+                  </Button>
+                </div>
               </section>
             </div>
 
-            <aside className="theme-editor__side">
-              <div className="theme-preview" style={tokensToCssVars(draft.tokens)}>
-                <div className="theme-preview__eyebrow">Preview</div>
-                <h3>Daily plan</h3>
-                <p>
-                  Paper, ink, line, and accent update here before saving.{" "}
-                  <a className="theme-preview__link" href="#preview" onClick={preventNav}>
-                    Read the notes
-                  </a>
-                </p>
-                <div className="theme-preview__badges">
-                  <Badge tone="forest" dot>
-                    On track
-                  </Badge>
-                  <Badge tone="amber">2 due</Badge>
-                  <Badge outline>Draft</Badge>
-                </div>
-                <div className="theme-preview__card">
-                  <span className="theme-preview__cardtitle">Surface card</span>
-                  <div className="theme-preview__row">
-                    <span className="theme-preview__rowtitle">Morning review</span>
-                    <span className="theme-preview__rowmeta">9:00</span>
-                  </div>
-                  <Divider />
-                  <div className="theme-preview__row">
-                    <span className="theme-preview__rowtitle">Call the vet</span>
-                    <span className="theme-preview__rowmeta">Done</span>
-                  </div>
-                  <Divider />
-                  <span className="theme-preview__cardline" />
-                  <span className="theme-preview__cardline theme-preview__cardline--short" />
-                </div>
-                <input
-                  className="jds-input jds-input--sm"
-                  type="text"
-                  readOnly
-                  aria-label="Preview input"
-                  value="Add a task"
+            <aside className="theme-editor__side" ref={sideRef}>
+              <ThemePreview
+                style={tokensToCssVars(draft.tokens)}
+                openPart={picker?.from === "preview" ? picker.part : null}
+                onPick={openFromPreview}
+              />
+              {picker?.from === "preview" ? (
+                <ColorPopover
+                  title={FIELD_NAMES[picker.key]}
+                  value={toHexInput(fieldValue(picker.key))}
+                  palette={palette}
+                  anchorRef={previewAnchorRef}
+                  style={{ left: picker.left, top: picker.top }}
+                  onClose={() => setPicker(null)}
+                  onPick={(color) => {
+                    updateToken(picker.key, color);
+                    setPicker(null);
+                  }}
+                  onInput={(color) => updateToken(picker.key, color)}
                 />
-                <div className="theme-preview__actions">
-                  <Button size="sm">Primary action</Button>
-                  <Button size="sm" variant="quiet">
-                    Quiet
-                  </Button>
-                  <span className="theme-preview__gold">Gold note</span>
-                </div>
-                <div className="theme-preview__callout">
-                  <span className="theme-preview__callouttitle">Accent note</span>
-                  <span>Soft accent fills and their ink, drawn from the accent ramp.</span>
-                </div>
-              </div>
-              <div className="theme-ramp" aria-label="Generated accent ramp">
-                {Object.entries(deriveAccentRamp(draft.tokens.accent, draft.tokens.paper)).map(
-                  ([name, value]) => (
-                    <span className="theme-ramp__item" key={name}>
-                      <span
-                        className="theme-swatch"
-                        style={{ "--st-swatch": value } as React.CSSProperties}
-                      />
-                      <span>{name.replace("--", "")}</span>
-                    </span>
-                  )
-                )}
-              </div>
-              {contrastWarnings.length ? (
-                <Note icon={<Palette size={13} aria-hidden="true" />}>
-                  Low contrast: {contrastWarnings.join(", ")}. Save is allowed.
-                </Note>
               ) : null}
-              {goldWarning ? (
-                <Note icon={<Palette size={13} aria-hidden="true" />}>{goldWarning}</Note>
-              ) : null}
+              <ReadabilityList checks={readability} />
             </aside>
           </div>
 
@@ -572,9 +662,9 @@ function ThemeCard(props: {
   );
 }
 
-/* A miniature page: paper ground, a surface card with ink lines, an accent
-   button and a gold dot. Built-in themes resolve their colors through the
-   theme attributes; custom themes inject their saved tokens as CSS variables. */
+/* A miniature Moss screen: nav column with the selected item, a Today band
+   with its highlight rule, and rows. Built-in themes resolve their colors
+   through the theme attributes; custom themes inject their saved tokens. */
 function ThemeThumb(props: { readonly source: ThemePreviewSource }) {
   const attrs =
     props.source.kind === "builtIn"
@@ -582,15 +672,20 @@ function ThemeThumb(props: { readonly source: ThemePreviewSource }) {
       : { style: tokensToCssVars(props.source.tokens) };
   return (
     <div className="theme-thumb" aria-hidden="true" {...attrs}>
-      <div className="theme-thumb__card">
-        <span className="theme-thumb__line theme-thumb__line--ink" />
-        <span className="theme-thumb__line theme-thumb__line--soft" />
-        <span className="theme-thumb__line theme-thumb__line--soft theme-thumb__line--short" />
-      </div>
-      <div className="theme-thumb__foot">
-        <span className="theme-thumb__accent" />
-        <span className="theme-thumb__gold" />
-      </div>
+      <span className="theme-thumb__nav">
+        <i />
+        <i className="is-active" />
+        <i />
+        <i />
+      </span>
+      <span className="theme-thumb__body">
+        <span className="theme-thumb__band" />
+        <span className="theme-thumb__rows">
+          <i />
+          <i />
+          <i />
+        </span>
+      </span>
     </div>
   );
 }
@@ -603,10 +698,6 @@ export function slugifyThemeId(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
   return slug || `theme-${Date.now().toString(36)}`;
-}
-
-function preventNav(event: React.MouseEvent<HTMLAnchorElement>): void {
-  event.preventDefault();
 }
 
 export function tokensToCssVars(tokens: AestheticThemeTokens): Record<string, string> {

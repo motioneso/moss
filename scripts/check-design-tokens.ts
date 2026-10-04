@@ -43,12 +43,16 @@ const allowList = new Set([
   // list dots (listColorMap()) in task-list-view.tsx. Same components-tasks.css consumer, same
   // out-of-scan-root note as --tk-ava-bg above.
   "--tk-swatch",
-  // #1395 Settings: runtime accent-ramp / staged-palette swatch color in settings-appearance-pane.
-  // Consuming var() is in apps/web/src/styles/settings-panes-3.css today; Task 4's CSS split moves
-  // it to packages/ui/src/styles/components-settings-*.css, same out-of-scan-root shape as
-  // --tk-swatch. Named --st-swatch (not --swatch) per the coordinator's ruling — every sectional
-  // runtime token here is scoped, and a bare name would be the one an ancestor could capture.
-  "--st-swatch"
+  // #3000 Custom theme nav color. The theme runtime sets these inline on the root together with
+  // the data-nav-color flag; kit-shell-nav.css reads them only under that flag.
+  "--nav-bg",
+  "--nav-fg",
+  "--nav-muted",
+  "--nav-line",
+  "--nav-hover",
+  "--nav-active-bg",
+  "--nav-active-fg",
+  "--nav-brand"
 ]);
 
 export interface TokenViolation {

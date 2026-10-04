@@ -287,6 +287,10 @@ export function AppShell(props: AppShellProps) {
     );
     document.documentElement.setAttribute("data-color-mode", mode);
     applyThemeTokens(document.documentElement.style, customTheme?.tokens ?? null);
+    document.documentElement.toggleAttribute(
+      "data-nav-color",
+      document.documentElement.style.getPropertyValue("--nav-bg") !== ""
+    );
     saveShellTheme(activeThemeId);
     saveShellColorMode(mode);
   }, [activeThemeId, colorMode, themesQuery.data?.custom, themesQuery.data?.mode]);

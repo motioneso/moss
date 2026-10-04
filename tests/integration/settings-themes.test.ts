@@ -100,14 +100,14 @@ describe("settings theme preferences", () => {
     expect(Object.keys(await readPreference("themes.custom"))).not.toContain("red");
   });
 
-  it("persists the optional gold token when provided", async () => {
-    const put = await putTheme(ids.sessionA, "gold-theme", {
+  it("persists the optional highlight token when provided", async () => {
+    const put = await putTheme(ids.sessionA, "highlight-theme", {
       name: "Golden",
-      tokens: { ...validThemeTokens, gold: "#c2872b" }
+      tokens: { ...validThemeTokens, highlight: "#c2872b" }
     });
 
     expect(put.statusCode).toBe(200);
-    expect(put.json<PutCustomThemeResponse>().theme.tokens.gold).toBe("#c2872b");
+    expect(put.json<PutCustomThemeResponse>().theme.tokens.highlight).toBe("#c2872b");
 
     const list = await server.inject({
       method: "GET",
@@ -116,8 +116,57 @@ describe("settings theme preferences", () => {
     });
     const stored = list
       .json<ListThemesResponse>()
-      .custom.find((theme) => theme.id === "gold-theme");
-    expect(stored?.tokens.gold).toBe("#c2872b");
+      .custom.find((theme) => theme.id === "highlight-theme");
+    expect(stored?.tokens.highlight).toBe("#c2872b");
+  });
+
+  it("persists the optional nav token when provided", async () => {
+    const put = await putTheme(ids.sessionA, "nav-theme", {
+      name: "Harbor",
+      tokens: { ...validThemeTokens, nav: "#1f3a5f" }
+    });
+
+    expect(put.statusCode).toBe(200);
+    expect(put.json<PutCustomThemeResponse>().theme.tokens.nav).toBe("#1f3a5f");
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/themes",
+      headers: userHeaders(ids.sessionA)
+    });
+    const stored = list.json<ListThemesResponse>().custom.find((theme) => theme.id === "nav-theme");
+    expect(stored?.tokens.nav).toBe("#1f3a5f");
+  });
+
+  it("clears optional tokens a complete save leaves out, and keeps them on a partial save", async () => {
+    await putTheme(ids.sessionA, "reset-theme", {
+      name: "Harbor",
+      tokens: { ...validThemeTokens, nav: "#1f3a5f", highlight: "#c2872b" }
+    });
+
+    const partial = await putTheme(ids.sessionA, "reset-theme", { tokens: { accent: "#2f6f8f" } });
+    expect(partial.json<PutCustomThemeResponse>().theme.tokens).toMatchObject({
+      accent: "#2f6f8f",
+      nav: "#1f3a5f",
+      highlight: "#c2872b"
+    });
+
+    const complete = await putTheme(ids.sessionA, "reset-theme", {
+      tokens: { ...validThemeTokens, highlight: "#c2872b" }
+    });
+    expect(complete.statusCode).toBe(200);
+    expect(complete.json<PutCustomThemeResponse>().theme.tokens.nav).toBeUndefined();
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/themes",
+      headers: userHeaders(ids.sessionA)
+    });
+    const stored = list
+      .json<ListThemesResponse>()
+      .custom.find((theme) => theme.id === "reset-theme");
+    expect(stored?.tokens.nav).toBeUndefined();
+    expect(stored?.tokens.highlight).toBe("#c2872b");
   });
 
   it("persists active custom theme per user", async () => {
@@ -144,6 +193,46 @@ describe("settings theme preferences", () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a see-through nav color but accepts an opaque rgba one", async () => {
+    const seeThrough = await putTheme(ids.sessionA, "glass-nav", {
+      name: "Glass",
+      tokens: { ...validThemeTokens, nav: "rgba(0, 0, 0, 0.5)" }
+    });
+    expect(seeThrough.statusCode).toBe(400);
+
+    const opaque = await putTheme(ids.sessionA, "glass-nav", {
+      name: "Glass",
+      tokens: { ...validThemeTokens, nav: "rgba(0, 0, 0, 1)" }
+    });
+    expect(opaque.statusCode).toBe(200);
+    expect(opaque.json<PutCustomThemeResponse>().theme.tokens.nav).toBe("rgba(0, 0, 0, 1)");
+  });
+
+  it("reads a highlight saved under its old gold name", async () => {
+    await putTheme(ids.sessionA, "legacy-gold", { name: "Legacy", tokens: validThemeTokens });
+    const stored = (await readPreference("themes.custom")) as unknown as Array<{
+      id: string;
+      tokens: Record<string, string>;
+    }>;
+    const legacy = stored.map((theme) =>
+      theme.id === "legacy-gold"
+        ? { ...theme, tokens: { ...theme.tokens, gold: "#c2872b" } }
+        : theme
+    );
+    await writePreference("themes.custom", legacy);
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/themes",
+      headers: userHeaders(ids.sessionA)
+    });
+    const theme = list.json<ListThemesResponse>().custom.find((item) => item.id === "legacy-gold");
+    expect(theme?.tokens.highlight).toBe("#c2872b");
+
+    const rename = await putTheme(ids.sessionA, "legacy-gold", { name: "Legacy renamed" });
+    expect(rename.json<PutCustomThemeResponse>().theme.tokens.highlight).toBe("#c2872b");
   });
 
   it("does not delete built-ins or the active theme", async () => {
@@ -205,6 +294,19 @@ describe("settings theme preferences", () => {
       headers: { ...userHeaders(sessionId), "content-type": "application/json" },
       payload: { id }
     });
+  }
+
+  async function writePreference(key: string, value: unknown): Promise<void> {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      await client.query(
+        "UPDATE app.preferences SET value_json = $1 WHERE owner_user_id = $2 AND key = $3",
+        [JSON.stringify(value), ids.userA, key]
+      );
+    } finally {
+      await client.end();
+    }
   }
 
   async function readPreference(key: string): Promise<Record<string, unknown>> {

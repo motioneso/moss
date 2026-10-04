@@ -72,6 +72,8 @@ export { NavIndex, NavIndexItem } from "./nav-index.js";
 export type { NavIndexProps, NavIndexItemProps } from "./nav-index.js";
 export { RowIndex, RowIndexItem } from "./row-index.js";
 export type { RowIndexProps, RowIndexItemProps } from "./row-index.js";
+export { ColorBox, ColorPopover } from "./color-box.js";
+export type { ColorBoxProps, ColorPopoverProps } from "./color-box.js";
 export { Menu } from "./menu.js";
 export type { MenuItem, MenuProps } from "./menu.js";
 export { MonthChip } from "./month-chip.js";
