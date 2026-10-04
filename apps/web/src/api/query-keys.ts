@@ -82,15 +82,7 @@ export const queryKeys = {
     actionAuditLog: (params?: { since?: string; family?: string; limit?: number }) =>
       ["ai", "action-audit-log", params] as const,
     activityLines: (params?: { since?: string; limit?: number }) =>
-      ["ai", "activity-lines", params] as const,
-    modelActivity: (params?: {
-      kind?: string;
-      model?: string;
-      result?: string;
-      since?: string;
-      before?: string;
-      limit?: number;
-    }) => ["ai", "model-activity", params] as const
+      ["ai", "activity-lines", params] as const
   },
   briefings: {
     definitions: ["briefings", "definitions"] as const,

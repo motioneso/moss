@@ -136,23 +136,65 @@ test("a real model call appears as an Activity line with a working detail dialog
 
   await test.step("the Activity page shows the line in fixed words, never the prose", async () => {
     await openActivity(page);
-    const line = page.locator(".act-line", { hasText: "Ran a structured task" }).first();
+    const line = page.locator(".act-line", { hasText: "Prepared a briefing" }).first();
     await expect(line).toBeVisible({ timeout: 15_000 });
     await expect(line.getByText(WRITER_MODEL_NAME).first()).toBeVisible();
+    await expect(page.locator(".act-filters")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Models: all" })).toBeVisible();
     // The page is titles and recorded facts: the model's reply must not leak into it.
     await expect(page.locator(".act-line").getByText(WRITER_HEADLINE)).toHaveCount(0);
     await shot(page, "activity-page");
   });
 
   await test.step("clicking the line opens the detail dialog with steps and facts", async () => {
-    await page.locator(".act-line", { hasText: "Ran a structured task" }).first().click();
+    await page.locator(".act-line", { hasText: "Prepared a briefing" }).first().click();
     const dialog = page.locator(".act-dialog");
     await expect(dialog).toBeVisible({ timeout: 15_000 });
-    await expect(dialog.getByText("Ran a structured task").first()).toBeVisible();
+    await expect(dialog.getByText("Prepared a briefing").first()).toBeVisible();
     await expect(dialog.locator('[role="listbox"]')).toBeVisible();
     await expect(dialog.locator(".act-facts")).toBeVisible();
     await shot(page, "activity-dialog");
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
+  });
+
+  await test.step("unticking a model hides its lines with a note", async () => {
+    await page.getByRole("button", { name: /Models:/ }).click();
+    const checklist = page.locator(".jds-checklist");
+    await expect(checklist).toBeVisible({ timeout: 15_000 });
+    await expect(checklist.getByText(WRITER_MODEL_NAME)).toBeVisible();
+    await shot(page, "activity-models-checklist");
+    await checklist.getByText(WRITER_MODEL_NAME).click();
+    await expect(page.locator(".act-line", { hasText: "Prepared a briefing" })).toHaveCount(0);
+    await expect(page.getByText("1 entry hidden by the model filter")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Models: \d+ of \d+/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset filters" })).toBeVisible();
+  });
+
+  await test.step("filter choices survive a reload", async () => {
+    await page.reload();
+    const menu = page.locator(".jds-usermenu__trigger");
+    await expect(menu).toBeVisible({ timeout: 30_000 });
+    await openActivity(page);
+    await expect(page.locator(".act-line", { hasText: "Prepared a briefing" })).toHaveCount(0);
+    await expect(page.getByText("1 entry hidden by the model filter")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset filters" })).toBeVisible();
+  });
+
+  await test.step("Reset filters clears the choices", async () => {
+    await page.getByRole("button", { name: "Reset filters" }).click();
+    const line = page.locator(".act-line", { hasText: "Prepared a briefing" }).first();
+    await expect(line).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Models: all" })).toBeVisible();
+    await expect(page.getByText(/hidden by the model filter/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reset filters" })).toHaveCount(0);
+  });
+
+  await test.step("Settings no longer lists the retired Model activity page", async () => {
+    await page.locator(".jds-usermenu__trigger").click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Admin / Setup" }).click();
+    await expect(page.getByRole("button", { name: "Model activity" })).toHaveCount(0);
+    await shot(page, "settings-admin-no-model-activity");
   });
 });

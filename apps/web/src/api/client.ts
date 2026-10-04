@@ -206,7 +206,6 @@ import type {
   PutCustomThemeResponse,
   ListActionAuditLogResponse,
   ListActivityLinesResponse,
-  ListModelActivityResponse,
   YoloSettingsResponse,
   YoloAdminSettingsResponse
 } from "@moss/shared";
@@ -1512,36 +1511,6 @@ export async function listActionAuditLog(params?: {
   try {
     return await requestJson<ListActionAuditLogResponse>(
       `/api/ai/action-audit${qs ? `?${qs}` : ""}`,
-      { signal: controller.signal }
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-export async function listModelActivity(params?: {
-  kind?: string;
-  model?: string;
-  result?: string;
-  since?: string;
-  before?: string;
-  beforeId?: string;
-  limit?: number;
-}): Promise<ListModelActivityResponse> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3000);
-  const search = new URLSearchParams();
-  if (params?.kind) search.set("kind", params.kind);
-  if (params?.model) search.set("model", params.model);
-  if (params?.result) search.set("result", params.result);
-  if (params?.since) search.set("since", params.since);
-  if (params?.before) search.set("before", params.before);
-  if (params?.beforeId) search.set("beforeId", params.beforeId);
-  if (params?.limit !== undefined) search.set("limit", String(params.limit));
-  const qs = search.toString();
-  try {
-    return await requestJson<ListModelActivityResponse>(
-      `/api/ai/model-activity${qs ? `?${qs}` : ""}`,
       { signal: controller.signal }
     );
   } finally {

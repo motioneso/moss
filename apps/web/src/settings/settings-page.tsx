@@ -10,7 +10,6 @@ import {
   Brain,
   ChevronDown,
   Command,
-  Cpu,
   Link2,
   ListChecks,
   Package,
@@ -88,7 +87,6 @@ type AdminSectionId =
   | "shadowreport"
   | "instmods"
   | "audit"
-  | "modelactivity"
   | "oversight"
   | "host"
   | "enckeys";
@@ -145,11 +143,6 @@ const InstanceModulesPane = lazyPane(() =>
 );
 const AuditPane = lazyPane(() =>
   import("./settings-audit-pane").then((module) => ({ default: module.AuditPane }))
-);
-const ModelActivityPane = lazyPane(() =>
-  import("./settings-model-activity-pane").then((module) => ({
-    default: module.ModelActivityPane
-  }))
 );
 const OversightPane = lazyPane(() =>
   import("./settings-admin-panes").then((module) => ({ default: module.OversightPane }))
@@ -316,13 +309,6 @@ const ADMIN_GROUPS = [
         Pane: AuditPane
       },
       {
-        id: "modelactivity",
-        icon: Cpu,
-        label: "Model activity",
-        description: coreSettingDescription("modelactivity"),
-        Pane: ModelActivityPane
-      },
-      {
         id: "host",
         icon: ServerCog,
         label: "Advanced host setup",
@@ -390,7 +376,6 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
   ],
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],
-  modelactivity: ["model", "ai", "calls", "log", "activity", "classifier"],
   host: ["server", "domain", "url", "backup", "advanced"],
   enckeys: ["encryption", "keys", "secret", "credentials", "setup"]
 };

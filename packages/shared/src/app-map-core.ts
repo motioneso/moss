@@ -137,11 +137,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "activity",
     label: "Activity",
     description:
-      "Review assistant activity visible to this user. Each call reads as a plain action " +
-      "(for example, Checked your calendar) under its module name, with how long it took to " +
-      "run. A call that did not work, was not allowed, or was held back " +
-      "carries one plain line saying whether the user needs to do anything. A module filter " +
-      "narrows the list.",
+      "Review every model call Moss made for you: chat answers, structured tasks, " +
+      "transcription, embeddings, background tasks and tool runs, each as a plain action " +
+      "with how long it took. Opening a line shows the detail dialog with its steps and " +
+      "facts. Filter by time range, module, or model with the model checklist; choices " +
+      "are remembered per user and Reset filters restores the default. Quoted words " +
+      "expire after 30 days while the line itself stays. Admins also see System lines " +
+      "for ownerless calls.",
     path: "/settings?section=activity",
     scope: "user"
   },
@@ -326,18 +328,6 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     label: "Audit & operations",
     description: "Review instance audit and operational records.",
     path: "/settings?section=audit",
-    scope: "admin"
-  },
-  {
-    id: "modelactivity",
-    label: "Model activity",
-    description:
-      "Review the model calls Moss records: chat turns through CLI and API-key providers, " +
-      "structured output including classifier choices, transcription, embeddings, background " +
-      "tasks, module builds, and provider probes and checks. A day-grouped feed with the time, " +
-      "what it did, the model that ran it, whether it succeeded, and a short result; filter by " +
-      "kind, model, result and time. The log never shows chat text and is kept indefinitely.",
-    path: "/settings?section=modelactivity",
     scope: "admin"
   },
   {

@@ -3,8 +3,8 @@
 // Plan 3.6b (#2890) live-path proof for a live chat turn. 3.6a recorded only the provider-adapter
 // boundary, which a live chat turn never reaches — chat runs a whole CLI session. This spec proves
 // the new per-turn recording through the real app: an admin sends a real chat turn through the
-// drawer (a real model reply), then opens Settings > Model activity and sees a `chat` row for the
-// turn, without the message text.
+// drawer (a real model reply), then opens Settings > Activity and sees one "Answered a chat
+// message" line for the turn. (#2956 slice D retired the old Model activity screen.)
 //
 // This uses the operator's own signed-in Codex login (tests/uat/real-chat-env.ts, #2732) rather
 // than the scripted provider fixture: the ACP chat engine spawns @agentclientprotocol/
@@ -26,11 +26,10 @@ const REQUIRE_REAL_CHAT = Boolean(process.env.JARVIS_UAT_REQUIRE_REAL_CHAT);
 
 const MESSAGE = "UAT 3.6b coverage check: reply with a short greeting.";
 
-async function openModelActivity(page: Page): Promise<void> {
+async function openActivity(page: Page): Promise<void> {
   await page.locator(".jds-usermenu__trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Admin / Setup" }).click();
-  await page.getByRole("button", { name: "Model activity" }).click();
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
 }
 
 interface ModelActivityEntry {
@@ -111,10 +110,9 @@ test("a live chat turn appears in the admin model activity log (#2890)", async (
     expect(chatRows[0]?.outcome, "the chat row should be ok").toBe("ok");
   });
 
-  await test.step("the admin screen shows the chat row, and never the message text", async () => {
-    await openModelActivity(page);
-    const chatRow = page.locator(".aud__row").filter({ hasText: "Answered" }).first();
-    await expect(chatRow).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".aud").getByText(MESSAGE)).toHaveCount(0);
+  await test.step("the Activity page shows one answered-chat line for the turn", async () => {
+    await openActivity(page);
+    const chatLine = page.locator(".act-line", { hasText: "Answered a chat message" }).first();
+    await expect(chatLine).toBeVisible({ timeout: 15_000 });
   });
 });
