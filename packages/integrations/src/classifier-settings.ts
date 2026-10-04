@@ -8,6 +8,12 @@ import type {
 } from "@moss/shared";
 
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import {
+  higherRisk,
+  toolRiskInputs,
+  toolSortFingerprint,
+  type RiskInputSource
+} from "./classifier-risk-inputs.js";
 import { effectiveEnabledTools } from "./curation.js";
 
 /**
@@ -425,4 +431,299 @@ export function classifierPreparationView(
     view.push({ toolName: tool.name, ...entry, state: entryState });
   }
   return view;
+}
+
+/*
+ * Sort storage (spec 8.2 and 8.3, #2984).
+ *
+ * A second versioned map on the owner-only connection row, keyed by discovered tool name. Each
+ * entry holds the sorting pass's result for one tool, the owner's send-without-asking choice, and
+ * a risk floor converted once from the old per-tool review. Like the preparation map it is read
+ * defensively: a malformed map reads as empty and a malformed entry is dropped, so every tool
+ * falls back to never tried and asks.
+ */
+
+export const INTEGRATION_CLASSIFIER_SORT_VERSION = 1 as const;
+
+/** Bound on the stored sort map. Every discovered tool needs an entry, so this sits well above the opt-in bound. */
+export const INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES = 1000;
+
+export const INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS = 80;
+
+export type ClassifierSortStatus = "current" | "failed" | "never_tried";
+
+/** Why a sort failed. `unsafe` means the tool's text held the stored credential and was not sent. */
+export type ClassifierSortFailure = "error" | "unsafe";
+
+export interface ClassifierSortEntry {
+  readonly status: ClassifierSortStatus;
+  /** The sorted group as its risk, after the code rule. Set only when current. */
+  readonly risk: IntegrationClassifierRisk | null;
+  /** The model-written display name. Set only when current. */
+  readonly readableName: string | null;
+  /** The risk-inputs fingerprint the sort or the failure was made against. */
+  readonly sortFingerprint: string | null;
+  readonly sortedAt: string | null;
+  readonly failure: ClassifierSortFailure | null;
+  /** The owner's choice to let a Sends things out tool run without asking. Tied to `sortFingerprint`. */
+  readonly sendWithoutAsking: boolean;
+  /** An owner-reviewed risk from the old flow. It only ever raises the sorted risk. */
+  readonly legacyRiskFloor: IntegrationClassifierRisk | null;
+}
+
+export interface ClassifierSortMap {
+  readonly version: typeof INTEGRATION_CLASSIFIER_SORT_VERSION;
+  readonly entries: Readonly<Record<string, ClassifierSortEntry>>;
+}
+
+/** A tool's sort as read against its current risk inputs. Anything but `current` asks. */
+export type ClassifierToolSortState =
+  | {
+      readonly status: "current";
+      readonly risk: IntegrationClassifierRisk;
+      readonly readableName: string;
+      readonly sendWithoutAsking: boolean;
+    }
+  | { readonly status: "stale" }
+  | { readonly status: "failed"; readonly failure: ClassifierSortFailure }
+  | { readonly status: "never_tried" };
+
+/** One sorting result to store. */
+export type ClassifierSortResult =
+  | {
+      readonly status: "current";
+      readonly risk: IntegrationClassifierRisk;
+      readonly readableName: string;
+      readonly sortFingerprint: string;
+      readonly sortedAt: string;
+    }
+  | {
+      readonly status: "failed";
+      readonly failure: ClassifierSortFailure;
+      readonly sortFingerprint: string;
+      readonly sortedAt: string;
+    };
+
+function sortEntriesRecord(
+  source?: Readonly<Record<string, ClassifierSortEntry>>
+): Record<string, ClassifierSortEntry> {
+  const out = Object.create(null) as Record<string, ClassifierSortEntry>;
+  if (source) for (const key of Object.keys(source)) out[key] = source[key]!;
+  return out;
+}
+
+export function emptySortMap(): ClassifierSortMap {
+  return { version: INTEGRATION_CLASSIFIER_SORT_VERSION, entries: sortEntriesRecord() };
+}
+
+/** The stored sort entry for a tool name, only when it is an own key. */
+export function sortEntry(
+  map: ClassifierSortMap,
+  toolName: string
+): ClassifierSortEntry | undefined {
+  return Object.prototype.hasOwnProperty.call(map.entries, toolName)
+    ? map.entries[toolName]
+    : undefined;
+}
+
+/** A display name is one line of bounded plain text with no control characters. */
+export function isReadableName(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    value.length <= INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS &&
+    // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
+}
+
+function storedRisk(value: unknown): IntegrationClassifierRisk | null | undefined {
+  if (value === null || value === undefined) return null;
+  return typeof value === "string" && (RISKS as readonly string[]).includes(value)
+    ? (value as IntegrationClassifierRisk)
+    : undefined;
+}
+
+/** Read one stored sort entry. Any field that breaks its status's shape drops the entry. */
+function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
+  if (!isRecord(raw)) return null;
+  const legacyRiskFloor = storedRisk(raw.legacyRiskFloor);
+  if (legacyRiskFloor === undefined) return null;
+  const base = { legacyRiskFloor };
+
+  if (raw.status === "never_tried") {
+    return {
+      ...base,
+      status: "never_tried",
+      risk: null,
+      readableName: null,
+      sortFingerprint: null,
+      sortedAt: null,
+      failure: null,
+      sendWithoutAsking: false
+    };
+  }
+  if (!isIdentifier(raw.sortFingerprint) || !isIdentifier(raw.sortedAt)) return null;
+  if (raw.status === "failed") {
+    if (raw.failure !== "error" && raw.failure !== "unsafe") return null;
+    return {
+      ...base,
+      status: "failed",
+      risk: null,
+      readableName: null,
+      sortFingerprint: raw.sortFingerprint,
+      sortedAt: raw.sortedAt,
+      failure: raw.failure,
+      sendWithoutAsking: false
+    };
+  }
+  if (raw.status !== "current") return null;
+  const risk = storedRisk(raw.risk);
+  if (!risk || !isReadableName(raw.readableName)) return null;
+  return {
+    ...base,
+    status: "current",
+    risk,
+    readableName: raw.readableName,
+    sortFingerprint: raw.sortFingerprint,
+    sortedAt: raw.sortedAt,
+    failure: null,
+    // The choice exists only while the sort, raised by any old floor, is Sends things out.
+    sendWithoutAsking:
+      raw.sendWithoutAsking === true && higherRisk(risk, legacyRiskFloor) === "outbound"
+  };
+}
+
+export function parseSortMap(raw: unknown): ClassifierSortMap {
+  if (!isRecord(raw)) return emptySortMap();
+  if (raw.version !== INTEGRATION_CLASSIFIER_SORT_VERSION) return emptySortMap();
+  if (!isRecord(raw.entries)) return emptySortMap();
+  const entries = sortEntriesRecord();
+  for (const [toolName, value] of Object.entries(raw.entries)) {
+    if (!isIdentifier(toolName)) continue;
+    const parsed = parseStoredSortEntry(value);
+    if (parsed) entries[toolName] = parsed;
+  }
+  return { version: INTEGRATION_CLASSIFIER_SORT_VERSION, entries };
+}
+
+/**
+ * A tool's sort against its current risk inputs. A sort or failure made against other inputs is
+ * stale. The sorted risk is raised to the old reviewed floor, never lowered by it, and the
+ * send-without-asking choice counts only while the tool's risk is `outbound`.
+ */
+export function toolSortState(
+  map: ClassifierSortMap,
+  tool: RiskInputSource
+): ClassifierToolSortState {
+  const entry = sortEntry(map, tool.name);
+  if (!entry || entry.status === "never_tried") return { status: "never_tried" };
+  if (entry.sortFingerprint !== toolSortFingerprint(toolRiskInputs(tool))) {
+    return { status: "stale" };
+  }
+  if (entry.status === "failed") return { status: "failed", failure: entry.failure ?? "error" };
+  const risk = higherRisk(entry.risk!, entry.legacyRiskFloor);
+  return {
+    status: "current",
+    risk,
+    readableName: entry.readableName!,
+    sendWithoutAsking: entry.sendWithoutAsking && risk === "outbound"
+  };
+}
+
+/**
+ * Store one sorting result. The old reviewed floor survives. A send-without-asking choice
+ * survives only a result made against the same risk inputs as the current sort it was set on.
+ * Returns `null` for a result whose shape is not storable.
+ */
+export function withSortResult(
+  map: ClassifierSortMap,
+  toolName: string,
+  result: ClassifierSortResult
+): ClassifierSortMap | null {
+  if (!isIdentifier(toolName) || !isIdentifier(result.sortFingerprint)) return null;
+  if (!isIdentifier(result.sortedAt)) return null;
+  const previous = sortEntry(map, toolName);
+  if (!previous && Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES) {
+    return null;
+  }
+  const legacyRiskFloor = previous?.legacyRiskFloor ?? null;
+
+  let entry: ClassifierSortEntry;
+  if (result.status === "current") {
+    if (!(RISKS as readonly string[]).includes(result.risk)) return null;
+    if (!isReadableName(result.readableName)) return null;
+    const keepsChoice =
+      previous?.status === "current" &&
+      previous.sortFingerprint === result.sortFingerprint &&
+      higherRisk(result.risk, legacyRiskFloor) === "outbound";
+    entry = {
+      status: "current",
+      risk: result.risk,
+      readableName: result.readableName,
+      sortFingerprint: result.sortFingerprint,
+      sortedAt: result.sortedAt,
+      failure: null,
+      sendWithoutAsking: keepsChoice ? previous.sendWithoutAsking : false,
+      legacyRiskFloor
+    };
+  } else {
+    if (result.failure !== "error" && result.failure !== "unsafe") return null;
+    entry = {
+      status: "failed",
+      risk: null,
+      readableName: null,
+      sortFingerprint: result.sortFingerprint,
+      sortedAt: result.sortedAt,
+      failure: result.failure,
+      sendWithoutAsking: false,
+      legacyRiskFloor
+    };
+  }
+  const entries = sortEntriesRecord(map.entries);
+  entries[toolName] = entry;
+  return { version: INTEGRATION_CLASSIFIER_SORT_VERSION, entries };
+}
+
+/**
+ * Set or clear the owner's send-without-asking choice on one tool. Clearing always succeeds,
+ * because it only adds asking. Setting needs a current sort whose risk is `outbound`; anything
+ * else returns `null`.
+ */
+export function withSendWithoutAsking(
+  map: ClassifierSortMap,
+  tool: RiskInputSource,
+  allow: boolean
+): ClassifierSortMap | null {
+  const entry = sortEntry(map, tool.name);
+  if (!allow) {
+    if (!entry || !entry.sendWithoutAsking) return map;
+  } else {
+    const state = toolSortState(map, tool);
+    if (state.status !== "current" || state.risk !== "outbound" || !entry) return null;
+  }
+  const entries = sortEntriesRecord(map.entries);
+  entries[tool.name] = { ...entry!, sendWithoutAsking: allow };
+  return { version: INTEGRATION_CLASSIFIER_SORT_VERSION, entries };
+}
+
+/**
+ * Clear every send-without-asking choice whose sort has gone stale against the newly discovered
+ * tools, or whose tool is gone. A tool whose inputs change and later change back therefore still
+ * asks until the owner allows it again.
+ */
+export function withoutStaleSendChoices(
+  map: ClassifierSortMap,
+  tools: readonly RiskInputSource[]
+): ClassifierSortMap {
+  const byName = new Map(tools.map((tool) => [tool.name, tool]));
+  let entries: Record<string, ClassifierSortEntry> | null = null;
+  for (const [toolName, entry] of Object.entries(map.entries)) {
+    if (!entry.sendWithoutAsking) continue;
+    const tool = byName.get(toolName);
+    if (tool && entry.sortFingerprint === toolSortFingerprint(toolRiskInputs(tool))) continue;
+    entries ??= sortEntriesRecord(map.entries);
+    entries[toolName] = { ...entry, sendWithoutAsking: false };
+  }
+  return entries ? { version: INTEGRATION_CLASSIFIER_SORT_VERSION, entries } : map;
 }

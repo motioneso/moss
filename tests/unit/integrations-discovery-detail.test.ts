@@ -22,6 +22,8 @@ function connection(overrides: Partial<ConnectionRow>): ConnectionRow {
     unsuppressedTools: [],
     classifierEnabled: false,
     classifierPreparation: { version: 1, entries: {} },
+    classifierSort: { version: 1, entries: {} },
+    classifierKeptOutTools: [],
     discoveredTools: [],
     lastDiscoveryAt: null,
     lastError: null,

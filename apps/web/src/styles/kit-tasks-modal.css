@@ -6,10 +6,15 @@
   max-height: 88vh;
   display: flex;
   flex-direction: column;
+  position: relative;
   animation: kbar-in 0.18s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .tk-modal .jds-dialog__body {
   overflow-y: auto;
+}
+/* The dialog's own head wrapper adds a second 24px inset; drop it so the header lines up with the body. */
+.tk-modal .jds-dialog__head {
+  padding: 0;
 }
 .tk-modal__head {
   flex: none;
@@ -22,12 +27,17 @@
 .tk-modal__headmain {
   flex: 1;
   min-width: 0;
+  /* keeps the title clear of the corner close button */
+  padding-right: 32px;
 }
 .tk-modal__eyebrow {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .tk-modal__x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   flex: none;
   width: 34px;
   height: 34px;
