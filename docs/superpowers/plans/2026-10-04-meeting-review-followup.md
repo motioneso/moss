@@ -118,3 +118,11 @@ A clean owner-controlled four-spec real-provider rerun remains required. The rep
 Opus 5.5 (Anthropic); the builder is OpenAI. That reported identity does not independently verify
 the reviewer's upstream proxy or supply a current detailed security re-review. Do not claim
 verified cross-provider approval, real capture readiness or merge clearance from this report.
+
+The first reconciled run at `337127e0` passed the Meetings UI group and macOS tests but exposed
+another stale regression assertion: `moss-assistant-name` still required the fixed Moss wordmark
+although main #3032 intentionally personalized that chrome. Reconcile this test with the current
+persona-name contract rather than reverting the approved product behavior. Keep the provider-free
+UI check, preference persistence and restoration, and make the regression group's bounded failure
+output retain locator/expected/received and source-line diagnostics. This failed run is not passing
+proof of the repaired test; the next head must rerun the full checks.

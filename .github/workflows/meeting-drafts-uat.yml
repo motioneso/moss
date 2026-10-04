@@ -152,7 +152,7 @@ jobs:
           import re
           for path in Path("/tmp/jarv1s-gate").glob("*.log"):
               lines = re.sub(r"\x1b\[[0-9;]*m", "", path.read_text(errors="replace")).splitlines()
-              matched = [line for line in lines if re.search(r"^### |\[meetings-uat\]|\[uat\] running|[0-9]+ passed|[0-9]+ failed|[0-9]+ skipped|Error:|TimeoutError", line)]
+              matched = [line for line in lines if re.search(r"^### |\[meetings-uat\]|\[uat\] running|[0-9]+ passed|[0-9]+ failed|[0-9]+ skipped|Error:|TimeoutError|Locator:|Expected:|Received:|\.uat\.spec\.ts:[0-9]+|[0-9]+\) \[chromium\]", line)]
               print(f"Bounded outcomes from {path.name}")
               for line in matched[-120:]:
                   print(line[:1000])
