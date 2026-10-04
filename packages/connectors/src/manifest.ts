@@ -283,6 +283,16 @@ export const connectorsModuleManifest = {
   ],
   features: [
     {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.connectors.email-sort",
+      description: "Sorted new email"
+    },
+    {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.connectors.email-extract",
+      description: "Checked new email for follow-ups"
+    },
+    {
       id: "connectors.google_sync",
       description:
         "A connected Google account keeps its calendar and email in Moss: a background sync " +

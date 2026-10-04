@@ -528,3 +528,78 @@ describe("generateChoices", () => {
     });
   });
 });
+
+describe("generateChoices activity lines", () => {
+  it("records chat.tool_check with owner, turn, confidence and tokens", async () => {
+    const { deps } = okFetch(validResponse);
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const result = await generateChoices(
+        scopedDb,
+        makeInput({
+          activity: {
+            ownerUserId: "user-1",
+            turnId: "turn-1",
+            parentId: "answer-1",
+            actionCode: "chat.tool_check"
+          }
+        }),
+        deps
+      );
+      expect(result.ok).toBe(true);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        kind: "structured",
+        actionCode: "chat.tool_check",
+        ownerUserId: "user-1",
+        turnId: "turn-1",
+        parentId: "answer-1",
+        outcome: "ok",
+        inputTokens: 12,
+        outputTokens: 3,
+        factCounts: { confidence: 0.8 }
+      });
+      expect(typeof entries[0]?.durationMs).toBe("number");
+    } finally {
+      installModelActivityRecorder(null);
+    }
+  });
+
+  it("defaults to the service structured code when the caller names none", async () => {
+    const { deps } = okFetch(validResponse);
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      await generateChoices(scopedDb, makeInput(), deps);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        actionCode: "structured.focus-judgment",
+        outcome: "ok"
+      });
+      expect(entries[0]).not.toHaveProperty("ownerUserId");
+    } finally {
+      installModelActivityRecorder(null);
+    }
+  });
+
+  it("records a failed post with a code and no confidence", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(500, { error: "internal" }));
+    const deps = makeDeps({ fetch: fetchMock as unknown as typeof fetch });
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const result = await generateChoices(
+        scopedDb,
+        makeInput({ activity: { ownerUserId: "user-1", turnId: "turn-1" } }),
+        deps
+      );
+      expect(result).toEqual({ ok: false, error: "provider_error" });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ outcome: "error", ownerUserId: "user-1" });
+      expect(entries[0]?.factCounts).toBeUndefined();
+    } finally {
+      installModelActivityRecorder(null);
+    }
+  });
+});

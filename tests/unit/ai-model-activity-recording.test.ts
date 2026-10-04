@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
 import {
+  boundModelActivityEntry,
   createDbModelActivityRecorder,
+  modelActivityFailureCode,
+  withModelActivityRecording,
   type ModelActivityEntry
 } from "../../packages/ai/src/model-activity.js";
 
@@ -113,9 +116,12 @@ describe("model activity recording (plan 3.6a, #2889)", () => {
     });
 
     expect(JSON.stringify(entries)).not.toContain(SENTINEL);
-    // The entry carries only the six short fields.
+    // The entry carries only the short fields plus the centrally measured duration.
+    // #2956 slice B: every line also carries its fixed action code.
     expect(Object.keys(entries[0]!).sort()).toEqual([
       "action",
+      "actionCode",
+      "durationMs",
       "kind",
       "modelName",
       "outcome",
@@ -154,6 +160,75 @@ describe("model activity recording (plan 3.6a, #2889)", () => {
       messages: [{ role: "user", content: "hi" }]
     });
     expect(out.text).toBe("still fine");
+  });
+
+  it("maps provider errors to failure codes without storing error text (#2956)", () => {
+    expect(modelActivityFailureCode(new Error("x"))).toBe("unknown");
+    expect(modelActivityFailureCode("boom")).toBe("unknown");
+    const abort = new Error("stopped");
+    abort.name = "AbortError";
+    expect(modelActivityFailureCode(abort)).toBe("cancelled");
+    expect(modelActivityFailureCode(Object.assign(new Error("t"), { code: "ETIMEDOUT" }))).toBe(
+      "timeout"
+    );
+    expect(modelActivityFailureCode(Object.assign(new Error("r"), { code: "RATE_LIMITED" }))).toBe(
+      "rate_limited"
+    );
+    const secret = new Error("secret response body must never be stored");
+    expect(modelActivityFailureCode(secret)).toBe("unknown");
+  });
+
+  it("measures duration centrally and codes failures (#2956)", async () => {
+    const entries: ModelActivityEntry[] = [];
+    await withModelActivityRecording(
+      (entry) => entries.push(entry),
+      { kind: "chat", action: "chat", modelName: "m" },
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return "done";
+      }
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.outcome).toBe("ok");
+    expect(entries[0]!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(entries[0]!.failureCode).toBeUndefined();
+
+    const failing: ModelActivityEntry[] = [];
+    await expect(
+      withModelActivityRecording(
+        (entry) => failing.push(entry),
+        { kind: "chat", action: "chat", modelName: "m" },
+        async () => {
+          throw Object.assign(new Error("nope"), { code: "ETIMEDOUT" });
+        }
+      )
+    ).rejects.toThrow("nope");
+    expect(failing).toHaveLength(1);
+    expect(failing[0]!.outcome).toBe("error");
+    expect(failing[0]!.failureCode).toBe("timeout");
+    expect(failing[0]!.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("drops non-number fact values and clamps the new text fields (#2956)", () => {
+    const bounded = boundModelActivityEntry({
+      kind: "chat",
+      action: "chat",
+      outcome: "ok",
+      modelName: "m",
+      result: "completed",
+      actionCode: "c".repeat(100),
+      turnId: "t".repeat(200),
+      factCounts: { tools: 3, jev_agreed: true, note: "must not store" } as unknown as Record<
+        string,
+        number | boolean
+      >,
+      detail: { quote: "q".repeat(3000), resultLine: "r".repeat(600) }
+    });
+    expect(bounded.actionCode!.length).toBe(64);
+    expect(bounded.turnId!.length).toBe(128);
+    expect(bounded.factCounts).toEqual({ tools: 3, jev_agreed: true });
+    expect(new TextEncoder().encode(bounded.detail!.quote!).length).toBeLessThanOrEqual(2000);
+    expect(bounded.detail!.resultLine!.length).toBe(500);
   });
 
   it("truncates over-long fields to the column limits instead of dropping the row", () => {

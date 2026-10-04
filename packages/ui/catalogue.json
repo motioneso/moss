@@ -176,6 +176,15 @@
       "flags": []
     },
     {
+      "name": "checklist",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/checklist.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Checklist"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "chip",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chip.tsx", "type": "registry:ui" }],

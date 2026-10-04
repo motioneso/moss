@@ -64,6 +64,13 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     { queueName: COMMITMENT_EXTRACTION_QUEUE, metadataOnly: true },
     { queueName: COMMITMENT_EMAIL_JUDGEMENT_QUEUE, metadataOnly: true }
   ],
+  features: [
+    {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.commitments.email-judgement",
+      description: "Checked what new email asks of you"
+    }
+  ],
   assistantActionFamilies: [
     {
       id: "commitment_review",

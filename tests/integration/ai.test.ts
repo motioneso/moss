@@ -184,14 +184,18 @@ describe("AI provider foundation", () => {
       "app.ai_assistant_action_requests",
       "app.moss_action_audit_log",
       "app.moss_error_log",
-      "app.moss_model_activity_log"
+      "app.moss_model_activity_log",
+      "app.moss_activity_detail"
     ]);
     expect(manifest?.settings?.[0]).toMatchObject({
       id: "ai.user-settings",
       path: "/settings?section=assistant",
       permissionId: "ai.manage"
     });
-    expect(registration?.queueDefinitions.map((q) => q.name)).toEqual(["ai-purge-audit-log"]);
+    expect(registration?.queueDefinitions.map((q) => q.name)).toEqual([
+      "ai-purge-audit-log",
+      "ai-purge-activity-detail"
+    ]);
     expect(manifest?.routes?.map((route) => route.path)).toContain("/api/ai/assistant-actions");
     expect(manifest?.routes?.map((route) => route.path)).toContain(
       "/api/ai/assistant-actions/:id/resolve"

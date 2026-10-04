@@ -42,4 +42,11 @@ describe("settings activity labels", () => {
   it("gives no note for a successful call", () => {
     expect(outcomeNote("success")).toBeNull();
   });
+
+  it("names the modules that own structured calls (#2956 slice D)", () => {
+    expect(moduleLabel("briefings")).toBe("Briefings");
+    expect(moduleLabel("connectors")).toBe("Connectors");
+    expect(moduleLabel("jarvis.commitments")).toBe("Commitments");
+    expect(moduleLabel("web")).toBe("Web Research");
+  });
 });

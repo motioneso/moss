@@ -176,8 +176,13 @@ async function writeAcpAuditLine(
     errorClass: string | null;
     durationMs: number | null;
     inputSummary: ActionAuditInputSummary;
+    /** #2956: captured at ask arrival; survives an approval hold. */
+    turnId?: string;
   }
 ): Promise<void> {
+  // #2956: capture the turn BEFORE any await. An explicit id (an approval
+  // hold captured it at arrival) wins; otherwise the live turn is read.
+  const turnId = line.turnId ?? deps.tokens.readCurrentTurnId(chatSessionId);
   try {
     await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       deps.repository.insertActionAuditLog(scopedDb, {
@@ -192,6 +197,7 @@ async function writeAcpAuditLine(
         errorClass: line.errorClass,
         requestId: access.requestId ?? null,
         chatSessionId,
+        ...(turnId ? { turnId } : {}),
         sourceSurface: "chat",
         inputSummary: line.inputSummary,
         durationMs: line.durationMs
@@ -225,6 +231,9 @@ export async function requestAcpBuiltInPermission(
   const input = request.toolInput;
   const requestId = `acp_${randomUUID()}`;
   const access: AccessContext = { actorUserId, requestId };
+  // #2956: the ask below can pend on approval past the turn's end; the turn is
+  // captured at arrival and handed to each audit write explicitly.
+  const arrivalTurnId = deps.tokens.readCurrentTurnId(chatSessionId);
   const folders = { cwd: request.cwd, home: request.home };
   const builtIn: AcpBuiltInRequest = {
     sessionId: request.sessionId,
@@ -255,7 +264,8 @@ export async function requestAcpBuiltInPermission(
       outcome: "success",
       errorClass: null,
       durationMs: Date.now() - startedAt,
-      inputSummary: summarize("allowed", "yolo")
+      inputSummary: summarize("allowed", "yolo"),
+      ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
     });
     return {
       decision: "allow",
@@ -343,7 +353,8 @@ export async function requestAcpBuiltInPermission(
         outcome: outcome === "confirmed" ? "success" : "failed",
         errorClass: outcome === "confirmed" ? null : outcome,
         durationMs: Date.now() - startedAt,
-        inputSummary: summarize("asked", null)
+        inputSummary: summarize("asked", null),
+        ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
       });
       return outcome === "confirmed" ? "allow" : "deny";
     } finally {
@@ -375,7 +386,8 @@ export async function requestAcpBuiltInPermission(
       outcome: "failed",
       errorClass: result.reason,
       durationMs: null,
-      inputSummary: summarize("refused", result.reason)
+      inputSummary: summarize("refused", result.reason),
+      ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
     });
     return {
       decision: "deny",
