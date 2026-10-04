@@ -11,6 +11,7 @@ import {
   parsePreparationMap,
   parseSortMap,
   preparationEntry,
+  preparationHasRoom,
   withoutStaleSendChoices,
   withSendWithoutAsking,
   withSortResult,
@@ -332,12 +333,7 @@ export class IntegrationsRepository {
 
     const map = row.classifierPreparation;
     const existing = preparationEntry(map, toolName);
-    if (
-      existing === undefined &&
-      Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
-    ) {
-      return { status: "too_many" };
-    }
+    if (!preparationHasRoom(map, toolName)) return { status: "too_many" };
     const entry: ClassifierPreparationEntry = {
       optIn: input.optIn,
       reviewedRisk: input.reviewedRisk,

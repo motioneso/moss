@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import type { PgBoss } from "pg-boss";
 import { describe, expect, it } from "vitest";
 
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner, JsonSecretCipher } from "@moss/db";
 import {
   buildPreparationDefinitionPayload,
   buildPreparationPrompt,
@@ -391,6 +391,8 @@ function buildServer(
   const writes = options.writes ?? [];
   const repository = {
     getConnection: async () => row,
+    updateConnection: async (_db: unknown, _id: string, patch: Partial<ConnectionRow>) =>
+      row === null ? null : { ...row, ...patch },
     saveClassifierToolReview: async () => {
       writes.push("save");
       return { status: "not_found" };
@@ -403,6 +405,7 @@ function buildServer(
     }),
     dataContext: fakeDataContext(),
     repository,
+    cipher: {} as JsonSecretCipher,
     ...(options.withBoss === false ? {} : { boss: fakeBoss(options.sent ?? []) })
   });
   return server;
@@ -473,5 +476,43 @@ describe("POST /api/integrations/:id/classifier/prepare", () => {
       payload: {}
     });
     expect(response.statusCode).toBe(503);
+  });
+});
+
+describe("PATCH /api/integrations/:id and preparation", () => {
+  async function patch(row: ConnectionRow, payload: Record<string, unknown>) {
+    const sent: SentJob[] = [];
+    const server = buildServer(row, { sent });
+    const response = await server.inject({
+      method: "PATCH",
+      url: "/api/integrations/conn-1",
+      payload
+    });
+    expect(response.statusCode).toBe(200);
+    return sent;
+  }
+
+  it("queues preparation when a skipped tool is switched on for chat with the switch on", async () => {
+    const muted = connection({ mutedTools: ["turn_on"] });
+    for (const payload of [
+      { mutedTools: [] },
+      { enabledTools: ["turn_on"] },
+      { enabledGroups: ["lights"] },
+      { unsuppressedTools: ["turn_on"] }
+    ]) {
+      const sent = await patch(muted, payload);
+      expect(sent, JSON.stringify(payload)).toEqual([
+        {
+          queue: INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
+          payload: { actorUserId: "user-a", resourceId: "conn-1", op: "prepare" },
+          options: { singletonKey: "classifier-prepare:conn-1" }
+        }
+      ]);
+    }
+  });
+
+  it("queues no preparation while the switch is off or when nothing about the tools changed", async () => {
+    expect(await patch(connection({ classifierEnabled: false }), { mutedTools: [] })).toEqual([]);
+    expect(await patch(connection(), { name: "Renamed" })).toEqual([]);
   });
 });

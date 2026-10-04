@@ -8,6 +8,7 @@ import {
   INTEGRATION_CLASSIFIER_MAX_DESCRIPTION_CHARS,
   INTEGRATION_CLASSIFIER_MAX_IDENTIFIER_CHARS,
   INTEGRATION_CLASSIFIER_MAX_TEMPLATE_CHARS,
+  parseReviewedEntry,
   preparationEntry,
   preparationFailure,
   toolSortState,
@@ -396,6 +397,12 @@ export async function prepareClassifierTool(
     return failed("definition_too_large");
   }
 
+  // The arguments come from the schema alone, so a shape that can never be stored fails here,
+  // before the model is paid.
+  const definitionFingerprint = toolDefinitionFingerprint(tool);
+  const args = derivePreparationArguments(tool.inputSchema, headerParamNames(tool));
+  if (!storableEntry(definitionFingerprint, args, "-", "-")) return failed("unsupported_shape");
+
   const outcome = await port.runStructuredDraft(scopedDb, {
     model,
     schema: preparationDraftSchema(),
@@ -410,13 +417,31 @@ export async function prepareClassifierTool(
   const parsed = parsePreparationDraft(outcome.object);
   if (!parsed.ok) return failed("invalid_draft");
 
-  return {
-    kind: "prepared",
-    entry: {
-      definitionFingerprint: toolDefinitionFingerprint(tool),
-      description: parsed.value.description,
-      arguments: derivePreparationArguments(tool.inputSchema, headerParamNames(tool)),
-      replyTemplate: parsed.value.replyTemplate
-    }
+  const entry: PreparedEntry = {
+    definitionFingerprint,
+    description: parsed.value.description,
+    arguments: args,
+    replyTemplate: parsed.value.replyTemplate
   };
+  if (!storableEntry(entry.definitionFingerprint, args, entry.description, entry.replyTemplate)) {
+    return failed("unsupported_shape");
+  }
+  return { kind: "prepared", entry };
+}
+
+/** Whether an entry passes the same checks the stored read applies, so it is never dropped. */
+function storableEntry(
+  definitionFingerprint: string,
+  args: Record<string, IntegrationClassifierArgument>,
+  description: string,
+  replyTemplate: string
+): boolean {
+  return parseReviewedEntry({
+    optIn: true,
+    reviewedRisk: null,
+    description,
+    arguments: args,
+    replyTemplate,
+    reviewedFingerprint: definitionFingerprint
+  }).ok;
 }

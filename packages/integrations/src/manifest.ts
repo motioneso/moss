@@ -92,9 +92,9 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_classifier_preparation",
       description:
-        "Turning the classifier switch on prepares sorted tools in the background on the " +
-        "owner's model; a changed tool is prepared again. A tool whose text holds the " +
-        "credential is not sent. It costs model usage; a failed tool waits for Try again.",
+        "With the classifier switch on, sorted chat tools are prepared in the background on " +
+        "the owner's model, again when changed or switched on. A tool whose text holds the " +
+        "credential is not sent. A failed tool waits for Try again.",
       remediations: [
         {
           id: "integrations.connection_classifier_preparation.choose_chat_model",
@@ -116,6 +116,18 @@ export const integrationsModuleManifest = {
           class: "prerequisite",
           remediationRef: "integrations.connection_classifier_preparation.choose_chat_model",
           description: "The default chat model cannot produce the structured setup draft for tools."
+        },
+        {
+          code: "integrations.connection_classifier_preparation.unsupported_shape",
+          class: "validation",
+          description:
+            "A tool has more inputs or longer text than quick requests can hold, so it stays out."
+        },
+        {
+          code: "integrations.connection_classifier_preparation.too_many_tools",
+          class: "validation",
+          description:
+            "The connection already has the most prepared tools it can hold, so this one stays out."
         }
       ]
     },

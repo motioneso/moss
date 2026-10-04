@@ -11,6 +11,10 @@ import {
   type ClassifierPreparationPort,
   type PreparationChatModel
 } from "./classifier-preparation.js";
+import {
+  preparationHasRoom,
+  type ClassifierPreparationFailureReason
+} from "./classifier-settings.js";
 import { credentialMatcher, type CredentialMatcher } from "./classifier-sorting.js";
 import { loadClassifierCheckCredential, type IntegrationsCipherSources } from "./credentials.js";
 import { INTEGRATION_CLASSIFIER_PREPARE_QUEUE } from "./manifest.js";
@@ -158,6 +162,19 @@ export async function runClassifierPreparationJob(
       if (!row || !classifierActive(row)) return "switched_off" as const;
       const tool = targetsFor(row, op).find((candidate) => candidate.name === toolName);
       if (!tool) return "skipped" as const;
+      const fail = async (reason: ClassifierPreparationFailureReason) => {
+        await repository.saveClassifierPreparationFailure(scopedDb, connectionId, toolName, {
+          reason,
+          definitionFingerprint: toolDefinitionFingerprint(tool),
+          failedAt: now().toISOString()
+        });
+      };
+
+      // A full preparation store cannot take this tool, so it fails before any model charge.
+      if (!preparationHasRoom(row.classifierPreparation, toolName)) {
+        await fail("too_many_tools");
+        return "failed" as const;
+      }
 
       const outcome = await prepareClassifierTool(
         scopedDb,
@@ -175,13 +192,12 @@ export async function runClassifierPreparationJob(
           replyTemplate: outcome.entry.replyTemplate,
           reviewedFingerprint: outcome.entry.definitionFingerprint
         });
-        return saved.status === "saved" ? ("prepared" as const) : ("skipped" as const);
+        if (saved.status === "saved") return "prepared" as const;
+        if (saved.status !== "too_many") return "skipped" as const;
+        await fail("too_many_tools");
+        return "failed" as const;
       }
-      await repository.saveClassifierPreparationFailure(scopedDb, connectionId, toolName, {
-        reason: outcome.reason,
-        definitionFingerprint: toolDefinitionFingerprint(tool),
-        failedAt: now().toISOString()
-      });
+      await fail(outcome.reason);
       return outcome.reason === "provider_error"
         ? ("provider_error" as const)
         : ("failed" as const);

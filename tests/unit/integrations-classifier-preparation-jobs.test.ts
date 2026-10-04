@@ -6,7 +6,10 @@ import {
   emptyPreparationMap,
   emptySortMap,
   enqueueClassifierPreparation,
+  INTEGRATION_CLASSIFIER_MAX_ARGUMENTS,
+  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
+  parsePreparationMap,
   runClassifierPreparationJob,
   toolDefinitionFingerprint,
   toolRiskInputs,
@@ -87,17 +90,37 @@ function row(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
   };
 }
 
-/** A repository that applies the job's writes to one in-memory row. */
+/** Read the stored map the way the database read does: through JSON and the defensive parser. */
+function readBack(row: ConnectionRow): ConnectionRow {
+  return {
+    ...row,
+    classifierPreparation: parsePreparationMap(
+      JSON.parse(JSON.stringify(row.classifierPreparation))
+    )
+  };
+}
+
+/**
+ * A repository that applies the job's writes to one in-memory row. Reads go through the stored
+ * parser and saves keep the real entry cap, so an entry the database would drop is dropped here.
+ */
 function fakeRepository(initial: ConnectionRow) {
   const state = { row: initial };
   const failures: { toolName: string; failure: ClassifierPreparationFailure }[] = [];
   const repository = {
     getConnection: vi.fn(async (_db: DataContextDb, id: string) =>
-      id === state.row.id ? state.row : null
+      id === state.row.id ? readBack(state.row) : null
     ),
     loadCredentialEnvelope: vi.fn(async () => "envelope"),
     saveClassifierToolReview: vi.fn(
       async (_db: DataContextDb, _id: string, toolName: string, input: ReviewedEntryInput) => {
+        const entries = state.row.classifierPreparation.entries;
+        if (
+          !Object.prototype.hasOwnProperty.call(entries, toolName) &&
+          Object.keys(entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
+        ) {
+          return { status: "too_many" as const };
+        }
         state.row = {
           ...state.row,
           classifierPreparation: withPreparationEntry(state.row.classifierPreparation, toolName, {
@@ -133,7 +156,15 @@ function fakeRepository(initial: ConnectionRow) {
       }
     )
   };
-  return { state, failures, repository: repository as unknown as IntegrationsRepository };
+  return {
+    state: {
+      get row() {
+        return readBack(state.row);
+      }
+    },
+    failures,
+    repository: repository as unknown as IntegrationsRepository
+  };
 }
 
 function fakePort(): ClassifierPreparationPort & {
@@ -312,6 +343,70 @@ describe("runClassifierPreparationJob", () => {
     expect(outcome).toEqual({ status: "stopped", prepared: 0, failed: 1 });
     expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
     expect(failures.map((f) => f.failure.reason)).toEqual(["provider_error"]);
+  });
+
+  it("records a tool whose entry could never be stored, before any model call", async () => {
+    const properties: Record<string, unknown> = {};
+    for (let index = 0; index <= INTEGRATION_CLASSIFIER_MAX_ARGUMENTS; index += 1) {
+      properties[`field_${index}`] = { type: "string" };
+    }
+    const wide = discovered("wide", {
+      inputSchema: { type: "object", properties, required: Object.keys(properties) }
+    });
+    const first = await run(row({ discoveredTools: [wide] }));
+    expect(first.outcome).toEqual({ status: "prepared", prepared: 0, failed: 1 });
+    expect(first.port.runStructuredDraft).not.toHaveBeenCalled();
+    expect(first.failures.map((f) => f.failure.reason)).toEqual(["unsupported_shape"]);
+
+    const again = await run(first.state.row);
+    expect(again.outcome).toEqual({ status: "nothing_to_prepare" });
+    expect(again.port.runStructuredDraft).not.toHaveBeenCalled();
+  });
+
+  it("saves an entry that survives the stored read", async () => {
+    const { state } = await run(row());
+    const stored = parsePreparationMap(JSON.parse(JSON.stringify(state.row.classifierPreparation)));
+    expect(stored.entries.turn_on).toMatchObject({
+      description: "Turn one light on",
+      replyTemplate: "{summary}",
+      definitionFingerprint: toolDefinitionFingerprint(discovered("turn_on"))
+    });
+  });
+
+  it("records every tool past the preparation limit without paying for a draft", async () => {
+    const tools = Array.from({ length: INTEGRATION_CLASSIFIER_MAX_ENTRIES + 2 }, (_, index) =>
+      discovered(`tool_${index}`)
+    );
+    let preparation = emptyPreparationMap();
+    for (const tool of tools.slice(0, INTEGRATION_CLASSIFIER_MAX_ENTRIES)) {
+      preparation = withPreparationEntry(preparation, tool.name, {
+        optIn: true,
+        reviewedRisk: null,
+        description: "Prepared",
+        arguments: {},
+        replyTemplate: "{summary}",
+        definitionFingerprint: toolDefinitionFingerprint(tool),
+        reviewedAt: "2026-10-03T00:00:00.000Z",
+        preparationVersion: 1
+      });
+    }
+    const full = row({
+      discoveredTools: tools,
+      classifierPreparation: preparation,
+      enabledGroups: ["lights"]
+    });
+
+    const first = await run(full);
+    expect(first.port.runStructuredDraft).not.toHaveBeenCalled();
+    expect(first.outcome).toEqual({ status: "prepared", prepared: 0, failed: 2 });
+    expect(first.failures.map((f) => [f.toolName, f.failure.reason])).toEqual([
+      ["tool_200", "too_many_tools"],
+      ["tool_201", "too_many_tools"]
+    ]);
+
+    const again = await run(first.state.row);
+    expect(again.outcome).toEqual({ status: "nothing_to_prepare" });
+    expect(again.port.runStructuredDraft).not.toHaveBeenCalled();
   });
 
   it("makes no model call when no default chat model can draft", async () => {

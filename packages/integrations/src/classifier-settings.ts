@@ -63,12 +63,18 @@ export interface ClassifierPreparationMap {
   readonly failures?: Readonly<Record<string, ClassifierPreparationFailure>>;
 }
 
-/** Why automatic preparation failed. `unsafe` means the tool's text held the stored credential. */
+/**
+ * Why automatic preparation failed. `unsafe` means the tool's text held the stored credential.
+ * `unsupported_shape` means the prepared entry could never be stored, and `too_many_tools` means
+ * the connection already holds the most prepared tools it can store.
+ */
 export type ClassifierPreparationFailureReason =
   | "unsafe"
   | "provider_error"
   | "invalid_draft"
-  | "definition_too_large";
+  | "definition_too_large"
+  | "unsupported_shape"
+  | "too_many_tools";
 
 export interface ClassifierPreparationFailure {
   readonly reason: ClassifierPreparationFailureReason;
@@ -81,7 +87,9 @@ const PREPARATION_FAILURE_REASONS: readonly ClassifierPreparationFailureReason[]
   "unsafe",
   "provider_error",
   "invalid_draft",
-  "definition_too_large"
+  "definition_too_large",
+  "unsupported_shape",
+  "too_many_tools"
 ];
 
 /**
@@ -391,6 +399,14 @@ export function preparationFailure(
   return map.failures && Object.prototype.hasOwnProperty.call(map.failures, toolName)
     ? map.failures[toolName]
     : undefined;
+}
+
+/** Whether the map can take an entry for this tool: it replaces one, or the cap has room. */
+export function preparationHasRoom(map: ClassifierPreparationMap, toolName: string): boolean {
+  return (
+    preparationEntry(map, toolName) !== undefined ||
+    Object.keys(map.entries).length < INTEGRATION_CLASSIFIER_MAX_ENTRIES
+  );
 }
 
 /** Merge one reviewed entry, keeping at most the bounded number of entries. */

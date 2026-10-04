@@ -68,6 +68,9 @@ interface ClassifierToolParams extends IdParams {
   readonly toolName: string;
 }
 
+/** Patch fields that change which of a connection's tools chat can use. */
+const TOOL_CHOICE_FIELDS = ["enabledGroups", "enabledTools", "mutedTools", "unsuppressedTools"];
+
 export function registerIntegrationsRoutes(
   server: FastifyInstance,
   dependencies: IntegrationsRouteDependencies
@@ -109,6 +112,26 @@ export function registerIntegrationsRoutes(
       request.log.warn(
         { connectionId, error: error instanceof Error ? error.message : "unknown" },
         "integrations: could not queue tool sorting"
+      );
+    }
+  }
+
+  /**
+   * Queue preparation for tools that became available to chat. Failed tools still wait for the
+   * owner's Try again. A queue failure is logged; the next sort queues preparation again.
+   */
+  async function queuePreparation(
+    request: FastifyRequest,
+    actorUserId: string,
+    connectionId: string
+  ): Promise<void> {
+    if (!dependencies.boss) return;
+    try {
+      await enqueueClassifierPreparation(dependencies.boss, actorUserId, connectionId, "prepare");
+    } catch (error) {
+      request.log.warn(
+        { connectionId, error: error instanceof Error ? error.message : "unknown" },
+        "integrations: could not queue tool preparation"
       );
     }
   }
@@ -214,9 +237,12 @@ export function registerIntegrationsRoutes(
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
       candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
-      // Turning the switch on queues a sort, and every sort is followed by preparation.
+      // Turning the switch on queues a sort, and every sort is followed by preparation. With the
+      // switch already on, a change to which tools chat can use queues preparation alone.
       if (value.classifierEnabled === true) {
         await queueSort(request, accessContext.actorUserId, updated.id);
+      } else if (updated.classifierEnabled && TOOL_CHOICE_FIELDS.some((field) => field in value)) {
+        await queuePreparation(request, accessContext.actorUserId, updated.id);
       }
       return toDetail(updated, updated.discoveredTools);
     } catch (error) {
