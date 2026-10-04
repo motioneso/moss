@@ -200,20 +200,29 @@ test("the connection page groups sorted tools and controls sending without askin
     await expect(page.getByText(FIXTURE_LIGHT_TOOL).first()).toBeVisible({ timeout: 30_000 });
   });
 
-  await test.step("the worker sorts every tool with the real model", async () => {
-    await expect
-      .poll(
-        async () => {
-          const detail = await readDetail(page);
-          return detail.tools.every(
-            (tool) =>
-              detail.classifierTools.find((sort) => sort.toolName === tool.name)?.status ===
-              "current"
-          );
-        },
-        { timeout: 300_000, intervals: [5_000] }
+  await test.step("the open page picks up the finished sort without a reload", async () => {
+    // Connecting opens the new connection's page; it must fill in once the worker sorts,
+    // with no navigation. The marker would vanish on any reload.
+    await expect(page.getByRole("button", { name: "Back to connections" })).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { __r25Stayed?: boolean }).__r25Stayed = true;
+    });
+    const titles = page.locator(".intg-tools .pane__cardtitle");
+    console.log(
+      "2984 R2.5 sorted when the page opened:",
+      (await titles.filter({ hasText: "Sends things out" }).count()) > 0
+    );
+    await expect(titles.filter({ hasText: "Sends things out" })).toHaveCount(1, {
+      timeout: 300_000
+    });
+    await expect(page.getByText("Not sorted yet", { exact: true })).toHaveCount(0, {
+      timeout: 60_000
+    });
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __r25Stayed?: boolean }).__r25Stayed === true
       )
-      .toBe(true);
+    ).toBe(true);
     const detail = await readDetail(page);
     console.log(
       "2984 R2.5 sorts:",
@@ -227,8 +236,6 @@ test("the connection page groups sorted tools and controls sending without askin
     page.getByText(`${on} of ${total} on, ${ask} always ask`, { exact: true });
 
   await test.step("the page fills the settings area, with the rail and grouped tools", async () => {
-    const id = await connectionId(page);
-    await page.goto(`${requireUatBaseURL()}/settings?section=connections&integration=${id}`);
     await expect(page.getByRole("button", { name: "Back to connections" })).toBeVisible();
     await expect(page.getByRole("heading", { name: CONNECTION_NAME })).toBeVisible();
     await expect(page.locator(".set2--wide")).toHaveCount(1);

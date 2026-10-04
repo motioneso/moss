@@ -175,7 +175,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "before they run and that YOLO mode skips the asking. Every tool starts on, except on an " +
       "app with a lot of tools, where they start off. Tools are grouped by what they do: Looks " +
       "things up, Changes things, Sends things out, Sensitive, and Not sorted yet; before Moss " +
-      "has sorted them they show A to Z with a note saying so, and the owner can switch between " +
+      "has sorted them they show A to Z with a note saying so, and the open page fills in the " +
+      "groups by itself once sorting finishes. The owner can switch between " +
       "By what it does and A to Z. A search box and an All, On or Off filter narrow the list; a " +
       "long group shows six tools and a Show more link. Each tool has its own on or off switch, " +
       "and each group has Turn all off (Turn all on when every tool in it is off). Tools that " +
