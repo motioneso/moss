@@ -1,0 +1,244 @@
+// @vitest-environment jsdom
+// Connection page state (#2984 R2.5): overlapping tool changes keep every click, and an open
+// page picks up a finished sort without a reload.
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type {
+  IntegrationClassifierRisk,
+  IntegrationClassifierToolSort,
+  IntegrationDetail,
+  UpdateIntegrationRequest
+} from "@moss/shared";
+
+const api = vi.hoisted(() => ({
+  getIntegration: vi.fn(),
+  updateIntegration: vi.fn(),
+  setIntegrationSendWithoutAsking: vi.fn()
+}));
+
+vi.mock("../../apps/web/src/api/client.js", () => api);
+
+import {
+  SORT_POLL_MS,
+  useIntegrationDetail
+} from "../../apps/web/src/settings/integration-detail-state.js";
+
+type Deferred = { resolve: (value: unknown) => void };
+
+function sorted(
+  toolName: string,
+  risk: IntegrationClassifierRisk | null,
+  status: IntegrationClassifierToolSort["status"] = "current"
+): IntegrationClassifierToolSort {
+  return {
+    toolName,
+    status,
+    risk: status === "current" ? risk : null,
+    failure: null,
+    sendWithoutAsking: false,
+    asksFirst: status !== "current" || risk === "outbound" || risk === "destructive"
+  };
+}
+
+function detail(overrides: Partial<IntegrationDetail> = {}): IntegrationDetail {
+  return {
+    id: "conn-1",
+    name: "Hub",
+    kind: "mcp",
+    url: "http://hub.test/mcp",
+    enabled: true,
+    hasCredential: false,
+    toolCount: 4,
+    enabledToolCount: 4,
+    lastDiscoveryAt: null,
+    lastError: null,
+    credentialPlacement: null,
+    tools: ["read_a", "read_b", "send_a", "send_b"].map((name) => ({
+      name,
+      description: "",
+      group: "",
+      inputSchema: null
+    })),
+    groups: [],
+    enabledGroups: [],
+    enabledTools: [],
+    mutedTools: [],
+    unsuppressedTools: [],
+    groupOptIn: false,
+    specPasted: false,
+    classifierEnabled: false,
+    classifierPreparation: [],
+    classifierTools: [
+      sorted("read_a", "read"),
+      sorted("read_b", "read"),
+      sorted("send_a", "outbound"),
+      sorted("send_b", "outbound")
+    ],
+    ...overrides
+  };
+}
+
+let state: ReturnType<typeof useIntegrationDetail> | undefined;
+let renderer: ReactTestRenderer | undefined;
+let client: QueryClient;
+const onError = vi.fn();
+
+function Harness() {
+  state = useIntegrationDetail("conn-1", onError);
+  return null;
+}
+
+async function mount(): Promise<void> {
+  client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
+  await act(async () => {
+    renderer = create(createElement(QueryClientProvider, { client }, createElement(Harness)));
+  });
+  await act(async () => {
+    await vi.waitFor(() => expect(state?.detailQuery.data).toBeDefined());
+  });
+}
+
+function shown(): IntegrationDetail {
+  return state!.detailQuery.data!;
+}
+
+beforeEach(() => {
+  api.getIntegration.mockReset();
+  api.updateIntegration.mockReset();
+  api.setIntegrationSendWithoutAsking.mockReset();
+  onError.mockReset();
+});
+
+afterEach(() => {
+  act(() => renderer?.unmount());
+  renderer = undefined;
+  state = undefined;
+  client?.clear();
+  vi.useRealTimers();
+});
+
+describe("useIntegrationDetail overlapping changes", () => {
+  it("keeps both groups off when a second group is turned off before the first answer", async () => {
+    // The server stores what each request sends, the way its replace-the-lists update does.
+    let stored = detail();
+    api.getIntegration.mockImplementation(async () => stored);
+    const answers: Deferred[] = [];
+    api.updateIntegration.mockImplementation(
+      (_id: string, body: UpdateIntegrationRequest) =>
+        new Promise((resolve) => {
+          answers.push({
+            resolve: () => {
+              stored = { ...stored, ...body } as IntegrationDetail;
+              resolve(stored);
+            }
+          });
+        })
+    );
+    await mount();
+
+    act(() => state!.setToolsOn(["send_a", "send_b"], false));
+    act(() => state!.setToolsOn(["read_a", "read_b"], false));
+    expect(shown().mutedTools).toEqual(["send_a", "send_b", "read_a", "read_b"]);
+
+    await act(async () => {
+      await vi.waitFor(() => expect(answers).toHaveLength(1));
+      answers[0]!.resolve(undefined);
+      await vi.waitFor(() => expect(answers).toHaveLength(2));
+      answers[1]!.resolve(undefined);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(api.getIntegration).toHaveBeenCalledTimes(2));
+    });
+
+    expect(api.updateIntegration.mock.calls.map(([, body]) => body.mutedTools)).toEqual([
+      ["send_a", "send_b"],
+      ["send_a", "send_b", "read_a", "read_b"]
+    ]);
+    expect(stored.mutedTools).toEqual(["send_a", "send_b", "read_a", "read_b"]);
+    expect(shown().mutedTools).toEqual(["send_a", "send_b", "read_a", "read_b"]);
+  });
+
+  it("sends allow and ask for one tool in click order, so the newer click wins", async () => {
+    let stored = detail();
+    api.getIntegration.mockImplementation(async () => stored);
+    const answers: Deferred[] = [];
+    api.setIntegrationSendWithoutAsking.mockImplementation(
+      (_id: string, body: { allow: boolean; toolNames: string[] }) =>
+        new Promise((resolve) => {
+          answers.push({
+            resolve: () => {
+              stored = {
+                ...stored,
+                classifierTools: stored.classifierTools.map((tool) =>
+                  body.toolNames.includes(tool.toolName)
+                    ? { ...tool, sendWithoutAsking: body.allow, asksFirst: !body.allow }
+                    : tool
+                )
+              };
+              resolve(stored);
+            }
+          });
+        })
+    );
+    await mount();
+
+    act(() => state!.setSendWithoutAsking(["send_a", "send_b"], true));
+    act(() => state!.setSendWithoutAsking(["send_a"], false));
+    const sendA = () => shown().classifierTools.find((tool) => tool.toolName === "send_a")!;
+    expect(sendA()).toMatchObject({ sendWithoutAsking: false, asksFirst: true });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(answers).toHaveLength(1));
+      // Only one request is out at a time, so the first answer cannot land after the second.
+      expect(api.setIntegrationSendWithoutAsking).toHaveBeenCalledTimes(1);
+      answers[0]!.resolve(undefined);
+      await vi.waitFor(() => expect(answers).toHaveLength(2));
+      answers[1]!.resolve(undefined);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(api.getIntegration).toHaveBeenCalledTimes(2));
+    });
+
+    expect(sendA()).toMatchObject({ sendWithoutAsking: false, asksFirst: true });
+    expect(shown().classifierTools.find((tool) => tool.toolName === "send_b")).toMatchObject({
+      sendWithoutAsking: true
+    });
+  });
+});
+
+describe("useIntegrationDetail sorting", () => {
+  it("picks up a finished sort on the open page, then stops re-reading", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const waiting = detail({
+      classifierTools: [
+        sorted("read_a", null, "never_tried"),
+        sorted("read_b", null, "never_tried"),
+        sorted("send_a", null, "never_tried"),
+        sorted("send_b", null, "never_tried")
+      ]
+    });
+    let stored = waiting;
+    api.getIntegration.mockImplementation(async () => stored);
+    await mount();
+    expect(shown().classifierTools.every((tool) => tool.status === "never_tried")).toBe(true);
+
+    stored = detail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS);
+    });
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(shown().classifierTools.every((tool) => tool.status === "current")).toBe(true)
+      );
+    });
+
+    const reads = api.getIntegration.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 3);
+    });
+    expect(api.getIntegration).toHaveBeenCalledTimes(reads);
+  });
+});

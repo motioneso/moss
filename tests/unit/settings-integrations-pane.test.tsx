@@ -31,7 +31,8 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   deleteIntegration: vi.fn(),
   prepareIntegrationClassifierTools: vi.fn(),
   saveIntegrationClassifierTool: vi.fn(),
-  removeIntegrationClassifierTool: vi.fn()
+  removeIntegrationClassifierTool: vi.fn(),
+  setIntegrationSendWithoutAsking: vi.fn()
 }));
 
 vi.mock("../../apps/web/src/settings/settings-feedback.js", () => ({
@@ -86,125 +87,105 @@ function baseDetail(overrides: Partial<IntegrationDetail> = {}): IntegrationDeta
   };
 }
 
-describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
-  it("shows the fresh-opt-in note when grouping just turned on and nothing is enabled yet", () => {
-    currentDetail.value = baseDetail({
-      groupOptIn: true,
-      enabledGroups: [],
-      enabledTools: [],
-      tools: [tool({ readOnly: true })]
-    });
+describe("SettingsIntegrationsPane connection detail (#2984 R2.5)", () => {
+  it("opens with Back to connections, the app's name and its host", () => {
+    currentDetail.value = baseDetail();
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
-    expect(html).toContain("Groups start off. Turn on the ones Moss should use.");
-    expect(html).not.toContain("kept everything enabled before grouping existed");
+    expect(html).toContain("Back to connections");
+    expect(html).toContain("Home Assistant");
+    expect(html).toContain("homeassistant.local:8123");
   });
 
-  it("shows the grandfathered note instead when the connection was already fully enabled", () => {
-    currentDetail.value = baseDetail({
-      groupOptIn: true,
-      enabledGroups: [],
-      enabledTools: ["ToolA", "ToolB"],
-      tools: [tool({ readOnly: true })]
-    });
+  it("shows the connection rail: use switch, status, how it connects and the tool count", () => {
+    currentDetail.value = baseDetail();
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
-    expect(html).toContain("kept everything enabled before grouping existed");
-    expect(html).not.toContain("Groups start off. Turn on the ones Moss should use.");
+    expect(switchState(html, "Use Home Assistant")).toBe("on");
+    expect(html).toContain("Connected");
+    expect(html).toContain("Tool server");
+    expect(html).toContain("Check for new tools");
+    expect(html).toContain("Remove");
   });
 
-  it("shows the refresh-for-hints note when every tool predates read/repeat hints", () => {
+  it("says it can't reach the app and offers Check again when discovery failed", () => {
+    currentDetail.value = baseDetail({ lastError: "Connection refused" });
+
+    const html = renderToString(createElement(SettingsIntegrationsPane));
+
+    expect(html).toContain("Can&#x27;t reach it");
+    expect(html).toContain("Connection refused");
+    expect(html).toContain("Check again");
+  });
+
+  it("shows Off when the connection is switched off", () => {
+    currentDetail.value = baseDetail({ enabled: false, lastError: "Connection refused" });
+
+    const html = renderToString(createElement(SettingsIntegrationsPane));
+
+    expect(switchState(html, "Use Home Assistant")).toBe("off");
+    expect(html).not.toContain("Can&#x27;t reach it");
+  });
+
+  it("hides Check for new tools when the spec was pasted", () => {
+    currentDetail.value = baseDetail({ kind: "openapi", specPasted: true });
+
+    const html = renderToString(createElement(SettingsIntegrationsPane));
+
+    expect(html).toContain("Web service");
+    expect(html).not.toContain("Check for new tools");
+  });
+
+  it("tells a many-tool app that its tools start off", () => {
+    currentDetail.value = baseDetail({ groupOptIn: true, tools: [tool({ readOnly: true })] });
+
+    const html = renderToString(createElement(SettingsIntegrationsPane));
+
+    expect(html).toContain("This app has a lot of tools, so they start off.");
+    expect(html).not.toContain("Every tool starts on.");
+  });
+
+  it("shows the hints note when every tool predates read/repeat hints", () => {
     currentDetail.value = baseDetail({
       tools: [tool({ readOnly: undefined, idempotent: undefined, destructive: undefined })]
     });
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
-    expect(html).toContain("Refresh tools rereads what");
-    expect(html).toContain("says about each tool");
+    expect(html).toContain("Check for new tools rereads what");
   });
 
-  it("does not show the refresh-for-hints note once any tool has a hint", () => {
-    currentDetail.value = baseDetail({
-      tools: [tool({ readOnly: true })]
-    });
+  it("does not show the hints note once any tool has a hint", () => {
+    currentDetail.value = baseDetail({ tools: [tool({ readOnly: true })] });
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 
-    expect(html).not.toContain("Refresh tools rereads");
+    expect(html).not.toContain("rereads what");
   });
 
-  it("renders only the on/off switch, no repeat-call switch, for each tool in the flat (ungrouped) list", () => {
-    currentDetail.value = baseDetail({
-      groupOptIn: false,
-      tools: [tool({ name: "ToolA" })]
-    });
-
-    const html = renderToString(createElement(SettingsIntegrationsPane));
-
-    expect(html).toContain("Enable ToolA");
-    expect(html).not.toContain("repeated");
-  });
-
-  it("renders only the on/off switch, no repeat-call switch, for each tool in the grouped list", () => {
-    currentDetail.value = baseDetail({
-      groupOptIn: true,
-      enabledGroups: ["Group A"],
-      tools: [tool({ name: "ToolA", group: "Group A" })]
-    });
-
-    const html = renderToString(createElement(SettingsIntegrationsPane));
-
-    expect(html).toContain("Enable ToolA");
-    expect(html).not.toContain("repeated");
-  });
-
-  it("shows the Other group switch off when every tool in it is off, and on when every tool is on (#2986)", () => {
-    const tools = [
-      tool({ name: "send", group: "Other" }),
-      tool({ name: "reply", group: "Other" }),
-      tool({ name: "list_a", group: "list" })
-    ];
-    // Agentmail shape: the server lists Other in enabledGroups but reports it not enabled.
+  it("reads a tool in an app group as on or off the way the server does (#2986)", () => {
+    const tools = [tool({ name: "send", group: "Other" }), tool({ name: "list_a", group: "list" })];
     currentDetail.value = baseDetail({
       groupOptIn: true,
       tools,
       groups: [
         { name: "list", toolCount: 1, enabled: true },
-        { name: "Other", toolCount: 2, enabled: false }
+        { name: "Other", toolCount: 1, enabled: false }
       ],
-      enabledGroups: ["list", "Other"],
-      enabledTools: [],
-      mutedTools: []
+      enabledGroups: ["list", "Other"]
     });
-    const off = renderToString(createElement(SettingsIntegrationsPane));
-    expect(switchState(off, "Enable group Other")).toBe("off");
-    expect(switchState(off, "Enable send")).toBe("off");
-    expect(switchState(off, "Enable group list")).toBe("on");
 
-    // Home Assistant shape: every tool picked explicitly, no group enabled.
-    currentDetail.value = baseDetail({
-      groupOptIn: true,
-      tools,
-      groups: [
-        { name: "list", toolCount: 1, enabled: false },
-        { name: "Other", toolCount: 2, enabled: false }
-      ],
-      enabledGroups: [],
-      enabledTools: ["send", "reply", "list_a"],
-      mutedTools: []
-    });
-    const on = renderToString(createElement(SettingsIntegrationsPane));
-    expect(switchState(on, "Enable group Other")).toBe("on");
-    expect(switchState(on, "Enable group list")).toBe("on");
+    const html = renderToString(createElement(SettingsIntegrationsPane));
+
+    expect(switchState(html, "Enable send")).toBe("off");
+    expect(switchState(html, "Enable list_a")).toBe("on");
+    expect(html).not.toContain("Enable group");
   });
 
-  it("mounts the classifier section without changing the ordinary tool controls (#2899)", () => {
-    currentDetail.value = baseDetail({
-      tools: [tool({ name: "ToolA" })]
-    });
+  it("mounts the classifier section beside the tool controls (#2899)", () => {
+    currentDetail.value = baseDetail({ tools: [tool({ name: "ToolA" })] });
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
 

@@ -310,7 +310,10 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     expect(callsBeforeReconnect, "approving made no model call").toBe(callsAfterPrepare);
     const listRequestsBefore = fixtureState().toolListRequests;
     // Rediscover from the server.
-    await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
+    await page
+      .getByRole("button", { name: /^(Check for new tools|Check again)$/ })
+      .first()
+      .click();
     await expect.poll(() => fixtureState().toolListRequests).toBeGreaterThan(listRequestsBefore);
     // Classifier off then on.
     const classifierSwitch = page.getByLabel("Let the classifier use this connection");
@@ -385,7 +388,10 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
     });
     control("POST", "/__control/tools", changed);
     await openConnection(page);
-    await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
+    await page
+      .getByRole("button", { name: /^(Check for new tools|Check again)$/ })
+      .first()
+      .click();
     await expect
       .poll(async () => (await connectionDetail(page)).tools.map((tool) => tool.name))
       .toContain("dim_light");
@@ -432,11 +438,17 @@ test("classifier setup on the real integrations screen (#2936)", async ({ page, 
   await test.step("an empty tool list removes eligibility", async () => {
     control("POST", "/__control/tools", []);
     await openConnection(page);
-    await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
+    await page
+      .getByRole("button", { name: /^(Check for new tools|Check again)$/ })
+      .first()
+      .click();
     await expect.poll(async () => (await connectionDetail(page)).tools.length).toBe(0);
     expect(resolveMenu(await connectionDetail(page))).toEqual([]);
     control("POST", "/__control/reset");
-    await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
+    await page
+      .getByRole("button", { name: /^(Check for new tools|Check again)$/ })
+      .first()
+      .click();
     await expect.poll(async () => (await connectionDetail(page)).tools.length).toBeGreaterThan(0);
   });
 

@@ -488,6 +488,9 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const navRef = useRef<HTMLElement>(null);
   // Phone: no ?section= means the person has not chosen yet, so show the whole list.
   const nothingChosen = !requested;
+  // One open connection takes the full width: no section list, its own Back link instead.
+  const openIntegration = searchParams.get("integration");
+  const wide = activeSection.id === "connections" && !!openIntegration && openIntegration !== "new";
 
   // The open sheet behaves like a dialog: focus moves in, Tab stays in, Escape closes, the page
   // behind is inert, and focus returns to the picker bar.
@@ -593,7 +596,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
 
   return (
     <FeedbackProvider>
-      <div className={`set2${nothingChosen ? " set2--nolist" : ""}`}>
+      <div className={`set2${nothingChosen ? " set2--nolist" : ""}${wide ? " set2--wide" : ""}`}>
         <div className="set2__mast">
           <h1 className="set2__masttitle">Settings</h1>
           <div className="set2__bar">

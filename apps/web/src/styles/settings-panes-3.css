@@ -849,3 +849,91 @@
   display: inline-flex;
   align-items: center;
 }
+
+/* ---- One connection, full width (#2984 R2.5) ----
+   Layout only: text and colour come from @moss/ui and settings-ui. */
+.intg-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 0 44px;
+  align-items: start;
+  margin-top: var(--space-6);
+}
+.intg-detail__main {
+  min-width: 0;
+}
+.intg-detail__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.intg-tools .pane__desc {
+  margin-bottom: var(--space-3);
+}
+.intg-tools__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.intg-tools__search {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.intg-tools__acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-5);
+}
+.intg-tools__ctl {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.intg-tools__ctl .jds-badge {
+  gap: var(--space-1);
+}
+.intg-tools__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+.intg-tools__more {
+  padding: var(--space-3) 0;
+}
+@media (max-width: 960px) {
+  .intg-detail {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+  .intg-detail__rail {
+    grid-row: 1;
+  }
+}
+@media (max-width: 640px) {
+  .intg-tools .pane__cardhead {
+    flex-wrap: wrap;
+  }
+  .intg-tools .pane__cardaction {
+    flex: 1 1 100%;
+  }
+  .intg-tools__acts {
+    justify-content: flex-start;
+  }
+
+  /* A long name or extra marks drop the controls under the text. */
+  .intg-tools .set-row {
+    flex-wrap: wrap;
+    row-gap: var(--space-3);
+  }
+  .intg-tools .set-row__main {
+    flex: 1 1 160px;
+  }
+  .intg-tools .set-row__name {
+    overflow-wrap: anywhere;
+  }
+}
