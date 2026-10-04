@@ -176,7 +176,7 @@ svg.i { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stro
 /* ---------- Mockup 2 and 4: a connection's own screen ---------- */
 
 .crumb { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--ink-2); }
-.crumb a { color:var(--accent-fg); text-decoration:none; font-weight:600; }
+.crumb a { display:inline-flex; align-items:center; gap:6px; color:var(--accent-fg); text-decoration:none; font-weight:600; }
 .dmh { display:flex; align-items:center; gap:18px; margin-top:16px; padding-bottom:22px; border-bottom:1px solid var(--line-strong); }
 .dmh__title { font-family:var(--font-display); font-weight:900; font-size:40px; word-spacing:.12em; letter-spacing:-.022em; line-height:1; margin:0; }
 .dmh__sub { margin-top:8px; font-size:13.5px; color:var(--ink-2); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -194,6 +194,7 @@ svg.i { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stro
 .grp__count { font-size:12.5px; color:var(--text-faint); font-variant-numeric:tabular-nums; }
 .grp__head .linkbtn { margin-left:auto; }
 .grp__help { padding:8px 12px 0; font-size:12.5px; color:var(--ink-2); }
+.sortnote { display:flex; align-items:baseline; gap:12px; padding:12px; border-bottom:2px solid var(--ink); font-size:13px; color:var(--ink-2); }
 .grp__more { padding:12px; font-size:13px; border-bottom:1px solid var(--line); }
 .grp__more .linkbtn { font-size:13px; }
 
@@ -318,6 +319,7 @@ svg.i { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stro
   .seg span { padding:6px 10px; }
   .grp__head { padding:0 0 8px; flex-wrap:wrap; row-gap:4px; }
   .grp__help { padding:8px 0 0; }
+  .sortnote { padding:10px 0; flex-wrap:wrap; row-gap:6px; }
   .grp__more { padding:12px 0; }
   .tool { grid-template-columns:minmax(0,1fr) 38px; gap:6px 12px; padding:14px 0; }
   .tool__id { grid-column:1; grid-row:1; }
