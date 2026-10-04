@@ -106,6 +106,8 @@ None.
 
 ## Reaped sessions
 
+- w1:p12R "Research virtual desktop (Opus)" (research-virtual-desktop) - report ~/moss-research/2026-10-04-virtual-desktop-for-moss.md (outside the repo); closed by relay 8.
+
 - w1:p12E "Coordinator (old)" (session 18a6b85a, relay 7) - drove run to RELAY POINT 8 after merging PR #2991; closed by relay 8 (session 32206ccd) after session id verified.
 
 - w1:p11B "2942 mid-chat tools (Opus)" (opus-2942) - built PR #2974, merged a1369fbed; closed, worktree removed (reap check: REAPABLE, gates clear; ahead=13), branch deleted local+remote.
@@ -328,3 +330,5 @@ merges_since_relay 1 (PR #2991). Ben asleep; his 21:35 merge interpretation gove
 ## Relay 8 adopted (session 32206ccd, pane w1:p12T)
 
 - Lock taken, old coordinator w1:p12E closed (session 18a6b85a verified). merges_since_relay 0. RELAY POINT 8 steps 1-5 govern.
+- Virtual desktop research done: recommends borrowing an open-source browser tool inside Moss's own isolation and confirmations, no full desktop yet; first step a two-day throwaway trial outside the repo. Pane w1:p12R closed.
+- QA 2976 round 3 (w1:p12H) told to post its new blocking gap to the PR now (pane near auto-compact); branch browser reruns queued behind main runs. Self-knowledge research still running. Background watcher armed on ~/.needs-ben/replies/.
