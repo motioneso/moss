@@ -15,6 +15,9 @@ import {
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
+// Repository live-path proof uses executable assertions and bounded text only.
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 const exec = promisify(execFile);
 

@@ -3,6 +3,9 @@ import { expect, test } from "@playwright/test";
 import type { MeetingCapturePreferences, MeetingRecord } from "@moss/shared";
 import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
+// Repository live-path proof uses executable assertions and bounded text only.
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 // Real browser + API only. Never run against a personal database; deletes only this test's draft.
