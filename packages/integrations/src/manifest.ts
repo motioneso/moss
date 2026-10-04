@@ -29,7 +29,8 @@ export const integrationsModuleManifest = {
     { method: "PUT", path: "/api/integrations/:id/classifier/tools/:toolName" },
     { method: "DELETE", path: "/api/integrations/:id/classifier/tools/:toolName" },
     { method: "POST", path: "/api/integrations/:id/classifier/prepare" },
-    { method: "POST", path: "/api/integrations/:id/classifier/sort" }
+    { method: "POST", path: "/api/integrations/:id/classifier/sort" },
+    { method: "PUT", path: "/api/integrations/:id/classifier/send-without-asking" }
   ],
   jobs: [{ queueName: INTEGRATION_CLASSIFIER_SORT_QUEUE, metadataOnly: true }],
   dataLifecycle: {
@@ -46,6 +47,13 @@ export const integrationsModuleManifest = {
         "When a connection is added or refreshed, the owner's chat model sorts each tool by what " +
         "it does and names it. A tool whose text holds the credential is not sent; delete is " +
         "always sensitive; failed tools wait for Try again."
+    },
+    {
+      id: "integrations.connection_tools_ask_first",
+      description:
+        "Outside YOLO, connected tools sorted as Looks things up or Changes things run without " +
+        "asking. Sends things out asks until the owner allows it. Sensitive, unsorted, failed and " +
+        "changed tools always ask; the detail shows which ask first."
     },
     {
       // #2956: the Activity history line title for the background tool-sorting call.

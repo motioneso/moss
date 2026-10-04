@@ -4,6 +4,7 @@ import type {
   IntegrationClassifierPreparationState,
   IntegrationClassifierRisk,
   IntegrationClassifierToolPreparation,
+  IntegrationClassifierToolSort,
   IntegrationToolDescriptor
 } from "@moss/shared";
 
@@ -726,4 +727,35 @@ export function withoutStaleSendChoices(
     entries[toolName] = { ...entry, sendWithoutAsking: false };
   }
   return entries ? { version: INTEGRATION_CLASSIFIER_SORT_VERSION, entries } : map;
+}
+
+/**
+ * Whether a connected tool runs in chat without asking (spec 8.3): a current sort of Looks things
+ * up or Changes things, or Sends things out with the owner's choice. Sensitive, never tried, failed
+ * and stale sorts ask, and a send choice on any group but Sends things out is ignored.
+ */
+export function toolRunsWithoutAsking(map: ClassifierSortMap, tool: RiskInputSource): boolean {
+  const state = toolSortState(map, tool);
+  if (state.status !== "current") return false;
+  if (state.risk === "read" || state.risk === "write") return true;
+  return state.risk === "outbound" && state.sendWithoutAsking;
+}
+
+/** The API view: each discovered tool's sort against its current risk inputs, and whether it asks. */
+export function classifierSortView(
+  map: ClassifierSortMap,
+  tools: readonly RiskInputSource[]
+): IntegrationClassifierToolSort[] {
+  return tools.map((tool) => {
+    const state = toolSortState(map, tool);
+    const current = state.status === "current";
+    return {
+      toolName: tool.name,
+      status: state.status,
+      risk: current ? state.risk : null,
+      failure: state.status === "failed" ? state.failure : null,
+      sendWithoutAsking: current && state.sendWithoutAsking,
+      asksFirst: !toolRunsWithoutAsking(map, tool)
+    };
+  });
 }

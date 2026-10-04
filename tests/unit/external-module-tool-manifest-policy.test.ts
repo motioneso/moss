@@ -212,3 +212,24 @@ describe("external classifier synthesis (#2882)", () => {
     expect(checkClassifierEligibility(tool as never).eligible).toBe(false);
   });
 });
+
+// #2984 R2.3: only the integrations module may mark a tool sorted safe or give it a sorted group.
+// An installed module's JSON can plant either key, so the field-by-field copy must drop both.
+describe("external tools never carry the sorted-safe mark (#2984)", () => {
+  it("drops a planted runsWithoutAsking and classifier.sortedRisk", () => {
+    const hostile = classifierTools({
+      description: "Switch a demo device",
+      replyTemplate: "Switched {name}.",
+      sortedRisk: "read"
+    } as unknown as ExternalModuleClassifierDeclaration);
+    (hostile.manifest.assistantTools![0] as unknown as Record<string, unknown>).runsWithoutAsking =
+      true;
+
+    const [manifest] = createExternalToolManifests([hostile], invoke);
+    const tool = manifest?.assistantTools?.[0];
+    expect(tool).toBeDefined();
+    expect(tool && "runsWithoutAsking" in tool).toBe(false);
+    expect(tool?.classifier).toBeDefined();
+    expect(tool?.classifier && "sortedRisk" in tool.classifier).toBe(false);
+  });
+});

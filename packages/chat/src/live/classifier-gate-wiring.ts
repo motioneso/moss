@@ -57,6 +57,15 @@ function isClassifierCapable(tool: ClassifierCapableTool): boolean {
   return typeof tool.execute === "function" && tool.classifier !== undefined;
 }
 
+/**
+ * A connected tool's sorted group sets its confidence bar (spec 8.3). Only an external tool's
+ * declaration is read, and never to `read`, so a tool the gate may act on keeps mutating handling.
+ */
+function gateRisk(tool: ClassifierCapableTool): GateTool["risk"] {
+  const sorted = tool.classifier?.sortedRisk;
+  return tool.isExternal === true && sorted !== undefined && sorted !== "read" ? sorted : tool.risk;
+}
+
 function asGateTool(
   manifest: MossModuleManifest,
   tool: ClassifierCapableTool,
@@ -66,7 +75,7 @@ function asGateTool(
     moduleId: manifest.id,
     moduleDescription: description,
     name: tool.name,
-    risk: tool.risk,
+    risk: gateRisk(tool),
     inputSchema: tool.inputSchema,
     outputSchema: tool.outputSchema,
     classifier: tool.classifier

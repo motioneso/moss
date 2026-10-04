@@ -87,6 +87,32 @@ export interface SaveIntegrationClassifierToolRequest {
   readonly reviewedFingerprint: string;
 }
 
+/** A tool's sort as read against its current definition (#2984). Anything but `current` asks. */
+export type IntegrationClassifierSortStatus = "current" | "stale" | "failed" | "never_tried";
+
+/** One discovered tool's sort and whether chat asks before running it (spec 8.3, #2984). */
+export interface IntegrationClassifierToolSort {
+  readonly toolName: string;
+  readonly status: IntegrationClassifierSortStatus;
+  /** The sorted group as its risk. Set only when `status` is `current`. */
+  readonly risk: IntegrationClassifierRisk | null;
+  /** `unsafe`: the tool's text held the stored credential, so it was not sent. Set only when failed. */
+  readonly failure: "error" | "unsafe" | null;
+  /** The owner allowed this Sends things out tool to run without asking. */
+  readonly sendWithoutAsking: boolean;
+  /** Ordinary chat shows an approval card before running this tool, unless YOLO mode is on. */
+  readonly asksFirst: boolean;
+}
+
+/**
+ * Body for `PUT /api/integrations/:id/classifier/send-without-asking` (#2984). `allow: true` lets
+ * the named Sends things out tools run without asking, all or nothing; `allow: false` clears them.
+ */
+export interface SetIntegrationSendWithoutAskingRequest {
+  readonly allow: boolean;
+  readonly toolNames: readonly string[];
+}
+
 export interface IntegrationDetail extends IntegrationSummary {
   readonly credentialPlacement: CredentialPlacement | null;
   readonly tools: readonly IntegrationToolDescriptor[];
@@ -104,6 +130,8 @@ export interface IntegrationDetail extends IntegrationSummary {
   readonly classifierEnabled: boolean;
   /** Owner-reviewed classifier preparation, one entry per reviewed discovered tool. */
   readonly classifierPreparation: readonly IntegrationClassifierToolPreparation[];
+  /** One entry per discovered tool, in discovered order (#2984). */
+  readonly classifierTools: readonly IntegrationClassifierToolSort[];
 }
 
 export interface CreateIntegrationRequest {

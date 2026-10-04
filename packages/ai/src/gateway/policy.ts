@@ -26,15 +26,21 @@ export interface AgencyPrefLookup {
  * for this specific call (`confirmOverride`, computed by the caller before this function runs —
  * see gateway.ts's `computeConfirmOverride` — so this module stays DB-free), even when the
  * tool's family has been promoted to trusted_auto.
+ *
+ * `sortedSafe` is the connected tool's `runsWithoutAsking` result for this call (#2984, spec 8.3),
+ * also computed by the caller. It runs an external tool unless a confirmation override applies,
+ * so a first-party outbound tool still confirms.
  */
 export async function resolvePolicy(
   tool: ModuleAssistantToolManifest,
   moduleId: string,
   confirmOverride: boolean,
-  lookup: ActionPolicyLookup
+  lookup: ActionPolicyLookup,
+  sortedSafe = false
 ): Promise<PolicyDecision> {
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
+  if (sortedSafe && tool.isExternal === true) return confirmOverride ? "confirm" : "run";
   if (tool.risk === "outbound") return "confirm";
   if (confirmOverride) return "confirm";
 

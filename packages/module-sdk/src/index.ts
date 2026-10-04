@@ -177,6 +177,17 @@ export type ToolRequiresConfirmation = (
 ) => boolean | Promise<boolean>;
 
 /**
+ * Per-call check that a connected tool may run without an approval card (#2984, spec 8.3). Read at
+ * call time under the actor's own data context. The gateway honours it only on a tool whose
+ * `isExternal` is `true`, never on a destructive one, and never against a confirmation override.
+ * It MUST fail closed: a throw resolves to `false` (ask).
+ */
+export type ToolRunsWithoutAsking = (
+  scopedDb: unknown,
+  ctx: ToolContext
+) => boolean | Promise<boolean>;
+
+/**
  * Rich, server-derived preview of a proposed write for the Approve/Deny card. Unlike the
  * persisted `inputSummary` (key-names only), this is computed under the actor's DataContextDb
  * from owner-visible cached state and rides the live SSE stream ONLY — it is never persisted
@@ -606,6 +617,11 @@ export interface ModuleAssistantToolManifest {
    * write→trusted_auto auto-run path never applies to those calls.
    */
   readonly requiresConfirmation?: ToolRequiresConfirmation;
+  /**
+   * Set only by the integrations module on a connected tool Moss sorted as safe to run without
+   * asking (see ToolRunsWithoutAsking). External module declarations never carry it.
+   */
+  readonly runsWithoutAsking?: ToolRunsWithoutAsking;
   /**
    * Optional async producer of a rich Approve/Deny card preview, derived server-side under the
    * actor's DataContextDb (see ToolPreview). The gateway calls it at card-creation time and
