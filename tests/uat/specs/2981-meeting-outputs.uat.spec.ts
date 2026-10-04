@@ -239,9 +239,19 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await expect(page.getByRole("button", { name: "Accept Task", exact: true })).toBeDisabled();
     const reviewedTitle = "Owner reviewed Orchid action";
     await page.getByLabel("Suggested Task · version 1", { exact: true }).fill(reviewedTitle);
-    await page
-      .getByRole("checkbox", { name: "Create in my Tasks after owner review", exact: true })
-      .click();
+    // Switch intentionally hides its native checkbox; the associated label is the real
+    // visible click target (the same interaction used by the draft/setup UAT).
+    const ownerReview = page.getByRole("checkbox", {
+      name: "Create in my Tasks after owner review",
+      exact: true
+    });
+    const ownerReviewLabel = page.locator("label.jds-switch", { has: ownerReview });
+    await expect(ownerReviewLabel).toBeVisible();
+    await expect(ownerReview).not.toBeChecked();
+    await expect(ownerReview).toBeEnabled();
+    await ownerReviewLabel.click();
+    await expect(ownerReview).toBeChecked();
+    await expect(page.getByRole("button", { name: "Accept Task", exact: true })).toBeEnabled();
     const review = await clickCommand(
       page,
       "Accept Task",
