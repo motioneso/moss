@@ -16,6 +16,16 @@
 #    (#2989). Anything the agent types directly — pnpm or direct vitest/tsx —
 #    lands on jarv1s-postgres, which the dev instance also uses.
 #
+#    Matching is by command position, not substring: the command is split on
+#    shell separators and each segment must START with the runner (after env
+#    assignments), so `git commit -m "pnpm db:migrate"` and PR comment bodies
+#    that merely quote a gate command are left alone. Runner flags between the
+#    runner and the script (`pnpm -w`, `pnpm --filter x`) do not hide it.
+#
+#    Deliberate override: when Ben asks for a migration of the dev database
+#    itself (not a gate), prefix the command with JARVIS_ALLOW_DIRECT_DB=1.
+#    That token in command position disables this block — and only this block.
+#
 # Contract: stdin is the PreToolUse JSON payload. Exit 0 allows the call; exit 2 blocks it and
 # sends stderr back to the model as the reason.
 set -uo pipefail
@@ -39,13 +49,38 @@ cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2> /dev/null
 # dev database. Blocked piped or bare, with or without pipefail: pipefail
 # fixes the exit code but not the database. One plain line pointing at the
 # skill.
-db_direct_re='(pnpm|npm|turbo)[[:space:]]+(run[[:space:]]+)?(verify:foundation|test:integration|test:uat-seed|db:migrate)([[:space:]]|$)'
-db_direct_vitest_re='(vitest|tsx)[[:space:]]+[^;&|]*tests/(integration|uat/seed)'
-db_direct_tsx_re='tsx[[:space:]]+scripts/(test-integration|migrate)\.ts'
+db_override_re='(^|[;&|])[[:space:]]*JARVIS_ALLOW_DIRECT_DB=1([[:space:]]|$)'
+db_override=0
+if printf '%s' "$cmd" | grep -qE "$db_override_re"; then
+  db_override=1
+fi
 
-if printf '%s' "$cmd" | grep -qE "$db_direct_re" ||
-  printf '%s' "$cmd" | grep -qE "$db_direct_vitest_re" ||
-  printf '%s' "$cmd" | grep -qE "$db_direct_tsx_re"; then
+# Runner flags that may sit between the runner and the script name, with an
+# optional value (`pnpm -w`, `pnpm -s`, `pnpm --filter x`, `--silent`).
+db_flags='([[:space:]]+(--filter([= ][[:space:]]*[^[:space:]]+)?|--[a-zA-Z][a-zA-Z-]*|-[a-zA-Z]+))*'
+db_scripts='(verify:foundation|test:integration|test:uat-seed|db:migrate)([[:space:]]|$)'
+db_runner_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(run[[:space:]]+)?${db_scripts}"
+db_runner_vitest_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+vitest[[:space:]]+run[[:space:]]+[^[:space:]]*(integration|uat/seed)"
+db_vitest_re='^(npx[[:space:]]+)?(vitest|tsx)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(run[[:space:]]+)?[^[:space:]]*(integration|uat/seed|test-integration\.ts|migrate\.ts)'
+
+db_blocked=0
+segments="$(printf '%s' "$cmd" | tr '|&;' '\n')"
+while IFS= read -r seg; do
+  # Leading `sudo`/wrappers and VAR=value assignments do not move the command
+  # out of command position.
+  seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/^(sudo|doas|env)[[:space:]]+//')"
+  while printf '%s' "$seg" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+'; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+//')"
+  done
+  if printf '%s' "$seg" | grep -qE "$db_runner_re" ||
+    printf '%s' "$seg" | grep -qE "$db_runner_vitest_re" ||
+    printf '%s' "$seg" | grep -qE "$db_vitest_re"; then
+    db_blocked=1
+    break
+  fi
+done <<<"$segments"
+
+if [ "$db_blocked" = "1" ] && [ "$db_override" = "0" ]; then
   echo "BLOCKED: database-touching tests and migrates run only through the verify-gate skill (scripts/run-gate.sh)." >&2
   exit 2
 fi

@@ -235,17 +235,20 @@ pick_free_port() {
 }
 
 # Launches the throwaway pgvector server for this run: own container, own
-# loopback port, generous shm. Sets LAUNCH_CONTAINER/LAUNCH_PORT. Retries a
-# few times — the picked port can lose a race between the probe and docker.
+# loopback port, generous shm. The name is picked by the caller and already
+# reserved in this run's log before the first attempt, so a sibling start
+# sweeping mid-launch sees it in a live log. Sets LAUNCH_CONTAINER/LAUNCH_PORT.
+# Retries a few times — the picked port can lose a race between the probe and
+# docker. The startpid label records which start launched the server, for
+# operators reading `docker ps`; the sweep never judges liveness by it.
 launch_gate_postgres() {
-  local slug="$1" attempt=0 port name
+  local slug="$1" name="$2" attempt=0 port
   command -v docker >/dev/null 2>&1 || die "docker not found — cannot launch the gate database server"
   while [ "$attempt" -lt 10 ]; do
     attempt=$((attempt + 1))
     port="$(pick_free_port)" || die "could not find a free port for the gate database server"
-    name="${GATE_NAME_PREFIX}${slug}-$(date +%Y%m%d-%H%M%S)-$$-${attempt}"
     if docker run -d --name "$name" \
-      --label jarv1s.gate=1 --label "jarv1s.gate.slug=$slug" \
+      --label jarv1s.gate=1 --label "jarv1s.gate.slug=$slug" --label "jarv1s.gate.startpid=$$" \
       -p "127.0.0.1:${port}:5432" --shm-size="$GATE_SHM" \
       -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres \
       "$GATE_IMAGE" >/dev/null 2>&1; then
@@ -322,6 +325,12 @@ sweep_gate_containers() {
     if gate_container_in_live_run "$name"; then
       continue
     fi
+    # No PID-liveness check here on purpose: the name is reserved in the
+    # starting run's log before docker run, so a container the sweep can see
+    # always has a log line to judge by — and a kill -0 on the recorded
+    # starter PID is unsound on a busy box, where the PID can already belong
+    # to someone else (observed: a killed start's PID reused before the next
+    # sweep, which then kept a dead run's server forever).
     remove_gate_container "$name"
     if [ -n "${LAUNCH_LOG:-}" ]; then
       echo "### SWEEP removed leftover gate container $name" >>"$LAUNCH_LOG" 2>/dev/null || true
@@ -432,14 +441,21 @@ cmd_start() {
   sweep_gate_containers
 
   # Throwaway gate server (#2989). Own container, own loopback port, generous
-  # shm — shared with no other gate and never with the dev instance. From
+  # shm — shared with no other gate and never with the dev instance. The name
+  # is reserved in the log BEFORE docker run: a sibling start sweeping during
+  # our bringing-up window must find it in a live log, or it would collect
+  # our server as a leftover (the blocking review finding on this PR). From
   # here on every failure path removes it again (launch timeout below, the
   # EXIT trap on aborted start, the runner's trap on finish or kill).
-  launch_gate_postgres "$slug"
+  local gate_name
+  gate_name="${GATE_NAME_PREFIX}${slug}-$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
+  echo "### GATE_CONTAINER $gate_name (starting)" >>"$log"
+  launch_gate_postgres "$slug" "$gate_name"
   if ! wait_gate_postgres_ready "$LAUNCH_CONTAINER"; then
     local dead_container="$LAUNCH_CONTAINER"
     remove_gate_container "$dead_container"
     echo "### CLEANUP removed gate container $dead_container (never became ready)" >>"$log"
+    echo "${LAUNCH_FAILED_PREFIX}gate database server $dead_container did not accept connections within ${GATE_READY_SECS}s ($(date -Is))" >>"$log"
     LAUNCH_CONTAINER=""
     LAUNCH_OK=1
     die "gate database server $dead_container did not accept connections within ${GATE_READY_SECS}s"
@@ -497,6 +513,9 @@ cmd_start() {
   # are required: urls.ts refuses to synthesize default-credentialed URLs
   # against a non-default host/port (#1383), and this server is always both.
   # Role passwords match the dev defaults in packages/db/src/urls.ts.
+  # Both name spells are exported: resolveMossEnv prefers MOSS_* over
+  # JARVIS_*, so a caller with MOSS_* pointed at the shared dev database
+  # would otherwise split the gate across two servers.
   export JARVIS_PGHOST="$GATE_DBHOST"
   export JARVIS_PGPORT="$LAUNCH_PORT"
   export JARVIS_PGDATABASE="$gatedb"
@@ -505,6 +524,14 @@ cmd_start() {
   export JARVIS_APP_DATABASE_URL="postgres://jarvis_app_runtime:app_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
   export JARVIS_AUTH_DATABASE_URL="postgres://jarvis_auth_runtime:auth_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
   export JARVIS_WORKER_DATABASE_URL="postgres://jarvis_worker_runtime:worker_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
+  export MOSS_PGHOST="$JARVIS_PGHOST"
+  export MOSS_PGPORT="$JARVIS_PGPORT"
+  export MOSS_PGDATABASE="$JARVIS_PGDATABASE"
+  export MOSS_BOOTSTRAP_DATABASE_URL="$JARVIS_BOOTSTRAP_DATABASE_URL"
+  export MOSS_MIGRATION_DATABASE_URL="$JARVIS_MIGRATION_DATABASE_URL"
+  export MOSS_APP_DATABASE_URL="$JARVIS_APP_DATABASE_URL"
+  export MOSS_AUTH_DATABASE_URL="$JARVIS_AUTH_DATABASE_URL"
+  export MOSS_WORKER_DATABASE_URL="$JARVIS_WORKER_DATABASE_URL"
 
   # setsid+nohup so the run outlives this shell. The Bash tool's shell exits the
   # moment the call returns; without full detachment the gate can die with it.

@@ -61,7 +61,9 @@ permit it:
   `pnpm test:integration`, `pnpm test:uat-seed`, `pnpm db:migrate`, or direct `vitest`/`tsx`
   at those suites): anything not launched through `scripts/run-gate.sh` lands on the shared
   dev database. `.claude/hooks/check-gate-pipe.sh` blocks these with one line pointing back
-  here — a block there is the hook working, not an obstacle.
+  here — a block there is the hook working, not an obstacle. Deliberate exception: when Ben
+  asks for a migration of the dev database itself (not a gate), prefix the command with
+  `JARVIS_ALLOW_DIRECT_DB=1` — that token in command position disables only this block.
 - **Never pipe a gate command** (`| tail`, `| grep`, `| tee`): a pipeline returns the filter's
   exit code, so red reads as green. The same hook blocks the obvious forms.
 - **Never decide liveness with `pgrep`/`ps`.** The Bash tool's wrapper shells match your pattern

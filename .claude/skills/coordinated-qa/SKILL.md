@@ -63,18 +63,19 @@ gh pr checks <PR>          # required checks pass/fail
   without executing it. If the PR is docs-only that's correct and fine; if it is docs-plus-code and
   CI skipped the gate, the skip condition is itself the finding. Say which case you're in.
 - **Only if CI is red** do you reproduce locally to diagnose — via `scripts/run-gate.sh`, which
-  handles the isolated gate DB for you. With `JARVIS_PGDATABASE` unset the gate writes to Ben's
-  live dev database `jarv1s` and has taken his instance down:
+  handles the throwaway gate server for you. A gate typed directly (not through the script)
+  writes to Ben's live dev database `jarv1s` and has taken his instance down:
   ```bash
-  scripts/run-gate.sh start --exclusive       # fresh gate DB, flock'd, detached
+  scripts/run-gate.sh start                   # own throwaway Postgres server, detached
   scripts/run-gate.sh wait --follow           # run_in_background: true; no timeout to size
   ```
   Read the exit code the background call returns: 0 green · 1 failed · 2 DIED — you keep working
   and get exactly one completion notification instead of polling.
   Never decide a gate is still alive from `pgrep`/`ps` — it matches Claude's own bash wrappers and
   stays true forever (that cost lane #1273 19 hours). Never pipe a gate to `tail`/`grep` as the
-  final stage, and never trust a wrapper `echo $?`. Don't start a gate while a build lane is
-  running one — concurrent `test:integration` has crashed the shared dev Postgres into recovery.
+  final stage, and never trust a wrapper `echo $?`. Since #2989 concurrent gates are safe — each
+  run gets its own throwaway Postgres server, so two gates at once never share a server with each
+  other or with the dev instance.
   A known flake (e.g. pg-boss worker-timeout) gets one re-run before you call it red; don't wave
   it off either.
 - A red check is **stop-the-line** unless waivable per the coordinator's CI-waiver protocol (proven

@@ -40,50 +40,65 @@ new_env() {
   git -C "$r" commit -qm base
   cat >"$bin/docker" <<'EOF'
 #!/usr/bin/env bash
-# Stateful fake: tracks `run --name` creations in $FAKE_DOCKER_STATE/containers,
-# answers pg_isready (unless FAKE_DOCKER_NEVER_READY=1), psql, rm, and ps.
+# Stateful fake: tracks `run --name` creations (with their startpid label) in
+# $FAKE_DOCKER_STATE/containers as `name|startpid` lines. Answers pg_isready
+# (unless FAKE_DOCKER_NEVER_READY=1, or the container is held by
+# FAKE_DOCKER_HOLD_FIRST=1), psql, rm, ps, and inspect (startpid label).
 state="${FAKE_DOCKER_STATE:?}/containers"
 calls="${FAKE_DOCKER_STATE:?}/calls"
+held="${FAKE_DOCKER_STATE:?}/held"
 printf '%s\n' "docker $*" >>"$calls"
 case "${1:-}" in
   run)
     name=""
     prev=""
+    startpid=""
     for a in "$@"; do
       if [ "$prev" = "--name" ]; then name="$a"; fi
+      case "$a" in jarv1s.gate.startpid=*) startpid="${a#*=}" ;; esac
       prev="$a"
     done
     [ -n "$name" ] || exit 9
-    printf '%s\n' "$name" >>"$state"
+    printf '%s|%s\n' "$name" "$startpid" >>"$state"
+    if [ "${FAKE_DOCKER_HOLD_FIRST:-0}" = "1" ] && [ ! -f "$held" ]; then
+      printf '%s\n' "$name" >"$held"
+    fi
     ;;
   exec)
     # Container is the first non-flag arg (calls pass -e PGOPTIONS=... first).
     shift
     container=""
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -e) shift 2 || shift ;;
-        -e* | -*) shift ;;
-        *) container="$1"; break ;;
+    for a in "$@"; do
+      case "$a" in
+        -e | PGOPTIONS=*) continue ;;
+        -*) continue ;;
+        *)
+          if [ -z "$container" ]; then container="$a"; fi
+          ;;
       esac
     done
     [ -n "$container" ] || exit 8
-    grep -qxF "$container" "$state" 2>/dev/null || exit 7
-    if [ "${FAKE_DOCKER_NEVER_READY:-0}" = "1" ]; then
-      for a in "$@"; do
-        if [ "$a" = "pg_isready" ]; then exit 1; fi
-      done
-    fi
+    grep -q "^${container}|" "$state" 2>/dev/null || exit 7
+    for a in "$@"; do
+      if [ "$a" = "pg_isready" ]; then
+        if [ "${FAKE_DOCKER_NEVER_READY:-0}" = "1" ]; then exit 1; fi
+        if [ -f "$held" ] && grep -qxF "$container" "$held" 2>/dev/null; then exit 1; fi
+      fi
+    done
     ;;
   rm)
     for a in "$@"; do
       case "$a" in -*) continue ;; esac
-      grep -vxF "$a" "$state" 2>/dev/null >"$state.tmp" || true
+      grep -v "^${a}|" "$state" 2>/dev/null >"$state.tmp" || true
       mv "$state.tmp" "$state"
     done
     ;;
   ps)
-    cat "$state" 2>/dev/null || true
+    cut -d'|' -f1 "$state" 2>/dev/null || true
+    ;;
+  inspect)
+    name="${*: -1}"
+    awk -F'|' -v n="$name" '$1 == n { print $2 }' "$state" 2>/dev/null || true
     ;;
 esac
 exit 0
@@ -199,6 +214,13 @@ if ( cd "$R5" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G5/start.o
 fi
 grep -qi 'did not accept connections' "$G5/start.out" \
   || fail "T5: start hid the readiness reason: $(cat "$G5/start.out")"
+LOG5="$(ls -t "$G5"/*.log | head -1)"
+if ( cd "$R5" && ./scripts/run-gate.sh status --log "$LOG5" >/dev/null 2>&1 ); then
+  fail "T5: status exited 0, want DEAD(2)"
+else
+  rc=$?
+  [ "$rc" -eq 2 ] || fail "T5: status gave $rc, want 2 (never-ready server must read DEAD, not RUNNING)"
+fi
 [ -z "$(containers_of "$G5")" ] || fail "T5: container left behind"
 unset FAKE_DOCKER_NEVER_READY
 pass "unready server fails loud with no container left"
@@ -214,7 +236,7 @@ unset JARVIS_GATE_PGREADY_SECS
 SLOW_LOG="$(awk -F= '/^LOG=/ {print $2}' "$G6/slow.out")"
 SLOW_C="$(container_of_log "$SLOW_LOG")"
 sleep 3
-printf '%s\n' "jarv1s-gate-stale-orphan" >>"$G6/state/containers"
+printf '%s\n' "jarv1s-gate-stale-orphan|" >>"$G6/state/containers"
 ( cd "$R6" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G6/fast.out" 2>&1 ) \
   || fail "T6: fast start failed"
 FAST_LOG="$(awk -F= '/^LOG=/ {print $2}' "$G6/fast.out")"
@@ -232,6 +254,55 @@ grep -qF "$SLOW_C" "$G6/state/containers" \
 ( cd "$R6" && ./scripts/run-gate.sh stop --log "$SLOW_LOG" >/dev/null 2>&1 ) || true
 [ -z "$(containers_of "$G6")" ] || fail "T6: containers left behind: $(containers_of "$G6")"
 pass "sweep collects the stale container and keeps the live one"
+
+# --- T8: overlapping starts never sweep a server being brought up ---------
+# The blocking review finding: start A is held before its server is ready
+# while start B launches. B's sweep must keep A's server even though A's log
+# has no runner PID yet (the name is reserved in A's log up front, and A's
+# starting process is still alive). After A is killed, the next start
+# collects its server.
+read R8 B8 G8 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R8 $B8 $G8"
+export PATH="$B8:/usr/bin:/bin"
+export JARVIS_GATE_DIR="$G8" FAKE_DOCKER_STATE="$G8/state"
+export JARVIS_GATE_PGREADY_SECS=120 JARVIS_GATE_LAUNCH_GRACE_SECS=4
+export FAKE_DOCKER_HOLD_FIRST=1
+( cd "$R8" && setsid ./scripts/run-gate.sh start --gate fake-fast-gate >"$G8/a.out" 2>&1 & echo $! >"$G8/apid" )
+# Wait until A is actually stuck bringing its server up (not just slow to
+# start), so B's sweep truly overlaps the bringing-up window.
+for _i in $(seq 1 30); do
+  [ -s "$G8/state/containers" ] && break
+  sleep 1
+done
+[ -s "$G8/state/containers" ] || fail "T8: start A created no server"
+sleep 2
+A_PTR="$(cat "$G8"/*.current 2>/dev/null || true)"
+[ -n "$A_PTR" ] || fail "T8: start A recorded no pointer"
+A_C="$(container_of_log "$A_PTR")"
+[ -n "$A_C" ] || fail "T8: start A's log reserves no container name"
+( cd "$R8" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G8/b.out" 2>&1 ) \
+  || fail "T8: overlapping start B failed"
+B_LOG="$(awk -F= '/^LOG=/ {print $2}' "$G8/b.out")"
+B_C="$(container_of_log "$B_LOG")"
+[ "$B_C" != "$A_C" ] || fail "T8: overlapping runs share one container"
+if grep -qF "### SWEEP removed leftover gate container $A_C" "$B_LOG"; then
+  fail "T8: start B swept start A's server mid-launch"
+fi
+grep -qF "$A_C" "$G8/state/containers" || fail "T8: start A's server is gone after B's sweep"
+( cd "$R8" && ./scripts/run-gate.sh wait --follow --log "$B_LOG" >/dev/null 2>&1 ) \
+  || fail "T8: start B did not pass"
+kill -KILL "$(cat "$G8/apid")" 2>/dev/null || true
+sleep 6
+unset FAKE_DOCKER_HOLD_FIRST
+( cd "$R8" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G8/c.out" 2>&1 ) \
+  || fail "T8: start C failed"
+C_LOG="$(awk -F= '/^LOG=/ {print $2}' "$G8/c.out")"
+grep -qF "### SWEEP removed leftover gate container $A_C" "$C_LOG" \
+  || fail "T8: start C did not sweep start A's killed server"
+( cd "$R8" && ./scripts/run-gate.sh wait --follow --log "$C_LOG" >/dev/null 2>&1 ) \
+  || fail "T8: start C did not pass"
+[ -z "$(containers_of "$G8")" ] || fail "T8: containers left behind: $(containers_of "$G8")"
+pass "overlapping starts keep the server being brought up"
 
 # --- T7: launch shape (image, loopback port, shm) ---------------------------
 grep -qF -- '--shm-size="$GATE_SHM"' "$RUN_GATE_SRC" \

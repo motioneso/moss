@@ -100,6 +100,62 @@ describe("check-gate-pipe.sh", () => {
     }
   });
 
+  it("blocks runner flags between the runner and the script name", async () => {
+    for (const command of [
+      "pnpm -w verify:foundation",
+      "pnpm -s db:migrate",
+      "pnpm --filter moss-api test:integration",
+      "pnpm --filter=moss-api db:migrate"
+    ]) {
+      const { code } = await runHook(command);
+      expect(code).toBe(2);
+    }
+  });
+
+  it("blocks relative test paths", async () => {
+    for (const command of [
+      "cd tests && pnpm vitest run integration/chat.test.ts",
+      "vitest run integration/chat.test.ts",
+      "vitest run uat/seed.ts"
+    ]) {
+      const { code } = await runHook(command);
+      expect(code).toBe(2);
+    }
+  });
+
+  it("allows commands that only mention a gate command", async () => {
+    for (const command of [
+      'git commit -m "run pnpm verify:foundation after the fix"',
+      'gh pr comment 2991 --body "pnpm db:migrate failed, see the log"',
+      "echo pnpm db:migrate"
+    ]) {
+      const { code } = await runHook(command);
+      expect(code).toBe(0);
+    }
+  });
+
+  it("allows a chained command whose gate mention is not in command position", async () => {
+    const { code } = await runHook("git status && pnpm test:unit");
+    expect(code).toBe(0);
+  });
+
+  it("blocks env and sudo prefixes without moving the command out of position", async () => {
+    for (const command of ["FOO=bar pnpm db:migrate", "sudo pnpm test:integration"]) {
+      const { code } = await runHook(command);
+      expect(code).toBe(2);
+    }
+  });
+
+  it("honors the deliberate dev-database override, without disabling the pipe check", async () => {
+    const { code } = await runHook("JARVIS_ALLOW_DIRECT_DB=1 pnpm db:migrate");
+    expect(code).toBe(0);
+    const chained = await runHook("cd infra && JARVIS_ALLOW_DIRECT_DB=1 pnpm db:migrate");
+    expect(chained.code).toBe(0);
+    const piped = await runHook("JARVIS_ALLOW_DIRECT_DB=1 pnpm lint | tail -20");
+    expect(piped.code).toBe(2);
+    expect(piped.stderr).toContain("masks its exit code");
+  });
+
   it("prints the database-touching block as one plain line", async () => {
     const { code, stderr } = await runHook("pnpm db:migrate");
     expect(code).toBe(2);
