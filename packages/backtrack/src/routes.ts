@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import { MemoryRepository } from "@moss/memory";
+import { handleRouteError } from "@moss/module-sdk";
 import { BACKTRACK_STORAGE_CONFIG_KEY, RuntimeConfigResolver } from "@moss/settings";
 import {
   BACKTRACK_DELETE_MAX_RANGE_MS,
@@ -73,63 +74,81 @@ export function registerBacktrackRoutes(
   const repository = deps.repository ?? new BacktrackRepository();
   const memory = deps.memory ?? new MemoryRepository();
 
-  app.get("/api/backtrack/status", async (request): Promise<BacktrackStatusResponse> => {
-    const accessContext = await deps.resolveAccessContext(request);
-    const owner = accessContext.actorUserId;
-    return deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-      const storage = await new RuntimeConfigResolver(scopedDb).resolveEnum<"off" | "on">(
-        BACKTRACK_STORAGE_CONFIG_KEY
+  app.get("/api/backtrack/status", async (request, reply) => {
+    try {
+      const accessContext = await deps.resolveAccessContext(request);
+      const owner = accessContext.actorUserId;
+      return await deps.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb): Promise<BacktrackStatusResponse> => {
+          const storage = await new RuntimeConfigResolver(scopedDb).resolveEnum<"off" | "on">(
+            BACKTRACK_STORAGE_CONFIG_KEY
+          );
+          const prefs = await repository.getPreferences(scopedDb, owner);
+          const summary = await repository.getStatusSummary(scopedDb, owner);
+          return {
+            storage,
+            paused: prefs?.paused ?? false,
+            macs: summary.macs,
+            days: summary.days,
+            bytes: summary.bytes,
+            ...(summary.oldest ? { oldest: summary.oldest.toISOString() } : {}),
+            ...(summary.lastReceivedAt
+              ? { lastReceivedAt: summary.lastReceivedAt.toISOString() }
+              : {})
+          };
+        }
       );
-      const prefs = await repository.getPreferences(scopedDb, owner);
-      const summary = await repository.getStatusSummary(scopedDb, owner);
-      return {
-        storage,
-        paused: prefs?.paused ?? false,
-        macs: summary.macs,
-        days: summary.days,
-        bytes: summary.bytes,
-        ...(summary.oldest ? { oldest: summary.oldest.toISOString() } : {}),
-        ...(summary.lastReceivedAt ? { lastReceivedAt: summary.lastReceivedAt.toISOString() } : {})
-      };
-    });
+    } catch (error) {
+      return handleRouteError(error, reply);
+    }
   });
 
   app.put<{ Body: BacktrackPreferencesRequest }>(
     "/api/backtrack/preferences",
     { schema: backtrackPreferencesRouteSchema },
-    async (request): Promise<BacktrackPreferencesResponse> => {
-      const accessContext = await deps.resolveAccessContext(request);
-      const prefs = await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
-        repository.setPaused(scopedDb, accessContext.actorUserId, request.body.paused)
-      );
-      return { paused: prefs.paused };
+    async (request, reply) => {
+      try {
+        const accessContext = await deps.resolveAccessContext(request);
+        const prefs = await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.setPaused(scopedDb, accessContext.actorUserId, request.body.paused)
+        );
+        const response: BacktrackPreferencesResponse = { paused: prefs.paused };
+        return response;
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
     }
   );
 
   app.delete("/api/backtrack/segments", async (request, reply) => {
-    const accessContext = await deps.resolveAccessContext(request);
-    const owner = accessContext.actorUserId;
-    const range = parseDeleteRange(request.body);
-    if (range.kind === "invalid") return reply.code(400).send({ error: range.message });
+    try {
+      const accessContext = await deps.resolveAccessContext(request);
+      const owner = accessContext.actorUserId;
+      const range = parseDeleteRange(request.body);
+      if (range.kind === "invalid") return reply.code(400).send({ error: range.message });
 
-    const deletedAt = new Date();
-    // The marker ends where the delete stops: a range reaching past now is cut at now
-    // (decision 10), and the segments are deleted over that same cut range.
-    const from = range.kind === "range" ? range.from : null;
-    const to =
-      range.kind === "range" ? new Date(Math.min(range.to.getTime(), deletedAt.getTime())) : null;
+      const deletedAt = new Date();
+      // The marker ends where the delete stops: a range reaching past now is cut at now
+      // (decision 10), and the segments are deleted over that same cut range.
+      const from = range.kind === "range" ? range.from : null;
+      const to =
+        range.kind === "range" ? new Date(Math.min(range.to.getTime(), deletedAt.getTime())) : null;
 
-    const deleted = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-      await repository.lockOwner(scopedDb, owner);
-      // Marker first, then segments, then their chunks, in one transaction under the owner lock:
-      // an ingest retry waits on the lock and then meets the marker, so it can't undo the delete.
-      await repository.insertDeletionMarker(scopedDb, owner, from, to, deletedAt);
-      const ids = await repository.deleteSegmentsInRange(scopedDb, owner, { from, to });
-      await deleteScreenChunksForSegments(memory, scopedDb, owner, ids);
-      return ids.length;
-    });
+      const deleted = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
+        await repository.lockOwner(scopedDb, owner);
+        // Marker first, then segments, then their chunks, in one transaction under the owner lock:
+        // an ingest retry waits on the lock and then meets the marker, so it can't undo the delete.
+        await repository.insertDeletionMarker(scopedDb, owner, from, to, deletedAt);
+        const ids = await repository.deleteSegmentsInRange(scopedDb, owner, { from, to });
+        await deleteScreenChunksForSegments(memory, scopedDb, owner, ids);
+        return ids.length;
+      });
 
-    const response: BacktrackDeleteResponse = { deleted };
-    return response;
+      const response: BacktrackDeleteResponse = { deleted };
+      return response;
+    } catch (error) {
+      return handleRouteError(error, reply);
+    }
   });
 }

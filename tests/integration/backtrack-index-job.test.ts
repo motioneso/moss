@@ -463,7 +463,7 @@ describe("backtrack.upkeep", () => {
          (owner_user_id, device_id, started_at, ended_at, app_name, bundle_id, window_title, body,
           body_hash, created_at, client_started_at)
        SELECT $1, gen_random_uuid(), now() - interval '1 hour', now() - interval '1 hour',
-              'Safari', 'com.apple.Safari', 't', 'b', gen_random_bytes(32),
+              'Safari', 'com.apple.Safari', 't', 'b', decode(md5(random()::text || g::text) || md5(g::text || random()::text), 'hex'),
               now() - interval '20 minutes', now() - (g || ' seconds')::interval
          FROM generate_series(1, 250) AS g`,
       [OWNER_A]
