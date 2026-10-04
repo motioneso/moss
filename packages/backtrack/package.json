@@ -1,0 +1,30 @@
+{
+  "name": "@moss/backtrack",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./routes": "./src/routes.ts",
+    "./workers": "./src/jobs.ts",
+    "./settings": "./src/settings/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moss/db": "workspace:*",
+    "@moss/jobs": "workspace:*",
+    "@moss/memory": "workspace:*",
+    "@moss/module-sdk": "workspace:*",
+    "@moss/settings": "workspace:*",
+    "@moss/settings-ui": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "@moss/ui": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "fastify": "^5.8.5",
+    "kysely": "^0.29.2",
+    "pg-boss": "^12.18.2",
+    "react": "^19.0.0"
+  }
+}

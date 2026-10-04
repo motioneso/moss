@@ -4,7 +4,7 @@ import type { ChatSurface } from "@moss/shared";
 import { BrandMark, Button } from "@moss/ui";
 
 import { sendChatTurn } from "../../api/client";
-import { useAssistantName } from "../../api/use-assistant-name";
+import { useAssistantName } from "../../api/use-assistant-name.js";
 
 import "../../styles/kit-chat-attach.css";
 import {

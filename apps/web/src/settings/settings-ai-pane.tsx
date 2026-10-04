@@ -10,7 +10,6 @@ import {
   getChatModelOverrideSettings,
   getChatSettings,
   getYoloSettings,
-  getPersonaSettings,
   previewPersona,
   putChatArchiveSettings,
   putChatModelOverride,
@@ -19,7 +18,7 @@ import {
   putPersonaSettings
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { loadPersonaSettings, useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import {
   applyGuidedPersonaText,
@@ -95,7 +94,7 @@ function Persona({ who }: { readonly who: string }) {
     });
   const personaQuery = useQuery({
     queryKey: queryKeys.settings.persona,
-    queryFn: getPersonaSettings,
+    queryFn: loadPersonaSettings,
     retry: false
   });
   const chatSettingsQuery = useQuery({
@@ -276,7 +275,7 @@ function Persona({ who }: { readonly who: string }) {
         <div className="ppv">
           <div className="ppv__hd">
             <GitCommitHorizontal size={13} aria-hidden="true" />
-            How {p.assistantName || "Moss"} would sound
+            How {p.assistantName || assistantName} would sound
           </div>
           {previewReply ? (
             <div className="ppv__bubble ppv__bubble--main">

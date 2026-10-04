@@ -1,7 +1,7 @@
 import { PlugZap } from "lucide-react";
 import { Link } from "react-router";
 
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 
 /** Deep-link to the Your assistant settings pane (the post-onboarding provider-connect surface).
  *  settings-page reads `?section=` to open the right pane instead of the default Profile pane. */

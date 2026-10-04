@@ -2,6 +2,7 @@ import type { AiCliToolsDto } from "@moss/shared";
 import { Button } from "@moss/ui";
 
 import { Badge } from "./settings-ui";
+import { assistantName } from "../api/use-assistant-name.js";
 
 /**
  * #2689 slice 4: what a tool update is doing, beside the version on a CLI provider card. The text
@@ -34,7 +35,7 @@ export function CliUpdateStatus(props: {
         </>
       );
     case "needs_newer_moss":
-      return <Badge tone="neutral">{`Version${next} needs a newer Moss`}</Badge>;
+      return <Badge tone="neutral">{`Version${next} needs a newer ${assistantName()}`}</Badge>;
     case "cannot_check":
       return (
         <>

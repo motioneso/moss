@@ -44,6 +44,7 @@ import {
 } from "./settings-theme-preview";
 import { Field, Group, Note, PaneHead, Row } from "./settings-ui";
 import { Badge, BrandMark, Button, ColorBox, ColorPopover, Segmented } from "@moss/ui";
+import { assistantName, personalize } from "../api/use-assistant-name.js";
 
 interface DraftTheme {
   readonly id: string;
@@ -126,6 +127,11 @@ const HEADER_FIELD: FieldSpec = {
   name: "Background",
   desc: "Behind the page title, the date line and the settings cog"
 };
+
+/** Description of the navigation background field, using the current assistant name. */
+export function navFieldDesc(): string {
+  return personalize(NAV_FIELD.desc);
+}
 
 const FIELD_NAMES = Object.fromEntries(
   [...FIELD_GROUPS.flatMap((group) => group.fields), NAV_FIELD, HEADER_FIELD].map((field) => [
@@ -517,7 +523,7 @@ export function AppearancePane() {
                   The column of links down the left side. On a phone it also colors the top bar and
                   the menu. Text and icons pick dark or light by themselves.
                 </p>
-                <Row name={NAV_FIELD.name} desc={NAV_FIELD.desc} control={colorBox(NAV_FIELD)} />
+                <Row name={NAV_FIELD.name} desc={navFieldDesc()} control={colorBox(NAV_FIELD)} />
                 <div
                   className="theme-navstrip"
                   style={(navColors?.vars ?? {}) as CSSProperties}
@@ -525,7 +531,7 @@ export function AppearancePane() {
                 >
                   <span className="theme-navstrip__brand">
                     <BrandMark size={18} />
-                    Moss
+                    {assistantName()}
                   </span>
                   <span className="theme-navstrip__link is-active">
                     <House size={15} />
@@ -545,7 +551,7 @@ export function AppearancePane() {
                     {draft.tokens.nav && navColors
                       ? `Text and icons switch to ${navColors.textKind} on this color. Labels read at ${navColors.textRatio.toFixed(1)} to 1, quieter links at ${navColors.mutedRatio.toFixed(1)} to 1. Both clear the 4.5 to 1 floor.${
                           navColors.strongText
-                            ? ` This is a middle tone, so Moss uses full ${navColors.textKind === "dark" ? "black" : "white"} text.`
+                            ? ` This is a middle tone, so ${assistantName()} uses full ${navColors.textKind === "dark" ? "black" : "white"} text.`
                             : ""
                         }`
                       : "Using the default pale nav."}
@@ -589,7 +595,7 @@ export function AppearancePane() {
                     {draft.tokens.header && headerColors
                       ? `Text switches to ${headerColors.textKind} on this color. The title reads at ${headerColors.textRatio.toFixed(1)} to 1, the date and cog at ${headerColors.mutedRatio.toFixed(1)} to 1. Both clear the 4.5 to 1 floor.${
                           headerColors.strongText
-                            ? ` This is a middle tone, so Moss uses full ${headerColors.textKind === "dark" ? "black" : "white"} text.`
+                            ? ` This is a middle tone, so ${assistantName()} uses full ${headerColors.textKind === "dark" ? "black" : "white"} text.`
                             : ""
                         }`
                       : "Using the theme's page color."}

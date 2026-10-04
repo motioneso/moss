@@ -1,13 +1,25 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { createHash } from "node:crypto";
 
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PgBoss } from "pg-boss";
+
+import { redactSecrets } from "@moss/ai";
 import { CompanionAuthError, type CompanionContext, type MossAuthRuntime } from "@moss/auth";
-import type { DataContextRunner } from "@moss/db";
+import {
+  BACKTRACK_INDEX_QUEUE,
+  BacktrackRepository,
+  type NewBacktrackSegmentInput
+} from "@moss/backtrack";
+import type { DataContextDb, DataContextRunner } from "@moss/db";
+import { sendJob } from "@moss/jobs";
 import {
   FOCUS_JUDGE_TIMEOUT_MS,
   FocusError,
   type FocusJudgmentService
 } from "@moss/module-registry";
+import { BACKTRACK_STORAGE_CONFIG_KEY, RuntimeConfigResolver } from "@moss/settings";
 import {
+  backtrackUploadRouteSchema,
   cancelPairAttemptRouteSchema,
   companionHeartbeatRouteSchema,
   companionLogoutRouteSchema,
@@ -22,6 +34,8 @@ import {
   getPairAttemptRouteSchema,
   redeemPairAttemptRouteSchema,
   renameCompanionDeviceRouteSchema,
+  type BacktrackState,
+  type BacktrackUploadRequest,
   type CompanionHeartbeatRequest,
   type CreatePairAttemptRequest,
   type FocusCorrectRequest,
@@ -79,16 +93,55 @@ const FOCUS_CONTEXT_RATE_MAX = 60;
 const FOCUS_JUDGE_RATE_MAX = 30;
 const FOCUS_CORRECT_RATE_MAX = 30;
 
+/**
+ * Backtrack phase 2a ingest (#2638 plan 2026-10-03-backtrack-phase2.md §4.4). A Mac flushes its
+ * buffer on a 60s timer (§5.1), so ten a minute leaves headroom for a retry after a lost response
+ * without opening the route to abuse — keyed on IP like the other pre-credential-cheap routes
+ * above (the credential is resolved inside the handler, not by the limiter).
+ */
+const BACKTRACK_UPLOAD_RATE_MAX = 10;
+
+/** Decision 11: a request whose sentAt is further than this from receipt is 422 backtrack_clock. */
+const BACKTRACK_MAX_SKEW_MS = 60 * 60 * 1000;
+
+/** Decision 11: the 24-hour retention buffer plus slack, measured after shifting to server time. */
+const BACKTRACK_MAX_SEGMENT_AGE_MS = 26 * 60 * 60 * 1000;
+
+const BACKTRACK_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
+
+const BACKTRACK_SEGMENT_ID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export interface CompanionRouteDeps {
   readonly authRuntime: MossAuthRuntime;
   readonly dataContext: DataContextRunner;
   readonly focus: FocusJudgmentService;
+  readonly boss: PgBoss;
 }
 
 export function registerCompanionRoutes(server: FastifyInstance, deps: CompanionRouteDeps): void {
-  const { authRuntime, dataContext, focus } = deps;
+  const { authRuntime, dataContext, focus, boss } = deps;
   const pairing = authRuntime.companionPairing;
   const devices = authRuntime.companionDevices;
+  const backtrack = new BacktrackRepository();
+
+  /** Decision 1: the instance switch alone, with no preferences read — the cheap half of state. */
+  async function resolveBacktrackStorage(actorUserId: string): Promise<"off" | "on"> {
+    return dataContext.withDataContext({ actorUserId }, (scopedDb) =>
+      new RuntimeConfigResolver(scopedDb).resolveEnum<"off" | "on">(BACKTRACK_STORAGE_CONFIG_KEY)
+    );
+  }
+
+  /** The person's current Backtrack state (decisions 1 and 6), for the heartbeat. */
+  async function resolveBacktrackState(actorUserId: string): Promise<BacktrackState> {
+    return dataContext.withDataContext({ actorUserId }, async (scopedDb) => {
+      const storage = await new RuntimeConfigResolver(scopedDb).resolveEnum<"off" | "on">(
+        BACKTRACK_STORAGE_CONFIG_KEY
+      );
+      const prefs = await backtrack.getPreferences(scopedDb, actorUserId);
+      return { storage, paused: prefs?.paused ?? false };
+    });
+  }
 
   /**
    * Resolves the signed-in browser. `requireTrustedOrigin` adds a same-origin check. Both
@@ -240,7 +293,11 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
     async (request, reply) => {
       const ctx = await requireCompanion(request, reply);
       if (!ctx) return reply;
-      return devices.heartbeat(ctx, request.body);
+      const beat = await devices.heartbeat(ctx, request.body);
+      // #2638 Q7: the upload response always carries BacktrackState (so a Mac that is never
+      // offline still learns it); the heartbeat carries the same shape too, since it runs far
+      // more often than an upload while storage is off or paused.
+      return { ...beat, backtrack: await resolveBacktrackState(ctx.actorUserId) };
     }
   );
 
@@ -359,6 +416,232 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
       return reply.code(204).send();
     }
   );
+
+  // ---- Backtrack ingest (#2638 plan §4.4) -------------------------------------------------
+  // Platform route, same reasoning as focus above: the companion credential names the owner
+  // and the device, never the body, and the work runs under that owner's own row policies.
+  // Nothing here logs a body field — window text, the page address and the captured body must
+  // never reach a log or a job payload (metadata-only payloads, secrets-never-escape).
+
+  server.post<{ Body: BacktrackUploadRequest }>(
+    "/api/companion/backtrack",
+    {
+      schema: backtrackUploadRouteSchema,
+      bodyLimit: BACKTRACK_BODY_LIMIT_BYTES,
+      config: ipRateLimit(BACKTRACK_UPLOAD_RATE_MAX)
+    },
+    async (request, reply) => {
+      const ctx = await requireCompanion(request, reply);
+      if (!ctx) return reply;
+
+      const storage = await resolveBacktrackStorage(ctx.actorUserId);
+      if (storage !== "on") {
+        return reply.code(409).send({
+          error: backtrackMessageFor("backtrack_unavailable"),
+          code: "backtrack_unavailable"
+        });
+      }
+
+      const result = await dataContext.withDataContext(
+        { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+        (scopedDb) =>
+          runBacktrackIngest(backtrack, scopedDb, ctx.actorUserId, ctx.deviceId, request.body)
+      );
+
+      if (result.kind === "paused") {
+        return reply
+          .code(409)
+          .send({ error: backtrackMessageFor("backtrack_paused"), code: "backtrack_paused" });
+      }
+      if (result.kind === "clock") {
+        return reply
+          .code(422)
+          .send({ error: backtrackMessageFor("backtrack_clock"), code: "backtrack_clock" });
+      }
+      if (result.kind === "bad_request") {
+        return reply.code(400).send({ error: result.message });
+      }
+
+      // Decision 5: the rows are already committed. Nothing past this point — a bad id, a
+      // refused enqueue — may turn a successful ingest into an error response; the hourly
+      // upkeep sweep (Task C/D) re-enqueues anything still unindexed after ten minutes, so a
+      // missed enqueue here only delays indexing, it never loses a row.
+      if (result.segmentIds.length > 0) {
+        try {
+          assertBacktrackSegmentIdsForJob(result.segmentIds);
+          await sendJob(boss, BACKTRACK_INDEX_QUEUE, {
+            actorUserId: ctx.actorUserId,
+            segmentIds: result.segmentIds
+          });
+        } catch {
+          request.log.warn(
+            { requestId: ctx.requestId },
+            "backtrack.index enqueue failed after commit; the hourly sweep will retry it"
+          );
+        }
+      }
+
+      request.log.info(
+        {
+          requestId: ctx.requestId,
+          accepted: result.accepted,
+          duplicates: result.duplicates,
+          discarded: result.discarded,
+          rejectedClock: result.rejectedClock
+        },
+        "backtrack upload"
+      );
+
+      return {
+        accepted: result.accepted,
+        duplicates: result.duplicates,
+        discarded: result.discarded,
+        rejectedClock: result.rejectedClock,
+        state: { storage, paused: false }
+      };
+    }
+  );
+}
+
+/**
+ * The owner-locked heart of ingest (decisions 3, 10, 11), run inside one `withDataContext`
+ * transaction so the advisory lock (`lockOwner`) covers every read and write below it. Returns a
+ * plain result instead of throwing for the two expected non-2xx outcomes (paused, clock) so the
+ * route can answer without unwinding a transaction that made no writes either way.
+ */
+async function runBacktrackIngest(
+  backtrack: BacktrackRepository,
+  scopedDb: DataContextDb,
+  ownerUserId: string,
+  deviceId: string,
+  body: BacktrackUploadRequest
+): Promise<
+  | { readonly kind: "paused" }
+  | { readonly kind: "clock" }
+  | { readonly kind: "bad_request"; readonly message: string }
+  | {
+      readonly kind: "ok";
+      readonly accepted: number;
+      readonly duplicates: number;
+      readonly discarded: number;
+      readonly rejectedClock: number;
+      readonly segmentIds: readonly string[];
+    }
+> {
+  await backtrack.lockOwner(scopedDb, ownerUserId);
+
+  const prefs = await backtrack.getPreferences(scopedDb, ownerUserId);
+  if (prefs?.paused) return { kind: "paused" };
+
+  const sentAt = new Date(body.sentAt);
+  if (Number.isNaN(sentAt.getTime())) {
+    return { kind: "bad_request", message: "sentAt must be a date and time" };
+  }
+  // Decision 10: every upload carries the Mac's clock when the request left; the server's own
+  // measured skew is the only thing that ever converts a client timestamp into server time.
+  const receivedAt = new Date();
+  const skewMs = receivedAt.getTime() - sentAt.getTime();
+  if (Math.abs(skewMs) > BACKTRACK_MAX_SKEW_MS) {
+    return { kind: "clock" };
+  }
+
+  // Decision 11: shift each segment by the request's skew, then drop anything outside the
+  // accepted window before it is ever compared to a deletion marker.
+  interface Candidate {
+    readonly index: number;
+    readonly segment: BacktrackUploadRequest["segments"][number];
+    readonly clientStartedAt: Date;
+    readonly startedAt: Date;
+    readonly endedAt: Date;
+  }
+  const candidates: Candidate[] = [];
+  let rejectedClock = 0;
+  body.segments.forEach((segment, index) => {
+    const clientStartedAt = new Date(segment.startedAt);
+    const clientEndedAt = new Date(segment.endedAt);
+    if (Number.isNaN(clientStartedAt.getTime()) || Number.isNaN(clientEndedAt.getTime())) {
+      rejectedClock += 1;
+      return;
+    }
+    const startedAt = new Date(clientStartedAt.getTime() + skewMs);
+    const endedAt = new Date(clientEndedAt.getTime() + skewMs);
+    const tooOld = receivedAt.getTime() - startedAt.getTime() > BACKTRACK_MAX_SEGMENT_AGE_MS;
+    const tooNew = endedAt.getTime() > receivedAt.getTime();
+    if (tooOld || tooNew || endedAt.getTime() < startedAt.getTime()) {
+      rejectedClock += 1;
+      return;
+    }
+    candidates.push({ index, segment, clientStartedAt, startedAt, endedAt });
+  });
+
+  // Decision 10: one predicate, in two places. A segment whose server-time window overlaps a
+  // deletion marker is refused here, exactly as delete removes it.
+  const overlapping = await backtrack.findOverlappingDeletionMarkerIndexes(
+    scopedDb,
+    ownerUserId,
+    candidates.map((candidate) => ({
+      index: candidate.index,
+      startedAt: candidate.startedAt,
+      endedAt: candidate.endedAt
+    }))
+  );
+  const discarded = overlapping.size;
+
+  const toInsert: NewBacktrackSegmentInput[] = [];
+  for (const candidate of candidates) {
+    if (overlapping.has(candidate.index)) continue;
+    const { segment } = candidate;
+
+    // Server-side redaction, on top of whatever the Mac already did (secrets never escape —
+    // belt and suspenders, never trust the client alone).
+    const windowTitle = redactSecrets(segment.windowTitle);
+    const address = segment.address === undefined ? null : redactSecrets(segment.address);
+    const bodyText = redactSecrets(segment.body);
+
+    // Defense in depth against the column CHECK constraints: a single oversized row (redaction
+    // can only ever change length by a little, but never say never) would fail the WHOLE batch
+    // insert statement, not just itself. Caught here, it is silently dropped rather than
+    // bringing down everyone else's rows in the same request.
+    if (
+      Buffer.byteLength(segment.appName, "utf8") > 400 ||
+      Buffer.byteLength(segment.bundleId, "utf8") > 255 ||
+      Buffer.byteLength(windowTitle, "utf8") > 1000 ||
+      (address !== null && Buffer.byteLength(address, "utf8") > 2048) ||
+      Buffer.byteLength(bodyText, "utf8") > 8192
+    ) {
+      continue;
+    }
+
+    toInsert.push({
+      deviceId,
+      startedAt: candidate.startedAt,
+      endedAt: candidate.endedAt,
+      appName: segment.appName,
+      bundleId: segment.bundleId,
+      windowTitle,
+      address,
+      body: bodyText,
+      bodyHash: createHash("sha256").update(bodyText, "utf8").digest(),
+      clientStartedAt: candidate.clientStartedAt
+    });
+  }
+
+  const insertedIds = await backtrack.insertSegments(scopedDb, ownerUserId, toInsert);
+  return {
+    kind: "ok",
+    accepted: insertedIds.length,
+    duplicates: toInsert.length - insertedIds.length,
+    discarded,
+    rejectedClock,
+    segmentIds: insertedIds
+  };
+}
+
+/** Decision: the send site validates before a job ever reaches pg-boss, not just at the schema. */
+function assertBacktrackSegmentIdsForJob(ids: readonly string[]): void {
+  if (ids.length > 200 || !ids.every((id) => BACKTRACK_SEGMENT_ID_RE.test(id))) {
+    throw new Error("backtrack.index payload segmentIds must be at most 200 UUIDs");
+  }
 }
 
 function sendAccessContextFailure(reply: FastifyReply, error: unknown): void {
@@ -383,4 +666,12 @@ function messageFor(code: string): string {
   if (code === "account_pending_approval") return "Account is pending approval";
   if (code === "account_deactivated") return "Account has been deactivated";
   return "This Mac is no longer linked";
+}
+
+function backtrackMessageFor(
+  code: "backtrack_unavailable" | "backtrack_paused" | "backtrack_clock"
+): string {
+  if (code === "backtrack_paused") return "Recording is paused from Moss";
+  if (code === "backtrack_clock") return "This Mac's clock looks wrong";
+  return "Backtrack storage is not turned on for this Moss yet";
 }

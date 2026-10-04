@@ -149,6 +149,22 @@ enough to be worth what it costs in privacy and battery?
 - **Jobs carry IDs only.** Ingest enqueues `backtrack.index` with the actor and segment IDs.
   The worker reads the text under the actor's data context. No text, title or address ever goes in a
   job payload or a log line.
+- **Amended for Phase 2 (plan 2026-10-03-backtrack-phase2.md).** These replace anything above or
+  elsewhere in this spec that says otherwise:
+  - **Retention** is "37 days, plus up to one hourly run" (not 30 days), counted from the segment's
+    start or from when Moss received it, whichever is older, until Phase 4 summarises days into
+    notes. The same words appear in consent, the app map and Settings.
+  - **Revoking a Mac keeps its rows.** Stored history belongs to the person, not the device;
+    deleting it is an explicit action in Settings, and works with no Mac linked.
+  - **Deletion is by explicit range and permanent.** The browser sends `[from, to)` in the person's
+    time zone for "Last hour", "Today" and "Choose a day"; "Everything" sends no range. Each delete
+    writes a marker covering the range up to the moment of deletion, and ingest refuses segments
+    that overlap a marker, so a retried or offline upload cannot bring deleted text back.
+  - **Uploads are bounded by time and size.** A request whose clock is more than an hour off is
+    refused, a segment must have started within the last 26 hours and not end in the future, and a
+    batch holds at most 200 segments and 1.5 MiB of encoded JSON.
+  - **No notes row before Phase 4.** Settings shows no notes-folder row and no "also delete daily
+    notes" option until daily notes exist.
 
 ## 7. Asking Moss
 

@@ -29,6 +29,7 @@ import {
 } from "./day-plan-review-model.js";
 import { BriefingReportShell } from "./briefing-report-shell.js";
 import { ReviewRow, rowTitle } from "./day-plan-review-row.js";
+import { personalize } from "../api/use-assistant-name.js";
 
 export interface DayPlanReviewProps {
   readonly controller: DayPlanReviewController;
@@ -128,7 +129,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
 
   return (
     <BriefingReportShell
-      eyebrow="Moss / Morning briefing"
+      eyebrow={personalize("Moss / Morning briefing")}
       title={title}
       opener={props.opener}
       onClose={props.onClose}

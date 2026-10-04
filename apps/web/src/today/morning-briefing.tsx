@@ -40,6 +40,7 @@ import {
   sourceLabel
 } from "./briefing-freshness.js";
 import { DayPlanSection } from "./day-plan.js";
+import { personalize, assistantName } from "../api/use-assistant-name.js";
 
 export interface MorningBriefingReaderProps {
   /** Which briefing this run belongs to. The evening report has no task-block
@@ -223,7 +224,9 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
 
   return (
     <BriefingReportShell
-      eyebrow={evening ? "Moss / Evening briefing" : "Moss / Morning briefing"}
+      eyebrow={
+        evening ? personalize("Moss / Evening briefing") : personalize("Moss / Morning briefing")
+      }
       title={evening ? "Your day, reviewed." : "Your day, prepared."}
       opener={props.opener}
       onClose={props.onClose}
@@ -450,8 +453,8 @@ function ReportBody(props: {
       ) : null}
       {noEveningPlan ? (
         <p className="brief-reader__plan-source">
-          No evening priorities were available for this briefing. Moss used today’s available
-          sources, including tasks and calendar.
+          No evening priorities were available for this briefing. {assistantName()} used today’s
+          available sources, including tasks and calendar.
         </p>
       ) : null}
       {!props.evening &&

@@ -101,7 +101,8 @@ describe("companion route surface", () => {
       { method: "POST" as const, url: "/api/companion/logout" },
       { method: "POST" as const, url: "/api/companion/focus/context" },
       { method: "POST" as const, url: "/api/companion/focus/judge" },
-      { method: "POST" as const, url: "/api/companion/focus/correct" }
+      { method: "POST" as const, url: "/api/companion/focus/correct" },
+      { method: "POST" as const, url: "/api/companion/backtrack" }
     ];
 
     for (const route of routes) {

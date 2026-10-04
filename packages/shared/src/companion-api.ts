@@ -89,6 +89,13 @@ export interface CompanionHeartbeatResponse {
   readonly account: { readonly name: string; readonly email: string };
   readonly serverTime: string;
   readonly expiresAt: string;
+  /**
+   * Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.4, Q7): whether this Moss stores
+   * day memory and whether the person has paused it from Moss. Optional so an older Mac or an
+   * older server (before Backtrack shipped) keep working — the upload response carries the same
+   * shape either way.
+   */
+  readonly backtrack?: BacktrackState;
 }
 
 export interface RenameCompanionDeviceRequest {
@@ -106,7 +113,10 @@ export type CompanionErrorCode =
   | "pair_attempt_not_pending"
   | "invalid_origin"
   | "focus_not_ready"
-  | "focus_no_block";
+  | "focus_no_block"
+  | "backtrack_unavailable"
+  | "backtrack_paused"
+  | "backtrack_clock";
 
 const DEVICE_NAME_SCHEMA = {
   type: "string",
@@ -144,6 +154,21 @@ const ACCOUNT_SUMMARY_SCHEMA = {
   additionalProperties: false,
   required: ["name", "email"],
   properties: { name: { type: "string" }, email: { type: "string" } }
+} as const;
+
+/**
+ * Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.4): whether this Moss stores day
+ * memory (the instance switch, decision 1) and whether the person has paused it (decision 6).
+ * Declared ahead of {@link companionHeartbeatRouteSchema}, which carries it optionally.
+ */
+const BACKTRACK_STATE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["storage", "paused"],
+  properties: {
+    storage: { type: "string", enum: ["off", "on"] },
+    paused: { type: "boolean" }
+  }
 } as const;
 
 export const companionProtocolRouteSchema = {
@@ -305,7 +330,8 @@ export const companionHeartbeatRouteSchema = {
         device: DEVICE_SUMMARY_SCHEMA,
         account: ACCOUNT_SUMMARY_SCHEMA,
         serverTime: { type: "string" },
-        expiresAt: { type: "string" }
+        expiresAt: { type: "string" },
+        backtrack: BACKTRACK_STATE_SCHEMA
       }
     },
     401: errorResponseSchema,
@@ -500,6 +526,110 @@ export const focusCorrectRouteSchema = {
     403: errorResponseSchema,
     // 404: no such judgment for this person. Absent and someone else's are indistinguishable.
     404: errorResponseSchema,
+    429: errorResponseSchema
+  }
+} as const;
+
+/**
+ * Backtrack phase 2a ingest (#2638 plan 2026-10-03-backtrack-phase2.md §4.4). One segment is a
+ * contiguous run of screen text the Mac already redacted once on-device; the server redacts
+ * again (decision: belt-and-suspenders, never trust the client alone with secrets-never-escape).
+ * Every timestamp here is the Mac's own clock — the server never trusts it at face value
+ * (decision 10: everything is shifted to server time by the request's measured skew before it is
+ * compared to anything, including itself).
+ */
+export interface BacktrackSegmentUpload {
+  readonly startedAt: string;
+  readonly endedAt: string;
+  readonly appName: string;
+  readonly bundleId: string;
+  readonly windowTitle: string;
+  readonly address?: string;
+  readonly body: string;
+}
+
+export interface BacktrackUploadRequest {
+  /** The Mac's clock when this request left (decision 10) — never reused from an earlier attempt. */
+  readonly sentAt: string;
+  readonly segments: readonly BacktrackSegmentUpload[];
+}
+
+/** Whether this Moss stores Backtrack day memory, and whether the person has paused it. */
+export interface BacktrackState {
+  readonly storage: "off" | "on";
+  readonly paused: boolean;
+}
+
+export interface BacktrackUploadResponse {
+  readonly accepted: number;
+  readonly duplicates: number;
+  /** Overlapped a deletion marker (decision 10) — never stored, whatever the Mac's clock. */
+  readonly discarded: number;
+  /** Outside the accepted time window after shifting to server time (decision 11). */
+  readonly rejectedClock: number;
+  readonly state: BacktrackState;
+}
+
+// Character pre-checks only (ajv counts JS string length, not UTF-8 bytes): the same numeric
+// bound as the column's `octet_length` CHECK (packages/backtrack/sql/0282), so anything that
+// could possibly be too long in bytes is already too long in characters and is rejected here,
+// cheaply, before the route does the exact byte-length check on the (post-redaction) text.
+const BACKTRACK_TIMESTAMP_SCHEMA = { type: "string", minLength: 1, maxLength: 40 } as const;
+const BACKTRACK_APP_NAME_SCHEMA = { type: "string", minLength: 1, maxLength: 400 } as const;
+const BACKTRACK_BUNDLE_ID_SCHEMA = { type: "string", minLength: 1, maxLength: 255 } as const;
+const BACKTRACK_WINDOW_TITLE_SCHEMA = { type: "string", minLength: 0, maxLength: 1000 } as const;
+const BACKTRACK_ADDRESS_SCHEMA = { type: "string", minLength: 0, maxLength: 2048 } as const;
+const BACKTRACK_BODY_SCHEMA = { type: "string", minLength: 0, maxLength: 8192 } as const;
+
+const BACKTRACK_SEGMENT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["startedAt", "endedAt", "appName", "bundleId", "windowTitle", "body"],
+  properties: {
+    startedAt: BACKTRACK_TIMESTAMP_SCHEMA,
+    endedAt: BACKTRACK_TIMESTAMP_SCHEMA,
+    appName: BACKTRACK_APP_NAME_SCHEMA,
+    bundleId: BACKTRACK_BUNDLE_ID_SCHEMA,
+    windowTitle: BACKTRACK_WINDOW_TITLE_SCHEMA,
+    address: BACKTRACK_ADDRESS_SCHEMA,
+    body: BACKTRACK_BODY_SCHEMA
+  }
+} as const;
+
+export const backtrackUploadRouteSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["sentAt", "segments"],
+    properties: {
+      sentAt: BACKTRACK_TIMESTAMP_SCHEMA,
+      // Decision 13: the uploader packs at most 200 segments a request; bodyLimit (2 MiB, set on
+      // the route) is the byte-size half of that same decision.
+      segments: { type: "array", minItems: 1, maxItems: 200, items: BACKTRACK_SEGMENT_SCHEMA }
+    }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["accepted", "duplicates", "discarded", "rejectedClock", "state"],
+      properties: {
+        accepted: { type: "number" },
+        duplicates: { type: "number" },
+        discarded: { type: "number" },
+        rejectedClock: { type: "number" },
+        state: BACKTRACK_STATE_SCHEMA
+      }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    // 409: backtrack_unavailable (the instance switch is off) or backtrack_paused (the person
+    // paused recording from Moss). Nothing is stored in either case.
+    409: errorResponseSchema,
+    413: errorResponseSchema,
+    // 422: backtrack_clock — the request's sentAt is too far from when the server received it.
+    422: errorResponseSchema,
     429: errorResponseSchema
   }
 } as const;

@@ -44,7 +44,7 @@ import {
   putNotesSource
 } from "../api/notes-client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name.js";
 import { GOOGLE_CONNECT_SUCCESS_QUERY_KEYS } from "../connectors/use-google-connect-flow";
 import { getConnectorAccountHealth, isConnectorSyncInFlight } from "./settings-connector-sync";
 import { GoogleConnect } from "./settings-google-connect";
@@ -744,7 +744,10 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
 
   return (
     <>
-      <PaneHead title="Modules" desc="Choose which parts of Moss to use and configure." />
+      <PaneHead
+        title="Modules"
+        desc={personalize("Choose which parts of Moss to use and configure.")}
+      />
       <Group title="Built-in" desc="Modules included with core installation.">
         {builtInModules.length ? (
           builtInModules.map(renderRow)

@@ -6,7 +6,7 @@ import { Button, InfoTip } from "@moss/ui";
 import { getNotesSourceDirectories } from "../api/notes-client";
 import { queryKeys } from "../api/query-keys";
 import { ApiError } from "../api/client";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { readError } from "./settings-types";
 
 export function shouldShowNotesRootRecovery(error: unknown, rootCount: number): boolean {

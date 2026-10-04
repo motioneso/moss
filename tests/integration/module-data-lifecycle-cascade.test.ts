@@ -153,7 +153,12 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.scratchpads",
         // Workshop projects own their durable feed; both cascade with their owner.
         "app.workshop_projects",
-        "app.workshop_project_feed"
+        "app.workshop_project_feed",
+        // #2638 Backtrack phase 2a — day-memory segments, preferences and the per-day
+        // deletion ledger are all owner-keyed and cascade with the user.
+        "app.backtrack_segments",
+        "app.backtrack_preferences",
+        "app.backtrack_deletions"
       ].sort()
     );
   });

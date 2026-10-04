@@ -4,7 +4,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyServerOptions } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
@@ -105,7 +105,12 @@ export interface CreateApiServerOptions {
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
   readonly authRuntime?: MossAuthRuntime;
-  readonly logger?: boolean;
+  /**
+   * `boolean` is the common case (silence in tests, real pino otherwise). A test that must
+   * assert on captured log content (companion-backtrack-routes.test.ts, secrets-never-escape)
+   * passes Fastify's own logger options object (e.g. `{ stream }`) straight through.
+   */
+  readonly logger?: FastifyServerOptions["logger"];
   readonly apiServerConfig?: ApiServerConfig;
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
@@ -382,7 +387,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // #2560: Trail Marker pairing and linked-Mac routes. Platform-owned, next to auth —
     // linking a Mac to an account is not any module's business.
     const focus = focusService(server.log, options);
-    registerCompanionRoutes(server, { authRuntime, dataContext, focus });
+    registerCompanionRoutes(server, { authRuntime, dataContext, focus, boss });
 
     // #1752: a live cell, not a one-time snapshot — rescan() lets an admin-triggered
     // rescan surface a module dropped onto the mount after this process booted.

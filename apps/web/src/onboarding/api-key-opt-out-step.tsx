@@ -5,6 +5,7 @@ import { KeyRound, Lock } from "lucide-react";
 import { getAiSummary } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { FootNote, OptionCard, StepHeader } from "./onboarding-ui";
+import { personalize } from "../api/use-assistant-name.js";
 
 export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
   const [assistant, setAssistant] = useState<"shared" | "personal">("shared");
@@ -23,11 +24,13 @@ export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
     <section className="onb-step" aria-labelledby="member-apikey-title">
       <StepHeader
         eyebrow="Step 1 · Your assistant"
-        title="Moss is ready to use."
+        title={personalize("Moss is ready to use.")}
         lede={
           done
             ? "You have added a custom AI provider. You can manage it in Settings at any time."
-            : "Moss runs on a shared server, so there is nothing to install on your computer. If you want to use your own API key to manage your usage limits, you can add it here. Most users do not need to."
+            : personalize(
+                "Moss runs on a shared server, so there is nothing to install on your computer. If you want to use your own API key to manage your usage limits, you can add it here. Most users do not need to."
+              )
         }
       />
       <div className="onb-opts">
@@ -36,7 +39,9 @@ export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
           onClick={() => setAssistant("shared")}
           name="Use the shared setup"
           mono="recommended"
-          desc="Run Moss on the shared system. Easiest option, with no setup required."
+          desc={personalize(
+            "Run Moss on the shared system. Easiest option, with no setup required."
+          )}
         />
         <OptionCard
           selected={assistant === "personal"}

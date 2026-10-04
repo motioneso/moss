@@ -28,7 +28,7 @@ import {
   searchWeatherLocations
 } from "../api/weather-client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { DeleteAccount } from "./delete-account";
 import { useFeedback } from "./settings-feedback";
 import { DataExport, MacCompanion, Sessions } from "./settings-profile-subviews";

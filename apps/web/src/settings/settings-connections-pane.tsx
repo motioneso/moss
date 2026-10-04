@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router";
 import { listConnectorAccounts, listIntegrations } from "../api/client";
 import { getNotesSource } from "../api/notes-client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { SettingsIntegrationsPane } from "./settings-integrations-pane";
 import { ConnectedPane, SourcesPane } from "./settings-personal-data-panes";
 import { PaneHead } from "./settings-ui";

@@ -586,7 +586,9 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0272",
           name: "0272_integration_classifier_prepare_worker.sql"
-        }
+        },
+        { version: "0281", name: "0281_memory_screen_source_kind.sql" },
+        { version: "0282", name: "0282_backtrack_segments.sql" }
       ]);
     } finally {
       await client.end();
