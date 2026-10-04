@@ -56,6 +56,12 @@ export function todayRange(now: Date): Required<BacktrackDeleteRequest> {
   return localDayRange(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+/** Today as a native `type="date"` value, in the browser's time zone: the latest day to offer. */
+export function todayDateValue(now: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 /** Parses a native `type="date"` value (`YYYY-MM-DD`); undefined when it isn't one. */
 export function chosenDayRange(value: string): Required<BacktrackDeleteRequest> | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -193,6 +199,7 @@ export default function BacktrackSettings() {
                 type="date"
                 className="jds-input"
                 aria-label="Day to delete"
+                max={todayDateValue(new Date())}
                 value={day}
                 onChange={(event) => setDay(event.target.value)}
               />

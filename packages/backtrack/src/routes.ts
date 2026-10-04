@@ -128,15 +128,21 @@ export function registerBacktrackRoutes(
       const range = parseDeleteRange(request.body);
       if (range.kind === "invalid") return reply.code(400).send({ error: range.message });
 
-      const deletedAt = new Date();
-      // The marker ends where the delete stops: a range reaching past now is cut at now
-      // (decision 10), and the segments are deleted over that same cut range.
-      const from = range.kind === "range" ? range.from : null;
-      const to =
-        range.kind === "range" ? new Date(Math.min(range.to.getTime(), deletedAt.getTime())) : null;
-
       const deleted = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
         await repository.lockOwner(scopedDb, owner);
+        // The cut is taken under the lock, so an upload committed while this waited is older than
+        // it. The marker and the delete share one bound: a range reaching past now is cut at now,
+        // and "Everything" means everything up to now (decision 10).
+        const deletedAt = new Date();
+        const from = range.kind === "range" ? range.from : null;
+        const to =
+          range.kind === "range"
+            ? new Date(Math.min(range.to.getTime(), deletedAt.getTime()))
+            : deletedAt;
+        // A range that starts in the future (a day not yet begun) holds nothing yet: no marker,
+        // since one with its lower bound past its upper bound is no range at all.
+        if (from && from.getTime() >= to.getTime()) return 0;
+
         // Marker first, then segments, then their chunks, in one transaction under the owner lock:
         // an ingest retry waits on the lock and then meets the marker, so it can't undo the delete.
         await repository.insertDeletionMarker(scopedDb, owner, from, to, deletedAt);

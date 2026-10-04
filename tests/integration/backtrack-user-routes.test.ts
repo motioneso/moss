@@ -407,6 +407,57 @@ describe("DELETE /api/backtrack/segments", () => {
     }
   });
 
+  it("deletes nothing and writes no marker for a day that hasn't begun", async () => {
+    await seed({ startedAgo: HOUR });
+    const now = Date.now();
+    const res = await del(ids.userA, {
+      from: new Date(now + DAY).toISOString(),
+      to: new Date(now + 2 * DAY).toISOString()
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ deleted: 0 });
+    expect(await segmentIds(ids.userA)).toHaveLength(1);
+    expect(await bootstrap.query("SELECT 1 FROM app.backtrack_deletions")).toMatchObject({
+      rowCount: 0
+    });
+  });
+
+  it("everything: an upload holding the lock when the delete arrives is deleted and covered by the marker", async () => {
+    // Stand in for an ingest mid-transaction: hold the owner lock, let the delete queue behind
+    // it, then commit a segment captured after the delete was sent.
+    await bootstrap.query("BEGIN");
+    let pending: ReturnType<typeof del> | undefined;
+    let capturedAt: Date;
+    try {
+      await bootstrap.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('backtrack:' || $1::text, 0))",
+        [ids.userA]
+      );
+      pending = del(ids.userA);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      capturedAt = new Date();
+      await bootstrap.query(
+        `INSERT INTO app.backtrack_segments
+           (owner_user_id, device_id, started_at, ended_at, app_name, bundle_id, window_title,
+            body, body_hash, client_started_at)
+         VALUES ($1, $2, $3, $3, 'Safari', 'com.apple.Safari', 'A page', 'late', $4, $3)`,
+        [ids.userA, randomUUID(), capturedAt, randomBytes(32)]
+      );
+      await bootstrap.query("COMMIT");
+    } catch (error) {
+      await bootstrap.query("ROLLBACK");
+      throw error;
+    }
+
+    expect((await pending).json()).toEqual({ deleted: 1 });
+    expect(await segmentIds(ids.userA)).toEqual([]);
+    const covered = await bootstrap.query<{ covered: boolean }>(
+      "SELECT range @> $1::timestamptz AS covered FROM app.backtrack_deletions",
+      [capturedAt]
+    );
+    expect(covered.rows).toEqual([{ covered: true }]);
+  });
+
   it("rejects a half range, a backwards or oversized one, junk, and deletes nothing", async () => {
     await seed({ startedAgo: HOUR });
     const now = Date.now();

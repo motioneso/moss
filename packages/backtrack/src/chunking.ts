@@ -8,23 +8,28 @@ import type { TextChunk } from "@moss/memory";
  * Memory's own `parseDocument` can't do this job: it bounds a chunk by characters (2000, about 500
  * tokens of plain English, so no margin), and it treats a leading `---` as frontmatter and `## ` as
  * a heading, which is wrong for text read off a screen. Memory's public API exposes no tokenizer
- * either, so the bound here is an estimate that errs on the side of too small: each character is
- * weighted by how many tokens a character of its class costs at worst, and a chunk may weigh at
- * most `CHUNK_TOKEN_BUDGET` (well under 512, leaving room for the `search_document: ` prefix).
+ * either, so the bound here is a proven ceiling rather than a guess. The model's tokenizer is BERT
+ * WordPiece: it lowercases and decomposes (NFD) the text, splits it at whitespace, punctuation and
+ * CJK characters, then cuts each word into pieces of at least one code point, or one `[UNK]` for a
+ * word it can't cut. No token spans whitespace, so the tokens in a text are at most its
+ * non-whitespace code points once lowercased and decomposed (`한` decomposes to three jamo and
+ * costs three). A chunk may weigh at most `CHUNK_TOKEN_BUDGET`: 512, less the six tokens of
+ * `[CLS] search_document: … [SEP]`, less a small margin.
  */
-export const CHUNK_TOKEN_BUDGET = 400;
+export const CHUNK_TOKEN_BUDGET = 500;
 
-const ALNUM = /[A-Za-z0-9]/;
 const SPACE = /\s/;
 
 function charWeight(char: string): number {
-  if (char.charCodeAt(0) > 127) return 1; // CJK and the like: about a token per character
-  if (ALNUM.test(char)) return 0.45; // identifiers, hashes, URLs tokenize worse than prose
-  if (SPACE.test(char)) return 0.2;
-  return 0.7; // punctuation
+  if (SPACE.test(char)) return 0;
+  // Both orders, since a lowercase can add code points (`İ` → `i̇`) and so can a decomposition.
+  return Math.max(
+    [...char.toLowerCase().normalize("NFD")].length,
+    [...char.normalize("NFD").toLowerCase()].length
+  );
 }
 
-/** A deliberately high estimate of the tokens in `text` (see `CHUNK_TOKEN_BUDGET`). */
+/** An upper bound on the tokens the embedder makes of `text` (see `CHUNK_TOKEN_BUDGET`). */
 export function estimateTokens(text: string): number {
   let total = 0;
   for (const char of text) total += charWeight(char);

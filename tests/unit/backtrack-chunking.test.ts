@@ -50,6 +50,21 @@ describe("splitSegmentText", () => {
     expect(chunks.map((chunk) => chunk.text).join("")).toBe(cjk);
   });
 
+  it("counts a one-letter word as a whole token (the tokenizer makes 621 of 615 of them)", () => {
+    const body = "a ".repeat(615);
+    expect(estimateTokens(body)).toBe(615);
+    const chunks = splitSegmentText("", null, body);
+    expect(chunks.length).toBe(2);
+    for (const chunk of chunks)
+      expect(estimateTokens(chunk.text)).toBeLessThanOrEqual(CHUNK_TOKEN_BUDGET);
+  });
+
+  it("weighs a character by the code points it decomposes into", () => {
+    expect(estimateTokens("한국어")).toBe(8); // jamo after NFD; the tokenizer makes 8 tokens
+    expect(estimateTokens("İ")).toBe(2); // lowercases to i plus a combining dot
+    expect(estimateTokens(" \n\t")).toBe(0);
+  });
+
   it("never splits a surrogate pair", () => {
     const emoji = "😀".repeat(1200);
     const chunks = splitSegmentText("", null, emoji);
