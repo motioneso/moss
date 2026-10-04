@@ -4,7 +4,7 @@
   try {
     var name = (localStorage.getItem("moss.assistantName") || "").trim();
     if (name) document.title = name + " Offline";
-  } catch (e) {
+  } catch {
     return;
   }
 })();
