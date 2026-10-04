@@ -31,20 +31,29 @@ export function estimateTokens(text: string): number {
   return total;
 }
 
-/** Cut one over-budget run into pieces that each fit, at code-point boundaries. */
+/** Cut one over-budget run into pieces that each fit: at spaces where it can, mid-word only if it must. */
 function cutToBudget(run: string): string[] {
   const pieces: string[] = [];
   let current = "";
   let weight = 0;
-  for (const char of run) {
-    const next = charWeight(char);
-    if (current && weight + next > CHUNK_TOKEN_BUDGET) {
+  const push = (text: string, textWeight: number): void => {
+    if (current && weight + textWeight > CHUNK_TOKEN_BUDGET) {
       pieces.push(current);
       current = "";
       weight = 0;
     }
-    current += char;
-    weight += next;
+    current += text;
+    weight += textWeight;
+  };
+
+  for (const word of run.split(/(?<=\s)/)) {
+    const wordWeight = estimateTokens(word);
+    if (wordWeight <= CHUNK_TOKEN_BUDGET) {
+      push(word, wordWeight);
+      continue;
+    }
+    // One unbroken run (a minified blob, a long hash) longer than a whole chunk.
+    for (const char of word) push(char, charWeight(char));
   }
   if (current) pieces.push(current);
   return pieces;
