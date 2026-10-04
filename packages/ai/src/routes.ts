@@ -8,6 +8,7 @@ import {
   type DataContextDb,
   type DataContextRunner,
   type MossActionAuditLog,
+  type MossActivityDetail,
   type MossModelActivityLog
 } from "@moss/db";
 
@@ -70,9 +71,9 @@ import {
   listActionAuditLogRouteSchema,
   type ActionAuditLogEntryDto,
   type ListActionAuditLogResponse,
-  listModelActivityRouteSchema,
-  type ModelActivityEntryDto,
-  type ListModelActivityResponse
+  listActivityLinesRouteSchema,
+  type ActivityLineDto,
+  type ListActivityLinesResponse
 } from "@moss/shared";
 
 import {
@@ -826,58 +827,50 @@ export function registerAiRoutes(
     }
   );
 
-  const MODEL_ACTIVITY_MAX_LIMIT = 200;
-  const MODEL_ACTIVITY_DEFAULT_LIMIT = 100;
+  const ACTIVITY_LINES_DEFAULT_LIMIT = 200;
+  const ACTIVITY_LINES_MAX_LIMIT = 200;
 
-  // Plan 3.6a (#2889): admin-only read of the model activity log. The explicit admin check gives
-  // a non-admin a 403; the admin-only SELECT policy is the second, database-level lock. There is
-  // no retention floor — the log is kept indefinitely (ruling 14).
-  server.get<{
-    Querystring: {
-      kind?: string;
-      model?: string;
-      result?: string;
-      since?: string;
-      before?: string;
-      beforeId?: string;
-      limit?: number;
-    };
-  }>("/api/ai/model-activity", { schema: listModelActivityRouteSchema }, async (request, reply) => {
-    try {
-      const accessContext = await dependencies.resolveAccessContext(request);
-
-      return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
-
+  // #2956 (slice C): the viewer's own activity lines with unexpired detail. Owner-scoped:
+  // no admin check — row security limits each person to their own lines (admins additionally
+  // read ownerless System lines). Tool steps for a chat answer ride the existing action-audit
+  // endpoint (turnId) and join client-side on the turn.
+  server.get<{ Querystring: { since?: string; limit?: number } }>(
+    "/api/ai/activity-lines",
+    { schema: listActivityLinesRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
         const limit = Math.min(
-          request.query.limit ?? MODEL_ACTIVITY_DEFAULT_LIMIT,
-          MODEL_ACTIVITY_MAX_LIMIT
+          request.query.limit ?? ACTIVITY_LINES_DEFAULT_LIMIT,
+          ACTIVITY_LINES_MAX_LIMIT
         );
-        const since = parseOptionalTimestamp(request.query.since);
-        const before = parseOptionalTimestamp(request.query.before);
-        const rows = await repository.listModelActivity(scopedDb, {
-          ...(request.query.kind ? { kind: request.query.kind } : {}),
-          ...(request.query.model ? { modelName: request.query.model } : {}),
-          ...(request.query.result ? { outcome: request.query.result } : {}),
-          ...(since ? { since } : {}),
-          ...(before ? { before } : {}),
-          ...(before && request.query.beforeId ? { beforeId: request.query.beforeId } : {}),
-          limit
-        });
-
-        const entries = rows.map(serializeModelActivityEntry);
-        const last = entries.at(-1);
-        const response: ListModelActivityResponse = {
-          entries,
-          nextBefore: entries.length === limit && last ? last.occurredAt : null,
-          nextBeforeId: entries.length === limit && last ? last.id : null
-        };
+        const since =
+          parseOptionalTimestamp(request.query.since) ??
+          new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        const response: ListActivityLinesResponse = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const lines = await repository.listActivityLines(scopedDb, { since, limit });
+            const details = await repository.listActivityDetails(
+              scopedDb,
+              lines.map((line) => line.id)
+            );
+            const detailById = new Map(details.map((detail) => [detail.activity_id, detail]));
+            return {
+              entries: lines.map((line) => serializeActivityLine(line, detailById.get(line.id)))
+            };
+          }
+        );
         return response;
-      });
-    } catch (error) {
-      return handleRouteError(error, reply);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
     }
-  });
+  );
+
+  // #2956 (slice D): the old admin-only model activity endpoint is retired with
+  // its page. Admins read the same rows through /api/ai/activity-lines, which is
+  // owner-scoped by row security instead of an admin-wide read policy.
 
   server.get(
     "/api/ai/assistant-tools",
@@ -1449,6 +1442,7 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
     errorClass: row.error_class ?? null,
     requestId: row.request_id ?? null,
     chatSessionId: row.chat_session_id ?? null,
+    turnId: row.turn_id ?? null,
     sourceSurface: row.source_surface as ActionAuditLogEntryDto["sourceSurface"],
     inputSummary: row.input_summary as ActionAuditLogEntryDto["inputSummary"],
     durationMs: row.duration_ms ?? null,
@@ -1457,16 +1451,44 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
   };
 }
 
-function serializeModelActivityEntry(row: MossModelActivityLog): ModelActivityEntryDto {
+function serializeActivityLine(
+  row: MossModelActivityLog,
+  detail: MossActivityDetail | undefined
+): ActivityLineDto {
   return {
     id: row.id,
     occurredAt:
       row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at),
     kind: row.kind,
     action: row.action,
-    outcome: row.outcome,
+    outcome: row.outcome as ActivityLineDto["outcome"],
     modelName: row.model_name,
-    result: row.result
+    result: row.result,
+    ownerUserId: row.owner_user_id,
+    actionCode: row.action_code,
+    turnId: row.turn_id,
+    parentId: row.parent_id,
+    durationMs: row.duration_ms,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    failureCode: row.failure_code,
+    factCounts: (row.fact_counts as ActivityLineDto["factCounts"]) ?? null,
+    detail: detail
+      ? {
+          quote: detail.quote,
+          resultLine: detail.result_line,
+          steps: detail.steps.map((step) => ({
+            title: step.title,
+            result: step.result,
+            ...(step.askedFor ? { askedFor: step.askedFor } : {}),
+            ...(step.returned ? { returned: step.returned } : {})
+          })),
+          expiresAt:
+            detail.expires_at instanceof Date
+              ? detail.expires_at.toISOString()
+              : String(detail.expires_at)
+        }
+      : null
   };
 }
 

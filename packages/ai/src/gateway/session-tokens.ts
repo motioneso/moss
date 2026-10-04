@@ -139,6 +139,30 @@ export class SessionTokenRegistry {
   }
 
   /**
+   * #2956: the turn running on a chat session right now, keyed by the same
+   * session id the tokens carry. The chat manager sets it when a turn starts
+   * and clears it when the turn ends; tool-time audit writers read it so each
+   * tool row joins its turn. Gate attempts register under their own gate
+   * session id. Entries are short-lived by construction (cleared in the same
+   * finally that releases the turn or revokes the gate token); a missing entry
+   * means no live turn, never an error.
+   */
+  private readonly currentTurnBySession = new Map<string, string>();
+
+  setCurrentTurnId(chatSessionId: string, turnId: string): void {
+    this.currentTurnBySession.set(chatSessionId, turnId);
+  }
+
+  clearCurrentTurnId(chatSessionId: string): void {
+    this.currentTurnBySession.delete(chatSessionId);
+  }
+
+  readCurrentTurnId(chatSessionId: string | undefined): string | undefined {
+    if (!chatSessionId) return undefined;
+    return this.currentTurnBySession.get(chatSessionId);
+  }
+
+  /**
    * #2159 — mark that this token's client has completed its first MCP tools/list round trip.
    * Called by the MCP transport's tools/list handler on first success for a token. Idempotent
    * and a no-op for an unknown/revoked/expired token (nothing to wake).

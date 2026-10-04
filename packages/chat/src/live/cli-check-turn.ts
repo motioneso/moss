@@ -47,9 +47,12 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
 export async function runCheckTurn(options: CheckTurnOptions): Promise<CheckTurnResult> {
   const outcome = await runCheckTurnInner(options);
   const ok = outcome.result.ok;
+  // #2956: a check turn proves the provider answers, so it shares the
+  // reachability code. No actor rides along, so the line is a System line.
   recordModelActivity({
     kind: "check",
     action: "check",
+    actionCode: "probe.reachable",
     outcome: ok ? "ok" : "error",
     modelName: options.launch.model ?? options.engine.provider,
     result: ok ? "completed" : "failed"

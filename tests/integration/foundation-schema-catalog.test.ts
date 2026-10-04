@@ -545,6 +545,32 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0257",
           name: "0257_focus_judgments_retention.sql"
+        },
+        // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
+        {
+          version: "0258",
+          name: "0258_activity_owner_lines.sql"
+        },
+        // #2956 — turn link on the action audit log for the per-turn step join.
+        {
+          version: "0259",
+          name: "0259_audit_log_turn_id.sql"
+        },
+        // #2956 round 3 — a detail row can never move to another line: the
+        // immutability trigger also freezes activity_id.
+        {
+          version: "0260",
+          name: "0260_activity_detail_no_reparent.sql"
+        },
+        // #2984 R2.1 — per-tool sort records and keep-out list on connected services.
+        {
+          version: "0268",
+          name: "0268_integration_classifier_sort.sql"
+        },
+        // #2984 R2.1 — one-time conversion of old opt-in and reviewed-risk settings.
+        {
+          version: "0269",
+          name: "0269_integration_classifier_sort_convert.sql"
         }
       ]);
     } finally {

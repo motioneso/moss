@@ -10,6 +10,8 @@ export { Button } from "./button.js";
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./button.js";
 export { ButtonLink, buttonLinkClassName } from "./button-link.js";
 export type { ButtonLinkProps, ButtonLinkSize, ButtonLinkVariant } from "./button-link.js";
+export { Checklist } from "./checklist.js";
+export type { ChecklistItem, ChecklistProps } from "./checklist.js";
 export { BrandMark } from "./brand-mark.js";
 export { Card } from "./card.js";
 export type { CardPadding, CardProps } from "./card.js";

@@ -40,7 +40,12 @@ async function getRetriever(scopedDb: DataContextDb): Promise<MemoryRetriever> {
   if (retrieverCache?.key !== key) {
     retrieverCache = {
       key,
-      retriever: new MemoryRetriever(createEmbeddingProvider(config), new MemoryRepository())
+      // #2956: the retriever is shared across actors, so no owner is baked in —
+      // baking the first caller's would misattribute every later actor's rows.
+      retriever: new MemoryRetriever(
+        createEmbeddingProvider(config, process.env, undefined, { source: "notes" }),
+        new MemoryRepository()
+      )
     };
   }
   return retrieverCache.retriever;

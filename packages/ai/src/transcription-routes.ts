@@ -101,7 +101,9 @@ export function registerAiTranscriptionRoutes(
               model: { provider_model_id: model.provider_model_id },
               // Copy into a plain Uint8Array<ArrayBuffer> — Buffer's underlying ArrayBufferLike
               // can type as SharedArrayBuffer, which BlobPart rejects.
-              audio: new Blob([Uint8Array.from(audio)])
+              audio: new Blob([Uint8Array.from(audio)]),
+              // #2956: the transcription line is owned by the requesting user.
+              ownerUserId: accessContext.actorUserId
             }),
             TIMEOUT_MS
           );

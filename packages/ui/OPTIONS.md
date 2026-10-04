@@ -61,6 +61,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## checklist
+
+_No enum or boolean props._
+
 ## chip
 
 - **toggle** (optional boolean flag)

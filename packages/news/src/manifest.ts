@@ -493,6 +493,11 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.news",
+      description: "Ranked your news stories"
+    },
+    {
       id: "news.story_pictures",
       description:
         "Show a picture with a story, from the feed or else the story's own text (as for NPR). " +

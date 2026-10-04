@@ -44,7 +44,7 @@ import {
   patchAiActionPolicyRequestSchema,
   patchAiActionPolicyResponseSchema,
   listActionAuditLogRouteSchema,
-  listModelActivityRouteSchema,
+  listActivityLinesRouteSchema,
   approveModuleBuildResponseSchema,
   listMyModuleBuildsResponseSchema
 } from "@moss/shared";
@@ -97,7 +97,11 @@ export const aiModuleManifest = {
       // #2682 — the nightly worker-run purge job had no EXECUTE grant on the purge function.
       "sql/0245_moss_action_audit_purge_worker_grant.sql",
       // Plan 3.6a (#2889) — one flat, admin-readable, append-only row per model call.
-      "sql/0254_moss_model_activity_log.sql"
+      "sql/0254_moss_model_activity_log.sql",
+      // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
+      "sql/0258_activity_owner_lines.sql",
+      // #2956 — turn link on the action audit log for the per-turn step join.
+      "sql/0259_audit_log_turn_id.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -106,7 +110,8 @@ export const aiModuleManifest = {
       "app.ai_assistant_action_requests",
       "app.moss_action_audit_log",
       "app.moss_error_log",
-      "app.moss_model_activity_log"
+      "app.moss_model_activity_log",
+      "app.moss_activity_detail"
     ]
   },
   settings: [
@@ -123,6 +128,11 @@ export const aiModuleManifest = {
   ],
   // #2208: Moss's app map for the Providers card's model controls (Settings > AI providers).
   features: [
+    {
+      // #2956: the Activity history line title for the module-build planning call.
+      id: "structured.moss.workshop-build-plan",
+      description: "Planned a module build"
+    },
     {
       id: "ai.refresh_provider_models",
       description:
@@ -574,11 +584,14 @@ export const aiModuleManifest = {
       permissionId: "ai.assistant-actions"
     },
     {
-      // Plan 3.6a (#2889): the admin-only model activity log the Settings screen reads.
+      // #2956: the viewer's own activity lines the Activity page reads.
+      // Owner-scoped like the audit log above, so it carries the same permission.
+      // Slice D retired the old admin-only model-activity endpoint with its page;
+      // admins read the same rows through this route instead.
       method: "GET",
-      path: "/api/ai/model-activity",
-      responseSchema: listModelActivityRouteSchema.response[200],
-      permissionId: "ai.manage"
+      path: "/api/ai/activity-lines",
+      responseSchema: listActivityLinesRouteSchema.response[200],
+      permissionId: "ai.assistant-actions"
     },
     {
       // #1888 — the "Build it" button on the plan card the workshop.buildModule tool returns.

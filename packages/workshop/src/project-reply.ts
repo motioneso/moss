@@ -100,6 +100,7 @@ async function getReplyText(
     const result = await deps
       .createCliStructuredAdapter(modelInput.provider_kind)
       .generateStructured({
+        service: "module.workshop",
         model: modelInput,
         messages,
         schema,
@@ -121,7 +122,9 @@ async function getReplyText(
   const result = await adapter.generateChat({
     model: modelInput,
     messages,
-    maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS
+    maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS,
+    actionCode: "structured.workshop",
+    ownerUserId: actorUserId
   });
   return result.text;
 }

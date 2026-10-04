@@ -12,7 +12,20 @@
 
 import type { FastifyBaseLogger } from "fastify";
 
+import type { ActivityDetailStep, ActivityFactCounts } from "@moss/db";
+
 export type ModelActivityOutcome = "ok" | "error" | "aborted";
+
+/** Allow-listed failure vocabulary (spec section 5.4). Raw provider text is never stored. */
+export type ModelActivityFailureCode =
+  | "timeout"
+  | "rate_limited"
+  | "auth_failed"
+  | "bad_shape"
+  | "provider_down"
+  | "cancelled"
+  | "tool_denied"
+  | "unknown";
 
 export type ModelActivityEntry = {
   readonly kind: string;
@@ -21,7 +34,54 @@ export type ModelActivityEntry = {
   readonly modelName: string;
   readonly result: string;
   readonly occurredAt?: Date;
+  /** Caller-chosen id, so a later fact can attach to this line. */
+  readonly id?: string;
+  /** Owner line. Written inside the owner's data context; ownerless lines never get detail. */
+  readonly ownerUserId?: string;
+  readonly actionCode?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
+  readonly durationMs?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly failureCode?: ModelActivityFailureCode;
+  /** Numbers and booleans only; the SQL CHECK rejects anything else. */
+  readonly factCounts?: ActivityFactCounts;
+  readonly detail?: {
+    readonly quote?: string;
+    readonly resultLine?: string;
+    readonly steps?: readonly ActivityDetailStep[];
+  };
 };
+
+export type ModelActivityFacts = {
+  readonly factCounts?: ActivityFactCounts;
+  readonly quote?: string;
+  readonly resultLine?: string;
+  readonly steps?: readonly ActivityDetailStep[];
+};
+
+/**
+ * Map a provider error to a failure code. Raw errors can carry response bodies, so no
+ * error text is ever stored — only the error's shape is classified, and anything
+ * unrecognized is `unknown`.
+ */
+export function modelActivityFailureCode(error: unknown): ModelActivityFailureCode {
+  if (error instanceof Error) {
+    if (error.name === "AbortError") return "cancelled";
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string") {
+      const normalized = code.toUpperCase();
+      if (normalized.includes("TIMEOUT") || normalized.includes("ETIMEDOUT")) return "timeout";
+      if (normalized.includes("RATE_LIMIT") || normalized === "429") return "rate_limited";
+      if (normalized === "401" || normalized === "403" || normalized.includes("UNAUTH"))
+        return "auth_failed";
+      if (normalized.includes("ECONN") || normalized.includes("ENOTFOUND")) return "provider_down";
+    }
+    if (/timed out/i.test(error.message)) return "timeout";
+  }
+  return "unknown";
+}
 
 export type ModelActivityRecorder = (entry: ModelActivityEntry) => void;
 
@@ -80,14 +140,57 @@ export function modelActivityAction(service: string | undefined): string {
   return label.length > 0 ? label : "structured";
 }
 
+/**
+ * #2956: the fixed vocabulary for a structured activity line. A call no service
+ * names still gets a line, under the fallback the page titles "Ran a structured
+ * task". Shared by the API-key and CLI structured adapters so both agree.
+ */
+export function modelActivityStructuredCode(service: string | undefined): string {
+  const label = modelActivityAction(service);
+  return label === "structured" ? "structured.task" : `structured.${label}`;
+}
+
 /** DB CHECK limits for the short fields; a value over the limit is truncated, never dropped. */
 const KIND_LIMIT = 64;
 const ACTION_LIMIT = 200;
 const RESULT_LIMIT = 500;
+const ACTION_CODE_LIMIT = 64;
+const TURN_ID_LIMIT = 128;
+const QUOTE_BYTE_LIMIT = 2000;
+const RESULT_LINE_LIMIT = 500;
 
 function truncate(value: string, max: number): string {
   const codePoints = Array.from(value);
   return codePoints.length <= max ? value : codePoints.slice(0, max).join("");
+}
+
+function truncateBytes(value: string, maxBytes: number): string {
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.length <= maxBytes) return value;
+  let end = value.length;
+  while (end > 0 && new TextEncoder().encode(value.slice(0, end)).length > maxBytes) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+/**
+ * Fact counts carry allow-listed keys with number or boolean values only; anything
+ * else is dropped, never stored. The database trigger is the second lock and rejects
+ * the write outright.
+ */
+const FACT_COUNT_KEYS = new Set(["tools", "tools_failed", "jev_agreed", "confidence"]);
+
+export function boundModelActivityFacts(
+  facts: ActivityFactCounts | undefined
+): ActivityFactCounts | undefined {
+  if (!facts) return undefined;
+  const bounded: ActivityFactCounts = {};
+  for (const [key, value] of Object.entries(facts)) {
+    if (!FACT_COUNT_KEYS.has(key)) continue;
+    if (typeof value === "number" || typeof value === "boolean") bounded[key] = value;
+  }
+  return bounded;
 }
 
 /** Clamp every field to the column CHECK limits so an over-long value can never drop its row. */
@@ -97,7 +200,21 @@ export function boundModelActivityEntry(entry: ModelActivityEntry): ModelActivit
     kind: truncate(entry.kind, KIND_LIMIT),
     action: truncate(entry.action, ACTION_LIMIT),
     modelName: truncate(entry.modelName, ACTION_LIMIT),
-    result: truncate(entry.result, RESULT_LIMIT)
+    result: truncate(entry.result, RESULT_LIMIT),
+    actionCode: entry.actionCode ? truncate(entry.actionCode, ACTION_CODE_LIMIT) : undefined,
+    turnId: entry.turnId ? truncate(entry.turnId, TURN_ID_LIMIT) : undefined,
+    factCounts: boundModelActivityFacts(entry.factCounts),
+    detail: entry.detail
+      ? {
+          quote: entry.detail.quote
+            ? truncateBytes(entry.detail.quote, QUOTE_BYTE_LIMIT)
+            : undefined,
+          resultLine: entry.detail.resultLine
+            ? truncate(entry.detail.resultLine, RESULT_LINE_LIMIT)
+            : undefined,
+          steps: entry.detail.steps
+        }
+      : undefined
   };
 }
 
@@ -123,18 +240,45 @@ export function createDbModelActivityRecorder(
 }
 
 /**
- * Run one provider call and record its result after it settles. The record happens outside the
- * awaited work, so it can neither slow the call nor fail it.
+ * Run one provider call and record its result after it settles. The duration is measured here,
+ * so writers never compute it themselves. The record happens outside the awaited work, so it
+ * can neither slow the call nor fail it.
  */
 export async function withModelActivityRecording<T>(
   recorder: ModelActivityRecorder | undefined,
-  context: { readonly kind: string; readonly action: string; readonly modelName: string },
-  run: () => Promise<T>
+  context: {
+    readonly kind: string;
+    readonly action: string;
+    readonly modelName: string;
+    readonly id?: string;
+    readonly ownerUserId?: string;
+    readonly actionCode?: string;
+    readonly turnId?: string;
+    readonly parentId?: string;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+  },
+  run: () => Promise<T>,
+  opts?: {
+    /** Pull token usage off the settled value. Absent or empty means unreported. */
+    readonly usageOf?: (
+      value: T
+    ) => { readonly inputTokens?: number; readonly outputTokens?: number } | undefined;
+  }
 ): Promise<T> {
+  const startedAt = Date.now();
   try {
     const value = await run();
     if (recorder) {
-      invokeSafely(recorder, { ...context, outcome: "ok", result: RESULT_OK });
+      const usage = opts?.usageOf?.(value);
+      invokeSafely(recorder, {
+        ...context,
+        outcome: "ok",
+        result: RESULT_OK,
+        durationMs: Date.now() - startedAt,
+        ...(usage?.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+        ...(usage?.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {})
+      });
     }
     return value;
   } catch (error) {
@@ -143,7 +287,9 @@ export async function withModelActivityRecording<T>(
       invokeSafely(recorder, {
         ...context,
         outcome: aborted ? "aborted" : "error",
-        result: aborted ? RESULT_ABORTED : RESULT_ERROR
+        result: aborted ? RESULT_ABORTED : RESULT_ERROR,
+        durationMs: Date.now() - startedAt,
+        failureCode: modelActivityFailureCode(error)
       });
     }
     throw error;

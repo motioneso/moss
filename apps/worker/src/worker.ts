@@ -8,6 +8,7 @@ import {
   DataContextRunner,
   createDatabase,
   getMossDatabaseUrls,
+  readScopedActorUserId,
   resolveMossEnv,
   type AccessContext
 } from "@moss/db";
@@ -262,6 +263,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     prepareRunStepDeps: async (scopedDb) => {
       const model = await aiRepository.selectChatModelForUser(scopedDb);
       if (!model) throw new ModuleBuildSafeError("no chat model is configured for module build");
+      // #2956: the build runs for the scoped actor, who owns its lines.
+      const buildOwnerUserId = await readScopedActorUserId(scopedDb);
       const moduleBuildLiveAgent = createModuleBuildLiveAgent({
         io: moduleBuildIo,
         mux: moduleBuildMux,
@@ -274,6 +277,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           recordModelActivity({
             kind: "structured",
             action: "module-build",
+            actionCode: "module.build",
+            ...(buildOwnerUserId ? { ownerUserId: buildOwnerUserId } : {}),
             outcome,
             modelName: model.provider_model_id,
             result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
