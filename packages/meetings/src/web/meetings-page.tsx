@@ -5,12 +5,14 @@ import { Button, Masthead } from "@moss/ui";
 import { MeetingSetup } from "./meeting-setup.js";
 import { MeetingHistory } from "./meeting-history.js";
 import { MeetingRecord } from "./meeting-record.js";
-import { meetingKeys, meetingRecordQueryOptions } from "./client.js";
+import { useMeetingDate } from "./locale.js";
+import { isMeetingAccessDenied, meetingKeys, meetingRecordQueryOptions } from "./client.js";
 import "./styles.css";
 
 export function MeetingsPage() {
   const [params, setParams] = useSearchParams();
   const id = params.get("id");
+  const date = useMeetingDate();
   const client = useQueryClient();
   const navigation = useLocation().key;
   const hasReference = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"].some(
@@ -32,11 +34,12 @@ export function MeetingsPage() {
   return (
     <div className="meetings-page">
       <Masthead
-        tone="field"
-        eyebrow={id ? "Meeting draft" : history ? "Your meetings" : "Meeting companion"}
+        tone={id ? "default" : "field"}
+        compact={!!id}
+        eyebrow={id ? "Meeting review" : history ? "Your meetings" : "Meeting companion"}
         title={
           id
-            ? !record.isError && !record.isFetching
+            ? !isMeetingAccessDenied(record.error)
               ? (record.data?.meeting.title ?? "Your meeting draft")
               : "Your meeting draft"
             : history
@@ -45,11 +48,13 @@ export function MeetingsPage() {
         }
         lede={
           id
-            ? "Draft · Not recorded"
+            ? !isMeetingAccessDenied(record.error) && record.data
+              ? date(record.data.meeting.createdAt)
+              : undefined
             : "Create a draft, keep your personal notes, and find them again."
         }
         aside={
-          <Button variant="field" onClick={history ? showSetup : showHistory}>
+          <Button variant={id ? "secondary" : "field"} onClick={history ? showSetup : showHistory}>
             {history ? "New meeting draft" : "View meeting history"}
           </Button>
         }

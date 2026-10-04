@@ -1,3 +1,6 @@
+import { useSignOutGuard } from "./use-sign-out-guard";
+import { hasSessionUnsavedChanges } from "@moss/module-web-sdk";
+import { SignOutConfirmation } from "./sign-out-confirmation";
 import { randomUuid, validMeetingChatInput, type OpenMeetingChatInput } from "@moss/module-web-sdk";
 import { MeetingChatDrawer } from "../chat/meeting-chat-drawer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -331,6 +334,21 @@ export function AppShell(props: AppShellProps) {
     }
   });
 
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent) => {
+      if (!hasSessionUnsavedChanges(queryClient)) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [queryClient]);
+  const signOutGuard = useSignOutGuard(queryClient, () => {
+    setMeetingSelection(null);
+    setChatOpen(false);
+    signOutMutation.mutate();
+  });
+
   // Chat sits beside the page when the window is wide enough for both, on every screen. A
   // running draft module keeps the docked layout down to the mobile breakpoint. Below that the
   // drawer is the ordinary floating overlay.
@@ -430,6 +448,9 @@ export function AppShell(props: AppShellProps) {
 
   return (
     <div className="app-frame" data-nav={navMode} data-chat-expanded={expanded || undefined}>
+      {signOutGuard.confirming ? (
+        <SignOutConfirmation onCancel={signOutGuard.cancel} onConfirm={signOutGuard.confirm} />
+      ) : null}
       <PageTrailProvider>
         <ShellNav
           navMode={navMode}
@@ -443,11 +464,7 @@ export function AppShell(props: AppShellProps) {
           unreadByModule={unreadByModule}
           unreadCount={unreadCount}
           signOutPending={signOutMutation.isPending}
-          onSignOut={() => {
-            setMeetingSelection(null);
-            setChatOpen(false);
-            signOutMutation.mutate();
-          }}
+          onSignOut={signOutGuard.request}
           onNavigate={(to) => {
             closeMobileNav();
             navigate(to);

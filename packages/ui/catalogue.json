@@ -450,6 +450,15 @@
       "flags": []
     },
     {
+      "name": "radio-card-group",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/radio-card-group.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["RadioCardGroup"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "row-button",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/row-button.tsx", "type": "registry:ui" }],
@@ -522,6 +531,15 @@
         { "prop": "checked", "optional": false },
         { "prop": "disabled", "optional": true }
       ]
+    },
+    {
+      "name": "tabs",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/tabs.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Tabs"],
+      "options": [],
+      "flags": []
     },
     {
       "name": "today-pill",

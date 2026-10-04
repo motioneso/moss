@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AccessContext, DataContextDb } from "@moss/db";
+import { dataContextBrand, type AccessContext, type DataContextDb } from "@moss/db";
 import {
   AiRepository,
   createAiSecretCipher,
@@ -16,7 +16,7 @@ import {
   MEETING_OUTPUT_SCHEMA
 } from "../../packages/module-registry/src/meeting-output-runtime.js";
 
-const db = {} as DataContextDb;
+const db = { [dataContextBrand]: true } as DataContextDb;
 const actor = { actorUserId: "owner", requestId: "synthetic" };
 const model = {
   id: "model-id",
@@ -190,7 +190,11 @@ describe("meeting output composition HTTP boundary", () => {
       expect(args).toEqual([
         db,
         "module.meetings",
-        { capability: "summarization", rejectUnavailableFixedBinding: true }
+        {
+          capability: "summarization",
+          rejectUnavailableFixedBinding: true,
+          rejectUnavailablePinnedModel: true
+        }
       ]);
     expect(h.serviceRoute).not.toHaveBeenCalled();
     expect(h.sortingRoute).not.toHaveBeenCalled();
@@ -221,6 +225,22 @@ describe("meeting output composition HTTP boundary", () => {
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_route_unavailable"
     });
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("rejects same-provider hard-model-pin substitution through the real service resolver before credential lookup", async () => {
+    const h = setup();
+    h.route.mockRestore();
+    vi.spyOn(AiRepository.prototype, "listModuleServiceBindings").mockResolvedValue({});
+    vi.spyOn(AiRepository.prototype, "getAdminPinnedModelId").mockResolvedValue(model.id);
+    vi.spyOn(AiRepository.prototype, "getAdminPinnedProviderId").mockResolvedValue(null);
+    h.serviceRoute.mockResolvedValue({
+      model: { ...model, id: "same-provider-replacement" },
+      reason: "admin-pin"
+    });
+    await expect(h.generator(actor, input())).rejects.toMatchObject({
+      code: "meeting_output_route_unavailable"
+    });
+    expect(h.credential).not.toHaveBeenCalled();
     expect(h.fetch).not.toHaveBeenCalled();
   });
   it("fails closed on an unavailable admin pin without an alternate route", async () => {

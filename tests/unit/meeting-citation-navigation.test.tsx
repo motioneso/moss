@@ -4,7 +4,7 @@ import { MemoryRouter, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeetingRecord, MeetingTranscriptSnapshotResponse } from "@moss/shared";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
-import { meetingKeys } from "../../packages/meetings/src/web/client.js";
+import { isMeetingAccessDenied, meetingKeys } from "../../packages/meetings/src/web/client.js";
 
 const meeting: MeetingRecord = {
   id: "11223344-1122-4122-8122-112233445566",
@@ -66,10 +66,25 @@ let latest: number;
 let latestReads: number;
 let denied: boolean;
 async function flush() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 15));
-  });
+  await vi.waitFor(
+    async () => {
+      await act(async () => {});
+      expect(client.isFetching()).toBe(0);
+      if (
+        denied ||
+        isMeetingAccessDenied(client.getQueryState(meetingKeys.record(meeting.id))?.error)
+      ) {
+        expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+        expect(JSON.stringify(renderer.toJSON())).not.toContain(meeting.title);
+      }
+      expect(JSON.stringify(renderer.toJSON())).not.toMatch(
+        /Loading (?:your draft|transcript|summaries|referenced text)|Refreshing meeting/
+      );
+    },
+    { timeout: 5000 }
+  );
 }
+
 async function mount() {
   await act(async () => {
     renderer = create(
@@ -117,6 +132,10 @@ beforeEach(() => {
       if (url.pathname === "/api/me/locale")
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
+        );
+      if (url.pathname.endsWith("/outputs"))
+        return new Response(
+          JSON.stringify({ artifacts: [], candidates: [], headVersion: 0, templates: [] })
         );
       if (url.pathname.endsWith("/transcript/evidence"))
         return new Response(

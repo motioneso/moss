@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { ApiError, randomUuid } from "@moss/module-web-sdk";
+import { ApiError, randomUuid, clearSessionUnsavedChanges } from "@moss/module-web-sdk";
 
 export const outputDenialKey = (id: string) => ["meetings", "output-denied", id] as const;
 const epochKey = (id: string) => ["meetings", "output-access-epoch", id] as const;
@@ -7,6 +7,7 @@ export function outputAccessEpoch(client: QueryClient, id: string): string | und
   return client.getQueryData<string>(epochKey(id));
 }
 export function invalidateOutputAccess(client: QueryClient, id: string): void {
+  clearSessionUnsavedChanges(client, `meetings:${id}:output:`);
   client.setQueryData(epochKey(id), randomUuid());
   client.setQueryData(outputDenialKey(id), true);
   client.removeQueries({ queryKey: ["meetings", "output-session", id] });

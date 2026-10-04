@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "@moss/module-web-sdk";
+import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import type {
   MeetingActionCandidate,
   MeetingExportReceipt,
@@ -208,7 +208,7 @@ describe("meeting summary owner review", () => {
     expect(renderer.root.findAllByType("a").some((node) => node.props.href === "/tasks")).toBe(
       true
     );
-    expect(JSON.stringify(renderer.toJSON())).toContain("task-123");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Accepted");
   });
   it("retries an uncertain acceptance using its frozen original request", async () => {
     vi.mocked(api.reviewMeetingAction).mockRejectedValueOnce(new Error("offline"));
@@ -361,7 +361,7 @@ describe("meeting summary owner review", () => {
       if (reviewState === "pending") expect(button("Accept Task").props.disabled).toBe(true);
       else expect(button("Accept Task")).toBeUndefined();
       if (reviewState === "accepted")
-        expect(JSON.stringify(renderer.toJSON())).toContain("old-task");
+        expect(JSON.stringify(renderer.toJSON())).toContain("Accepted");
       if (reviewState === "dismissed")
         expect(JSON.stringify(renderer.toJSON())).toContain("Dismissed");
     }
@@ -384,7 +384,7 @@ describe("meeting summary owner review", () => {
     });
     await mount();
     expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(1);
-    expect(button("Edit this version").props.disabled).toBe(false);
+    expect(button("Edit this version").props.disabled).not.toBe(true);
     expect(api.getMeetingOutputArtifact).not.toHaveBeenCalled();
   });
 
@@ -451,6 +451,131 @@ describe("meeting summary owner review", () => {
     expect(button("Retry loading action evidence")).toBeDefined();
     expect(JSON.stringify(renderer.toJSON())).toContain("Pending review");
     expect(client.getQueryData(["meetings", "output-denied", meeting.id])).toBe(false);
+  });
+
+  it("keeps manual editor state mounted through summary refetch and registers unsaved edits", async () => {
+    await mount();
+    await click("Edit this version");
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "output-overview" })
+        .props.onChange({ target: { value: "Keep this edit" } })
+    );
+    await flush();
+    const editor = renderer.root.findByProps({ id: "output-overview" });
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    let finish!: (value: api.MeetingOutputsResponse) => void;
+    vi.mocked(api.getMeetingOutputs).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    await act(async () => {
+      void client.refetchQueries({ queryKey: api.outputKeys.list(meeting.id) });
+    });
+    expect(renderer.root.findByProps({ id: "output-overview" })).toBe(editor);
+    await act(async () =>
+      finish({
+        artifacts: [artifact],
+        candidates: [candidate],
+        headVersion: 1,
+        templates: [{ id: "general", version: 1, name: "General meeting" }]
+      })
+    );
+    await flush();
+    expect(renderer.root.findByProps({ id: "output-overview" }).props.value).toBe("Keep this edit");
+    await click("Discard edits");
+    expect(hasSessionUnsavedChanges(client)).toBe(false);
+  });
+  it("pins visible unsaved edits when a newer head arrives and lets the owner reopen kept edits", async () => {
+    await mount();
+    await click("Edit this version");
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "output-overview" })
+        .props.onChange({ target: { value: "Keep version one edits" } })
+    );
+    await flush();
+    const editor = renderer.root.findByProps({ id: "output-overview" });
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [
+        { ...artifact, version: 2, content: { ...artifact.content, overview: "Newer head" } },
+        artifact
+      ],
+      candidates: [candidate],
+      headVersion: 2,
+      templates: []
+    });
+    await act(async () => {
+      await client.refetchQueries({ queryKey: api.outputKeys.list(meeting.id) });
+    });
+    await flush();
+    expect(renderer.root.findByProps({ id: "output-overview" })).toBe(editor);
+    expect(editor.props.value).toBe("Keep version one edits");
+    expect(button("Save edits as new version").props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ id: "kept-summary-edits" }).props.value).toContain(
+      "Keep version one edits"
+    );
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [{ ...artifact, version: 102 }],
+      candidates: [candidate],
+      headVersion: 102,
+      templates: [],
+      omittedArtifactCount: 101
+    });
+    await act(async () => {
+      await client.refetchQueries({ queryKey: api.outputKeys.list(meeting.id) });
+    });
+    await flush();
+    expect(renderer.root.findByProps({ id: "output-overview" })).toBe(editor);
+    expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(1);
+    await click("Close editor");
+    await click("Review kept edits");
+    expect(renderer.root.findByProps({ id: "output-overview" }).props.value).toBe(
+      "Keep version one edits"
+    );
+  });
+
+  it("retains an old candidate review node while its exact source refreshes", async () => {
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [{ ...artifact, version: 102 }],
+      candidates: [candidate],
+      headVersion: 102,
+      templates: []
+    });
+    await mount();
+    const input = renderer.root.findByProps({ id: "action-candidate" });
+    let finish!: (value: { artifact: MeetingOutputArtifact }) => void;
+    vi.mocked(api.getMeetingOutputArtifact).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    await act(async () => {
+      void client.refetchQueries({ queryKey: ["meetings", "output-artifact", meeting.id, 1] });
+    });
+    expect(renderer.root.findByProps({ id: "action-candidate" })).toBe(input);
+    await act(async () => finish({ artifact }));
+    await flush();
+    expect(renderer.root.findByProps({ id: "action-candidate" })).toBe(input);
+  });
+
+  it("shows the confirmed owner-edited title after accepting a suggestion", async () => {
+    await mount();
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "action-candidate" })
+        .props.onChange({ target: { value: "My reviewed Task title" } })
+    );
+    await flush();
+    await toggle("Create in my Tasks after owner review");
+    await toggle("Create a separate Task despite possible matches");
+    await click("Accept Task");
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      "Created as: My reviewed Task title · Accepted"
+    );
   });
 
   it("distinguishes saved, pending, delayed and conflicting writes from indexing", () => {

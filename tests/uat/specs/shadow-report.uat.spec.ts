@@ -172,7 +172,8 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   await expect(page.getByRole("heading", { name: "Shadow report" })).toBeVisible();
   await expect(page.getByText("Messages checked")).toBeVisible();
   await expect(page.getByText("calendar.listvisibleevents led to tasks.list")).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("shadow-report-live.png") });
+  if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+    await page.screenshot({ path: test.info().outputPath("shadow-report-live.png") });
 
   // The 7 and 90-day views carry the same three turns.
   for (const days of [7, 90]) {

@@ -6,7 +6,15 @@ import {
 } from "./meeting-outputs-fixture-server.js";
 
 // Only isolated seeded-owner copies. Public VaultContext APIs; no raw filesystem access.
-const [actorUserId, meetingId] = process.argv.slice(2);
+const [actorUserId, meetingId, expectedOwner] = process.argv.slice(2);
+// Fail closed before VaultContext can create/read anything if exec used launcher root or
+// another identity. This fixture runs only as the isolated app's existing runtime owner.
+if (
+  !expectedOwner ||
+  !/^[1-9][0-9]*:[1-9][0-9]*$/.test(expectedOwner) ||
+  `${process.getuid?.()}:${process.getgid?.()}` !== expectedOwner
+)
+  throw new Error("Vault evidence requires the isolated app runtime owner");
 if (
   actorUserId !== "00000000-0000-4000-8000-000000000001" ||
   !meetingId ||

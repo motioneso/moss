@@ -1,5 +1,6 @@
 import type { IngestMeetingTranscriptInput, MeetingTranscriptLedger } from "@moss/shared";
 import {
+  MEETING_TRANSCRIPT_MAX_CHARACTERS,
   applyMeetingTranscriptEvent,
   createMeetingTranscriptLedger,
   extendMeetingTranscriptSources
@@ -100,6 +101,8 @@ export function encodeMeetingTranscriptBatch(input: IngestMeetingTranscriptInput
       if (segment.speakerId !== null) boundedText(segment.speakerId);
       if (typeof segment.text !== "string" || segment.text.includes("\0"))
         throw new MeetingTranscriptInputError();
+      if (segment.text.length > MEETING_TRANSCRIPT_MAX_CHARACTERS)
+        throw new MeetingTranscriptLimitError();
       return {
         cursor: event.cursor,
         segment: {
@@ -151,6 +154,11 @@ export function applyMeetingTranscriptBatch(
       ? extendMeetingTranscriptSources(previous, input.sources)
       : createMeetingTranscriptLedger(input.meetingId, ownerUserId, input.sources);
     for (const event of input.events) {
+      if (
+        typeof event.segment.text === "string" &&
+        event.segment.text.length > MEETING_TRANSCRIPT_MAX_CHARACTERS
+      )
+        throw new MeetingTranscriptLimitError();
       const result = applyMeetingTranscriptEvent(ledger, event);
       if (result.status === "rejected") throw new MeetingTranscriptInputError();
       ledger = result.ledger;

@@ -15,10 +15,7 @@ export function OutputEvidence({
         if (reference.kind === "personal-note")
           return (
             <details key={index}>
-              <summary>
-                My notes · revision {reference.notesRevision} · characters{" "}
-                {reference.startCharacter}–{reference.endCharacter}
-              </summary>
+              <summary>My notes · View source</summary>
               <p className="meetings-transcript-text">
                 {artifact.inputs.personalNotes.slice(
                   reference.startCharacter,
@@ -44,9 +41,7 @@ export function OutputEvidence({
               Transcript
               {segment
                 ? ` · ${transcriptTime(segment.startMs)}–${transcriptTime(segment.endMs)}`
-                : ""}{" "}
-              · revision {reference.segmentRevision} · characters {reference.startCharacter}–
-              {reference.endCharacter}
+                : ""}
             </Link>
             {segment ? (
               <p className="meetings-transcript-text">

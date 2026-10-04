@@ -90,11 +90,13 @@ export function createMeetingOutputRuntime(deps: {
         changed ? "meeting_output_route_changed" : "meeting_output_route_unavailable"
       );
     // Honor admin pins, then Meetings / generic-worker settings using the existing resolver.
-    // A broken fixed binding must not disclose meeting evidence to a replacement model.
+    // Broken fixed bindings and unavailable hard-pinned models must not send meeting
+    // evidence to a replacement model. Provider-only pins retain capability selection.
     // explicitModel below must only use this checked route.
     const route = await ai.resolveModelForService(db, "module.meetings", {
       capability: "summarization",
-      rejectUnavailableFixedBinding: true
+      rejectUnavailableFixedBinding: true,
+      rejectUnavailablePinnedModel: true
     });
     const model = route.model;
     if (

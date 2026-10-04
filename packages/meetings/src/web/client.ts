@@ -1,6 +1,6 @@
 import { invalidateOutputAccess } from "./output-access.js";
 import type { QueryClient } from "@tanstack/react-query";
-import { ApiError, requestJson } from "@moss/module-web-sdk";
+import { ApiError, requestJson, clearSessionUnsavedChanges } from "@moss/module-web-sdk";
 import type {
   CreateMeetingRecordInput,
   MeetingCapturePreferences,
@@ -46,6 +46,7 @@ export function meetingRecordQueryOptions(id: string) {
         // A later success from an earlier save must not restore inaccessible content.
         if (!signal?.aborted && isMeetingAccessDenied(error)) {
           invalidateOutputAccess(client, id);
+          clearSessionUnsavedChanges(client, `meetings:${id}:`);
           client.removeQueries({ queryKey: meetingKeys.editor(id), exact: true });
           client.removeQueries({ queryKey: ["meetings", "output-session", id] });
           client.removeQueries({ queryKey: ["meetings", "outputs", id] });

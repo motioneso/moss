@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMeetingChat } from "@moss/module-web-sdk";
+import { useMeetingChat, clearSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { Button, Dialog } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { deleteMeeting, meetingKeys } from "./client.js";
@@ -28,6 +28,7 @@ export function DeleteMeetingDialog({
     mutationFn: () => deleteMeeting(meeting.id),
     onSuccess: () => {
       clearMeetingChat(meeting.id);
+      clearSessionUnsavedChanges(client, `meetings:${meeting.id}:`);
       client.removeQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       client.removeQueries({ queryKey: meetingKeys.editor(meeting.id), exact: true });
       client.removeQueries({ queryKey: ["meetings", "output-session", meeting.id] });

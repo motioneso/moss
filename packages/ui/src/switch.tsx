@@ -1,5 +1,6 @@
 export interface SwitchProps {
   readonly ariaLabel: string;
+  readonly label?: string;
   readonly checked: boolean;
   readonly disabled?: boolean;
   readonly onChange?: (checked: boolean) => void;
@@ -18,6 +19,7 @@ export function Switch(props: SwitchProps) {
       <span className="jds-switch__track">
         <span className="jds-switch__thumb" />
       </span>
+      {props.label ? <span className="jds-switch__label">{props.label}</span> : null}
     </label>
   );
 }

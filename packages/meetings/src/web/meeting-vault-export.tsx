@@ -100,7 +100,7 @@ export function MeetingVaultExport({
   }
   return (
     <section className="meetings-section" aria-label="Save to vault">
-      <SectionHead number="04" title="Save to vault" rule />
+      <SectionHead number="03" title="Save to vault" rule />
       <Note variant="practical">
         Save version {version} as a new private note in Moss private vault. Later summary versions
         create separate notes.
@@ -127,7 +127,10 @@ export function MeetingVaultExport({
         </p>
       ) : null}
       {receipt?.noteReference ? (
-        <p className="jds-hint">Note reference: {receipt.noteReference}</p>
+        <details>
+          <summary>Saved file details</summary>
+          <p className="jds-hint">{receipt.noteReference}</p>
+        </details>
       ) : null}
     </section>
   );

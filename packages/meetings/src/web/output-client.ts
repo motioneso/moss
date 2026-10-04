@@ -18,6 +18,7 @@ export interface MeetingOutputsResponse {
   readonly artifacts: readonly MeetingOutputArtifact[];
   readonly candidates: readonly MeetingActionCandidate[];
   readonly headVersion: number;
+  readonly omittedArtifactCount?: number;
   readonly templates: readonly {
     id: GenerateMeetingOutputInput["templateId"];
     version: number;

@@ -155,6 +155,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## radio-card-group
+
+_No enum or boolean props._
+
 ## row-button
 
 _No enum or boolean props._
@@ -184,6 +188,10 @@ _No enum or boolean props._
 
 - **checked** (required boolean flag)
 - **disabled** (optional boolean flag)
+
+## tabs
+
+_No enum or boolean props._
 
 ## today-pill
 

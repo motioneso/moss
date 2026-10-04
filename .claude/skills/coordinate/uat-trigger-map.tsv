@@ -185,3 +185,41 @@ blocking	tests/uat/seed/chunks/classifier-ai.ts	tests/uat/specs/classifier-shado
 blocking	tests/uat/fixtures/classifier-fixture-server.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
 # #2942 mid-conversation tools: session-allowlist refusal hint and its live proof.
 blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/2942-midchat-tools.uat.spec.ts
+# #2981: bounded Meetings UI/API checkpoints. All three run through the credential-free
+# test:uat:2981-meetings wrapper; model HTTP stand-ins never replace Moss responses.
+# Shared Meetings records, sources, routes and review navigation can affect every checkpoint.
+blocking	packages/meetings/**	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	packages/meetings/**	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/meetings/**	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/module-registry/src/index.ts	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	packages/module-registry/src/index.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/module-registry/src/index.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/module-registry/src/meeting-chat.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/module-registry/src/meeting-output-runtime.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/module-registry/src/meeting-export-runtime.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/chat/src/live/meeting-*.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/chat/src/meeting-chat-boundary.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	apps/web/src/chat/meeting-*.tsx	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/module-web-sdk/src/meeting-chat.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/shared/src/meeting-record-api.ts	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	packages/shared/src/meeting-preferences-api.ts	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	packages/shared/src/meeting-chat-api.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/shared/src/meeting-transcript*.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	packages/shared/src/meeting-transcript*.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/shared/src/meeting-output-api.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/shared/src/meeting-export-api.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/ai/src/structured/generate-structured.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/notes/src/private-note-export.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/vault/src/vault-ops.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/memory/src/vault-ingest-jobs.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	tests/uat/specs/2981-meeting-drafts.uat.spec.ts	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	tests/uat/specs/2981-meeting-chat.uat.spec.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	tests/uat/specs/2981-meeting-outputs.uat.spec.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	tests/uat/fixtures/meeting-chat-*.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	tests/uat/fixtures/meeting-outputs-*.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	tests/uat/run-meetings-uat.ts	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	tests/uat/run-meetings-uat.ts	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	tests/uat/run-meetings-uat.ts	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-chat.uat.spec.ts
+blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-outputs.uat.spec.ts

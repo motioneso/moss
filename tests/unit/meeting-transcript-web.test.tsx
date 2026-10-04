@@ -65,7 +65,7 @@ describe("retained transcript review", () => {
     expect(html).toContain("Desk microphone");
     expect(html).toContain("Source labels only");
     expect(html).toContain("0:01–0:02");
-    expect(html).toContain("Revision ");
+    expect(html).not.toContain("Epoch ");
     expect(html).toContain("Provisional");
     expect(html).toContain("Corrected");
     expect(html).toContain("segments omitted");

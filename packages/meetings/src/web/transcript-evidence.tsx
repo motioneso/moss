@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
-import { Button, Note, SectionHead } from "@moss/ui";
+import { Button, Note, Eyebrow } from "@moss/ui";
 import type { MeetingTranscriptEvidence } from "@moss/shared";
 import { getMeetingTranscriptEvidence } from "./client.js";
 import { transcriptTime } from "./meeting-transcript.js";
@@ -58,7 +58,7 @@ export function TranscriptEvidence({ meetingId }: { readonly meetingId: string }
   if (!requested) return null;
   return (
     <section className="meetings-section" aria-label="Transcript evidence">
-      <SectionHead number="↗" title="Referenced transcript" rule />
+      <Eyebrow as="h2">Referenced transcript</Eyebrow>
       <Button
         variant="quiet"
         onClick={() => {
@@ -86,16 +86,22 @@ export function TranscriptEvidence({ meetingId }: { readonly meetingId: string }
         <>
           <p className="jds-hint">
             {transcriptTime(evidence.data.evidence.segment.startMs)}–
-            {transcriptTime(evidence.data.evidence.segment.endMs)} · Segment revision{" "}
-            {evidence.data.evidence.segment.revision} · {evidence.data.evidence.segment.finality}
+            {transcriptTime(evidence.data.evidence.segment.endMs)} ·{" "}
+            {evidence.data.evidence.segment.finality === "provisional"
+              ? "Provisional"
+              : "Saved transcript"}
           </p>
           <Note variant="practical">
             <span className="meetings-transcript-text">{evidence.data.evidence.excerpt}</span>
           </Note>
-          <p className="jds-hint">
-            Exact referenced range, characters {reference.startCharacter}–{reference.endCharacter}.
-            Later corrections do not change this excerpt.
-          </p>
+          <details>
+            <summary>Source details</summary>
+            <p className="jds-hint">
+              Transcript revision {reference.segmentRevision} · Characters{" "}
+              {reference.startCharacter}–{reference.endCharacter}. Later corrections do not change
+              this excerpt.
+            </p>
+          </details>
         </>
       ) : null}
     </section>

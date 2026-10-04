@@ -1336,6 +1336,8 @@ export class AiRepository {
       requireExplicitBinding?: boolean;
       /** Privacy-sensitive calls must not degrade a missing fixed binding to another model. */
       rejectUnavailableFixedBinding?: true;
+      /** Require the exact hard-pinned model, rather than another model in its provider. */
+      rejectUnavailablePinnedModel?: true;
     }
   ): Promise<AiCapabilityRouteResolution> {
     assertDataContextDb(scopedDb);
@@ -1352,7 +1354,17 @@ export class AiRepository {
       this.getAdminPinnedProviderId(scopedDb)
     ]);
     if (!requireExplicitBinding && (pinnedModelId !== null || pinnedProviderId !== null)) {
-      return this.resolveModelForCapability(scopedDb, capability, tierHint);
+      const pinned = await this.resolveModelForCapability(scopedDb, capability, tierHint);
+      // Worker capability routing normally permits a replacement within the pinned model's
+      // provider. Privacy-sensitive callers can require that exact model before credentials
+      // are loaded; a provider-only pin still permits capability selection inside its provider.
+      if (
+        options.rejectUnavailablePinnedModel &&
+        pinnedModelId !== null &&
+        pinned.model?.id !== pinnedModelId
+      )
+        return { model: null, reason: "admin-pin-unavailable" };
+      return pinned;
     }
 
     const keys: ModuleServiceKey[] =

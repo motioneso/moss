@@ -56,7 +56,7 @@ describe("Meetings draft screen", () => {
     expect(html).toMatch(
       /disabled=""[^>]*aria-describedby="meeting-capture-unavailable"[^>]*>Start meeting/
     );
-    expect(html).toContain("native capture is not implemented");
+    expect(html).toContain("Recording isn’t available in this version of Moss");
     expect(html).toContain("/settings?section=aiproviders");
     expect(html).not.toContain("Ready to start");
   });
@@ -73,7 +73,7 @@ describe("Meetings draft screen", () => {
     expect(empty).toContain("Your first draft starts here");
     expect(empty).not.toContain("Loading your meeting drafts");
   });
-  it("labels actual history records only as unrecorded drafts", () => {
+  it("shows factual history columns and bounded search", () => {
     const html = render("/meetings?view=history", (client) =>
       client.setQueryData(meetingKeys.history, {
         pages: [{ meetings: [meeting] }],
@@ -81,7 +81,8 @@ describe("Meetings draft screen", () => {
       })
     );
     expect(html).toContain("Design review");
-    expect(html).toContain("Draft · Not recorded");
+    expect(html).toContain("Search loaded meetings and notes");
+    expect(html).toContain("Last edited");
     expect(html).not.toContain("Saved to vault");
   });
   it("opens real notes and explicitly disables meeting chat", () => {
@@ -90,7 +91,7 @@ describe("Meetings draft screen", () => {
     );
     expect(html).toContain("Design review");
     expect(html).toContain("First notes");
-    expect(html).toContain("Meeting chat needs an available transcript");
+    expect(html).toContain("Ask Moss needs an available transcript");
     expect(html).toMatch(/disabled=""[^>]*aria-describedby="meeting-chat-unavailable"/);
   });
 });

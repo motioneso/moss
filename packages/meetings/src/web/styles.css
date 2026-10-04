@@ -2,11 +2,10 @@
   display: grid;
   gap: var(--space-7);
   padding: var(--space-4);
+  min-width: 0;
 }
 .meetings-body {
   width: 100%;
-  max-width: var(--container);
-  margin-inline: auto;
   display: grid;
   gap: var(--space-7);
 }
@@ -77,4 +76,26 @@
 }
 .meetings-transcript-turn .meetings-actions {
   overflow-wrap: anywhere;
+}
+
+.meetings-review-status {
+  justify-content: flex-start;
+}
+.meetings-page [role="tabpanel"] {
+  min-width: 0;
+}
+
+.meetings-history-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
+  gap: var(--space-3);
+}
+.meetings-history-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+@media (max-width: 760px) {
+  .meetings-history-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

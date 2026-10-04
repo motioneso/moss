@@ -64,6 +64,13 @@ const snapshot: MeetingTranscriptSnapshot = {
     }
   ]
 };
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 function setup() {
   const selected = vi
     .spyOn(AiRepository.prototype, "selectChatModelForUser")
@@ -99,33 +106,153 @@ function setup() {
       )
   );
   vi.stubGlobal("fetch", fetch);
+  let activeTransactions = 0;
+  const withDataContext = async <T>(
+    _access: AccessContext,
+    work: (scoped: DataContextDb) => Promise<T>
+  ) => {
+    activeTransactions += 1;
+    try {
+      return await work(db);
+    } finally {
+      activeTransactions -= 1;
+    }
+  };
   const runtime = createMeetingChatRuntime({
     repository,
-    dataContext: {
-      withDataContext: async <T>(
-        _access: AccessContext,
-        work: (scoped: DataContextDb) => Promise<T>
-      ) => work(db)
-    },
+    dataContext: { withDataContext },
     withMeeting: async <T>(
       _access: AccessContext,
       _meetingId: string,
       work: (scoped: DataContextDb) => Promise<T>
-    ) => work(db),
+    ) => withDataContext(_access, work),
     source: {
       isAvailable: async () => true,
       snapshot: async () => snapshot,
       evidence: async () => null
     }
   });
-  return { ...runtime, selected, credential, saved, fetch };
+  return {
+    ...runtime,
+    selected,
+    credential,
+    saved,
+    fetch,
+    activeTransactions: () => activeTransactions
+  };
 }
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe("meeting selected-model HTTP boundary", () => {
+  it("has no open actor or meeting transaction at HTTP dispatch", async () => {
+    const h = setup();
+    const observed: number[] = [];
+    h.fetch.mockImplementation(async () => {
+      observed.push(h.activeTransactions());
+      return new Response(JSON.stringify({ choices: [{ message: { content: "Answer [[S1]]" } }] }));
+    });
+    await h.service.submit(access, meetingChatSurface(meetingId), selection, "Question");
+    expect(observed).toEqual([0]);
+    expect(h.activeTransactions()).toBe(0);
+  });
+
+  it("keeps transactions closed for the whole pending HTTP call", async () => {
+    const h = setup();
+    const entered = deferred<void>();
+    const response = deferred<Response>();
+    h.fetch.mockImplementation(async () => {
+      entered.resolve();
+      return response.promise;
+    });
+    const result = h.service.submit(access, meetingChatSurface(meetingId), selection, "Question");
+    await entered.promise;
+    const transactionsDuringHttp = h.activeTransactions();
+    response.resolve(
+      new Response(JSON.stringify({ choices: [{ message: { content: "Answer" } }] }))
+    );
+    await result;
+    expect(transactionsDuringHttp).toBe(0);
+    expect(h.activeTransactions()).toBe(0);
+  });
+
+  it("aborts at 120 seconds and settles even when HTTP ignores cancellation", async () => {
+    vi.useFakeTimers();
+    const h = setup();
+    const entered = deferred<AbortSignal>();
+    const response = deferred<Response>();
+    h.fetch.mockImplementation(async (_url, options) => {
+      entered.resolve(options!.signal!);
+      return response.promise;
+    });
+    let settled = false;
+    const result = h.service
+      .submit(access, meetingChatSurface(meetingId), selection, "Question")
+      .then(
+        (value) => value,
+        (error: unknown) => error
+      )
+      .finally(() => {
+        settled = true;
+      });
+    const signal = await entered.promise;
+    await vi.advanceTimersByTimeAsync(119_999);
+    expect(signal.aborted).toBe(false);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const abortedAtDeadline = signal.aborted;
+    const settledAtDeadline = settled;
+    // Clean up even against the unprotected implementation when demonstrating red.
+    h.service.cancel(access.actorUserId, meetingChatSurface(meetingId));
+    const outcome = await result;
+    response.resolve(
+      new Response(JSON.stringify({ choices: [{ message: { content: "late private answer" } }] }))
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(abortedAtDeadline).toBe(true);
+    expect(settledAtDeadline).toBe(true);
+    expect(outcome).toMatchObject({ code: "meeting_chat_failed" });
+    expect(h.saved).not.toHaveBeenCalled();
+    expect(h.fetch).toHaveBeenCalledTimes(1);
+    expect(h.activeTransactions()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("stops a user-cancelled request immediately and never saves its late answer", async () => {
+    vi.useFakeTimers();
+    const h = setup();
+    const entered = deferred<AbortSignal>();
+    const response = deferred<Response>();
+    h.fetch.mockImplementationOnce(async (_url, options) => {
+      entered.resolve(options!.signal!);
+      return response.promise;
+    });
+    const result = h.service
+      .submit(access, meetingChatSurface(meetingId), selection, "Question")
+      .then(
+        (value) => value,
+        (error: unknown) => error
+      );
+    const signal = await entered.promise;
+    h.service.cancel(access.actorUserId, meetingChatSurface(meetingId));
+    expect(signal.aborted).toBe(true);
+    expect(await result).toMatchObject({ code: "meeting_chat_changed" });
+    expect(h.saved).not.toHaveBeenCalled();
+    response.resolve(
+      new Response(JSON.stringify({ choices: [{ message: { content: "late private answer" } }] }))
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.saved).not.toHaveBeenCalled();
+    expect(h.activeTransactions()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(
+      await h.service.submit(access, meetingChatSurface(meetingId), selection, "Try again")
+    ).toMatchObject({ reply: "Answer [[S1]]" });
+  });
+
   it("uses exactly the selected model with no tool or search declaration and ignores tool-call output", async () => {
     const h = setup();
     expect(
@@ -150,6 +277,28 @@ describe("meeting selected-model HTTP boundary", () => {
     ).rejects.toMatchObject({ code: "meeting_chat_unsupported" });
     expect(h.fetch).not.toHaveBeenCalled();
     expect(h.saved).not.toHaveBeenCalled();
+  });
+  it("fails closed when the selected model cannot be resolved", async () => {
+    const h = setup();
+    h.selected.mockResolvedValue(null);
+    await expect(
+      h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
+    ).rejects.toMatchObject({ code: "meeting_chat_unsupported" });
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.saved).not.toHaveBeenCalled();
+  });
+  it("withholds an answer when the configured model changes during HTTP", async () => {
+    const h = setup();
+    h.fetch.mockImplementationOnce(async () => {
+      h.selected.mockResolvedValue({ ...model, provider_model_id: "replacement-model" });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "private reply" } }] }));
+    });
+    await expect(
+      h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
+    ).rejects.toMatchObject({ code: "meeting_chat_changed" });
+    expect(h.fetch).toHaveBeenCalledTimes(1);
+    expect(h.saved).not.toHaveBeenCalled();
+    expect(h.activeTransactions()).toBe(0);
   });
   it("rejects a provider revoked on the actual credential fetch, after preliminary checks", async () => {
     const h = setup();

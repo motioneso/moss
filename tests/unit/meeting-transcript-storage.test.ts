@@ -42,6 +42,20 @@ const input = (): IngestMeetingTranscriptInput => ({
 });
 
 describe("persisted transcript input rules", () => {
+  it("reports an oversized individual segment as a limit, not malformed input", () => {
+    const batch = input();
+    const oversized = {
+      ...batch,
+      events: [
+        { ...batch.events[0]!, segment: { ...batch.events[0]!.segment, text: "x".repeat(100001) } }
+      ]
+    };
+    expect(() => encodeMeetingTranscriptBatch(oversized)).toThrow(MeetingTranscriptLimitError);
+    expect(() => applyMeetingTranscriptBatch(null, id, null, oversized)).toThrow(
+      MeetingTranscriptLimitError
+    );
+  });
+
   it("canonicalizes keys without changing exact text or source identity", () => {
     const batch = input();
     expect(encodeMeetingTranscriptBatch(batch)).toBe(

@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Button } from "@moss/ui";
 import type { MeetingActionCandidate, MeetingOutputArtifact } from "@moss/shared";
 import { getMeetingOutputArtifact } from "./output-client.js";
-import { outputAccessEpoch } from "./output-access.js";
+import { outputAccessEpoch, isOutputAccessDenied } from "./output-access.js";
 import { denyMeetingOutputs } from "./output-session.js";
 import { MeetingActionReview } from "./meeting-action-review.js";
 
@@ -39,12 +39,15 @@ export function MeetingCandidateSource({
     refetchOnWindowFocus: "always"
   });
   const resolved =
-    artifact ?? (!source.isError && !source.isFetching ? source.data?.artifact : undefined);
+    artifact ?? (!isOutputAccessDenied(source.error) ? source.data?.artifact : undefined);
   if (resolved) return <MeetingActionReview candidate={candidate} artifact={resolved} />;
   return (
     <article className="meetings-section">
       <p>
-        {candidate.proposal.text} ·{" "}
+        {candidate.reviewState === "accepted"
+          ? `Original suggestion: ${candidate.proposal.text}`
+          : candidate.proposal.text}{" "}
+        ·{" "}
         {candidate.reviewState === "pending"
           ? "Pending review"
           : candidate.reviewState === "accepted"
@@ -53,8 +56,8 @@ export function MeetingCandidateSource({
       </p>
       <p role="status" className="jds-hint">
         {source.isError
-          ? `Couldn’t load evidence version ${candidate.artifactVersion}. Load it before reviewing this suggestion.`
-          : `Loading evidence version ${candidate.artifactVersion}…`}
+          ? "Couldn’t load this suggestion’s source. Retry before reviewing it."
+          : "Loading this suggestion’s source…"}
       </p>
       {source.isError ? (
         <Button variant="secondary" onClick={() => void source.refetch()}>
@@ -63,7 +66,7 @@ export function MeetingCandidateSource({
       ) : null}
       {candidate.reviewState === "accepted" && candidate.acceptedTaskId ? (
         <p className="jds-hint">
-          Task reference: {candidate.acceptedTaskId} · <Link to="/tasks">Go to Tasks</Link>
+          <Link to="/tasks">Go to Tasks</Link>
         </p>
       ) : null}
     </article>

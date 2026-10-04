@@ -56,6 +56,8 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.unsaved_changes",
+      "meetings.referenced_evidence",
       "meetings.private_exports",
       "meetings.grounded_outputs",
       "meetings.reviewed_tasks",

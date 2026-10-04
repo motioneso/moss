@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
-import { Badge, Button, Divider, Field, FormLabel, Note, SectionHead, Select } from "@moss/ui";
+import {
+  Badge,
+  Button,
+  Divider,
+  Eyebrow,
+  Field,
+  FormLabel,
+  Note,
+  SectionHead,
+  Select
+} from "@moss/ui";
 import type {
   GenerateMeetingOutputInput,
   MeetingOutputArtifact,
@@ -16,6 +26,7 @@ import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
 interface SummaryState {
+  readonly pinnedArtifact?: MeetingOutputArtifact;
   readonly templateId: GenerateMeetingOutputInput["templateId"] | "";
   readonly operation?: OutputOperation<GenerateMeetingOutputInput>;
 }
@@ -32,7 +43,7 @@ export function ArtifactContent({ artifact }: { readonly artifact: MeetingOutput
       ))}
       {artifact.content.openQuestions.length ? (
         <div>
-          <h3>Open questions</h3>
+          <Eyebrow as="h3">Open questions</Eyebrow>
           <ul>
             {artifact.content.openQuestions.map((question, index) => (
               <li key={index}>{question}</li>
@@ -81,7 +92,10 @@ export function MeetingSummary({
     gcTime: 0,
     refetchOnWindowFocus: "always"
   });
-  const [selected, setSelected] = useState<number>();
+  const [selected, setSelected] = useState<number | undefined>(
+    () => state?.pinnedArtifact?.version
+  );
+  const pinned = state?.pinnedArtifact;
   const [editing, setEditing] = useState(false);
   const [compare, setCompare] = useState(false);
   if (state === undefined || session.denied)
@@ -91,7 +105,9 @@ export function MeetingSummary({
       </p>
     );
   const data = outputs.data;
-  const artifact = data?.artifacts.find((item) => item.version === (selected ?? data.headVersion));
+  const artifact =
+    data?.artifacts.find((item) => item.version === (selected ?? data.headVersion)) ??
+    (selected === pinned?.version ? pinned : undefined);
   const latest = data?.artifacts.find((item) => item.version === data.headVersion);
   const busy = state.operation?.status === "running";
   const retry = state.operation?.status === "retry" || state.operation?.status === "pending";
@@ -146,12 +162,12 @@ export function MeetingSummary({
   return (
     <section className="meetings-section" aria-label="Summary and actions">
       <SectionHead
-        number="03"
+        number="01"
         title="Summary and actions"
         rule
         meta={artifact ? `Version ${artifact.version}` : undefined}
       />
-      {outputs.isFetching ? (
+      {outputs.isFetching && !data ? (
         <p role="status" className="jds-hint">
           Loading summaries…
         </p>
@@ -160,7 +176,7 @@ export function MeetingSummary({
         <p role="alert" className="jds-hint">
           Summary access is unavailable. Return to history or sign in again.
         </p>
-      ) : outputs.isError ? (
+      ) : outputs.isError && (!data || isMeetingAccessDenied(outputs.error)) ? (
         <>
           <p role="alert" className="jds-hint">
             {isMeetingAccessDenied(outputs.error)
@@ -171,7 +187,7 @@ export function MeetingSummary({
             Retry loading summaries
           </Button>
         </>
-      ) : data && !outputs.isFetching ? (
+      ) : data ? (
         <>
           <div className="meetings-actions">
             <Field>
@@ -219,6 +235,12 @@ export function MeetingSummary({
               {state.operation.message}
             </p>
           ) : null}
+          {data.omittedArtifactCount ? (
+            <p className="jds-hint">
+              Showing recent versions. Evidence from earlier versions is available from its
+              suggestion.
+            </p>
+          ) : null}
           {data.artifacts.length ? (
             <Field>
               <FormLabel htmlFor="meeting-output-version">Saved version</FormLabel>
@@ -230,6 +252,9 @@ export function MeetingSummary({
                   setEditing(false);
                 }}
               >
+                {pinned && !data.artifacts.some((item) => item.version === pinned.version) ? (
+                  <option value={pinned.version}>Version {pinned.version} · Kept edits</option>
+                ) : null}
                 {data.artifacts.map((item) => (
                   <option key={item.version} value={item.version}>
                     Version {item.version} ·{" "}
@@ -248,9 +273,9 @@ export function MeetingSummary({
           {artifact ? (
             <>
               <p className="jds-hint">
-                {artifact.templateId} · template v{artifact.templateVersion} · Notes revision{" "}
-                {artifact.inputs.notesRevision} · Transcript revision{" "}
-                {artifact.inputs.transcript?.transcriptRevision ?? "None"}
+                {data.templates.find((template) => template.id === artifact.templateId)?.name ??
+                  "Meeting summary"}{" "}
+                · {artifact.origin === "manual" ? "Edited by you" : "Generated from saved sources"}
               </p>
               {artifact.stale ? (
                 <Note variant="practical">
@@ -270,10 +295,15 @@ export function MeetingSummary({
               <div className="meetings-actions">
                 <Button
                   variant="secondary"
-                  disabled={artifact.version !== data.headVersion}
-                  onClick={() => setEditing(!editing)}
+                  onClick={() => {
+                    update((current) => ({ ...current, pinnedArtifact: artifact }));
+                    setSelected(artifact.version);
+                    setEditing(!editing);
+                  }}
                 >
-                  Edit this version
+                  {artifact.version === data.headVersion
+                    ? "Edit this version"
+                    : "Review kept edits"}
                 </Button>
                 {latest && latest.version !== artifact.version ? (
                   <Button variant="quiet" onClick={() => setCompare(!compare)}>
@@ -283,7 +313,7 @@ export function MeetingSummary({
               </div>
               {compare && latest && latest.version !== artifact.version ? (
                 <section className="meetings-section">
-                  <h3>Latest · version {latest.version}</h3>
+                  <Eyebrow as="h3">Latest · version {latest.version}</Eyebrow>
                   <ArtifactContent artifact={latest} />
                 </section>
               ) : null}
@@ -293,9 +323,14 @@ export function MeetingSummary({
                   artifact={artifact}
                   headVersion={data.headVersion}
                   onClose={() => setEditing(false)}
+                  onSaved={(version) => {
+                    update((current) => ({ ...current, pinnedArtifact: undefined }));
+                    setSelected(version);
+                    setEditing(false);
+                  }}
                 />
               ) : null}
-              <SectionHead number="→" title="Suggested Tasks" rule />
+              <SectionHead number="02" title="Suggested Tasks" rule />
               <p className="jds-hint">
                 Review each suggestion before accepting. Accepted Tasks are managed in Tasks;
                 regeneration does not edit them.

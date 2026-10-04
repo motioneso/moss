@@ -1,3 +1,4 @@
+import { assertMeetingReviewLayout, assertProvisionalContrast } from "./meeting-review-layout.js";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { MeetingCapturePreferences, MeetingRecord } from "@moss/shared";
@@ -30,8 +31,10 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Set up your meeting" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
-    await expect(page.getByLabel("Microphone", { exact: true })).toBeDisabled();
-    await page.getByRole("button", { name: "Microphone and selected app", exact: true }).click();
+    await expect(
+      page.getByText("Recording isn’t available in this version of Moss.", { exact: false })
+    ).toBeVisible();
+    await page.getByRole("radio", { name: /^Microphone and selected app/ }).click();
     const defaultControl = page.getByRole("checkbox", {
       name: "Use this capture mode as my default"
     });
@@ -77,14 +80,25 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     const { meeting } = (await created.json()) as { meeting: MeetingRecord };
     fixtureId = meeting.id;
     await expect(page).toHaveURL(new RegExp(`id=${fixtureId}`));
+    await assertMeetingReviewLayout(page);
     await expect(page.getByRole("button", { name: "Ask Moss", exact: true })).toBeDisabled();
+    await page.getByRole("tab", { name: /^My notes/ }).click();
     const notes = page.getByLabel("Personal notes", { exact: true });
     await notes.fill("Unsent notes retained through navigation.");
+    await page.locator(".jds-usermenu__trigger").click();
+    await page.getByRole("button", { name: "Log out", exact: true }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Sign out with unsaved changes?" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+    await expect(notes).toHaveValue("Unsent notes retained through navigation.");
     await page.getByRole("button", { name: "View meeting history", exact: true }).click();
     await page.goBack();
+    await page.getByRole("tab", { name: /^My notes/ }).click();
     await expect(notes).toHaveValue("Unsent notes retained through navigation.");
     await page.goForward();
     await page.getByRole("button", { name: title, exact: true }).click();
+    await page.getByRole("tab", { name: /^My notes/ }).click();
     await expect(notes).toHaveValue("Unsent notes retained through navigation.");
     const saveResponse = page.waitForResponse(
       (response) =>
@@ -95,6 +109,7 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     expect((await saveResponse).status()).toBe(200);
     await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     await page.reload();
+    await page.getByRole("tab", { name: /^My notes/ }).click();
     await expect(notes).toHaveValue("Unsent notes retained through navigation.");
     const persisted = await page.request.get(`/api/meetings/records/${fixtureId}`);
     expect((await persisted.json()).meeting.personalNotes).toBe(
@@ -203,6 +218,7 @@ test("Retained transcript review shows real source labels and immutable earlier 
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await page.getByRole("button", { name: "View meeting history", exact: true }).click();
     await page.getByRole("button", { name: title, exact: true }).click();
+    await page.getByRole("tab", { name: /^Transcript/ }).click();
     const transcript = page.getByRole("region", { name: "Retained transcript", exact: true });
     await expect(transcript).toContainText("Synthetic desk microphone");
     await expect(transcript).toContainText("Synthetic corrected wording.");
@@ -212,10 +228,12 @@ test("Retained transcript review shows real source labels and immutable earlier 
     await page.getByRole("button", { name: "Previous revision", exact: true }).click();
     await expect(transcript).toContainText("Synthetic draft wording.");
     await expect(transcript).toContainText("Provisional");
+    await assertProvisionalContrast(page);
     await expect(transcript).not.toContainText("Synthetic corrected wording.");
     await page.getByRole("button", { name: "Latest revision", exact: true }).click();
     await expect(transcript).toContainText("Synthetic corrected wording.");
     await page.reload();
+    await page.getByRole("tab", { name: /^Transcript/ }).click();
     await expect(transcript).toContainText("Synthetic corrected wording.");
     const url = new URL(page.url());
     url.searchParams.set("segmentId", original.segmentId);
@@ -223,9 +241,11 @@ test("Retained transcript review shows real source labels and immutable earlier 
     url.searchParams.set("startCharacter", "0");
     url.searchParams.set("endCharacter", String(original.text.length));
     await page.goto(url.toString());
+    await page.getByRole("tab", { name: /^Transcript/ }).click();
     const evidence = page.getByRole("region", { name: "Transcript evidence", exact: true });
     await expect(evidence).toContainText(original.text);
-    await expect(evidence).toContainText("Segment revision 1");
+    await evidence.getByText("Source details", { exact: true }).click();
+    await expect(evidence).toContainText("Transcript revision 1");
     await expect(transcript).toContainText("Synthetic corrected wording.");
     await page.getByRole("button", { name: "Close evidence", exact: true }).click();
     await expect(evidence).toHaveCount(0);

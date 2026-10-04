@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "@moss/module-web-sdk";
 import { Badge, Button, Divider, Note, SectionHead } from "@moss/ui";
-import { getMeetingTranscript, meetingKeys, type MeetingTranscriptView } from "./client.js";
+import {
+  getMeetingTranscript,
+  isMeetingAccessDenied,
+  meetingKeys,
+  type MeetingTranscriptView
+} from "./client.js";
 
 export function transcriptTime(milliseconds: number): string {
   const seconds = Math.floor(milliseconds / 1000);
@@ -12,11 +17,9 @@ export function TranscriptTimeline({ snapshot, sources }: MeetingTranscriptView)
   return (
     <>
       <p className="jds-hint">
-        Revision {snapshot.transcriptRevision} ·{" "}
         {snapshot.throughMs === null
           ? "No text in this selection"
           : `Through ${transcriptTime(snapshot.throughMs)}`}{" "}
-        · Cutoff {transcriptTime(snapshot.cutoffMs)}
       </p>
       <p className="jds-hint">
         Source labels only. Sources do not identify people. Timestamps do not establish continuous
@@ -40,7 +43,7 @@ export function TranscriptTimeline({ snapshot, sources }: MeetingTranscriptView)
             <article
               className="meetings-transcript-turn"
               key={segment.segmentId}
-              aria-label={`Transcript segment ${segment.segmentId}`}
+              aria-label={`Transcript at ${transcriptTime(segment.startMs)}`}
             >
               <Divider />
               <div className="meetings-actions">
@@ -51,10 +54,9 @@ export function TranscriptTimeline({ snapshot, sources }: MeetingTranscriptView)
                 <Badge tone={segment.finality === "provisional" ? "amber" : "neutral"}>
                   {segment.finality === "provisional" ? "Provisional" : "Final"}
                 </Badge>
-                <span className="jds-hint">
-                  Segment revision {segment.revision} · Epoch {segment.epoch}
-                  {segment.provenance === "correction" ? " · Corrected" : ""}
-                </span>
+                {segment.provenance === "correction" ? (
+                  <span className="jds-hint">Corrected</span>
+                ) : null}
               </div>
               <p className="meetings-transcript-text">{segment.text}</p>
             </article>
@@ -119,12 +121,12 @@ export function MeetingTranscript({
           </Button>
         ) : null}
       </div>
-      {transcript.isFetching ? (
+      {transcript.isFetching && !transcript.data ? (
         <p role="status" className="jds-hint">
           Loading transcript…
         </p>
       ) : null}
-      {transcript.isError ? (
+      {transcript.isError && (!transcript.data || isMeetingAccessDenied(transcript.error)) ? (
         <p role="status" className="jds-hint">
           {transcript.error instanceof ApiError && transcript.error.status === 404
             ? "No retained transcript is available for this selection."
@@ -132,7 +134,7 @@ export function MeetingTranscript({
               ? "Transcript access is unavailable. Sign in again or return to meeting history."
               : "Couldn’t load the transcript. Refresh to try again."}
         </p>
-      ) : transcript.data && !transcript.isFetching ? (
+      ) : transcript.data ? (
         <>
           {revision !== undefined ? (
             <Note variant="practical">

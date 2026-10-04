@@ -17,6 +17,9 @@ on:
       - "packages/shared/src/chat-api.ts"
       - "packages/shared/src/meeting-*.ts"
       - "tests/uat/run-meetings-uat.ts"
+      - "tests/uat/playwright.uat.config.ts"
+      - ".claude/skills/coordinate/uat-trigger-map.tsv"
+      - "packages/ui/**"
       - "tests/uat/subnet-selection.ts"
       - "tests/uat/specs/2981-meeting-*.uat.spec.ts"
       - "tests/uat/fixtures/meeting-*.ts"
@@ -38,6 +41,9 @@ jobs:
     name: Verify real meeting draft UI
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      JARVIS_IMAGE_TAG: meetings-uat-${{ github.run_id }}-meetings
+      JARVIS_UAT_BUILD: "0"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -57,6 +63,9 @@ jobs:
       - name: Install browser
         timeout-minutes: 5
         run: pnpm exec playwright install --with-deps chromium
+      - name: Build one fixture image for the Meetings group
+        timeout-minutes: 10
+        run: docker build -t "ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG}" -f Dockerfile .
       - name: Start the isolated gate's database container
         run: pnpm db:up
       - name: Run credential-free Meetings UAT through the supported gate
@@ -90,3 +99,90 @@ jobs:
         run: |
           scripts/run-gate.sh stop || true
           pnpm db:down
+
+  credential-free-regressions:
+    name: Verify Meetings regression group (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [chat, runtime, model-fixtures]
+    env:
+      MOSS_MEETING_UAT_GROUP: ${{ matrix.group }}
+      JARVIS_IMAGE_TAG: meetings-uat-${{ github.run_id }}-${{ matrix.group }}
+      # The image is explicitly built once below; every spec still gets a fresh UAT server.
+      JARVIS_UAT_BUILD: "0"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install browser
+        timeout-minutes: 5
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build one fixture image for this group
+        timeout-minutes: 10
+        run: docker build -t "ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG}" -f Dockerfile .
+      - name: Start this hosted job's disposable gate server
+        run: pnpm db:up
+      - name: Run the fixed credential-free group through the supported gate
+        timeout-minutes: 20
+        run: |
+          scripts/run-gate.sh start --gate test:uat:2981-meetings
+          scripts/run-gate.sh wait --follow
+      - name: Record bounded outcomes and remaining proof
+        if: always()
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import re
+          for path in Path("/tmp/jarv1s-gate").glob("*.log"):
+              lines = re.sub(r"\x1b\[[0-9;]*m", "", path.read_text(errors="replace")).splitlines()
+              matched = [line for line in lines if re.search(r"^### |\[meetings-uat\]|\[uat\] running|[0-9]+ passed|[0-9]+ failed|[0-9]+ skipped|Error:|TimeoutError", line)]
+              print(f"Bounded outcomes from {path.name}")
+              for line in matched[-120:]:
+                  print(line[:1000])
+          print("Known fixmes are not passing proof: attachments=1, install-grant=1, runtime-context=2.")
+          print("Not run: real-provider Sports #1909, notes-default-retrieval, notes-path-recheck, workshop-chat-handover.")
+          PYCODE
+      - name: Stop the gate and remove disposable resources
+        if: always()
+        timeout-minutes: 3
+        run: |
+          scripts/run-gate.sh stop || true
+          cleanup_status=0
+          pnpm db:down || cleanup_status=$?
+          # Ordinary fixture teardown is in run-uat's finally/SIGTERM handler. This last
+          # hosted-job-only sweep handles interrupted fixtures without touching host/dev data.
+          python - <<'PYCODE' || cleanup_status=$?
+          import json, re, subprocess
+          def records(kind):
+              out = subprocess.check_output(["docker", kind, "ls", "-a", "--format", "{{json .}}"], text=True) if kind == "container" else subprocess.check_output(["docker", kind, "ls", "--format", "{{json .}}"], text=True)
+              return [json.loads(line) for line in out.splitlines() if line]
+          failures = []
+          for kind, key in [("container", "Names"), ("volume", "Name"), ("network", "Name")]:
+              names = [row[key] for row in records(kind) if re.match(r"^uat-[0-9]+_[0-9a-f]{8}[-_]", row[key])]
+              for name in names:
+                  command = ["docker", kind, "rm"] + (["--force"] if kind == "container" else []) + [name]
+                  if subprocess.run(command, stdout=subprocess.DEVNULL).returncode:
+                      failures.append((kind, name))
+              remaining = [row[key] for row in records(kind) if re.match(r"^uat-[0-9]+_[0-9a-f]{8}[-_]", row[key])]
+              if remaining:
+                  failures.extend((kind, name) for name in remaining)
+              print(f"UAT {kind} cleanup: removed={len(names)}, remaining={len(remaining)}")
+          if failures:
+              raise SystemExit("Disposable UAT cleanup failed")
+          PYCODE
+          exit "$cleanup_status"

@@ -1,7 +1,8 @@
+import { Link } from "react-router";
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import { Button, Field, FormLabel, Note, SectionHead, Select, Switch } from "@moss/ui";
+import { Button, Field, FormLabel, Note, SectionHead, RadioCardGroup, Switch } from "@moss/ui";
 import type { CreateMeetingRecordInput } from "@moss/shared";
 import {
   createMeeting,
@@ -127,25 +128,17 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
             Use a shorter title and remove any unsupported characters.
           </p>
         ) : null}
-        <div className="meetings-modes" role="group" aria-label="Capture mode">
-          {MODES.map((option) => (
-            <Field key={option.value}>
-              <Button
-                variant={mode === option.value ? "accentSoft" : "secondary"}
-                aria-pressed={mode === option.value}
-                onClick={() => {
-                  updateForm({ mode: option.value });
-                }}
-              >
-                {option.label}
-              </Button>
-              <p className="jds-hint">{option.description}</p>
-            </Field>
-          ))}
-        </div>
+        <RadioCardGroup
+          name="meeting-capture-mode"
+          ariaLabel="Capture mode"
+          value={mode}
+          options={MODES}
+          onChange={(mode) => updateForm({ mode })}
+        />
         <div className="meetings-actions">
           <Switch
             ariaLabel="Use this capture mode as my default"
+            label="Use this capture mode as my default"
             checked={mode !== null && preferences.data?.defaultCaptureMode === mode}
             disabled={
               !mode || !preferences.isSuccess || saveDefault.isPending || form.data.defaultSaving
@@ -156,7 +149,6 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
               saveDefault.mutate({ defaultCaptureMode: checked ? mode : null });
             }}
           />
-          <span className="jds-hint">Use this capture mode as my default</span>
         </div>
         {preferences.isPending ? (
           <p role="status" className="jds-hint">
@@ -191,33 +183,16 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
       </section>
       <section className="meetings-section">
         <SectionHead number="02" title="Check the sources" rule />
-        <div className="meetings-sources">
-          <Field>
-            <FormLabel htmlFor="meeting-microphone">Microphone</FormLabel>
-            <Select id="meeting-microphone" disabled>
-              <option>Unavailable — native capture not implemented</option>
-            </Select>
-          </Field>
-          <Field>
-            <FormLabel htmlFor="meeting-output">
-              {mode === "selected-app" ? "Selected app" : "Output audio"}
-            </FormLabel>
-            <Select id="meeting-output" disabled>
-              <option>
-                {mode === "microphone-only"
-                  ? "Not captured in microphone-only mode"
-                  : "Unavailable — native capture not implemented"}
-              </option>
-            </Select>
-          </Field>
-        </div>
-        <p className="jds-hint" id="meeting-capture-unavailable">
-          Recording is unavailable because native capture is not implemented. You can create a draft
-          and save personal notes.
-        </p>
-        <p className="jds-hint">
-          Configure processing in <a href="/settings?section=aiproviders">AI providers</a>.
-        </p>
+        <Note variant="practical">
+          <p id="meeting-capture-unavailable">
+            Recording isn’t available in this version of Moss. Create a draft to keep your notes, or
+            review an existing transcript.
+          </p>
+          <p>
+            Manage transcription and summaries in{" "}
+            <Link to="/settings?section=aiproviders">AI providers</Link>.
+          </p>
+        </Note>
         {create.isError ? (
           <p role="alert" className="jds-hint jds-hint--error">
             Couldn’t create or confirm the draft. Correct any invalid title, or retry the same

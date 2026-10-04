@@ -61,6 +61,11 @@ export function operationError(error: unknown): { status: "retry" | "failed"; me
       status: "failed",
       message: "Access is unavailable. Return to history or sign in again."
     };
+  if (error instanceof ApiError && error.code === "meeting_output_busy")
+    return {
+      status: "failed",
+      message: "A summary is already being generated. Refresh to check its result."
+    };
   if (error instanceof ApiError && error.status === 409)
     return {
       status: "failed",

@@ -209,6 +209,46 @@ removes the isolated DB and volumes, including deliberately surviving synthetic 
 This is the implemented acceptance path, not a claim of a passing live run. Exact-commit results
 and remaining blockers belong on [PR #2982](https://github.com/motioneso/moss/pull/2982).
 
+### Credential-free regression groups (CI only)
+
+The same supported `test:uat:2981-meetings` gate entry accepts the closed
+`MOSS_MEETING_UAT_GROUP` enum below. Omission selects `meetings`; an empty/unknown group fails
+before provisioning rather than falling back to all tests. This does not lift the local DB hold
+pending #2989.
+
+- `meetings`: draft/review (2 tests), meeting chat (1), summary/Task/private exports (1).
+- `chat`: private drawer #1089/#1090 (2), attachments #1133 (2 active, 1 fixme), runtime context
+  (2 active, 2 fixmes), assistant naming (4).
+- `runtime`: module install/restart (1), vault ownership #1217 (1), install grant #1311
+  (1 active, 1 fixme), Today masthead #1112 (2).
+- `model-fixtures`: model activity #2889 (1), shadow-delete refusal #2911 (1), retired shadow-purge
+  queue #2911 (1), classifier shadow (1), shadow report (1).
+
+For example, the hosted `chat` matrix job sets `MOSS_MEETING_UAT_GROUP=chat` and invokes the same
+`scripts/run-gate.sh start --gate test:uat:2981-meetings` / `wait --follow` sequence. Each of the
+four hosted jobs has a 30-minute cap and its own disposable outer Postgres server. Each builds one
+job-tagged image, then uses the provisioner's existing `JARVIS_UAT_BUILD=0` option to reuse that
+image while still creating/tearing down a separate UAT stack for every spec. The three regression
+matrix jobs do not cancel each other on failure. They retain bounded textual outcomes, not trace,
+screenshot or video artifacts. The wrapper overrides any inherited host-auth location with an
+absent temporary file and clears inherited real-chat readiness. No real provider login is used.
+Module installation may still download the public Finance module; that is not provider proof.
+
+The groups contain **24 active tests and 4 pre-existing fixmes**, not 28 passing assertions.
+Attachments do not prove a model read the file; runtime-context does not prove the model's refusal
+or page-error resolution; install-grant does not prove model-driven Task dispatch. Scripted shadow
+delete proves refusal/retention, not the real-model approval round trip. The private-drawer test
+uses the scripted backend and delays/continues actual requests; it does not replace responses.
+The trigger map's old advisory note for that spec is stale: both private-drawer tests are active
+and the changed chat UI already makes the spec blocking. The separate advisory #1520 spec remains
+an unconditional fixme and contributes no live assertion.
+
+Four additional blocking trigger targets still require an explicitly authorized real provider:
+`1909-sports-public-source-completion`, `notes-default-retrieval`, `notes-path-recheck`, and
+`workshop-chat-handover` (all `.uat.spec.ts`). They are excluded from these credential-free groups;
+a run that skips them is not passing live proof. Sports also needs actual public-publisher access.
+Do not mark those gates complete or infer visual/layout/keyboard proof from these functional tests.
+
 ## Remaining release proof
 
 Database tests cover owner/admin isolation, idempotency, concurrent notes, rollback and cascading

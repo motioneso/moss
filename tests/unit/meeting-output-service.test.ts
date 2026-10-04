@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { isDeepStrictEqual } from "node:util";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import type {
   GenerateMeetingOutputInput,
@@ -91,7 +92,11 @@ function setup() {
     .spyOn(repository, "request")
     .mockImplementation(async (_db, meetingId, key, encoded) => {
       const previous = requests.get(key);
-      if (previous && (previous.meeting_id !== meetingId || previous.input_json !== encoded)) {
+      if (
+        previous &&
+        (previous.meeting_id !== meetingId ||
+          !isDeepStrictEqual(JSON.parse(previous.input_json), JSON.parse(encoded)))
+      ) {
         throw new MeetingOutputError("meeting_output_request_conflict");
       }
       if (
@@ -112,6 +117,15 @@ function setup() {
       }
       return previous;
     });
+  vi.spyOn(repository, "pendingGeneration").mockImplementation(async (db, meetingId) => {
+    for (const [key, receipt] of requests) {
+      if (receipt.meeting_id !== meetingId || JSON.parse(receipt.input_json).kind !== "generate")
+        continue;
+      const reconciled = await repository.request(db, meetingId, key, receipt.input_json);
+      if (reconciled?.result_json === null) return key;
+    }
+    return null;
+  });
   const head = vi.spyOn(repository, "head").mockImplementation(async () => state.head);
   const inputs = vi
     .spyOn(repository, "inputs")
@@ -191,6 +205,72 @@ function setup() {
 }
 
 describe("meeting output generation service", () => {
+  it("races distinct request keys while dispatching only the reserved winner", async () => {
+    const harness = setup();
+    const provider = deferred<Awaited<ReturnType<MeetingOutputGenerator>>>();
+    const dispatched = deferred<void>();
+    harness.generator.mockImplementation(async () => {
+      dispatched.resolve();
+      return provider.promise;
+    });
+    const winner = harness.service.generate(ACTOR, MEETING_ID, INPUT);
+    const secondInput = { ...INPUT, requestKey: "33333333-3333-4333-8333-333333333333" };
+    const loser = harness.service.generate(ACTOR, MEETING_ID, secondInput);
+    await dispatched.promise;
+    await expect(loser).rejects.toMatchObject({ code: "meeting_output_busy", statusCode: 409 });
+    expect(harness.requests.has(secondInput.requestKey)).toBe(false);
+    expect(harness.generator).toHaveBeenCalledOnce();
+    expect(harness.reserve).toHaveBeenCalledOnce();
+    provider.resolve({ content: CONTENT, modelRoute: "configured-route" });
+    expect(await winner).toMatchObject({ status: "saved", replayed: false });
+    expect(harness.save).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a distinct key as busy rather than a false pending retry after the winner fails", async () => {
+    const harness = setup();
+    const provider = deferred<Awaited<ReturnType<MeetingOutputGenerator>>>();
+    const dispatched = deferred<void>();
+    harness.generator.mockImplementation(async () => {
+      dispatched.resolve();
+      return provider.promise;
+    });
+    const first = harness.service.generate(ACTOR, MEETING_ID, INPUT);
+    await dispatched.promise;
+    const secondInput = { ...INPUT, requestKey: "33333333-3333-4333-8333-333333333333" };
+    await expect(harness.service.generate(ACTOR, MEETING_ID, secondInput)).rejects.toMatchObject({
+      code: "meeting_output_busy",
+      statusCode: 409
+    });
+    expect(harness.requests.has(secondInput.requestKey)).toBe(false);
+    provider.reject(new Error("Provider failed"));
+    const failed = await first;
+    expect(failed).toMatchObject({ status: "failed", requestKey: INPUT.requestKey });
+    // Only the actual reservation has a checkable terminal receipt. No losing key is
+    // mislabeled pending, queued for redispatch, or retried automatically after failure.
+    expect(await harness.service.generate(ACTOR, MEETING_ID, INPUT)).toEqual(failed);
+    expect(harness.generator).toHaveBeenCalledOnce();
+    expect(harness.reserve).toHaveBeenCalledOnce();
+    expect(harness.requests.has(secondInput.requestKey)).toBe(false);
+  });
+
+  it("replays logically identical input regardless of object key order", async () => {
+    const harness = setup();
+    await harness.service.generate(ACTOR, MEETING_ID, INPUT);
+    const reordered = {
+      templateVersion: INPUT.templateVersion,
+      templateId: INPUT.templateId,
+      expectedNotesRevision: INPUT.expectedNotesRevision,
+      expectedTranscriptRevision: INPUT.expectedTranscriptRevision,
+      expectedOutputVersion: INPUT.expectedOutputVersion,
+      requestKey: INPUT.requestKey
+    };
+    expect(await harness.service.generate(ACTOR, MEETING_ID, reordered)).toMatchObject({
+      status: "saved",
+      replayed: true
+    });
+    expect(harness.generator).toHaveBeenCalledOnce();
+  });
+
   it("pins authorized inputs and template before calling the generator outside a transaction", async () => {
     const harness = setup();
     harness.generator.mockImplementation(async (actor, input) => {
@@ -320,7 +400,7 @@ describe("meeting output generation service", () => {
     });
     const first = harness.service.generate(ACTOR, MEETING_ID, INPUT);
     await started.promise;
-    expect(timeout).toHaveBeenCalledExactlyOnceWith(120_000);
+    expect(timeout).toHaveBeenCalledExactlyOnceWith(110_000);
     controller.abort();
     const result = await first;
     expect(result).toEqual({

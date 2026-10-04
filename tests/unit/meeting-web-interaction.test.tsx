@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "@moss/module-web-sdk";
+import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import type { MeetingRecord } from "@moss/shared";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import * as api from "../../packages/meetings/src/web/client.js";
@@ -205,7 +205,10 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
   it("never saves a default just by choosing a mode; explicit switch saves it", async () => {
     vi.mocked(api.putMeetingPreferences).mockResolvedValue({ defaultCaptureMode: "selected-app" });
     await mount("/meetings");
-    await click("Microphone and selected app");
+    await act(async () =>
+      renderer.root.findByProps({ type: "radio", value: "selected-app" }).props.onChange()
+    );
+    await flush();
     expect(api.putMeetingPreferences).not.toHaveBeenCalled();
     await act(async () =>
       renderer.root
@@ -311,6 +314,48 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       );
     }
   );
+  it("keeps the active panel and notes node mounted during background record reads", async () => {
+    await mount();
+    await act(async () =>
+      renderer.root.findByProps({ id: "meeting-review-tab-notes" }).props.onClick()
+    );
+    await typeNotes("Keep this exact editor");
+    const editor = renderer.root.findByProps({ id: "meeting-personal-notes" });
+    let finish!: (value: { meeting: MeetingRecord }) => void;
+    vi.mocked(api.getMeeting).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    await act(async () => {
+      void client.refetchQueries({ queryKey: api.meetingKeys.record(meeting.id) });
+    });
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" })).toBe(editor);
+    expect(renderer.root.findByProps({ id: "meeting-review-panel-notes" }).props.hidden).toBe(
+      false
+    );
+    expect(JSON.stringify(renderer.toJSON())).toContain("Design review");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    await act(async () => finish({ meeting }));
+    await flush();
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" })).toBe(editor);
+  });
+  it("retains sign-out warning through history navigation and clears it after saving", async () => {
+    await mount();
+    await typeNotes("Needs saving");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    await click("View meeting history");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    await click("Design review");
+    vi.mocked(api.saveMeetingNotes).mockResolvedValue({
+      status: "saved",
+      replayed: false,
+      meeting: { ...meeting, personalNotes: "Needs saving", notesRevision: 2 }
+    });
+    await click("Save notes");
+    expect(hasSessionUnsavedChanges(client)).toBe(false);
+  });
   it("retains unsaved recovery through an ordinary transient read failure", async () => {
     await mount();
     await typeNotes("Recover my edit");
@@ -323,7 +368,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       text: "Recover my edit"
     });
     vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
-    await click("Retry loading draft");
+    await click("Retry");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Recover my edit"
     );

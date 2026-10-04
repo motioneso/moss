@@ -95,9 +95,7 @@ export function MeetingActionReview({
       <Divider />
       {result.reviewState === "pending" ? (
         <Field>
-          <FormLabel htmlFor={`action-${candidate.id}`}>
-            Suggested Task · version {candidate.artifactVersion}
-          </FormLabel>
+          <FormLabel htmlFor={`action-${candidate.id}`}>Suggested Task</FormLabel>
           <input
             id={`action-${candidate.id}`}
             className="jds-input meetings-input"
@@ -109,13 +107,22 @@ export function MeetingActionReview({
         </Field>
       ) : (
         <p>
-          {candidate.proposal.text} · {result.reviewState === "accepted" ? "Accepted" : "Dismissed"}
+          {result.reviewState === "accepted"
+            ? state.operation?.status === "done" && state.operation.input.decision === "accept"
+              ? `Created as: ${state.operation.input.title} · Accepted`
+              : `Original suggestion: ${candidate.proposal.text} · Accepted`
+            : `${candidate.proposal.text} · Dismissed`}
         </p>
       )}
       <p className="jds-hint">
-        Owner phrase: {candidate.proposal.ownerPhrase ?? "Unassigned"} · Due phrase:{" "}
-        {candidate.proposal.duePhrase ?? "No date stated"}. No due date is set here; choose one in
-        Tasks.
+        {candidate.proposal.ownerPhrase
+          ? `Owner mentioned: ${candidate.proposal.ownerPhrase}`
+          : "Unassigned"}{" "}
+        ·{" "}
+        {candidate.proposal.duePhrase
+          ? `Date mentioned: ${candidate.proposal.duePhrase}`
+          : "No due date"}
+        . Choose a due date in Tasks.
       </p>
       <OutputEvidence evidence={candidate.proposal.evidence} artifact={artifact} />
       {result.reviewState === "pending" ? (
@@ -123,11 +130,11 @@ export function MeetingActionReview({
           <div className="meetings-actions">
             <Switch
               ariaLabel="Create in my Tasks after owner review"
+              label="Create in my Tasks after owner review"
               checked={state.ownerReviewed}
               disabled={busy || state.operation?.status === "retry"}
               onChange={(ownerReviewed) => update((current) => ({ ...current, ownerReviewed }))}
             />
-            <span>Create in my Tasks after reviewing the owner</span>
           </div>
           {uncertain ? (
             <Note variant="practical">
@@ -138,13 +145,13 @@ export function MeetingActionReview({
               <div className="meetings-actions">
                 <Switch
                   ariaLabel="Create a separate Task despite possible matches"
+                  label="Create a separate Task despite possible matches"
                   checked={state.matchesReviewed}
                   disabled={busy || state.operation?.status === "retry"}
                   onChange={(matchesReviewed) =>
                     update((current) => ({ ...current, matchesReviewed }))
                   }
                 />
-                <span>Create a separate Task despite possible matches</span>
               </div>
             </Note>
           ) : null}
@@ -176,7 +183,7 @@ export function MeetingActionReview({
         </>
       ) : result.acceptedTaskId ? (
         <p className="jds-hint">
-          Task reference: {result.acceptedTaskId} · <Link to="/tasks">Go to Tasks</Link>
+          Current Task details and edits are in <Link to="/tasks">Tasks</Link>.
         </p>
       ) : null}
       {state.operation ? (

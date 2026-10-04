@@ -6,7 +6,8 @@ import type { ModuleServiceBindingMap } from "@moss/shared";
 const model = { id: "bound-model" } as AiConfiguredModelSafeRow;
 const strict = {
   capability: "summarization" as const,
-  rejectUnavailableFixedBinding: true as const
+  rejectUnavailableFixedBinding: true as const,
+  rejectUnavailablePinnedModel: true as const
 };
 function setup(
   bindings: ModuleServiceBindingMap,
@@ -82,6 +83,45 @@ describe("service routing with unavailable fixed-binding rejection", () => {
       expect(h.selectFrom).not.toHaveBeenCalled();
     }
   );
+  it.each(["same-provider-replacement", null])(
+    "rejects unavailable exact model pins (%s)",
+    async (replacementId) => {
+      const h = setup({ "module.meetings": { kind: "model", modelId: "bound-model" } });
+      h.modelPin.mockResolvedValue("pinned-model");
+      h.capability.mockResolvedValue({
+        model: replacementId ? { ...model, id: replacementId } : null,
+        reason: "admin-pin"
+      });
+      expect(await h.ai.resolveModelForService(h.db, "module.meetings", strict)).toEqual({
+        model: null,
+        reason: "admin-pin-unavailable"
+      });
+      expect(h.selectFrom).not.toHaveBeenCalled();
+      expect(h.defaultProvider).not.toHaveBeenCalled();
+    }
+  );
+  it("preserves legacy same-provider model-pin substitution without strict exact-pin checking", async () => {
+    const h = setup({});
+    h.modelPin.mockResolvedValue("pinned-model");
+    const replacement = { ...model, id: "same-provider-replacement" };
+    h.capability.mockResolvedValue({ model: replacement, reason: "admin-pin" });
+    expect(
+      await h.ai.resolveModelForService(h.db, "module.meetings", {
+        capability: "summarization",
+        rejectUnavailableFixedBinding: true
+      })
+    ).toEqual({ model: replacement, reason: "admin-pin" });
+  });
+  it("allows capability-based model selection under a provider-only pin even in strict mode", async () => {
+    const h = setup({});
+    h.providerPin.mockResolvedValue("pinned-provider");
+    const selected = { ...model, id: "capable-model-in-pinned-provider" };
+    h.capability.mockResolvedValue({ model: selected, reason: "admin-pin" });
+    expect(await h.ai.resolveModelForService(h.db, "module.meetings", strict)).toEqual({
+      model: selected,
+      reason: "admin-pin"
+    });
+  });
   it.each(["module.meetings", "module.worker"] as const)(
     "fails closed on unavailable %s fixed binding without default-provider fallback",
     async (service) => {

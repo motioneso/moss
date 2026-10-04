@@ -328,6 +328,53 @@ describe("Meeting output ownership and action acceptance", () => {
     });
   });
 
+  it("serializes distinct generation request keys before any second provider dispatch", async () => {
+    const { meeting, artifact, content } = await fixture();
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let dispatches = 0;
+    const service = new MeetingOutputService(context, async () => {
+      dispatches++;
+      await waiting;
+      return { content, modelRoute: "test-only" };
+    });
+    const input = {
+      requestKey: randomUUID(),
+      expectedOutputVersion: artifact.version,
+      expectedTranscriptRevision: 0,
+      expectedNotesRevision: 1,
+      templateId: "general" as const,
+      templateVersion: 1
+    };
+    const first = service.generate(owner, meeting.id, input);
+    const second = service.generate(owner, meeting.id, { ...input, requestKey: randomUUID() });
+    try {
+      await expect(Promise.race([first, second])).rejects.toMatchObject({
+        code: "meeting_output_busy",
+        statusCode: 409
+      });
+      expect(dispatches).toBe(1);
+    } finally {
+      release();
+    }
+    const results = await Promise.allSettled([first, second]);
+    expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
+    expect(results.find((result) => result.status === "fulfilled")).toMatchObject({
+      value: { status: "saved" }
+    });
+    expect(dispatches).toBe(1);
+    await context.withDataContext(owner, async (db) => {
+      const receipts = await db.db
+        .selectFrom("app.meeting_output_requests")
+        .select("request_key")
+        .where("meeting_id", "=", meeting.id)
+        .execute();
+      expect(receipts).toHaveLength(1);
+    });
+  });
+
   it("deletes meeting outputs while preserving accepted Task copies", async () => {
     const { meeting, candidate } = await fixture();
     const accepted = await context.withDataContext(owner, (db) =>

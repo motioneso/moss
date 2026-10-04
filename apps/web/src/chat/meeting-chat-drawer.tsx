@@ -53,6 +53,11 @@ export function MeetingChatDrawer(props: {
               : "Loading meeting…"}
           </Chip>
         </div>
+        <p role="status" className="jds-hint">
+          {access.isError || history.isError || unavailable
+            ? "This meeting is no longer available to this account. Close this conversation and choose an available meeting."
+            : "Checking access to this meeting…"}
+        </p>
       </aside>
     );
   }

@@ -165,3 +165,5 @@ export function randomUuid(): string {
 }
 
 export * from "./meeting-chat.js";
+
+export * from "./session-unsaved-changes.js";

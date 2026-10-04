@@ -9,11 +9,16 @@ export interface MastheadProps {
   readonly lede?: ReactNode;
   readonly aside?: ReactNode;
   readonly tone?: MastheadTone;
+  readonly compact?: boolean;
 }
 
 export function Masthead(props: MastheadProps) {
   const { tone = "default" } = props;
-  const classes = ["jds-masthead", tone === "field" ? "jds-masthead--field" : null]
+  const classes = [
+    "jds-masthead",
+    tone === "field" ? "jds-masthead--field" : null,
+    props.compact ? "jds-masthead--compact" : null
+  ]
     .filter(Boolean)
     .join(" ");
   return (

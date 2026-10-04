@@ -283,9 +283,11 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
       .click();
     expect((await dereference).status()).toBe(200);
     await expect(page).toHaveURL(new RegExp(`segmentRevision=1`));
+    await page.getByRole("tab", { name: /^Transcript/ }).click();
     const evidenceRegion = page.getByRole("region", { name: "Transcript evidence", exact: true });
     await expect(evidenceRegion).toContainText(MEETING_FIXTURE_OLD);
-    await expect(evidenceRegion).toContainText("Segment revision 1");
+    await evidenceRegion.getByText("Source details", { exact: true }).click();
+    await expect(evidenceRegion).toContainText("Transcript revision 1");
     await expect(
       page.getByRole("region", { name: "Retained transcript", exact: true })
     ).toContainText(MEETING_FIXTURE_NEW);

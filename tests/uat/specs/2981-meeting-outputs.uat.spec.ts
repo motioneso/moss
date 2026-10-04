@@ -39,16 +39,29 @@ async function readOutputs(page: Page, path: string): Promise<Outputs> {
   return response.json() as Promise<Outputs>;
 }
 async function vaultEvidence(project: string, meetingId: string): Promise<VaultEvidence[]> {
+  if (!project.startsWith("uat-")) throw new Error("Use isolated UAT provisioner");
+  // The launcher has no DAC override. Match the API's ordinary runtime owner, as the
+  // existing notes-failure-evidence fixture does, without changing any vault permissions.
+  const ownerResult = await exec(
+    "docker",
+    buildUatComposeArgs(project, ["exec", "-T", "jarv1s", "stat", "-c", "%u:%g", "/data/vaults"])
+  );
+  const owner = ownerResult.stdout.trim();
+  if (!/^[1-9][0-9]*:[1-9][0-9]*$/.test(owner))
+    throw new Error("Expected a non-root isolated vault runtime owner");
   const { stdout } = await exec(
     "docker",
     buildUatComposeArgs(project, [
       "exec",
       "-T",
+      "--user",
+      owner,
       "jarv1s",
       "node_modules/.bin/tsx",
       "tests/uat/fixtures/meeting-outputs-vault-evidence-cli.ts",
       UAT_ADMIN_ID,
-      meetingId
+      meetingId,
+      owner
     ])
   );
   return JSON.parse(stdout) as VaultEvidence[];
@@ -227,18 +240,24 @@ test("reviewed summary versions create independent Tasks and private vault copie
       return tasks.filter((task) => task.sourceRef === meetingId);
     };
     expect(await taskList()).toHaveLength(0);
-    // Follow exact source evidence through the real transcript UI.
-    await summary
-      .getByRole("link", { name: /^Transcript ·/ })
-      .first()
-      .click();
+    // Follow exact evidence without unmounting the focused review controls.
+    await page.getByRole("button", { name: "Edit this version", exact: true }).click();
+    const overview = page.getByLabel("Overview", { exact: true });
+    const editorNode = await overview.elementHandle();
+    const evidenceLink = summary.getByRole("link", { name: /^Transcript ·/ }).first();
+    await evidenceLink.focus();
+    await evidenceLink.press("Enter");
     await expect(
       page.getByRole("region", { name: "Transcript evidence", exact: true })
     ).toContainText(OUTPUT_FIXTURE_TEXT);
+    await expect(evidenceLink).toBeFocused();
+    expect(await editorNode!.evaluate((node) => node.isConnected)).toBe(true);
+    await expect(overview).toHaveValue(OUTPUT_FIXTURE_OVERVIEW);
+    await page.getByRole("button", { name: "Close editor", exact: true }).click();
     expect(new URL(page.url()).searchParams.get("segmentRevision")).toBe("1");
     await expect(page.getByRole("button", { name: "Accept Task", exact: true })).toBeDisabled();
     const reviewedTitle = "Owner reviewed Orchid action";
-    await page.getByLabel("Suggested Task · version 1", { exact: true }).fill(reviewedTitle);
+    await page.getByLabel("Suggested Task", { exact: true }).fill(reviewedTitle);
     // Switch intentionally hides its native checkbox; the associated label is the real
     // visible click target (the same interaction used by the draft/setup UAT).
     const ownerReview = page.getByRole("checkbox", {

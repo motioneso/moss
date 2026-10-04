@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
   assertDataContextDb,
   assertUuid,
@@ -57,6 +58,26 @@ function identity(action: MeetingOutputAction) {
   // all nonexact proposals are reviewable possible matches, never automatic replacements.
   return createHash("sha256").update(JSON.stringify(action)).digest("hex");
 }
+const HISTORY_ARTIFACT_BYTE_BUDGET = 2 * 1024 * 1024;
+
+/** Full snapshots are byte-bounded; exact-version reads retain access to omitted evidence. */
+export function selectMeetingOutputHistoryVersions(
+  metadata: readonly { version: number; bytes: number }[],
+  headVersion: number | null
+): number[] {
+  const head = metadata.find((item) => item.version === headVersion);
+  const versions = head ? [head.version] : [];
+  let bytes = head?.bytes ?? 0;
+  if (bytes > HISTORY_ARTIFACT_BYTE_BUDGET)
+    throw new MeetingOutputError("meeting_output_limit", 400);
+  for (const item of metadata.slice(0, 100)) {
+    if (item.version === headVersion || bytes + item.bytes > HISTORY_ARTIFACT_BYTE_BUDGET) continue;
+    versions.push(item.version);
+    bytes += item.bytes;
+  }
+  return versions.sort((a, b) => b - a);
+}
+
 export class MeetingOutputsRepository {
   private readonly records = new MeetingRecordsRepository();
   private readonly transcripts = new MeetingTranscriptRepository();
@@ -68,7 +89,19 @@ export class MeetingOutputsRepository {
     return meeting;
   }
   async inputs(db: DataContextDb, meetingId: string): Promise<MeetingOutputInputs> {
-    const meeting = await this.lock(db, meetingId);
+    assertDataContextDb(db);
+    assertUuid(meetingId, "Meeting id");
+    // Read paths retain a shared meeting lock for a consistent notes/transcript snapshot.
+    // Mutation orchestration acquires its exclusive lock before calling this reader.
+    const visible = await db.db
+      .selectFrom("app.meeting_records")
+      .select("id")
+      .where("id", "=", meetingId)
+      .forShare()
+      .executeTakeFirst();
+    if (!visible) throw new MeetingOutputError("meeting_not_found", 404);
+    const meeting = await this.records.get(db, meetingId);
+    if (!meeting) throw new MeetingOutputError("meeting_not_found", 404);
     const transcript = await this.transcripts.snapshot(db, meeting.id, {
       maxSegments: 500,
       maxCharacters: 100000
@@ -109,19 +142,27 @@ export class MeetingOutputsRepository {
   }
   async list(db: DataContextDb, meetingId: string) {
     const inputs = await this.inputs(db, meetingId);
-    const rows = await db.db
+    const metadata = await db.db
       .selectFrom("app.meeting_output_artifacts")
-      .select("artifact_json")
+      .select(["version", sql<number>`octet_length(artifact_json)`.as("bytes")])
       .where("meeting_id", "=", meetingId)
       .orderBy("version", "desc")
-      .limit(100)
+      .limit(1000)
       .execute();
     const head = await this.head(db, meetingId);
+    const selectedVersions = selectMeetingOutputHistoryVersions(metadata, head?.version ?? null);
+    const rows = selectedVersions.length
+      ? await db.db
+          .selectFrom("app.meeting_output_artifacts")
+          .select("artifact_json")
+          .where("meeting_id", "=", meetingId)
+          .where("version", "in", selectedVersions)
+          .orderBy("version", "desc")
+          .execute()
+      : [];
     const history = rows.map(
       ({ artifact_json }) => JSON.parse(artifact_json) as MeetingOutputArtifact
     );
-    // Late stale generations must not evict the current editable head from the bounded page.
-    if (head && !history.some((artifact) => artifact.version === head.version)) history.push(head);
     const artifacts = history.map((artifact) => {
       return {
         ...artifact,
@@ -134,6 +175,7 @@ export class MeetingOutputsRepository {
     });
     return {
       artifacts,
+      omittedArtifactCount: metadata.length - artifacts.length,
       candidates: await this.candidates(db, meetingId),
       headVersion: head?.version ?? 0
     };
@@ -160,7 +202,7 @@ export class MeetingOutputsRepository {
       .where("meeting_id", "=", meetingId)
       .where("request_key", "=", requestKey)
       .executeTakeFirst();
-    if (row && row.input_json !== input)
+    if (row && !isDeepStrictEqual(JSON.parse(row.input_json), JSON.parse(input)))
       throw new MeetingOutputError("meeting_output_request_conflict");
     if (row && row.result_json === null && row.expires_at.getTime() <= Date.now()) {
       const result_json = JSON.stringify({
@@ -172,6 +214,31 @@ export class MeetingOutputsRepository {
       return { ...row, result_json };
     }
     return row;
+  }
+  /** Called under the owner meeting lock, so distinct keys cannot reserve concurrent attempts. */
+  async pendingGeneration(db: DataContextDb, meetingId: string): Promise<string | null> {
+    await this.lock(db, meetingId);
+    await db.db
+      .updateTable("app.meeting_output_requests")
+      .set({
+        result_json: sql<string>`json_build_object('status', 'failed', 'requestKey', request_key, 'code', 'meeting_output_interrupted')::text`
+      })
+      .where("meeting_id", "=", meetingId)
+      .where("result_json", "is", null)
+      .where(sql<boolean>`input_json::jsonb ->> 'kind' = 'generate'`)
+      .where("expires_at", "<=", sql<Date>`clock_timestamp()`)
+      .execute();
+    const pending = await db.db
+      .selectFrom("app.meeting_output_requests")
+      .select("request_key")
+      .where("meeting_id", "=", meetingId)
+      .where("result_json", "is", null)
+      .where(sql<boolean>`input_json::jsonb ->> 'kind' = 'generate'`)
+      .where("expires_at", ">", sql<Date>`clock_timestamp()`)
+      .orderBy("expires_at", "desc")
+      .limit(1)
+      .executeTakeFirst();
+    return pending?.request_key ?? null;
   }
   async reserve(db: DataContextDb, meetingId: string, requestKey: string, input: string) {
     await db.db
@@ -228,7 +295,9 @@ export class MeetingOutputsRepository {
       if (existing.length + input.content.actions.length > 1000)
         throw new MeetingOutputError("meeting_output_limit", 400);
       for (const action of input.content.actions) {
-        const inserted = await db.db
+        // Only prior versions are review candidates; siblings in this artifact are not
+        // declared semantic duplicates of one another.
+        await db.db
           .insertInto("app.meeting_action_candidates")
           .values({
             meeting_id: input.meetingId,
@@ -241,9 +310,7 @@ export class MeetingOutputsRepository {
             accepted_task_id: null
           })
           .onConflict((conflict) => conflict.columns(["meeting_id", "identity_key"]).doNothing())
-          .returningAll()
-          .executeTakeFirst();
-        if (inserted) existing.push(candidate(inserted));
+          .execute();
       }
     }
     return artifact;

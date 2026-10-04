@@ -1,5 +1,10 @@
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
-import { AiRepository, createAiSecretCipher, generateText, type ProviderKind } from "@moss/ai";
+import {
+  AiRepository,
+  createAiSecretCipher,
+  prepareTextApiGeneration,
+  type ProviderKind
+} from "@moss/ai";
 import { meetingIdFromChatSurface, type StoredMeetingChatContext } from "@moss/shared";
 import type { ChatRepository } from "../repository.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
@@ -9,6 +14,8 @@ import {
   MeetingChatService,
   meetingSourceCards
 } from "./meeting-chat-service.js";
+
+const GENERATION_TIMEOUT_MS = 120_000;
 
 const GUIDANCE =
   "Answer the person's question using only the selected meeting evidence below. " +
@@ -104,8 +111,10 @@ export function createMeetingChatRuntime(
         assertCurrent,
         async run(question, evidence, signal) {
           await assertCurrent();
-          const result = await deps.dataContext.withDataContext(access, (db) =>
-            generateText(
+          const timeout = new AbortController();
+          const requestSignal = AbortSignal.any([signal, timeout.signal]);
+          const run = await deps.dataContext.withDataContext(access, (db) =>
+            prepareTextApiGeneration(
               db,
               {
                 model: selected.model,
@@ -116,7 +125,7 @@ export function createMeetingChatRuntime(
                   }
                 ],
                 maxOutputTokens: 2048,
-                signal
+                signal: requestSignal
               },
               {
                 repository: {
@@ -149,13 +158,31 @@ export function createMeetingChatRuntime(
               }
             )
           );
-          // No CLI adapter is provided. A credential auth change also fails closed inside generateText.
-          if (!result.ok)
-            throw new MeetingChatError(
-              "meeting_chat_failed",
-              "The selected model could not answer. Please try again."
-            );
-          return result.text;
+          // Only the prepared transport runs here, after the actor transaction has closed.
+          // Its abort race also settles the turn when a provider ignores cancellation.
+          const timer = setTimeout(() => timeout.abort(), GENERATION_TIMEOUT_MS);
+          timer.unref();
+          try {
+            const result = await run();
+            if (signal.aborted)
+              throw new MeetingChatError(
+                "meeting_chat_changed",
+                "The meeting question was stopped."
+              );
+            if (timeout.signal.aborted)
+              throw new MeetingChatError(
+                "meeting_chat_failed",
+                "The selected model took too long to answer. Please try again."
+              );
+            if (!result.ok)
+              throw new MeetingChatError(
+                "meeting_chat_failed",
+                "The selected model could not answer. Please try again."
+              );
+            return result.text;
+          } finally {
+            clearTimeout(timer);
+          }
         }
       };
     },

@@ -271,6 +271,13 @@ export function resolveMeetingTranscriptEvidence(
       revision.segment.revision === evidence.segmentRevision
   )?.segment;
   if (!segment || evidence.endCharacter > segment.text.length) return null;
+  const splitsSurrogate = (offset: number) => {
+    const before = segment.text.charCodeAt(offset - 1);
+    const after = segment.text.charCodeAt(offset);
+    return before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff;
+  };
+  if (splitsSurrogate(evidence.startCharacter) || splitsSurrogate(evidence.endCharacter))
+    return null;
   return Object.freeze({
     segment,
     excerpt: segment.text.slice(evidence.startCharacter, evidence.endCharacter)

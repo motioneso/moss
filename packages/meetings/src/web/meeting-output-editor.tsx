@@ -1,4 +1,5 @@
-import { randomUuid } from "@moss/module-web-sdk";
+import { useEffect, useRef } from "react";
+import { randomUuid, setSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { Button, Field, FormLabel } from "@moss/ui";
 import type {
   EditMeetingOutputInput,
@@ -14,18 +15,40 @@ interface EditState {
 export function MeetingOutputEditor({
   artifact,
   headVersion,
-  onClose
+  onClose,
+  onSaved
 }: {
   readonly artifact: MeetingOutputArtifact;
   readonly headVersion: number;
   readonly onClose: () => void;
+  readonly onSaved?: (version: number) => void;
 }) {
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const session = useOutputSession<EditState>(
     artifact.meetingId,
     `edit:${artifact.version}`,
     () => ({ content: artifact.content })
   );
   const { state, update, client } = session;
+  const dirty =
+    !!state &&
+    JSON.stringify(state.content) !==
+      JSON.stringify(
+        state.operation?.status === "done" ? state.operation.input.content : artifact.content
+      );
+  useEffect(() => {
+    setSessionUnsavedChanges(
+      client,
+      `meetings:${artifact.meetingId}:output:${artifact.version}`,
+      dirty && !session.denied
+    );
+  }, [client, artifact.meetingId, artifact.version, dirty, session.denied]);
   if (state === undefined || session.denied)
     return (
       <p role="status" className="jds-hint">
@@ -47,6 +70,11 @@ export function MeetingOutputEditor({
     try {
       const saved = await editMeetingOutput(artifact.meetingId, input);
       if (!session.authorized()) return;
+      setSessionUnsavedChanges(
+        client,
+        `meetings:${artifact.meetingId}:output:${artifact.version}`,
+        false
+      );
       update((current) =>
         current.operation?.input.requestKey !== input.requestKey
           ? current
@@ -56,6 +84,7 @@ export function MeetingOutputEditor({
             }
       );
       void client.invalidateQueries({ queryKey: outputKeys.list(artifact.meetingId) });
+      if (active.current) onSaved?.(saved.version);
     } catch (error) {
       if (session.deny(error) || !session.authorized()) return;
       update((current) =>
@@ -140,7 +169,7 @@ export function MeetingOutputEditor({
       ))}
       <div className="meetings-actions">
         <Button
-          disabled={busy || state.operation?.status === "done" || artifact.version !== headVersion}
+          disabled={busy || !dirty || artifact.version !== headVersion}
           onClick={() => void save()}
         >
           {state.operation?.status === "retry" ? "Retry edit save" : "Save edits as new version"}
@@ -148,11 +177,51 @@ export function MeetingOutputEditor({
         <Button variant="quiet" onClick={onClose}>
           Close editor
         </Button>
+        <Button
+          variant="quiet"
+          disabled={busy}
+          onClick={() => {
+            update(() => ({ content: artifact.content }));
+            setSessionUnsavedChanges(
+              client,
+              `meetings:${artifact.meetingId}:output:${artifact.version}`,
+              false
+            );
+            onClose();
+          }}
+        >
+          Discard edits
+        </Button>
       </div>
       {artifact.version !== headVersion ? (
         <p role="status" className="jds-hint">
           A newer version exists. Your edits are kept. Compare the latest version before editing it.
         </p>
+      ) : null}
+      {artifact.version !== headVersion ? (
+        <details>
+          <summary>Copy kept edits</summary>
+          <Field>
+            <FormLabel htmlFor="kept-summary-edits">Kept summary edits</FormLabel>
+            <textarea
+              id="kept-summary-edits"
+              className="jds-textarea meetings-input"
+              readOnly
+              rows={8}
+              value={[
+                state.content.overview,
+                ...state.content.decisions.map((item) => item.text),
+                ...state.content.openQuestions,
+                ...state.content.actions.map((item) => item.text)
+              ].join("\n\n")}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </Field>
+          <p className="jds-hint">
+            Copy this text, then choose the latest version to make a new edit. Reopening this
+            version restores your kept edits.
+          </p>
+        </details>
       ) : null}
       {state.operation ? (
         <p role="status" className="jds-hint">

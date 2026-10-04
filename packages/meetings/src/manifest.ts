@@ -101,6 +101,16 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.unsaved_changes",
+      description:
+        "Unsaved notes and summary edits stay in this signed-in session. Sign-out asks before discarding them; cancel keeps the edits. Browser close or reload also warns about unsaved edits."
+    },
+    {
+      id: "meetings.referenced_evidence",
+      description:
+        "Open an exact cited passage beside the current transcript. Close evidence returns to review. Invalid links and unavailable revisions show an explanation; they never redirect a citation to newer text."
+    },
+    {
       id: "meetings.private_exports",
       description:
         "Explicitly save an immutable output version into the Moss private vault. Each version has its own file. Unchanged repeats are a no-op; manual edits cause a conflict. Saved and search-index queued/delayed statuses are separate.",
@@ -179,6 +189,12 @@ export const meetingsModuleManifest = {
             "Generation failed or its result was invalid. Review provider settings, then explicitly start a new request; no fallback provider is used."
         },
         {
+          code: "meeting_output_busy",
+          class: "transient",
+          description:
+            "Another summary is already being generated for this meeting. Refresh to check its result before starting another request."
+        },
+        {
           code: "meeting_output_version_conflict",
           class: "transient",
           description:
@@ -235,7 +251,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.questions",
       description:
-        "Ask Moss opens shared chat with this meeting selected. Independent questions use current transcript evidence, visible coverage and exact-revision timestamps. Requires an API-key model; no actions, exports or subscription-model support."
+        "Ask Moss uses current meeting evidence and exact citations in shared chat. API-key requests have a two-minute deadline; no actions or model fallback. Inaccessible meetings explain how to close and choose another. CLI unsupported."
     },
     {
       id: "meetings.transcript_storage",
@@ -297,7 +313,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.draft_records",
       description:
-        "Create drafts, browse history, save personal notes, review transcripts and generated summaries, accept reviewed Tasks, and save private-vault copies at /meetings. Native recording remains unavailable.",
+        "Review Summary and actions, Transcript and My notes tabs at /meetings. History searches loaded titles/notes and filters saved notes. Accept reviewed Tasks and save private copies. Native recording remains unavailable.",
       errors: [
         {
           code: "meeting_request_conflict",

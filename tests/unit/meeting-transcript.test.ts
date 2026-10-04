@@ -551,4 +551,17 @@ describe("bounded revision-pinned transcript evidence", () => {
     expect(snapshot.segments[0]?.speakerId).toBeNull();
     expect(snapshot.segments[0]?.text).toBe(text);
   });
+  it("rejects evidence boundaries inside a UTF-16 surrogate pair", () => {
+    const state = accept(ledger(), event({ text: "A😀B" }));
+    const evidence = {
+      meetingId: "meeting",
+      segmentId: "segment",
+      segmentRevision: 1,
+      startCharacter: 1,
+      endCharacter: 3
+    };
+    expect(resolveMeetingTranscriptEvidence(state, evidence)?.excerpt).toBe("😀");
+    expect(resolveMeetingTranscriptEvidence(state, { ...evidence, startCharacter: 2 })).toBeNull();
+    expect(resolveMeetingTranscriptEvidence(state, { ...evidence, endCharacter: 2 })).toBeNull();
+  });
 });

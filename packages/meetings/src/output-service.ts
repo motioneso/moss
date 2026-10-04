@@ -50,6 +50,8 @@ export class MeetingOutputService {
             ? (JSON.parse(previous.result_json) as MeetingOutputResult)
             : { status: "pending" as const, requestKey: input.requestKey }
         };
+      const pendingKey = await this.repository.pendingGeneration(db, meetingId);
+      if (pendingKey) throw new MeetingOutputError("meeting_output_busy", 409);
       const head = await this.repository.head(db, meetingId);
       const inputs = await this.repository.inputs(db, meetingId);
       if (
@@ -75,7 +77,7 @@ export class MeetingOutputService {
     try {
       // Transport must honor this deadline. It must resolve live routing/credential state
       // itself and reject tool-capable transports; the service never retries or falls back.
-      const signal = AbortSignal.timeout(120000);
+      const signal = AbortSignal.timeout(110000);
       let rejectAbort: (() => void) | undefined;
       const aborted = new Promise<never>((_resolve, reject) => {
         rejectAbort = () => reject(new MeetingOutputError("meeting_output_interrupted"));
@@ -102,6 +104,7 @@ export class MeetingOutputService {
         "Capture gaps and participant attribution have not been independently verified."
       );
       const result = await this.dataContext.withDataContext(actor, async (db) => {
+        await this.repository.lock(db, meetingId);
         const current = await this.repository.inputs(db, meetingId);
         const receipt = await this.repository.request(db, meetingId, input.requestKey, encoded);
         if (!receipt) throw new MeetingOutputError("meeting_output_interrupted");
