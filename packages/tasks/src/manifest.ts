@@ -858,7 +858,7 @@ export const tasksModuleManifest = {
     {
       id: "tasks.details_window",
       description:
-        "Open a task from List or Grid to edit its title, notes, subtasks and status in the Task details window. The close button (X) is in the top right corner; Cancel and Escape also close it without saving, and Save changes keeps your edits."
+        "Open a task from List or Grid to edit it in the Task details window. The close button (X) is in the top right corner. Closing it, or Cancel or Escape, discards unsaved edits to the task's fields; subtasks, tags and comments save as you go."
     },
     {
       id: "tasks.breakdown",
