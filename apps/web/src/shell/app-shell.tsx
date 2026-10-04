@@ -509,7 +509,7 @@ function TrailMoreButton() {
 /**
  * The top bar's title area. While a page holds the trail (a Workshop project), the bar shows
  * the section as the way back, then the page name and its meta note — in place of the plain
- * title, never beside it. Otherwise the ordinary title and subtitle render unchanged.
+ * title, never beside it. Either way the date line sits under the title row.
  */
 function TopbarTitles(props: {
   readonly title: string;
@@ -545,6 +545,7 @@ function TopbarTitles(props: {
           ) : null
         }
       />
+      {props.subtitle ? <span className="topbar-subtitle">{props.subtitle}</span> : null}
     </div>
   );
 }
