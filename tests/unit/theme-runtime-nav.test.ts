@@ -131,3 +131,18 @@ describe("custom-theme nav color", () => {
     expect(style.values.has("--nav-active-bg")).toBe(false);
   });
 });
+
+describe("top bar ground (#3012)", () => {
+  it("follows the theme's own paper so a dark-start theme keeps a dark bar under light ink", () => {
+    const style = fakeStyle();
+    applyThemeTokens(style, { ...baseTokens, paper: "#1c1a16", ink: "#ece7dc" });
+    expect(style.values.get("--topbar-bg")).toBe("rgb(28 26 22 / 0.85)");
+  });
+
+  it("clears the bar ground when the theme is removed", () => {
+    const style = fakeStyle();
+    applyThemeTokens(style, baseTokens);
+    applyThemeTokens(style, null);
+    expect(style.values.has("--topbar-bg")).toBe(false);
+  });
+});

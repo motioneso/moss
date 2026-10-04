@@ -65,6 +65,7 @@ const CLEARED_RUNTIME_VARS = [
   "--accent-strong",
   "--btn-primary-bg",
   "--focus-ring",
+  "--topbar-bg",
   "--gold",
   "--gold-strong",
   "--gold-soft",
@@ -179,6 +180,12 @@ export function applyThemeTokens(
     if (isThemeColor(value)) style.setProperty(TOKEN_TO_VAR[key], value);
   }
   style.setProperty("--forest", tokens.accent);
+  const paperColor = parseThemeColor(tokens.paper);
+  // The built-in top bar ground is tuned for the light house palette, so a theme made from dark
+  // mode would sit its light ink on a light bar. The bar wears the theme's own paper instead.
+  if (paperColor) {
+    style.setProperty("--topbar-bg", `rgb(${paperColor.r} ${paperColor.g} ${paperColor.b} / 0.85)`);
+  }
   for (const [name, value] of Object.entries(deriveAccentRamp(tokens.accent, tokens.paper))) {
     style.setProperty(name, value);
   }
