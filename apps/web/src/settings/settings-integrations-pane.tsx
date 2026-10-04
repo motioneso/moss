@@ -21,6 +21,7 @@ import {
   updateIntegration
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import { groupTogglePatch, isGroupOn, isToolOn } from "./integration-group-state";
 import { useFeedback } from "./settings-feedback";
 import { IntegrationClassifierSection } from "./settings-integrations-classifier";
 import { readError } from "./settings-types";
@@ -242,9 +243,7 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
   };
 
   const toggleGroup = (groupName: string, enabled: boolean) => {
-    curationMutation.mutate({
-      enabledGroups: withMember(detail.enabledGroups, groupName, enabled)
-    });
+    curationMutation.mutate(groupTogglePatch(detail, groupName, enabled));
   };
 
   const toggleExplicitTool = (toolName: string, enabled: boolean) => {
@@ -384,7 +383,7 @@ function IntegrationGroupedTools(props: {
         </Note>
       ) : null}
       {detail.groups.map((group) => {
-        const groupEnabled = detail.enabledGroups.includes(group.name);
+        const groupEnabled = group.enabled;
         return (
           <Group
             key={group.name}
@@ -392,7 +391,7 @@ function IntegrationGroupedTools(props: {
             action={
               <Switch
                 ariaLabel={`Enable group ${group.name}`}
-                checked={groupEnabled}
+                checked={isGroupOn(detail, group.name)}
                 onChange={(checked) => props.onToggleGroup(group.name, checked)}
               />
             }
@@ -400,9 +399,7 @@ function IntegrationGroupedTools(props: {
             {detail.tools
               .filter((tool) => tool.group === group.name)
               .map((tool) => {
-                const muted = detail.mutedTools.includes(tool.name);
-                const explicit = detail.enabledTools.includes(tool.name);
-                const checked = groupEnabled ? !muted : explicit && !muted;
+                const checked = isToolOn(detail, tool.name, group.name);
                 return (
                   <Row
                     key={tool.name}

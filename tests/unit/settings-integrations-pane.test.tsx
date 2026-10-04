@@ -40,6 +40,12 @@ vi.mock("../../apps/web/src/settings/settings-feedback.js", () => ({
 
 import { SettingsIntegrationsPane } from "../../apps/web/src/settings/settings-integrations-pane.js";
 
+function switchState(html: string, label: string): "on" | "off" | undefined {
+  const match = new RegExp(`<input[^>]*aria-label="${label}"[^>]*>`).exec(html);
+  if (!match) return undefined;
+  return / checked(=|\s|\/|>)/.test(match[0]) ? "on" : "off";
+}
+
 const currentDetail: { value: IntegrationDetail | undefined } = { value: undefined };
 
 function tool(overrides: Partial<IntegrationToolDescriptor> = {}): IntegrationToolDescriptor {
@@ -152,6 +158,46 @@ describe("SettingsIntegrationsPane connection detail (#2175 Task 6)", () => {
 
     expect(html).toContain("Enable ToolA");
     expect(html).not.toContain("repeated");
+  });
+
+  it("shows the Other group switch off when every tool in it is off, and on when every tool is on (#2986)", () => {
+    const tools = [
+      tool({ name: "send", group: "Other" }),
+      tool({ name: "reply", group: "Other" }),
+      tool({ name: "list_a", group: "list" })
+    ];
+    // Agentmail shape: the server lists Other in enabledGroups but reports it not enabled.
+    currentDetail.value = baseDetail({
+      groupOptIn: true,
+      tools,
+      groups: [
+        { name: "list", toolCount: 1, enabled: true },
+        { name: "Other", toolCount: 2, enabled: false }
+      ],
+      enabledGroups: ["list", "Other"],
+      enabledTools: [],
+      mutedTools: []
+    });
+    const off = renderToString(createElement(SettingsIntegrationsPane));
+    expect(switchState(off, "Enable group Other")).toBe("off");
+    expect(switchState(off, "Enable send")).toBe("off");
+    expect(switchState(off, "Enable group list")).toBe("on");
+
+    // Home Assistant shape: every tool picked explicitly, no group enabled.
+    currentDetail.value = baseDetail({
+      groupOptIn: true,
+      tools,
+      groups: [
+        { name: "list", toolCount: 1, enabled: false },
+        { name: "Other", toolCount: 2, enabled: false }
+      ],
+      enabledGroups: [],
+      enabledTools: ["send", "reply", "list_a"],
+      mutedTools: []
+    });
+    const on = renderToString(createElement(SettingsIntegrationsPane));
+    expect(switchState(on, "Enable group Other")).toBe("on");
+    expect(switchState(on, "Enable group list")).toBe("on");
   });
 
   it("mounts the classifier section without changing the ordinary tool controls (#2899)", () => {
