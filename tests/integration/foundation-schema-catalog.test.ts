@@ -550,7 +550,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0261", name: "0261_meeting_draft_delete.sql" },
         { version: "0262", name: "0262_meeting_transcript_batches.sql" },
         { version: "0263", name: "0263_meeting_chat_cleanup.sql" },
-        { version: "0264", name: "0264_chat_surface_immutable.sql" }
+        { version: "0264", name: "0264_chat_surface_immutable.sql" },
+        { version: "0265", name: "0265_meeting_outputs.sql" },
+        { version: "0266", name: "0266_meeting_exports.sql" }
       ]);
     } finally {
       await client.end();
