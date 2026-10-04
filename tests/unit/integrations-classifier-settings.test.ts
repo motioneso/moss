@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  classifierPreparationView,
+  classifierSortView,
   effectiveClassifierTools,
   emptyPreparationMap,
   emptySortMap,
@@ -13,6 +13,7 @@ import {
   INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   parsePreparationMap,
   parseReviewedEntry,
+  parseSortMap,
   toolDefinitionFingerprint,
   withPreparationEntry,
   type ClassifierPreparationEntry,
@@ -342,7 +343,7 @@ describe("prototype-safe tool names", () => {
       discoveredTools: names.map((name) => tool({ name })),
       classifierPreparation: emptyPreparationMap()
     });
-    expect(classifierPreparationView(colliding)).toEqual([]);
+    expect(classifierSortView(colliding).some((t) => t.classifierState === "ready")).toBe(false);
     expect(effectiveClassifierTools(colliding)).toEqual([]);
   });
 
@@ -361,24 +362,256 @@ describe("prototype-safe tool names", () => {
   });
 });
 
-describe("classifierPreparationView", () => {
-  it("reports current versus stale from the stored fingerprint alone", () => {
-    const current = tool();
-    const view = classifierPreparationView(
-      state({
-        discoveredTools: [current, tool({ name: "turn_off" })],
-        classifierPreparation: {
-          version: 1,
-          entries: {
-            turn_on: entry(toolDefinitionFingerprint(current)),
-            turn_off: entry("sha256:stale")
-          }
+describe("classifierSortView standing (#2984 R2.5b)", () => {
+  const prepared = (
+    t: IntegrationToolDescriptor,
+    overrides: Partial<ClassifierPreparationEntry> = {}
+  ) => mapWith(t.name, entry(toolDefinitionFingerprint(t), overrides));
+  const standing = (overrides: Parameters<typeof state>[0]) =>
+    classifierSortView(state(overrides))[0]!;
+  const failedAgainst = (
+    fingerprint: string,
+    reason: "no_model" | "provider_error" = "no_model"
+  ): ClassifierPreparationMap => ({
+    ...emptyPreparationMap(),
+    failures: { turn_on: { reason, definitionFingerprint: fingerprint, failedAt: "t" } }
+  });
+
+  it("reads off while the switch is off, before anything else", () => {
+    const view = standing({ classifierEnabled: false, classifierKeptOutTools: ["turn_on"] });
+    expect(view.classifierState).toBe("off");
+    expect(view.keptOut).toBe(true);
+  });
+
+  it("reads kept_out for a kept-out tool even when it is prepared", () => {
+    const view = standing({
+      classifierKeptOutTools: ["turn_on"],
+      classifierPreparation: prepared(tool())
+    });
+    expect(view.classifierState).toBe("kept_out");
+  });
+
+  it("reads not_used for a tool off for chat, a failed sort, or a root-combinator schema", () => {
+    expect(standing({ mutedTools: ["turn_on"] }).classifierState).toBe("not_used");
+    const failedSort = withSortResult(emptySortMap(), "turn_on", {
+      status: "failed",
+      failure: "error",
+      sortFingerprint: toolSortFingerprint(toolRiskInputs(tool())),
+      sortedAt: "2026-10-03T00:00:00.000Z"
+    })!;
+    expect(standing({ classifierSort: failedSort }).classifierState).toBe("not_used");
+    const combinator = tool({ inputSchema: { anyOf: [{ type: "object" }] } });
+    expect(standing({ discoveredTools: [combinator] }).classifierState).toBe("not_used");
+  });
+
+  it("reads failed for want of a model when the sort failed for that reason", () => {
+    const failedSort = (failure: "error" | "no_model") =>
+      withSortResult(emptySortMap(), "turn_on", {
+        status: "failed",
+        failure,
+        sortFingerprint: toolSortFingerprint(toolRiskInputs(tool())),
+        sortedAt: "2026-10-03T00:00:00.000Z"
+      })!;
+    const missing = standing({ classifierSort: failedSort("no_model") });
+    expect(missing).toMatchObject({
+      status: "failed",
+      failure: "no_model",
+      classifierState: "failed",
+      preparationFailure: "no_model",
+      failedAt: "2026-10-03T00:00:00.000Z"
+    });
+
+    const errored = standing({ classifierSort: failedSort("error") });
+    expect(errored).toMatchObject({
+      classifierState: "not_used",
+      preparationFailure: null,
+      failedAt: "2026-10-03T00:00:00.000Z"
+    });
+
+    const off = standing({ classifierEnabled: false, classifierSort: failedSort("no_model") });
+    expect(off).toMatchObject({ classifierState: "off", preparationFailure: null });
+  });
+
+  it("reads preparing while the sort is never tried or stale, and before first preparation", () => {
+    expect(standing({ classifierSort: emptySortMap() }).classifierState).toBe("preparing");
+    const stale = sortedAs([tool({ description: "Older text" })]);
+    expect(standing({ classifierSort: stale }).classifierState).toBe("preparing");
+    expect(standing({}).classifierState).toBe("preparing");
+  });
+
+  it("reads ready with the preparation time when the preparation matches", () => {
+    const view = standing({ classifierPreparation: prepared(tool()) });
+    expect(view.classifierState).toBe("ready");
+    expect(view.preparedAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(view.preparationFailure).toBeNull();
+  });
+
+  it("reads failed with its reason only for a failure against the current definition", () => {
+    const fingerprint = toolDefinitionFingerprint(tool());
+    const failed = standing({ classifierPreparation: failedAgainst(fingerprint) });
+    expect(failed.classifierState).toBe("failed");
+    expect(failed.preparationFailure).toBe("no_model");
+    expect(failed.failedAt).toBe("t");
+    expect(failed.preparedAt).toBeNull();
+    const old = standing({ classifierPreparation: failedAgainst("sha256:older") });
+    expect(old.classifierState).toBe("preparing");
+    expect(old.preparationFailure).toBeNull();
+  });
+
+  it("reads preparing_again for a preparation made against an older definition", () => {
+    const view = standing({
+      classifierPreparation: mapWith("turn_on", entry("sha256:older"))
+    });
+    expect(view.classifierState).toBe("preparing_again");
+    expect(view.preparedAt).toBeNull();
+  });
+
+  it("reads preparing_again for a prepared tool that changed and waits to be sorted again", () => {
+    const changed = tool({ description: "Newer text" });
+    const view = standing({
+      discoveredTools: [changed],
+      classifierSort: sortedAs([tool()]),
+      classifierPreparation: prepared(tool())
+    });
+    expect(view.classifierState).toBe("preparing_again");
+  });
+
+  it("marks ready exactly the tools the gate would offer", () => {
+    const tools = [
+      tool(),
+      tool({ name: "turn_off" }),
+      tool({ name: "dim" }),
+      tool({ name: "kept" })
+    ];
+    const shared = state({
+      discoveredTools: tools,
+      classifierSort: sortedAs(tools),
+      classifierKeptOutTools: ["kept"],
+      classifierPreparation: {
+        version: 1,
+        entries: {
+          turn_on: entry(toolDefinitionFingerprint(tools[0]!)),
+          turn_off: entry("sha256:older"),
+          kept: entry(toolDefinitionFingerprint(tools[3]!))
         }
+      }
+    });
+    const ready = classifierSortView(shared)
+      .filter((t) => t.classifierState === "ready")
+      .map((t) => t.toolName);
+    expect(ready).toEqual(effectiveClassifierTools(shared).map((t) => t.tool.name));
+    expect(ready).toEqual(["turn_on"]);
+  });
+
+  it("shows the model's name and sort details only while the sort is current", () => {
+    const current = standing({});
+    expect(current.readableName).toBe("Turn on");
+    expect(current.sortedAt).toBe("2026-10-03T00:00:00.000Z");
+
+    const unsorted = classifierSortView(
+      state({
+        discoveredTools: [tool({ name: "light_turn_on" }), tool({ name: "light_turn_off" })],
+        classifierSort: emptySortMap()
       })
     );
-    expect(view.map((v) => [v.toolName, v.state])).toEqual([
-      ["turn_on", "current"],
-      ["turn_off", "stale"]
-    ]);
+    expect(unsorted.map((t) => t.readableName)).toEqual(["Turn on", "Turn off"]);
+    expect(unsorted.every((t) => t.sortedAt === null && t.sortedBy === null)).toBe(true);
+  });
+});
+
+describe("sortedBy on stored sorts (#2984 R2.5b)", () => {
+  const current = tool();
+  const fingerprint = toolSortFingerprint(toolRiskInputs(current));
+  const viewWith = (classifierSort: ClassifierSortMap) =>
+    classifierSortView(state({ classifierSort }))[0]!;
+  const stored = (sortedBy: unknown) =>
+    parseSortMap({
+      version: 1,
+      entries: {
+        turn_on: {
+          status: "current",
+          risk: "write",
+          readableName: "Turn on",
+          sortFingerprint: fingerprint,
+          sortedAt: "2026-10-03T00:00:00.000Z",
+          failure: null,
+          sendWithoutAsking: false,
+          legacyRiskFloor: null,
+          ...(sortedBy === undefined ? {} : { sortedBy })
+        }
+      }
+    });
+
+  it("stores and shows valid display names", () => {
+    const map = withSortResult(emptySortMap(), "turn_on", {
+      status: "current",
+      risk: "write",
+      readableName: "Turn on",
+      sortFingerprint: fingerprint,
+      sortedAt: "2026-10-03T00:00:00.000Z",
+      sortedBy: { model: "House model", provider: "Home server" }
+    })!;
+    expect(viewWith(map).sortedBy).toEqual({ model: "House model", provider: "Home server" });
+    expect(viewWith(parseSortMap(JSON.parse(JSON.stringify(map)))).sortedBy).toEqual({
+      model: "House model",
+      provider: "Home server"
+    });
+  });
+
+  it("reads invalid names as unknown without dropping the sort", () => {
+    for (const bad of [
+      { model: "", provider: "Home server" },
+      { model: "Line\nbreak", provider: "Home server" },
+      { model: "x".repeat(81), provider: "Home server" },
+      { model: "House model" },
+      "House model"
+    ]) {
+      const view = viewWith(stored(bad));
+      expect(view.status).toBe("current");
+      expect(view.sortedBy).toBeNull();
+    }
+    const written = withSortResult(emptySortMap(), "turn_on", {
+      status: "current",
+      risk: "write",
+      readableName: "Turn on",
+      sortFingerprint: fingerprint,
+      sortedAt: "2026-10-03T00:00:00.000Z",
+      sortedBy: { model: "\u0000", provider: "Home server" }
+    })!;
+    expect(viewWith(written).status).toBe("current");
+    expect(viewWith(written).sortedBy).toBeNull();
+  });
+
+  it("keeps an older stored sort that has no sortedBy", () => {
+    const view = viewWith(stored(undefined));
+    expect(view.status).toBe("current");
+    expect(view.risk).toBe("write");
+    expect(view.sortedBy).toBeNull();
+  });
+
+  it("records how a sort was made, and reads an older sort's method as unknown", () => {
+    const sortedWith = (sortMethod: "model" | "local") =>
+      withSortResult(emptySortMap(), "turn_on", {
+        status: "current",
+        risk: "write",
+        readableName: "Turn on",
+        sortFingerprint: fingerprint,
+        sortedAt: "2026-10-03T00:00:00.000Z",
+        sortedBy: { model: "House model", provider: "Home server" },
+        sortMethod
+      })!;
+    const byModel = parseSortMap(JSON.parse(JSON.stringify(sortedWith("model"))));
+    expect(viewWith(byModel)).toMatchObject({
+      sortMethod: "model",
+      sortedBy: { model: "House model", provider: "Home server" }
+    });
+
+    // A local sort read no model, whatever names came with it.
+    expect(viewWith(sortedWith("local"))).toMatchObject({ sortMethod: "local", sortedBy: null });
+
+    expect(viewWith(stored(undefined)).sortMethod).toBeNull();
+    expect(viewWith(stored({ model: "House model", provider: "Home server" })).sortMethod).toBe(
+      null
+    );
   });
 });

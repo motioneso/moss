@@ -105,7 +105,10 @@ describe("classifier sort storage (#2984 R2.1)", () => {
       status: "current",
       risk: "outbound",
       readableName: "Readable",
-      sendWithoutAsking: true
+      sendWithoutAsking: true,
+      sortedAt: "2026-10-04T00:00:00.000Z",
+      sortedBy: null,
+      sortMethod: null
     });
   });
 
@@ -190,7 +193,11 @@ describe("classifier sort storage (#2984 R2.1)", () => {
       sortFingerprint: toolSortFingerprint(toolRiskInputs(LIGHT)),
       sortedAt: "2026-10-04T00:00:00.000Z"
     })!;
-    expect(toolSortState(map, LIGHT)).toEqual({ status: "failed", failure: "unsafe" });
+    expect(toolSortState(map, LIGHT)).toEqual({
+      status: "failed",
+      failure: "unsafe",
+      failedAt: "2026-10-04T00:00:00.000Z"
+    });
     expect(toolSortState(map, { ...LIGHT, description: "New" })).toEqual({ status: "stale" });
   });
 

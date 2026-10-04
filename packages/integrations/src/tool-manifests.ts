@@ -29,13 +29,12 @@ import {
 } from "./classifier-candidates.js";
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import { toolRiskInputs, toolSortFingerprint } from "./classifier-risk-inputs.js";
+import { toolRunsWithoutAsking, toolSortState } from "./classifier-settings.js";
 import {
   effectiveClassifierTools,
-  toolRunsWithoutAsking,
-  toolSortState,
   type ClassifierConnectionState,
   type EligibleClassifierTool
-} from "./classifier-settings.js";
+} from "./classifier-standing.js";
 import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { capChars, INTEGRATION_RESPONSE_CHAR_CAP } from "./limits.js";

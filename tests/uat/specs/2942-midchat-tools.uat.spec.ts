@@ -18,8 +18,8 @@
 // mid-conversation, the hint path there is what carries the person to a new chat.
 //
 // Reuses the classifier fixture's faithful fake hub (real MCP over the real connect
-// path) and the operator's own Codex sign-in with the cheapest model tier, like
-// classifier-integrations.uat.spec.ts. Nothing is intercepted.
+// path) and the operator's own Codex sign-in with the cheapest model tier. Nothing is
+// intercepted.
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";

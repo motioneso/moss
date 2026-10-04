@@ -1,6 +1,7 @@
 import type { DataContextDb } from "@moss/db";
-import type { IntegrationClassifierRisk } from "@moss/shared";
+import type { IntegrationClassifierRisk, IntegrationClassifierSortedBy } from "@moss/shared";
 
+import { attemptLive } from "./classifier-attempt.js";
 import { readableToolNames } from "./classifier-readable-name.js";
 import {
   higherRisk,
@@ -18,7 +19,9 @@ import {
   INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS,
   isReadableName,
   toolSortState,
+  type ClassifierSortFailure,
   type ClassifierSortMap,
+  type ClassifierSortMethod,
   type ClassifierSortResult
 } from "./classifier-settings.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
@@ -375,17 +378,24 @@ export interface SortingTargetsInput {
   readonly sort: ClassifierSortMap;
   /** The owner's Try again: also re-send tools whose sort failed against their current inputs. */
   readonly retryFailed: boolean;
+  /** A model was added: also re-send tools whose sort failed for want of one, which cost nothing. */
+  readonly retryNoModel?: boolean;
+  readonly now: Date;
 }
 
 /**
  * Tools without a current sort: never tried, or stale because a risk input changed. A tool whose
- * sort failed against its current inputs waits for Try again; no other path resends it.
+ * sort failed against its current inputs waits for Try again; the only other path that resends it
+ * is a model being added after a `no_model` failure, which never reached a provider. A tool whose
+ * call may still be running is left to that call.
  */
 export function sortingTargets(input: SortingTargetsInput): readonly DiscoveredTool[] {
   return input.discoveredTools.filter((tool) => {
     const state = toolSortState(input.sort, tool);
     if (state.status === "never_tried" || state.status === "stale") return true;
-    return state.status === "failed" && input.retryFailed;
+    if (state.status !== "failed") return false;
+    if (state.failure === "interrupted" && attemptLive(state.failedAt, input.now)) return false;
+    return input.retryFailed || (input.retryNoModel === true && state.failure === "no_model");
   });
 }
 
@@ -478,7 +488,7 @@ export interface SortingToolResult {
 
 function failedResult(
   tool: DiscoveredTool,
-  failure: "error" | "unsafe",
+  failure: ClassifierSortFailure,
   sortedAt: string
 ): SortingToolResult {
   return {
@@ -496,7 +506,8 @@ function currentResult(
   tool: DiscoveredTool,
   group: ClassifierSortGroup | null,
   readableName: string,
-  sortedAt: string
+  sortedAt: string,
+  sortMethod: ClassifierSortMethod
 ): SortingToolResult {
   const inputs = toolRiskInputs(tool);
   return {
@@ -506,12 +517,16 @@ function currentResult(
       risk: sortedToolRisk(group, inputs),
       readableName,
       sortFingerprint: toolSortFingerprint(inputs),
-      sortedAt
+      sortedAt,
+      sortMethod
     }
   };
 }
 
-/** Results for tools settled without a call: unsafe ones fail, oversized ones are Sensitive. */
+/**
+ * Results for tools settled without a call: unsafe ones fail, oversized ones are Sensitive. No
+ * model reads either, so an oversized tool's sort is stored as made locally.
+ */
 export function resultsWithoutCall(
   plan: SortingPlan,
   freeNames: ReadonlyMap<string, string>,
@@ -520,9 +535,29 @@ export function resultsWithoutCall(
   return [
     ...plan.unsafe.map((tool) => failedResult(tool, "unsafe", sortedAt)),
     ...plan.oversized.map((tool) =>
-      currentResult(tool, null, freeNames.get(tool.name) ?? tool.name, sortedAt)
+      currentResult(tool, null, freeNames.get(tool.name) ?? tool.name, sortedAt, "local")
     )
   ];
+}
+
+/** Failed results for tools that could not be sent, such as when no model can sort them. */
+export function failedSortResults(
+  tools: readonly DiscoveredTool[],
+  failure: ClassifierSortFailure,
+  sortedAt: string
+): readonly SortingToolResult[] {
+  return tools.map((tool) => failedResult(tool, failure, sortedAt));
+}
+
+/** Results with the sorting model's display names on every current sort. */
+export function withSortedBy(
+  results: readonly SortingToolResult[],
+  sortedBy: IntegrationClassifierSortedBy | null
+): readonly SortingToolResult[] {
+  if (!sortedBy) return results;
+  return results.map((entry) =>
+    entry.result.status === "current" ? { ...entry, result: { ...entry.result, sortedBy } } : entry
+  );
 }
 
 /** The free rule's names for every tool on the connection. */
@@ -533,8 +568,8 @@ export function freeReadableNames(tools: readonly DiscoveredTool[]): ReadonlyMap
 /**
  * Run one sorting call. A provider or answer-shape failure, or a thrown error, marks the call's
  * tools failed. A tool the answer skips, or answers invalidly, is Sensitive under its free name.
- * `null` means the model is not set up or the call was cancelled: write nothing, so the tools
- * stay unsorted.
+ * `null` means the call was cancelled, or the model turned out not to be set up: nothing is
+ * written, so the tools keep their started-call mark and wait for Try again.
  */
 export async function runSortingCall(
   scopedDb: DataContextDb,
@@ -561,7 +596,7 @@ export async function runSortingCall(
   }
   const sortedAt = now().toISOString();
   if (!outcome.ok) {
-    if (outcome.error === "needs_config" || outcome.error === "aborted") return null;
+    if (outcome.error === "aborted" || outcome.error === "needs_config") return null;
     return call.map((entry) => failedResult(entry.tool, "error", sortedAt));
   }
 
@@ -572,12 +607,13 @@ export async function runSortingCall(
   return call.map((entry) => {
     const answer = answers.get(entry.id);
     return answer
-      ? currentResult(entry.tool, answer.group, answer.name, sortedAt)
+      ? currentResult(entry.tool, answer.group, answer.name, sortedAt, "model")
       : currentResult(
           entry.tool,
           null,
           freeNames.get(entry.tool.name) ?? entry.tool.name,
-          sortedAt
+          sortedAt,
+          "model"
         );
   });
 }

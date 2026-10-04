@@ -112,8 +112,9 @@ import type {
   IntegrationDetail,
   ListIntegrationsResponse,
   PrepareIntegrationClassifierResponse,
-  SaveIntegrationClassifierToolRequest,
+  SetIntegrationKeptOutRequest,
   SetIntegrationSendWithoutAskingRequest,
+  SortIntegrationClassifierResponse,
   UpdateIntegrationRequest,
   InterpretTaskSearchRequest,
   InterpretTaskSearchResponse,
@@ -1697,9 +1698,8 @@ export async function deleteIntegration(id: string): Promise<void> {
   return requestJson<void>(`/api/integrations/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-// Classifier gate plan 2b.4 (#2899): the reviewed-switches screen calls 2b.3's transient prepare
-// endpoint and 2b.2's per-tool review save/remove endpoints. `toolName` comes from the connection's
-// discovered list, so it is encoded like the connection id.
+// The owner's Try again for preparation (#2984 R2.4). It queues a background run; the page
+// re-reads the connection to follow it.
 export async function prepareIntegrationClassifierTools(
   id: string,
   input: { readonly force?: boolean },
@@ -1711,24 +1711,24 @@ export async function prepareIntegrationClassifierTools(
   );
 }
 
-export async function saveIntegrationClassifierTool(
-  id: string,
-  toolName: string,
-  body: SaveIntegrationClassifierToolRequest
-): Promise<IntegrationDetail> {
-  return requestJson<IntegrationDetail>(
-    `/api/integrations/${encodeURIComponent(id)}/classifier/tools/${encodeURIComponent(toolName)}`,
-    { method: "PUT", body }
+// The owner's Try again for sorting (#2984 R2.2): re-sends tools whose last sort failed.
+export async function sortIntegrationClassifierTools(
+  id: string
+): Promise<SortIntegrationClassifierResponse> {
+  return requestJson<SortIntegrationClassifierResponse>(
+    `/api/integrations/${encodeURIComponent(id)}/classifier/sort`,
+    { method: "POST" }
   );
 }
 
-export async function removeIntegrationClassifierTool(
+// Keeps the named tools out of the classifier, or lets them back in (#2984 R2.5b).
+export async function setIntegrationKeptOut(
   id: string,
-  toolName: string
+  body: SetIntegrationKeptOutRequest
 ): Promise<IntegrationDetail> {
   return requestJson<IntegrationDetail>(
-    `/api/integrations/${encodeURIComponent(id)}/classifier/tools/${encodeURIComponent(toolName)}`,
-    { method: "DELETE" }
+    `/api/integrations/${encodeURIComponent(id)}/classifier/kept-out`,
+    { method: "PUT", body }
   );
 }
 

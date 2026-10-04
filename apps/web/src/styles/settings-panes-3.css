@@ -797,42 +797,6 @@
   align-self: flex-start;
 }
 
-/* ---- Classifier section on a connection detail (#2899) ----
-   Layout only (D2): text, colour and status styling come from @moss/ui primitives and
-   settings-ui Note/Badge/Row/Field. */
-.clsf__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-.clsf__tool,
-.clsf__ineligible {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) 0;
-}
-.clsf__toolhead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.clsf__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.clsf__disclosure {
-  margin-top: var(--space-3);
-}
-.clsf__disclosure summary {
-  cursor: pointer;
-}
-.clsf__disclosure > * + * {
-  margin-top: var(--space-1);
-}
-
 /* Page header group: layout of the miniature strip; its colors live in the UI package. */
 .theme-headerstrip {
   display: flex;
@@ -904,6 +868,65 @@
 }
 .intg-tools__more {
   padding: var(--space-3) 0;
+}
+
+/* A tool row: readable name, then the raw name and its marks. */
+.intg-tool__id {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.intg-tool__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.intg-tool__meta .jds-badge {
+  gap: var(--space-2);
+}
+
+.intg-tool__raw {
+  overflow-wrap: anywhere;
+}
+
+/* Sorting line and the Classifier panel in the rail (#2984 R2.5b). */
+.intg-clsf__sorting,
+.intg-clsf__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.intg-clsf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--accent-rule);
+}
+.intg-clsf__state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.intg-clsf__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.intg-clsf p,
+.intg-clsf__sorting p {
+  margin: 0;
+}
+.intg-clsf__disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
 }
 @media (max-width: 960px) {
   .intg-detail {

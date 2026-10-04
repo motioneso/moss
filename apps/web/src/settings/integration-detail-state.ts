@@ -1,17 +1,48 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { IntegrationDetail } from "@moss/shared";
 
-import { getIntegration, setIntegrationSendWithoutAsking, updateIntegration } from "../api/client";
+import {
+  getIntegration,
+  prepareIntegrationClassifierTools,
+  setIntegrationKeptOut,
+  setIntegrationSendWithoutAsking,
+  sortIntegrationClassifierTools,
+  updateIntegration
+} from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import {
+  preparationPending,
+  retriedFailures,
+  retryPending,
+  withClassifierEnabled,
+  withKeptOut,
+  withRetriesAwaited,
+  type AwaitedRetries
+} from "./integration-classifier-state";
 import { toolsOnPatch } from "./integration-tool-groups";
 
-/** How often an open connection re-reads while tools wait to be sorted. */
+/** How often an open connection re-reads while tools wait to be sorted or prepared. */
 export const SORT_POLL_MS = 3_000;
 
-/** An open page stops waiting for sorting after this long, e.g. when no model can sort. */
+/**
+ * An open page stops waiting after this long, e.g. when no model can sort. Turning the
+ * classifier on or pressing Try again starts the wait over.
+ */
 export const SORT_WATCH_MS = 10 * 60_000;
+
+/** Model settings whose change can give a connection the model its tools waited for. */
+const MODEL_SETTINGS_KEYS: readonly QueryKey[] = [
+  queryKeys.ai.summary,
+  queryKeys.ai.providers,
+  queryKeys.ai.models,
+  queryKeys.ai.chatModelOverride
+];
+
+function isModelSettingsKey(key: QueryKey): boolean {
+  return MODEL_SETTINGS_KEYS.some((prefix) => prefix.every((part, index) => key[index] === part));
+}
 
 /** True while the worker still owes a sort for at least one tool. */
 export function sortPending(detail: IntegrationDetail | undefined): boolean {
@@ -48,8 +79,15 @@ export function withSendWithoutAsking(
  * detail re-reads from the server once the queue drains; a read in flight when a click lands is
  * cancelled so it cannot undo the click on screen.
  *
- * While tools wait to be sorted the detail re-reads every few seconds, so the groups appear
- * without a reload.
+ * While tools wait to be sorted or prepared the detail re-reads every few seconds, so the
+ * groups and the classifier's progress appear without a reload.
+ *
+ * Changing the model settings re-reads the detail and starts the wait over, since tools that
+ * failed for want of a model resume once one exists. Reopening the page always re-reads.
+ *
+ * Try again only queues work, and the server shows the old failure until the worker replaces it.
+ * The page remembers each retried failure and its time, keeps re-reading while the server still
+ * shows it, and shows those tools as waiting meanwhile.
  */
 export function useIntegrationDetail(id: string, onError: (error: unknown) => void) {
   const queryClient = useQueryClient();
@@ -58,17 +96,50 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
   const queued = useRef(0);
   const latest = useRef<IntegrationDetail | undefined>(undefined);
   const [changing, setChanging] = useState(false);
-  const openedAt = useRef(Date.now());
+  const watchedFrom = useRef(Date.now());
+  const [awaited, setAwaited] = useState<AwaitedRetries>(() => new Map());
 
   const detailQuery = useQuery({
     queryKey: key,
     queryFn: () => getIntegration(id),
     retry: false,
+    refetchOnMount: "always",
+    select: useCallback(
+      (detail: IntegrationDetail) => withRetriesAwaited(detail, awaited),
+      [awaited]
+    ),
     refetchInterval: (query) =>
-      !changing && sortPending(query.state.data) && Date.now() - openedAt.current < SORT_WATCH_MS
+      !changing &&
+      (sortPending(query.state.data) ||
+        preparationPending(query.state.data) ||
+        retryPending(query.state.data, awaited)) &&
+      Date.now() - watchedFrom.current < SORT_WATCH_MS
         ? SORT_POLL_MS
         : false
   });
+
+  // A busy change queue re-reads once it drains, so a model change only restarts the wait then.
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.type !== "updated" || event.action.type !== "invalidate") return;
+        if (!isModelSettingsKey(event.query.queryKey)) return;
+        watchedFrom.current = Date.now();
+        if (queued.current > 0) return;
+        void queryClient.invalidateQueries({ queryKey: queryKeys.integrations.detail(id) });
+      }),
+    [queryClient, id]
+  );
+
+  // A retry the worker never answers shows its failure again once the wait ends.
+  useEffect(() => {
+    if (awaited.size === 0) return;
+    const timer = setTimeout(
+      () => setAwaited(new Map()),
+      Math.max(0, SORT_WATCH_MS - (Date.now() - watchedFrom.current))
+    );
+    return () => clearTimeout(timer);
+  }, [awaited]);
 
   const change = (
     next: (detail: IntegrationDetail) => IntegrationDetail,
@@ -111,5 +182,55 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
       () => setIntegrationSendWithoutAsking(id, { allow, toolNames: [...toolNames] })
     );
 
-  return { detailQuery, setToolsOn, setSendWithoutAsking };
+  const setKeptOut = (toolNames: readonly string[], keptOut: boolean) =>
+    change(
+      (detail) => withKeptOut(detail, toolNames, keptOut),
+      () => setIntegrationKeptOut(id, { keptOut, toolNames: [...toolNames] })
+    );
+
+  const setClassifierEnabled = (on: boolean) => {
+    watchedFrom.current = Date.now();
+    change(
+      (detail) => withClassifierEnabled(detail, on),
+      () => updateIntegration(id, { classifierEnabled: on })
+    );
+  };
+
+  /** Await the failures a Try again re-sends; a refused request shows them again. */
+  const retry = (kind: "sort" | "preparation", send: () => Promise<unknown>) => {
+    const detail = queryClient.getQueryData<IntegrationDetail>(key);
+    if (!detail) return;
+    const failures = retriedFailures(detail, kind);
+    watchedFrom.current = Date.now();
+    setAwaited((current) => new Map([...current, ...failures]));
+    change(
+      (current) => current,
+      () =>
+        send().catch((error: unknown) => {
+          setAwaited((current) => {
+            const left = new Map(current);
+            for (const [name, failedAt] of failures) {
+              if (left.get(name) === failedAt) left.delete(name);
+            }
+            return left;
+          });
+          throw error;
+        })
+    );
+  };
+
+  const retryPreparation = () =>
+    retry("preparation", () => prepareIntegrationClassifierTools(id, {}));
+
+  const retrySort = () => retry("sort", () => sortIntegrationClassifierTools(id));
+
+  return {
+    detailQuery,
+    setToolsOn,
+    setSendWithoutAsking,
+    setKeptOut,
+    setClassifierEnabled,
+    retryPreparation,
+    retrySort
+  };
 }
