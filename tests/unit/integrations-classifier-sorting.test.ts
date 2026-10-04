@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { modelActivityStructuredCode } from "@moss/ai";
+import { generateStructured, modelActivityStructuredCode } from "@moss/ai";
 import type { DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
 import { assertMetadataOnlyPayload } from "@moss/jobs";
 import {
@@ -88,12 +88,68 @@ function connection(
 
 type RunInput = Parameters<ClassifierPreparationPort["runStructuredDraft"]>[1];
 
+/** The ids in one call's prompt. */
+function promptIds(prompt: string): string[] {
+  const data = prompt.slice(prompt.indexOf("UNTRUSTED DATA:\n") + 16);
+  return (JSON.parse(data) as { id: string }[]).map((entry) => entry.id);
+}
+
+/**
+ * Runs the call through the real structured router, as the production port does: its prompt size
+ * check and its answer check both apply. Only the provider's reply is scripted.
+ */
+async function throughRouter(
+  input: RunInput,
+  reply: (ids: string[]) => unknown
+): Promise<PreparationStructuredOutcome> {
+  const result = await generateStructured(
+    {} as DataContextDb,
+    {
+      service: input.service ?? "module.integrations",
+      schema: input.schema,
+      prompt: input.prompt,
+      explicitModel: {
+        id: "m1",
+        provider_config_id: "p1",
+        provider_kind: "anthropic",
+        provider_model_id: "opaque-model"
+      },
+      maxOutputTokens: input.maxOutputTokens,
+      singleAttempt: true,
+      servedByLabel: "main"
+    },
+    {
+      repository: {
+        selectProviderWithCredential: async () => ({
+          id: "p1",
+          auth_method: "api_key",
+          base_url: null,
+          encrypted_credential: {}
+        })
+      } as never,
+      cipher: { decryptJson: () => ({ apiKey: "sk-test" }) },
+      createAdapter: () => ({
+        generateStructured: async () => ({
+          rawObject: reply(promptIds(input.prompt)),
+          usage: { inputTokens: 1, outputTokens: 1 }
+        })
+      })
+    }
+  );
+  return result.ok
+    ? { ok: true, object: result.object, usage: result.usage }
+    : { ok: false, error: result.error };
+}
+
 /** Answers every tool in the call with `group`, unless `answer` overrides the reply. */
 function harness(
   row: ConnectionRow,
   config: {
     group?: string;
-    answer?: (ids: string[], input: RunInput) => PreparationStructuredOutcome;
+    answer?: (
+      ids: string[],
+      input: RunInput
+    ) => PreparationStructuredOutcome | Promise<PreparationStructuredOutcome>;
     structured?: boolean | null;
     credential?: string | null;
   } = {}
@@ -115,8 +171,7 @@ function harness(
           },
     runStructuredDraft: async (_db, input) => {
       runs.push(input);
-      const data = input.prompt.slice(input.prompt.indexOf("UNTRUSTED DATA:\n") + 16);
-      const ids = (JSON.parse(data) as { id: string }[]).map((entry) => entry.id);
+      const ids = promptIds(input.prompt);
       if (config.answer) return config.answer(ids, input);
       return {
         ok: true,
@@ -541,6 +596,77 @@ describe("what gets sent, and when", () => {
     expect(h.runs[0]!.service).toBe(INTEGRATION_CLASSIFIER_SORT_SERVICE);
     const code = modelActivityStructuredCode(INTEGRATION_CLASSIFIER_SORT_SERVICE);
     expect(integrationsModuleManifest.features.map((f) => f.id)).toContain(code);
+  });
+});
+
+describe("through the real structured router", () => {
+  const answerAll = (ids: string[]) => ({
+    tools: ids.map((id) => ({ id, group: "changes_things", name: `Name ${id}` }))
+  });
+
+  it("splits calls so every prompt fits the router's byte limit", async () => {
+    // 3,000 three-byte characters each: well under the character bounds, over the byte limit.
+    const tools = Array.from({ length: 10 }, (_, i) =>
+      tool(`wide_${i.toString()}`, { description: "\u754c".repeat(3000) })
+    );
+    const h = harness(connection(tools), {
+      answer: (_ids, input) => throughRouter(input, answerAll)
+    });
+
+    await expect(h.run()).resolves.toMatchObject({ status: "sorted" });
+    expect(h.runs.length).toBeGreaterThan(1);
+    for (const t of tools) {
+      expect(entry(h.state, t.name)).toMatchObject({ status: "current", risk: "write" });
+    }
+  });
+
+  it("keeps the valid answers when one answer in the reply is invalid", async () => {
+    const h = harness(connection([tool("a"), tool("b"), tool("c"), tool("d")]), {
+      answer: (_ids, input) =>
+        throughRouter(input, () => ({
+          tools: [
+            { id: "t1", group: "looks_things_up", name: "Look it up" },
+            { id: "t2", group: "harmless", name: "Unknown group" },
+            { id: "t3", group: "looks_things_up", name: "x".repeat(500) },
+            { id: "t4", group: "looks_things_up", name: "First" },
+            { id: "t4", group: "looks_things_up", name: "Second" },
+            { id: "t4", group: "looks_things_up", name: "Third" }
+          ]
+        }))
+    });
+
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({
+      status: "current",
+      risk: "read",
+      readableName: "Look it up"
+    });
+    for (const name of ["b", "c", "d"]) {
+      expect(entry(h.state, name)).toMatchObject({ status: "current", risk: "destructive" });
+    }
+  });
+
+  it("marks a call failed and runs the next one when the call throws", async () => {
+    const tools = Array.from(
+      { length: INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL + 1 },
+      (_, i) => tool(`t_${i.toString()}`)
+    );
+    let calls = 0;
+    const h = harness(connection(tools), {
+      answer: (ids) => {
+        calls += 1;
+        if (calls === 1) throw new Error("adapter blew up");
+        return { ok: true, object: answerAll(ids), usage: { inputTokens: 1, outputTokens: 1 } };
+      }
+    });
+
+    await expect(h.run()).resolves.toMatchObject({ status: "sorted", calls: 2 });
+    expect(entry(h.state, "t_0")).toMatchObject({ status: "failed", failure: "error" });
+    expect(
+      entry(h.state, `t_${INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL.toString()}`)
+    ).toMatchObject({
+      status: "current"
+    });
   });
 });
 

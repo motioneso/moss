@@ -8,7 +8,11 @@ import {
   toolSortFingerprint,
   type ToolRiskInputs
 } from "./classifier-risk-inputs.js";
-import type { ClassifierPreparationPort, PreparationChatModel } from "./classifier-preparation.js";
+import type {
+  ClassifierPreparationPort,
+  PreparationChatModel,
+  PreparationStructuredOutcome
+} from "./classifier-preparation.js";
 import {
   INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS,
   isReadableName,
@@ -38,6 +42,8 @@ export const INTEGRATION_CLASSIFIER_SORT_MAX_CALL_CHARS = 48_000;
 export const INTEGRATION_CLASSIFIER_SORT_MAX_TOOL_CHARS = 8000;
 /** Output bound for one sorting call. */
 export const INTEGRATION_CLASSIFIER_SORT_MAX_OUTPUT_TOKENS = 2000;
+/** The structured router's prompt limit, in UTF-8 bytes, for the whole prompt. */
+export const INTEGRATION_CLASSIFIER_SORT_MAX_PROMPT_BYTES = 65_536;
 /** The activity-history service key for sorting calls. */
 export const INTEGRATION_CLASSIFIER_SORT_SERVICE = "module.integrations.tool-sort" as const;
 
@@ -271,7 +277,12 @@ export function buildSortingPrompt(serializedTools: string): string {
   );
 }
 
-export function sortingAnswerSchema(toolCount: number): Record<string, unknown> {
+/**
+ * The answer's shape only. The router rejects a whole reply that fails this schema, so group,
+ * name and duplicate checks live in `parseSortingAnswer`, where one bad answer costs one tool.
+ * Strict providers need every property required.
+ */
+export function sortingAnswerSchema(): Record<string, unknown> {
   return {
     type: "object",
     additionalProperties: false,
@@ -279,19 +290,14 @@ export function sortingAnswerSchema(toolCount: number): Record<string, unknown> 
     properties: {
       tools: {
         type: "array",
-        maxItems: toolCount,
         items: {
           type: "object",
           additionalProperties: false,
           required: ["id", "group", "name"],
           properties: {
             id: { type: "string" },
-            group: { type: "string", enum: [...CLASSIFIER_SORT_GROUPS] },
-            name: {
-              type: "string",
-              minLength: 1,
-              maxLength: INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS
-            }
+            group: { type: "string", description: `One of: ${CLASSIFIER_SORT_GROUPS.join(", ")}.` },
+            name: { type: "string" }
           }
         }
       }
@@ -378,7 +384,18 @@ export interface SortingPlan {
   readonly calls: readonly (readonly SortingCallTool[])[];
 }
 
-/** Check, size and batch this job's targets. No model call happens here. */
+/** The full prompt for one call. */
+export function sortingCallPrompt(call: readonly SortingCallTool[]): string {
+  return buildSortingPrompt(`[${call.map((entry) => entry.serialized).join(",")}]`);
+}
+
+// Instructions, example and the empty array's brackets.
+const PROMPT_OVERHEAD_BYTES = Buffer.byteLength(buildSortingPrompt("[]"), "utf8");
+
+/**
+ * Check, size and batch this job's targets. No model call happens here. A call is bounded in
+ * characters and, for the router's limit, in UTF-8 bytes of the whole prompt.
+ */
 export function planSortingCalls(
   targets: readonly DiscoveredTool[],
   matcher: CredentialMatcher
@@ -388,33 +405,44 @@ export function planSortingCalls(
   const calls: SortingCallTool[][] = [];
   let current: SortingCallTool[] = [];
   let currentChars = 0;
+  let currentBytes = PROMPT_OVERHEAD_BYTES;
+
+  const fits = (serialized: string) =>
+    current.length < INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL &&
+    currentChars + serialized.length <= INTEGRATION_CLASSIFIER_SORT_MAX_CALL_CHARS &&
+    currentBytes + Buffer.byteLength(serialized, "utf8") + 1 <=
+      INTEGRATION_CLASSIFIER_SORT_MAX_PROMPT_BYTES;
+  const add = (tool: DiscoveredTool, id: string, serialized: string) => {
+    current.push({ id, tool, serialized });
+    currentChars += serialized.length;
+    currentBytes += Buffer.byteLength(serialized, "utf8") + 1;
+  };
 
   for (const tool of targets) {
-    const id = `t${(current.length + 1).toString()}`;
-    const payload = buildSortingToolPayload(tool, id);
-    if (payloadHoldsCredential(payload, matcher)) {
+    if (payloadHoldsCredential(buildSortingToolPayload(tool, "t1"), matcher)) {
       unsafe.push(tool);
       continue;
     }
-    const serialized = JSON.stringify(payload);
-    if (serialized.length > INTEGRATION_CLASSIFIER_SORT_MAX_TOOL_CHARS) {
+    const alone = JSON.stringify(buildSortingToolPayload(tool, "t1"));
+    if (
+      alone.length > INTEGRATION_CLASSIFIER_SORT_MAX_TOOL_CHARS ||
+      PROMPT_OVERHEAD_BYTES + Buffer.byteLength(alone, "utf8") >
+        INTEGRATION_CLASSIFIER_SORT_MAX_PROMPT_BYTES
+    ) {
       oversized.push(tool);
       continue;
     }
-    if (
-      current.length >= INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL ||
-      currentChars + serialized.length > INTEGRATION_CLASSIFIER_SORT_MAX_CALL_CHARS
-    ) {
-      calls.push(current);
-      current = [];
-      currentChars = 0;
-      const renumbered = JSON.stringify(buildSortingToolPayload(tool, "t1"));
-      current.push({ id: "t1", tool, serialized: renumbered });
-      currentChars += renumbered.length;
+    const id = `t${(current.length + 1).toString()}`;
+    const serialized = JSON.stringify(buildSortingToolPayload(tool, id));
+    if (fits(serialized)) {
+      add(tool, id, serialized);
       continue;
     }
-    current.push({ id, tool, serialized });
-    currentChars += serialized.length;
+    calls.push(current);
+    current = [];
+    currentChars = 0;
+    currentBytes = PROMPT_OVERHEAD_BYTES;
+    add(tool, "t1", alone);
   }
   if (current.length > 0) calls.push(current);
   return { unsafe, oversized, calls };
@@ -484,9 +512,10 @@ export function freeReadableNames(tools: readonly DiscoveredTool[]): ReadonlyMap
 }
 
 /**
- * Run one sorting call. A provider or answer-shape failure marks the call's tools failed. A tool
- * the answer skips, or answers invalidly, is Sensitive under its free name. `null` means the model
- * is not set up or the call was cancelled: write nothing, so the tools stay unsorted.
+ * Run one sorting call. A provider or answer-shape failure, or a thrown error, marks the call's
+ * tools failed. A tool the answer skips, or answers invalidly, is Sensitive under its free name.
+ * `null` means the model is not set up or the call was cancelled: write nothing, so the tools
+ * stay unsorted.
  */
 export async function runSortingCall(
   scopedDb: DataContextDb,
@@ -497,14 +526,19 @@ export async function runSortingCall(
   now: () => Date = () => new Date(),
   signal?: AbortSignal
 ): Promise<readonly SortingToolResult[] | null> {
-  const outcome = await port.runStructuredDraft(scopedDb, {
-    model,
-    schema: sortingAnswerSchema(call.length),
-    prompt: buildSortingPrompt(`[${call.map((entry) => entry.serialized).join(",")}]`),
-    maxOutputTokens: INTEGRATION_CLASSIFIER_SORT_MAX_OUTPUT_TOKENS,
-    service: INTEGRATION_CLASSIFIER_SORT_SERVICE,
-    ...(signal ? { signal } : {})
-  });
+  let outcome: PreparationStructuredOutcome;
+  try {
+    outcome = await port.runStructuredDraft(scopedDb, {
+      model,
+      schema: sortingAnswerSchema(),
+      prompt: sortingCallPrompt(call),
+      maxOutputTokens: INTEGRATION_CLASSIFIER_SORT_MAX_OUTPUT_TOKENS,
+      service: INTEGRATION_CLASSIFIER_SORT_SERVICE,
+      ...(signal ? { signal } : {})
+    });
+  } catch {
+    outcome = { ok: false, error: signal?.aborted ? "aborted" : "provider_error" };
+  }
   const sortedAt = now().toISOString();
   if (!outcome.ok) {
     if (outcome.error === "needs_config" || outcome.error === "aborted") return null;
