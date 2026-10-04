@@ -29,6 +29,11 @@
   --nav-active-bg: initial;
   --nav-active-fg: initial;
   --nav-brand: initial;
+  --header-bg: initial;
+  --header-fg: initial;
+  --header-muted: initial;
+  --header-line: initial;
+  --header-hover: initial;
 }
 
 /* Page header group: the miniature strip in the derived header colors. */
