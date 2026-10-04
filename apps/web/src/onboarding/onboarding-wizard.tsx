@@ -15,7 +15,7 @@ import { SectionTourStep } from "./section-tour-step";
 import { WelcomeStep } from "./welcome-step";
 import { firstIncompleteStepIndex } from "./resume";
 import { SkipConfirmDialog, needsSkipConfirm } from "./skip-confirm";
-import { personalize, assistantName } from "../api/use-assistant-name";
+import { personalize, assistantName } from "../api/use-assistant-name.js";
 
 const FOUNDER_ORDER = ["welcome", "cliAuth", "connectors", "finish"] as const;
 const MEMBER_ORDER = ["welcome", "assistant", "accounts", "tour", "finish"] as const;

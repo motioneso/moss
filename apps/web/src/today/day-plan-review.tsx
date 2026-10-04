@@ -29,7 +29,7 @@ import {
 } from "./day-plan-review-model.js";
 import { BriefingReportShell } from "./briefing-report-shell.js";
 import { ReviewRow, rowTitle } from "./day-plan-review-row.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 export interface DayPlanReviewProps {
   readonly controller: DayPlanReviewController;

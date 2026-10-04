@@ -23,7 +23,7 @@ import {
   shipExternalModule,
   throwAwayExternalModuleDraft
 } from "./api/client";
-import { assistantName, loadPersonaSettings } from "./api/use-assistant-name";
+import { assistantName, loadPersonaSettings } from "./api/use-assistant-name.js";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";

@@ -43,7 +43,7 @@ import {
   EveningStepStrip,
   type EveningStepId
 } from "./evening-planning-frame.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 export interface EveningPlanningDialogProps {
   readonly evening: EveningPlanningController;

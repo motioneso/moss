@@ -44,7 +44,7 @@ import {
   putNotesSource
 } from "../api/notes-client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName, personalize } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name.js";
 import { GOOGLE_CONNECT_SUCCESS_QUERY_KEYS } from "../connectors/use-google-connect-flow";
 import { getConnectorAccountHealth, isConnectorSyncInFlight } from "./settings-connector-sync";
 import { GoogleConnect } from "./settings-google-connect";

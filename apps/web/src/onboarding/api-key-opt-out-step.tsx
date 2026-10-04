@@ -5,7 +5,7 @@ import { KeyRound, Lock } from "lucide-react";
 import { getAiSummary } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { FootNote, OptionCard, StepHeader } from "./onboarding-ui";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
   const [assistant, setAssistant] = useState<"shared" | "personal">("shared");

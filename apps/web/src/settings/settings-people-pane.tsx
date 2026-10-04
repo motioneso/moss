@@ -18,7 +18,7 @@ import {
 } from "../api/people-client";
 import { listSourceBehaviors, putSourceBehavior } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName, personalize } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import {
   findSourceBehaviorEnabled,

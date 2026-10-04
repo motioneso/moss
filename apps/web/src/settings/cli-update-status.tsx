@@ -2,7 +2,7 @@ import type { AiCliToolsDto } from "@moss/shared";
 import { Button } from "@moss/ui";
 
 import { Badge } from "./settings-ui";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 /**
  * #2689 slice 4: what a tool update is doing, beside the version on a CLI provider card. The text

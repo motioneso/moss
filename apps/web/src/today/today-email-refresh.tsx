@@ -11,7 +11,7 @@ import { Button } from "@moss/ui";
 
 import { getBriefingRun, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const POLL_INTERVAL_MS = 1_000;

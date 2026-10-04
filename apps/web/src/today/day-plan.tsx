@@ -18,7 +18,7 @@ import {
   TimelineRow
 } from "./today-timeline.js";
 import type { DayItem } from "./day-plan-view-model.js";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export interface DayPlanSectionProps {
   readonly dayPlan: GetDayPlanResponse | undefined;

@@ -18,7 +18,7 @@ import {
   putPersonaSettings
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { loadPersonaSettings, useAssistantName } from "../api/use-assistant-name";
+import { loadPersonaSettings, useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import {
   applyGuidedPersonaText,

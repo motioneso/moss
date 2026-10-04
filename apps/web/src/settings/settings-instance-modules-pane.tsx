@@ -14,7 +14,7 @@ import {
   setExternalModuleEnabled
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import { ModuleCredentialsSection } from "./module-credentials-section";
 import { ModuleRegistrySection } from "./settings-module-registry-section";

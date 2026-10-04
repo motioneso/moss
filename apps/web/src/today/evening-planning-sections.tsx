@@ -27,7 +27,7 @@ import {
 import { BriefingMarkdown, EVENING_SECTION_NAMES } from "./briefing-markdown.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 const CAPACITY_OPTIONS = [
   ["normal", "A steady day", "The main task, with room for follow-through."],

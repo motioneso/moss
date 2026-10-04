@@ -15,7 +15,7 @@ import { BrandMark, IconButton } from "@moss/ui";
 import type { NavSection } from "../app-route-metadata.js";
 import { NAV_ICON_MAP } from "./nav-icons.js";
 import type { ShellNavMode } from "./nav-storage.js";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export interface ShellNavProps {
   readonly navMode: ShellNavMode;

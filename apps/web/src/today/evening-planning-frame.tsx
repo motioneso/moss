@@ -30,7 +30,7 @@ import {
   EVENING_SNAPSHOT_ROOM_NOTE,
   timeLabel
 } from "./today-labels.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 export const EVENING_STEP_IDS = ["reflect", "commitments", "shape", "review"] as const;
 

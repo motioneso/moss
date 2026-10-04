@@ -9,7 +9,7 @@ import {
   putAdminYoloUser
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Group, Row, Switch } from "./settings-ui";

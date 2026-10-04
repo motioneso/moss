@@ -3,7 +3,7 @@ import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from
 import { Settings } from "lucide-react";
 
 import type { AestheticThemeTokens } from "@moss/shared";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export type EditorTokenKey = keyof AestheticThemeTokens;
 

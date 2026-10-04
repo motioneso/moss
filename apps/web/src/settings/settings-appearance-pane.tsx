@@ -44,7 +44,7 @@ import {
 } from "./settings-theme-preview";
 import { Field, Group, Note, PaneHead, Row } from "./settings-ui";
 import { Badge, BrandMark, Button, ColorBox, ColorPopover, Segmented } from "@moss/ui";
-import { assistantName, personalize } from "../api/use-assistant-name";
+import { assistantName, personalize } from "../api/use-assistant-name.js";
 
 interface DraftTheme {
   readonly id: string;

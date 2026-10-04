@@ -3,7 +3,7 @@ import { CalendarDays, Compass, HeartPulse, House, ListChecks, Settings } from "
 
 import { getModules, getMyModules } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName, personalize } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name.js";
 import { buildTourSections, type TourSection } from "./section-tour-model";
 import { FootNote, StepHeader } from "./onboarding-ui";
 

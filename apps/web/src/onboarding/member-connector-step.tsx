@@ -1,4 +1,4 @@
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { GoogleConnectorStep } from "./google-connector-step";
 
 export function MemberConnectorStep() {

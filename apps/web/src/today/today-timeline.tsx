@@ -4,7 +4,7 @@ import { RowButton } from "@moss/ui";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import type { ScheduleClosingLine, ScheduleGapRow } from "./day-plan-gaps.js";
 import type { DayItem } from "./day-plan-view-model.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 export function durationText(minutes: number | null): string {
   if (minutes === null || minutes <= 0) return "";

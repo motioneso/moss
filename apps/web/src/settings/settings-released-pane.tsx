@@ -3,7 +3,7 @@ import releaseNotes from "../../../../docs/WHATS_NEW.md?raw";
 import { MarkdownMessage } from "../chat/markdown-message";
 import type { PaneProps } from "./settings-types";
 import { PaneHead } from "./settings-ui";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 function edgeChannelFirst(markdown: string): string {
   const firstSection = markdown.search(/^## /m);

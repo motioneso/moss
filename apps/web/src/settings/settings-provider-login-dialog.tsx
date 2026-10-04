@@ -11,7 +11,7 @@ import {
   pollOnboardingProviderLogin,
   submitOnboardingProviderLoginToken
 } from "../api/onboarding-connect-client";
-import { useAssistantName, personalize } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name.js";
 
 // #2027 added google: the Gemini command-line tool now has a sign-in adapter on the server, so the
 // dialog can drive its link-and-paste flow like the other two.

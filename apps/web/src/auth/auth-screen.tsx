@@ -3,7 +3,7 @@ import { LoaderCircle, LogIn, UserPlus } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
 import { signInEmail, signUpEmail } from "../api/client";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 interface AuthScreenProps {
   readonly needsBootstrap: boolean;

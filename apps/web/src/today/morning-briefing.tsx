@@ -40,7 +40,7 @@ import {
   sourceLabel
 } from "./briefing-freshness.js";
 import { DayPlanSection } from "./day-plan.js";
-import { personalize, assistantName } from "../api/use-assistant-name";
+import { personalize, assistantName } from "../api/use-assistant-name.js";
 
 export interface MorningBriefingReaderProps {
   /** Which briefing this run belongs to. The evening report has no task-block

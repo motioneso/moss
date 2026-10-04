@@ -13,7 +13,7 @@
 import { useId } from "react";
 
 import { Button, Dialog } from "@moss/ui";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export interface ThrowAwayDraftDialogProps {
   readonly moduleId: string;

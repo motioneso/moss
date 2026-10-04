@@ -8,7 +8,7 @@ import { Link } from "react-router";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { formatDateTime, useUserLocale } from "../locale/locale-format";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 type NotificationFilter = "all" | "unread";
 

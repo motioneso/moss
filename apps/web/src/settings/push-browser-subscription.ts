@@ -1,5 +1,5 @@
 import type { RegisterPushSubscriptionRequest } from "@moss/shared";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 // #2308: keep this browser's push subscription and the server's device records in step.
 // "This device" is the record whose endpoint fingerprint matches the subscription the

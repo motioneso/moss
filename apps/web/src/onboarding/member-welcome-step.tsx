@@ -1,7 +1,7 @@
 import { CircleCheck, Compass, Lock } from "lucide-react";
 
 import { FootNote, StepHeader } from "./onboarding-ui";
-import { personalize, assistantName } from "../api/use-assistant-name";
+import { personalize, assistantName } from "../api/use-assistant-name.js";
 
 export function MemberWelcomeStep(props: { readonly onSkipAll: () => void }) {
   return (

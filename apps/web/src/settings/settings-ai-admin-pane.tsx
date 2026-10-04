@@ -33,7 +33,7 @@ import {
   updateAiProvider
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { CliUpdateStatus } from "./cli-update-status";
 import { OpenCodeAcpCard, cliVersionLine } from "./settings-ai-opencode-card";
 import { useFeedback } from "./settings-feedback";

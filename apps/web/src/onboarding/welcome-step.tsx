@@ -1,7 +1,7 @@
 import { Plug, Radio, ShieldCheck, Terminal } from "lucide-react";
 
 import { FootNote, StepHeader } from "./onboarding-ui";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 export function WelcomeStep(props: { readonly onSkipAll: () => void }) {
   return (

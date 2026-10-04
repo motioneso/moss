@@ -1,7 +1,7 @@
 import type { ActionAuditLogEntryDto, ActivityLineDto } from "@moss/shared";
 
 import type { BadgeTone } from "./settings-ui.js";
-import { assistantName, personalize } from "../api/use-assistant-name";
+import { assistantName, personalize } from "../api/use-assistant-name.js";
 
 /**
  * #2956 (slice C): the Activity page's fixed vocabulary. Titles, sub-lines, badges and failure

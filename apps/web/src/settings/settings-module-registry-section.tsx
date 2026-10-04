@@ -20,7 +20,7 @@ import { ModuleCredentialsSection } from "./module-credentials-section.js";
 import { useFeedback } from "./settings-feedback.js";
 import { readError } from "./settings-types.js";
 import { Note, Row, Switch } from "./settings-ui.js";
-import { assistantName, personalize } from "../api/use-assistant-name";
+import { assistantName, personalize } from "../api/use-assistant-name.js";
 
 // #996/#860: props threaded down from InstanceModulesPane (Task 12) so an installed
 // registry row can reuse the same setExternalModuleEnabled mutation the External-modules

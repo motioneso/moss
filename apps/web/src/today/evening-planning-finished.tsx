@@ -11,7 +11,7 @@ import {
   EVENING_HANDOFF_MESSAGE,
   EVENING_ADJUST_LINK
 } from "./today-labels.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 /** Replaces the step strip once the plan is saved. */
 export function EveningDoneStrip(props: { readonly dateLabel: string }) {

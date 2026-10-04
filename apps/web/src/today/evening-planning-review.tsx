@@ -37,7 +37,7 @@ import {
 import { StepIntro } from "./evening-planning-sections.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
-import { personalize } from "../api/use-assistant-name";
+import { personalize } from "../api/use-assistant-name.js";
 
 function blockTitle(block: DayPlanBlockDto, tasks: readonly DayPlanTaskSummary[]): string {
   if (block.taskId === null) return block.title ?? "Untitled block";

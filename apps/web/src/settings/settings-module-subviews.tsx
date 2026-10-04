@@ -28,7 +28,7 @@ import {
   updateBriefingDefinition
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import {
   MORNING_NEWS_TOOL,
   MORNING_SPORTS_TOOL,

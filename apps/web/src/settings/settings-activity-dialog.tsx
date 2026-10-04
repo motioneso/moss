@@ -7,7 +7,7 @@ import type { LocaleSettingsDto } from "@moss/shared";
 import { formatDate } from "../locale/locale-format.js";
 import type { ActivityBadge } from "./settings-activity-line.js";
 import { failureSentence } from "./settings-activity-line.js";
-import { assistantName } from "../api/use-assistant-name";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export interface ActivityDialogStep {
   readonly key: string;
