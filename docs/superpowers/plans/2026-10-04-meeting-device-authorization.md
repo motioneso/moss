@@ -157,7 +157,7 @@ New files:
 - `packages/meetings/src/device-authorization-service.ts`: explicit approve/redeem/authorize/revoke
   flow; no generic action dispatch or provider client.
 - `packages/meetings/src/device-authorization-routes.ts`: separate cookie-owner and device routes.
-- `packages/meetings/sql/0267_meeting_device_authorizations.sql`: reserved by coordinator.
+- `packages/meetings/sql/0268_meeting_device_authorizations.sql`: reserved by coordinator.
 - `tests/unit/meeting-device-authorization.test.ts` and
   `tests/unit/meeting-device-routes.test.ts`: pure protocol/route synthetic tests.
 - `tests/unit/browser-session-binding.test.ts`: synthetic auth-pool boundary tests.
