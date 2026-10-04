@@ -64,6 +64,9 @@ permit it:
   here — a block there is the hook working, not an obstacle. Deliberate exception: when Ben
   asks for a migration of the dev database itself (not a gate), prefix the command with
   `JARVIS_ALLOW_DIRECT_DB=1` — that token in command position disables only this block.
+  Hook matching can miss a shell form, so the integration setup has the same rule as a
+  backstop: without the gate's run marker (`JARVIS_GATE_RUN=1`, exported by the script) or
+  the override, it refuses with the same one line.
 - **Never pipe a gate command** (`| tail`, `| grep`, `| tee`): a pipeline returns the filter's
   exit code, so red reads as green. The same hook blocks the obvious forms.
 - **Never decide liveness with `pgrep`/`ps`.** The Bash tool's wrapper shells match your pattern

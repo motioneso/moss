@@ -2,7 +2,7 @@ import { Pool } from "pg";
 import { Kysely, PostgresDialect } from "kysely";
 
 import { DataContextRunner, type MossDatabase } from "@moss/db";
-import { getMossDatabaseUrls } from "@moss/db";
+import { assertGateRunDatabaseAccess, getMossDatabaseUrls } from "@moss/db";
 
 /**
  * #1025 hard invariant (tier=sensitive): dev-only privileged connection for the
@@ -13,6 +13,9 @@ import { getMossDatabaseUrls } from "@moss/db";
  * hard invariant (CLAUDE.md) by turning migration-owner into a de facto bypass role.
  */
 export function createMigrationOwnerDb(): Kysely<MossDatabase> {
+  // Backstop (#2989): refuse a bare seed outside a gate. Unit tests mock
+  // this module, so they never reach this.
+  assertGateRunDatabaseAccess();
   const { migration } = getMossDatabaseUrls();
   return new Kysely<MossDatabase>({
     dialect: new PostgresDialect({ pool: new Pool({ connectionString: migration }) })
@@ -31,6 +34,7 @@ export function createMigrationOwnerDb(): Kysely<MossDatabase> {
  * no RLS carve-out, no bypass.
  */
 export function createAppRuntimeRunner(): DataContextRunner & { destroy(): Promise<void> } {
+  assertGateRunDatabaseAccess();
   const { app } = getMossDatabaseUrls();
   const rootDb = new Kysely<MossDatabase>({
     dialect: new PostgresDialect({ pool: new Pool({ connectionString: app }) })

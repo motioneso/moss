@@ -105,10 +105,39 @@ describe("check-gate-pipe.sh", () => {
       "pnpm -w verify:foundation",
       "pnpm -s db:migrate",
       "pnpm --filter moss-api test:integration",
-      "pnpm --filter=moss-api db:migrate"
+      "pnpm --filter=moss-api db:migrate",
+      "pnpm --dir apps/api test:integration",
+      "pnpm -C ~/Jarv1s db:migrate"
     ]) {
       const { code } = await runHook(command);
       expect(code).toBe(2);
+    }
+  });
+
+  it("blocks wrapper and grouping forms around a gate command", async () => {
+    for (const command of [
+      "pnpm exec vitest run tests/integration/chat.test.ts",
+      "pnpm exec tsx scripts/migrate.ts",
+      "timeout 600 pnpm test:integration",
+      "timeout -s KILL 600 pnpm test:integration",
+      "nohup pnpm verify:foundation > f &",
+      "(pnpm db:migrate)",
+      "node --import tsx scripts/migrate.ts"
+    ]) {
+      const { code, stderr } = await runHook(command);
+      expect(code).toBe(2);
+      expect(stderr).toContain("verify-gate skill");
+    }
+  });
+
+  it("matches integration only as a path segment, so unit tests keep running", async () => {
+    for (const command of [
+      "pnpm vitest run tests/unit/integrations-credentials.test.ts",
+      "vitest run tests/unit/integrations-credentials.test.ts",
+      "pnpm test:unit"
+    ]) {
+      const { code } = await runHook(command);
+      expect(code).toBe(0);
     }
   });
 

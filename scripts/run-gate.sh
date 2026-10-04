@@ -532,6 +532,11 @@ cmd_start() {
   export MOSS_APP_DATABASE_URL="$JARVIS_APP_DATABASE_URL"
   export MOSS_AUTH_DATABASE_URL="$JARVIS_AUTH_DATABASE_URL"
   export MOSS_WORKER_DATABASE_URL="$JARVIS_WORKER_DATABASE_URL"
+  # Run marker for the database backstop: integration setup and migrate
+  # refuse to touch a database without it (or the documented override).
+  # Both spells, like the URLs above.
+  export JARVIS_GATE_RUN=1
+  export MOSS_GATE_RUN=1
 
   # setsid+nohup so the run outlives this shell. The Bash tool's shell exits the
   # moment the call returns; without full detachment the gate can die with it.

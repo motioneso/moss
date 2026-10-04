@@ -55,25 +55,38 @@ if printf '%s' "$cmd" | grep -qE "$db_override_re"; then
   db_override=1
 fi
 
-# Runner flags that may sit between the runner and the script name, with an
-# optional value (`pnpm -w`, `pnpm -s`, `pnpm --filter x`, `--silent`).
-db_flags='([[:space:]]+(--filter([= ][[:space:]]*[^[:space:]]+)?|--[a-zA-Z][a-zA-Z-]*|-[a-zA-Z]+))*'
-db_scripts='(verify:foundation|test:integration|test:uat-seed|db:migrate)([[:space:]]|$)'
-db_runner_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(run[[:space:]]+)?${db_scripts}"
-db_runner_vitest_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+vitest[[:space:]]+run[[:space:]]+[^[:space:]]*(integration|uat/seed)"
-db_vitest_re='^(npx[[:space:]]+)?(vitest|tsx)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(run[[:space:]]+)?[^[:space:]]*(integration|uat/seed|test-integration\.ts|migrate\.ts)'
+# Runner flags that may sit between the runner and the script name.
+# Value-taking flags (`--filter x`, `--dir x`, `-C x`, `--workspace x`)
+# consume one following token; plain flags do not (`-w`, `-s`, `--silent`).
+# A bare value after any other flag is NOT consumed, so the script name can
+# never hide as a flag value.
+db_flag_value='(--filter|-C|--dir|--workspace)(=[^[:space:]]+|[[:space:]]+[^[:space:]]+)?'
+db_flags="([[:space:]]+(${db_flag_value}|--[a-zA-Z][a-zA-Z-]*|-[a-zA-Z]+))*"
+db_end='([[:space:]()]|$)'
+db_scripts="(verify:foundation|test:integration|test:uat-seed|db:migrate)${db_end}"
+db_runner_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(run[[:space:]]+)?(exec[[:space:]]+)?${db_scripts}"
+db_runner_vitest_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(exec[[:space:]]+)?vitest[[:space:]]+run[[:space:]]+([^[:space:]]*/)?integration(/|$)"
+db_runner_tsx_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(exec[[:space:]]+)?(tsx[[:space:]]+)?[^[:space:]]*scripts/(test-integration|migrate)\.ts"
+db_node_tsx_re='^node([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+--import(=|[[:space:]]+)tsx[[:space:]]+[^[:space:]]*scripts/(test-integration|migrate)\.ts'
+# integration/uat paths match as path segments only, so database-free unit
+# tests with "integration" in the file name (tests/unit/integrations-*) run.
+db_vitest_re='^(npx[[:space:]]+)?(vitest|tsx)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(run[[:space:]]+)?[^[:space:]]*([^[:space:]]*/)?(integration(/|$)|uat/seed|test-integration\.ts|migrate\.ts)'
 
 db_blocked=0
 segments="$(printf '%s' "$cmd" | tr '|&;' '\n')"
 while IFS= read -r seg; do
-  # Leading `sudo`/wrappers and VAR=value assignments do not move the command
-  # out of command position.
-  seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/^(sudo|doas|env)[[:space:]]+//')"
+  # Leading wrappers, timeouts, and VAR=value assignments do not move the
+  # command out of command position. A leading `(` (subshell grouping) is
+  # stripped too; the script names below tolerate a trailing `)`.
+  seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/^\(+//; s/^(sudo|doas|env|exec|nohup)[[:space:]]+//')"
+  seg="$(printf '%s' "$seg" | sed -E 's/^timeout(([[:space:]]+(--[a-zA-Z-]+(=[^[:space:]]+)?|-[a-zA-Z]+)([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+[0-9]+[smhd]?[[:space:]]+)//')"
   while printf '%s' "$seg" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+'; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+//')"
   done
   if printf '%s' "$seg" | grep -qE "$db_runner_re" ||
     printf '%s' "$seg" | grep -qE "$db_runner_vitest_re" ||
+    printf '%s' "$seg" | grep -qE "$db_runner_tsx_re" ||
+    printf '%s' "$seg" | grep -qE "$db_node_tsx_re" ||
     printf '%s' "$seg" | grep -qE "$db_vitest_re"; then
     db_blocked=1
     break
