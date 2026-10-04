@@ -106,6 +106,8 @@ None.
 
 ## Reaped sessions
 
+- w1:p12Q "Research self-knowledge (Opus)" (research-self-knowledge, session 313a7cf9) - report ~/moss-research/2026-10-04-assistant-self-knowledge.md (outside the repo); closed by relay 8.
+
 - w1:p12R "Research virtual desktop (Opus)" (research-virtual-desktop) - report ~/moss-research/2026-10-04-virtual-desktop-for-moss.md (outside the repo); closed by relay 8.
 
 - w1:p12E "Coordinator (old)" (session 18a6b85a, relay 7) - drove run to RELAY POINT 8 after merging PR #2991; closed by relay 8 (session 32206ccd) after session id verified.
@@ -333,3 +335,4 @@ merges_since_relay 1 (PR #2991). Ben asleep; his 21:35 merge interpretation gove
 - Virtual desktop research done: recommends borrowing an open-source browser tool inside Moss's own isolation and confirmations, no full desktop yet; first step a two-day throwaway trial outside the repo. Pane w1:p12R closed.
 - QA 2976 round 3 (w1:p12H) told to post its new blocking gap to the PR now (pane near auto-compact); branch browser reruns queued behind main runs. Self-knowledge research still running. Background watcher armed on ~/.needs-ben/replies/.
 - QA 2976 round 3 interim BLOCKING (comment 5977959865): an update can move a detail row onto another person's line. Sent to Muse lane w1:p12D for a new-migration fix plus an observed-red row security test; delivery confirmed. Full verdict to follow after QA's browser reruns. Then diff-only re-check by the same QA pane.
+- Self-knowledge research done: build the app map from what Moss already registers (screens, settings, tools, modules) with a test that fails on any missing entry; cheap first step is telling every chat surface to check before saying no. Pane w1:p12Q closed. RELAY POINT 8 step 2 complete; findings go to Ben in the morning report.
