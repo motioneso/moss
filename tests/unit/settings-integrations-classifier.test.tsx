@@ -544,6 +544,10 @@ describe("IntegrationClassifierSection", () => {
     expect(rendered).toContain(DISCLOSURE.provider);
     expect(rendered).toContain(DISCLOSURE.cost);
     expect(rendered).toContain(DISCLOSURE.excluded);
+    // Moss does not scan descriptions for secrets, so the notice must not promise it does.
+    expect(DISCLOSURE.excluded).not.toMatch(/secrets and raw/i);
+    expect(DISCLOSURE.excluded).toMatch(/does not check tool descriptions for secrets/i);
+    expect(DISCLOSURE.sent).toMatch(/exactly as the service wrote them/i);
     // No collapsed container that would hide the body while Prepare is clickable.
     expect(renderer!.root.findAllByType("details")).toHaveLength(0);
     // The notice body precedes the Prepare button in render order.

@@ -171,7 +171,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "switch that only marks the connection eligible, a note that messages and device names go " +
       "to the classifier provider, and a cost and sharing notice shown open above an explicit " +
       "Prepare action that names which tool definitions are sent to the owner's default chat " +
-      "model and that preparing costs model usage. Prepared tools appear as drafts that look " +
+      "model and that preparing costs model usage. The notice says server addresses, saved " +
+      "sign-in details and tool call results are never sent, and that tool descriptions go out " +
+      "as the service wrote them, not checked for secrets. Prepared tools appear as drafts that look " +
       "different from saved reviews; the owner edits each description and reply, chooses a risk, " +
       "and switches on only the tools the classifier may use, so the connection switch never " +
       "opts a tool in. Every unusable tool names why (connection switch off, off for ordinary " +
