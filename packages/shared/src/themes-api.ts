@@ -16,11 +16,13 @@ export const AESTHETIC_THEME_TOKEN_KEYS = [
 ] as const;
 
 /** Optional aesthetic tokens: absent = built-in constant applies. */
-export const OPTIONAL_AESTHETIC_TOKEN_KEYS = ["gold"] as const;
+export const OPTIONAL_AESTHETIC_TOKEN_KEYS = ["gold", "nav"] as const;
 
 export type AestheticThemeTokenKey = (typeof AESTHETIC_THEME_TOKEN_KEYS)[number];
 export type AestheticThemeTokens = Record<AestheticThemeTokenKey, string> & {
   gold?: string;
+  /** Nav bar ground; text, hover and selected colors derive from it. */
+  nav?: string;
 };
 export type BuiltInThemeId = "light" | "sage" | "canyon" | "teal" | "dusk" | "dark";
 export type ColorMode = "light" | "dark";

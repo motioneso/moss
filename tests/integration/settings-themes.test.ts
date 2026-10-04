@@ -120,6 +120,24 @@ describe("settings theme preferences", () => {
     expect(stored?.tokens.gold).toBe("#c2872b");
   });
 
+  it("persists the optional nav token when provided", async () => {
+    const put = await putTheme(ids.sessionA, "nav-theme", {
+      name: "Harbor",
+      tokens: { ...validThemeTokens, nav: "#1f3a5f" }
+    });
+
+    expect(put.statusCode).toBe(200);
+    expect(put.json<PutCustomThemeResponse>().theme.tokens.nav).toBe("#1f3a5f");
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/themes",
+      headers: userHeaders(ids.sessionA)
+    });
+    const stored = list.json<ListThemesResponse>().custom.find((theme) => theme.id === "nav-theme");
+    expect(stored?.tokens.nav).toBe("#1f3a5f");
+  });
+
   it("persists active custom theme per user", async () => {
     await putTheme(ids.sessionA, "my-blue", { name: "My Blue", tokens: validThemeTokens });
     const active = await setActive(ids.sessionA, "my-blue");

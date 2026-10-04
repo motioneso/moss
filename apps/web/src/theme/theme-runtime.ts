@@ -29,6 +29,26 @@ const TOKEN_TO_VAR: Record<AestheticThemeTokenKey, string> = {
   accent: "--accent"
 };
 
+/* Shell nav vars. Unset, the sidebar and phone top bar fall back to the theme's own colors. */
+const NAV_VARS = [
+  "--nav-bg",
+  "--nav-fg",
+  "--nav-muted",
+  "--nav-line",
+  "--nav-hover",
+  "--nav-active-bg",
+  "--nav-active-fg",
+  "--nav-brand"
+] as const;
+
+/* House ink and bone; nav text uses whichever reads better on the chosen ground. */
+const NAV_DARK_TEXT: Rgb = { r: 0x28, g: 0x2c, b: 0x25 };
+const NAV_LIGHT_TEXT: Rgb = { r: 0xed, g: 0xe5, b: 0xd2 };
+const BLACK: Rgb = { r: 0, g: 0, b: 0 };
+const WHITE: Rgb = { r: 255, g: 255, b: 255 };
+const TEXT_FLOOR = 4.5;
+const ACCENT_PILL_FLOOR = 3;
+
 const CLEARED_RUNTIME_VARS = [
   ...Object.values(TOKEN_TO_VAR),
   "--forest",
@@ -49,7 +69,8 @@ const CLEARED_RUNTIME_VARS = [
   "--gold-strong",
   "--gold-soft",
   "--gold-soft-2",
-  "--gold-ink"
+  "--gold-ink",
+  ...NAV_VARS
 ] as const;
 
 export function isThemeColor(value: string): boolean {
@@ -78,6 +99,67 @@ export function deriveAccentRamp(accent: string, paper: string): Record<string, 
     "--accent-soft-2": rgbToHex(mix(color, paperColor, 0.76)),
     "--accent-soft-fg": rgbToHex(mix(color, { r: 0, g: 0, b: 0 }, 0.28)),
     "--btn-primary-bg": accent
+  };
+}
+
+export interface NavColors {
+  readonly vars: Record<(typeof NAV_VARS)[number], string>;
+  readonly textRatio: number;
+  readonly mutedRatio: number;
+  readonly textKind: "dark" | "light";
+  /** True when neither house color reached 4.5:1 and text fell back to black or white. */
+  readonly strongText: boolean;
+  readonly activeKind: "accent" | "wash";
+}
+
+/**
+ * Derives readable nav colors for any ground. Text takes house ink or bone,
+ * falling back to black or white on mid-tones, so it always clears 4.5:1.
+ * Quieter links dim toward the ground only as far as 4.5:1 allows. The
+ * selected item keeps the accent pill when the accent clears 3:1 against the
+ * ground, otherwise it becomes a wash of the text color.
+ */
+export function deriveNavColors(nav: string, accent: string): NavColors | null {
+  const bg = parseThemeColor(nav);
+  if (!bg) return null;
+
+  let fg = ratio(NAV_DARK_TEXT, bg) >= ratio(NAV_LIGHT_TEXT, bg) ? NAV_DARK_TEXT : NAV_LIGHT_TEXT;
+  let strongText = false;
+  if (ratio(fg, bg) < TEXT_FLOOR) {
+    fg = ratio(BLACK, bg) >= ratio(WHITE, bg) ? BLACK : WHITE;
+    strongText = true;
+  }
+
+  let muted = fg;
+  for (let step = 20; step >= 0; step -= 1) {
+    const candidate = mix(fg, bg, step / 50);
+    if (ratio(candidate, bg) >= TEXT_FLOOR) {
+      muted = candidate;
+      break;
+    }
+  }
+
+  const accentColor = parseThemeColor(accent);
+  const accentRatio = accentColor ? ratio(accentColor, bg) : 1;
+  const accentPill = accentRatio >= ACCENT_PILL_FLOOR;
+  const fgHex = rgbToHex(fg);
+
+  return {
+    vars: {
+      "--nav-bg": rgbToHex(bg),
+      "--nav-fg": fgHex,
+      "--nav-muted": rgbToHex(muted),
+      "--nav-line": rgbToHex(mix(bg, fg, 0.2)),
+      "--nav-hover": rgbToHex(mix(bg, fg, 0.08)),
+      "--nav-active-bg": accentPill ? accent : rgbToHex(mix(bg, fg, 0.16)),
+      "--nav-active-fg": accentPill ? "var(--accent-label)" : fgHex,
+      "--nav-brand": accentRatio >= TEXT_FLOOR ? accent : fgHex
+    },
+    textRatio: ratio(fg, bg),
+    mutedRatio: ratio(muted, bg),
+    textKind: fg === NAV_DARK_TEXT || fg === BLACK ? "dark" : "light",
+    strongText,
+    activeKind: accentPill ? "accent" : "wash"
   };
 }
 
@@ -119,6 +201,13 @@ export function applyThemeTokens(
       style.setProperty("--gold-ink", rgbToHex(mix(gold, { r: 0, g: 0, b: 0 }, 0.45)));
     }
   }
+
+  if (tokens.nav) {
+    const nav = deriveNavColors(tokens.nav, tokens.accent);
+    if (nav) {
+      for (const [name, value] of Object.entries(nav.vars)) style.setProperty(name, value);
+    }
+  }
 }
 
 export function readCurrentAestheticTokens(style: CSSStyleDeclarationLike): AestheticThemeTokens {
@@ -147,6 +236,20 @@ function parseThemeColor(value: string): Rgb | null {
   const channels = rgb.slice(1).map(Number);
   if (channels.some((channel) => channel < 0 || channel > 255)) return null;
   return { r: channels[0]!, g: channels[1]!, b: channels[2]! };
+}
+
+function ratio(a: Rgb, b: Rgb): number {
+  const l1 = luminance(a);
+  const l2 = luminance(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+function luminance(color: Rgb): number {
+  const channel = (value: number) => {
+    const c = value / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
 }
 
 function mix(from: Rgb, to: Rgb, amount: number): Rgb {
