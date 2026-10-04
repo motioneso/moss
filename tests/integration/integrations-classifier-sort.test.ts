@@ -212,6 +212,39 @@ describe("integrations classifier sort storage and conversion (#2984 R2.1)", () 
     expect(sensitive).toEqual({ status: "refused", toolName: put.name });
   });
 
+  it("keeps the send choice in storage when an old reviewed risk raises the sort to outbound", async () => {
+    const conn = await createConnection(ids.userA, "Sort floor send choice", [BROADCAST]);
+    await seedClient.query(
+      `UPDATE app.integration_connections SET classifier_sort = $2::jsonb WHERE id = $1`,
+      [
+        conn.id,
+        JSON.stringify({
+          version: 1,
+          entries: { [BROADCAST.name]: { status: "never_tried", legacyRiskFloor: "outbound" } }
+        })
+      ]
+    );
+
+    const allowed = await as(ids.userA, async (scopedDb) => {
+      await repository.saveClassifierToolSorts(scopedDb, conn.id, [
+        { toolName: BROADCAST.name, result: sortedAs(BROADCAST, "write") }
+      ]);
+      return repository.setClassifierSendWithoutAsking(scopedDb, conn.id, [BROADCAST.name], true);
+    });
+    expect(allowed.status).toBe("saved");
+    if (allowed.status !== "saved") return;
+    expect(toolSortState(allowed.connection.classifierSort, BROADCAST)).toMatchObject({
+      risk: "outbound",
+      sendWithoutAsking: true
+    });
+
+    const reread = await as(ids.userA, (scopedDb) => repository.getConnection(scopedDb, conn.id));
+    expect(toolSortState(reread!.classifierSort, BROADCAST)).toMatchObject({
+      risk: "outbound",
+      sendWithoutAsking: true
+    });
+  });
+
   it("converts old entries once: opt-in off becomes kept out, a reviewed risk only raises", async () => {
     const tools = [
       { ...BROADCAST, name: "opted_out" },

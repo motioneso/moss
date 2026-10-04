@@ -160,6 +160,22 @@ describe("classifier sort storage (#2984 R2.1)", () => {
     expect(raised).toBeNull();
   });
 
+  it("keeps the send choice through storage when an old reviewed floor raises the sort to outbound", () => {
+    const converted = parseSortMap({
+      version: 1,
+      entries: { HassBroadcast: { status: "never_tried", legacyRiskFloor: "outbound" } }
+    });
+    let map = withSendWithoutAsking(sorted(LIGHT, "write", converted), LIGHT, true)!;
+    expect(toolSortState(map, LIGHT)).toMatchObject({ risk: "outbound", sendWithoutAsking: true });
+
+    map = parseSortMap(JSON.parse(JSON.stringify(map)));
+    expect(toolSortState(map, LIGHT)).toMatchObject({ risk: "outbound", sendWithoutAsking: true });
+
+    // A re-sort against the same inputs keeps the choice while the floor still makes it outbound.
+    map = sorted(LIGHT, "read", map);
+    expect(toolSortState(map, LIGHT)).toMatchObject({ risk: "outbound", sendWithoutAsking: true });
+  });
+
   it("clears the send choice when a new sort result arrives for changed inputs", () => {
     let map = withSendWithoutAsking(sorted(LIGHT, "outbound"), LIGHT, true)!;
     const changed = { ...LIGHT, description: "Broadcast and record" };
@@ -263,6 +279,14 @@ describe("free readable-name rule (#2984 R2.1)", () => {
     expect(names.get("delete_api_v3_movie_id")).toBe("Delete movie");
     expect(names.get("post_api_v3_movie")).toBe("Create movie");
     expect(names.get("listPets")).toBe("List pets");
+  });
+
+  it("keeps a shared action word when every tool in the connection starts with it", () => {
+    const shared = Object.fromEntries(readableToolNames(["AddTask", "AddShow"].map(mcp)));
+    expect(shared).toEqual({ AddTask: "Add task", AddShow: "Add show" });
+
+    const hass = Object.fromEntries(readableToolNames(["HassTurnOn", "HassTurnOff"].map(mcp)));
+    expect(hass).toEqual({ HassTurnOn: "Turn on", HassTurnOff: "Turn off" });
   });
 
   it("keeps a lone tool's full name and never returns an empty name", () => {

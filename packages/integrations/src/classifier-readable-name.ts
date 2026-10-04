@@ -106,12 +106,16 @@ function leading(parts: NameParts): string | undefined {
   return parts.words.length > 1 ? parts.words[0]!.toLowerCase() : undefined;
 }
 
-/** Drop leading words every tool in the set shares, as in a route's `api/v3`. */
-function dropCommonPrefix(set: NameParts[]): void {
+/**
+ * Drop leading words every tool in the set shares, as in a route's `api/v3`. With `keepVerbs`
+ * the drop stops at an action word, so `AddTask` and `AddShow` keep their `Add`.
+ */
+function dropCommonPrefix(set: NameParts[], keepVerbs: boolean): void {
   if (set.length < 2) return;
   for (;;) {
     const first = leading(set[0]!);
     if (first === undefined || !set.every((parts) => leading(parts) === first)) return;
+    if (keepVerbs && VERBS.has(first)) return;
     for (const parts of set) parts.words.shift();
   }
 }
@@ -142,8 +146,8 @@ export function readableToolNames(tools: readonly DiscoveredTool[]): Map<string,
   const parts = tools.map(nameParts);
   const routes = parts.filter((entry) => entry.fromRoute);
   const named = parts.filter((entry) => !entry.fromRoute);
-  dropCommonPrefix(routes);
-  dropCommonPrefix(named);
+  dropCommonPrefix(routes, false);
+  dropCommonPrefix(named, true);
   dropGluedPrefix(named);
 
   const out = new Map<string, string>();

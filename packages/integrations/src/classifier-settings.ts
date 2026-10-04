@@ -588,8 +588,9 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
     sortFingerprint: raw.sortFingerprint,
     sortedAt: raw.sortedAt,
     failure: null,
-    // The choice exists only on a Sends things out sort.
-    sendWithoutAsking: raw.sendWithoutAsking === true && risk === "outbound"
+    // The choice exists only while the sort, raised by any old floor, is Sends things out.
+    sendWithoutAsking:
+      raw.sendWithoutAsking === true && higherRisk(risk, legacyRiskFloor) === "outbound"
   };
 }
 
@@ -655,7 +656,7 @@ export function withSortResult(
     const keepsChoice =
       previous?.status === "current" &&
       previous.sortFingerprint === result.sortFingerprint &&
-      result.risk === "outbound";
+      higherRisk(result.risk, legacyRiskFloor) === "outbound";
     entry = {
       status: "current",
       risk: result.risk,
