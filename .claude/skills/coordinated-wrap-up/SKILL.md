@@ -51,9 +51,11 @@ Read the exit code the background call returns when its one completion notificat
 0 = green, 1 = the gate failed, 2 = the run DIED (no sentinel, log gone stale). No separate
 `status` call needed.
 Useful flags: `--gate audit:release-hardening` to run a different pnpm script (each gate gets its
-own log), `--keep-db` to keep the gate DB for debugging, `--exclusive` to hold the DB lock for the
-whole run when a sibling lane is also gating. `scripts/run-gate.sh stop` terminates a run and still
-lands a sentinel. Full usage is in the script header.
+own log). `--keep-db` and `--exclusive` are accepted for compatibility but no longer do anything:
+since #2989 each run gets its own throwaway Postgres server (removed when the run ends, so there
+is no gate DB to keep) and concurrent gates never contend (so there is no lock left to hold).
+`scripts/run-gate.sh stop` terminates a run and still lands a sentinel. Full usage is in the
+script header.
 
 - **Liveness comes from the sentinel + log mtime, never from `ps`/`pgrep`.** Every Claude Bash call
   is wrapped in a snapshot-sourcing shell whose command line contains your worktree path and your

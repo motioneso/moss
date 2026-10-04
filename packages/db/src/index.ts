@@ -3,6 +3,7 @@ export * from "./cluster-ddl-lock.js";
 export * from "./data-context.js";
 export * from "./database.js";
 export * from "./env.js";
+export * from "./gate-run-guard.js";
 export * from "./keyring.js";
 export * from "./migrations/module-sql-runner.js";
 export * from "./migrations/pending.js";

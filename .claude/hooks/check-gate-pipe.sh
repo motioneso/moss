@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) guard: refuse to run a verification gate whose exit code is masked by a pipe.
+# PreToolUse(Bash) guard: keep verification gates honest and off the shared database.
 #
-# Why this exists: a shell pipeline reports the exit status of the LAST command, so
-# `pnpm verify:foundation | tail -20` exits 0 even when every test failed. An agent then reads
-# exit 0, reports "gate green" in good faith, and the defect merges.
+# Two blocks in one hook:
+# 1. A piped gate masks its exit code. A shell pipeline reports the exit status
+#    of the LAST command, so `pnpm verify:foundation | tail -20` exits 0 even
+#    when every test failed. An agent then reads exit 0, reports "gate green"
+#    in good faith, and the defect merges.
 #
-# Measured 2026-07-27 over three weeks of transcripts: of 1,560 gate runs in this repo, 824 were
-# piped to tail/head and only 142 of those set pipefail — so 682 runs (44% of all gate runs)
-# could not have reported a failure. See the `verification-discipline` agent memory.
+#    Measured 2026-07-27 over three weeks of transcripts: of 1,560 gate runs in this repo, 824 were
+#    piped to tail/head and only 142 of those set pipefail — so 682 runs (44% of all gate runs)
+#    could not have reported a failure. See the `verification-discipline` agent memory.
+#
+# 2. A bare database-touching command hits the shared dev database. Gates run
+#    only through scripts/run-gate.sh, which points them at a throwaway server
+#    (#2989). Anything the agent types directly — pnpm or direct vitest/tsx —
+#    lands on jarv1s-postgres, which the dev instance also uses.
+#
+#    Matching is by command position, not substring: the command is split on
+#    shell separators and each segment must START with the runner (after env
+#    assignments), so `git commit -m "pnpm db:migrate"` and PR comment bodies
+#    that merely quote a gate command are left alone. Runner flags between the
+#    runner and the script (`pnpm -w`, `pnpm --filter x`) do not hide it.
+#
+#    Deliberate override: when Ben asks for a migration of the dev database
+#    itself (not a gate), prefix the command with JARVIS_ALLOW_DIRECT_DB=1.
+#    That token in command position disables this block — and only this block.
 #
 # Contract: stdin is the PreToolUse JSON payload. Exit 0 allows the call; exit 2 blocks it and
 # sends stderr back to the model as the reason.
@@ -25,8 +42,66 @@ tool=$(printf '%s' "$payload" | jq -r '.tool_name // empty' 2> /dev/null)
 cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2> /dev/null)
 [ -n "$cmd" ] || exit 0
 
-# Explicit opt-outs. Either construct makes the pipeline report the real failure, so the
-# command is safe and the author has clearly thought about it.
+# Database-touching commands first (#2989). The hook only ever sees what the
+# agent typed: the gate's own pnpm runs inside scripts/run-gate.sh, detached,
+# never through the agent's Bash tool — so any database-touching command here
+# is by definition NOT launched through run-gate.sh, and would hit the shared
+# dev database. Blocked piped or bare, with or without pipefail: pipefail
+# fixes the exit code but not the database. One plain line pointing at the
+# skill.
+db_override_re='(^|[;&|])[[:space:]]*JARVIS_ALLOW_DIRECT_DB=1([[:space:]]|$)'
+db_override=0
+if printf '%s' "$cmd" | grep -qE "$db_override_re"; then
+  db_override=1
+fi
+
+# Runner flags that may sit between the runner and the script name.
+# Value-taking flags (`--filter x`, `--dir x`, `-C x`, `--workspace x`)
+# consume one following token; plain flags do not (`-w`, `-s`, `--silent`).
+# A bare value after any other flag is NOT consumed, so the script name can
+# never hide as a flag value.
+db_flag_value='(--filter|-C|--dir|--workspace)(=[^[:space:]]+|[[:space:]]+[^[:space:]]+)?'
+db_flags="([[:space:]]+(${db_flag_value}|--[a-zA-Z][a-zA-Z-]*|-[a-zA-Z]+))*"
+db_end='([[:space:]()]|$)'
+db_scripts="(verify:foundation|test:integration|test:uat-seed|db:migrate)${db_end}"
+db_runner_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(run[[:space:]]+)?(exec[[:space:]]+)?${db_scripts}"
+db_runner_vitest_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(exec[[:space:]]+)?vitest[[:space:]]+run[[:space:]]+([^[:space:]]*/)?integration(/|$)"
+db_runner_tsx_re="^(pnpm|npm|yarn|turbo|npx)${db_flags}[[:space:]]+(exec[[:space:]]+)?(tsx[[:space:]]+)?[^[:space:]]*scripts/(test-integration|migrate)\.ts"
+db_node_tsx_re='^node([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+--import(=|[[:space:]]+)tsx[[:space:]]+[^[:space:]]*scripts/(test-integration|migrate)\.ts'
+# integration/uat paths match as path segments only, so database-free unit
+# tests with "integration" in the file name (tests/unit/integrations-*) run.
+db_vitest_re='^(npx[[:space:]]+)?(vitest|tsx)([[:space:]]+-[^[:space:]]+)*[[:space:]]+(run[[:space:]]+)?[^[:space:]]*([^[:space:]]*/)?(integration(/|$)|uat/seed|test-integration\.ts|migrate\.ts)'
+
+db_blocked=0
+segments="$(printf '%s' "$cmd" | tr '|&;' '\n')"
+while IFS= read -r seg; do
+  # Leading wrappers, timeouts, and VAR=value assignments do not move the
+  # command out of command position. A leading `(` (subshell grouping) is
+  # stripped too; the script names below tolerate a trailing `)`.
+  seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/^\(+//; s/^(sudo|doas|env|exec|nohup)[[:space:]]+//')"
+  seg="$(printf '%s' "$seg" | sed -E 's/^timeout(([[:space:]]+(--[a-zA-Z-]+(=[^[:space:]]+)?|-[a-zA-Z]+)([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+[0-9]+[smhd]?[[:space:]]+)//')"
+  while printf '%s' "$seg" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+'; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+//')"
+  done
+  if printf '%s' "$seg" | grep -qE "$db_runner_re" ||
+    printf '%s' "$seg" | grep -qE "$db_runner_vitest_re" ||
+    printf '%s' "$seg" | grep -qE "$db_runner_tsx_re" ||
+    printf '%s' "$seg" | grep -qE "$db_node_tsx_re" ||
+    printf '%s' "$seg" | grep -qE "$db_vitest_re"; then
+    db_blocked=1
+    break
+  fi
+done <<<"$segments"
+
+if [ "$db_blocked" = "1" ] && [ "$db_override" = "0" ]; then
+  echo "BLOCKED: database-touching tests and migrates run only through the verify-gate skill (scripts/run-gate.sh)." >&2
+  exit 2
+fi
+
+# Explicit opt-outs for the pipe check below. Either construct makes the
+# pipeline report the real failure, so the command is safe and the author has
+# clearly thought about it. (Database-touching commands never reach this —
+# they are blocked above with or without pipefail.)
 case "$cmd" in
   *pipefail* | *PIPESTATUS*) exit 0 ;;
 esac
@@ -40,31 +115,6 @@ scan=${cmd//\|\|/ @@OR@@ }
 gate_re='(pnpm|npm|turbo)[[:space:]]+(run[[:space:]]+)?[a-z0-9:_-]*(verify|test|lint|typecheck|format|build|check|audit|migrate)[a-z0-9:_-]*[^|]*\|'
 
 if printf '%s' "$scan" | grep -qE "$gate_re"; then
-  # Database-touching gate scripts take 15-25 minutes, longer than a single Bash call may run.
-  # A foreground redirect recipe cannot finish for these, so it points the agent at a hand-rolled
-  # background run and wait loop instead of the documented safe procedure. See the header comment
-  # in scripts/run-gate.sh for the full story.
-  db_gate_re='(pnpm|npm|turbo)[[:space:]]+(run[[:space:]]+)?(verify:foundation|test:integration|test:uat-seed|db:migrate)([[:space:]]|$)'
-  if printf '%s' "$scan" | grep -qE "$db_gate_re"; then
-    cat >&2 <<'MSG'
-BLOCKED: this pipes a verification gate into another command, which masks its exit code.
-
-A pipeline reports the LAST command's status, so piping this gate into tail/head/etc can exit 0
-even when the gate failed. Exit 0 here does not mean green.
-
-This command runs a database-touching gate, which takes 15 to 25 minutes - too long for a single
-foreground Bash call. Use scripts/run-gate.sh instead:
-
-    scripts/run-gate.sh start        # optionally: --gate <pnpm-script> for a narrower gate
-    scripts/run-gate.sh wait
-    scripts/run-gate.sh status
-
-Read the exit code it reports, not any piped text. Full procedure: the verify-gate skill
-(.claude/skills/verify-gate/SKILL.md).
-MSG
-    exit 2
-  fi
-
   cat >&2 <<'MSG'
 BLOCKED: this pipes a verification gate into another command, which masks its exit code.
 

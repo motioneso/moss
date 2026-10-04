@@ -77,9 +77,13 @@ every phase names an e2e test that was **observed** passing.
 
 `pnpm verify:foundation` ran without `JARVIS_PGDATABASE` set, so migrations and integration
 tests executed against the live dev database `jarv1s`. Inline `VAR=x pnpm …` does **not** survive
-backgrounding — the variable must be `export`ed. → `coordinated-wrap-up` step 2 now DROPs and
-CREATEs a per-agent gate DB and `export`s it before backgrounding anything, and DROPs it when
-done. Concurrent gate runs also crash the shared dev Postgres, so agents stagger them.
+backgrounding — the variable must be `export`ed. → `coordinated-wrap-up` step 2 now runs the gate
+through `scripts/run-gate.sh`, which launches a throwaway Postgres server per run and `export`s
+the whole database environment (both `JARVIS_*` and `MOSS_*` spells) at it before backgrounding
+anything, and removes the server when done (#2989). Concurrent gates no longer share a server, so
+no staggering is needed. A hook (`.claude/hooks/check-gate-pipe.sh`) blocks database-touching
+commands typed outside the gate; prefixing with `JARVIS_ALLOW_DIRECT_DB=1` is the deliberate
+override for a dev-database migration Ben asked for.
 
 ## 2026-07-2x — piped gate commands reported the filter's exit code
 

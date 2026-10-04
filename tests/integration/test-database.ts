@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import type { WithClusterDdlLockOptions } from "@moss/db";
 import {
+  assertGateRunDatabaseAccess,
   DEFAULT_JARVIS_DATABASE_NAME,
   getMossDatabaseUrls,
   resolveMossEnv,
@@ -135,12 +136,16 @@ export function laneScopedModuleId(
 }
 
 export async function resetFoundationDatabase(): Promise<void> {
+  // Backstop (#2989): refuse a bare run outside a gate. Unit tests import
+  // the pure helpers above without calling reset, so they never reach this.
+  assertGateRunDatabaseAccess();
   assertIsolatedTestDatabase(connectionStrings.bootstrap);
   await resetEmptyFoundationDatabase();
   await seedProbeData();
 }
 
 export async function resetEmptyFoundationDatabase(): Promise<void> {
+  assertGateRunDatabaseAccess();
   assertIsolatedTestDatabase(connectionStrings.bootstrap);
   await dropApplicationSchemas();
   // The bootstrap directory issues CREATE ROLE / ALTER ROLE, which write the cluster-global
