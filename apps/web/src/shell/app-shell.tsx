@@ -291,6 +291,10 @@ export function AppShell(props: AppShellProps) {
       "data-nav-color",
       document.documentElement.style.getPropertyValue("--nav-bg") !== ""
     );
+    document.documentElement.toggleAttribute(
+      "data-header-color",
+      document.documentElement.style.getPropertyValue("--header-bg") !== ""
+    );
     saveShellTheme(activeThemeId);
     saveShellColorMode(mode);
   }, [activeThemeId, colorMode, themesQuery.data?.custom, themesQuery.data?.mode]);

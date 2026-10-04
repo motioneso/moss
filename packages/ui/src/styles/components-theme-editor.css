@@ -31,6 +31,25 @@
   --nav-brand: initial;
 }
 
+/* Page header group: the miniature strip in the derived header colors. */
+.theme-headerstrip {
+  background: var(--header-bg, var(--paper));
+  border: var(--border-w) solid var(--header-line, var(--line));
+  color: var(--header-fg, var(--ink));
+}
+.theme-headerstrip__title {
+  font-weight: var(--weight-bold);
+}
+.theme-headerstrip__date,
+.theme-headerstrip__cog {
+  color: var(--header-muted, var(--ink-3));
+}
+.theme-headerstrip__date {
+  font-size: var(--text-xs);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
 /* Mini Moss screen: nav column, Today band with its highlight rule, rows. */
 .theme-thumb {
   display: grid;
@@ -174,6 +193,22 @@
   background: var(--nav-bg, var(--sage-light));
   border-right: var(--border-w) solid var(--nav-line, var(--line));
   color: var(--nav-fg, var(--ink));
+}
+.theme-pv__header {
+  background: var(--header-bg, var(--paper));
+  border-bottom: var(--border-w) solid var(--header-line, var(--line-strong));
+  color: var(--header-fg, var(--ink));
+}
+.theme-pv__header-title {
+  font-weight: var(--weight-bold);
+}
+.theme-pv__header-date,
+.theme-pv__header-cog {
+  color: var(--header-muted, var(--ink-3));
+}
+.theme-pv .theme-pv__header.is-hot,
+.theme-pv .theme-pv__header.is-open {
+  outline-offset: -4px;
 }
 .theme-pv__brand {
   font-family: var(--font-display);
