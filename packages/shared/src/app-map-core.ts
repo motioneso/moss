@@ -164,13 +164,25 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Notes folder: review sources the assistant can read and choose the notes folder. Every folder comes " +
       "from the same list of folders available on the server, and People notes live inside " +
       "the chosen notes folder. An info icon explains how folders get listed. " +
-      "Apps & services: connect external tools and services. A connection's detail screen lists its discovered " +
-      "tools and lets the owner choose which are on for ordinary chat, with one on or off " +
-      "switch per tool. Tools are listed in groups, each with its own switch. A group switch reads " +
-      "on only when every tool in the group is on, and a group that is partly on reads off. Turning a " +
-      "group switch on turns on every tool in the group, including tools that were switched off " +
-      "one by one, and turning it off turns off every tool in the group, including tools that " +
-      "were switched on one by one. It also has a classifier section: a Let the classifier use this connection " +
+      "Apps & services: connect external tools and services. Opening a connection fills the whole settings " +
+      "area: the settings menu hides, a Back to connections link returns to the list, and the " +
+      "connection's name and address head the page. A Connection panel beside the tools (above " +
+      "them on a phone) has a Use switch for the whole connection, its status (Connected, Off, or " +
+      "Can't reach it with the error), how it connects, its address, how many tools were found " +
+      "and when it was last checked, a Check for new tools button (Check again after an error; " +
+      "hidden for a pasted spec) and Remove. The Tools section heading counts how many tools are " +
+      "on and how many always ask, and says that tools marked Asks first check with the owner " +
+      "before they run and that YOLO mode skips the asking. Every tool starts on, except on an " +
+      "app with a lot of tools, where they start off. Tools are grouped by what they do: Looks " +
+      "things up, Changes things, Sends things out, Sensitive, and Not sorted yet; before Moss " +
+      "has sorted them they show A to Z with a note saying so, and the owner can switch between " +
+      "By what it does and A to Z. A search box and an All, On or Off filter narrow the list; a " +
+      "long group shows six tools and a Show more link. Each tool has its own on or off switch, " +
+      "and each group has Turn all off (Turn all on when every tool in it is off). Tools that " +
+      "ask first carry an Asks first mark. On a sending tool, a menu offers Send without asking, " +
+      "after which it carries a Sends without asking mark, or Ask before sending to undo it. The " +
+      "Sends things out group has Send all without asking, which asks for confirmation first, " +
+      "and Ask first for all once any tool is allowed. It also has a classifier section: a Let the classifier use this connection " +
       "switch that only marks the connection eligible, a note that messages and device names go " +
       "to the classifier provider, and a cost and sharing notice shown open above an explicit " +
       "Prepare action that names which tool definitions are sent to the owner's default chat " +

@@ -1,15 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 
-import type {
-  CredentialPlacementKind,
-  IntegrationDetail,
-  IntegrationKind,
-  IntegrationSummary
-} from "@moss/shared";
-import { Button, Segmented, Select } from "@moss/ui";
+import type { CredentialPlacementKind, IntegrationKind, IntegrationSummary } from "@moss/shared";
+import { Button, Eyebrow, Segmented, Select } from "@moss/ui";
 
 import {
   ApiError,
@@ -18,10 +13,12 @@ import {
   getIntegration,
   listIntegrations,
   refreshIntegration,
+  setIntegrationSendWithoutAsking,
   updateIntegration
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { groupTogglePatch, isGroupOn, isToolOn } from "./integration-group-state";
+import { formatDate, useUserLocale } from "../locale/locale-format";
+import { IntegrationToolsSection, toolsOnPatch } from "./integration-tool-groups";
 import { useFeedback } from "./settings-feedback";
 import { IntegrationClassifierSection } from "./settings-integrations-classifier";
 import { readError } from "./settings-types";
@@ -137,13 +134,6 @@ function IntegrationRow(props: {
   );
 }
 
-function withMember(list: readonly string[], value: string, member: boolean): string[] {
-  const set = new Set(list);
-  if (member) set.add(value);
-  else set.delete(value);
-  return [...set];
-}
-
 function hostOf(url: string): string {
   try {
     return new URL(url).host || url;
@@ -156,6 +146,7 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
   const { id, onBack } = props;
   const queryClient = useQueryClient();
   const { toast, confirm } = useFeedback();
+  const locale = useUserLocale();
 
   const detailQuery = useQuery({
     queryKey: queryKeys.integrations.detail(id),
@@ -186,13 +177,32 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
 
+  const enabledMutation = useMutation({
+    mutationFn: (enabled: boolean) => updateIntegration(id, { enabled }),
+    onSuccess: () => {
+      invalidateDetail();
+      invalidateList();
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+
   const curationMutation = useMutation({
-    mutationFn: (body: {
-      enabledGroups?: readonly string[];
-      enabledTools?: readonly string[];
-      mutedTools?: readonly string[];
-    }) => updateIntegration(id, body),
-    onSuccess: () => invalidateDetail(),
+    mutationFn: (body: { enabledTools: readonly string[]; mutedTools: readonly string[] }) =>
+      updateIntegration(id, body),
+    onSuccess: () => {
+      invalidateDetail();
+      invalidateList();
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: (input: { toolNames: readonly string[]; allow: boolean }) =>
+      setIntegrationSendWithoutAsking(id, { allow: input.allow, toolNames: [...input.toolNames] }),
+    onSuccess: (detail) => {
+      queryClient.setQueryData(queryKeys.integrations.detail(id), detail);
+      invalidateList();
+    },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
 
@@ -208,58 +218,27 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
   const backLink = (
     <button type="button" className="gflow__back" onClick={onBack}>
       <ArrowLeft size={15} aria-hidden="true" />
-      Back to integrations
+      Back to connections
     </button>
   );
 
   if (detailQuery.isError) {
     const notFound = detailQuery.error instanceof ApiError && detailQuery.error.status === 404;
     return (
-      <>
-        <PaneHead title="Integrations" />
-        <div className="gflow">
-          {backLink}
-          <Note>{notFound ? "Connection not found." : readError(detailQuery.error)}</Note>
-        </div>
-      </>
+      <div className="gflow">
+        {backLink}
+        <Note>{notFound ? "Connection not found." : readError(detailQuery.error)}</Note>
+      </div>
     );
   }
 
   const detail = detailQuery.data;
-  if (!detail) {
-    return (
-      <>
-        <PaneHead title="Integrations" />
-        {backLink}
-      </>
-    );
-  }
-
-  const status = !detail.enabled ? "Off" : detail.lastError ? "Error" : "Connected";
-  const statusTone = status === "Connected" ? "forest" : status === "Error" ? "red" : "neutral";
-
-  const toggleMute = (toolName: string, unmuted: boolean) => {
-    curationMutation.mutate({ mutedTools: withMember(detail.mutedTools, toolName, !unmuted) });
-  };
-
-  const toggleGroup = (groupName: string, enabled: boolean) => {
-    curationMutation.mutate(groupTogglePatch(detail, groupName, enabled));
-  };
-
-  const toggleExplicitTool = (toolName: string, enabled: boolean) => {
-    if (enabled) {
-      curationMutation.mutate({
-        enabledTools: withMember(detail.enabledTools, toolName, true),
-        mutedTools: withMember(detail.mutedTools, toolName, false)
-      });
-    } else {
-      curationMutation.mutate({ enabledTools: withMember(detail.enabledTools, toolName, false) });
-    }
-  };
+  if (!detail) return <div className="gflow">{backLink}</div>;
 
   // Absent hint fields mean the connection's tools were discovered before Task 1 added
   // readOnly/idempotent/destructive hints — refresh re-fetches them from the server.
   const predatesHints =
+    !detail.specPasted &&
     detail.tools.length > 0 &&
     detail.tools.every(
       (tool) =>
@@ -268,161 +247,78 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
         tool.destructive === undefined
     );
 
-  return (
-    <>
-      <PaneHead title="Integrations" />
-      <div className="gflow">
-        {backLink}
-        <Group
-          title={
-            <span className="intg__name">
-              {detail.name}
-              <Badge tone={detail.kind === "mcp" ? "steel" : "amber"}>
-                {detail.kind === "mcp" ? "MCP" : "API"}
-              </Badge>
-            </span>
-          }
-          desc={hostOf(detail.url)}
-          action={
-            <span className="intg__controls">
-              {detail.specPasted ? null : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => refreshMutation.mutate()}
-                  disabled={refreshMutation.isPending}
-                >
-                  Refresh
-                </Button>
-              )}
-              <Button variant="quiet" size="sm" onClick={onRemove}>
-                Remove
-              </Button>
-            </span>
-          }
-        >
-          <Row
-            name="Status"
-            desc={`${detail.enabledToolCount} tools on`}
-            control={<Badge tone={statusTone}>{status}</Badge>}
-          />
-          {detail.lastError ? (
-            <span className="intg__controls">
-              <Note>{detail.lastError}</Note>
-              {detail.specPasted ? null : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => refreshMutation.mutate()}
-                  disabled={refreshMutation.isPending}
-                >
-                  Refresh
-                </Button>
-              )}
-            </span>
-          ) : null}
-        </Group>
-        {detail.groupOptIn ? (
-          <IntegrationGroupedTools
-            detail={detail}
-            onToggleGroup={toggleGroup}
-            onToggleMute={toggleMute}
-            onToggleExplicitTool={toggleExplicitTool}
-          />
-        ) : (
-          <Group title="Tools">
-            {detail.tools.map((tool) => (
-              <Row
-                key={tool.name}
-                name={tool.name}
-                desc={tool.description}
-                control={
-                  <Switch
-                    ariaLabel={`Enable ${tool.name}`}
-                    checked={!detail.mutedTools.includes(tool.name)}
-                    onChange={(checked) => toggleMute(tool.name, checked)}
-                  />
-                }
-              />
-            ))}
-          </Group>
-        )}
-        <IntegrationClassifierSection detail={detail} onChanged={invalidateList} />
-        {predatesHints ? (
-          <Note>
-            Refresh tools rereads what {detail.name} says about each tool — press it to pick up read
-            and repeat hints on tools discovered before this changed.
-          </Note>
-        ) : null}
-      </div>
-    </>
+  const checkButton = detail.specPasted ? null : (
+    <Button
+      variant="secondary"
+      size="sm"
+      icon={<RefreshCw size={14} aria-hidden="true" />}
+      onClick={() => refreshMutation.mutate()}
+      disabled={refreshMutation.isPending}
+    >
+      {detail.lastError ? "Check again" : "Check for new tools"}
+    </Button>
   );
-}
-
-function IntegrationGroupedTools(props: {
-  readonly detail: IntegrationDetail;
-  readonly onToggleGroup: (groupName: string, enabled: boolean) => void;
-  readonly onToggleMute: (toolName: string, unmuted: boolean) => void;
-  readonly onToggleExplicitTool: (toolName: string, enabled: boolean) => void;
-}) {
-  const { detail } = props;
-  // Mutually exclusive: a connection that opted into grouping either starts fresh (everything
-  // off) or was grandfathered in already fully enabled before grouping existed (#2175 Task 6).
-  const isFreshOptIn =
-    detail.groupOptIn && detail.enabledGroups.length === 0 && detail.enabledTools.length === 0;
-  const isGrandfathered =
-    detail.groupOptIn && detail.enabledGroups.length === 0 && detail.enabledTools.length > 0;
+  const lastChecked = detail.lastDiscoveryAt
+    ? `last checked ${formatDate(detail.lastDiscoveryAt, locale, { day: "numeric", month: "long" })}`
+    : "not checked yet";
 
   return (
-    <>
-      {isFreshOptIn ? <Note>Groups start off. Turn on the ones Moss should use.</Note> : null}
-      {isGrandfathered ? (
-        <Note>
-          This connection kept everything enabled before grouping existed — the groups below are
-          ready to narrow, nothing changes until you turn one off.
-        </Note>
-      ) : null}
-      {detail.groups.map((group) => {
-        const groupEnabled = group.enabled;
-        return (
-          <Group
-            key={group.name}
-            title={`${group.name} (${group.toolCount})`}
-            action={
+    <div className="gflow">
+      {backLink}
+      <PaneHead title={detail.name} desc={hostOf(detail.url)} />
+      <div className="intg-detail">
+        <div className="intg-detail__main">
+          <IntegrationToolsSection
+            detail={detail}
+            onSetOn={(names, on) => curationMutation.mutate(toolsOnPatch(detail, names, on))}
+            onSendWithoutAsking={(toolNames, allow) => sendMutation.mutate({ toolNames, allow })}
+          />
+          <IntegrationClassifierSection detail={detail} onChanged={invalidateList} />
+          {predatesHints ? (
+            <Note>
+              Check for new tools rereads what {detail.name} says about each tool. Press it to pick
+              up read and repeat hints on tools found before this changed.
+            </Note>
+          ) : null}
+        </div>
+        <aside className="intg-detail__rail" aria-label="Connection">
+          <Eyebrow>Connection</Eyebrow>
+          <Row
+            name={`Use ${detail.name}`}
+            control={
               <Switch
-                ariaLabel={`Enable group ${group.name}`}
-                checked={isGroupOn(detail, group.name)}
-                onChange={(checked) => props.onToggleGroup(group.name, checked)}
+                ariaLabel={`Use ${detail.name}`}
+                checked={detail.enabled}
+                disabled={enabledMutation.isPending}
+                onChange={(next) => enabledMutation.mutate(next)}
               />
             }
-          >
-            {detail.tools
-              .filter((tool) => tool.group === group.name)
-              .map((tool) => {
-                const checked = isToolOn(detail, tool.name, group.name);
-                return (
-                  <Row
-                    key={tool.name}
-                    name={tool.name}
-                    desc={tool.description}
-                    control={
-                      <Switch
-                        ariaLabel={`Enable ${tool.name}`}
-                        checked={checked}
-                        onChange={(next) =>
-                          groupEnabled
-                            ? props.onToggleMute(tool.name, next)
-                            : props.onToggleExplicitTool(tool.name, next)
-                        }
-                      />
-                    }
-                  />
-                );
-              })}
-          </Group>
-        );
-      })}
-    </>
+          />
+          <Row
+            name="Status"
+            control={
+              !detail.enabled ? (
+                <Badge>Off</Badge>
+              ) : detail.lastError ? (
+                <Badge tone="red">Can't reach it</Badge>
+              ) : (
+                <Badge tone="forest">Connected</Badge>
+              )
+            }
+          />
+          {detail.enabled && detail.lastError ? <Note>{detail.lastError}</Note> : null}
+          <Row name="Connects as" control={detail.kind === "mcp" ? "Tool server" : "Web service"} />
+          <Row name="Address" control={hostOf(detail.url)} />
+          <Row name="Tools found" desc={lastChecked} control={String(detail.toolCount)} />
+          <span className="intg__controls">
+            {checkButton}
+            <Button variant="quiet" size="sm" onClick={onRemove}>
+              Remove
+            </Button>
+          </span>
+        </aside>
+      </div>
+    </div>
   );
 }
 

@@ -72,9 +72,9 @@ export const integrationsModuleManifest = {
     {
       id: "integrations.connection_detail_grouped_tools",
       description:
-        "A connection's tool list is grouped, with one on or off switch per tool. Moss never " +
-        "blocks an integration tool for repeating an identical call. Notes explain grandfathered " +
-        "connections and point to Refresh tools when read hints are missing."
+        "A connection's page groups its tools by what they do, one switch each, Asks first " +
+        "marked. Sending tools can send without asking, singly or as a confirmed group. Moss " +
+        "never blocks a tool for repeating an identical call."
     },
     {
       id: "integrations.connection_classifier_opt_in",

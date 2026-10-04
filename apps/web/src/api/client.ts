@@ -113,6 +113,7 @@ import type {
   ListIntegrationsResponse,
   PrepareIntegrationClassifierResponse,
   SaveIntegrationClassifierToolRequest,
+  SetIntegrationSendWithoutAskingRequest,
   UpdateIntegrationRequest,
   InterpretTaskSearchRequest,
   InterpretTaskSearchResponse,
@@ -1728,6 +1729,17 @@ export async function removeIntegrationClassifierTool(
   return requestJson<IntegrationDetail>(
     `/api/integrations/${encodeURIComponent(id)}/classifier/tools/${encodeURIComponent(toolName)}`,
     { method: "DELETE" }
+  );
+}
+
+// All or nothing: the server refuses the whole list when any tool is not sorted as Sends things out.
+export async function setIntegrationSendWithoutAsking(
+  id: string,
+  body: SetIntegrationSendWithoutAskingRequest
+): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(
+    `/api/integrations/${encodeURIComponent(id)}/classifier/send-without-asking`,
+    { method: "PUT", body }
   );
 }
 
