@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Today header contour lines are back.** The faint contour lines behind the Today header are back. [PR #3017](https://github.com/motioneso/moss/pull/3017)
 - **Connection tools get ready for the classifier on their own.** When you turn on the classifier for a connection, Moss now prepares that connection's tools in the background, and again whenever you switch a tool back on, so you no longer review each tool by hand before it can be used. [PR #3009](https://github.com/motioneso/moss/pull/3009)
 - **Safe connected tools run without asking.** When a connected service's tool is sorted as only looking things up or changing things, Moss now uses it in chat without asking you first, while sensitive tools, tools that send things out and tools not yet sorted still ask. [PR #3011](https://github.com/motioneso/moss/pull/3011)
 - **Same date line on every page.** Every page now shows today's date under its title, the way Wellness does. [PR #3008](https://github.com/motioneso/moss/pull/3008)
