@@ -145,4 +145,16 @@ describe("top bar ground (#3012)", () => {
     applyThemeTokens(style, null);
     expect(style.values.has("--topbar-bg")).toBe(false);
   });
+
+  it("sets secondary bar text that clears 4.5:1 on the bar for a dark-start theme", () => {
+    const style = fakeStyle();
+    applyThemeTokens(style, { ...baseTokens, paper: "#1c1a16", ink: "#ece7dc" });
+    const muted = style.values.get("--topbar-muted")!;
+    expect(muted).toMatch(/^#[0-9a-f]{6}$/);
+    const lum = (hex: string) => luminance(hex);
+    const [hi, lo] = [Math.max(lum(muted), lum("#1c1a16")), Math.min(lum(muted), lum("#1c1a16"))];
+    expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
+    applyThemeTokens(style, null);
+    expect(style.values.has("--topbar-muted")).toBe(false);
+  });
 });

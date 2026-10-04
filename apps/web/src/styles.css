@@ -496,7 +496,7 @@ button.module-link {
   font-size: 0.6875rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--text-subtle);
+  color: var(--topbar-muted, var(--text-subtle));
 }
 
 /* Page trail: section (the way back) / current name / meta note, in place of the plain title. */
@@ -506,7 +506,7 @@ button.module-link {
 
 .topbar-title--link {
   flex-shrink: 0;
-  color: var(--text-subtle);
+  color: var(--topbar-muted, var(--text-subtle));
   text-decoration: none;
 }
 
@@ -517,7 +517,7 @@ button.module-link {
 
 .topbar-crumb__sep {
   flex-shrink: 0;
-  color: var(--text-subtle);
+  color: var(--topbar-muted, var(--text-subtle));
 }
 
 .topbar-crumb__now {
@@ -535,7 +535,7 @@ button.module-link {
 .topbar-crumb__meta {
   flex-shrink: 0;
   font-size: 0.8125rem;
-  color: var(--text-subtle);
+  color: var(--topbar-muted, var(--text-subtle));
   white-space: nowrap;
 }
 
@@ -549,7 +549,7 @@ button.module-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-subtle);
+  color: var(--topbar-muted, var(--text-subtle));
   border-radius: var(--radius-sm);
   text-decoration: none;
   vertical-align: middle;

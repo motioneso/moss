@@ -66,6 +66,7 @@ const CLEARED_RUNTIME_VARS = [
   "--btn-primary-bg",
   "--focus-ring",
   "--topbar-bg",
+  "--topbar-muted",
   "--gold",
   "--gold-strong",
   "--gold-soft",
@@ -186,6 +187,10 @@ export function applyThemeTokens(
   if (paperColor) {
     style.setProperty("--topbar-bg", `rgb(${paperColor.r} ${paperColor.g} ${paperColor.b} / 0.85)`);
   }
+  const inkColor = parseThemeColor(tokens.ink);
+  if (paperColor && inkColor) {
+    style.setProperty("--topbar-muted", rgbToHex(dimTextOn(inkColor, paperColor)));
+  }
   for (const [name, value] of Object.entries(deriveAccentRamp(tokens.accent, tokens.paper))) {
     style.setProperty(name, value);
   }
@@ -255,6 +260,15 @@ function readableText(ground: Rgb): Rgb {
     ratio(NAV_DARK_TEXT, ground) >= ratio(NAV_LIGHT_TEXT, ground) ? NAV_DARK_TEXT : NAV_LIGHT_TEXT;
   if (ratio(house, ground) >= TEXT_FLOOR) return house;
   return ratio(BLACK, ground) >= ratio(WHITE, ground) ? BLACK : WHITE;
+}
+
+/* Quieter text: ink dimmed toward the ground only as far as 4.5:1 allows. */
+function dimTextOn(text: Rgb, ground: Rgb): Rgb {
+  for (let step = 20; step >= 0; step -= 1) {
+    const candidate = mix(text, ground, step / 50);
+    if (ratio(candidate, ground) >= TEXT_FLOOR) return candidate;
+  }
+  return text;
 }
 
 /* A hover or selected ground. It leans toward the text color, unless that

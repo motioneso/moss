@@ -117,20 +117,30 @@ test("top bar text is readable on its own background in a custom theme", async (
         await expect(page.locator("html")).toHaveAttribute("data-theme", THEME_ID);
         const bar = page.locator(".topbar").first();
         await expect(bar).toBeVisible();
-        const title = bar.locator(".topbar-title").first();
-        await expect(title).toBeVisible();
+        await expect(bar.locator(".topbar-title").first()).toBeVisible();
         const bg = await bar.evaluate((el) => getComputedStyle(el).backgroundColor);
-        const fg = await title.evaluate((el) => getComputedStyle(el).color);
-        const ratio = contrast(bg, fg);
-        console.log(
-          `${start.name} ${vp.name}: bar ${bg}, text ${fg}, contrast ${ratio.toFixed(2)}`
+        // Every label on the bar that carries its own text: title, date, trail, links.
+        const labels = await bar.evaluate((el) =>
+          [...el.querySelectorAll("*")]
+            .filter((n) => [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent?.trim()))
+            .map((n) => ({
+              text: (n.textContent ?? "").trim().slice(0, 30),
+              color: getComputedStyle(n).color
+            }))
         );
+        expect(labels.length).toBeGreaterThanOrEqual(2);
+        for (const label of labels) {
+          const ratio = contrast(bg, label.color);
+          console.log(
+            `${start.name} ${vp.name}: "${label.text}" ${label.color} on ${bg} = ${ratio.toFixed(2)}`
+          );
+          expect(ratio, `${label.text} on the top bar`).toBeGreaterThanOrEqual(4.5);
+        }
         const box = await bar.boundingBox();
         await page.screenshot({
           path: `${SHOTS}/${start.name}-${vp.name}.png`,
           clip: { x: 0, y: 0, width: vp.width, height: Math.ceil((box?.height ?? 64) + 4) }
         });
-        expect(ratio).toBeGreaterThanOrEqual(4.5);
       }
     }
   } finally {
