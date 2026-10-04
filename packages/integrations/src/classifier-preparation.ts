@@ -83,6 +83,8 @@ export interface ClassifierPreparationPort {
       readonly schema: Record<string, unknown>;
       readonly prompt: string;
       readonly maxOutputTokens: number;
+      /** Names the call in activity history. Omitted calls record as the module worker. */
+      readonly service?: `module.${string}`;
       readonly signal?: AbortSignal;
     }
   ): Promise<PreparationStructuredOutcome>;

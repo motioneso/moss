@@ -7,6 +7,8 @@ export const integrationsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
 );
 
+export const INTEGRATION_CLASSIFIER_SORT_QUEUE = "integrations.classifier-sort";
+
 export const integrationsModuleManifest = {
   id: INTEGRATIONS_MODULE_ID,
   name: "Integrations",
@@ -26,8 +28,10 @@ export const integrationsModuleManifest = {
     { method: "DELETE", path: "/api/integrations/:id" },
     { method: "PUT", path: "/api/integrations/:id/classifier/tools/:toolName" },
     { method: "DELETE", path: "/api/integrations/:id/classifier/tools/:toolName" },
-    { method: "POST", path: "/api/integrations/:id/classifier/prepare" }
+    { method: "POST", path: "/api/integrations/:id/classifier/prepare" },
+    { method: "POST", path: "/api/integrations/:id/classifier/sort" }
   ],
+  jobs: [{ queueName: INTEGRATION_CLASSIFIER_SORT_QUEUE, metadataOnly: true }],
   dataLifecycle: {
     exportSections: [],
     deletion: {
@@ -36,6 +40,18 @@ export const integrationsModuleManifest = {
     }
   },
   features: [
+    {
+      id: "integrations.connection_tool_sorting",
+      description:
+        "When a connection is added or refreshed, the owner's chat model sorts each tool by what " +
+        "it does and names it. A tool whose text holds the credential is not sent; delete is " +
+        "always sensitive; failed tools wait for Try again."
+    },
+    {
+      // #2956: the Activity history line title for the background tool-sorting call.
+      id: "structured.integrations.tool-sort",
+      description: "Sorted a connection's tools"
+    },
     {
       id: "integrations.connection_detail_grouped_tools",
       description:

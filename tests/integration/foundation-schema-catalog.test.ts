@@ -571,6 +571,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0269",
           name: "0269_integration_classifier_sort_convert.sql"
+        },
+        // #2984 R2.2 — the sorting worker writes sort results; start-up sweep lists ids only.
+        {
+          version: "0270",
+          name: "0270_integration_classifier_sort_worker.sql"
         }
       ]);
     } finally {
