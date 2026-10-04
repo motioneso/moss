@@ -48,18 +48,73 @@ describe("check-gate-pipe.sh", () => {
     expect(stderr).toContain("EXIT=$?");
   });
 
-  it("allows a piped gate command through when pipefail is set first", async () => {
-    const { code } = await runHook("set -o pipefail; pnpm verify:foundation | tail -20");
+  it("allows a piped lint through when pipefail is set first", async () => {
+    const { code } = await runHook("set -o pipefail; pnpm lint | tail -20");
     expect(code).toBe(0);
   });
 
-  it("allows a piped gate command through when PIPESTATUS is checked", async () => {
-    const { code } = await runHook("pnpm verify:foundation | tail -20; echo ${PIPESTATUS[0]}");
+  it("allows a piped lint through when PIPESTATUS is checked", async () => {
+    const { code } = await runHook("pnpm lint | tail -20; echo ${PIPESTATUS[0]}");
     expect(code).toBe(0);
   });
 
   it("allows a non-gate piped command through untouched", async () => {
     const { code } = await runHook("echo hello | wc -l");
     expect(code).toBe(0);
+  });
+
+  // #2989: database-touching commands are blocked bare, piped, with or
+  // without pipefail — pipefail fixes the exit code but not the database.
+  it.each([
+    "pnpm verify:foundation",
+    "pnpm test:integration",
+    "pnpm test:uat-seed",
+    "pnpm db:migrate",
+    "npm run db:migrate"
+  ])("blocks a bare database-touching command: %s", async (command) => {
+    const { code, stderr } = await runHook(command);
+    expect(code).toBe(2);
+    expect(stderr).toContain("verify-gate skill");
+  });
+
+  it("blocks a database-touching command even with pipefail set", async () => {
+    const { code, stderr } = await runHook("set -o pipefail; pnpm verify:foundation | tail -20");
+    expect(code).toBe(2);
+    expect(stderr).toContain("verify-gate skill");
+  });
+
+  it("blocks a database-touching command even when PIPESTATUS is checked", async () => {
+    const { code } = await runHook("pnpm verify:foundation | tail -20; echo ${PIPESTATUS[0]}");
+    expect(code).toBe(2);
+  });
+
+  it("blocks direct vitest and tsx database-touching invocations", async () => {
+    for (const command of [
+      "vitest run tests/integration/chat.test.ts",
+      "tsx scripts/test-integration.ts",
+      "tsx scripts/migrate.ts"
+    ]) {
+      const { code, stderr } = await runHook(command);
+      expect(code).toBe(2);
+      expect(stderr).toContain("verify-gate skill");
+    }
+  });
+
+  it("prints the database-touching block as one plain line", async () => {
+    const { code, stderr } = await runHook("pnpm db:migrate");
+    expect(code).toBe(2);
+    expect(stderr.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("allows run-gate.sh itself and non-database commands", async () => {
+    for (const command of [
+      "scripts/run-gate.sh start",
+      "scripts/run-gate.sh start --gate verify:foundation",
+      "pnpm test:unit",
+      "pnpm lint"
+    ]) {
+      const { code } = await runHook(command);
+      expect(code).toBe(0);
+    }
   });
 });

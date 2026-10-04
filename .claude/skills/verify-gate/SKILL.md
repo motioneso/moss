@@ -1,6 +1,6 @@
 ---
 name: verify-gate
-description: The only safe way to run the local gate — `pnpm verify:foundation` or any DB-touching test or migrate command — in this repo. Wraps scripts/run-gate.sh (fresh isolated gate database, detached run, sentinel-based wait). Use BEFORE running verify:foundation, test:integration, test:uat-seed, or db:migrate.
+description: The only safe way to run the local gate — `pnpm verify:foundation` or any DB-touching test or migrate command — in this repo. Wraps scripts/run-gate.sh (own throwaway Postgres server per run, detached run, sentinel-based wait). Use BEFORE running verify:foundation, test:integration, test:uat-seed, or db:migrate.
 ---
 
 # Running the gate
@@ -16,8 +16,10 @@ Do not DROP/CREATE databases, export variables, background subshells, or write w
 hand. The script does all of it correctly.
 
 ```bash
-# 1. Launch — creates a fresh isolated gate DB, detaches, confirms the runner
-#    started (about a second), prints the log path, and returns.
+# 1. Launch — starts a throwaway pgvector Postgres server just for this run
+#    (own container, own port, nothing shared with the dev database or any
+#    other gate), detaches, confirms the runner started (about a second),
+#    prints the log path, and returns.
 scripts/run-gate.sh start            # add --gate <pnpm-script> for a narrower gate
 
 # 2. Wait — launch this as ONE Bash call with run_in_background: true. It never gives up
@@ -35,10 +37,11 @@ the one procedure to use here.)
 Every run log records what it tested: the commit (`### COMMIT`), the dirty-tree file
 list (`### DIRTY`), an input fingerprint over commit plus status plus file contents
 (`### FINGERPRINT` — same files dirty with different bytes hash differently), toolchain
-versions (`### TOOLCHAIN`), the database-server version (`### POSTGRES`), the gate database
-(`### DB`, freshly provisioned per run), the exact command (`### GATE`), timing, outcome,
-and log path. File bytes never enter the log, only digests — no secrets. `status` and
-`wait` repeat commit, tree, fingerprint, and toolchain in one line.
+versions (`### TOOLCHAIN`), the database-server version (`### POSTGRES`), the throwaway
+server (`### GATE_CONTAINER`, launched per run and removed when the run ends), the gate
+database (`### DB`, freshly provisioned inside that server), the exact command (`### GATE`),
+timing, outcome, and log path. File bytes never enter the log, only digests — no secrets.
+`status` and `wait` repeat commit, tree, fingerprint, and toolchain in one line.
 
 ## Evidence reuse rule (#2462)
 
@@ -54,17 +57,21 @@ permit it:
 
 ## Rules that still apply around the script
 
+- **Never run a database-touching command directly** (`pnpm verify:foundation`,
+  `pnpm test:integration`, `pnpm test:uat-seed`, `pnpm db:migrate`, or direct `vitest`/`tsx`
+  at those suites): anything not launched through `scripts/run-gate.sh` lands on the shared
+  dev database. `.claude/hooks/check-gate-pipe.sh` blocks these with one line pointing back
+  here — a block there is the hook working, not an obstacle.
 - **Never pipe a gate command** (`| tail`, `| grep`, `| tee`): a pipeline returns the filter's
-  exit code, so red reads as green. `.claude/hooks/check-gate-pipe.sh` blocks the obvious forms —
-  a block there is the hook working, not an obstacle.
+  exit code, so red reads as green. The same hook blocks the obvious forms.
 - **Never decide liveness with `pgrep`/`ps`.** The Bash tool's wrapper shells match your pattern
   long after the real process died (the 19-hour stall). The script's sentinel is the only truth.
 - **A failed launch is loud, not a hang.** If `start` cannot get the runner going, it exits
   non-zero (exit `4`, which now includes a failed launch) and marks the log, and `status`/`wait`
   report dead (exit `2`) with the reason. When `start` exits non-zero, fix the reported cause
   and start again — never read an earlier result as this run's verdict.
-- **Stagger with other sessions.** Concurrent gate runs crash the shared dev Postgres. Check
-  `herdr pane list` before starting one; if another gate is running, wait for it.
+- **Concurrent gates are safe.** Each run gets its own throwaway Postgres server, so two gates
+  at once never share a server with each other or with the dev instance. No staggering needed.
 - **Green local is not green CI.** The gate does **not** include `test:e2e`; CI runs the browser
   suite separately. Say which one you verified.
 - **`pnpm test:unit` trap:** the module-sdk-worker suite fails locally but is green in CI — do

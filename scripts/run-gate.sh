@@ -31,17 +31,20 @@
 # USAGE
 #
 #   scripts/run-gate.sh start [--gate <pnpm-script>] [--exclusive] [--keep-db]
-#       DROP/CREATEs a fresh isolated gate database, exports JARVIS_PGDATABASE,
-#       launches the gate fully detached, confirms the runner recorded its PID
-#       (about a second on success), then prints the log path and returns. If
-#       no PID lands within the launch bound the start fails loudly (exit 4)
-#       and marks the log, so status/wait report DEAD with the reason — a
-#       failed launch never reads as RUNNING. The log records the tested
-#       commit (### COMMIT), dirty-tree state (### DIRTY), an input
-#       fingerprint over commit plus status plus file contents
-#       (### FINGERPRINT, so same-files-dirty with different bytes hashes
-#       differently), toolchain versions (### TOOLCHAIN) and the
-#       database-server version (### POSTGRES) — repeated in short form by
+#       Launches a throwaway pgvector Postgres server just for this run (own
+#       container, own host port, nothing shared with the dev database or any
+#       other gate), CREATEs a fresh gate database inside it, exports the
+#       database environment at it, launches the gate fully detached,
+#       confirms the runner recorded its PID (about a second on success),
+#       then prints the log path and returns. If no PID lands within the
+#       launch bound the start fails loudly (exit 4) and marks the log, so
+#       status/wait report DEAD with the reason — a failed launch never reads
+#       as RUNNING. The log records the tested commit (### COMMIT),
+#       dirty-tree state (### DIRTY), an input fingerprint over commit plus
+#       status plus file contents (### FINGERPRINT, so same-files-dirty with
+#       different bytes hashes differently), toolchain versions
+#       (### TOOLCHAIN), the database-server version (### POSTGRES) and the
+#       throwaway container (### GATE_CONTAINER) — repeated in short form by
 #       status/wait. Full reuse rule in the verify-gate skill: changed or
 #       unknown inputs invalidate reuse.
 #
@@ -86,7 +89,15 @@
 #   4  usage or environment problem
 #
 # ENVIRONMENT OVERRIDES
-#   JARVIS_PG_CONTAINER     dev Postgres container   (default jarv1s-postgres)
+#   JARVIS_GATE_PGIMAGE     Postgres image for the throwaway gate server
+#                           (default pgvector/pgvector:pg17, the same image the
+#                           dev compose file uses for its postgres service)
+#   JARVIS_GATE_PGSHM       /dev/shm size for the throwaway gate server
+#                           (default 1g; the 2026-10-03 incident ran on the
+#                           Docker default of 64 MB)
+#   JARVIS_GATE_PGREADY_SECS
+#                           seconds `start` waits for the throwaway server to
+#                           accept connections before provisioning (default 60)
 #   JARVIS_GATE_DIR         log + lock directory     (default /tmp/jarv1s-gate)
 #   JARVIS_GATE_STALE_SECS  idle seconds => DEAD, but ONLY for a log with no
 #                           recorded pid (default 900). A real run is judged by
@@ -103,17 +114,26 @@
 #                           it could mark the failure.
 #
 # NOTES
-#   - JARVIS_PGDATABASE is *exported*, never assigned inline: an inline
-#     assignment does not survive backgrounding, and a gate that loses it lands
-#     on the live `jarv1s` database. That took chat down for 90 minutes once.
-#   - The gate database is dropped on success and KEPT on failure so the failure
-#     is debuggable. `--keep-db` keeps it either way.
+#   - JARVIS_PGDATABASE (and the whole database environment) is *exported*,
+#     never assigned inline: an inline assignment does not survive
+#     backgrounding, and a gate that loses it lands on the live `jarv1s`
+#     database. That took chat down for 90 minutes once.
+#   - Every run gets its own throwaway Postgres server, so concurrent gates
+#     never share a server with each other or with the dev instance. The
+#     container is removed when the run ends on every path — pass, fail,
+#     killed, aborted start — and each start sweeps leftover gate containers
+#     whose run is no longer alive. `--keep-db` is accepted for compatibility
+#     but keeps nothing: the database dies with its server.
 #   - The gate's output is only ever redirected to a file, never piped. A pipe
 #     returns the *filter's* exit code, so a red gate reads as green.
 
 set -euo pipefail
 
-CONTAINER="${JARVIS_PG_CONTAINER:-jarv1s-postgres}"
+GATE_IMAGE="${JARVIS_GATE_PGIMAGE:-pgvector/pgvector:pg17}"
+GATE_SHM="${JARVIS_GATE_PGSHM:-1g}"
+GATE_READY_SECS="${JARVIS_GATE_PGREADY_SECS:-60}"
+GATE_NAME_PREFIX="jarv1s-gate-"
+GATE_DBHOST="127.0.0.1"
 STATE_DIR="${JARVIS_GATE_DIR:-/tmp/jarv1s-gate}"
 STALE_SECS="${JARVIS_GATE_STALE_SECS:-900}"
 # How long `start` waits for the detached runner to record its PID before
@@ -139,17 +159,24 @@ die() {
 # function's frame (the same reason cmd___run uses globals).
 LAUNCH_LOG=""
 LAUNCH_OK=0
+LAUNCH_CONTAINER=""
 
 # EXIT trap for cmd_start (#2473): if the shell leaves before the runner's
 # PID is confirmed, the log gets a launch-failure marker so no later wait can
 # mistake the previous run's result for this one. Covers die, set -e aborts,
 # SIGPIPE, TERM and INT. SIGKILL cannot run any trap; the verdict backstop
-# below keys on the first header line for that case. Always succeeds.
+# below keys on the first header line for that case. A throwaway server that
+# already launched is removed here, so an aborted start leaves no container
+# behind. Always succeeds.
 start_abort() {
   [ "${LAUNCH_OK:-0}" = "1" ] && return 0
   [ -n "${LAUNCH_LOG:-}" ] || return 0
   grep -qF "$LAUNCH_FAILED_PREFIX" "$LAUNCH_LOG" 2>/dev/null && return 0
   echo "${LAUNCH_FAILED_PREFIX}start exited before the runner launched" >>"$LAUNCH_LOG" 2>/dev/null || true
+  if [ -n "${LAUNCH_CONTAINER:-}" ]; then
+    docker rm -f "$LAUNCH_CONTAINER" >/dev/null 2>&1 || true
+    echo "### CLEANUP removed gate container $LAUNCH_CONTAINER (aborted start)" >>"$LAUNCH_LOG" 2>/dev/null || true
+  fi
   return 0
 }
 
@@ -182,6 +209,125 @@ resolve_log() {
   ptr="$(pointer_file "$(slug_for "$(repo_root)")")"
   [ -f "$ptr" ] || die "no recorded run for this worktree — pass --log, or run 'start' first"
   cat "$ptr"
+}
+
+# ---------------------------------------------------------------------------
+# throwaway gate server (#2989)
+# ---------------------------------------------------------------------------
+
+# Prints a free loopback port. Asks the kernel first (bind 0); without
+# python3, probes a random candidate directly. The caller still retries on a
+# lost race: docker run fails when another process grabbed the port first.
+pick_free_port() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])' 2>/dev/null && return 0
+  fi
+  local port attempt=0
+  while [ "$attempt" -lt 20 ]; do
+    attempt=$((attempt + 1))
+    port=$((55000 + RANDOM % 5000))
+    if ! (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+      echo "$port"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Launches the throwaway pgvector server for this run: own container, own
+# loopback port, generous shm. Sets LAUNCH_CONTAINER/LAUNCH_PORT. Retries a
+# few times — the picked port can lose a race between the probe and docker.
+launch_gate_postgres() {
+  local slug="$1" attempt=0 port name
+  command -v docker >/dev/null 2>&1 || die "docker not found — cannot launch the gate database server"
+  while [ "$attempt" -lt 10 ]; do
+    attempt=$((attempt + 1))
+    port="$(pick_free_port)" || die "could not find a free port for the gate database server"
+    name="${GATE_NAME_PREFIX}${slug}-$(date +%Y%m%d-%H%M%S)-$$-${attempt}"
+    if docker run -d --name "$name" \
+      --label jarv1s.gate=1 --label "jarv1s.gate.slug=$slug" \
+      -p "127.0.0.1:${port}:5432" --shm-size="$GATE_SHM" \
+      -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres \
+      "$GATE_IMAGE" >/dev/null 2>&1; then
+      LAUNCH_CONTAINER="$name"
+      LAUNCH_PORT="$port"
+      return 0
+    fi
+    docker rm -f "$name" >/dev/null 2>&1 || true
+  done
+  die "could not launch the gate database server (image $GATE_IMAGE) after 10 attempts"
+}
+
+# Waits until the throwaway server accepts connections. Returns nonzero on
+# timeout; the caller removes the container and fails the launch loudly.
+wait_gate_postgres_ready() {
+  local name="$1" waited=0
+  while [ "$waited" -lt "$GATE_READY_SECS" ]; do
+    if docker exec "$name" pg_isready -U postgres >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  return 1
+}
+
+# Removes one throwaway server. Never fails the caller.
+remove_gate_container() {
+  [ -n "${1:-}" ] || return 0
+  docker rm -f "$1" >/dev/null 2>&1 || true
+  return 0
+}
+
+# Removes the throwaway server a log names, if any. For stop paths where the
+# runner is gone and its trap never ran. Never fails the caller.
+remove_log_container() {
+  local log="$1" container
+  container="$(grep -m 1 '^### GATE_CONTAINER ' "$log" 2>/dev/null | awk '{print $3}' || true)"
+  [ -n "$container" ] || return 0
+  remove_gate_container "$container"
+  echo "### CLEANUP removed gate container $container (stop)" >>"$log" 2>/dev/null || true
+  return 0
+}
+
+# True when some recorded run still references this container AND that run is
+# not terminal (RUNNING verdict). A container whose runs all reached a
+# sentinel, a launch marker, or a dead runner is a leftover.
+gate_container_in_live_run() {
+  local name="$1" candidate rc
+  for candidate in "$STATE_DIR"/*.log; do
+    [ -f "$candidate" ] || continue
+    grep -qF "$name" "$candidate" 2>/dev/null || continue
+    rc=0
+    verdict "$candidate" 1 >/dev/null 2>&1 || rc=$?
+    [ "$rc" = "3" ] && return 0
+  done
+  return 1
+}
+
+# Removes leftover gate servers whose run is no longer alive. Runs at each
+# start, so a SIGKILLed run (no trap, no sentinel) still gets collected on
+# the next one. Never fails the start; records what it removed in this run's
+# log when one is already open.
+sweep_gate_containers() {
+  local names name
+  names="$(docker ps -a --filter "name=${GATE_NAME_PREFIX}" --format '{{.Names}}' 2>/dev/null || true)"
+  [ -n "$names" ] || return 0
+  for name in $names; do
+    case "$name" in
+      "${GATE_NAME_PREFIX}"*) ;;
+      *) continue ;;
+    esac
+    [ "$name" != "${LAUNCH_CONTAINER:-}" ] || continue
+    if gate_container_in_live_run "$name"; then
+      continue
+    fi
+    remove_gate_container "$name"
+    if [ -n "${LAUNCH_LOG:-}" ]; then
+      echo "### SWEEP removed leftover gate container $name" >>"$LAUNCH_LOG" 2>/dev/null || true
+    fi
+  done
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -281,48 +427,48 @@ cmd_start() {
   fi
   rm -f "$fp_status" "$fp_files" "$fp_content" 2>/dev/null || true
 
+  # Collect servers whose run is already over (#2989). Runs before this
+  # run launches its own, so one sweep happens per start.
+  sweep_gate_containers
+
+  # Throwaway gate server (#2989). Own container, own loopback port, generous
+  # shm — shared with no other gate and never with the dev instance. From
+  # here on every failure path removes it again (launch timeout below, the
+  # EXIT trap on aborted start, the runner's trap on finish or kill).
+  launch_gate_postgres "$slug"
+  if ! wait_gate_postgres_ready "$LAUNCH_CONTAINER"; then
+    local dead_container="$LAUNCH_CONTAINER"
+    remove_gate_container "$dead_container"
+    echo "### CLEANUP removed gate container $dead_container (never became ready)" >>"$log"
+    LAUNCH_CONTAINER=""
+    LAUNCH_OK=1
+    die "gate database server $dead_container did not accept connections within ${GATE_READY_SECS}s"
+  fi
+
   # Toolchain and database-server identity (#2462). Compared on reuse:
   # a different node, pnpm, or Postgres can change results without any
   # code diff. Unknown probes never block a start.
   local gate_node gate_pnpm gate_postgres
   gate_node="$(node --version 2>/dev/null || echo unknown)"
   gate_pnpm="$(pnpm --version 2>/dev/null || echo unknown)"
-  gate_postgres="$(docker exec "$CONTAINER" psql -U postgres -tAc 'SHOW server_version;' 2>/dev/null | tr -d '[:space:]' || echo unknown)"
+  gate_postgres="$(docker exec "$LAUNCH_CONTAINER" psql -U postgres -tAc 'SHOW server_version;' 2>/dev/null | tr -d '[:space:]' || echo unknown)"
   [ -n "$gate_node" ] || gate_node="unknown (probe failed)"
   [ -n "$gate_pnpm" ] || gate_pnpm="unknown (probe failed)"
   [ -n "$gate_postgres" ] || gate_postgres="unknown (probe failed)"
 
-  # Refuse to point at production under any circumstance. The prod database
-  # (container moss-postgres, compose project jarv1s-prod) sits beside the dev
-  # one on this box. Check the compose project too, so a renamed prod container
-  # is still refused.
-  case "$CONTAINER" in
-    *prod* | moss-postgres) die "refusing to run a gate against container '$CONTAINER' (looks like production)" ;;
-  esac
-  docker inspect "$CONTAINER" >/dev/null 2>&1 ||
-    die "container '$CONTAINER' not found — is the dev stack up?"
-  local container_project
-  container_project="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$CONTAINER" 2>/dev/null || true)"
-  case "$container_project" in
-    *prod*) die "refusing to run a gate against container '$CONTAINER' (compose project '$container_project' looks like production)" ;;
-  esac
-
-  # Serialize the DROP/CREATE. These touch shared catalogs (pg_database), which
-  # per-database isolation does not cover — concurrent create/drop across lanes
-  # is one way to produce `tuple concurrently updated`. Cheap: held for a second
-  # or two. Use --exclusive to hold it for the whole gate instead (see below).
-  local lock="$STATE_DIR/db.lock"
-  (
-    flock 200
-    # PGOPTIONS, not psql --set: --set defines a *psql* variable and leaves the
-    # server GUC alone, so the "does not exist, skipping" NOTICE still lands on
-    # stderr. DROP DATABASE cannot run inside a transaction block, so we also
-    # can't fold a `SET` into the same -c string.
-    docker exec -e PGOPTIONS='-c client_min_messages=warning' "$CONTAINER" \
-      psql -U postgres -q -c "DROP DATABASE IF EXISTS $gatedb WITH (FORCE);" >/dev/null
-    docker exec -e PGOPTIONS='-c client_min_messages=warning' "$CONTAINER" \
-      psql -U postgres -q -c "CREATE DATABASE $gatedb;" >/dev/null
-  ) 200>"$lock" || die "could not provision gate database $gatedb"
+  # Fresh gate database inside the throwaway server. No lock: the server is
+  # ours alone, so no other lane touches its catalogs. The old shared-server
+  # lock (and the --exclusive hold) no longer has anything to serialize.
+  # PGOPTIONS, not psql --set: --set defines a *psql* variable and leaves the
+  # server GUC alone, so the "does not exist, skipping" NOTICE still lands on
+  # stderr. DROP DATABASE cannot run inside a transaction block, so we also
+  # can't fold a `SET` into the same -c string.
+  docker exec -e PGOPTIONS='-c client_min_messages=warning' "$LAUNCH_CONTAINER" \
+    psql -U postgres -q -c "DROP DATABASE IF EXISTS $gatedb WITH (FORCE);" >/dev/null ||
+    die "could not provision gate database $gatedb"
+  docker exec -e PGOPTIONS='-c client_min_messages=warning' "$LAUNCH_CONTAINER" \
+    psql -U postgres -q -c "CREATE DATABASE $gatedb;" >/dev/null ||
+    die "could not provision gate database $gatedb"
 
   {
     echo "### CWD    $root"
@@ -340,20 +486,32 @@ cmd_start() {
     echo "### FINGERPRINT $gate_fingerprint"
     echo "### TOOLCHAIN node $gate_node pnpm $gate_pnpm"
     echo "### POSTGRES $gate_postgres"
-    echo "### DB     $gatedb (container $CONTAINER)"
+    echo "### GATE_CONTAINER $LAUNCH_CONTAINER (image $GATE_IMAGE, 127.0.0.1:$LAUNCH_PORT, shm $GATE_SHM)"
+    echo "### DB     $gatedb (container $LAUNCH_CONTAINER 127.0.0.1:$LAUNCH_PORT)"
     echo "### START  $(date -Is)"
     echo
   } >>"$log"
 
-  # Exported, not inline — see the header note.
+  # Exported, not inline — see the header note. Points at the throwaway
+  # server, never at the shared dev database. The explicit *_DATABASE_URLs
+  # are required: urls.ts refuses to synthesize default-credentialed URLs
+  # against a non-default host/port (#1383), and this server is always both.
+  # Role passwords match the dev defaults in packages/db/src/urls.ts.
+  export JARVIS_PGHOST="$GATE_DBHOST"
+  export JARVIS_PGPORT="$LAUNCH_PORT"
   export JARVIS_PGDATABASE="$gatedb"
+  export JARVIS_BOOTSTRAP_DATABASE_URL="postgres://postgres:postgres@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
+  export JARVIS_MIGRATION_DATABASE_URL="postgres://jarvis_migration_owner:migration_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
+  export JARVIS_APP_DATABASE_URL="postgres://jarvis_app_runtime:app_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
+  export JARVIS_AUTH_DATABASE_URL="postgres://jarvis_auth_runtime:auth_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
+  export JARVIS_WORKER_DATABASE_URL="postgres://jarvis_worker_runtime:worker_password@${GATE_DBHOST}:${LAUNCH_PORT}/${gatedb}"
 
   # setsid+nohup so the run outlives this shell. The Bash tool's shell exits the
   # moment the call returns; without full detachment the gate can die with it.
   # stdin comes from nowhere so nohup never prints its "ignoring input"
   # notice. The launcher's stderr goes to a sidecar so a real failure becomes
   # the DEAD reason instead of a generic message.
-  setsid nohup "$0" __run "$log" "$gate" "$keep_db" "$gatedb" "$exclusive" "$root" \
+  setsid nohup "$0" __run "$log" "$gate" "$keep_db" "$gatedb" "$exclusive" "$root" "$LAUNCH_CONTAINER" \
     </dev/null >/dev/null 2>"$log.launch-err" &
   local launcher_pid=$!
   disown 2>/dev/null || true
@@ -393,11 +551,9 @@ cmd_start() {
     launch_err="${launch_err:0:200}"
     [ -n "$launch_err" ] || launch_err="runner never recorded its PID within ${LAUNCH_WAIT_SECS}s of launch"
     echo "${LAUNCH_FAILED_PREFIX}${launch_err} ($(date -Is))" >>"$log"
-    if [ "$keep_db" != "1" ]; then
-      docker exec -e PGOPTIONS='-c client_min_messages=warning' "$CONTAINER" \
-        psql -U postgres -q -c "DROP DATABASE IF EXISTS $gatedb WITH (FORCE);" >/dev/null 2>&1 || true
-      echo "### CLEANUP dropped $gatedb (launch failed)" >>"$log"
-    fi
+    remove_gate_container "$LAUNCH_CONTAINER"
+    echo "### CLEANUP removed gate container $LAUNCH_CONTAINER (launch failed)" >>"$log"
+    LAUNCH_CONTAINER=""
     LAUNCH_OK=1
     die "runner failed to start: $launch_err ($log reads DEAD, see status)"
   fi
@@ -417,15 +573,17 @@ cmd_start() {
 RUN_LOG=""
 RUN_KEEP_DB=""
 RUN_GATEDB=""
+RUN_CONTAINER=""
 run_finish() {
   local rc=$?
   [ -n "$RUN_LOG" ] || exit "$rc"
-  if [ "$rc" -eq 0 ] && [ "$RUN_KEEP_DB" != "1" ]; then
-    docker exec -e PGOPTIONS='-c client_min_messages=warning' "$CONTAINER" \
-      psql -U postgres -q -c "DROP DATABASE IF EXISTS $RUN_GATEDB WITH (FORCE);" >/dev/null 2>&1 || true
-    echo "### CLEANUP dropped $RUN_GATEDB" >>"$RUN_LOG"
+  # The database dies with its server: the container goes on every ending —
+  # pass, fail, or signal — and --keep-db keeps nothing behind.
+  if [ -n "${RUN_CONTAINER:-}" ]; then
+    docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 || true
+    echo "### CLEANUP removed gate container $RUN_CONTAINER (rc=$rc)" >>"$RUN_LOG"
   else
-    echo "### CLEANUP kept $RUN_GATEDB (rc=$rc)" >>"$RUN_LOG"
+    echo "### CLEANUP no gate container recorded (rc=$rc)" >>"$RUN_LOG"
   fi
   echo "### END    $(date -Is)" >>"$RUN_LOG"
   echo "${SENTINEL_PREFIX}${rc}" >>"$RUN_LOG"
@@ -434,7 +592,7 @@ run_finish() {
 
 # Internal. Runs the gate with a trap-guaranteed sentinel.
 cmd___run() {
-  local log="$1" gate="$2" keep_db="$3" gatedb="$4" exclusive="$5" root="$6"
+  local log="$1" gate="$2" keep_db="$3" gatedb="$4" exclusive="$5" root="$6" container="${7:-}"
 
   # These MUST be globals, not locals. An EXIT trap runs after the calling
   # function's frame has already unwound, so `local` values are gone by the time
@@ -444,6 +602,7 @@ cmd___run() {
   RUN_LOG="$log"
   RUN_KEEP_DB="$keep_db"
   RUN_GATEDB="$gatedb"
+  RUN_CONTAINER="$container"
 
   trap run_finish EXIT
   trap 'exit 143' TERM
@@ -459,13 +618,9 @@ cmd___run() {
   # (the EXIT trap writes the sentinel, so a plain exit is enough here)
   cd "$root" || exit 4
 
-  if [ "$exclusive" = "1" ]; then
-    # Hold the DB lock for the entire run. Slower across lanes, but it is the
-    # only thing that fully removes concurrent-DDL contention during migrations.
-    flock "$STATE_DIR/db.lock" pnpm "$gate" >>"$log" 2>&1
-  else
-    pnpm "$gate" >>"$log" 2>&1
-  fi
+  # --exclusive is accepted for compatibility but no longer serializes
+  # anything: each run owns its server, so concurrent gates never contend.
+  pnpm "$gate" >>"$log" 2>&1
 }
 
 # ---------------------------------------------------------------------------
@@ -627,7 +782,10 @@ cmd_stop() {
 
   # Nothing to stop when the runner never launched (a launch-failed log):
   # report the verdict instead of erroring, mirroring the finished-run path.
+  # The server is already gone on this path (launch failure removes it), but
+  # ask again: a SIGKILLed start can leave one behind with no marker at all.
   if ! grep -q '^### PID ' "$log" 2>/dev/null; then
+    remove_log_container "$log"
     verdict "$log" || true
     return 0
   fi
@@ -640,8 +798,13 @@ cmd_stop() {
   # shell alone is not enough: bash defers trap handling until the foreground
   # command returns, so `pnpm` would keep running and the sentinel would not
   # land until the gate finished on its own.
-  kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null ||
+  kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || {
+    # Already gone without a sentinel (SIGKILL, OOM): its trap never ran, so
+    # its server is still up. Remove it here; the next start's sweep is the
+    # backstop when even stop never runs.
+    remove_log_container "$log"
     die "could not signal pid $pid (already gone?)"
+  }
 
   for i in $(seq 1 20); do
     sleep 1
