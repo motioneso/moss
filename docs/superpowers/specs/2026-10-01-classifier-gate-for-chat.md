@@ -103,8 +103,8 @@ The gate runs the chosen tool through the same gateway call path chat uses now. 
 of rules. That path already provides:
 
 - the per-tool risk level (`read`, `write`, `outbound`, `destructive`). A connected tool's level
-  comes from Moss's sorting pass (section 8.2). It sets the gate's confidence bar only; approval
-  follows the unchanged gateway rules (section 8.3)
+  comes from Moss's sorting pass (section 8.2) and sets the gate's confidence bar. A tool sorted
+  Sensitive asks before it runs unless YOLO is on (section 8.3)
 - the user's trust setting per tool family and the per-call confirmation override
 - YOLO handling. A non-read tool in YOLO mode still goes to an approval card when its family is not
   trusted for auto-run or a per-call override applies, and it is rate limited
@@ -283,20 +283,21 @@ Ruling 7's line names inputs as well as name and description, because the pass s
   what they do. A web-service connection keeps its own sections on screen; its risk still follows
   the rule above.
 
-### 8.3 Risky tools and approval
+### 8.3 Risky tools ask before running
 
-- A tool's sorted group sets the gate's confidence bar (section 3.6). Sensitive tools need 0.98. The
-  group never changes ordinary-chat approval. The synthetic tool keeps manifest risk `outbound` and
-  its execution policy, so no group is lowered or raised in the gateway.
-- "Still ask before running" means the gate declines whenever the gateway would ask. The main model
-  then handles the message and shows the usual card. The gate never raises a card (section 4).
-- With YOLO off, the gateway asks before every connected tool runs, so the gate declines all of them.
-- With YOLO on, connected tools run without a card, Sensitive ones included. This follows decisions
-  D1 and D2 of `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (locked with Ben, 2026-06-29), under which YOLO
-  auto-runs calls that would otherwise ask, destructive ones included. In today's gateway, issue
-  2419 still shows the card in YOLO for first-party tools marked destructive; connected tools are
-  external tools with `outbound` risk, so the YOLO rule runs them. The gate handles a Sensitive tool
-  in YOLO only above the 0.98 bar.
+- A tool sorted Sensitive starts on and asks before it runs, from ordinary chat and from the
+  classifier. The page marks it "Asks first".
+- YOLO mode skips the asking. YOLO is off by default and admin-only. Decisions D1 and D2 of
+  `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (locked with Ben, 2026-06-29) auto-run calls that would otherwise ask, destructive ones
+  included. Issue 2419's exception covers first-party destructive tools only, and connected tools
+  are external tools.
+- No new gateway hook is needed. Every connected tool's synthetic manifest carries risk `outbound`,
+  and with YOLO off the gateway already asks before any outbound tool runs. Manifest risk and
+  execution policy stay as they are.
+- A sorted group also sets the gate's confidence bar (section 3.6). Sensitive needs 0.98.
+- The gate declines whenever the gateway would ask, so the main model handles the message and shows
+  the usual card. The gate never raises a card (section 4). With YOLO off this declines every
+  connected tool, not only Sensitive ones (question 2 in section 8.10).
 - The user cannot change a tool's group in version one.
 
 ### 8.4 The connection's classifier switch
@@ -306,9 +307,8 @@ Ruling 7's line names inputs as well as name and description, because the pass s
   what is never sent. Moss then prepares every sorted tool that is on, with progress.
 - Preparation output is validated and saved directly, with no review step. The model still never
   writes executable template code, never sets risk and never approves a tool.
-- Ready reads, for example, "74 of 75 tools can answer quick requests." The mockup's "6 always ask
-  you before they run" is dropped, because whether a connected tool asks depends on YOLO, not on its
-  group (section 8.3).
+- Ready reads, for example, "74 of 75 tools can answer quick requests. 6 always ask you before they
+  run." A short line under it says YOLO mode skips the asking.
 - A changed tool is sorted and prepared again by itself, and its row says "Preparing again". Until
   then it is out of the classifier and still works in ordinary chat. A new tool starts on.
 - A failed sort or preparation shows "Try again". No automatic retry repeats the cost.
@@ -346,8 +346,8 @@ changes both.
 
 - The settings list is hidden so the tools get the full width, with "Back to connections" at the top.
 - Each tool shows its readable name in bold and its raw name small and faint underneath.
-- Tools group by what they do once sorted, Sensitive included. The mockup's "Asks first" label is
-  dropped for the reason in section 8.4.
+- Tools group by what they do once sorted. Sensitive tools show "Asks first", and one short line
+  says YOLO mode skips the asking.
 - Each tool keeps one switch for ordinary chat. Its menu holds "Keep out of the classifier".
 - A side rail holds the classifier switch and its states: off, turning on (the notice), preparing,
   ready, a tool preparing again, could not prepare, and connection lost.
@@ -366,9 +366,10 @@ changes both.
 | Review editor (2b.4)      | Per-tool editor with a diff and approve                | Removed; replaced by section 8.6                                                          |
 | Changed tool (2b.2)       | Stale until the user prepares and reviews it again     | Sorted and prepared again by itself                                                       |
 | Release record (1.2, 4.2) | Admin rows per tool; On needs one row                  | Connected tools released by sort and preparation; On needs the admin shadow-review record |
+| Sensitive tools           | No group; ask outside YOLO like every connected tool   | Marked "Asks first"; still ask outside YOLO; YOLO skips the asking                        |
 | Notice                    | One-time notice before preparing                       | Kept for the classifier switch; sorting has a page line instead                           |
 | Tool names on screen      | Raw names                                              | Readable name, raw name underneath                                                        |
-| Live proof (2b.6)         | Prepare, edit and approve a draft; opt in chosen tools | All tools on with no review; sorting calls counted; Sensitive bar checked in YOLO         |
+| Live proof (2b.6)         | Prepare, edit and approve a draft; opt in chosen tools | All tools on with no review; sorting calls counted; Sensitive asks outside YOLO           |
 
 Stored preparation entries from the old flow convert once. An entry the owner saved with opt-in off
 becomes kept out, because that may have been a choice. An owner-reviewed risk is kept only when it is
@@ -385,8 +386,8 @@ higher than the sorted group.
 - Gate execution still goes through the unchanged gateway. Kept-out, ordinary-chat state and the
   definition fingerprint are checked again at dispatch.
 - Tests seen failing with the guard removed: secrets absent from the sorting prompt for a
-  connection whose configuration holds a secret, and a Sensitive tool refused by the gate below
-  the 0.98 bar.
+  connection whose configuration holds a secret, a Sensitive tool asking with YOLO off, and a
+  Sensitive tool refused by the gate below the 0.98 bar.
 
 ### 8.9 Out of scope
 
@@ -398,3 +399,8 @@ higher than the sorted group.
 
 1. Section 8.5 makes the kill gate one review per classifier selection rather than evidence per
    tool. Plan task 4.2 had said one tool's results must not release another. Is one review enough?
+2. With YOLO off, today's gateway asks before every connected tool, because each carries risk
+   `outbound`. "Asks first" marks the Sensitive group, but the other groups ask too, so the gate
+   can answer no connected tool outside YOLO. Should the other groups run without asking outside
+   YOLO, in line with the 2026-08-19 ruling that installing grants normal use? That is a gateway
+   change, and this version keeps today's rule.
