@@ -534,9 +534,11 @@ cmd_start() {
   export MOSS_APP_DATABASE_URL="$JARVIS_APP_DATABASE_URL"
   export MOSS_AUTH_DATABASE_URL="$JARVIS_AUTH_DATABASE_URL"
   export MOSS_WORKER_DATABASE_URL="$JARVIS_WORKER_DATABASE_URL"
-  # Run marker for the database backstop: integration setup and migrate
-  # refuse to touch a database without it (or the documented override).
-  # Both spells, like the URLs above.
+  # Run marker for the database backstop: the integration-test resets, the
+  # test-integration wrapper, and the UAT seed connections refuse to open a
+  # database without it (or the documented override). scripts/migrate.ts is
+  # deliberately not guarded — compose smokes run it inside images that
+  # never see this marker. Both spells, like the URLs above.
   export JARVIS_GATE_RUN=1
   export MOSS_GATE_RUN=1
 
