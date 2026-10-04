@@ -9,7 +9,10 @@ const UAT_STACK_DB_PORT = "5432";
 // carry none, so any query string or fragment is refused.
 function isUatStackDatabaseUrl(url: string): boolean {
   const parsed = new URL(url);
+  // Only plain TCP postgres addresses with an explicit host; socket:// and other
+  // forms can send the driver to a local Unix socket.
   return (
+    (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:") &&
     parsed.hostname === UAT_STACK_DB_HOST &&
     (parsed.port === "" || parsed.port === UAT_STACK_DB_PORT) &&
     parsed.search === "" &&

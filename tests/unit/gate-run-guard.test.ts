@@ -94,6 +94,36 @@ describe("assertGateRunDatabaseAccess (#2989)", () => {
       }
     });
 
+    it("refuses socket-style and other non-postgres address forms", () => {
+      for (const url of [
+        "socket://postgres:5432/jarv1s",
+        "socket:///var/run/postgresql jarv1s",
+        "socket://postgres/var/run/postgresql:jarv1s",
+        "postgres://%2Fvar%2Frun%2Fpostgresql/jarv1s",
+        "postgres:///jarv1s",
+        "http://postgres:5432/jarv1s",
+        "postgresql+unix://postgres/jarv1s"
+      ]) {
+        expect(() =>
+          assertGateRunDatabaseAccess({
+            ...stackUrls,
+            JARVIS_APP_DATABASE_URL: url,
+            JARVIS_UAT_SEED_CONFIRM: "1"
+          } as NodeJS.ProcessEnv)
+        ).toThrow();
+      }
+    });
+
+    it("accepts the postgresql:// spelling of a stack address", () => {
+      expect(() =>
+        assertGateRunDatabaseAccess({
+          ...stackUrls,
+          JARVIS_APP_DATABASE_URL: "postgresql://a:pw@postgres:5432/jarv1s",
+          JARVIS_UAT_SEED_CONFIRM: "1"
+        } as NodeJS.ProcessEnv)
+      ).not.toThrow();
+    });
+
     it("refuses a stack address on another port", () => {
       expect(() =>
         assertGateRunDatabaseAccess({
