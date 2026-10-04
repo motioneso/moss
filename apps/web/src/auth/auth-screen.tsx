@@ -3,7 +3,7 @@ import { LoaderCircle, LogIn, UserPlus } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
 import { signInEmail, signUpEmail } from "../api/client";
-import { assistantName } from "../api/use-assistant-name.js";
+import { assistantName, holdAssistantNameForSignIn } from "../api/use-assistant-name.js";
 
 interface AuthScreenProps {
   readonly needsBootstrap: boolean;
@@ -26,7 +26,10 @@ export function AuthScreen(props: AuthScreenProps) {
 
       await signInEmail({ email, password });
     },
-    onSuccess: () => props.onAuthenticated()
+    onSuccess: () => {
+      holdAssistantNameForSignIn();
+      props.onAuthenticated();
+    }
   });
 
   useEffect(() => {

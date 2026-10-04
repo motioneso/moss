@@ -595,7 +595,7 @@ export function AppearancePane() {
                     {draft.tokens.header && headerColors
                       ? `Text switches to ${headerColors.textKind} on this color. The title reads at ${headerColors.textRatio.toFixed(1)} to 1, the date and cog at ${headerColors.mutedRatio.toFixed(1)} to 1. Both clear the 4.5 to 1 floor.${
                           headerColors.strongText
-                            ? ` This is a middle tone, so Moss uses full ${headerColors.textKind === "dark" ? "black" : "white"} text.`
+                            ? ` This is a middle tone, so ${assistantName()} uses full ${headerColors.textKind === "dark" ? "black" : "white"} text.`
                             : ""
                         }`
                       : "Using the theme's page color."}

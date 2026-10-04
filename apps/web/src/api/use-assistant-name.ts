@@ -135,6 +135,15 @@ export function bindAssistantUser(userId: string | null): void {
   applyName((savedForThisUser && readSaved()) || DEFAULT_ASSISTANT_NAME, true);
 }
 
+/**
+ * Called once a sign-in succeeds, before the account is known. The loading screen that follows
+ * shows the default name, so a previous person's saved name never appears for the new account.
+ * The saved name stays in storage; binding the same user again restores it.
+ */
+export function holdAssistantNameForSignIn(): void {
+  applyName(DEFAULT_ASSISTANT_NAME);
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
