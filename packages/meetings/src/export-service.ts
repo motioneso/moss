@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { assertUuid, type AccessContext, type DataContextRunner } from "@moss/db";
-import type { PrivateNoteExportPort } from "@moss/notes";
+import type { MeetingPrivateExportPort } from "./export-port.js";
 import type { ExportMeetingOutputInput, MeetingExportReceipt } from "@moss/shared";
 import { MeetingExportsRepository } from "./export-repository.js";
 import { MeetingOutputError } from "./output-repository.js";
@@ -14,7 +14,7 @@ type ExportStore = Pick<
 export class MeetingExportService {
   constructor(
     private readonly dataContext: Pick<DataContextRunner, "withDataContext">,
-    private readonly notes: PrivateNoteExportPort,
+    private readonly notes: MeetingPrivateExportPort,
     private readonly repository: ExportStore = new MeetingExportsRepository()
   ) {}
 

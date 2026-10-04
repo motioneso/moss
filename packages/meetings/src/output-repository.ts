@@ -5,7 +5,7 @@ import {
   type DataContextDb,
   type MeetingActionCandidatesTable
 } from "@moss/db";
-import type { Selectable } from "kysely";
+import { sql, type Selectable } from "kysely";
 import type {
   MeetingActionCandidate,
   MeetingOutputAction,
@@ -235,7 +235,9 @@ export class MeetingOutputsRepository {
             identity_key: identity(action),
             artifact_version: version,
             proposal_json: JSON.stringify(action),
-            possible_match_ids: existing.map((item) => item.id),
+            possible_match_ids: sql<
+              string[]
+            >`${JSON.stringify(existing.map((item) => item.id))}::jsonb`,
             accepted_task_id: null
           })
           .onConflict((conflict) => conflict.columns(["meeting_id", "identity_key"]).doNothing())

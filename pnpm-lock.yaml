@@ -794,9 +794,6 @@ importers:
       '@moss/module-web-sdk':
         specifier: workspace:*
         version: link:../module-web-sdk
-      '@moss/notes':
-        specifier: workspace:*
-        version: link:../notes
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared

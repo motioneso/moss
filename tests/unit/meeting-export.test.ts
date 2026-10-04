@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
 import { HttpError } from "@moss/module-sdk";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
-import type { PrivateNoteExportPort } from "@moss/notes";
+import type { MeetingPrivateExportPort } from "@moss/meetings";
 import type { MeetingExportReceipt, MeetingOutputArtifact } from "@moss/shared";
 import { MeetingExportService } from "../../packages/meetings/src/export-service.js";
 import type { MeetingExportsRepository } from "../../packages/meetings/src/export-repository.js";
@@ -116,17 +116,17 @@ function setup() {
     noteReference: `notes/generated/${meetingId}/v1.md`,
     contentHash: hash
   });
-  const notes: PrivateNoteExportPort = {
-    inspect: vi.fn<PrivateNoteExportPort["inspect"]>(async () => ({
+  const notes: MeetingPrivateExportPort = {
+    inspect: vi.fn<MeetingPrivateExportPort["inspect"]>(async () => ({
       ...observation(),
       status: file === null ? "missing" : file === content ? "unchanged" : "conflict"
     })),
-    createOrInspect: vi.fn<PrivateNoteExportPort["createOrInspect"]>(async () => {
+    createOrInspect: vi.fn<MeetingPrivateExportPort["createOrInspect"]>(async () => {
       events.push("write");
       file = content;
       return { ...observation(), status: "written" };
     }),
-    queueIndex: vi.fn<PrivateNoteExportPort["queueIndex"]>(async () => {
+    queueIndex: vi.fn<MeetingPrivateExportPort["queueIndex"]>(async () => {
       events.push("queue");
       return { status: "queued", jobId: "synthetic-job" };
     })

@@ -65,6 +65,7 @@ export const meetingsModuleManifest = {
     }
   ],
   routes: [
+    { method: "GET", path: "/api/meetings/records/:id/exports", permissionId: "meetings.read" },
     { method: "POST", path: "/api/meetings/records/:id/exports", permissionId: "meetings.write" },
     { method: "GET", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.read" },
     {

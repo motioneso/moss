@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
-import type { PrivateNoteExportPort } from "@moss/notes";
+import type { MeetingPrivateExportPort } from "@moss/meetings";
 import { MeetingRecordsRepository } from "@moss/meetings";
 import { MeetingOutputsRepository } from "../../packages/meetings/src/output-repository.js";
 import { MeetingExportService } from "../../packages/meetings/src/export-service.js";
@@ -54,16 +54,16 @@ async function fixture() {
     noteReference: `notes/generated/${meeting.id}/v1.md`,
     contentHash: "a".repeat(64)
   };
-  const notes: PrivateNoteExportPort = {
-    inspect: vi.fn<PrivateNoteExportPort["inspect"]>(async () => ({
+  const notes: MeetingPrivateExportPort = {
+    inspect: vi.fn<MeetingPrivateExportPort["inspect"]>(async () => ({
       ...observation,
       status: written ? "unchanged" : "missing"
     })),
-    createOrInspect: vi.fn<PrivateNoteExportPort["createOrInspect"]>(async () => {
+    createOrInspect: vi.fn<MeetingPrivateExportPort["createOrInspect"]>(async () => {
       written = true;
       return { ...observation, status: "written" };
     }),
-    queueIndex: vi.fn<PrivateNoteExportPort["queueIndex"]>(async () => ({
+    queueIndex: vi.fn<MeetingPrivateExportPort["queueIndex"]>(async () => ({
       status: "queued",
       jobId: randomUUID()
     }))
