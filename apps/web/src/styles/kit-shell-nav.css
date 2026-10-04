@@ -238,3 +238,32 @@
     background: var(--nav-hover);
   }
 }
+
+/* Custom theme page header color: the desktop top bar only. At 920px and under the nav
+   color (above) paints the bar, so these rules stand down. */
+@media (min-width: 921px) {
+  [data-header-color] .topbar {
+    background: var(--header-bg);
+    border-bottom-color: var(--header-line);
+    color: var(--header-fg);
+  }
+
+  [data-header-color] .topbar-subtitle,
+  [data-header-color] .topbar-title--link,
+  [data-header-color] .topbar-crumb__sep,
+  [data-header-color] .topbar-crumb__meta,
+  [data-header-color] .topbar-settings-button {
+    color: var(--header-muted);
+  }
+
+  [data-header-color] .topbar-title,
+  [data-header-color] .topbar-crumb__now,
+  [data-header-color] .topbar-title--link:hover,
+  [data-header-color] .topbar-settings-button:hover {
+    color: var(--header-fg);
+  }
+
+  [data-header-color] .topbar-settings-button:hover {
+    background: var(--header-hover);
+  }
+}

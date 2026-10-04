@@ -16,7 +16,7 @@ export const AESTHETIC_THEME_TOKEN_KEYS = [
 ] as const;
 
 /** Optional aesthetic tokens: absent = built-in constant applies. */
-export const OPTIONAL_AESTHETIC_TOKEN_KEYS = ["highlight", "nav"] as const;
+export const OPTIONAL_AESTHETIC_TOKEN_KEYS = ["highlight", "nav", "header"] as const;
 
 export type AestheticThemeTokenKey = (typeof AESTHETIC_THEME_TOKEN_KEYS)[number];
 export type AestheticThemeTokens = Record<AestheticThemeTokenKey, string> & {
@@ -24,6 +24,8 @@ export type AestheticThemeTokens = Record<AestheticThemeTokenKey, string> & {
   highlight?: string;
   /** Nav bar ground; text, hover and selected colors derive from it. */
   nav?: string;
+  /** Page header ground (desktop top bar); its text derives from it. Phones follow `nav`. */
+  header?: string;
 };
 export type BuiltInThemeId = "light" | "sage" | "canyon" | "teal" | "dusk" | "dark";
 export type ColorMode = "light" | "dark";
@@ -75,7 +77,7 @@ const colorValueSchema = {
     "^(#[0-9a-fA-F]{6}|rgba?\\((25[0-5]|2[0-4]\\d|1?\\d?\\d),\\s*(25[0-5]|2[0-4]\\d|1?\\d?\\d),\\s*(25[0-5]|2[0-4]\\d|1?\\d?\\d)(,\\s*(0|1|0?\\.\\d+))?\\))$"
 } as const;
 
-/* Nav text contrast is derived from its ground, so the nav refuses see-through rgba. */
+/* Nav and header text contrast is derived from the ground, so both refuse see-through rgba. */
 const solidColorValueSchema = {
   type: "string",
   pattern:
@@ -86,7 +88,8 @@ const tokenProperties = {
   ...(Object.fromEntries(
     [...AESTHETIC_THEME_TOKEN_KEYS, "highlight" as const].map((key) => [key, colorValueSchema])
   ) as Record<AestheticThemeTokenKey | "highlight", typeof colorValueSchema>),
-  nav: solidColorValueSchema
+  nav: solidColorValueSchema,
+  header: solidColorValueSchema
 };
 
 export const aestheticThemeTokensSchema = {

@@ -393,6 +393,11 @@
   --shadow-drawer: -8px 0 24px rgba(38, 34, 28, 0.16);
   --topbar-bg: rgb(236 228 209 / 0.85);
   --topbar-muted: var(--text-subtle);
+  --header-bg: var(--topbar-bg);
+  --header-fg: var(--ink);
+  --header-muted: var(--topbar-muted);
+  --header-line: var(--border-strong);
+  --header-hover: var(--surface-2);
   --scrim-strong: rgb(0 0 0 / 45%);
   --surface-hover: rgba(38, 34, 28, 0.06);
   --hairline-contrast: rgba(0, 0, 0, 0.06);
@@ -499,6 +504,11 @@
   --shadow-drawer: -8px 0 28px rgba(0, 0, 0, 0.6);
   --topbar-bg: rgb(28 26 22 / 0.85);
   --topbar-muted: var(--text-subtle);
+  --header-bg: var(--topbar-bg);
+  --header-fg: var(--ink);
+  --header-muted: var(--topbar-muted);
+  --header-line: var(--border-strong);
+  --header-hover: var(--surface-2);
   --accent-soft-border: rgb(121 166 141 / 0.5);
   --accent-soft-border-weak: rgb(121 166 141 / 0.36);
 

@@ -1,5 +1,7 @@
 import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 
+import { Settings } from "lucide-react";
+
 import type { AestheticThemeTokens } from "@moss/shared";
 
 export type EditorTokenKey = keyof AestheticThemeTokens;
@@ -7,6 +9,7 @@ export type EditorTokenKey = keyof AestheticThemeTokens;
 /* Each clickable part of the preview and the field that paints it. */
 export const PREVIEW_PARTS = {
   nav: { key: "nav", label: "Nav bar" },
+  header: { key: "header", label: "Page header" },
   page: { key: "paper", label: "Page" },
   band: { key: "accent", label: "Accent" },
   rule: { key: "highlight", label: "Highlight" },
@@ -69,32 +72,41 @@ export function ThemePreview(props: {
           <span className="theme-pv__link">Calendar</span>
           <span className="theme-pv__link">News</span>
         </div>
-        <div {...part("page", "theme-pv__main")}>
-          <div>
-            <div {...part("band", "theme-pv__band")}>
-              <div className="theme-pv__eyebrow">Good morning</div>
-              <p className="theme-pv__headline">
-                A clear run
-                <br />
-                to lunch
-              </p>
-              <p className="theme-pv__summary">Two meetings, one errand, nothing overdue.</p>
-            </div>
-            <div {...part("rule", "theme-pv__rule")} />
-          </div>
-          <div className="theme-pv__head">
-            <span className="theme-pv__num">01</span>
-            <span {...part("title", "theme-pv__title")}>Your day, laid out</span>
-          </div>
-          <div>
-            <PreviewRow time="9:00" title="Morning review" meta="30 minutes" part={part} />
-            <PreviewRow time="2:30 pm" title="Call the vet" meta="Task, due today" part={part} />
-          </div>
-          <div {...part("card", "theme-pv__card")}>
-            <span>
-              Medications <span className="theme-pv__meta">0 of 1 logged</span>
+        <div className="theme-pv__col">
+          <div {...part("header", "theme-pv__header")}>
+            <span className="theme-pv__header-title">Today</span>
+            <span className="theme-pv__header-date">Sun, Oct 4</span>
+            <span className="theme-pv__header-cog">
+              <Settings size={11} />
             </span>
-            <span {...part("button", "theme-pv__button")}>Check in</span>
+          </div>
+          <div {...part("page", "theme-pv__main")}>
+            <div>
+              <div {...part("band", "theme-pv__band")}>
+                <div className="theme-pv__eyebrow">Good morning</div>
+                <p className="theme-pv__headline">
+                  A clear run
+                  <br />
+                  to lunch
+                </p>
+                <p className="theme-pv__summary">Two meetings, one errand, nothing overdue.</p>
+              </div>
+              <div {...part("rule", "theme-pv__rule")} />
+            </div>
+            <div className="theme-pv__head">
+              <span className="theme-pv__num">01</span>
+              <span {...part("title", "theme-pv__title")}>Your day, laid out</span>
+            </div>
+            <div>
+              <PreviewRow time="9:00" title="Morning review" meta="30 minutes" part={part} />
+              <PreviewRow time="2:30 pm" title="Call the vet" meta="Task, due today" part={part} />
+            </div>
+            <div {...part("card", "theme-pv__card")}>
+              <span>
+                Medications <span className="theme-pv__meta">0 of 1 logged</span>
+              </span>
+              <span {...part("button", "theme-pv__button")}>Check in</span>
+            </div>
           </div>
         </div>
       </div>
