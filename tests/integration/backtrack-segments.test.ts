@@ -471,23 +471,37 @@ describe("account deletion", () => {
     expect(deleted.countsBeforeDelete["app.backtrack_preferences"]).toBe(1);
     expect(deleted.countsBeforeDelete["app.backtrack_deletions"]).toBe(1);
 
+    // Scope every "what's left" check to the two actors this test created — the file's other
+    // describe blocks (CHECK constraints, idempotency, cross-owner isolation, the upkeep
+    // function, ...) all write their own rows into these same tables and never clean up, so an
+    // unscoped SELECT here also sees their leftovers.
+    const bothOwners = [owner, other];
+
     const remainingSegments = await bootstrap.query(
-      `SELECT owner_user_id::text AS owner FROM app.backtrack_segments`
+      `SELECT owner_user_id::text AS owner FROM app.backtrack_segments
+       WHERE owner_user_id = ANY($1::uuid[])`,
+      [bothOwners]
     );
     expect(remainingSegments.rows.map((row) => row.owner)).toEqual([other]);
 
     const remainingPreferences = await bootstrap.query(
-      `SELECT owner_user_id::text AS owner FROM app.backtrack_preferences`
+      `SELECT owner_user_id::text AS owner FROM app.backtrack_preferences
+       WHERE owner_user_id = ANY($1::uuid[])`,
+      [bothOwners]
     );
     expect(remainingPreferences.rows.map((row) => row.owner)).toEqual([other]);
 
     const remainingDeletions = await bootstrap.query(
-      `SELECT owner_user_id::text AS owner FROM app.backtrack_deletions`
+      `SELECT owner_user_id::text AS owner FROM app.backtrack_deletions
+       WHERE owner_user_id = ANY($1::uuid[])`,
+      [bothOwners]
     );
     expect(remainingDeletions.rows).toEqual([]);
 
     const remainingScreenChunks = await bootstrap.query<{ owner: string }>(
-      `SELECT owner_user_id::text AS owner FROM app.memory_chunks WHERE source_kind = 'screen'`
+      `SELECT owner_user_id::text AS owner FROM app.memory_chunks
+       WHERE source_kind = 'screen' AND owner_user_id = ANY($1::uuid[])`,
+      [bothOwners]
     );
     expect(remainingScreenChunks.rows.map((row) => row.owner)).toEqual([other]);
   });
