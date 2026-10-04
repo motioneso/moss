@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type RefObject } from "react";
 
 export interface ColorPopoverProps {
   /** Field name shown at the top, also the dialog's accessible name. */
@@ -33,18 +33,22 @@ export function ColorPopover(props: ColorPopoverProps) {
     closeRef.current = props.onClose;
   });
 
-  /* Slide sideways to stay inside the window when the anchor sits near an edge. */
+  /* Slide sideways to stay inside the window when the anchor sits near an edge.
+     A ref callback measures before paint; it reruns when the caller moves the panel. */
   const left = props.style?.left;
   const top = props.style?.top;
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.translate = "";
-    const rect = el.getBoundingClientRect();
-    const overRight = rect.right - (window.innerWidth - EDGE_GAP);
-    const dx = rect.left < EDGE_GAP ? EDGE_GAP - rect.left : overRight > 0 ? -overRight : 0;
-    if (dx) el.style.translate = `${dx}px 0`;
-  }, [left, top]);
+  const place = useCallback(
+    (el: HTMLDivElement | null) => {
+      ref.current = el;
+      if (!el) return;
+      el.style.translate = "";
+      const rect = el.getBoundingClientRect();
+      const overRight = rect.right - (window.innerWidth - EDGE_GAP);
+      const dx = rect.left < EDGE_GAP ? EDGE_GAP - rect.left : overRight > 0 ? -overRight : 0;
+      if (dx) el.style.translate = `${dx}px 0`;
+    },
+    [left, top]
+  );
 
   useEffect(() => {
     const onClose = () => closeRef.current();
@@ -67,7 +71,7 @@ export function ColorPopover(props: ColorPopoverProps) {
 
   return (
     <div
-      ref={ref}
+      ref={place}
       className={["jds-colorpop", props.className].filter(Boolean).join(" ")}
       style={props.style}
       role="dialog"
