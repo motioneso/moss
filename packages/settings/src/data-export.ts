@@ -96,6 +96,7 @@ export interface UserDataExportTables {
   readonly aiConfiguredModels: readonly ExportRow[];
   readonly aiProviderConfigs: readonly ExportRow[];
   readonly authAccounts: readonly ExportRow[];
+  readonly backtrackSegments: readonly ExportRow[];
   readonly betterAuthSessions: readonly ExportRow[];
   readonly briefingDefinitions: readonly ExportRow[];
   readonly briefingRuns: readonly ExportRow[];
@@ -250,6 +251,16 @@ async function readExportTables(
     { actorUserId: userId, requestId }
   );
 
+  // #2638 Backtrack phase 2a: a flat row array, like focusJudgments, not a grouped section —
+  // backtrack has only one row-set to export (see collectBacktrackSegmentsExportSection).
+  const backtrackSegments = await collectModuleExportSection<readonly ExportRow[]>(
+    listModuleManifests,
+    "backtrack",
+    "backtrackSegments",
+    scopedDb,
+    { actorUserId: userId, requestId }
+  );
+
   return {
     users: await readRows(scopedDb.db, userQuery(userId)),
     authAccounts: await readRows(authDb, authAccountsQuery(userId)),
@@ -294,6 +305,7 @@ async function readExportTables(
     usefulnessFeedbackSignals: await readRows(scopedDb.db, usefulnessFeedbackSignalsQuery(userId)),
     usefulnessFeedbackTargets: await readRows(scopedDb.db, usefulnessFeedbackTargetsQuery(userId)),
     focusJudgments: await readRows(scopedDb.db, focusJudgmentsQuery(userId)),
+    backtrackSegments,
     newsPersonalization: newsPersonalizationSection,
     wellnessCheckins: wellnessSection.checkins,
     medications: await readRows(scopedDb.db, medicationsQuery(userId)),
