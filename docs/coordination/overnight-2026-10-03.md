@@ -1,7 +1,7 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `18a6b85a-ba99-4eb5-aa2b-3e6f0676ed7a` (relay 7). Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `32206ccd-a8b4-44e2-9fbf-ab753f7a297b` (relay 8). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
@@ -105,6 +105,8 @@ None.
   - Session id at merge matched lock anchor: y (b1e6e877). Merged 2c3c12da0. Issue closed, board Done.
 
 ## Reaped sessions
+
+- w1:p12E "Coordinator (old)" (session 18a6b85a, relay 7) - drove run to RELAY POINT 8 after merging PR #2991; closed by relay 8 (session 32206ccd) after session id verified.
 
 - w1:p11B "2942 mid-chat tools (Opus)" (opus-2942) - built PR #2974, merged a1369fbed; closed, worktree removed (reap check: REAPABLE, gates clear; ahead=13), branch deleted local+remote.
 
@@ -322,3 +324,7 @@ merges_since_relay 1 (PR #2991). Ben asleep; his 21:35 merge interpretation gove
 3. **Ben question open**: People sync, which notes count as a person (AWAITING-BEN.md). needs-ben sent 01:25; watch ~/.needs-ben/replies/ with a background until-loop. Do not build it in this run.
 4. **PR #2982**: never merge from this run.
 5. End: point the two log folders at the Downloads drive (see disk bullet above), then end-coordination (closing entry, stop coordinator-watchdog.timer, release the name), worktree clean.
+
+## Relay 8 adopted (session 32206ccd, pane w1:p12T)
+
+- Lock taken, old coordinator w1:p12E closed (session 18a6b85a verified). merges_since_relay 0. RELAY POINT 8 steps 1-5 govern.
