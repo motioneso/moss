@@ -409,6 +409,57 @@ export function preparationHasRoom(map: ClassifierPreparationMap, toolName: stri
   );
 }
 
+/**
+ * Failures that can still block a run: those for a discovered tool at its present definition.
+ * A failure for a removed tool or an earlier definition never blocks anything, so it is dropped.
+ */
+function blockingFailures(
+  map: ClassifierPreparationMap,
+  discoveredTools: readonly IntegrationToolDescriptor[]
+): Record<string, ClassifierPreparationFailure> {
+  const fingerprints = new Map(
+    discoveredTools.map((tool) => [tool.name, toolDefinitionFingerprint(tool)])
+  );
+  const kept = Object.create(null) as Record<string, ClassifierPreparationFailure>;
+  for (const [toolName, failure] of Object.entries(map.failures ?? {})) {
+    if (fingerprints.get(toolName) === failure.definitionFingerprint) kept[toolName] = failure;
+  }
+  return kept;
+}
+
+/**
+ * Whether a failure for this tool can be remembered. The job checks this before any model call,
+ * because a failure it cannot remember would be charged again on the next run.
+ */
+export function preparationFailureHasRoom(
+  map: ClassifierPreparationMap,
+  discoveredTools: readonly IntegrationToolDescriptor[],
+  toolName: string
+): boolean {
+  const kept = blockingFailures(map, discoveredTools);
+  return (
+    Object.prototype.hasOwnProperty.call(kept, toolName) ||
+    Object.keys(kept).length < INTEGRATION_CLASSIFIER_MAX_FAILURES
+  );
+}
+
+/** The failure history with one tool's failure recorded, or null when it has no room. */
+export function withPreparationFailure(
+  map: ClassifierPreparationMap,
+  discoveredTools: readonly IntegrationToolDescriptor[],
+  toolName: string,
+  failure: ClassifierPreparationFailure
+): Record<string, ClassifierPreparationFailure> | null {
+  if (!preparationFailureHasRoom(map, discoveredTools, toolName)) return null;
+  const failures = blockingFailures(map, discoveredTools);
+  failures[toolName] = {
+    reason: failure.reason,
+    definitionFingerprint: failure.definitionFingerprint,
+    failedAt: failure.failedAt
+  };
+  return failures;
+}
+
 /** Merge one reviewed entry, keeping at most the bounded number of entries. */
 export function withPreparationEntry(
   map: ClassifierPreparationMap,
@@ -526,6 +577,9 @@ export const INTEGRATION_CLASSIFIER_SORT_VERSION = 1 as const;
 
 /** Bound on the stored sort map. Every discovered tool needs an entry, so this sits well above the opt-in bound. */
 export const INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES = 1000;
+
+/** Bound on stored preparation failures. Only a sorted tool is prepared, so it matches the sort bound. */
+export const INTEGRATION_CLASSIFIER_MAX_FAILURES = INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES;
 
 export const INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS = 80;
 

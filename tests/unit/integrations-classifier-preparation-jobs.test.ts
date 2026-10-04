@@ -8,6 +8,7 @@ import {
   enqueueClassifierPreparation,
   INTEGRATION_CLASSIFIER_MAX_ARGUMENTS,
   INTEGRATION_CLASSIFIER_MAX_ENTRIES,
+  INTEGRATION_CLASSIFIER_MAX_FAILURES,
   INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
   parsePreparationMap,
   runClassifierPreparationJob,
@@ -15,6 +16,7 @@ import {
   toolRiskInputs,
   toolSortFingerprint,
   withPreparationEntry,
+  withPreparationFailure,
   withSortResult,
   type ClassifierPreparationFailure,
   type ClassifierPreparationJobOp,
@@ -102,7 +104,8 @@ function readBack(row: ConnectionRow): ConnectionRow {
 
 /**
  * A repository that applies the job's writes to one in-memory row. Reads go through the stored
- * parser and saves keep the real entry cap, so an entry the database would drop is dropped here.
+ * parser and saves keep the real entry and failure rules, so a write the database would refuse
+ * is refused here.
  */
 function fakeRepository(initial: ConnectionRow) {
   const state = { row: initial };
@@ -144,13 +147,17 @@ function fakeRepository(initial: ConnectionRow) {
         toolName: string,
         failure: ClassifierPreparationFailure
       ) => {
+        const next = withPreparationFailure(
+          state.row.classifierPreparation,
+          state.row.discoveredTools,
+          toolName,
+          failure
+        );
+        if (!next) return false;
         failures.push({ toolName, failure });
         state.row = {
           ...state.row,
-          classifierPreparation: {
-            ...state.row.classifierPreparation,
-            failures: { ...state.row.classifierPreparation.failures, [toolName]: failure }
-          }
+          classifierPreparation: { ...state.row.classifierPreparation, failures: next }
         };
         return true;
       }
@@ -407,6 +414,57 @@ describe("runClassifierPreparationJob", () => {
     const again = await run(first.state.row);
     expect(again.outcome).toEqual({ status: "nothing_to_prepare" });
     expect(again.port.runStructuredDraft).not.toHaveBeenCalled();
+  });
+
+  it("drops failures that can no longer block a run to remember a new one", async () => {
+    const removed = Array.from({ length: INTEGRATION_CLASSIFIER_MAX_FAILURES }, (_, index) =>
+      discovered(`removed_${index}`)
+    );
+    const stale: Record<string, ClassifierPreparationFailure> = {};
+    for (const tool of removed) {
+      stale[tool.name] = {
+        reason: "invalid_draft",
+        definitionFingerprint: toolDefinitionFingerprint(tool),
+        failedAt: "2026-10-03T00:00:00.000Z"
+      };
+    }
+    const full = row({
+      classifierPreparation: { ...emptyPreparationMap(), failures: stale }
+    });
+    const port = fakePort();
+    port.runStructuredDraft.mockResolvedValue({ ok: false, error: "provider_error" });
+
+    const first = await run(full, "prepare", port);
+    expect(first.outcome).toEqual({ status: "stopped", prepared: 0, failed: 1 });
+    expect(Object.keys(first.state.row.classifierPreparation.failures ?? {})).toEqual(["turn_on"]);
+
+    const again = await run(first.state.row, "prepare", port);
+    expect(again.outcome).toEqual({ status: "nothing_to_prepare" });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes no model call when a failure for the tool could not be remembered", async () => {
+    const failedBefore = Array.from({ length: INTEGRATION_CLASSIFIER_MAX_FAILURES }, (_, index) =>
+      discovered(`failed_${index}`)
+    );
+    const current: Record<string, ClassifierPreparationFailure> = {};
+    for (const tool of failedBefore) {
+      current[tool.name] = {
+        reason: "invalid_draft",
+        definitionFingerprint: toolDefinitionFingerprint(tool),
+        failedAt: "2026-10-03T00:00:00.000Z"
+      };
+    }
+    const full = row({
+      discoveredTools: [...failedBefore, discovered("turn_on")],
+      classifierPreparation: { ...emptyPreparationMap(), failures: current },
+      classifierSort: sortedAs([discovered("turn_on")]),
+      enabledGroups: ["lights"]
+    });
+
+    const { outcome, port } = await run(full);
+    expect(outcome).toEqual({ status: "failure_history_full", prepared: 0, failed: 0 });
+    expect(port.runStructuredDraft).not.toHaveBeenCalled();
   });
 
   it("makes no model call when no default chat model can draft", async () => {

@@ -11,8 +11,10 @@ import {
 import {
   createIntegrationsCipher,
   effectiveClassifierTools,
+  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   IntegrationsRepository,
   runClassifierPreparationJob,
+  toolDefinitionFingerprint,
   toolRiskInputs,
   toolSortFingerprint,
   type ClassifierPreparationPort,
@@ -122,9 +124,13 @@ describe("integrations classifier preparation worker (#2984 R2.4)", () => {
     ))!;
   }
 
-  function prepare(actorUserId: string, connectionId: string) {
+  function prepare(
+    actorUserId: string,
+    connectionId: string,
+    preparationPort: ClassifierPreparationPort = port
+  ) {
     return runClassifierPreparationJob(
-      { dataContext: worker, port, cipherSources: { cipher } },
+      { dataContext: worker, port: preparationPort, cipherSources: { cipher } },
       context(actorUserId),
       connectionId,
       "prepare"
@@ -177,6 +183,54 @@ describe("integrations classifier preparation worker (#2984 R2.4)", () => {
     );
     expect(after!.classifierPreparation.entries).toEqual({});
     expect(effectiveClassifierTools(after!)).toEqual([]);
+  });
+
+  it("remembers a failed tool when the failure history is already full", async () => {
+    // Every earlier failure is current, so none can be dropped to make room.
+    const failedBefore = Array.from({ length: INTEGRATION_CLASSIFIER_MAX_ENTRIES }, (_, index) =>
+      tool(`failed_${index}`)
+    );
+    const conn = await sortedConnection(ids.userA, "Prepare full failure history", [
+      ...failedBefore,
+      tool("heater_on")
+    ]);
+    await as(app, ids.userA, (scopedDb) =>
+      repository.updateConnection(scopedDb, conn.id, { enabledGroups: ["Home"] })
+    );
+    await as(worker, ids.userA, async (scopedDb) => {
+      for (const failed of failedBefore) {
+        await repository.saveClassifierPreparationFailure(scopedDb, conn.id, failed.name, {
+          reason: "invalid_draft",
+          definitionFingerprint: toolDefinitionFingerprint(failed),
+          failedAt: "2026-10-04T00:00:00.000Z"
+        });
+      }
+    });
+
+    const draftCalls: string[] = [];
+    const failingPort: ClassifierPreparationPort = {
+      selectDefaultChatModel: port.selectDefaultChatModel,
+      runStructuredDraft: async (_db, input) => {
+        draftCalls.push(input.prompt);
+        return { ok: false, error: "provider_error" };
+      }
+    };
+
+    expect(await prepare(ids.userA, conn.id, failingPort)).toEqual({
+      status: "stopped",
+      prepared: 0,
+      failed: 1
+    });
+    expect(draftCalls).toHaveLength(1);
+    expect(await prepare(ids.userA, conn.id, failingPort)).toEqual({
+      status: "nothing_to_prepare"
+    });
+    expect(draftCalls).toHaveLength(1);
+
+    const after = await as(app, ids.userA, (scopedDb) =>
+      repository.getConnection(scopedDb, conn.id)
+    );
+    expect(after!.classifierPreparation.failures?.heater_on?.reason).toBe("provider_error");
   });
 
   it("gives the worker no write on columns other than sort and preparation", async () => {

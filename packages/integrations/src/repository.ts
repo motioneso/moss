@@ -7,12 +7,12 @@ import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import {
   emptyPreparationMap,
   emptySortMap,
-  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
   parsePreparationMap,
   parseSortMap,
   preparationEntry,
   preparationHasRoom,
   withoutStaleSendChoices,
+  withPreparationFailure,
   withSendWithoutAsking,
   withSortResult,
   type ClassifierPreparationEntry,
@@ -353,7 +353,8 @@ export class IntegrationsRepository {
   /**
    * Record that automatic preparation failed for one tool (#2984 R2.4). The failure is tied to the
    * definition it was attempted against, so the job leaves it for the owner's Try again. Only a
-   * discovered tool is recorded, and the stored failures stay within the entry cap.
+   * discovered tool is recorded. Failures that can no longer block a run are dropped in the same
+   * write, and the row lock keeps the rewrite of the whole failure set from losing another write.
    */
   async saveClassifierPreparationFailure(
     scopedDb: DataContextDb,
@@ -364,19 +365,14 @@ export class IntegrationsRepository {
     assertDataContextDb(scopedDb);
     const row = await this.lockConnection(scopedDb, id);
     if (!row?.discoveredTools.some((tool) => tool.name === toolName)) return false;
-    const failures = row.classifierPreparation.failures ?? {};
-    if (
-      !Object.prototype.hasOwnProperty.call(failures, toolName) &&
-      Object.keys(failures).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
-    ) {
-      return false;
-    }
+    const failures = withPreparationFailure(
+      row.classifierPreparation,
+      row.discoveredTools,
+      toolName,
+      failure
+    );
+    if (!failures) return false;
 
-    const failureJson = JSON.stringify({
-      reason: failure.reason,
-      definitionFingerprint: failure.definitionFingerprint,
-      failedAt: failure.failedAt
-    });
     const result = await sql`
       UPDATE app.integration_connections
       SET classifier_preparation = jsonb_set(
@@ -385,12 +381,7 @@ export class IntegrationsRepository {
               ELSE '{"version": 1, "entries": {}}'::jsonb
             END,
             ARRAY['failures'],
-            CASE
-              WHEN ${WELL_FORMED_PREPARATION}
-                AND jsonb_typeof(classifier_preparation->'failures') = 'object'
-              THEN classifier_preparation->'failures'
-              ELSE '{}'::jsonb
-            END || jsonb_build_object(${toolName}::text, ${failureJson}::jsonb),
+            ${JSON.stringify(failures)}::jsonb,
             true
           ),
           updated_at = now()

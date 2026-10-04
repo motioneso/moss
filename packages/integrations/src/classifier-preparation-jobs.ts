@@ -12,6 +12,7 @@ import {
   type PreparationChatModel
 } from "./classifier-preparation.js";
 import {
+  preparationFailureHasRoom,
   preparationHasRoom,
   type ClassifierPreparationFailureReason
 } from "./classifier-settings.js";
@@ -81,7 +82,13 @@ export type ClassifierPreparationJobOutcome =
   | { readonly status: "no_model" }
   | { readonly status: "credentials_paused" }
   | { readonly status: "prepared"; readonly prepared: number; readonly failed: number }
-  | { readonly status: "stopped"; readonly prepared: number; readonly failed: number };
+  | { readonly status: "stopped"; readonly prepared: number; readonly failed: number }
+  | {
+      /** A failure could not be remembered, so the run stopped before paying for the tool. */
+      readonly status: "failure_history_full";
+      readonly prepared: number;
+      readonly failed: number;
+    };
 
 interface PreparationRun {
   readonly model: PreparationChatModel;
@@ -162,18 +169,22 @@ export async function runClassifierPreparationJob(
       if (!row || !classifierActive(row)) return "switched_off" as const;
       const tool = targetsFor(row, op).find((candidate) => candidate.name === toolName);
       if (!tool) return "skipped" as const;
-      const fail = async (reason: ClassifierPreparationFailureReason) => {
-        await repository.saveClassifierPreparationFailure(scopedDb, connectionId, toolName, {
+      const fail = (reason: ClassifierPreparationFailureReason) =>
+        repository.saveClassifierPreparationFailure(scopedDb, connectionId, toolName, {
           reason,
           definitionFingerprint: toolDefinitionFingerprint(tool),
           failedAt: now().toISOString()
         });
-      };
+
+      // A failure that could not be remembered would be charged again on every run, so the tool
+      // is not attempted unless its failure can be stored.
+      if (!preparationFailureHasRoom(row.classifierPreparation, row.discoveredTools, toolName)) {
+        return "unrecorded" as const;
+      }
 
       // A full preparation store cannot take this tool, so it fails before any model charge.
       if (!preparationHasRoom(row.classifierPreparation, toolName)) {
-        await fail("too_many_tools");
-        return "failed" as const;
+        return (await fail("too_many_tools")) ? ("failed" as const) : ("unrecorded" as const);
       }
 
       const outcome = await prepareClassifierTool(
@@ -194,15 +205,15 @@ export async function runClassifierPreparationJob(
         });
         if (saved.status === "saved") return "prepared" as const;
         if (saved.status !== "too_many") return "skipped" as const;
-        await fail("too_many_tools");
-        return "failed" as const;
+        return (await fail("too_many_tools")) ? ("failed" as const) : ("unrecorded" as const);
       }
-      await fail(outcome.reason);
+      if (!(await fail(outcome.reason))) return "unrecorded" as const;
       return outcome.reason === "provider_error"
         ? ("provider_error" as const)
         : ("failed" as const);
     });
     if (step === "switched_off") return { status: "stopped", prepared, failed };
+    if (step === "unrecorded") return { status: "failure_history_full", prepared, failed };
     if (step === "prepared") prepared += 1;
     if (step === "failed" || step === "provider_error") failed += 1;
     // A provider failure would repeat for every tool, so the rest wait for the next run.
