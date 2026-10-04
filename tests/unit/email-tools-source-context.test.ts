@@ -22,6 +22,7 @@ function contextItem(overrides: Record<string, unknown> = {}) {
     subject: "Hello",
     receivedAt: "2026-07-03T10:00:00.000Z",
     threadId: "thread-1",
+    sourceHref: "https://mail.google.com/mail/u/0/#all/thread-1",
     snippet: "Hi Ben",
     summary: "Alice has a quick question.",
     actionability: "needs_reply",
@@ -30,6 +31,7 @@ function contextItem(overrides: Record<string, unknown> = {}) {
     reason: "Direct question.",
     dueDate: null,
     suggestedTasks: [{ title: "Reply to Alice", dueDate: null }],
+    bulk: true,
     source: "live",
     degradedReason: null,
     cacheMessageId: "row-1",
@@ -72,6 +74,7 @@ describe("emailListVisibleMessagesExecute (source context)", () => {
       subject: "Hello",
       receivedAt: "2026-07-03T10:00:00.000Z",
       threadId: "thread-1",
+      sourceHref: "https://mail.google.com/mail/u/0/#all/thread-1",
       snippet: "Hi Ben",
       summary: "Alice has a quick question.",
       actionability: "needs_reply",
@@ -81,6 +84,7 @@ describe("emailListVisibleMessagesExecute (source context)", () => {
       dueDate: null,
       suggestedTasks: [{ title: "Reply to Alice", dueDate: null }],
       awaitingJudgement: false,
+      bulk: true,
       source: "live",
       degradedReason: null
     });

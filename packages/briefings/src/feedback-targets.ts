@@ -60,6 +60,14 @@ export function briefingSignalFeedbackItemId(
   return `${sourceKind}:${signalType}:${shortHash([sourceKind, signalType, summary])}`;
 }
 
+/** Feedback kinds that mark a catch-up entry handled: Dismiss and Add task. */
+export const CATCH_UP_HANDLED_KINDS = ["dismiss", "more_like_this"] as const;
+
+/** Feedback target ref for a catch-up digest entry; stable for the message across runs. */
+export function catchUpEntryId(emailSourceRef: string): string {
+  return `email-digest:${shortHash([emailSourceRef])}`;
+}
+
 function shortHash(parts: readonly string[]): string {
   return createHash("sha256")
     .update(parts.map((part) => part.trim().toLowerCase().replace(/\s+/g, " ")).join("|"))
