@@ -189,7 +189,7 @@ read R5 B5 G5 <<<"$(new_env)"
 SCRATCH="$SCRATCH $R5 $B5 $G5"
 cat >"$B5/docker" <<'EOF'
 #!/usr/bin/env bash
-if [ "$1" = "inspect" ] && [ "${SLOW_INSPECT:-0}" = "1" ]; then sleep 60; fi
+if [ "$1" = "run" ] && [ "${SLOW_RUN:-0}" = "1" ]; then sleep 60; fi
 exit 0
 EOF
 chmod +x "$B5/docker"
@@ -210,13 +210,14 @@ else
 fi
 [ ! -e "$GOOD5.launch-err" ] || fail "T5: healthy run left its error sidecar behind"
 sleep 2
-# A second start, killed while still checking setup: the pointer must already
-# name the new log, so the next wait reports this run (DEAD), not the green one.
-export SLOW_INSPECT=1
+# A second start, killed while still launching its throwaway server: the
+# pointer must already name the new log, so the next wait reports this run
+# (DEAD), not the green one.
+export SLOW_RUN=1
 ( cd "$R5" && setsid ./scripts/run-gate.sh start --gate fake-fast-gate >"$G5/bad.out" 2>&1 & echo $! >"$G5/spid" )
 sleep 3
 kill -KILL "$(cat "$G5/spid")" 2>/dev/null || true
-unset SLOW_INSPECT
+unset SLOW_RUN
 sleep 6
 PTR5="$(cat "$G5"/*.current 2>/dev/null || true)"
 [ -n "$PTR5" ] || fail "T5: no pointer after killed start"

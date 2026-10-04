@@ -95,8 +95,8 @@ export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
     description:
       "Whether Moss may route eligible chat messages to the classifier model instead of the main " +
       "model. Off sends nothing to the classifier. Shadow records what the gate would do without " +
-      "acting. On lets the gate act; turning it on requires an approved tool release, and every " +
-      "user's eligible messages then reach the classifier provider.",
+      "acting. On lets the gate act; turning it on requires a shadow review for the current " +
+      "classifier, and every user's eligible messages then reach the classifier provider.",
     defaultValue: "off",
     envVar: "MOSS_CHAT_CLASSIFIER_GATE_MODE",
     enumValues: ["off", "shadow", "on"],

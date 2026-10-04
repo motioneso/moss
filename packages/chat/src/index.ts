@@ -13,7 +13,7 @@ export * from "./email-write-impl.js";
 export * from "./module-build-start-impl.js";
 export * from "./jobs.js";
 export * from "./classifier-shadow-repository.js";
-export * from "./classifier-release-repository.js";
+export * from "./classifier-shadow-review-repository.js";
 export * from "./live-routes.js";
 export { DataContextChatPersistence } from "./live/persistence.js";
 export type { DataContextChatPersistenceDeps } from "./live/persistence.js";

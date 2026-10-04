@@ -7,6 +7,7 @@
 import type { ChatSource, GenerateChatInput, ChatProviderAdapter } from "../chat-adapter.js";
 import {
   modelActivityAction,
+  modelActivityStructuredCode,
   recordModelActivity,
   withModelActivityRecording,
   type ModelActivityRecorder
@@ -65,7 +66,15 @@ export class HttpApiAdapter implements ChatProviderAdapter {
   ): Promise<{ readonly text: string; readonly sources?: readonly ChatSource[] }> {
     return withModelActivityRecording(
       this.recorder(),
-      { kind: "chat", action: "chat", modelName: input.model.provider_model_id },
+      {
+        kind: "chat",
+        action: "chat",
+        modelName: input.model.provider_model_id,
+        actionCode: input.actionCode ?? "chat.answer",
+        ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
+        ...(input.turnId ? { turnId: input.turnId } : {}),
+        ...(input.parentId ? { parentId: input.parentId } : {})
+      },
       async () => {
         input.onActivity?.({ kind: "status", text: "calling api..." });
 
@@ -97,7 +106,11 @@ export class HttpApiAdapter implements ChatProviderAdapter {
       {
         kind: "structured",
         action: modelActivityAction(input.service),
-        modelName: input.model.provider_model_id
+        modelName: input.model.provider_model_id,
+        actionCode: input.actionCode ?? modelActivityStructuredCode(input.service),
+        ...(input.actorUserId ? { ownerUserId: input.actorUserId } : {}),
+        ...(input.turnId ? { turnId: input.turnId } : {}),
+        ...(input.parentId ? { parentId: input.parentId } : {})
       },
       async () => {
         const request = buildStructuredRequest(
@@ -116,7 +129,8 @@ export class HttpApiAdapter implements ChatProviderAdapter {
           throw new Error(`AI provider request failed: HTTP ${response.status}`);
         }
         return extractStructuredResult(this.providerKind, await response.json());
-      }
+      },
+      { usageOf: structuredUsageOrUndefined }
     );
   }
 
@@ -133,7 +147,15 @@ export class HttpApiAdapter implements ChatProviderAdapter {
   async transcribeAudio(input: TranscribeAudioInput): Promise<TranscribeAudioResult> {
     return withModelActivityRecording(
       this.recorder(),
-      { kind: "transcription", action: "transcription", modelName: input.model.provider_model_id },
+      {
+        kind: "transcription",
+        action: "transcription",
+        modelName: input.model.provider_model_id,
+        actionCode: "transcribe.voice_note",
+        ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
+        ...(input.turnId ? { turnId: input.turnId } : {}),
+        ...(input.parentId ? { parentId: input.parentId } : {})
+      },
       async () => {
         if (this.providerKind !== "openai-compatible") {
           throw new Error(`Transcription is not supported for provider kind: ${this.providerKind}`);
@@ -371,6 +393,19 @@ export class HttpApiAdapter implements ChatProviderAdapter {
       }
     }
   }
+}
+
+/**
+ * #2956: tokens off the settled structured result. A zero/zero report is a
+ * placeholder (the CLI path always reports it), not a measurement — omit it so
+ * the line reads unreported instead of a false zero.
+ */
+function structuredUsageOrUndefined(
+  result: StructuredProviderResult
+): { readonly inputTokens: number; readonly outputTokens: number } | undefined {
+  const usage = result.usage;
+  if (!usage || (usage.inputTokens === 0 && usage.outputTokens === 0)) return undefined;
+  return usage;
 }
 
 function normalizeSource(candidate: { url?: string; title?: string }): ChatSource | null {

@@ -6,9 +6,14 @@ import {
   createIntegrationsCipher,
   createResolverCache,
   effectiveClassifierTools,
+  emptySortMap,
   parsePreparationMap,
   parseReviewedEntry,
   toolDefinitionFingerprint,
+  toolRiskInputs,
+  toolSortFingerprint,
+  withSortResult,
+  type ClassifierSortMap,
   type ConnectionRow,
   type DiscoveredTool
 } from "@moss/integrations";
@@ -40,6 +45,17 @@ function protoTool(): DiscoveredTool {
   };
 }
 
+/** A current sort as write, so the tool reaches the menu. */
+function sortedAsWrite(tool: DiscoveredTool): ClassifierSortMap {
+  return withSortResult(emptySortMap(), tool.name, {
+    status: "current",
+    risk: "write",
+    readableName: "Set mode",
+    sortFingerprint: toolSortFingerprint(toolRiskInputs(tool)),
+    sortedAt: "2026-10-03T00:00:00.000Z"
+  })!;
+}
+
 function savedBody(fingerprint: string): unknown {
   return JSON.parse(
     `{"optIn":true,"reviewedRisk":"write","description":"Set a mode","replyTemplate":"Done.",` +
@@ -66,6 +82,8 @@ function connection(overrides: Partial<ConnectionRow>): ConnectionRow {
     unsuppressedTools: [],
     classifierEnabled: true,
     classifierPreparation: { version: 1, entries: {} },
+    classifierSort: { version: 1, entries: {} },
+    classifierKeptOutTools: [],
     discoveredTools: [],
     lastDiscoveryAt: null,
     lastError: null,
@@ -115,7 +133,9 @@ describe("an argument named __proto__", () => {
       enabledGroups: [],
       enabledTools: [],
       mutedTools: [],
-      classifierPreparation: map
+      classifierPreparation: map,
+      classifierSort: sortedAsWrite(tool),
+      classifierKeptOutTools: []
     });
     expect(tools).toHaveLength(1);
     const copied = { ...tools[0]!.arguments };
@@ -164,7 +184,11 @@ describe("an argument named __proto__", () => {
       resolverCache: createResolverCache(),
       repository: {
         listConnections: async () => [
-          connection({ discoveredTools: [tool], classifierPreparation })
+          connection({
+            discoveredTools: [tool],
+            classifierPreparation,
+            classifierSort: sortedAsWrite(tool)
+          })
         ]
       } as never
     });

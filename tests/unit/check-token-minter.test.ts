@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { SessionTokenRegistry } from "../../packages/ai/src/index.js";
 import { buildCheckTokenMinter } from "../../packages/chat/src/routes.js";
+import { buildCheckTokenMinter as buildInternalCheckTokenMinter } from "../../packages/chat/src/check-token-minter.js";
 
 describe("check token minter", () => {
+  it("preserves the routes module's minter export", () => {
+    expect(buildCheckTokenMinter).toBe(buildInternalCheckTokenMinter);
+  });
+
   it("mints a token limited to exactly the named tools", () => {
     const tokens = new SessionTokenRegistry();
     const minter = buildCheckTokenMinter(tokens, "http://mcp.test/api/mcp");

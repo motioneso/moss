@@ -80,6 +80,7 @@ import {
   type TerminalRpcHandle
 } from "@moss/ai";
 import { buildCliToolAlertRaiser, buildCliVersionTooOldHandler } from "./cli-tools-alerts.js";
+import { forwardEmbeddingActivity } from "./embedding-activity.js";
 import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
 import { createClassifierPreparationPort } from "./classifier-preparation-port.js";
 import {
@@ -143,7 +144,7 @@ import {
   buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
-  ClassifierReleaseRepository,
+  isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
@@ -328,8 +329,12 @@ import {
   GOALS_MEMORY_SYNC_RECONCILE_QUEUE
 } from "@moss/goals";
 import {
+  INTEGRATION_CLASSIFIER_PREPARE_QUEUE_DEFINITION,
+  INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION,
   integrationsModuleManifest,
   integrationsModuleSqlMigrationDirectory,
+  registerClassifierPreparationWorkers,
+  registerClassifierSortWorkers,
   registerIntegrationsRoutes,
   resolverCache
 } from "@moss/integrations";
@@ -1756,11 +1761,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         repository: new SettingsRepository(),
-        // Classifier gate activation (task 1.2, #2881): the settings boundary stays module-isolated
-        // and calls this injected port; the chat-owned reader supplies the answer.
+        // Classifier gate activation (#2984 R2.4): the settings boundary stays module-isolated
+        // and calls this injected port; the chat-owned check supplies the answer.
         classifierActivation: {
-          hasEligibleRelease: (scopedDb) =>
-            new ClassifierReleaseRepository().hasEligibleRelease(scopedDb)
+          hasShadowReviewForCurrentClassifier: (scopedDb) =>
+            isCurrentClassifierReviewed(scopedDb, {
+              classifierDeps: { repository: new AiRepository() }
+            })
         }
       });
       installWebSearchResolvers({
@@ -1933,21 +1940,37 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: integrationsModuleManifest,
     sqlMigrationDirectories: [integrationsModuleSqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: [
+      INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION,
+      INTEGRATION_CLASSIFIER_PREPARE_QUEUE_DEFINITION
+    ],
     registerRoutes: (server, deps) =>
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        // Plan 2b.3 (#2894): composition-layer model port, so the integrations package keeps no
-        // @moss/ai dependency.
-        preparationPort: createClassifierPreparationPort({
-          ...(deps.createCliStructuredAdapter
-            ? { createCliStructuredAdapter: deps.createCliStructuredAdapter }
-            : {})
-        }),
         // Master key store (#2312): per-request family key, never eager at boot.
-        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
-      })
+        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY),
+        boss: deps.boss
+      }),
+    // #2984 R2.2, R2.4: background tool sorting and preparation on the owner's default chat
+    // model. The composition-layer port keeps the integrations package free of @moss/ai.
+    registerWorkers: async (boss, deps) => {
+      const jobDeps = {
+        dataContext: deps.dataContext,
+        port: createClassifierPreparationPort({
+          createCliStructuredAdapter: createCliStructuredAdapterFactory()
+        }),
+        cipherSources: {
+          resolveKeyring: (scopedDb: DataContextDb) =>
+            loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
+        },
+        ...(deps.logger ? { logger: deps.logger } : {})
+      };
+      return [
+        ...(await registerClassifierPreparationWorkers(boss, jobDeps)),
+        ...(await registerClassifierSortWorkers(boss, { ...jobDeps, rootDb: deps.rootDb }))
+      ];
+    }
   },
   {
     manifest: webModuleManifest,
@@ -3348,16 +3371,25 @@ export function registerBuiltInApiRoutes(
   // Plan 3.6a (#2889): install the process-wide model activity recorder. Provider adapters fall
   // back to it, so every call records through one seam without editing each caller. A failed write
   // is logged and dropped; it can never slow or fail the model call.
+  // #2956: an owned entry is written inside the owner's data context so the owner-only
+  // insert check passes; an ownerless entry writes on the root handle as before.
   {
     const modelActivityRepository = new AiRepository();
-    const recorder = createDbModelActivityRecorder(
-      (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
-      server.log
-    );
+    const recorder = createDbModelActivityRecorder(async (entry) => {
+      if (entry.ownerUserId) {
+        await dependencies.dataContext.withDataContext(
+          { actorUserId: entry.ownerUserId },
+          (scopedDb) => modelActivityRepository.insertModelActivity(scopedDb.db, entry)
+        );
+      } else {
+        await modelActivityRepository.insertModelActivity(dependencies.rootDb, entry);
+      }
+    }, server.log);
     installModelActivityRecorder(recorder);
     // Plan 3.6b (#2890): embedding calls record through the same seam. Memory declares the sink
     // structurally so it need not import @moss/ai; forward its entries to the DB recorder.
-    installEmbeddingActivityRecorder((entry) => recorder(entry));
+    // #2956: the forward maps the source onto the `embed.<source>` line code.
+    installEmbeddingActivityRecorder(forwardEmbeddingActivity(recorder));
   }
 
   // #342 boot-time fork (§3.5): when JARVIS_CLI_RUNNER_SOCKET is set the api drives the cli-runner
@@ -3778,15 +3810,23 @@ export async function registerBuiltInModuleWorkers(
   dependencies: BuiltInWorkerDependencies
 ): Promise<string[]> {
   // Plan 3.6a (#2889): the worker process records its own model calls through the same seam.
+  // #2956: an owned entry is written inside the owner's data context, same as the API route.
   {
     const modelActivityRepository = new AiRepository();
-    const recorder = createDbModelActivityRecorder(
-      (entry) => modelActivityRepository.insertModelActivity(dependencies.rootDb, entry),
-      dependencies.logger
-    );
+    const recorder = createDbModelActivityRecorder(async (entry) => {
+      if (entry.ownerUserId) {
+        await dependencies.dataContext.withDataContext(
+          { actorUserId: entry.ownerUserId },
+          (scopedDb) => modelActivityRepository.insertModelActivity(scopedDb.db, entry)
+        );
+      } else {
+        await modelActivityRepository.insertModelActivity(dependencies.rootDb, entry);
+      }
+    }, dependencies.logger);
     installModelActivityRecorder(recorder);
     // Plan 3.6b (#2890): forward embedding activity to the same DB recorder.
-    installEmbeddingActivityRecorder((entry) => recorder(entry));
+    // #2956: the forward maps the source onto the `embed.<source>` line code.
+    installEmbeddingActivityRecorder(forwardEmbeddingActivity(recorder));
   }
   const workerIds = await Promise.all(
     BUILT_IN_MODULES.map(

@@ -24,7 +24,7 @@ export const MEETING_UAT_GROUPS = {
     "1112-today-masthead-oneline.uat.spec.ts"
   ],
   "model-fixtures": [
-    "2889-model-activity-log.uat.spec.ts",
+    "2956-activity-history.uat.spec.ts",
     "2911-shadow-delete.uat.spec.ts",
     "2911-shadow-purge-queue.uat.spec.ts",
     "classifier-shadow.uat.spec.ts",

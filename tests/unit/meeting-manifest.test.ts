@@ -29,6 +29,13 @@ describe("meetings composition", () => {
       "app.meeting_export_receipts",
       "app.meeting_export_requests"
     ]);
+    const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
+    expect(chat?.database?.migrations).toEqual(
+      expect.arrayContaining([
+        "sql/0276_meeting_chat_cleanup.sql",
+        "sql/0277_chat_surface_immutable.sql"
+      ])
+    );
     expect(meeting?.navigation).toEqual([
       expect.objectContaining({
         id: "meetings",

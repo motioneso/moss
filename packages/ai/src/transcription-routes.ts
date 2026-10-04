@@ -116,7 +116,9 @@ export function registerAiTranscriptionRoutes(
               // Copy Buffer's ArrayBufferLike into a Blob-compatible ArrayBuffer.
               audio: new Blob([Uint8Array.from(audio)]),
               signal: controller.signal,
-              ...(request.query.timestamps ? { timestamps: request.query.timestamps } : {})
+              ...(request.query.timestamps ? { timestamps: request.query.timestamps } : {}),
+              // #2956: the transcription line is owned by the requesting user.
+              ownerUserId: accessContext.actorUserId
             }),
             controller.signal
           );

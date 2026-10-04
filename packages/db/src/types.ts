@@ -852,6 +852,7 @@ export interface MossActionAuditLogTable {
   error_class: string | null;
   request_id: string | null;
   chat_session_id: string | null;
+  turn_id: string | null;
   source_surface: string;
   input_summary: JsonColumn | null;
   occurred_at: TimestampColumn;
@@ -871,7 +872,10 @@ export interface MossErrorLogTable {
   request_id: string | null;
 }
 
-/** Plan 3.6a (#2889): one flat row per model call. Instance-global, admin-readable, append-only. */
+/**
+ * Plan 3.6a (#2889): one flat row per model call. #2956 adds the owner columns: bare facts
+ * kept forever, quoted words in the detail table. Still append-only on the bare table.
+ */
 export interface MossModelActivityLogTable {
   id: string;
   occurred_at: TimestampColumn;
@@ -880,6 +884,40 @@ export interface MossModelActivityLogTable {
   outcome: string;
   model_name: string;
   result: string;
+  owner_user_id: string | null;
+  action_code: string | null;
+  turn_id: string | null;
+  parent_id: string | null;
+  duration_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  failure_code: string | null;
+  fact_counts: ColumnType<
+    ActivityFactCounts | null,
+    ActivityFactCounts | null,
+    ActivityFactCounts | null
+  >;
+}
+
+/** #2956: owner-owned activity lines. Bare facts kept forever; quoted words live in the detail table. */
+export type ActivityFactCounts = Record<string, number | boolean>;
+
+export interface ActivityDetailStep {
+  readonly title: string;
+  readonly result: string;
+  readonly askedFor?: string;
+  readonly returned?: string;
+}
+
+/** #2956: quoted words and step text per activity line. Owner-only, 30-day expiry. */
+export interface MossActivityDetailTable {
+  activity_id: string;
+  owner_user_id: string;
+  quote: string | null;
+  result_line: string | null;
+  steps: ColumnType<ActivityDetailStep[], ActivityDetailStep[], ActivityDetailStep[]>;
+  created_at: TimestampColumn;
+  expires_at: TimestampColumn;
 }
 
 export interface ChatThreadsTable {
@@ -927,6 +965,14 @@ export interface ChatClassifierReleaseEligibilityTable {
   classifier_config_version: string;
   approved_at: TimestampColumn;
   approved_by_user_id: string;
+}
+
+export interface ChatClassifierShadowReviewsTable {
+  id: ColumnType<string, string | undefined, string>;
+  classifier_model_id: string;
+  classifier_provider_model_id: string;
+  reviewed_at: TimestampColumn;
+  reviewed_by_user_id: string;
 }
 
 export interface ChatMessagesTable {
@@ -1880,10 +1926,12 @@ export interface MossDatabase {
   "app.moss_action_audit_log": MossActionAuditLogTable;
   "app.moss_error_log": MossErrorLogTable;
   "app.moss_model_activity_log": MossModelActivityLogTable;
+  "app.moss_activity_detail": MossActivityDetailTable;
   "app.chat_threads": ChatThreadsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;
+  "app.chat_classifier_shadow_reviews": ChatClassifierShadowReviewsTable;
   "app.chat_skills": ChatSkillsTable;
   "app.briefing_definitions": BriefingDefinitionsTable;
   "app.briefing_runs": BriefingRunsTable;
@@ -1965,6 +2013,7 @@ export type AiAssistantActionRequest = Selectable<AiAssistantActionRequestsTable
 export type MossActionAuditLog = Selectable<MossActionAuditLogTable>;
 export type MossErrorLog = Selectable<MossErrorLogTable>;
 export type MossModelActivityLog = Selectable<MossModelActivityLogTable>;
+export type MossActivityDetail = Selectable<MossActivityDetailTable>;
 export type ChatThread = Selectable<ChatThreadsTable>;
 export type ChatMessage = Selectable<ChatMessagesTable>;
 export type ChatSkill = Selectable<ChatSkillsTable>;

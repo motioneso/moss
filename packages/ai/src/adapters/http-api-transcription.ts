@@ -10,6 +10,10 @@ export interface TranscribeAudioInput {
   readonly audio: Blob;
   readonly signal?: AbortSignal;
   readonly timestamps?: "segment";
+  /** Activity attribution; never sent as provider request content. */
+  readonly ownerUserId?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
 }
 
 export interface TranscribeAudioResult {

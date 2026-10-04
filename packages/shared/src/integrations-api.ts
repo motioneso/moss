@@ -87,6 +87,32 @@ export interface SaveIntegrationClassifierToolRequest {
   readonly reviewedFingerprint: string;
 }
 
+/** A tool's sort as read against its current definition (#2984). Anything but `current` asks. */
+export type IntegrationClassifierSortStatus = "current" | "stale" | "failed" | "never_tried";
+
+/** One discovered tool's sort and whether chat asks before running it (spec 8.3, #2984). */
+export interface IntegrationClassifierToolSort {
+  readonly toolName: string;
+  readonly status: IntegrationClassifierSortStatus;
+  /** The sorted group as its risk. Set only when `status` is `current`. */
+  readonly risk: IntegrationClassifierRisk | null;
+  /** `unsafe`: the tool's text held the stored credential, so it was not sent. Set only when failed. */
+  readonly failure: "error" | "unsafe" | null;
+  /** The owner allowed this Sends things out tool to run without asking. */
+  readonly sendWithoutAsking: boolean;
+  /** Ordinary chat shows an approval card before running this tool, unless YOLO mode is on. */
+  readonly asksFirst: boolean;
+}
+
+/**
+ * Body for `PUT /api/integrations/:id/classifier/send-without-asking` (#2984). `allow: true` lets
+ * the named Sends things out tools run without asking, all or nothing; `allow: false` clears them.
+ */
+export interface SetIntegrationSendWithoutAskingRequest {
+  readonly allow: boolean;
+  readonly toolNames: readonly string[];
+}
+
 export interface IntegrationDetail extends IntegrationSummary {
   readonly credentialPlacement: CredentialPlacement | null;
   readonly tools: readonly IntegrationToolDescriptor[];
@@ -104,6 +130,8 @@ export interface IntegrationDetail extends IntegrationSummary {
   readonly classifierEnabled: boolean;
   /** Owner-reviewed classifier preparation, one entry per reviewed discovered tool. */
   readonly classifierPreparation: readonly IntegrationClassifierToolPreparation[];
+  /** One entry per discovered tool, in discovered order (#2984). */
+  readonly classifierTools: readonly IntegrationClassifierToolSort[];
 }
 
 export interface CreateIntegrationRequest {
@@ -157,15 +185,17 @@ export const INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE: IntegrationClassifie
   {
     sent:
       "Each tool's name, description, group, input schema and read-only, repeatable and " +
-      "destructive hints. Credential header parameters and default or example values are " +
-      "removed from the schema first.",
+      "destructive hints. Descriptions go out exactly as the service wrote them. Credential " +
+      "header parameters and default or example values are removed from the schema first.",
     provider:
       "Your current default chat model reads these once; if it is a hosted model, they also go " +
       "to that model's provider.",
     cost: "Preparing, and preparing again after a change, uses model usage and may cost money.",
     excluded:
-      "Transport addresses, sign-in details, secrets and raw tool results are never sent. A " +
-      "tool's own fixed choice list is part of its schema and is sent with it."
+      "Moss does not add the connection's saved address or sign-in settings to this request, " +
+      "and it does not run any tool for this step. Text the service provides, such as tool " +
+      "descriptions and choice lists, is sent as written and is not checked for secrets, " +
+      "including saved sign-in details."
   };
 
 /** Why one tool's draft could not be produced. Fixed codes; never raw provider text. */
@@ -191,10 +221,9 @@ export interface IntegrationClassifierToolDraftFailure {
 }
 
 /**
- * Reply to `POST /api/integrations/:id/classifier/prepare`. `status` is the whole-run outcome:
- * `unavailable` (no default chat model) and `unsupported_model` (the selected model cannot produce
- * a structured draft) make zero model calls and force the screen to show a setup failure — the
- * model is never silently switched. Nothing here is persisted.
+ * Reply to `POST /api/integrations/:id/classifier/prepare`, the owner's Try again (#2984 R2.4).
+ * The request queues a background run that saves each prepared tool itself, so the reply carries
+ * no drafts.
  */
 export interface PrepareIntegrationClassifierResponse {
   readonly disclosure: IntegrationClassifierPreparationDisclosure;
@@ -205,6 +234,14 @@ export interface PrepareIntegrationClassifierResponse {
   readonly failed: readonly IntegrationClassifierToolDraftFailure[];
   /** Eligible tools not drafted in this call because of the per-call bound. */
   readonly remaining: number;
+}
+
+/**
+ * Reply to `POST /api/integrations/:id/classifier/sort` (#2984 R2.2): the owner's Try again.
+ * The sort runs in the background and re-sends tools whose last sort failed.
+ */
+export interface SortIntegrationClassifierResponse {
+  readonly status: "queued";
 }
 
 /** Body for the prepare request. */

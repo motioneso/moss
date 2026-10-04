@@ -105,6 +105,12 @@ export type GenerateStructuredDeps = {
 export type GenerateStructuredInput = {
   readonly service: ModuleServiceKey;
   readonly schema: Record<string, unknown>;
+  /**
+   * #2984: the schema the reply is checked against. Defaults to `schema`, which the provider is
+   * sent. A caller that checks each item itself passes a looser one, so one malformed item does
+   * not fail the whole reply under a strict provider schema.
+   */
+  readonly replySchema?: Record<string, unknown>;
   readonly prompt: string;
   readonly tierHint?: AiModelTier;
   readonly requireExplicitBinding?: boolean;
@@ -134,6 +140,12 @@ export type GenerateStructuredInput = {
    * run on that model alone, so a latency-bound caller never waits on a second try.
    */
   readonly singleAttempt?: true;
+  /**
+   * #2956: which turn this call belongs to. Passed to the adapter for the
+   * activity line; the owner travels separately via the scoped actor.
+   */
+  readonly turnId?: string;
+  readonly parentId?: string;
 };
 
 export type GenerateStructuredExplicitModel = {
@@ -164,6 +176,8 @@ type RunOptions = {
   readonly maxAttempts: number;
   readonly signal: AbortSignal | undefined;
   readonly servedBy: StructuredServedBy;
+  /** Prepared API calls capture their activity owner before the actor transaction closes. */
+  readonly actorUserId?: string;
 };
 
 export async function generateStructured(
@@ -172,6 +186,7 @@ export async function generateStructured(
   deps: GenerateStructuredDeps
 ): Promise<GenerateStructuredResult> {
   assertBoundedStructuredSchema(input.schema);
+  if (input.replySchema) assertBoundedStructuredSchema(input.replySchema);
   assertBoundedStructuredPrompt(input.prompt);
 
   let sortingFailure: { readonly modelId: string; readonly error: SortingFailure } | null = null;
@@ -274,7 +289,12 @@ export async function prepareStructuredApiGeneration(
       }
     },
     input.explicitModel,
-    { maxAttempts: 1, signal: input.signal, servedBy: "main" }
+    {
+      maxAttempts: 1,
+      signal: input.signal,
+      servedBy: "main",
+      actorUserId: await readScopedActorUserId(scopedDb)
+    }
   );
   let consumed = false;
   return async () => {
@@ -321,7 +341,7 @@ async function prepareRunOnModel(
   }
   const providerKind = model.provider_kind as ProviderKind;
   let adapter: StructuredProviderAdapter;
-  let actorUserId: string | undefined;
+  let actorUserId = options.actorUserId;
   if (provider.auth_method === "cli") {
     // #982/#869/#981 D3: CLI credentials are sealed markers, not API keys. Route before decrypt so
     // AES-GCM can never see `{ cli: true }`; composition root supplies chat's CLI implementation.
@@ -375,7 +395,7 @@ async function runPreparedModel(
   const { adapter, providerKind, actorUserId, acpAgentId } = transport;
   const signal = options.signal;
   const ajv = new Ajv({ strict: false, validateFormats: false });
-  const validate = ajv.compile(input.schema);
+  const validate = ajv.compile(input.replySchema ?? input.schema);
   const maxOutputTokens = input.maxOutputTokens ?? STRUCTURED_DEFAULT_MAX_OUTPUT_TOKENS;
   const messages: StructuredChatTurn[] = [{ role: "user", content: input.prompt }];
   const usage = { inputTokens: 0, outputTokens: 0 };
@@ -400,7 +420,9 @@ async function runPreparedModel(
           scope: input.scope,
           closeScope: input.closeScope,
           ...(acpAgentId !== undefined ? { acpAgentId } : {}),
-          ...(actorUserId ? { actorUserId } : {})
+          ...(actorUserId ? { actorUserId } : {}),
+          ...(input.turnId ? { turnId: input.turnId } : {}),
+          ...(input.parentId ? { parentId: input.parentId } : {})
         }),
         signal
       );

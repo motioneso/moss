@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import {
   PRIORITY_LEVELS,
@@ -73,6 +73,34 @@ export function TaskDetailsDialog(props: {
   readonly onClose: () => void;
 }) {
   const isNew = props.taskId === null;
+  const headingId = useId();
+
+  // Captured during render, before the title field's autoFocus moves focus into the dialog.
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  );
+  const onCloseRef = useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+
+  const mountedRef = useRef(false);
+
+  // Escape closes the dialog; focus returns to the control that opened it. The restore waits
+  // a microtask so StrictMode's effect replay, which remounts at once, keeps focus inside.
+  useEffect(() => {
+    mountedRef.current = true;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      mountedRef.current = false;
+      document.removeEventListener("keydown", onKeyDown);
+      queueMicrotask(() => {
+        if (!mountedRef.current && opener?.isConnected) opener.focus();
+      });
+    };
+  }, [opener]);
+
   const requireTaskId = () => {
     if (!props.taskId) throw new Error("Task id required for this operation");
     return props.taskId;
@@ -113,7 +141,9 @@ export function TaskDetailsDialog(props: {
     queryFn: () => listTaskActivity(requireTaskId())
   });
   const task = taskQuery.data?.task;
-  const tagsListId = task?.listId ?? form.listId;
+
+  // An existing task's tags live in its own list, unknown until the task loads.
+  const tagsListId = isNew ? form.listId : (task?.listId ?? "");
   const listTagsQuery = useQuery({
     enabled: props.open && Boolean(tagsListId),
     queryKey: queryKeys.tasks.tags(tagsListId),
@@ -243,7 +273,7 @@ export function TaskDetailsDialog(props: {
     if (isNew) {
       setNewTags((t) => (t.includes(name) ? t : [...t, name]));
       setTagDraft("");
-    } else {
+    } else if (tagsListId) {
       assignTagMutation.mutate(name);
     }
   };
@@ -252,7 +282,7 @@ export function TaskDetailsDialog(props: {
     const name = normalizeTagName(rawName);
     if (!name) return;
     if (isNew) setNewTags((t) => (t.includes(name) ? t : [...t, name]));
-    else assignTagMutation.mutate(name);
+    else if (tagsListId) assignTagMutation.mutate(name);
   };
 
   const addExistingSubtask = () => {
@@ -263,11 +293,14 @@ export function TaskDetailsDialog(props: {
   return (
     <Dialog
       className="tk-modal"
+      aria-labelledby={headingId}
       onClose={props.onClose}
       title={
         <div className="tk-modal__head">
           <div className="tk-modal__headmain">
-            <div className="tk-modal__eyebrow">{isNew ? "New task" : "Task details"}</div>
+            <div className="tk-modal__eyebrow" id={headingId}>
+              {isNew ? "New task" : "Task details"}
+            </div>
             <input
               className="tk-modal__titlein"
               value={form.title}

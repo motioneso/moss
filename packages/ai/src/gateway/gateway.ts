@@ -9,10 +9,10 @@ import type {
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
-import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
+import type { AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
-import type { AiRepository, InsertAuditLogInput } from "../repository.js";
+import type { AiRepository } from "../repository.js";
 import {
   requestAcpBuiltInPermission as resolveAcpBuiltInPermission,
   type AcpBuiltInPermissionRequest,
@@ -21,6 +21,7 @@ import {
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { recordGatewayAudit } from "./gateway-audit.js";
 import { validateToolInput } from "./input-validation.js";
 import { liveStreamResult, renderAndCap } from "./output-validation.js";
 import {
@@ -179,13 +180,18 @@ export class AssistantToolGateway {
         found.tool.risk !== "read" &&
         !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)
       ) {
-        void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-          approvalMode: "auto",
-          outcome: "denied",
-          durationMs: null,
-          errorClass: "rate_limited",
-          chatSessionId: ctx.chatSessionId
-        });
+        void recordGatewayAudit(
+          this.deps,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          found,
+          {
+            approvalMode: "auto",
+            outcome: "denied",
+            durationMs: null,
+            errorClass: "rate_limited",
+            chatSessionId: ctx.chatSessionId
+          }
+        );
         return this.confirmAndRun(
           found,
           input,
@@ -241,13 +247,18 @@ export class AssistantToolGateway {
       if (route.kind === "yolo-run") {
         this.denyRateLimited(found, ctx, "yolo");
       } else {
-        void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-          approvalMode: "auto",
-          outcome: "denied",
-          durationMs: null,
-          errorClass: "rate_limited",
-          chatSessionId: ctx.chatSessionId
-        });
+        void recordGatewayAudit(
+          this.deps,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          found,
+          {
+            approvalMode: "auto",
+            outcome: "denied",
+            durationMs: null,
+            errorClass: "rate_limited",
+            chatSessionId: ctx.chatSessionId
+          }
+        );
       }
       return { kind: "declined", reason: "rate_limited" };
     }
@@ -353,7 +364,8 @@ export class AssistantToolGateway {
       found.tool,
       found.dto.moduleId,
       confirmOverride,
-      effectiveLookup
+      effectiveLookup,
+      await this.computeSortedSafe(found, ctx)
     )) === "run"
       ? { kind: "auto-run" }
       : { kind: "confirm" };
@@ -372,13 +384,18 @@ export class AssistantToolGateway {
       holdDurationMs: null,
       reason: "Rate limit exceeded for unattended runs of this tool."
     });
-    void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-      approvalMode,
-      outcome: "denied",
-      durationMs: null,
-      errorClass: "rate_limited",
-      chatSessionId: ctx.chatSessionId
-    });
+    void recordGatewayAudit(
+      this.deps,
+      { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+      found,
+      {
+        approvalMode,
+        outcome: "denied",
+        durationMs: null,
+        errorClass: "rate_limited",
+        chatSessionId: ctx.chatSessionId
+      }
+    );
     return {
       ok: false,
       denied: true,
@@ -406,11 +423,16 @@ export class AssistantToolGateway {
         ? { affectsQueryKeys: found.tool.affectsQueryKeys }
         : {})
     });
-    void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-      approvalMode,
-      ...audit,
-      chatSessionId: ctx.chatSessionId
-    });
+    void recordGatewayAudit(
+      this.deps,
+      { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+      found,
+      {
+        approvalMode,
+        ...audit,
+        chatSessionId: ctx.chatSessionId
+      }
+    );
   }
 
   async requestNativeToolPermission(
@@ -705,6 +727,25 @@ export class AssistantToolGateway {
     }
   }
 
+  /**
+   * Resolves a connected tool's `runsWithoutAsking` check (#2984, spec 8.3) under the actor's own
+   * data context. Only an external write or outbound tool is asked; reads already run and
+   * destructive tools always ask. Fails closed: a throw or anything but `true` means the tool asks.
+   */
+  private async computeSortedSafe(found: ExecutableTool, ctx: ToolContext): Promise<boolean> {
+    const { risk, isExternal, runsWithoutAsking: hook } = found.tool;
+    if (!hook || isExternal !== true || risk === "read" || risk === "destructive") return false;
+    const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    try {
+      const safe = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+        Promise.resolve(hook(scopedDb, ctx))
+      );
+      return safe === true;
+    } catch {
+      return false;
+    }
+  }
+
   private runHandler(
     found: ExecutableTool,
     input: Record<string, unknown>,
@@ -748,6 +789,9 @@ export class AssistantToolGateway {
     notice?: string
   ): Promise<GatewayToolResponse> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    // #2956: the approval hold below can outlive the turn, so the turn is
+    // captured at arrival and handed to each audit write explicitly.
+    const arrivalTurnId = this.deps.tokens.readCurrentTurnId(ctx.chatSessionId);
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.createPendingAssistantAction(scopedDb, {
@@ -800,7 +844,7 @@ export class AssistantToolGateway {
     // awaits before responding — must fire once this call has fully finished handling the
     // outcome (both branches below), on every exit path, so the caller never observes
     // "confirmed" before the handler run below has actually happened. Deliberately outside the
-    // fire-and-forget `recordAudit` calls (`void this.recordAudit(...)`) — those stay
+    // fire-and-forget `recordGatewayAudit` calls (`void recordGatewayAudit(...)`) — those stay
     // unawaited on purpose and must not reopen the same kind of delay on the audit write.
     try {
       if (outcome !== "confirmed") {
@@ -820,11 +864,12 @@ export class AssistantToolGateway {
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
-        void this.recordAudit(access, found, {
+        void recordGatewayAudit(this.deps, access, found, {
           approvalMode,
           outcome: outcome === "cancelled" ? "cancelled" : "denied",
           durationMs: null,
-          chatSessionId: ctx.chatSessionId
+          chatSessionId: ctx.chatSessionId,
+          ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
         });
         const reason = APPROVAL_REFUSED_REASON;
         return { ok: false, denied: true, reason };
@@ -844,10 +889,11 @@ export class AssistantToolGateway {
           ? { affectsQueryKeys: found.tool.affectsQueryKeys }
           : {})
       });
-      void this.recordAudit(access, found, {
+      void recordGatewayAudit(this.deps, access, found, {
         approvalMode: "confirmed",
         ...audit,
-        chatSessionId: ctx.chatSessionId
+        chatSessionId: ctx.chatSessionId,
+        ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
       });
       return result;
     } finally {
@@ -909,77 +955,5 @@ export class AssistantToolGateway {
       }
     }
     return out;
-  }
-
-  private async recordAuditRaw(
-    access: AccessContext,
-    fields: {
-      toolModuleId: string;
-      toolName: string;
-      actionFamilyId: string | null;
-      actionKind: "write" | "outbound" | "destructive";
-    },
-    opts: {
-      approvalMode: InsertAuditLogInput["approvalMode"];
-      outcome: InsertAuditLogInput["outcome"];
-      durationMs: number | null;
-      errorClass?: string | null;
-      chatSessionId?: string;
-      inputSummary?: ActionAuditInputSummary | null;
-    }
-  ): Promise<void> {
-    try {
-      await this.deps.runner.withDataContext(access, (scopedDb) =>
-        this.deps.repository.insertActionAuditLog(scopedDb, {
-          id: randomUUID(),
-          ownerUserId: access.actorUserId,
-          toolModuleId: fields.toolModuleId,
-          toolName: fields.toolName,
-          actionFamilyId: fields.actionFamilyId,
-          actionKind: fields.actionKind,
-          approvalMode: opts.approvalMode,
-          outcome: opts.outcome,
-          errorClass: opts.errorClass ?? null,
-          requestId: access.requestId ?? null,
-          chatSessionId: opts.chatSessionId ?? null,
-          sourceSurface: "chat",
-          inputSummary: opts.inputSummary ?? null,
-          durationMs: opts.durationMs
-        })
-      );
-    } catch {
-      console.error(
-        JSON.stringify({
-          event: "audit_log_write_failed",
-          toolName: fields.toolName,
-          toolModuleId: fields.toolModuleId,
-          approvalMode: opts.approvalMode,
-          outcome: opts.outcome
-        })
-      );
-    }
-  }
-
-  private async recordAudit(
-    access: AccessContext,
-    found: ExecutableTool,
-    opts: {
-      approvalMode: InsertAuditLogInput["approvalMode"];
-      outcome: InsertAuditLogInput["outcome"];
-      durationMs: number | null;
-      errorClass?: string | null;
-      chatSessionId?: string;
-    }
-  ): Promise<void> {
-    return this.recordAuditRaw(
-      access,
-      {
-        toolModuleId: found.dto.moduleId,
-        toolName: found.dto.name,
-        actionFamilyId: found.tool.actionFamilyId ?? null,
-        actionKind: found.tool.risk as "write" | "outbound" | "destructive"
-      },
-      opts
-    );
   }
 }

@@ -10,7 +10,6 @@ import type { DataContextDb, DataContextRunner } from "@moss/db";
 import type { MossModuleManifest, ToolContext } from "@moss/module-sdk";
 import { MODULE_WORKER_SERVICE_KEY } from "@moss/shared";
 
-import type { ClassifierReleaseEligibilityRepository } from "../classifier-release-repository.js";
 import type { ClassifierGatePorts, GateTool } from "./classifier-gate.js";
 
 /**
@@ -44,7 +43,6 @@ export interface ClassifierGatePortsFactoryDeps {
   readonly dataContext: DataContextRunner;
   readonly gateway: Pick<AssistantToolGateway, "callToolForGate">;
   readonly classifierDeps: ClassifierDeps;
-  readonly releaseRepository: ClassifierReleaseEligibilityRepository;
   /** The human-readable area label shown to the classifier; defaults to the manifest name. */
   readonly moduleDescription?: (manifest: MossModuleManifest) => string;
   readonly now?: () => number;
@@ -57,6 +55,15 @@ function isClassifierCapable(tool: ClassifierCapableTool): boolean {
   return typeof tool.execute === "function" && tool.classifier !== undefined;
 }
 
+/**
+ * A connected tool's sorted group sets its confidence bar (spec 8.3). Only an external tool's
+ * declaration is read, and never to `read`, so a tool the gate may act on keeps mutating handling.
+ */
+function gateRisk(tool: ClassifierCapableTool): GateTool["risk"] {
+  const sorted = tool.classifier?.sortedRisk;
+  return tool.isExternal === true && sorted !== undefined && sorted !== "read" ? sorted : tool.risk;
+}
+
 function asGateTool(
   manifest: MossModuleManifest,
   tool: ClassifierCapableTool,
@@ -66,7 +73,7 @@ function asGateTool(
     moduleId: manifest.id,
     moduleDescription: description,
     name: tool.name,
-    risk: tool.risk,
+    risk: gateRisk(tool),
     inputSchema: tool.inputSchema,
     outputSchema: tool.outputSchema,
     classifier: tool.classifier
@@ -83,7 +90,7 @@ export function createClassifierGatePortsFactory(
     /** The manifest tool behind each offered name, so `loadCandidates` can reach its hook. */
     const byName = new Map<string, ClassifierCapableTool>();
     /** Populated by `listTools`; the engine consults `isReleased` only after listing. */
-    const releasedIds = new Set<string>();
+    const listedIds = new Set<string>();
     let requestCounter = 0;
     const nextRequestId = () => `classifier_gate_${actorUserId}_${(requestCounter += 1)}`;
     const scoped = <T>(work: (db: DataContextDb) => Promise<T>) =>
@@ -102,7 +109,20 @@ export function createClassifierGatePortsFactory(
                 service: MODULE_WORKER_SERVICE_KEY,
                 state: input.state,
                 question: input.question,
-                signal: input.signal
+                signal: input.signal,
+                // #2956: the owner is this attempt's actor; the turn rides in.
+                ...(input.activity
+                  ? {
+                      activity: {
+                        ownerUserId: actorUserId,
+                        ...(input.activity.actionCode
+                          ? { actionCode: input.activity.actionCode }
+                          : {}),
+                        ...(input.activity.turnId ? { turnId: input.activity.turnId } : {}),
+                        ...(input.activity.parentId ? { parentId: input.activity.parentId } : {})
+                      }
+                    }
+                  : {})
               },
               classifierDeps
             )
@@ -117,7 +137,20 @@ export function createClassifierGatePortsFactory(
                 instructions: input.instructions,
                 state: input.state,
                 schema: input.schema,
-                signal: input.signal
+                signal: input.signal,
+                // #2956: the owner is this attempt's actor; the turn rides in.
+                ...(input.activity
+                  ? {
+                      activity: {
+                        ownerUserId: actorUserId,
+                        ...(input.activity.actionCode
+                          ? { actionCode: input.activity.actionCode }
+                          : {}),
+                        ...(input.activity.turnId ? { turnId: input.activity.turnId } : {}),
+                        ...(input.activity.parentId ? { parentId: input.activity.parentId } : {})
+                      }
+                    }
+                  : {})
               },
               classifierDeps
             )
@@ -125,18 +158,18 @@ export function createClassifierGatePortsFactory(
       },
       listTools: async () => {
         byName.clear();
-        releasedIds.clear();
+        listedIds.clear();
         const manifests = await deps.resolveActiveModules(actorUserId);
         const tools: GateTool[] = [];
         for (const manifest of manifests) {
           for (const tool of manifest.assistantTools ?? []) {
             if (!isClassifierCapable(tool)) continue;
             byName.set(tool.name, tool);
-            tools.push(asGateTool(manifest, tool, describe(manifest)));
+            const gateTool = asGateTool(manifest, tool, describe(manifest));
+            listedIds.add(`${gateTool.moduleId}.${gateTool.name}`);
+            tools.push(gateTool);
           }
         }
-        const releases = await scoped((db) => deps.releaseRepository.listEligibleReleases(db));
-        for (const release of releases) releasedIds.add(`${release.moduleId}.${release.toolName}`);
         return tools;
       },
       loadCandidates: async (tool, signal) => {
@@ -152,9 +185,10 @@ export function createClassifierGatePortsFactory(
         };
         return scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
       },
-      // Synchronous by contract; `listTools` preloaded the approved releases beforehand. No release
-      // writer exists yet (task 4.2), so today this is always empty and `on` stays unreachable.
-      isReleased: (tool) => releasedIds.has(`${tool.moduleId}.${tool.name}`),
+      // Synchronous by contract. A tool is released when this attempt listed it: a module tool by
+      // its author's classifier declaration, a connected tool by the declaration its synthetic
+      // manifest carries only while the tool is eligible (spec 8.5).
+      isReleased: (tool) => listedIds.has(`${tool.moduleId}.${tool.name}`),
       gateway: {
         call: (toolName: string, input: Record<string, unknown>, mode: "execute" | "dry-run") =>
           deps.gateway.callToolForGate(token, toolName, input, mode)

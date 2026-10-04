@@ -29,6 +29,36 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-04
+
+#### Fixed
+
+- **Clearer notice about what is shared when preparing tools.** The notice shown before preparing a connection's tools now says plainly that text from the service, such as tool descriptions, is sent as written and is not checked for secrets. [PR #2996](https://github.com/motioneso/moss/pull/2996)
+
+### 2026-10-03
+
+#### Changed
+
+- **A refreshed Tasks page.** Tasks now pairs a park-inspired layout with a visible list index, keeping quick capture and both task views close at hand. [PR #2972](https://github.com/motioneso/moss/pull/2972)
+- **Small text on Today is easier to read.** The smallest labels and notes on the Today screen are a little larger, and the layout looks the same. [PR #2948](https://github.com/motioneso/moss/pull/2948)
+- **Cleaner docked chat panel.** The chat panel beside your page now sits flush against the edge with a single divider, and the message box has one outline instead of two. [PR #2958](https://github.com/motioneso/moss/pull/2958)
+- **Simpler tool switches.** Each tool in a connection now has a single on/off switch, and Moss no longer refuses to repeat the same request to a connected tool. [PR #2953](https://github.com/motioneso/moss/pull/2953)
+
+#### Fixed
+
+- **Tool group switches.** Turning a group of tools on or off in a connection now switches every tool in that group, and the group switch shows the right state. [PR #2992](https://github.com/motioneso/moss/pull/2992)
+- **Account menu is easier to reach on phones.** The account area in the navigation now shows just your name and picture, and its menu is fully visible on a phone without scrolling. [PR #2988](https://github.com/motioneso/moss/pull/2988)
+- **Readable model name in chat.** The model button above the chat box now shows the model's readable name instead of a long technical code. [PR #2980](https://github.com/motioneso/moss/pull/2980)
+- **Trail Marker focus checks now expire after 30 days.** Trail Marker's focus checks are now deleted after 30 days as promised, and they are included in your data export and removed when your account is deleted. [PR #2977](https://github.com/motioneso/moss/pull/2977)
+- **Starting a new chat stops the current reply.** Starting a new chat now stops the reply that was still being written, so it can no longer leak into the new chat. [PR #2963](https://github.com/motioneso/moss/pull/2963)
+- **Refreshing your nudges on Today works again.** Refreshing the "On your radar" nudges on Today no longer fails with an error. [PR #2967](https://github.com/motioneso/moss/pull/2967)
+- **Chat box no longer disappears while typing.** If no chat model is connected, the message box stays put while you type instead of vanishing, and your draft is never lost when the connection status loads. [PR #2965](https://github.com/motioneso/moss/pull/2965)
+
+#### Added
+
+- **Expand button for chat.** You can now expand the chat to fill the whole screen beside the menu, and History and private chat are in a new More menu. [PR #2961](https://github.com/motioneso/moss/pull/2961)
+- **Temporary classifier shadow report.** Admins can open a temporary Shadow report from the Classifier row while the gate runs in Shadow, showing how often the classifier agreed with the main chat model over the last 7, 30 or 90 days. [PR #2964](https://github.com/motioneso/moss/pull/2964)
+
 ### 2026-10-02
 
 #### Fixed

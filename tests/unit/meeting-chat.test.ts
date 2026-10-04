@@ -18,7 +18,10 @@ import {
   type MeetingChatGeneration,
   type MeetingChatServiceDeps
 } from "../../packages/chat/src/live/meeting-chat-service.js";
-import { registerMeetingChatBoundary } from "../../packages/chat/src/meeting-chat-boundary.js";
+import {
+  isMeetingEvidenceAvailable,
+  registerMeetingChatBoundary
+} from "../../packages/chat/src/meeting-chat-boundary.js";
 import { retrieveMeetingTranscript } from "../../packages/meetings/src/transcript-retrieval.js";
 
 const meetingId = "12345678-1234-4234-9234-123456789abc";
@@ -259,6 +262,45 @@ describe("meeting chat identity and evidence", () => {
     expect(h.source.evidence.mock.calls[0]?.[1]).toMatchObject({ segmentRevision: 1 });
     h.setAvailable(false);
     expect(await h.context.dereference(access, old, "S1")).toEqual({ available: false });
+  });
+});
+
+describe("meeting provenance availability", () => {
+  it("leaves non-meeting answers available without querying a meeting source", async () => {
+    const h = harness();
+    expect(await isMeetingEvidenceAvailable(undefined, access, null)).toBe(true);
+    expect(await isMeetingEvidenceAvailable(h, access, null)).toBe(true);
+    expect(h.source.isAvailable).not.toHaveBeenCalled();
+  });
+
+  it("withholds meeting evidence when its runtime is unavailable", async () => {
+    const h = harness();
+    const binding = await h.context.bind(access, selection, "Friday");
+    expect(await isMeetingEvidenceAvailable(undefined, access, binding)).toBe(false);
+  });
+
+  it("checks current access for the bound meeting on every request", async () => {
+    const h = harness();
+    const binding = await h.context.bind(access, selection, "Friday");
+    h.source.isAvailable.mockClear();
+    expect(await isMeetingEvidenceAvailable(h, access, binding)).toBe(true);
+    const otherAccess = { actorUserId: "other", requestId: "other-request" };
+    expect(await isMeetingEvidenceAvailable(h, otherAccess, binding)).toBe(false);
+    h.setAvailable(false);
+    expect(await isMeetingEvidenceAvailable(h, access, binding)).toBe(false);
+    expect(h.source.isAvailable.mock.calls).toEqual([
+      [access, meetingId],
+      [otherAccess, meetingId],
+      [access, meetingId]
+    ]);
+  });
+
+  it("propagates source-check failures to the route's existing error handler", async () => {
+    const h = harness();
+    const binding = await h.context.bind(access, selection, "Friday");
+    const error = new Error("Source unavailable");
+    h.source.isAvailable.mockRejectedValueOnce(error);
+    await expect(isMeetingEvidenceAvailable(h, access, binding)).rejects.toBe(error);
   });
 });
 

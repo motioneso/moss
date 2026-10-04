@@ -72,8 +72,15 @@ describe("web route metadata", () => {
     expect(resolvePageHeading("/today", new Date("2026-06-14T16:42:00Z")).title).toBe("Today");
     expect(resolvePageHeading("/settings", new Date("2026-06-14T16:42:00Z"))).toMatchObject({
       title: "Settings",
-      subtitle: ""
+      subtitle: "SUN · JUN 14"
     });
+  });
+
+  it("gives every page the same date line under its title", () => {
+    const now = new Date("2026-06-14T16:42:00Z");
+    for (const route of webRoutes) {
+      expect(resolvePageHeading(route.path, now).subtitle, route.path).toBe("SUN · JUN 14");
+    }
   });
 
   it("uses a runtime external module label for its embedded route heading", () => {
@@ -81,7 +88,7 @@ describe("web route metadata", () => {
       resolvePageHeading("/m/demo-module/onboarding", new Date("2026-06-14T16:42:00Z"), undefined, [
         moduleWithNav("demo-module", "Demo Module", "/m/demo-module", "briefcase", 0, true)
       ])
-    ).toEqual({ title: "Demo Module", subtitle: "" });
+    ).toEqual({ title: "Demo Module", subtitle: "SUN · JUN 14" });
   });
 
   it("defines concrete app routes without synthetic shell-only entries", () => {

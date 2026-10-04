@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TaskDto, TaskListDto } from "@moss/shared";
 import {
   deriveTaskFilters,
+  primaryListSelection,
   groupTasksByQuadrant,
   type ListState
 } from "../../apps/web/src/tasks/task-view-model.js";
@@ -130,6 +131,38 @@ describe("task view model", () => {
   });
 });
 
+describe("matrix quadrant rules under a controlled clock", () => {
+  const NOW = new Date("2026-06-14T12:00:00.000Z");
+  const hoursFromNow = (hours: number) => new Date(NOW.getTime() + hours * 3_600_000).toISOString();
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("treats priority 4+ as important and due within 48 hours, or overdue, as urgent", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+
+    const grouped = groupTasksByQuadrant([
+      task("p4-inside", { priority: 4, dueAt: hoursFromNow(24) }),
+      task("p5-at-edge", { priority: 5, dueAt: hoursFromNow(48) }),
+      task("p4-outside", { priority: 4, dueAt: hoursFromNow(49) }),
+      task("p4-undated", { priority: 4 }),
+      task("p3-overdue", { priority: 3, dueAt: hoursFromNow(-30) }),
+      task("p3-inside", { priority: 3, dueAt: hoursFromNow(1) }),
+      task("p3-outside", { priority: 3, dueAt: hoursFromNow(72) }),
+      task("p3-undated", { priority: 3 }),
+      task("p5-overdue", { priority: 5, dueAt: hoursFromNow(-2) })
+    ]);
+
+    const ids = (key: keyof typeof grouped) => grouped[key].map((item) => item.id).sort();
+    expect(ids("do")).toEqual(["p4-inside", "p5-at-edge", "p5-overdue"]);
+    expect(ids("schedule")).toEqual(["p4-outside", "p4-undated"]);
+    expect(ids("delegate")).toEqual(["p3-inside", "p3-overdue"]);
+    expect(ids("eliminate")).toEqual(["p3-outside", "p3-undated"]);
+  });
+});
+
 function baseIntent(
   overrides: Partial<NonNullable<Parameters<typeof deriveTaskFilters>[0]["searchIntent"]>>
 ): NonNullable<Parameters<typeof deriveTaskFilters>[0]["searchIntent"]> {
@@ -192,3 +225,20 @@ function task(
     suggestionMetadata: null
   };
 }
+
+describe("primary list selection", () => {
+  it("reads an untouched or fully included state as all lists", () => {
+    expect(primaryListSelection({})).toEqual({ kind: "all" });
+    expect(primaryListSelection({ a: "included" })).toEqual({ kind: "all" });
+  });
+
+  it("reads a single solo list as that one list", () => {
+    expect(primaryListSelection({ a: "solo", b: "included" })).toEqual({ kind: "one", id: "a" });
+  });
+
+  it("reports hidden lists and several solo lists as custom", () => {
+    expect(primaryListSelection({ a: "excluded" })).toEqual({ kind: "custom" });
+    expect(primaryListSelection({ a: "solo", b: "solo" })).toEqual({ kind: "custom" });
+    expect(primaryListSelection({ a: "solo", b: "excluded" })).toEqual({ kind: "custom" });
+  });
+});

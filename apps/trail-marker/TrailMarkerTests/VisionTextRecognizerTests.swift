@@ -39,5 +39,12 @@ final class VisionTextRecognizerTests: XCTestCase {
         let hits = expected.filter { got.contains($0) }.count
         XCTAssertGreaterThanOrEqual(Double(hits) / Double(expected.count), 0.9, "recognised: \(recognised)")
     }
+
+    /// Plan §7, retry 2, task 1: language correction roughly doubles the cost of a pass.
+    func testRequestIsAccurateWithoutLanguageCorrection() {
+        let request = VisionTextRecognizer.makeRequest { _ in }
+        XCTAssertEqual(request.recognitionLevel, .accurate)
+        XCTAssertFalse(request.usesLanguageCorrection)
+    }
 }
 #endif

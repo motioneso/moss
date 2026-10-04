@@ -94,3 +94,32 @@ describe("embedding model activity recording (plan 3.6b, #2890)", () => {
     }
   });
 });
+
+describe("embedding activity source and owner (#2956 slice B)", () => {
+  it("carries the wrap site's source and owner on every row", async () => {
+    const entries: EmbeddingActivityEntry[] = [];
+    const provider = withEmbeddingActivity(fakeProvider(), (entry) => entries.push(entry), {
+      source: "notes",
+      ownerUserId: "user-1"
+    });
+
+    await provider.embedDocument("chunk one");
+    await provider.embedQuery("a query");
+
+    expect(entries).toHaveLength(2);
+    for (const entry of entries) {
+      expect(entry).toMatchObject({ source: "notes", ownerUserId: "user-1" });
+    }
+  });
+
+  it("leaves source and owner off when the wrap site names none", async () => {
+    const entries: EmbeddingActivityEntry[] = [];
+    const provider = withEmbeddingActivity(fakeProvider(), (entry) => entries.push(entry));
+
+    await provider.embedDocument("chunk one");
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).not.toHaveProperty("source");
+    expect(entries[0]).not.toHaveProperty("ownerUserId");
+  });
+});

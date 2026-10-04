@@ -61,6 +61,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## checklist
+
+_No enum or boolean props._
+
 ## chip
 
 - **toggle** (optional boolean flag)
@@ -139,6 +143,10 @@ _No enum or boolean props._
 
 - **block** (optional boolean flag)
 
+## nav-index
+
+- **selected** (optional boolean flag)
+
 ## note
 
 - **variant** (required): `plan`, `pull`, `practical`
@@ -174,7 +182,7 @@ _No enum or boolean props._
 
 ## segmented
 
-_No enum or boolean props._
+- **tone** (optional): `default`, `field`
 
 ## select
 

@@ -177,9 +177,10 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
   for (const group of ["Access", "AI & extensions", "Operations"]) {
     await expect(nav.getByText(group, { exact: true })).toBeVisible();
   }
-  await expect(nav.getByRole("button")).toHaveCount(8);
+  await expect(nav.getByRole("button")).toHaveCount(7);
   await expect(nav.getByRole("button", { name: "Encryption keys" })).toBeVisible();
-  await expect(nav.getByRole("button", { name: "Model activity" })).toBeVisible();
+  // #2956 slice D retired the admin Model activity page; Activity covers it.
+  await expect(nav.getByRole("button", { name: "Model activity" })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "Identity & registration" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible();
   for (const section of ["Registration", "Pending approval", "Members"]) {

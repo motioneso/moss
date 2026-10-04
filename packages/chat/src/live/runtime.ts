@@ -67,7 +67,7 @@ export type {
 import { ChatSessionManager } from "./chat-session-manager.js";
 import { createRealPersonaFs } from "./persona.js";
 import { DataContextChatPersistence } from "./persistence.js";
-import { withTurnActivityRecording } from "./turn-activity-engine.js";
+
 import type { CliChatEngine, EngineKillOpts } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import { ChatRepository } from "../repository.js";
@@ -500,6 +500,13 @@ export interface CreateChatSessionRuntimeDeps {
     /** Refresh a session token's TTL on activity (defaults to no-op if omitted). */
     readonly touch?: (chatSessionId: string) => void;
     /**
+     * #2956: file a session's tool rows under its running turn. Wraps the
+     * token registry's turn map; the manager sets it per turn and clears it
+     * in the turn's finally. Absent ⇒ tool rows carry no turn id.
+     */
+    readonly setCurrentTurn?: (chatSessionId: string, turnId: string) => void;
+    readonly clearCurrentTurn?: (chatSessionId: string) => void;
+    /**
      * #342 (§5.3 step 2) — revoke every token whose chatSessionId ∉ the live set. Wraps
      * `SessionTokenRegistry.reconcile`. Forwarded to the manager as `reconcileMcpTokens`. Absent ⇒
      * reconciliation skips the token sweep (the in-process/host path mints no tokens).
@@ -688,20 +695,15 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   // NOT re-submit. The in-process path keeps draining itself (serverOwnsDrain = false).
   const serverOwnsDrain = connection !== undefined;
 
-  // Plan 3.6b (#2890): wrap each session engine so one model activity row is recorded per live
-  // chat turn, CLI or otherwise. This is the composition seam — the manager is unchanged.
-  const recordingEngineFactory: ChatEngineFactory = (provider, sessionKey, options) => {
-    const engine = engineFactory(provider, sessionKey, options);
-    if (engine && typeof (engine as Promise<CliChatEngine>).then === "function") {
-      return (engine as Promise<CliChatEngine>).then((resolved) =>
-        withTurnActivityRecording(resolved)
-      );
-    }
-    return withTurnActivityRecording(engine as CliChatEngine);
-  };
+  // #2956 (slice B): session engines run unwrapped. The manager writes the
+  // turn's one owned answer line itself (with the turn-start id, duration,
+  // tokens and tool counts a wrapper never sees), so a wrapper row would
+  // double-log every turn. Probes and check turns still record themselves.
+  const managerEngineFactory: ChatEngineFactory = (provider, sessionKey, options) =>
+    engineFactory(provider, sessionKey, options);
 
   manager = new ChatSessionManager({
-    engineFactory: recordingEngineFactory,
+    engineFactory: managerEngineFactory,
     persistence,
     personaFs: createRealPersonaFs(),
     clock: { now: () => Date.now() },
@@ -712,6 +714,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     mintMcpToken: deps.mcpTokenLifecycle?.mint,
     revokeMcpToken: deps.mcpTokenLifecycle?.revoke,
     touchMcpToken: deps.mcpTokenLifecycle?.touch,
+    setCurrentTurnId: deps.mcpTokenLifecycle?.setCurrentTurn,
+    clearCurrentTurnId: deps.mcpTokenLifecycle?.clearCurrentTurn,
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,
     waitForToolsListReady: deps.mcpTokenLifecycle?.waitForReady,

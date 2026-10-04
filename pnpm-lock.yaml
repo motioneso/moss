@@ -752,6 +752,9 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../db
+      '@moss/jobs':
+        specifier: workspace:*
+        version: link:../jobs
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
@@ -764,6 +767,9 @@ importers:
       kysely:
         specifier: ^0.29.2
         version: 0.29.2
+      pg-boss:
+        specifier: ^12.18.2
+        version: 12.18.2
 
   packages/jobs:
     dependencies:

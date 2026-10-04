@@ -5,6 +5,7 @@ import {
   type AiProviderWithSealedCredential,
   type GenerateTextInput
 } from "@moss/ai";
+import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
 
 const db = {} as DataContextDb;
 const input: GenerateTextInput = {
@@ -44,6 +45,18 @@ afterEach(() => {
 });
 
 describe("prepared tool-free API text generation", () => {
+  it("preserves the meeting chat activity label without sending activity metadata to the provider", async () => {
+    const h = setup();
+    const generate = vi.spyOn(HttpApiAdapter.prototype, "generateChat");
+    const run = await prepareTextApiGeneration(db, { ...input, actionCode: "chat.answer" }, h.deps);
+    expect(generate).not.toHaveBeenCalled();
+    expect(await run()).toEqual({ ok: true, text: "Answer" });
+    expect(generate.mock.calls[0]?.[0]).toMatchObject({ actionCode: "chat.answer" });
+    const body = JSON.parse(String(h.fetch.mock.calls[0]?.[1]?.body));
+    expect(body).not.toHaveProperty("actionCode");
+    expect(body).not.toHaveProperty("ownerUserId");
+  });
+
   it("prepares in a short actor context and makes only one attempt after that context closes", async () => {
     const h = setup();
     let active = true;

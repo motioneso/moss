@@ -4,6 +4,9 @@ Approved design: [meeting companion](../specs/2026-10-03-meeting-companion.md).
 Task: https://github.com/motioneso/moss/issues/2981 (part of #216).
 Baseline: `12ff22bf0af2125f75eaf3b2b48363d95311fd1b`.
 
+Current migration numbering: see the [package migration note](../../../packages/meetings/README.md#migration-numbering).
+The numbered checkpoint descriptions below retain their historical evidence.
+
 ## Verified seams and decisions
 
 - Shared wire contracts are exported from `packages/shared/src/index.ts:20–27`;
@@ -109,7 +112,7 @@ Expected exit code is 0 for each applicable command; keep exit codes unpiped:
 - `pnpm exec prettier --check <changed files>`
 - `pnpm exec tsc --noEmit`
 - `pnpm verify:static`
-- DB gates require a disposable Postgres server per run under issue #2989. Current local wrapper commands are withheld until that implementation lands; never use a separate database on the shared dev server.
+- DB gates require the current `scripts/run-gate.sh` per-run Postgres server wrapper; read `verify-gate` first. Never run DB commands directly or use a persistent/shared development server.
 - Required CI on the exact published commit; real UI UAT and actual native OS proof remain
   independent gates. No merge/deployment is authorized.
 
@@ -156,7 +159,7 @@ DB-touching command. Use the project-pinned pnpm version and its frozen lockfile
 
 - Branch: `feat/2981-meeting-companion`
 - Focused tests: `pnpm test:unit tests/unit/meeting-api-schema.test.ts tests/unit/meeting-lifecycle.test.ts tests/unit/meeting-transcript.test.ts tests/unit/meeting-record-routes.test.ts`
-- Local full gate is withheld pending the per-server isolation implementation in #2989. Follow the updated supported wrapper after it lands; current GitHub-hosted CI runs on disposable job-isolated servers.
+- Use the current supported per-server wrapper after reading `verify-gate`; required CI runs on disposable job-isolated servers. Historical gate failures above do not describe the merged wrapper.
 - Integration suite `tests/integration/meeting-records.test.ts` is included in the normal
   integration gate through registry migration discovery.
 - Do not run migrations/tests against a shared/live database by hand. No native capture or

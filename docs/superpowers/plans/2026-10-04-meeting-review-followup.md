@@ -30,12 +30,12 @@ Review source: [PR #2982 comment #5976578877](https://github.com/motioneso/moss/
 
 ## Preserved decisions and remaining proof
 
-- Applied migrations 0263/0264 stay append-only; no squash or hash change.
+- Earlier “applied migrations 0263/0264” wording referred to disposable CI runs. The unmerged sequence is now 0273–0280, with cleanup/immutability at 0276/0277; their SQL bytes are unchanged. Applied main migrations remain untouched. See the [migration note](../../../packages/meetings/README.md#migration-numbering); historical checks do not verify this new numbering.
 - Private vault write/index receipt orchestration currently serializes filesystem work with the meeting receipt lock. This remains a bounded create-only export design, not an exactly-once filesystem claim or an Indexed result.
 - History's artifact budget does not claim to bound all candidate data; the separate candidate count/storage bounds remain. Exact older versions remain accessible by owner-scoped version reads.
 - History navigation/filtering, typography, switch/radio labels, step numbering, mobile/desktop layout and dark-theme readability require current UI assertions; source checks alone are insufficient visual proof.
 - Live provider compatibility, native macOS/Windows capture, permissions, Teams/Zoom behavior and validated speaker separation remain unverified. No real credentials or workplace audio are used in these checks.
-- DB checks run only in disposable job-isolated CI servers. Local DB gates remain withheld until the supported per-server wrapper for #2989 lands.
+- DB checks require disposable servers. The merged `scripts/run-gate.sh` now supplies a per-run server; follow `verify-gate`, never direct DB commands. This source-only review did not run a local DB gate; new exact-commit CI and UI proof remain required.
 - Exported independent copies and accepted Tasks intentionally survive meeting deletion. No destructive retention change is introduced by this review.
 
 Do not mark the PR merge-ready on the basis of this document. Record exact final commit, full CI, real UI results and any remaining findings in the PR after verification.

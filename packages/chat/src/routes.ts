@@ -82,7 +82,8 @@ import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import {
   registerMeetingChatBoundary,
-  dereferenceMeetingCitation
+  dereferenceMeetingCitation,
+  isMeetingEvidenceAvailable
 } from "./meeting-chat-boundary.js";
 import {
   createMeetingChatRuntime,
@@ -107,8 +108,11 @@ import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
 import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
-import { ClassifierReleaseRepository } from "./classifier-release-repository.js";
+import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
+import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
+
+export { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
 
 export {
   buildChatGatewayDependencies,
@@ -117,39 +121,6 @@ export {
 } from "./gateway-services.js";
 
 const STALE_ACTION_GRACE_MS = 5 * 60_000;
-
-export interface CheckTokenMinter {
-  readonly mint: (
-    actorUserId: string,
-    chatSessionId: string,
-    toolNames: readonly string[]
-  ) => { readonly token: string; readonly mcpServerUrl: string };
-  readonly revoke: (chatSessionId: string) => void;
-}
-
-/**
- * Builds the minter for check sessions. A token it mints carries an allowlist of exactly the
- * named tools, and the gateway refuses a call to any other tool at call time.
- */
-export function buildCheckTokenMinter(
-  tokens: {
-    mint: (identity: {
-      actorUserId: string;
-      chatSessionId: string;
-      allowedToolNames: Set<string>;
-    }) => string;
-    revokeBySessionId: (chatSessionId: string) => void;
-  },
-  mcpServerUrl: string
-): CheckTokenMinter {
-  return {
-    mint: (actorUserId, chatSessionId, toolNames) => ({
-      token: tokens.mint({ actorUserId, chatSessionId, allowedToolNames: new Set(toolNames) }),
-      mcpServerUrl
-    }),
-    revoke: (chatSessionId) => tokens.revokeBySessionId(chatSessionId)
-  };
-}
 
 export interface ChatRoutesDependencies {
   readonly meetingChat?: MeetingChatData;
@@ -374,7 +345,7 @@ export function registerChatRoutes(
 
   /**
    * #2907 (plan 3.5) — the production ports factory for the gate: the actor's tool menu, the
-   * classifier calls, candidate hooks, the dry-run gateway call and the approved-release check.
+   * classifier calls, candidate hooks and the dry-run gateway call.
    * Shared by the handled-turn runner (4.1) and the shadow runner, so neither copies wiring.
    */
   const classifierGatePorts = wiring
@@ -388,29 +359,40 @@ export function registerChatRoutes(
           createCliStructuredAdapter: createCliStructuredAdapterFactory(
             dependencies.chatEngineFactory
           )
-        },
-        releaseRepository: new ClassifierReleaseRepository()
+        }
       })
+    : undefined;
+
+  /**
+   * #2984 R2.4 — the admin mode as the gate runs it: a stored `on` reads as `shadow` until the
+   * current classifier selection has a shadow review. Shared by both runners.
+   */
+  const readGateMode = wiring
+    ? (actorUserId: string) =>
+        dependencies.dataContext.withDataContext({ actorUserId }, async (scopedDb) =>
+          resolveEffectiveGateMode(
+            scopedDb,
+            await new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
+              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
+            ),
+            { classifierDeps: { repository: wiring.aiRepository } }
+          )
+        )
     : undefined;
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
    * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
-   * read. `on` is unreachable until an approved release exists (no writer yet), so passing the real
-   * ports factory cannot run a tool today.
+   * read. `on` runs only while the current classifier selection has a shadow review.
    */
-  const classifierGate = wiring
-    ? buildClassifierGateRunner({
-        readMode: (actorUserId) =>
-          dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
-            new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
-              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
-            )
-          ),
-        tokens: wiring.tokens,
-        createPorts: classifierGatePorts
-      })
-    : undefined;
+  const classifierGate =
+    wiring && readGateMode
+      ? buildClassifierGateRunner({
+          readMode: readGateMode,
+          tokens: wiring.tokens,
+          createPorts: classifierGatePorts
+        })
+      : undefined;
 
   if (classifierGate) dependencies.adoptClassifierGate?.(classifierGate);
 
@@ -420,20 +402,18 @@ export function registerChatRoutes(
    * so no tool ever executes and no card is ever raised.
    */
   const classifierGateShadow =
-    wiring && classifierGatePorts
+    wiring && classifierGatePorts && readGateMode
       ? createClassifierGateShadowRunner({
-          readMode: (actorUserId) =>
-            dependencies.dataContext.withDataContext({ actorUserId }, (scopedDb) =>
-              new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
-                CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
-              )
-            ),
+          readMode: readGateMode,
           createPorts: classifierGatePorts,
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
           tokens: {
-            mint: (actorUserId, correlationId, allowedToolNames) =>
-              wiring.tokens.mint(
+            mint: (actorUserId, correlationId, allowedToolNames) => {
+              // #2956: the shadow passes its turn id as the correlation id, so the
+              // gate session files its tool rows under the chat turn. Revoke clears it.
+              wiring.tokens.setCurrentTurnId(`classifier-gate:${correlationId}`, correlationId);
+              return wiring.tokens.mint(
                 {
                   actorUserId,
                   chatSessionId: `classifier-gate:${correlationId}`,
@@ -442,9 +422,12 @@ export function registerChatRoutes(
                 // #2907 QA N2: the short fixed lifetime, exactly like the 4.1 gate token, so a
                 // skipped revoke leaves it stale after a minute instead of an hour.
                 { ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true }
-              ),
-            revoke: (correlationId) =>
-              wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`)
+              );
+            },
+            revoke: (correlationId) => {
+              wiring.tokens.clearCurrentTurnId(`classifier-gate:${correlationId}`);
+              wiring.tokens.revokeBySessionId(`classifier-gate:${correlationId}`);
+            }
           },
           listToolNames: async (actorUserId) =>
             (await wiring.gateway.listToolsForActor(actorUserId)).map((tool) => tool.name),
@@ -496,6 +479,12 @@ export function registerChatRoutes(
           },
           revoke: (chatSessionId: string) => wiring.tokens.revokeBySessionId(chatSessionId),
           touch: (chatSessionId: string) => wiring.tokens.touchBySessionId(chatSessionId),
+          // #2956: the chat manager files a session's tool rows under its
+          // running turn; the gateway reads the same map at tool time.
+          setCurrentTurn: (chatSessionId: string, turnId: string) =>
+            wiring.tokens.setCurrentTurnId(chatSessionId, turnId),
+          clearCurrentTurn: (chatSessionId: string) =>
+            wiring.tokens.clearCurrentTurnId(chatSessionId),
           // #342 (§5.3 steps 2/4) — orphan-token reconciliation + the source-of-truth session-id list.
           // Forwarded to the manager (reconcileMcpTokens / listMcpTokenSessionIds) so a (re)connect or
           // bootId change revokes tokens for sessions the cli-runner no longer holds — even after an api
@@ -915,11 +904,7 @@ export function registerChatRoutes(
         }
         const toolMetadata = asRecord(message.tool_metadata);
         const meetingBinding = readMeetingChatContext(toolMetadata);
-        if (
-          meetingBinding &&
-          (!meetingChat ||
-            !(await meetingChat.source.isAvailable(access, meetingBinding.coverage.meetingId)))
-        )
+        if (!(await isMeetingEvidenceAvailable(meetingChat, access, meetingBinding)))
           return reply.code(404).send({ error: "Meeting evidence unavailable" });
         const stored = readStoredProvenance(toolMetadata);
         const cards: AnswerSourceSupportCard[] = stored != null ? provenanceCards(stored) : [];
@@ -943,11 +928,7 @@ export function registerChatRoutes(
         }
         const toolMetadata = asRecord(message.tool_metadata);
         const meetingBinding = readMeetingChatContext(toolMetadata);
-        if (
-          meetingBinding &&
-          (!meetingChat ||
-            !(await meetingChat.source.isAvailable(access, meetingBinding.coverage.meetingId)))
-        )
+        if (!(await isMeetingEvidenceAvailable(meetingChat, access, meetingBinding)))
           return reply.code(404).send({ error: "Meeting evidence unavailable" });
         const stored = readStoredProvenance(toolMetadata);
         if (!stored) return reply.code(404).send({ error: "No provenance for this message" });

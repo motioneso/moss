@@ -48,8 +48,8 @@ start capture, contact a provider, or create/expand companion grants.
   Reading preferences never creates a default, and choosing a mode alone does not save it.
 
 Titles are at most 240 UTF-8 bytes; notes at most 64,000 UTF-8 bytes. Draft titles are immutable
-at this checkpoint. A stored draft is not evidence that capture occurred. Migration 0260 defines
-the records and receipts; 0261 separately grants owner-policy-governed draft deletion.
+at this checkpoint. A stored draft is not evidence that capture occurred. Migration 0273 defines
+the records and receipts; 0274 separately grants owner-policy-governed draft deletion.
 
 Meetings is optional but default-enabled, as required by the repository's deny-only built-in
 module model. Existing module controls can disable it. This does not start any recording.
@@ -73,17 +73,17 @@ review counts and separate vault write/index receipts. These do not establish na
 continuous coverage, current Task contents or a fresh filesystem/index check. Mobile selection
 has an explicit Back to results action; review navigation preserves the session's search.
 
-Migration 0267 maintains a current-segment search projection in the existing transcript transaction.
+Migration 0280 maintains a current-segment search projection in the existing transcript transaction.
 Its explicitly declared, checksummed first-party sidecar backfills metadata from original TEXT JSON
 inside the migration transaction; it preserves original payloads and UTF-16 segment identities.
 The canonical runner restores FORCE RLS before committing and rolls back on a backfill failure.
 External module installation remains SQL-only. Isolated CI integration and real History UI tests
-are required before treating this slice as verified; do not run local DB gates while the hold below
-applies.
+are required on the final commit before treating this slice as verified. Use only the supported
+isolated gate described below for database checks.
 
 ## Transcript storage API
 
-Migration 0262 adds append-only transcript batch receipts owned by the meeting. Deleting the
+Migration 0275 adds append-only transcript batch receipts owned by the meeting. Deleting the
 meeting cascades transcript revisions and receipts. Runtime grants permit select/insert only;
 forced owner RLS and a composite owner/meeting foreign key are declared. Database protection
 removal proof is still required; these declarations alone are not live isolation evidence.
@@ -179,6 +179,22 @@ Write receipts distinguish `saved` from indexing `queued`, `delayed` or `conflic
 proof that content has been indexed. Failed/delayed indexing does not undo a completed private
 write. Independent saved copies and accepted Tasks survive meeting deletion.
 
+## Migration numbering
+
+The unmerged Meetings sequence was renumbered from 0260–0267 to 0273–0280 in original order
+before deployment, avoiding current main and the now-merged migrations at 0271/0272.
+The owner confirmed that the reachable persistent development and production databases had no
+Meetings migrations applied. Earlier branch references to “applied” describe disposable CI
+runs, not persistent deployment. Historical checkpoint results keep their original commit and
+numbering; they are not verification of this newly numbered tree.
+
+The SQL bytes are unchanged except for History's required adjacent sidecar declaration, now
+`0280_meeting_history.backfill.mjs`; the sidecar bytes remain unchanged. Applied main migrations
+are untouched. Do not reuse a disposable database carrying the old sequence, edit an applied
+ledger, or run these renames as a live database repair. Fresh exact-commit CI and UI proof remain
+required. The unpublished device-authorization candidate is still excluded and has no reserved
+migration number in this branch.
+
 ## Local verification
 
 Use a separate checkout/worktree if another agent is editing your local tree. Read the
@@ -192,27 +208,26 @@ node_modules/.bin/vitest run tests/unit/meeting-transcript.test.ts tests/unit/me
 pnpm verify:static
 ```
 
-**Local database gates are withheld pending
-[#2989](https://github.com/motioneso/moss/issues/2989).** Each DB gate must have its own disposable
-Postgres server, share none with development or another gate, and clean up on every outcome.
-The current `scripts/run-gate.sh` only creates a separate database on the configured existing
-server (default `jarv1s-postgres`); that does not meet the new requirement. It also retains failed
-gate databases. Do not launch local foundation, integration, migration, seed or UAT commands until
-the supported per-run server wrapper and cleanup land. Do not bypass this by invoking DB commands
-directly or by hand-building an alternative wrapper.
+The current `scripts/run-gate.sh` includes the per-run server isolation from #2989/#2991:
+it creates a fresh pgvector container and port, points the gate at that server, and removes the
+container on completion, failure or handled interruption. Read `verify-gate` for the supported
+launch/wait procedure and failure handling. Never run DB-backed commands directly or point a gate
+at a persistent development or production database. Running the gate requires Docker and the
+pinned dependencies; this source-only review did not run a local DB gate.
 
-### CI-only real UI acceptance
+### Isolated real UI acceptance
 
 The current GitHub-hosted workflows allocate fresh `ubuntu-latest` jobs. Each integration shard
 starts its own Compose pgvector server and uses `if: always()` cleanup with `down -v`. The Meetings
 workflow's outer gate server is likewise job-local, and the UAT provisioner starts separate
 uniquely named `uat-*` Compose projects with private Postgres containers/volumes. Its teardown
 removes project-scoped model fixtures, calls `down -v`, and checks for leaked containers, volumes
-and networks. The workflow also stops the outer gate and removes its Compose volumes. This
-job-level isolation does not make the current local shared-server wrapper safe and does not prove
-#2989's future concurrent local-gate acceptance criteria.
+and networks. The workflow also stops the outer gate and removes its Compose volumes. The same supported gate wrapper now gives local runs their own outer Postgres server;
+the UAT provisioner continues to isolate each spec stack. Seed containers use main’s #3013 guard, which checks all five
+database URLs against their owned Compose Postgres service. The wrapper no longer forwards outer
+gate markers into seed containers; it keeps the existing stack seed-confirmation flag.
 
-After its job-local database startup, the existing Meetings workflow invokes:
+Use the supported wrapper for the Meetings acceptance entry point:
 
 ```sh
 scripts/run-gate.sh start --gate test:uat:2981-meetings
@@ -221,8 +236,8 @@ scripts/run-gate.sh wait --follow
 
 The underlying `test:uat:2981-meetings` command runs `tests/uat/run-meetings-uat.ts`, which includes
 `2981-meeting-drafts.uat.spec.ts`, `2981-meeting-chat.uat.spec.ts`,
-`2981-meeting-outputs.uat.spec.ts` and `2981-meeting-history.uat.spec.ts`. These commands are documented for the CI workflow, **not for
-local execution before #2989**. The dedicated wrapper selects an absent host-login file in a fresh
+`2981-meeting-outputs.uat.spec.ts` and `2981-meeting-history.uat.spec.ts`.
+The dedicated wrapper selects an absent host-login file in a fresh
 temporary directory; it never needs real provider credentials, host chat login, audio or a user's
 vault. The chat/summary tests disclose local third-party HTTP stand-ins while exercising Moss's
 real UI, APIs and services without intercepting Moss responses. Trace, screenshots and video are
@@ -237,19 +252,19 @@ removes the isolated DB and volumes, including deliberately surviving synthetic 
 This is the implemented acceptance path, not a claim of a passing live run. Exact-commit results
 and remaining blockers belong on [PR #2982](https://github.com/motioneso/moss/pull/2982).
 
-### Credential-free regression groups (CI only)
+### Credential-free regression groups
 
 The same supported `test:uat:2981-meetings` gate entry accepts the closed
 `MOSS_MEETING_UAT_GROUP` enum below. Omission selects `meetings`; an empty/unknown group fails
-before provisioning rather than falling back to all tests. This does not lift the local DB hold
-pending #2989.
+before provisioning rather than falling back to all tests. Run these DB-backed groups only
+through the supported isolated gate.
 
 - `meetings`: draft/review (2 tests), meeting chat (1), summary/Task/private exports (1), History (1).
 - `chat`: private drawer #1089/#1090 (2), attachments #1133 (2 active, 1 fixme), runtime context
   (2 active, 2 fixmes), assistant naming (4).
 - `runtime`: module install/restart (1), vault ownership #1217 (1), install grant #1311
   (1 active, 1 fixme), Today masthead #1112 (2).
-- `model-fixtures`: model activity #2889 (1), shadow-delete refusal #2911 (1), retired shadow-purge
+- `model-fixtures`: Activity history #2956 (1), shadow-delete refusal #2911 (1), retired shadow-purge
   queue #2911 (1), classifier shadow (1), shadow report (1).
 
 For example, the hosted `chat` matrix job sets `MOSS_MEETING_UAT_GROUP=chat` and invokes the same
@@ -262,7 +277,9 @@ screenshot or video artifacts. The wrapper overrides any inherited host-auth loc
 absent temporary file and clears inherited real-chat readiness. No real provider login is used.
 Module installation may still download the public Finance module; that is not provider proof.
 
-The groups contain **25 active tests and 4 pre-existing fixmes**, not 29 passing assertions.
+The source groups define **25 active tests and 4 pre-existing fixmes**, not 29 passing assertions.
+The retired #2889 activity spec is replaced by #2956, preserving the one-test slot. The assembled
+main reconciliation and new migration numbering require a fresh run; older pass counts are historical.
 Attachments do not prove a model read the file; runtime-context does not prove the model's refusal
 or page-error resolution; install-grant does not prove model-driven Task dispatch. Scripted shadow
 delete proves refusal/retention, not the real-model approval round trip. The private-drawer test
@@ -285,8 +302,8 @@ receipts. The transcript suite includes a rollback-only protection-removal probe
 transaction, verifies runtime role/actor, requires the same owner assertion to detect its
 synthetic leaked row, rolls back, then rechecks RLS and owner isolation. This must pass in CI;
 it has not run in the Docker-free cloud workspace. Earlier draft-table negative proof remains
-separate. Current DB proof must come from the isolated GitHub-hosted CI jobs described above;
-local DB gates remain withheld until #2989 provides per-run server isolation and cleanup.
+separate. Current DB proof must come from the supported isolated gate or GitHub-hosted CI jobs
+described above; required CI and real-UI evidence must still match the final commit.
 The preceding draft/transcript/chat/output checkpoint is verified at `bee892ce` by
 [CI](https://github.com/motioneso/moss/actions/runs/37180058593) and
 [credential-free UI UAT](https://github.com/motioneso/moss/actions/runs/37180058600): 24 active tests

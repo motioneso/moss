@@ -125,6 +125,7 @@ export function createMeetingChatRuntime(
                   }
                 ],
                 maxOutputTokens: 2048,
+                actionCode: "chat.answer",
                 signal: requestSignal
               },
               {

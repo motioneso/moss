@@ -278,14 +278,6 @@ export const composeSeedHook: SeedHook = async ({
       "run",
       "--rm",
       "-e",
-      // #2989: run-gate's authorization is inherited by this host process, but Docker does
-      // not forward it into seed. Carry only existing exact markers across that boundary;
-      // explicit empty values keep bare runs unmarked. Never forward the direct-DB override
-      // or the outer gate's URLs: seed still uses this UAT project's private Postgres server.
-      `JARVIS_GATE_RUN=${process.env.JARVIS_GATE_RUN === "1" ? "1" : ""}`,
-      "-e",
-      `MOSS_GATE_RUN=${process.env.MOSS_GATE_RUN === "1" ? "1" : ""}`,
-      "-e",
       `JARVIS_UAT_SEED_LEVEL=${level}`,
       "-e",
       `JARVIS_UAT_SEED_EXCLUDE_CHUNKS=${(excludeChunks ?? []).join(",")}`,

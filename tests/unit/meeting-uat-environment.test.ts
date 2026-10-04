@@ -62,6 +62,8 @@ describe("bounded credential-free UAT group selection", () => {
     const specs = Object.keys(MEETING_UAT_GROUPS).flatMap((group) => [...meetingUatSpecs(group)]);
     expect(specs).toHaveLength(17);
     expect(new Set(specs).size).toBe(17);
+    expect(specs).toContain("2956-activity-history.uat.spec.ts");
+    expect(specs).not.toContain("2889-model-activity-log.uat.spec.ts");
     for (const spec of [
       "1909-sports-public-source-completion",
       "notes-default-retrieval",

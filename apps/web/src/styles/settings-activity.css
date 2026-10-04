@@ -1,0 +1,335 @@
+/* Settings — Activity history lines and detail dialog (#2956, slice C).
+   Full-width list, no side rail (spec section 8). Follows the approved mockup. */
+
+/* ---- Filter bar (slice D): time range, module, Models button, note, Reset ---- */
+
+.act-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--text);
+}
+
+.act-filters__models {
+  position: relative;
+}
+
+.act-filters__group {
+  display: flex;
+  gap: var(--space-2);
+  margin-right: var(--space-3);
+}
+
+.act-filters .jds-select {
+  min-height: 32px;
+}
+
+.act-filters__spacer {
+  flex: 1;
+}
+
+.act-hidden-note {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.act-day {
+  margin-top: var(--space-5);
+}
+
+.act-day .jds-eyebrow {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.act-line {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.act-line:hover {
+  background: var(--hover-tint);
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+
+.act-line:hover .act-line__title {
+  color: var(--accent-fg);
+}
+
+.act-line__time {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.act-line__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.act-line__title {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+}
+
+.act-line__quote {
+  color: var(--text-muted);
+}
+
+.act-line__result {
+  line-height: var(--leading-snug);
+}
+
+.act-line__meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.act-line__badges {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---- Detail dialog: layout-only overrides on the Dialog primitive ---- */
+
+.act-dialog {
+  width: min(1120px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
+.act-dialog .jds-dialog__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.act-dialog .jds-dialog__title {
+  min-width: 0;
+}
+
+.act-dialog .jds-dialog__desc {
+  margin-top: 0;
+  align-self: start;
+}
+
+.act-dialog__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.act-dialog__titlerow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.act-dialog .jds-dialog__body {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: auto;
+  min-height: 0;
+}
+
+.act-quote {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--gold);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.act-steps {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-right: 1px solid var(--border);
+}
+
+.act-step {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.act-step:hover {
+  background: var(--hover-tint);
+}
+
+.act-step[aria-selected="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.act-step__n {
+  font-weight: var(--weight-bold);
+  color: var(--accent-fg);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.act-step__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.act-step__title {
+  font-weight: var(--weight-bold);
+}
+
+.act-step__meta {
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.act-pane {
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.act-pane__title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-heavy);
+  font-size: var(--text-lg);
+  letter-spacing: -0.02em;
+  margin: var(--space-1) 0 0;
+}
+
+.act-pane__empty {
+  padding: var(--space-5) var(--space-6);
+  color: var(--text-muted);
+}
+
+.act-facts {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.act-facts__row {
+  display: contents;
+}
+
+.act-facts dt,
+.act-facts dd {
+  margin: 0;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.act-facts dt {
+  color: var(--text-muted);
+}
+
+.act-why {
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-soft, var(--surface-2));
+  border-radius: var(--radius-sm);
+  line-height: var(--leading-normal);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.act-why b {
+  font-weight: var(--weight-bold);
+}
+
+.act-expiry {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+/* ---- Phone (spec section 8: 44px minimums, time buttons on their own row) ---- */
+
+@media (max-width: 640px) {
+  .act-filters .jds-btn,
+  .act-filters .jds-select {
+    min-height: 44px;
+  }
+
+  .act-filters__group {
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+
+  .act-line {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .act-line__badges {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .act-line__badges:empty {
+    display: none;
+  }
+
+  .act-dialog {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .act-dialog .jds-dialog__head {
+    padding: var(--space-4);
+  }
+
+  .act-dialog .jds-dialog__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .act-steps {
+    display: contents;
+  }
+
+  .act-pane {
+    padding: var(--space-4);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .act-facts {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+
+  .act-dialog .jds-dialog__desc .jds-btn {
+    min-height: 44px;
+  }
+}

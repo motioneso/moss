@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PgBoss } from "pg-boss";
 
 import {
-  resolveMossEnv,
   type AccessContext,
   type DataContextDb,
   type DataContextRunner,
@@ -17,15 +17,15 @@ import {
   type IntegrationKind,
   type IntegrationSummary,
   type ListIntegrationsResponse,
-  type PrepareIntegrationClassifierResponse
+  type PrepareIntegrationClassifierResponse,
+  type SetIntegrationSendWithoutAskingRequest,
+  type SortIntegrationClassifierResponse
 } from "@moss/shared";
 
-import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
+import { resolveIntegrationsCipher } from "./credentials.js";
 import { candidateCache } from "./classifier-candidates.js";
-import {
-  prepareClassifierToolDrafts,
-  type ClassifierPreparationPort
-} from "./classifier-preparation.js";
+import { enqueueClassifierSort, type ClassifierSortJobOp } from "./classifier-sort-jobs.js";
+import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
 import { parseReviewedEntry } from "./classifier-settings.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
@@ -54,11 +54,10 @@ export interface IntegrationsRouteDependencies {
   /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
   readonly resolverCache?: ResolverCache;
   /**
-   * Plan 2b.3 (#2894): the composition-layer port that drafts tool preparation on the owner's
-   * default chat model. Absent (older wiring/tests) means preparation reports unavailable and
-   * calls no model.
+   * #2984 R2.2, R2.4: queues the background tool sort and preparation. Absent (older wiring/tests)
+   * means nothing is queued and the Try again requests answer 503.
    */
-  readonly preparationPort?: ClassifierPreparationPort;
+  readonly boss?: PgBoss;
 }
 
 interface IdParams {
@@ -68,6 +67,9 @@ interface IdParams {
 interface ClassifierToolParams extends IdParams {
   readonly toolName: string;
 }
+
+/** Patch fields that change which of a connection's tools chat can use. */
+const TOOL_CHOICE_FIELDS = ["enabledGroups", "enabledTools", "mutedTools", "unsuppressedTools"];
 
 export function registerIntegrationsRoutes(
   server: FastifyInstance,
@@ -83,19 +85,55 @@ export function registerIntegrationsRoutes(
    * never a boot-style throw and never key material.
    */
   async function cipherForRequest(scopedDb: DataContextDb): Promise<JsonSecretCipher> {
-    if (dependencies.cipher) return dependencies.cipher;
-    if (resolveMossEnv(process.env, "JARVIS_INTEGRATIONS_SECRET_KEY") !== undefined) {
-      return createIntegrationsCipher();
-    }
-    if (dependencies.resolveKeyring) {
-      const keyring = await dependencies.resolveKeyring(scopedDb);
-      if (keyring) return createIntegrationsCipherFromKeyring(keyring);
-    }
+    const cipher = await resolveIntegrationsCipher(scopedDb, dependencies);
+    if (cipher) return cipher;
     throw new HttpError(
       503,
       "Integration credentials are paused until an encryption key is set up. " +
         "Ask an admin to open Settings, Encryption keys, and press Generate."
     );
+  }
+
+  /**
+   * Queue the tool sort after the request's transaction commits. The row is already saved, so a
+   * queue failure is logged and the request still succeeds; the worker's start-up sweep catches
+   * any tool left never tried.
+   */
+  async function queueSort(
+    request: FastifyRequest,
+    actorUserId: string,
+    connectionId: string,
+    op: ClassifierSortJobOp = "sort"
+  ): Promise<void> {
+    if (!dependencies.boss) return;
+    try {
+      await enqueueClassifierSort(dependencies.boss, actorUserId, connectionId, op);
+    } catch (error) {
+      request.log.warn(
+        { connectionId, error: error instanceof Error ? error.message : "unknown" },
+        "integrations: could not queue tool sorting"
+      );
+    }
+  }
+
+  /**
+   * Queue preparation for tools that became available to chat. Failed tools still wait for the
+   * owner's Try again. A queue failure is logged; the next sort queues preparation again.
+   */
+  async function queuePreparation(
+    request: FastifyRequest,
+    actorUserId: string,
+    connectionId: string
+  ): Promise<void> {
+    if (!dependencies.boss) return;
+    try {
+      await enqueueClassifierPreparation(dependencies.boss, actorUserId, connectionId, "prepare");
+    } catch (error) {
+      request.log.warn(
+        { connectionId, error: error instanceof Error ? error.message : "unknown" },
+        "integrations: could not queue tool preparation"
+      );
+    }
   }
 
   server.get("/api/integrations", async (request, reply) => {
@@ -164,6 +202,7 @@ export function registerIntegrationsRoutes(
       );
 
       cache.drop(accessContext.actorUserId);
+      await queueSort(request, accessContext.actorUserId, detail.id);
       return reply.code(201).send(detail);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -198,6 +237,13 @@ export function registerIntegrationsRoutes(
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
       candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
+      // Turning the switch on queues a sort, and every sort is followed by preparation. With the
+      // switch already on, a change to which tools chat can use queues preparation alone.
+      if (value.classifierEnabled === true) {
+        await queueSort(request, accessContext.actorUserId, updated.id);
+      } else if (updated.classifierEnabled && TOOL_CHOICE_FIELDS.some((field) => field in value)) {
+        await queuePreparation(request, accessContext.actorUserId, updated.id);
+      }
       return toDetail(updated, updated.discoveredTools);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -237,6 +283,7 @@ export function registerIntegrationsRoutes(
 
       cache.drop(accessContext.actorUserId);
       candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
+      await queueSort(request, accessContext.actorUserId, request.params.id);
       return detail;
     } catch (error) {
       return handleRouteError(error, reply);
@@ -291,13 +338,26 @@ export function registerIntegrationsRoutes(
         if (!parsed.ok) {
           return reply.code(400).send({ error: parsed.problems.join("; ") });
         }
-        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.saveClassifierToolReview(
-            scopedDb,
-            request.params.id,
-            request.params.toolName,
-            parsed.value
-          )
+        // #2984 R2.4: eligibility no longer reads opt-in, so the screen's opt-in choice is kept
+        // as the kept-out list instead. An opted-out tool must not return by automatic preparation.
+        const result = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const saved = await repository.saveClassifierToolReview(
+              scopedDb,
+              request.params.id,
+              request.params.toolName,
+              parsed.value
+            );
+            if (saved.status !== "saved") return saved;
+            const updated = await repository.setClassifierToolKeptOut(
+              scopedDb,
+              request.params.id,
+              request.params.toolName,
+              !parsed.value.optIn
+            );
+            return updated ? { ...saved, connection: updated } : saved;
+          }
         );
         if (result.status === "not_found") {
           return reply.code(404).send({ error: "Integration not found" });
@@ -322,18 +382,36 @@ export function registerIntegrationsRoutes(
     }
   );
 
-  /** Remove one saved classifier preparation entry (opt-out). */
+  /**
+   * Remove one saved classifier preparation entry (opt-out). The tool is also kept out, so
+   * automatic preparation does not bring it back.
+   */
   server.delete<{ Params: ClassifierToolParams }>(
     "/api/integrations/:id/classifier/tools/:toolName",
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const updated = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.removeClassifierToolReview(
-            scopedDb,
-            request.params.id,
-            request.params.toolName
-          )
+        const updated = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const removed = await repository.removeClassifierToolReview(
+              scopedDb,
+              request.params.id,
+              request.params.toolName
+            );
+            if (!removed) return null;
+            // Only a discovered name is kept out, so the list cannot grow with arbitrary names.
+            const discovered = removed.discoveredTools.some(
+              (tool) => tool.name === request.params.toolName
+            );
+            if (!discovered) return removed;
+            return repository.setClassifierToolKeptOut(
+              scopedDb,
+              request.params.id,
+              request.params.toolName,
+              true
+            );
+          }
         );
         if (!updated) return reply.code(404).send({ error: "Integration not found" });
         cache.drop(accessContext.actorUserId);
@@ -346,11 +424,67 @@ export function registerIntegrationsRoutes(
   );
 
   /**
-   * Plan 2b.3 (#2894): draft the owner-reviewed classifier preparation for this connection on the
-   * owner's current default chat model. Transient — nothing is stored here; the owner saves each
-   * reviewed draft through PUT .../classifier/tools/:toolName. When there is no default chat model,
-   * or it cannot produce the structured draft, this reports a setup failure and calls no model;
-   * there is no fallback to the classifier or another model.
+   * #2984 R2.2: the owner's Try again. Queues a background sort that also re-sends tools whose
+   * last sort failed; nothing else resends them.
+   */
+  server.post<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/sort",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        if (!dependencies.boss) throw new HttpError(503, "Tool sorting is not available.");
+        const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.getConnection(scopedDb, request.params.id)
+        );
+        if (!row) throw new HttpError(404, "Integration not found");
+        await enqueueClassifierSort(dependencies.boss, accessContext.actorUserId, row.id, "retry");
+        return reply
+          .code(202)
+          .send({ status: "queued" } satisfies SortIntegrationClassifierResponse);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /**
+   * #2984 R2.3: the owner allows or undoes sending without asking, for one tool or a whole group.
+   * All or nothing: any tool not currently sorted as sending things out refuses the whole request,
+   * so a Sensitive tool can never carry the flag.
+   */
+  server.put<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/send-without-asking",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const body = parseSendWithoutAsking(request.body);
+        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.setClassifierSendWithoutAsking(
+            scopedDb,
+            request.params.id,
+            body.toolNames,
+            body.allow
+          )
+        );
+        if (result.status === "not_found") throw new HttpError(404, "Integration not found");
+        if (result.status === "refused") {
+          throw new HttpError(
+            409,
+            "Only a tool sorted as sending things out can send without asking."
+          );
+        }
+        cache.drop(accessContext.actorUserId);
+        return toDetail(result.connection, result.connection.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /**
+   * #2984 R2.4: the owner's Try again for preparation. Queues a background run that also re-sends
+   * tools whose last preparation failed; nothing else resends them. The reply keeps the earlier
+   * draft shape with nothing in it, because the job saves each prepared tool itself.
    */
   server.post<{ Params: IdParams }>(
     "/api/integrations/:id/classifier/prepare",
@@ -361,50 +495,28 @@ export function registerIntegrationsRoutes(
         if ("force" in body && typeof body.force !== "boolean") {
           throw new HttpError(400, "force must be a boolean");
         }
-        const force = body.force === true;
-
-        const controller = new AbortController();
-        const abort = () => controller.abort();
-        request.raw.once("aborted", abort);
-        try {
-          return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-            const row = await repository.getConnection(scopedDb, request.params.id);
-            if (!row) throw new HttpError(404, "Integration not found");
-            if (!row.classifierEnabled) {
-              throw new HttpError(
-                409,
-                "Turn on the connection classifier before preparing its tools."
-              );
-            }
-            if (!dependencies.preparationPort) {
-              return {
-                disclosure: INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
-                status: "unavailable",
-                drafts: [],
-                reused: [],
-                failed: [],
-                remaining: 0
-              } satisfies PrepareIntegrationClassifierResponse;
-            }
-            return prepareClassifierToolDrafts(
-              scopedDb,
-              {
-                discoveredTools: row.discoveredTools,
-                preparation: row.classifierPreparation,
-                curation: {
-                  enabledGroups: row.enabledGroups,
-                  enabledTools: row.enabledTools,
-                  mutedTools: row.mutedTools
-                },
-                force,
-                signal: controller.signal
-              },
-              dependencies.preparationPort
-            );
-          });
-        } finally {
-          request.raw.off("aborted", abort);
+        if (!dependencies.boss) throw new HttpError(503, "Tool preparation is not available.");
+        const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.getConnection(scopedDb, request.params.id)
+        );
+        if (!row) throw new HttpError(404, "Integration not found");
+        if (!row.classifierEnabled) {
+          throw new HttpError(409, "Turn on the connection classifier before preparing its tools.");
         }
+        await enqueueClassifierPreparation(
+          dependencies.boss,
+          accessContext.actorUserId,
+          row.id,
+          "retry"
+        );
+        return reply.code(202).send({
+          disclosure: INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
+          status: "ok",
+          drafts: [],
+          reused: [],
+          failed: [],
+          remaining: 0
+        } satisfies PrepareIntegrationClassifierResponse);
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -557,6 +669,22 @@ function requiredString(value: unknown, fieldName: string): string {
 function requiredStringArray(value: unknown, fieldName: string): string[] {
   if (!Array.isArray(value)) throw new HttpError(400, `${fieldName} must be an array`);
   return value.map((item, index) => requiredString(item, `${fieldName}[${index}]`));
+}
+
+const SEND_WITHOUT_ASKING_MAX_TOOLS = 500;
+const TOOL_NAME_MAX_LENGTH = 200;
+
+function parseSendWithoutAsking(body: unknown): SetIntegrationSendWithoutAskingRequest {
+  const value = requireObject(body);
+  if (typeof value.allow !== "boolean") throw new HttpError(400, "allow must be a boolean");
+  const toolNames = requiredStringArray(value.toolNames, "toolNames");
+  if (toolNames.length === 0 || toolNames.length > SEND_WITHOUT_ASKING_MAX_TOOLS) {
+    throw new HttpError(400, `toolNames must hold 1 to ${SEND_WITHOUT_ASKING_MAX_TOOLS} names`);
+  }
+  if (toolNames.some((name) => name.length > TOOL_NAME_MAX_LENGTH)) {
+    throw new HttpError(400, "A tool name is too long");
+  }
+  return { allow: value.allow, toolNames: [...new Set(toolNames)] };
 }
 
 function handleRouteError(error: unknown, reply: FastifyReply) {

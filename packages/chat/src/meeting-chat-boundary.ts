@@ -177,6 +177,16 @@ export async function deleteMeetingChatThreads(
   );
 }
 
+/** Both provenance routes require current source access; non-meeting answers need no check. */
+export async function isMeetingEvidenceAvailable(
+  runtime: Pick<MeetingChatRuntime, "source"> | undefined,
+  access: AccessContext,
+  binding: StoredMeetingChatContext | null
+): Promise<boolean> {
+  if (!binding) return true;
+  return runtime ? runtime.source.isAvailable(access, binding.coverage.meetingId) : false;
+}
+
 export async function dereferenceMeetingCitation(
   runtime: MeetingChatRuntime,
   access: AccessContext,

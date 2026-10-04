@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 const sidecar = fileURLToPath(
-  new URL("../../packages/meetings/sql/0267_meeting_history.backfill.mjs", import.meta.url)
+  new URL("../../packages/meetings/sql/0280_meeting_history.backfill.mjs", import.meta.url)
 );
 type Query = (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 const load = async () =>

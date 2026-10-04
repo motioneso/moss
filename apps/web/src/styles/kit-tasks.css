@@ -1,12 +1,6 @@
 /* =====================================================================
    TASKS — priority-grouped list + Eisenhower matrix
    ===================================================================== */
-.tasks-wrap {
-  max-width: 940px;
-  margin: 0 auto;
-  padding: 26px 40px 96px;
-}
-
 /* ---- Control bar ---- */
 .tk-bar {
   display: flex;
@@ -311,89 +305,17 @@
   opacity: 1;
 }
 
-/* ---- Panels layout direction ---- */
-.tk-panel {
-  margin-top: 14px;
-  overflow: hidden;
-}
-.tk-panel:first-child {
-  margin-top: 14px;
-}
-.tk-panel__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-}
+/* ---- Priority groups ---- */
 .tk-panel__dot {
   width: 9px;
   height: 9px;
   flex: none;
-}
-.tk-panel__name {
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.tk-panel__count {
-  margin-left: auto;
-}
-.tk-panel__body {
-  padding: 6px 8px 8px;
 }
 .tasks--panels .tk-task__bar {
   display: none;
 }
 .tasks--panels .tk-task {
   padding-left: 10px;
-}
-
-/* ---- Matrix (Eisenhower) ---- */
-.tk-matrix {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-@media (max-width: 760px) {
-  .tk-matrix {
-    grid-template-columns: 1fr;
-  }
-}
-.tk-quad {
-  display: flex;
-  flex-direction: column;
-  min-height: 188px;
-  overflow: hidden;
-}
-.tk-quad__head {
-  padding: 13px 16px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.tk-quad__tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  letter-spacing: 0.1em;
-}
-.tk-quad__tag .dot {
-  width: 7px;
-  height: 7px;
-}
-.tk-quad__verb {
-  letter-spacing: -0.01em;
-  margin-top: 7px;
-}
-.tk-quad__n {
-  float: right;
-  margin-top: 2px;
-}
-.tk-quad__body {
-  padding: 5px 7px 9px;
-  flex: 1;
-}
-.tk-quad__empty {
-  font-style: italic;
-  padding: 16px 10px;
 }
 
 /* ---- Empty state + footer ---- */

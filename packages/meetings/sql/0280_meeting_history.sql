@@ -1,4 +1,4 @@
--- moss:backfill 0267_meeting_history.backfill.mjs
+-- moss:backfill 0280_meeting_history.backfill.mjs
 -- #2981: current-text search and lightweight metadata. TEXT JSON remains authoritative.
 ALTER TABLE app.meeting_records ADD COLUMN history_search_terms TEXT[]
   GENERATED ALWAYS AS (tsvector_to_array(to_tsvector('simple'::regconfig, title || ' ' || personal_notes))) STORED;

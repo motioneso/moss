@@ -276,7 +276,9 @@ export async function handleExtractFactsJob(
     const { text } = await adapter.generateChat({
       model: { provider_kind: model.provider_kind, provider_model_id: model.provider_model_id },
       messages: [{ role: "user", content: prompt }],
-      maxOutputTokens: EXTRACT_MAX_OUTPUT_TOKENS
+      maxOutputTokens: EXTRACT_MAX_OUTPUT_TOKENS,
+      actionCode: "task.memory-extract",
+      ownerUserId
     });
 
     for (const candidate of parseMemoryCandidates(text).slice(0, MAX_CANDIDATES_PER_TURN)) {

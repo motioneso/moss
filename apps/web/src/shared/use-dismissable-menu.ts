@@ -25,14 +25,18 @@ export function useDismissableMenu<T extends HTMLElement>(opts: {
     const onPointerDown = (event: PointerEvent) => {
       if (isOutsideTarget(ref.current, event.target)) opts.onClose();
     };
+    // Capture phase runs before any surface's bubble listener; preventDefault tells an
+    // enclosing dialog that this Escape is spent.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") opts.onClose();
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      opts.onClose();
     };
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
     };
   }, [opts.open, opts.onClose]);
 

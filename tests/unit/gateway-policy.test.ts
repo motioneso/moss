@@ -178,6 +178,57 @@ describe("gateway policy resolver", () => {
   });
 });
 
+describe("resolvePolicy with a sorted-safe connected tool (#2984 R2.3)", () => {
+  const noFamily: ActionPolicyLookup = {
+    getFamilyTier: async () => null,
+    getFamilyManifest: async () => null
+  };
+  const tool = (
+    risk: ModuleAssistantToolManifest["risk"],
+    isExternal: boolean
+  ): ModuleAssistantToolManifest => ({
+    name: "conn.tool",
+    description: "Connected tool",
+    permissionId: "conn.tool",
+    risk,
+    executionPolicy: "auto",
+    isExternal,
+    inputSchema: {},
+    outputSchema: {},
+    execute: async () => ({ data: {} })
+  });
+
+  it("runs a marked connected tool with no family", async () => {
+    await expect(
+      resolvePolicy(tool("outbound", true), "integrations", false, noFamily, true)
+    ).resolves.toBe("run");
+  });
+
+  it("asks for the same tool when it is not marked", async () => {
+    await expect(
+      resolvePolicy(tool("outbound", true), "integrations", false, noFamily, false)
+    ).resolves.toBe("confirm");
+  });
+
+  it("asks when a confirmation override applies to a marked tool", async () => {
+    await expect(
+      resolvePolicy(tool("outbound", true), "integrations", true, noFamily, true)
+    ).resolves.toBe("confirm");
+  });
+
+  it("asks for a first-party outbound tool even when marked", async () => {
+    await expect(
+      resolvePolicy(tool("outbound", false), "mail", false, noFamily, true)
+    ).resolves.toBe("confirm");
+  });
+
+  it("asks for a destructive connected tool even when marked", async () => {
+    await expect(
+      resolvePolicy(tool("destructive", true), "integrations", false, noFamily, true)
+    ).resolves.toBe("confirm");
+  });
+});
+
 describe("familyAllowsAutoRun (#2418, #2419)", () => {
   const createMockLookup = (
     manifest: ModuleAssistantActionFamilyManifest | null

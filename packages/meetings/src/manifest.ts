@@ -16,12 +16,12 @@ export const meetingsModuleManifest = {
   availability: { defaultEnabled: true, required: false, supportsUserDisable: true },
   database: {
     migrations: [
-      "sql/0260_meeting_records.sql",
-      "sql/0261_meeting_draft_delete.sql",
-      "sql/0262_meeting_transcript_batches.sql",
-      "sql/0265_meeting_outputs.sql",
-      "sql/0266_meeting_exports.sql",
-      "sql/0267_meeting_history.sql"
+      "sql/0273_meeting_records.sql",
+      "sql/0274_meeting_draft_delete.sql",
+      "sql/0275_meeting_transcript_batches.sql",
+      "sql/0278_meeting_outputs.sql",
+      "sql/0279_meeting_exports.sql",
+      "sql/0280_meeting_history.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [

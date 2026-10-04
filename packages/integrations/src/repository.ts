@@ -6,11 +6,20 @@ import type { CredentialPlacement, IntegrationKind } from "@moss/shared";
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import {
   emptyPreparationMap,
-  INTEGRATION_CLASSIFIER_MAX_ENTRIES,
+  emptySortMap,
   parsePreparationMap,
+  parseSortMap,
   preparationEntry,
+  preparationHasRoom,
+  withoutStaleSendChoices,
+  withPreparationFailure,
+  withSendWithoutAsking,
+  withSortResult,
   type ClassifierPreparationEntry,
+  type ClassifierPreparationFailure,
   type ClassifierPreparationMap,
+  type ClassifierSortMap,
+  type ClassifierSortResult,
   type ReviewedEntryInput
 } from "./classifier-settings.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
@@ -43,6 +52,10 @@ export interface ConnectionRow {
   readonly unsuppressedTools: readonly string[];
   readonly classifierEnabled: boolean;
   readonly classifierPreparation: ClassifierPreparationMap;
+  /** Per-tool sorting results and send-without-asking choices (#2984). */
+  readonly classifierSort: ClassifierSortMap;
+  /** Tools the owner kept out of the classifier. They stay on for ordinary chat (#2984). */
+  readonly classifierKeptOutTools: readonly string[];
   readonly discoveredTools: readonly DiscoveredTool[];
   readonly lastDiscoveryAt: Date | null;
   readonly lastError: string | null;
@@ -86,6 +99,13 @@ export type SaveClassifierToolReviewResult =
   /** The stored map is at its bounded size. */
   | { readonly status: "too_many" };
 
+/** Outcome of setting or clearing send-without-asking on some tools (#2984). */
+export type SetSendWithoutAskingResult =
+  | { readonly status: "saved"; readonly connection: ConnectionRow }
+  | { readonly status: "not_found" }
+  /** A named tool is gone, or has no current Sends things out sort. Nothing was written. */
+  | { readonly status: "refused"; readonly toolName: string };
+
 interface ConnectionSqlRow {
   id: string;
   owner_user_id: string;
@@ -104,6 +124,8 @@ interface ConnectionSqlRow {
   unsuppressed_tools: string[];
   classifier_enabled: boolean;
   classifier_preparation: unknown;
+  classifier_sort: unknown;
+  classifier_kept_out_tools: string[];
   discovered_tools: DiscoveredTool[];
   last_discovery_at: Date | null;
   last_error: string | null;
@@ -115,7 +137,8 @@ const SELECT_COLUMNS = `
   id, owner_user_id, name, kind, transport, url, credential_placement,
   (credential IS NOT NULL) AS has_credential, enabled, base_url, spec_pasted,
   enabled_groups, enabled_tools, muted_tools, unsuppressed_tools, classifier_enabled,
-  classifier_preparation, discovered_tools, last_discovery_at, last_error, created_at, updated_at
+  classifier_preparation, classifier_sort, classifier_kept_out_tools, discovered_tools,
+  last_discovery_at, last_error, created_at, updated_at
 `;
 
 export class IntegrationsRepository {
@@ -266,9 +289,16 @@ export class IntegrationsRepository {
       return;
     }
 
+    // A send-without-asking choice dies with the sort it was set on, so a tool whose risk inputs
+    // changed asks again even if a later discovery changes them back.
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row) return;
+    const sort = withoutStaleSendChoices(row.classifierSort, tools);
+
     await sql`
       UPDATE app.integration_connections
       SET discovered_tools = ${JSON.stringify(tools)}::jsonb,
+          classifier_sort = ${JSON.stringify(sort)}::jsonb,
           last_discovery_at = now(),
           last_error = ${error},
           updated_at = now()
@@ -303,12 +333,7 @@ export class IntegrationsRepository {
 
     const map = row.classifierPreparation;
     const existing = preparationEntry(map, toolName);
-    if (
-      existing === undefined &&
-      Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_ENTRIES
-    ) {
-      return { status: "too_many" };
-    }
+    if (!preparationHasRoom(map, toolName)) return { status: "too_many" };
     const entry: ClassifierPreparationEntry = {
       optIn: input.optIn,
       reviewedRisk: input.reviewedRisk,
@@ -323,6 +348,46 @@ export class IntegrationsRepository {
 
     const updated = await this.writePreparationEntry(scopedDb, id, toolName, entry);
     return updated ? { status: "saved", connection: updated } : { status: "not_found" };
+  }
+
+  /**
+   * Record that automatic preparation failed for one tool (#2984 R2.4). The failure is tied to the
+   * definition it was attempted against, so the job leaves it for the owner's Try again. Only a
+   * discovered tool is recorded. Failures that can no longer block a run are dropped in the same
+   * write, and the row lock keeps the rewrite of the whole failure set from losing another write.
+   */
+  async saveClassifierPreparationFailure(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string,
+    failure: ClassifierPreparationFailure
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row?.discoveredTools.some((tool) => tool.name === toolName)) return false;
+    const failures = withPreparationFailure(
+      row.classifierPreparation,
+      row.discoveredTools,
+      toolName,
+      failure
+    );
+    if (!failures) return false;
+
+    const result = await sql`
+      UPDATE app.integration_connections
+      SET classifier_preparation = jsonb_set(
+            CASE
+              WHEN ${WELL_FORMED_PREPARATION} THEN classifier_preparation
+              ELSE '{"version": 1, "entries": {}}'::jsonb
+            END,
+            ARRAY['failures'],
+            ${JSON.stringify(failures)}::jsonb,
+            true
+          ),
+          updated_at = now()
+      WHERE id = ${id}::uuid
+    `.execute(scopedDb.db);
+    return (result.numAffectedRows ?? 0n) > 0n;
   }
 
   /** Remove one saved classifier preparation entry (opt-out / discard a stale review). */
@@ -350,9 +415,98 @@ export class IntegrationsRepository {
   }
 
   /**
-   * Write a single reviewed entry with `jsonb_set`, touching only that tool's key. Two tabs saving
-   * different tools therefore merge instead of overwriting each other's map (the whole-map write
-   * this replaces could lose the other tab's review).
+   * Store sorting results for some of a connection's tools (#2984). A result for a tool that is no
+   * longer discovered, or whose shape is not storable, is skipped. The row is locked for the
+   * request transaction, so the whole-map write cannot lose a concurrent change.
+   */
+  async saveClassifierToolSorts(
+    scopedDb: DataContextDb,
+    id: string,
+    results: readonly { readonly toolName: string; readonly result: ClassifierSortResult }[]
+  ): Promise<ConnectionRow | null> {
+    assertDataContextDb(scopedDb);
+
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row) return null;
+    const discovered = new Set(row.discoveredTools.map((tool) => tool.name));
+    let sort = row.classifierSort;
+    for (const { toolName, result } of results) {
+      if (!discovered.has(toolName)) continue;
+      sort = withSortResult(sort, toolName, result) ?? sort;
+    }
+    return this.writeSort(scopedDb, id, sort);
+  }
+
+  /**
+   * Set or clear the owner's send-without-asking choice on the named tools, all or nothing.
+   * Only the owner's own request reaches this; row-level security keeps every other actor out.
+   */
+  async setClassifierSendWithoutAsking(
+    scopedDb: DataContextDb,
+    id: string,
+    toolNames: readonly string[],
+    allow: boolean
+  ): Promise<SetSendWithoutAskingResult> {
+    assertDataContextDb(scopedDb);
+
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row) return { status: "not_found" };
+    let sort = row.classifierSort;
+    for (const toolName of toolNames) {
+      const tool = row.discoveredTools.find((candidate) => candidate.name === toolName);
+      const next = tool ? withSendWithoutAsking(sort, tool, allow) : allow ? null : sort;
+      if (!next) return { status: "refused", toolName };
+      sort = next;
+    }
+    const updated = await this.writeSort(scopedDb, id, sort);
+    return updated ? { status: "saved", connection: updated } : { status: "not_found" };
+  }
+
+  /** Keep one tool out of the classifier, or let it back in. Ordinary chat is unaffected. */
+  async setClassifierToolKeptOut(
+    scopedDb: DataContextDb,
+    id: string,
+    toolName: string,
+    keptOut: boolean
+  ): Promise<ConnectionRow | null> {
+    assertDataContextDb(scopedDb);
+
+    const result = await sql<ConnectionSqlRow>`
+      UPDATE app.integration_connections
+      SET classifier_kept_out_tools = CASE
+            WHEN ${keptOut} AND NOT (${toolName} = ANY(classifier_kept_out_tools))
+            THEN array_append(classifier_kept_out_tools, ${toolName})
+            WHEN NOT ${keptOut} THEN array_remove(classifier_kept_out_tools, ${toolName})
+            ELSE classifier_kept_out_tools
+          END,
+          updated_at = now()
+      WHERE id = ${id}::uuid
+      RETURNING ${sql.raw(SELECT_COLUMNS)}
+    `.execute(scopedDb.db);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
+  private async writeSort(
+    scopedDb: DataContextDb,
+    id: string,
+    sort: ClassifierSortMap
+  ): Promise<ConnectionRow | null> {
+    const result = await sql<ConnectionSqlRow>`
+      UPDATE app.integration_connections
+      SET classifier_sort = ${JSON.stringify(sort)}::jsonb,
+          updated_at = now()
+      WHERE id = ${id}::uuid
+      RETURNING ${sql.raw(SELECT_COLUMNS)}
+    `.execute(scopedDb.db);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
+  /**
+   * Write a single entry with `jsonb_set`, touching only that tool's key, and clear the tool's
+   * stored failure. Two writers saving different tools therefore merge instead of overwriting each
+   * other's map.
    */
   private async writePreparationEntry(
     scopedDb: DataContextDb,
@@ -371,7 +525,7 @@ export class IntegrationsRepository {
             ARRAY['entries', ${toolName}],
             ${entryJson}::jsonb,
             true
-          ),
+          ) #- ARRAY['failures', ${toolName}],
           updated_at = now()
       WHERE id = ${id}::uuid
       RETURNING ${sql.raw(SELECT_COLUMNS)}
@@ -401,6 +555,8 @@ export class IntegrationsRepository {
       classifierPreparation: parsePreparationMap(
         row.classifier_preparation ?? emptyPreparationMap()
       ),
+      classifierSort: parseSortMap(row.classifier_sort ?? emptySortMap()),
+      classifierKeptOutTools: row.classifier_kept_out_tools ?? [],
       discoveredTools: row.discovered_tools,
       lastDiscoveryAt: row.last_discovery_at,
       lastError: row.last_error,

@@ -176,6 +176,15 @@
       "flags": []
     },
     {
+      "name": "checklist",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/checklist.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Checklist"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "chip",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chip.tsx", "type": "registry:ui" }],
@@ -406,6 +415,15 @@
       "flags": [{ "prop": "block", "optional": true }]
     },
     {
+      "name": "nav-index",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/nav-index.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["NavIndex", "NavIndexItem"],
+      "options": [],
+      "flags": [{ "prop": "selected", "optional": true }]
+    },
+    {
       "name": "note",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/note.tsx", "type": "registry:ui" }],
@@ -499,7 +517,15 @@
       "files": [{ "path": "packages/ui/src/segmented.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["Segmented"],
-      "options": [],
+      "options": [
+        {
+          "prop": "tone",
+          "kind": "enum",
+          "values": ["default", "field"],
+          "optional": true,
+          "default": null
+        }
+      ],
       "flags": []
     },
     {

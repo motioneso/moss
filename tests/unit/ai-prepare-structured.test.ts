@@ -2,9 +2,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 import {
   createAiSecretCipher,
+  generateStructured,
   prepareStructuredApiGeneration,
   type AiProviderWithSealedCredential
 } from "@moss/ai";
+import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
 
 const cipher = createAiSecretCipher();
 const provider = {
@@ -75,6 +78,35 @@ it("rejects CLI credentials without a provider call", async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
+it("captures the prepared API activity owner from the actor context without reusing it after preparation", async () => {
+  const owner = "12345678-1234-4234-9234-123456789abc";
+  const { scoped, queries } = makeRecordingDb({ rows: [{ actor: owner }] });
+  const generate = vi.spyOn(HttpApiAdapter.prototype, "generateStructured");
+  const fetch = vi.fn(async () => {
+    expect(queries).toHaveLength(1);
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content: '{"overview":"Done"}' } }] })
+    );
+  });
+  vi.stubGlobal("fetch", fetch);
+  const untrustedExtraOptions = { ...request, actorUserId: "another-owner" };
+  const run = await prepareStructuredApiGeneration(scoped, untrustedExtraOptions, {
+    cipher,
+    repository: { selectProviderWithCredential: async () => provider }
+  });
+  expect(queries).toHaveLength(1);
+  expect(queries[0]?.sql).toContain("current_setting('app.actor_user_id'");
+  expect(generate).not.toHaveBeenCalled();
+  expect(await run()).toMatchObject({ ok: true });
+  expect(await run()).toEqual({ ok: false, error: "provider_error" });
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(generate.mock.calls[0]?.[0]).toMatchObject({ actorUserId: owner });
+  expect(queries).toHaveLength(1);
+  expect(
+    String((fetch.mock.calls as unknown as [string, RequestInit][])[0]?.[1].body)
+  ).not.toContain(owner);
+});
+
 it("does not carry extra search, sorting, CLI or retry options into the prepared run", async () => {
   const fetch = vi.fn(
     async () => new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }))
@@ -84,7 +116,8 @@ it("does not carry extra search, sorting, CLI or retry options into the prepared
     ...request,
     nativeSearch: true,
     sorting: true,
-    singleAttempt: false
+    singleAttempt: false,
+    replySchema: {}
   };
   const run = await prepareStructuredApiGeneration({} as DataContextDb, untrustedExtraOptions, {
     cipher,
@@ -97,4 +130,30 @@ it("does not carry extra search, sorting, CLI or retry options into the prepared
   const [url, options] = (fetch.mock.calls as unknown as [string, RequestInit][])[0]!;
   expect(url).toBe("https://synthetic.invalid/v1/chat/completions");
   expect(JSON.parse(String(options.body))).not.toHaveProperty("tools");
+});
+
+it("preserves the general structured reply-schema override while sending the original provider schema", async () => {
+  const fetch = vi.fn(
+    async () => new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }))
+  );
+  vi.stubGlobal("fetch", fetch);
+  const result = await generateStructured(
+    {} as DataContextDb,
+    { ...request, replySchema: { type: "object" }, singleAttempt: true },
+    {
+      cipher,
+      repository: {
+        selectProviderWithCredential: async () => provider,
+        resolveModelForService: async () => {
+          throw new Error("The explicit model must not be rerouted");
+        }
+      }
+    }
+  );
+  expect(result).toMatchObject({ ok: true, object: {} });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const [, options] = (fetch.mock.calls as unknown as [string, RequestInit][])[0]!;
+  expect(JSON.parse(String(options.body)).response_format.json_schema.schema).toEqual(
+    request.schema
+  );
 });

@@ -58,8 +58,7 @@ export const webRoutes: readonly WebRouteMeta[] = [
     id: "today",
     path: "/today",
     title: "Today",
-    // Date + time live in the Today masthead (dateline + clock) — keep them out of the topbar.
-    subtitle: () => "",
+    subtitle: dateEyebrow,
     match: (pathname) => pathname === "/" || pathname.startsWith("/today")
   },
   {
@@ -73,14 +72,14 @@ export const webRoutes: readonly WebRouteMeta[] = [
     id: "notifications",
     path: "/notifications",
     title: "Notifications",
-    subtitle: () => "",
+    subtitle: dateEyebrow,
     match: (pathname) => pathname.startsWith("/notifications")
   },
   {
     id: "calendar",
     path: "/calendar",
     title: "Calendar",
-    subtitle: monthEyebrow,
+    subtitle: dateEyebrow,
     match: (pathname) => pathname.startsWith("/calendar")
   },
   {
@@ -91,15 +90,13 @@ export const webRoutes: readonly WebRouteMeta[] = [
     match: (pathname) => pathname.startsWith("/wellness")
   },
   // Module-contributed routes (#799): discovered from each module's `./web` manifest navigation
-  // at build time rather than hardcoded per module. Deviation from the prior sports entry: the
-  // generated subtitle is always empty (the manifest doesn't carry a topbar eyebrow string like
-  // the old sports-specific "FOLLOWED" label) — see PR description for the accepted trade-off.
+  // at build time rather than hardcoded per module. Every page header shows the same date line.
   ...MODULE_WEB_ROUTES.map(
     (route): WebRouteMeta => ({
       id: route.moduleId,
       path: route.path,
       title: route.label,
-      subtitle: () => "",
+      subtitle: dateEyebrow,
       match: (pathname) => pathname.startsWith(route.path)
     })
   ),
@@ -107,14 +104,14 @@ export const webRoutes: readonly WebRouteMeta[] = [
     id: "settings",
     path: "/settings",
     title: "Settings",
-    subtitle: () => "",
+    subtitle: dateEyebrow,
     match: (pathname) => pathname.startsWith("/settings")
   },
   {
     id: "link-trail-marker",
     path: "/link/trail-marker",
     title: "Link a Mac",
-    subtitle: () => "",
+    subtitle: dateEyebrow,
     match: (pathname) => pathname.startsWith("/link/trail-marker")
   }
 ];
@@ -190,7 +187,7 @@ export function resolvePageHeading(
   const navigationEntry = runtimeModule?.navigation.find(
     (entry) => pathname === entry.path || pathname.startsWith(`${entry.path}/`)
   );
-  if (navigationEntry) return { title: navigationEntry.label, subtitle: "" };
+  if (navigationEntry) return { title: navigationEntry.label, subtitle: dateEyebrow(now, locale) };
 
   const route = webRoutes.find((item) => item.match(pathname)) ?? webRoutes[0];
   if (!route) throw new Error("At least one web route must be defined");
@@ -202,8 +199,4 @@ function dateEyebrow(now: Date, locale: LocaleSettingsDto): string {
   const month = formatDate(now, locale, { month: "short" });
   const day = formatDate(now, locale, { day: "numeric" });
   return `${weekday} · ${month} ${day}`.toUpperCase();
-}
-
-function monthEyebrow(now: Date, locale: LocaleSettingsDto): string {
-  return formatDate(now, locale, { month: "long", year: "numeric" }).toUpperCase();
 }

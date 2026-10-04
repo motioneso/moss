@@ -4,7 +4,12 @@ import { join } from "node:path";
 
 import type { Job, PgBoss } from "pg-boss";
 
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import {
+  readScopedActorUserId,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner
+} from "@moss/db";
 import {
   type ActorScopedJobPayload,
   type QueueDefinition,
@@ -579,11 +584,18 @@ async function defaultEmbeddingProviderFactory(
   scopedDb: DataContextDb
 ): Promise<EmbeddingProvider> {
   const config = await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb));
+  // #2956: the provider is built per ingest, so the scoped actor is this job's
+  // owner. Both paths record `embed.notes` lines under it.
+  const scopedOwner = await readScopedActorUserId(scopedDb);
+  const activity = {
+    source: "notes",
+    ...(scopedOwner ? { ownerUserId: scopedOwner } : {})
+  };
   // Plan 3.6b (#2890): record one model activity row per embedding job. The local path builds a
   // CpuIsolatedEmbeddingProvider directly (the factory skips it), so wrap it here too.
   return config.kind === "local"
-    ? withEmbeddingActivity(new CpuIsolatedEmbeddingProvider(config.modelId))
-    : createEmbeddingProvider(config);
+    ? withEmbeddingActivity(new CpuIsolatedEmbeddingProvider(config.modelId), undefined, activity)
+    : createEmbeddingProvider(config, process.env, undefined, activity);
 }
 
 export async function runNotesAfterSyncHook(

@@ -78,7 +78,7 @@ describe("#1121 Task 4: chatScript arg-building", () => {
   });
 });
 
-describe("#2989: seed containers inherit only existing gate authorization", () => {
+describe("#3013: seed containers use their owned-stack guard, not outer authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.spawn.mockReturnValue({
@@ -94,40 +94,35 @@ describe("#2989: seed containers inherit only existing gate authorization", () =
   });
 
   it.each([
-    ["both markers", "1", "1", "1", "1"],
-    ["legacy marker only", "1", undefined, "1", ""],
-    ["Moss marker only", undefined, "1", "", "1"],
-    ["legacy marker with an invalid Moss marker", "1", "0", "1", ""],
-    ["Moss marker with an invalid legacy marker", "false", "1", "", "1"],
-    ["missing markers", undefined, undefined, "", ""],
-    ["empty markers", "", "", "", ""],
-    ["false-like markers", "0", "false", "", ""],
-    ["truthy but non-exact markers", "true", "yes", "", ""],
-    ["whitespace around markers", " 1", "1 ", "", ""]
-  ])(
-    "propagates %s without inventing consent",
-    async (_label, jarvis, moss, expectedJarvis, expectedMoss) => {
-      vi.stubEnv("JARVIS_GATE_RUN", jarvis);
-      vi.stubEnv("MOSS_GATE_RUN", moss);
+    ["both markers", "1", "1"],
+    ["legacy marker only", "1", undefined],
+    ["Moss marker only", undefined, "1"],
+    ["legacy marker with an invalid Moss marker", "1", "0"],
+    ["Moss marker with an invalid legacy marker", "false", "1"],
+    ["missing markers", undefined, undefined],
+    ["empty markers", "", ""],
+    ["false-like markers", "0", "false"],
+    ["truthy but non-exact markers", "true", "yes"],
+    ["whitespace around markers", " 1", "1 "]
+  ])("does not forward %s into the owned stack", async (_label, jarvis, moss) => {
+    vi.stubEnv("JARVIS_GATE_RUN", jarvis);
+    vi.stubEnv("MOSS_GATE_RUN", moss);
 
-      await composeSeedHook({ projectName: "uat-marker-test", level: "solo-admin" });
+    await composeSeedHook({ projectName: "uat-marker-test", level: "solo-admin" });
 
-      const args = mocks.spawn.mock.calls[0]?.[1] as string[];
-      const envArgs = args.flatMap((arg, index) => (arg === "-e" ? [args[index + 1]] : []));
-      expect(envArgs).toContain(`JARVIS_GATE_RUN=${expectedJarvis}`);
-      expect(envArgs).toContain(`MOSS_GATE_RUN=${expectedMoss}`);
-      expect(envArgs.filter((arg) => /^(JARVIS|MOSS)_GATE_RUN=/.test(arg!))).toHaveLength(2);
-      expect(envArgs).toContain("JARVIS_UAT_SEED_CONFIRM=1");
-      expect(args.slice(0, 5)).toEqual([
-        "compose",
-        "-p",
-        "uat-marker-test",
-        "-f",
-        "infra/docker-compose.prod.yml"
-      ]);
-      expect(args.at(-1)).toBe("seed");
-    }
-  );
+    const args = mocks.spawn.mock.calls[0]?.[1] as string[];
+    const envArgs = args.flatMap((arg, index) => (arg === "-e" ? [args[index + 1]] : []));
+    expect(envArgs.filter((arg) => /^(JARVIS|MOSS)_GATE_RUN=/.test(arg!))).toHaveLength(0);
+    expect(envArgs).toContain("JARVIS_UAT_SEED_CONFIRM=1");
+    expect(args.slice(0, 5)).toEqual([
+      "compose",
+      "-p",
+      "uat-marker-test",
+      "-f",
+      "infra/docker-compose.prod.yml"
+    ]);
+    expect(args.at(-1)).toBe("seed");
+  });
 
   it("does not pass a direct-DB override, CI flag, or outer gate database target to seed", async () => {
     // Pure mocked-spawn coverage: these values never reach a Docker or database process.
@@ -144,8 +139,7 @@ describe("#2989: seed containers inherit only existing gate authorization", () =
 
     const args = mocks.spawn.mock.calls[0]?.[1] as string[];
     const envArgs = args.flatMap((arg, index) => (arg === "-e" ? [args[index + 1]] : []));
-    expect(envArgs).toContain("JARVIS_GATE_RUN=");
-    expect(envArgs).toContain("MOSS_GATE_RUN=");
+    expect(envArgs.some((arg) => /^(JARVIS|MOSS)_GATE_RUN=/.test(arg!))).toBe(false);
     expect(
       envArgs.some((arg) =>
         /^(?:(?:JARVIS|MOSS)_(?:ALLOW_DIRECT_DB|PGHOST|APP_DATABASE_URL)|CI)=/.test(arg!)

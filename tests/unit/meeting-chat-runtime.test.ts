@@ -9,6 +9,7 @@ import {
 import { meetingChatSurface, type MeetingTranscriptSnapshot } from "@moss/shared";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { createMeetingChatRuntime } from "../../packages/chat/src/live/meeting-chat-runtime.js";
+import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
 
 const meetingId = "12345678-1234-4234-9234-123456789abc";
 const access = { actorUserId: "owner", requestId: "test" };
@@ -148,6 +149,14 @@ afterEach(() => {
 });
 
 describe("meeting selected-model HTTP boundary", () => {
+  it("classifies the tool-free meeting question as a chat answer", async () => {
+    const h = setup();
+    const generate = vi.spyOn(HttpApiAdapter.prototype, "generateChat");
+    await h.service.submit(access, meetingChatSurface(meetingId), selection, "Question");
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate.mock.calls[0]?.[0]).toMatchObject({ actionCode: "chat.answer" });
+  });
+
   it("has no open actor or meeting transaction at HTTP dispatch", async () => {
     const h = setup();
     const observed: number[] = [];

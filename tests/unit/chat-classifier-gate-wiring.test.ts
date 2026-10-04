@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { ClassifierDeps } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
-import type { ClassifierToolReleaseRecord } from "@moss/shared";
 
 import { createClassifierGatePortsFactory } from "../../packages/chat/src/live/classifier-gate-wiring.js";
 
@@ -11,6 +10,7 @@ import { createClassifierGatePortsFactory } from "../../packages/chat/src/live/c
  * #2907 (plan 3.5) — the production ports factory. The classifier, the gateway and the module
  * resolver are fakes; no provider or model is named. The point is the mapping from manifests to the
  * gate menu, the candidate hook plumbing, the gateway mode forwarding and the release check.
+ * A tool is released exactly when this attempt listed it (spec 8.5).
  */
 
 const fakeDb = {} as DataContextDb;
@@ -75,7 +75,7 @@ const manifest = {
 
 function makeFactory(
   overrides: {
-    releases?: ReadonlyArray<{ moduleId: string; toolName: string }>;
+    manifests?: () => readonly MossModuleManifest[];
     onCall?: (tool: string, mode: string) => unknown;
   } = {}
 ) {
@@ -85,11 +85,8 @@ function makeFactory(
       return overrides.onCall?.(tool, mode) ?? { kind: "would_run", approvalMode: "auto" };
     }
   );
-  const listEligibleReleases = vi.fn(async () =>
-    (overrides.releases ?? []).map((release) => release as ClassifierToolReleaseRecord)
-  );
   const factory = createClassifierGatePortsFactory({
-    resolveActiveModules: async () => [manifest],
+    resolveActiveModules: async () => overrides.manifests?.() ?? [manifest],
     dataContext,
     gateway: { callToolForGate } as never,
     classifierDeps: {
@@ -100,10 +97,9 @@ function makeFactory(
       },
       cipher: { decryptJson: vi.fn() }
     } as unknown as ClassifierDeps,
-    releaseRepository: { hasEligibleRelease: vi.fn(), listEligibleReleases },
     now: () => 0
   });
-  return { factory, callToolForGate, listEligibleReleases };
+  return { factory, callToolForGate };
 }
 
 describe("createClassifierGatePortsFactory", () => {
@@ -156,14 +152,29 @@ describe("createClassifierGatePortsFactory", () => {
     );
   });
 
-  it("reports a tool as released only after `listTools` loads a matching release row", async () => {
-    const { factory } = makeFactory({
-      releases: [{ moduleId: "calendar", toolName: "calendar.listVisibleEvents" }]
-    });
+  it("releases exactly the declared tools this attempt listed", async () => {
+    let current: readonly MossModuleManifest[] = [manifest];
+    const { factory } = makeFactory({ manifests: () => current });
     const ports = factory("actor-1", "jst_gate");
-    const tools = await ports.listTools();
-    expect(ports.isReleased(tools[0]!)).toBe(true);
-    expect(ports.isReleased(tools[1]!)).toBe(false);
+
+    const listed = await ports.listTools();
+    const [calendarGateTool, switchGateTool] = listed;
+    // Nothing is released before the attempt lists its tools.
+    const fresh = factory("actor-1", "jst_gate");
+    expect(fresh.isReleased(calendarGateTool!)).toBe(false);
+
+    expect(ports.isReleased(calendarGateTool!)).toBe(true);
+    expect(ports.isReleased(switchGateTool!)).toBe(true);
+    // An undeclared tool, or a same-named tool from another module, is not released.
+    expect(ports.isReleased({ ...calendarGateTool!, name: "calendar.createEvent" })).toBe(false);
+    expect(ports.isReleased({ ...calendarGateTool!, moduleId: "other" })).toBe(false);
+
+    // A tool that drops out of the menu (for example a connected tool that lost eligibility)
+    // stops being released on the next listing.
+    current = [{ ...manifest, assistantTools: [calendarTool] } as unknown as MossModuleManifest];
+    await ports.listTools();
+    expect(ports.isReleased(calendarGateTool!)).toBe(true);
+    expect(ports.isReleased(switchGateTool!)).toBe(false);
   });
 
   it("returns no classifier when none is bound, without borrowing the chat default", async () => {

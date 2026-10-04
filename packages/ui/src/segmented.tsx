@@ -7,16 +7,24 @@ export type SegmentedOption<T extends string> =
       readonly title?: string;
     };
 
+export type SegmentedTone = "default" | "field";
+
 export interface SegmentedProps<T extends string> {
   readonly value: T;
   readonly options: readonly SegmentedOption<T>[];
   readonly onChange: (value: T) => void;
   readonly ariaLabel?: string;
+  /** "field" sits on the forest masthead band. */
+  readonly tone?: SegmentedTone;
 }
 
 export function Segmented<T extends string>(props: SegmentedProps<T>) {
   return (
-    <div className="jds-segmented" role="group" aria-label={props.ariaLabel}>
+    <div
+      className={props.tone === "field" ? "jds-segmented jds-segmented--field" : "jds-segmented"}
+      role="group"
+      aria-label={props.ariaLabel}
+    >
       {props.options.map((option) => {
         const value = (typeof option === "string" ? option : option.value) as T;
         const label = typeof option === "string" ? option : option.label;

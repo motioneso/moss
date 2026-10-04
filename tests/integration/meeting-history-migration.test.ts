@@ -29,12 +29,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all([app?.destroy(), bootstrap?.destroy()]);
 });
-describe("0267 current-history upgrade", () => {
+describe("0280 current-history upgrade", () => {
   it("backfills pre-projection Unicode data without altering authoritative bytes and skips completed replay", async () => {
     // Rewind only the new feature in this already guarded disposable server, as existing
     // migration-upgrade suites do. No checked-in or previously applied SQL file is edited.
-    // This one new index uses only pre-0267 columns, so column teardown cannot remove it.
-    // The other 0267 indexes disappear with the projection table or their new columns.
+    // This one new index uses only pre-0280 columns, so column teardown cannot remove it.
+    // The other 0280 indexes disappear with the projection table or their new columns.
     await sql`DROP TABLE app.meeting_history_segments;
       DROP INDEX app.meeting_output_artifacts_history_head;
       ALTER TABLE app.meeting_records DROP COLUMN history_search_terms;
@@ -42,7 +42,7 @@ describe("0267 current-history upgrade", () => {
       ALTER TABLE app.meeting_output_requests DROP COLUMN history_kind,DROP COLUMN history_result_status,DROP COLUMN history_result_code;
       ALTER TABLE app.meeting_output_artifacts DROP COLUMN history_origin,DROP COLUMN history_notes_revision,DROP COLUMN history_transcript_revision,DROP COLUMN history_stale;
       ALTER TABLE app.meeting_export_receipts DROP COLUMN history_write_status,DROP COLUMN history_index_status,DROP COLUMN history_updated_at;
-      DELETE FROM app.schema_migrations WHERE version='0267'`.execute(bootstrap);
+      DELETE FROM app.schema_migrations WHERE version='0280'`.execute(bootstrap);
     const records = new MeetingRecordsRepository();
     const { meeting, encoded, artifactJson, resultJson } = await context.withDataContext(
       owner,
@@ -188,7 +188,7 @@ describe("0267 current-history upgrade", () => {
       connectionString: connectionStrings.migration,
       migrationsDirectory: meetingsModuleSqlMigrationDirectory
     });
-    expect(migrated.applied.map((item) => item.version)).toEqual(["0267"]);
+    expect(migrated.applied.map((item) => item.version)).toEqual(["0280"]);
     const history = new MeetingHistoryRepository();
     await context.withDataContext(owner, async (db) => {
       expect(
@@ -247,6 +247,6 @@ describe("0267 current-history upgrade", () => {
       migrationsDirectory: meetingsModuleSqlMigrationDirectory
     });
     expect(replay.applied).toEqual([]);
-    expect(replay.skipped.some((item) => item.version === "0267")).toBe(true);
+    expect(replay.skipped.some((item) => item.version === "0280")).toBe(true);
   });
 });

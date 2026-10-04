@@ -6,7 +6,7 @@ import {
   type ProviderKind,
   type StructuredProviderAdapter
 } from "@moss/ai";
-import type { DataContextDb, DataContextRunner } from "@moss/db";
+import { readScopedActorUserId, type DataContextDb, type DataContextRunner } from "@moss/db";
 import {
   MemoryRepository,
   MemoryRetriever,
@@ -21,8 +21,13 @@ import { RuntimeConfigResolver, type PersonaPreviewInput } from "@moss/settings"
 import { UsefulnessFeedbackRepository } from "@moss/usefulness-feedback";
 
 export async function createRuntimeEmbeddingProvider(scopedDb: DataContextDb) {
+  // #2956: built per call, so the scoped actor is this call's owner.
+  const scopedOwner = await readScopedActorUserId(scopedDb);
   return createEmbeddingProvider(
-    await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb))
+    await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb)),
+    process.env,
+    undefined,
+    { source: "memory", ...(scopedOwner ? { ownerUserId: scopedOwner } : {}) }
   );
 }
 
@@ -133,7 +138,8 @@ export function createDefaultPersonaPreview(
                 schema,
                 maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS,
                 acpAgentId: provider.acp_agent_id,
-                actorUserId: input.actorUserId
+                actorUserId: input.actorUserId,
+                actionCode: "module.build"
               })
             );
           } catch (error) {
@@ -173,7 +179,9 @@ export function createDefaultPersonaPreview(
             await adapter.generateChat({
               model: modelInput,
               messages,
-              maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS
+              maxOutputTokens: PERSONA_PREVIEW_MAX_OUTPUT_TOKENS,
+              actionCode: "module.build",
+              ownerUserId: input.actorUserId
             })
           ).text;
         } catch {

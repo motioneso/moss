@@ -1,16 +1,15 @@
-import type { ProviderKind } from "@moss/ai";
-import { resolveMossEnv } from "@moss/db";
+import { randomUUID } from "node:crypto";
+
+import { recordModelActivity, type ProviderKind } from "@moss/ai";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
+import { answerDetailSteps } from "./activity-detail-steps.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
-import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
 import { buildEngineText } from "./engine-text.js";
 import {
-  assertLiveCliProvider,
   assertProviderIdentityForPendingTurn,
-  assertProviderIdentityBeforeReplay,
   discardChatSession,
   dropSessionsForProvider,
   ensureSessionForCurrentProvider,
@@ -18,6 +17,7 @@ import {
   type ActiveChatProvider,
   type UserSession
 } from "./chat-session-provider-identity.js";
+import { launchChatSession, seedChatContext } from "./chat-session-launch.js";
 import {
   ChatStreamLimitError,
   ChatTurnInFlightError,
@@ -27,9 +27,7 @@ import {
   ApiKeyLiveChatUnavailableError,
   UnsupportedLegacyCliProviderError
 } from "./errors.js";
-import { renderPersona } from "./persona.js";
 import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
-import { renderMemorySeedBlock } from "./recall-seed.js";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import {
@@ -38,7 +36,6 @@ import {
   clearChatSession,
   countSubscribersFor,
   delay,
-  drainEngine,
   createPendingActionResultFlusher,
   clearPrivateDetachTimer,
   endPrivateChatSession,
@@ -159,126 +156,18 @@ export class ChatSessionManager {
     surface: ChatSurface,
     providerIdentity: ActiveChatProvider
   ): Promise<UserSession> {
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const { provider, model, acpModel, providerConfigId, acpAgentId } = providerIdentity;
-    assertLiveCliProvider(providerIdentity);
-    let threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
-    if (!threadState && this.deps.persistence.getCurrentThreadState) {
-      await this.deps.persistence.openNewConversation(actorUserId, undefined, surface);
-      threadState = await this.deps.persistence.getCurrentThreadState(actorUserId, surface);
-    }
-    const persona =
-      typeof this.deps.persona === "string"
-        ? this.deps.persona
-        : await this.deps.persona(actorUserId, userName, surface);
-    const { neutralDir, personaPath } = await renderPersona(this.deps.personaFs, {
-      sessionKey,
+    return launchChatSession({
+      actorUserId,
       userName,
-      provider,
-      baseDir: this.deps.neutralBase,
-      persona
-    });
-    const mcpConfig = await this.deps.mintMcpToken?.(actorUserId, sessionKey);
-    if (!this.sequenceBySession.has(sessionKey)) this.sequenceBySession.set(sessionKey, 0);
-    const nextSequence = () => {
-      const next = (this.sequenceBySession.get(sessionKey) ?? 0) + 1;
-      this.sequenceBySession.set(sessionKey, next);
-      return next;
-    };
-    const engine = await this.deps.engineFactory(provider, sessionKey, {
-      providerConfigId,
-      acpAgentId,
-      ...(acpModel ? { acpModel } : {}),
-      ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
-      ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
-        ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
-        : {}),
-      nextSequence
-    });
-    await assertProviderIdentityBeforeReplay({
-      actorUserId,
-      sessionKey,
-      providerIdentity,
-      persistence: this.deps.persistence,
-      engine,
-      revokeMcpToken: this.deps.revokeMcpToken
-    });
-    // Rebuild replay from live state for every launch; recall precedes conversation replay.
-    const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
-    const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-    const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
-    const memorySeed = recallResult
-      ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
-      : "";
-    const { recent: recentTurns, oldSummary } = await this.deps.persistence.listPriorTurns(
-      actorUserId,
-      { forceReplay: opts?.forceReplay },
-      surface
-    );
-    if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
-      throw new CliChatUnavailableError("private chat is only available in the drawer");
-    }
-    if (threadState?.incognito && !engine.purgeTranscripts && !engine.handlesOwnPrivatePurge) {
-      throw new CliChatUnavailableError("private session unavailable");
-    }
-    const replayParts: string[] = [];
-    if (memorySeed) replayParts.push(memorySeed);
-    if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
-    if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
-    const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
-    const { offset } = await engine.launch({
-      neutralDir,
-      personaPath,
-      personaText: persona,
-      replayBatch,
-      // #367: launch builders emit `--model` only for a concrete settings override; the
-      // `"default"` sentinel omits it so the CLI rides its own interactive/account model.
-      model,
-      ...(acpModel ? { acpModel } : {}),
-      mcpToken: mcpConfig?.token,
-      mcpServerUrl: mcpConfig?.mcpServerUrl
-    });
-
-    const startsToolClientPerTurn = engine.startsToolClientPerTurn ?? false;
-    if (mcpConfig?.token && !startsToolClientPerTurn) {
-      const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
-      if (toolsListReady === false) {
-        // The engine process this launch just started, and the token just minted for it, would
-        // otherwise leak: nothing else tracks or reaps either once this throw unwinds the launch.
-        try {
-          await engine.kill();
-        } catch {
-          // Best-effort teardown of a process that never finished starting up.
-        }
-        this.deps.revokeMcpToken?.(sessionKey);
-        throw new CliChatUnavailableError("tools list was not ready in time");
-      }
-    }
-
-    const session: UserSession = {
-      actorUserId,
+      opts,
       surface,
-      engine,
-      provider,
-      model,
       providerIdentity,
-      lastActivity: this.deps.clock.now(),
-      transcriptOffset: offset,
-      incognito: threadState?.incognito ?? false,
-      seededContextKeys: new Set(),
-      mcpToken: mcpConfig?.token,
-      startsToolClientPerTurn
-    };
-    this.sessions.set(sessionKey, session);
-
-    // #342 — only in-process engines need manager-owned replay submit + drain.
-    if (replayBatch !== undefined && !this.serverOwnsDrain) {
-      await engine.submit(replayBatch);
-      // Drain (and discard) so real turn records start from a clean offset.
-      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, this.pollMs);
-    }
-
-    return session;
+      deps: this.deps,
+      sessions: this.sessions,
+      sequenceBySession: this.sequenceBySession,
+      serverOwnsDrain: this.serverOwnsDrain,
+      pollMs: this.pollMs
+    });
   }
 
   /**
@@ -324,19 +213,16 @@ export class ChatSessionManager {
     idempotencyKey?: string,
     surface?: string
   ): Promise<void> {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    const session = await this.ensureSession(actorUserId, userName, undefined, chatSurface);
-    if (idempotencyKey && session.seededContextKeys.has(idempotencyKey)) return;
-    await session.engine.submit(seed);
-    session.transcriptOffset = await drainEngine(
-      session.engine,
-      session.transcriptOffset,
-      this.pollMs
-    );
-    if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
-    session.lastActivity = this.deps.clock.now();
-    this.deps.touchMcpToken?.(sessionKey);
+    return seedChatContext({
+      actorUserId,
+      userName,
+      seed,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(surface ? { surface } : {}),
+      deps: this.deps,
+      ensureSession: this.ensureSession.bind(this),
+      pollMs: this.pollMs
+    });
   }
 
   private async runTurn(
@@ -355,6 +241,12 @@ export class ChatSessionManager {
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
+    // #2956: one id for the turn, the shadow record, the audit rows and the
+    // answer line. Minted once here, so a launch retry or a replayed submit in
+    // this same turn reuses it and the answer line is written exactly once.
+    const turnId = randomUUID();
+    // File this session's tool rows under the turn; cleared in the finally below.
+    this.deps.setCurrentTurnId?.(sessionKey, turnId);
     const controller = new AbortController();
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
@@ -389,7 +281,7 @@ export class ChatSessionManager {
         actorUserId,
         surface,
         text,
-        opts,
+        { ...opts, turnId, parentId: turnId },
         controller
       );
       if (gated) return gated;
@@ -422,7 +314,9 @@ export class ChatSessionManager {
         requestIncognito,
         {
           hasAttachment: (opts?.attachments?.length ?? 0) > 0,
-          signal: controller.signal
+          signal: controller.signal,
+          // #2956: the shadow record shares the turn-start id.
+          turnId
         }
       );
 
@@ -665,6 +559,24 @@ export class ChatSessionManager {
       session.lastActivity = this.deps.clock.now();
       this.deps.touchMcpToken?.(sessionKey);
 
+      // #2956: the turn's answer line, with the turn-start id. Only a stored
+      // turn writes one — refused, stopped and private turns persist nothing,
+      // so their steps reference a missing parent, by design. Jev agreement
+      // settles in the shadow record after this write; the bare line carries
+      // tool counts, and agreement attaches to the detail row separately.
+      if (stored) {
+        this.recordAnswerLine(actorUserId, turnId, {
+          modelName: session.model,
+          durationMs: turnElapsedMs,
+          usage: turnUsage,
+          toolNames: invokedToolNames,
+          actionResults: this.actionResultsBySession.get(sessionKey),
+          quote: text,
+          records: turnActivityRecords,
+          reply
+        });
+      }
+
       // Post-store: re-emit reply with messageId + sourceFreshness so live UI picks it up
       if (stored?.assistantMessageId && stored.sourceFreshness !== undefined) {
         this.emit(actorUserId, surface, {
@@ -686,6 +598,9 @@ export class ChatSessionManager {
     } finally {
       // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
       gateShadow?.finish();
+      // #2956: release the turn's filing slot in the same finally that drops
+      // every other per-turn state, so later tool calls cannot join this turn.
+      this.deps.clearCurrentTurnId?.(sessionKey);
       flushPending();
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
@@ -693,6 +608,51 @@ export class ChatSessionManager {
       this.sequenceBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
+  }
+
+  /**
+   * #2956: one owned answer line per completed chat turn. Fire-and-forget like
+   * every other writer: the installed recorder routes the owned write through
+   * the owner's scope, and a failed write is logged and dropped, never thrown
+   * into the turn.
+   */
+  private recordAnswerLine(
+    actorUserId: string,
+    turnId: string,
+    turn: {
+      readonly modelName: string;
+      readonly durationMs?: number;
+      readonly usage?: ChatTurnUsageDto;
+      readonly toolNames: ReadonlySet<string>;
+      readonly actionResults?: readonly ActionResultMetadata[];
+      readonly quote: string;
+      readonly records: readonly TranscriptRecord[];
+      readonly reply: string;
+    }
+  ): void {
+    const failed = (turn.actionResults ?? []).filter((r) => r.outcome === "error").length;
+    recordModelActivity({
+      id: turnId,
+      kind: "chat",
+      action: "chat",
+      outcome: "ok",
+      modelName: turn.modelName,
+      result: "completed",
+      ownerUserId: actorUserId,
+      actionCode: "chat.answer",
+      turnId,
+      ...(turn.durationMs !== undefined ? { durationMs: turn.durationMs } : {}),
+      ...(turn.usage?.inputTokens !== undefined ? { inputTokens: turn.usage.inputTokens } : {}),
+      ...(turn.usage?.outputTokens !== undefined ? { outputTokens: turn.usage.outputTokens } : {}),
+      factCounts: { tools: turn.toolNames.size, tools_failed: failed },
+      detail: {
+        quote: turn.quote,
+        steps: answerDetailSteps(turn.records, turn.reply, {
+          modelName: turn.modelName,
+          durationMs: turn.durationMs
+        })
+      }
+    });
   }
 
   /** #2934 — fail a turn closed before it touches the model or the store. */

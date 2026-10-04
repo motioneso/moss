@@ -10,6 +10,8 @@ export { Button } from "./button.js";
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./button.js";
 export { ButtonLink, buttonLinkClassName } from "./button-link.js";
 export type { ButtonLinkProps, ButtonLinkSize, ButtonLinkVariant } from "./button-link.js";
+export { Checklist } from "./checklist.js";
+export type { ChecklistItem, ChecklistProps } from "./checklist.js";
 export { BrandMark } from "./brand-mark.js";
 export { Card } from "./card.js";
 export type { CardPadding, CardProps } from "./card.js";
@@ -66,6 +68,8 @@ export type {
   MastheadProps,
   MastheadTone
 } from "./masthead.js";
+export { NavIndex, NavIndexItem } from "./nav-index.js";
+export type { NavIndexProps, NavIndexItemProps } from "./nav-index.js";
 export { RowIndex, RowIndexItem } from "./row-index.js";
 export type { RowIndexProps, RowIndexItemProps } from "./row-index.js";
 export { Menu } from "./menu.js";
@@ -79,7 +83,7 @@ export type { PeekCloseButtonProps } from "./peek-close-button.js";
 export { PeekPanel } from "./peek-panel.js";
 export type { PeekPanelProps } from "./peek-panel.js";
 export { Segmented } from "./segmented.js";
-export type { SegmentedOption, SegmentedProps } from "./segmented.js";
+export type { SegmentedOption, SegmentedProps, SegmentedTone } from "./segmented.js";
 export { Select } from "./select.js";
 export { StatTile } from "./stat-tile.js";
 export type { StatTileProps } from "./stat-tile.js";

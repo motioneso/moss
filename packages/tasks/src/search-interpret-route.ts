@@ -100,7 +100,9 @@ export async function interpretTaskSearchForRequest(
             })
           }
         ],
-        maxOutputTokens: 500
+        maxOutputTokens: 500,
+        actionCode: "task.task-search",
+        ownerUserId: accessContext.actorUserId
       });
       return parseTaskSearchIntent(text, vocabulary);
     } catch (error) {

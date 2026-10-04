@@ -546,14 +546,56 @@ describe("MVP foundation schema catalog", () => {
           version: "0257",
           name: "0257_focus_judgments_retention.sql"
         },
-        { version: "0260", name: "0260_meeting_records.sql" },
-        { version: "0261", name: "0261_meeting_draft_delete.sql" },
-        { version: "0262", name: "0262_meeting_transcript_batches.sql" },
-        { version: "0263", name: "0263_meeting_chat_cleanup.sql" },
-        { version: "0264", name: "0264_chat_surface_immutable.sql" },
-        { version: "0265", name: "0265_meeting_outputs.sql" },
-        { version: "0266", name: "0266_meeting_exports.sql" },
-        { version: "0267", name: "0267_meeting_history.sql" }
+        // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
+        {
+          version: "0258",
+          name: "0258_activity_owner_lines.sql"
+        },
+        // #2956 — turn link on the action audit log for the per-turn step join.
+        {
+          version: "0259",
+          name: "0259_audit_log_turn_id.sql"
+        },
+        // #2956 round 3 — a detail row can never move to another line: the
+        // immutability trigger also freezes activity_id.
+        {
+          version: "0260",
+          name: "0260_activity_detail_no_reparent.sql"
+        },
+        // #2984 R2.1 — per-tool sort records and keep-out list on connected services.
+        {
+          version: "0268",
+          name: "0268_integration_classifier_sort.sql"
+        },
+        // #2984 R2.1 — one-time conversion of old opt-in and reviewed-risk settings.
+        {
+          version: "0269",
+          name: "0269_integration_classifier_sort_convert.sql"
+        },
+        // #2984 R2.2 — the sorting worker writes sort results; start-up sweep lists ids only.
+        {
+          version: "0270",
+          name: "0270_integration_classifier_sort_worker.sql"
+        },
+        // #2984 R2.4 — one admin shadow review per classifier selection unlocks the gate's `on`.
+        {
+          version: "0271",
+          name: "0271_chat_classifier_shadow_reviews.sql"
+        },
+        // #2984 R2.4 — the preparation worker writes prepared tools for its owner only.
+        {
+          version: "0272",
+          name: "0272_integration_classifier_prepare_worker.sql"
+        },
+        // #2981 — unapplied Meetings branch sequence, kept in original dependency order.
+        { version: "0273", name: "0273_meeting_records.sql" },
+        { version: "0274", name: "0274_meeting_draft_delete.sql" },
+        { version: "0275", name: "0275_meeting_transcript_batches.sql" },
+        { version: "0276", name: "0276_meeting_chat_cleanup.sql" },
+        { version: "0277", name: "0277_chat_surface_immutable.sql" },
+        { version: "0278", name: "0278_meeting_outputs.sql" },
+        { version: "0279", name: "0279_meeting_exports.sql" },
+        { version: "0280", name: "0280_meeting_history.sql" }
       ]);
     } finally {
       await client.end();

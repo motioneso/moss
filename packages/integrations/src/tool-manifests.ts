@@ -17,7 +17,8 @@ import type {
   MossModuleManifest,
   ToolContext,
   ToolExecute,
-  ToolResult
+  ToolResult,
+  ToolRunsWithoutAsking
 } from "@moss/module-sdk";
 
 import { requestBudget, type CallMemory, type RequestBudget } from "./call-memory.js";
@@ -27,8 +28,11 @@ import {
   type CandidateCache
 } from "./classifier-candidates.js";
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import { toolRiskInputs, toolSortFingerprint } from "./classifier-risk-inputs.js";
 import {
   effectiveClassifierTools,
+  toolRunsWithoutAsking,
+  toolSortState,
   type ClassifierConnectionState,
   type EligibleClassifierTool
 } from "./classifier-settings.js";
@@ -154,7 +158,7 @@ export function createIntegrationsActiveModulesResolver(
         enabledTools: conn.enabledTools,
         mutedTools: conn.mutedTools
       };
-      // Plan 2b.5 (#2905): the reviewed classifier menu for this connection, computed once. A
+      // Plan 2b.5 (#2905): the classifier menu for this connection, computed once. A
       // tool's `classifier` declaration and output schema are added only when it is currently
       // eligible, so ordinary manifests and curation are untouched for every other tool.
       const classifierState: ClassifierConnectionState = {
@@ -165,7 +169,9 @@ export function createIntegrationsActiveModulesResolver(
         enabledGroups: conn.enabledGroups,
         enabledTools: conn.enabledTools,
         mutedTools: conn.mutedTools,
-        classifierPreparation: conn.classifierPreparation
+        classifierPreparation: conn.classifierPreparation,
+        classifierSort: conn.classifierSort,
+        classifierKeptOutTools: conn.classifierKeptOutTools
       };
       const classifierByTool = new Map(
         effectiveClassifierTools(classifierState).map((entry) => [entry.tool.name, entry] as const)
@@ -231,8 +237,10 @@ function buildToolManifest(
   classifierByTool: ReadonlyMap<string, EligibleClassifierTool>
 ): ModuleAssistantToolManifest {
   const budget = deps.requestBudget ?? requestBudget;
-  const action: IntegrationOutcomeEnvelope["action"] =
-    tool.readOnly === true ? "read" : "performed";
+  // A current sort decides read versus performed; an unsorted tool keeps the server's hint.
+  const sort = toolSortState(conn.classifierSort, tool);
+  const readTool = sort.status === "current" ? sort.risk === "read" : tool.readOnly === true;
+  const action: IntegrationOutcomeEnvelope["action"] = readTool ? "read" : "performed";
   const classifierEntry = classifierByTool.get(tool.name);
   // Plan 2b.5: a connected read tool's reply can only be the fixed envelope summary with no
   // content ("Read succeeded."), so it cannot count as handled and stays off the menu. It can
@@ -312,6 +320,19 @@ function buildToolManifest(
     return { data: envelope as unknown as Record<string, unknown> };
   };
 
+  // Spec 8.3: read at call time from the owner's own row, so a changed sort, send choice or
+  // definition counts at the next call. The tool that runs is this listing's, so the stored
+  // definition must still match it.
+  const runsWithoutAsking: ToolRunsWithoutAsking = async (scopedDb) => {
+    const row = await repository.getConnection(scopedDb as never, conn.id);
+    if (!row || !row.enabled) return false;
+    const stored = row.discoveredTools.find((candidate) => candidate.name === tool.name);
+    if (!stored) return false;
+    const listed = toolSortFingerprint(toolRiskInputs(tool));
+    if (toolSortFingerprint(toolRiskInputs(stored)) !== listed) return false;
+    return toolRunsWithoutAsking(row.classifierSort, stored);
+  };
+
   return {
     name: `${slug}.${tool.name}`,
     description: tool.description,
@@ -320,11 +341,17 @@ function buildToolManifest(
     executionPolicy: "auto",
     isExternal: true,
     externalContent: true,
+    runsWithoutAsking,
     inputSchema: tool.inputSchema ?? { type: "object", properties: {} },
     ...(menuEntry
       ? {
           outputSchema: INTEGRATION_CLASSIFIER_OUTPUT_SCHEMA,
-          classifier: buildClassifierDeclaration(menuEntry, conn, classifierByTool, deps)
+          classifier: {
+            ...buildClassifierDeclaration(menuEntry, conn, classifierByTool, deps),
+            // The gate's confidence bar follows the current sort; without one it keeps the
+            // manifest's outbound bar.
+            ...(sort.status === "current" ? { sortedRisk: sort.risk } : {})
+          }
         }
       : {}),
     execute

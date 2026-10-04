@@ -5,6 +5,11 @@ Build: [#2981](https://github.com/motioneso/moss/issues/2981), [PR #2982](https:
 Base inspected: `bee892ce`.
 Approved design: `docs/superpowers/specs/2026-10-03-meeting-companion.md`, sections 4–5 and actual `2026-10-03-meeting-companion/Moss-meeting-04.png` pixels.
 
+Current source migration is 0280 after the unapplied branch renumber; see the
+[package migration note](../../../packages/meetings/README.md#migration-numbering). Prior
+checkpoint results and local-gate holds below are historical; current verification uses the
+merged per-server `scripts/run-gate.sh` wrapper and requires fresh exact-commit evidence.
+
 ## Scope and truthful boundaries
 
 Close the History metadata, server filtering/search, and selected-meeting rail gap in the existing
@@ -28,12 +33,12 @@ or vault files. Those exclusions describe the search surface, not deletion of re
 
 ## Verified seams
 
-- Draft identity, current notes, and descending `(created_at, id)` cursor: `packages/meetings/src/repository.ts:109–138`; table and owner/date index: `packages/meetings/sql/0260_meeting_records.sql:2–33`.
+- Draft identity, current notes, and descending `(created_at, id)` cursor: `packages/meetings/src/repository.ts:109–138`; table and owner/date index: `packages/meetings/sql/0273_meeting_records.sql:2–33`.
 - Authenticated route registration enters `withDataContext`: `packages/meetings/src/routes.ts:21–41`; actor GUC is transaction-local: `packages/db/src/data-context.ts:65–87`.
 - Transcript ingestion already validates/reconstructs the ledger and inserts its receipt in one actor transaction: `packages/meetings/src/transcript-repository.ts:102–143`. It caps each batch at 100 events/512 KiB, each segment at 100,000 UTF-16 characters, and the ledger at 20,000 revisions/32 MiB: `packages/meetings/src/transcript-batch.ts:10–12,55–67,119–142,178–180`.
 - Current segment identity and finality are explicit; source kind is only microphone/output: `packages/shared/src/meeting-transcript-api.ts:2–31`. No persisted per-record capture mode exists in the inspected record schema.
-- Active output head is highest non-inactive version; staleness compares current input revisions: `packages/meetings/src/output-repository.ts:114–127,163–179`. Generated request reservations have `expires_at` but no independent creation timestamp: `packages/meetings/sql/0265_meeting_outputs.sql:2–10`. Generation requests are distinguished by `input_json.kind`: `packages/meetings/src/output-service.ts:42`.
-- Candidate review states and accepted-copy identity live in Meetings, with independent Task lifecycle: `packages/meetings/sql/0265_meeting_outputs.sql:24–39`.
+- Active output head is highest non-inactive version; staleness compares current input revisions: `packages/meetings/src/output-repository.ts:114–127,163–179`. Generated request reservations have `expires_at` but no independent creation timestamp: `packages/meetings/sql/0278_meeting_outputs.sql:2–10`. Generation requests are distinguished by `input_json.kind`: `packages/meetings/src/output-service.ts:42`.
+- Candidate review states and accepted-copy identity live in Meetings, with independent Task lifecycle: `packages/meetings/sql/0278_meeting_outputs.sql:24–39`.
 - Export receipts distinguish write and indexing acknowledgement, and update under existing export transactions: `packages/shared/src/meeting-export-api.ts:7–32`; `packages/meetings/src/export-repository.ts:118–136`.
 - Existing History filters only loaded full-note records: `packages/meetings/src/web/meeting-history.tsx:20–42`; this is the behavior replaced, not reused for server search.
 - API defaults to Fastify request logging: `apps/api/src/server.ts:244–249`. Installed Fastify's `lib/logger-pino.js` request serializer includes URL, method and connection metadata, not body. The generic module route error helper logs the original error: `packages/module-sdk/src/route-errors.ts:122`. New history operations must scrub DB errors before this boundary; POST alone is not a complete logging claim.
@@ -158,9 +163,9 @@ separate facts. No creation time is invented from expiry. Latest vault receipt i
 stored canonical `updatedAt`, then artifact version; saved-version count is independent of that
 latest outcome.
 
-## Storage decision and migration 0267
+## Storage decision and migration 0280
 
-Reserve `packages/meetings/sql/0267_meeting_history.sql` for this slice. Earlier migrations remain
+Reserve `packages/meetings/sql/0280_meeting_history.sql` for this slice. Earlier migrations remain
 unchanged. The unpublished native-authorization candidate must be renumbered before future use.
 A migration is necessary: querying all append-only transcript JSON for every search would make
 latency and memory grow with private historical revisions and cannot provide a useful index.
@@ -248,8 +253,8 @@ rolls back both receipt and projection.
 ### Compatible, immutable application backfill
 
 Add one self-contained, frozen first-party sidecar:
-`packages/meetings/sql/0267_meeting_history.backfill.mjs`. The SQL file declares this exact adjacent
-basename with `-- moss:backfill 0267_meeting_history.backfill.mjs`; missing declared bytes fail
+`packages/meetings/sql/0280_meeting_history.backfill.mjs`. The SQL file declares this exact adjacent
+basename with `-- moss:backfill 0280_meeting_history.backfill.mjs`; missing declared bytes fail
 closed on fresh install and drift inspection. Reject multiple declarations, traversal, absolute
 paths, and noncanonical basenames; require the SQL basename with `.backfill.mjs` instead of `.sql`.
 Read/hash exact UTF-8 bytes and reject invalid UTF-8 instead of replacement decoding. The sidecar exports `backfill(queryClient)` and
@@ -318,7 +323,7 @@ limited to the inspected application logger, not arbitrary external infrastructu
 ## Work packages and ownership
 
 1. **Coordinator:** review and commit this plan before either code lane begins. Resolve any public
-   contract changes first. Reserve migration 0267 and coordinate shared-file commits.
+   contract changes first. Reserve migration 0280 and coordinate shared-file commits.
 2. **Metadata/backend lane:** shared contract and schemas; `history-repository.ts`,
    `history-routes.ts`, current-segment projection helper; additive registration in `routes.ts`
    and `index.ts`; DB type declarations, migration, manifest route/feature/storage declarations,
@@ -339,8 +344,9 @@ no module-injected host chat turn and no new prompt guidance or model-authored p
 
 ## Verification and release gate
 
-Pure/local checks only until the supported isolated DB gate is available. #2989 and its replacement
-#2991 remain infrastructure proof dependencies; no improvised local server, database, or gate.
+The supported per-server `scripts/run-gate.sh` from #2989/#2991 is now present. Read `verify-gate`
+before DB checks; no direct DB commands, persistent/shared server, or improvised gate. This
+source-only renumber does not claim a new DB result.
 The metadata lane must not start a global compiler concurrently with the coordinator.
 
 Expected exit 0 for each applicable unpiped command (use explicit touched paths when executing):

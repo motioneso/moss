@@ -2,7 +2,7 @@
 
 Date: 2026-10-04. Task: #2981. Draft PR: #2982.
 Approved product design: `docs/superpowers/specs/2026-10-03-meeting-companion.md`, section 9.
-Status: implementation plan committed before code; restore the reviewed metadata-only checkpoint after History verification. Browser/native handoff and capture scopes remain later stages.
+Status: archived, unpublished implementation plan. The device-authorization candidate remains excluded from this branch; this review does not restore it or reserve a migration number. Browser/native handoff and capture scopes remain later stages. Historical instructions below describe the candidate, not current executable steps.
 
 ## Outcome and boundary
 
@@ -31,7 +31,7 @@ credentials, account permissions, audio, or provider configuration will be creat
   owner identity: `packages/db/src/data-context.ts:56-80`.
 - Meetings owns an RLS table with an `(id, owner_user_id)` unique key and owner-only policy;
   public repository access requires `DataContextDb`:
-  `packages/meetings/sql/0260_meeting_records.sql:2-25` and
+  `packages/meetings/sql/0273_meeting_records.sql:2-25` and
   `packages/meetings/src/repository.ts:89-106`.
 - Module route declarations remain authoritative. The current route guard lets failed general
   authentication reach the route's own resolver; the separate device handler must independently
@@ -157,7 +157,7 @@ New files:
 - `packages/meetings/src/device-authorization-service.ts`: explicit approve/redeem/authorize/revoke
   flow; no generic action dispatch or provider client.
 - `packages/meetings/src/device-authorization-routes.ts`: separate cookie-owner and device routes.
-- `packages/meetings/sql/0268_meeting_device_authorizations.sql`: reserved by coordinator.
+- `packages/meetings/sql/0268_meeting_device_authorizations.sql`: historical candidate filename only; 0268 is now occupied on main, so future work must recheck all migration reservations.
 - `tests/unit/meeting-device-authorization.test.ts` and
   `tests/unit/meeting-device-routes.test.ts`: pure protocol/route synthetic tests.
 - `tests/unit/browser-session-binding.test.ts`: synthetic auth-pool boundary tests.
@@ -237,8 +237,9 @@ on an unverified authorization assumption.
 
 ## Restoration and concurrency constraints
 
-History owns migration 0267. The never-published authorization migration is reserved as 0268;
-retain every History route, type, export and schema/cascade inventory entry when adding this table.
+History now owns migration 0280. The never-published authorization candidate has no current
+reservation; 0268 is occupied on main. Any future approved restoration must choose a new unused
+number and retain every History route, type, export and schema/cascade inventory entry.
 
 Persist immutable `protocol_version = 1` in each grant. Version 1 permits only the literal status
 and revoke operation set. Check that version during approval replay, initial cryptographic proof

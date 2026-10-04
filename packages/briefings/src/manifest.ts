@@ -252,6 +252,11 @@ export const briefingsModuleManifest = {
   ],
   features: [
     {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.briefings",
+      description: "Prepared a briefing"
+    },
+    {
       id: "briefings.refresh",
       description:
         "Queue a fresh briefing run for a definition and follow it to ready. A repeated " +
