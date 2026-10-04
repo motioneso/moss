@@ -140,6 +140,7 @@ None.
 - w1:p11N "Coordinator (old)" (session 6fb239b6, relay 4 coordinator) - merged #2975 and #2974; relayed at RELAY POINT 5; closed by relay 5.
 - w1:p11V "Coordinator (old)" (session b1e6e877, relay 5 coordinator) - merged #2970 and #2977 (security, Ben sign-off); relayed at RELAY POINT 6; closed by relay 6.
 - w1:p11Y "Coordinator (old)" (session 66aed34b, relay 6 coordinator) - ran slices C and D of #2956, the 2982 review and the 2989 lane; relayed at RELAY POINT 7 on a compaction tripwire; closed by relay 7 (session 18a6b85a).
+- w1:p12N "Diagnose prod prepared tools (Opus)" (diag-prod-classifier) - read-only; found prod HA preparations were never saved (Prepare drafts only in the page; save needs approve per tool); finding posted on issue #2984; worktree removed.
 
 ## Continuation note
 
