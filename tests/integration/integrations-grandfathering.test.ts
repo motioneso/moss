@@ -158,20 +158,23 @@ describe("#2175 Task 5 — 0209 grandfathering migration", () => {
     expect(rows).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
   });
 
-  it("leaves exactly the two original policies on the table after the migration runs", async () => {
+  it("leaves the table's policies unchanged after the migration runs", async () => {
+    const policies = async () =>
+      (
+        await seedClient.query<{ policyname: string }>(
+          `SELECT policyname
+           FROM pg_policies
+           WHERE schemaname = 'app' AND tablename = 'integration_connections'
+           ORDER BY policyname`
+        )
+      ).rows.map((r) => r.policyname);
+    const before = await policies();
+
     await migrationClient.query(migrationSql);
 
-    const { rows } = await seedClient.query<{ policyname: string }>(
-      `SELECT policyname
-       FROM pg_policies
-       WHERE schemaname = 'app' AND tablename = 'integration_connections'
-       ORDER BY policyname`
-    );
-
-    expect(rows.map((r) => r.policyname)).toEqual([
-      "integration_connections_owner",
-      "integration_connections_worker_read"
-    ]);
+    expect(before).toContain("integration_connections_owner");
+    expect(before).toContain("integration_connections_worker_read");
+    expect(await policies()).toEqual(before);
   });
 
   it("keeps the same effective enabled tools across the migration, and leaves a later-discovered tool off", async () => {

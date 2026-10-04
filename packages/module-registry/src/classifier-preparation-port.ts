@@ -36,8 +36,9 @@ export function createClassifierPreparationPort(deps: {
       const result = await generateStructured(
         scopedDb,
         {
-          service: MODULE_WORKER_SERVICE_KEY,
+          service: input.service ?? MODULE_WORKER_SERVICE_KEY,
           schema: input.schema,
+          ...(input.replySchema ? { replySchema: input.replySchema } : {}),
           prompt: input.prompt,
           explicitModel: {
             id: input.model.id,
