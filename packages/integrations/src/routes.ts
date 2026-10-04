@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PgBoss } from "pg-boss";
 
 import {
-  resolveMossEnv,
   type AccessContext,
   type DataContextDb,
   type DataContextRunner,
@@ -17,11 +17,13 @@ import {
   type IntegrationKind,
   type IntegrationSummary,
   type ListIntegrationsResponse,
-  type PrepareIntegrationClassifierResponse
+  type PrepareIntegrationClassifierResponse,
+  type SortIntegrationClassifierResponse
 } from "@moss/shared";
 
-import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
+import { resolveIntegrationsCipher } from "./credentials.js";
 import { candidateCache } from "./classifier-candidates.js";
+import { enqueueClassifierSort, type ClassifierSortJobOp } from "./classifier-sort-jobs.js";
 import {
   prepareClassifierToolDrafts,
   type ClassifierPreparationPort
@@ -59,6 +61,11 @@ export interface IntegrationsRouteDependencies {
    * calls no model.
    */
   readonly preparationPort?: ClassifierPreparationPort;
+  /**
+   * #2984 R2.2: queues the background tool sort. Absent (older wiring/tests) means no sort is
+   * queued and the Try again request answers 503.
+   */
+  readonly boss?: PgBoss;
 }
 
 interface IdParams {
@@ -83,19 +90,35 @@ export function registerIntegrationsRoutes(
    * never a boot-style throw and never key material.
    */
   async function cipherForRequest(scopedDb: DataContextDb): Promise<JsonSecretCipher> {
-    if (dependencies.cipher) return dependencies.cipher;
-    if (resolveMossEnv(process.env, "JARVIS_INTEGRATIONS_SECRET_KEY") !== undefined) {
-      return createIntegrationsCipher();
-    }
-    if (dependencies.resolveKeyring) {
-      const keyring = await dependencies.resolveKeyring(scopedDb);
-      if (keyring) return createIntegrationsCipherFromKeyring(keyring);
-    }
+    const cipher = await resolveIntegrationsCipher(scopedDb, dependencies);
+    if (cipher) return cipher;
     throw new HttpError(
       503,
       "Integration credentials are paused until an encryption key is set up. " +
         "Ask an admin to open Settings, Encryption keys, and press Generate."
     );
+  }
+
+  /**
+   * Queue the tool sort after the request's transaction commits. The row is already saved, so a
+   * queue failure is logged and the request still succeeds; the worker's start-up sweep catches
+   * any tool left never tried.
+   */
+  async function queueSort(
+    request: FastifyRequest,
+    actorUserId: string,
+    connectionId: string,
+    op: ClassifierSortJobOp = "sort"
+  ): Promise<void> {
+    if (!dependencies.boss) return;
+    try {
+      await enqueueClassifierSort(dependencies.boss, actorUserId, connectionId, op);
+    } catch (error) {
+      request.log.warn(
+        { connectionId, error: error instanceof Error ? error.message : "unknown" },
+        "integrations: could not queue tool sorting"
+      );
+    }
   }
 
   server.get("/api/integrations", async (request, reply) => {
@@ -164,6 +187,7 @@ export function registerIntegrationsRoutes(
       );
 
       cache.drop(accessContext.actorUserId);
+      await queueSort(request, accessContext.actorUserId, detail.id);
       return reply.code(201).send(detail);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -198,6 +222,9 @@ export function registerIntegrationsRoutes(
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
       candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
+      if (value.classifierEnabled === true) {
+        await queueSort(request, accessContext.actorUserId, updated.id);
+      }
       return toDetail(updated, updated.discoveredTools);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -237,6 +264,7 @@ export function registerIntegrationsRoutes(
 
       cache.drop(accessContext.actorUserId);
       candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
+      await queueSort(request, accessContext.actorUserId, request.params.id);
       return detail;
     } catch (error) {
       return handleRouteError(error, reply);
@@ -339,6 +367,30 @@ export function registerIntegrationsRoutes(
         cache.drop(accessContext.actorUserId);
         candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
         return toDetail(updated, updated.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /**
+   * #2984 R2.2: the owner's Try again. Queues a background sort that also re-sends tools whose
+   * last sort failed; nothing else resends them.
+   */
+  server.post<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/sort",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        if (!dependencies.boss) throw new HttpError(503, "Tool sorting is not available.");
+        const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.getConnection(scopedDb, request.params.id)
+        );
+        if (!row) throw new HttpError(404, "Integration not found");
+        await enqueueClassifierSort(dependencies.boss, accessContext.actorUserId, row.id, "retry");
+        return reply
+          .code(202)
+          .send({ status: "queued" } satisfies SortIntegrationClassifierResponse);
       } catch (error) {
         return handleRouteError(error, reply);
       }

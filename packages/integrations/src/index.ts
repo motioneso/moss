@@ -6,6 +6,8 @@ export * from "./classifier-readable-name.js";
 export * from "./classifier-reply.js";
 export * from "./classifier-risk-inputs.js";
 export * from "./classifier-settings.js";
+export * from "./classifier-sort-jobs.js";
+export * from "./classifier-sorting.js";
 export * from "./credentials.js";
 export * from "./curation.js";
 export * from "./derive-groups.js";

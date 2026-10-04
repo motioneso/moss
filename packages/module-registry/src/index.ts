@@ -314,8 +314,10 @@ import {
   GOALS_MEMORY_SYNC_RECONCILE_QUEUE
 } from "@moss/goals";
 import {
+  INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION,
   integrationsModuleManifest,
   integrationsModuleSqlMigrationDirectory,
+  registerClassifierSortWorkers,
   registerIntegrationsRoutes,
   resolverCache
 } from "@moss/integrations";
@@ -1917,7 +1919,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: integrationsModuleManifest,
     sqlMigrationDirectories: [integrationsModuleSqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: [INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION],
     registerRoutes: (server, deps) =>
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
@@ -1930,7 +1932,21 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             : {})
         }),
         // Master key store (#2312): per-request family key, never eager at boot.
-        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
+        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY),
+        boss: deps.boss
+      }),
+    // #2984 R2.2: background tool sorting on the owner's default chat model.
+    registerWorkers: (boss, deps) =>
+      registerClassifierSortWorkers(boss, {
+        dataContext: deps.dataContext,
+        rootDb: deps.rootDb,
+        port: createClassifierPreparationPort({
+          createCliStructuredAdapter: createCliStructuredAdapterFactory()
+        }),
+        cipherSources: {
+          resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
+        },
+        ...(deps.logger ? { logger: deps.logger } : {})
       })
   },
   {

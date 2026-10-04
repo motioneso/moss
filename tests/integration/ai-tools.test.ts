@@ -468,6 +468,7 @@ describe("AI read-only assistant tool execution foundation", () => {
       "tasks-recurrence-materialize",
       "goals-memory-sync",
       "goals-memory-sync-reconcile",
+      "integrations.classifier-sort",
       "notifications.digest.compose",
       "notifications.push.deliver",
       "notifications.push.summary",

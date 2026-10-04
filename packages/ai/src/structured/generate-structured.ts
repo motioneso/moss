@@ -105,6 +105,12 @@ export type GenerateStructuredDeps = {
 export type GenerateStructuredInput = {
   readonly service: ModuleServiceKey;
   readonly schema: Record<string, unknown>;
+  /**
+   * #2984: the schema the reply is checked against. Defaults to `schema`, which the provider is
+   * sent. A caller that checks each item itself passes a looser one, so one malformed item does
+   * not fail the whole reply under a strict provider schema.
+   */
+  readonly replySchema?: Record<string, unknown>;
   readonly prompt: string;
   readonly tierHint?: AiModelTier;
   readonly requireExplicitBinding?: boolean;
@@ -178,6 +184,7 @@ export async function generateStructured(
   deps: GenerateStructuredDeps
 ): Promise<GenerateStructuredResult> {
   assertBoundedStructuredSchema(input.schema);
+  if (input.replySchema) assertBoundedStructuredSchema(input.replySchema);
   assertBoundedStructuredPrompt(input.prompt);
 
   let sortingFailure: { readonly modelId: string; readonly error: SortingFailure } | null = null;
@@ -291,7 +298,7 @@ async function runOnModel(
 
   const signal = options.signal;
   const ajv = new Ajv({ strict: false, validateFormats: false });
-  const validate = ajv.compile(input.schema);
+  const validate = ajv.compile(input.replySchema ?? input.schema);
   const maxOutputTokens = input.maxOutputTokens ?? STRUCTURED_DEFAULT_MAX_OUTPUT_TOKENS;
   const messages: StructuredChatTurn[] = [{ role: "user", content: input.prompt }];
   const usage = { inputTokens: 0, outputTokens: 0 };

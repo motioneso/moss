@@ -209,6 +209,14 @@ export interface PrepareIntegrationClassifierResponse {
   readonly remaining: number;
 }
 
+/**
+ * Reply to `POST /api/integrations/:id/classifier/sort` (#2984 R2.2): the owner's Try again.
+ * The sort runs in the background and re-sends tools whose last sort failed.
+ */
+export interface SortIntegrationClassifierResponse {
+  readonly status: "queued";
+}
+
 /** Body for the prepare request. */
 export interface PrepareIntegrationClassifierRequest {
   /** Re-draft every target, even one whose reviewed definition is unchanged (explicit re-prepare). */
