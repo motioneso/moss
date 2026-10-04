@@ -2,7 +2,7 @@
 
 Date: 2026-10-04. Task: #2981. Draft PR: #2982.
 Approved product design: `docs/superpowers/specs/2026-10-03-meeting-companion.md`, section 9.
-Status: proposed implementation plan; security review and committed-plan gate precede code.
+Status: implementation plan committed before code; restore the reviewed metadata-only checkpoint after History verification. Browser/native handoff and capture scopes remain later stages.
 
 ## Outcome and boundary
 
@@ -234,3 +234,27 @@ on an unverified authorization assumption.
   pools. Accepted correction: read-only cryptographic probe, close transaction, fresh preflight,
   then locked cryptographic/scope/state/deadline revalidation. Cross-service revoke is explicitly
   request-bound; grant revoke serializes with the final operation.
+
+## Restoration and concurrency constraints
+
+History owns migration 0267. The never-published authorization migration is reserved as 0268;
+retain every History route, type, export and schema/cascade inventory entry when adding this table.
+
+Persist immutable `protocol_version = 1` in each grant. Version 1 permits only the literal status
+and revoke operation set. Check that version during approval replay, initial cryptographic proof
+and final locked revalidation. A future content/capture extension needs a new approved protocol
+version and newly approved grant; changing a shared operation constant must never expand old
+credentials. Pin these rules with fail-closed protocol-mismatch tests, including a mismatch
+introduced between preflight and the final lock, and verify metadata-only credentials are rejected
+by the newly added History routes too.
+
+Approval request-key uniqueness is owner-wide, while meeting locks are per meeting. Concurrent
+requests using one key for different meetings therefore need the existing create-style targeted
+`ON CONFLICT (owner_user_id, request_key) DO NOTHING` and a separate winner read/replay comparison.
+Return the domain conflict for changed input; do not catch arbitrary unique violations or query
+inside an aborted transaction. Preserve the per-meeting cap lock.
+
+Keep the one-connection test that proves preflight does not hold an app transaction. Separately use
+two or more connections and explicit barriers to prove approval, redemption and revoke contention;
+a Promise.all test on one connection is serialization, not competing database-lock evidence.
+All database checks use disposable hosted CI servers while the local gate hold remains in force.

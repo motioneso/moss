@@ -1,6 +1,6 @@
 # Meeting history metadata, search, and selection (#2981)
 
-Status: implementation checkpoint; plan was committed before code. Isolated database and real-UI verification of this new slice remain pending publication.
+Status: verified History checkpoint at `b057123394590f90ee4b49a4d41fd77cbfbfe453`; plan was committed before code. Native capture and real-provider proof remain separate.
 Build: [#2981](https://github.com/motioneso/moss/issues/2981), [PR #2982](https://github.com/motioneso/moss/pull/2982).
 Base inspected: `bee892ce`.
 Approved design: `docs/superpowers/specs/2026-10-03-meeting-companion.md`, sections 4–5 and actual `2026-10-03-meeting-companion/Moss-meeting-04.png` pixels.
@@ -447,3 +447,24 @@ and authoritative JSON payloads remain the source contracts. Capture remains una
   sockets/network-interface inspection, absent Docker/browser/native PTY and tool-runtime setup;
   it is not an aggregate green result or final frozen-tree proof. Exact-commit hosted CI and the real History UAT must pass
   before this slice is called verified. Real capture/provider gates and the local DB hold remain.
+
+## Verified checkpoint — b0571233
+
+[Full CI](https://github.com/motioneso/moss/actions/runs/37184849831) and
+[all four credential-free UI groups](https://github.com/motioneso/moss/actions/runs/37184849824)
+completed successfully for `b057123394590f90ee4b49a4d41fd77cbfbfe453`.
+All four database shards, hosted unit tests, static checks, web/browser tests, and development/
+production Compose smoke passed. The UI groups contain 25 active tests and four pre-existing
+fixmes, not 29 passing tests. Four separate real-provider suites remain unrun.
+
+The first run exposed two test mistakes: the legacy upgrade fixture left a standalone new index
+behind, and the keyboard check inspected outline although shared buttons use a shadow focus ring.
+The follow-up changes only those tests: explicit fixture index teardown and real Tab navigation
+with a visible nontransparent shadow-ring assertion. Published migration bytes were unchanged.
+
+The final History UI test passed in 11.0 seconds against the real app/API with synthetic text:
+search older than the loaded page, terms across title/notes/current turns, correction removing old
+text, server state filters, selected review/back, real offline pause/reconnect, deleted selection,
+mobile browser navigation and keyboard focus, and light/dark/teal contrast. It does not establish
+recording, real transcription, speaker separation, or production-scale corpus performance.
+The local database hold pending the supported per-server gate remains unchanged.

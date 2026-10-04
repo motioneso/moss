@@ -64,8 +64,10 @@ partial chunk is retained; post-cutoff samples cannot be sent. Duplicate Stop do
 extend its deadline. Finalization is bounded to at most 60 seconds and distinguishes drained
 from deadline-expired. Already submitted work is separate from a new send.
 
-Raw audio is memory-only in this checkpoint. Bound queue duration and bytes per source;
-proposed duration cap is 60 seconds with a warning at 30. Overflow/expiry must return a
+Raw audio is memory-only in this checkpoint. Bound queue duration and bytes per source.
+The duration cap is 60 seconds with a warning at 30, but the separate default limit of
+1,048,576 samples fills after about 21.8 seconds at 48 kHz. The first exhausted limit wins;
+this is not a promise of 60 seconds of backlog. Overflow/expiry must return a
 visible gap/failure outcome rather than silently dropping audio or allocating indefinitely.
 No optional recovery buffer or disk export is implemented.
 
@@ -96,7 +98,8 @@ Run available static/source checks locally without recording, OS permission chan
 credentials or system settings. The current Linux development environment lacks Swift and
 Xcode, so it cannot validate native compilation. After review, the existing macos-15 CI job
 can compile real adapters and run injected synthetic XCTest cases. No workflow permission
-expansion is required.
+expansion is required. Add a Release compile-only check with code signing disabled to catch
+configuration-specific errors; it creates no distribution artifact and activates no capture.
 
 Synthetic coverage includes every startup failure and cleanup order, mic-only no-output,
 source-scope rejection, repeated Stop, Pause/send races, late callback rejection, exact
