@@ -125,6 +125,11 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.sports",
+      description: "Ranked your sports stories"
+    },
+    {
       id: "sports.source_icons",
       description:
         "Each custom news source in Sports settings shows its own icon next to its name: a publication's favicon. Subreddits and any source without a usable icon show a neutral newspaper symbol instead."

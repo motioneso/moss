@@ -31,6 +31,7 @@ const actionRow = {
   error_class: null,
   request_id: "req-action",
   chat_session_id: null,
+  turn_id: null,
   source_surface: "chat",
   input_summary: { userContent: "must not cross this boundary" },
   duration_ms: null

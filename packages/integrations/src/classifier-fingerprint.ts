@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { IntegrationToolDescriptor } from "@moss/shared";
 
 /** Recursively sort object keys so JSON.stringify is canonical (order-independent). */
-function canonicalize(value: unknown): unknown {
+export function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
     // Null prototype: a schema key named `__proto__` is hashed instead of dropped by the setter.
@@ -27,16 +27,34 @@ function canonicalize(value: unknown): unknown {
  * The digest is the token a save compares against, and the source of truth for "stale".
  */
 export function toolDefinitionFingerprint(tool: IntegrationToolDescriptor): string {
-  const canonical = JSON.stringify(
-    canonicalize({
-      name: tool.name,
-      description: tool.description,
-      group: tool.group,
-      inputSchema: tool.inputSchema,
-      readOnly: tool.readOnly ?? null,
-      idempotent: tool.idempotent ?? null,
-      destructive: tool.destructive ?? null
-    })
-  );
+  return sha256Of(toolDefinitionFields(tool));
+}
+
+/** The definition fields the fingerprint covers. The sort's risk inputs extend this record. */
+export interface ToolDefinitionFields {
+  readonly name: string;
+  readonly description: string;
+  readonly group: string;
+  readonly inputSchema: Record<string, unknown> | null;
+  readonly readOnly: boolean | null;
+  readonly idempotent: boolean | null;
+  readonly destructive: boolean | null;
+}
+
+export function toolDefinitionFields(tool: IntegrationToolDescriptor): ToolDefinitionFields {
+  return {
+    name: tool.name,
+    description: tool.description,
+    group: tool.group,
+    inputSchema: tool.inputSchema,
+    readOnly: tool.readOnly ?? null,
+    idempotent: tool.idempotent ?? null,
+    destructive: tool.destructive ?? null
+  };
+}
+
+/** `sha256:<hex>` of the canonical JSON of a value. */
+export function sha256Of(value: unknown): string {
+  const canonical = JSON.stringify(canonicalize(value));
   return `sha256:${createHash("sha256").update(canonical).digest("hex")}`;
 }

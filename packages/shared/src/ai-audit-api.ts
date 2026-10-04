@@ -44,6 +44,7 @@ const actionAuditLogEntrySchema = {
     "errorClass",
     "requestId",
     "chatSessionId",
+    "turnId",
     "sourceSurface",
     "inputSummary",
     "durationMs",
@@ -76,6 +77,8 @@ const actionAuditLogEntrySchema = {
     errorClass: { type: ["string", "null"] },
     requestId: { type: ["string", "null"] },
     chatSessionId: { type: ["string", "null"] },
+    /** #2956: the chat turn this tool row ran in; null outside a turn. Joins the answer line. */
+    turnId: { type: ["string", "null"] },
     sourceSurface: {
       type: "string",
       enum: ["chat", "proactive", "scheduled", "unknown"]
@@ -131,6 +134,8 @@ export type ActionAuditLogEntryDto = {
   readonly errorClass: string | null;
   readonly requestId: string | null;
   readonly chatSessionId: string | null;
+  /** #2956: the chat turn this tool row ran in; null outside a turn. Joins the answer line. */
+  readonly turnId: string | null;
   readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
   readonly inputSummary: ActionAuditInputSummary | null;
   /** #2175: milliseconds the tool call took; null when no call happened (e.g. a denial). */

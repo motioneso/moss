@@ -84,6 +84,11 @@ export const workshopModuleManifest = {
   ],
   features: [
     {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.workshop",
+      description: "Replied to a Workshop project"
+    },
+    {
       id: "workshop.projects",
       description:
         "Admins can save private projects and messages; other admins cannot access them. " +
