@@ -98,6 +98,9 @@ function promptIds(prompt: string): string[] {
  * Runs the call through the real structured router, as the production port does: its prompt size
  * check and its answer check both apply. Only the provider's reply is scripted.
  */
+/** Every schema the scripted provider was sent. */
+const sentSchemas: Record<string, unknown>[] = [];
+
 async function throughRouter(
   input: RunInput,
   reply: (ids: string[]) => unknown
@@ -116,7 +119,8 @@ async function throughRouter(
       },
       maxOutputTokens: input.maxOutputTokens,
       singleAttempt: true,
-      servedByLabel: "main"
+      servedByLabel: "main",
+      ...(input.replySchema ? { replySchema: input.replySchema } : {})
     },
     {
       repository: {
@@ -129,10 +133,13 @@ async function throughRouter(
       } as never,
       cipher: { decryptJson: () => ({ apiKey: "sk-test" }) },
       createAdapter: () => ({
-        generateStructured: async () => ({
-          rawObject: reply(promptIds(input.prompt)),
-          usage: { inputTokens: 1, outputTokens: 1 }
-        })
+        generateStructured: async (request: { schema: Record<string, unknown> }) => {
+          sentSchemas.push(request.schema);
+          return {
+            rawObject: reply(promptIds(input.prompt)),
+            usage: { inputTokens: 1, outputTokens: 1 }
+          };
+        }
       })
     }
   );
@@ -644,6 +651,52 @@ describe("through the real structured router", () => {
     for (const name of ["b", "c", "d"]) {
       expect(entry(h.state, name)).toMatchObject({ status: "current", risk: "destructive" });
     }
+  });
+
+  it("keeps the valid answer when another item is malformed or incomplete", async () => {
+    sentSchemas.length = 0;
+    const h = harness(connection([tool("a"), tool("b"), tool("c"), tool("d"), tool("e")]), {
+      answer: (_ids, input) =>
+        throughRouter(input, () => ({
+          tools: [
+            { id: "t1", group: "looks_things_up", name: "Look it up" },
+            { id: "t2", group: "looks_things_up" },
+            { id: "t3", group: 7, name: "Wrong type" },
+            { id: "t4", group: "looks_things_up", name: "Extra", note: "unexpected" },
+            "t5"
+          ]
+        }))
+    });
+
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({
+      status: "current",
+      risk: "read",
+      readableName: "Look it up"
+    });
+    for (const name of ["b", "c", "d", "e"]) {
+      expect(entry(h.state, name)).toMatchObject({ status: "current", risk: "destructive" });
+    }
+
+    // The provider still gets the strict shape: every item field required, nothing extra.
+    expect(sentSchemas).toHaveLength(1);
+    expect(sentSchemas[0]).toMatchObject({
+      additionalProperties: false,
+      properties: {
+        tools: {
+          items: { additionalProperties: false, required: ["id", "group", "name"] }
+        }
+      }
+    });
+  });
+
+  it("marks the call failed when the reply has no tool list at all", async () => {
+    const h = harness(connection([tool("a")]), {
+      answer: (_ids, input) => throughRouter(input, () => ({ answers: [] }))
+    });
+
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "error" });
   });
 
   it("marks a call failed and runs the next one when the call throws", async () => {

@@ -278,9 +278,8 @@ export function buildSortingPrompt(serializedTools: string): string {
 }
 
 /**
- * The answer's shape only. The router rejects a whole reply that fails this schema, so group,
- * name and duplicate checks live in `parseSortingAnswer`, where one bad answer costs one tool.
- * Strict providers need every property required.
+ * The answer shape sent to the provider. Strict providers need every property required and no
+ * extra properties, so this schema stays strict.
  */
 export function sortingAnswerSchema(): Record<string, unknown> {
   return {
@@ -305,15 +304,30 @@ export function sortingAnswerSchema(): Record<string, unknown> {
   };
 }
 
+/**
+ * The schema the router checks the reply against: a tool list and nothing more. Each item is
+ * checked in `parseSortingAnswer`, where one malformed or incomplete item costs one tool.
+ */
+export function sortingReplySchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["tools"],
+    properties: { tools: { type: "array" } }
+  };
+}
+
 export interface SortingAnswer {
   readonly group: ClassifierSortGroup;
   readonly name: string;
 }
 
+const ANSWER_FIELDS: ReadonlySet<string> = new Set(["id", "group", "name"]);
+
 /**
  * Read the model's answer for one call. An id outside the call, a second answer for the same id,
- * an unknown group or a name that is not bounded plain text leaves that id with no answer. A tool
- * with no answer is Sensitive, so one tool's text can never vouch for another tool.
+ * a missing, wrong-typed or extra field, an unknown group or a name that is not bounded plain
+ * text leaves that id with no answer. A tool with no answer is Sensitive, so one tool's text can
+ * never vouch for another tool.
  */
 export function parseSortingAnswer(
   raw: unknown,
@@ -335,6 +349,7 @@ export function parseSortingAnswer(
     const group = entry.group;
     const name = typeof entry.name === "string" ? entry.name.trim() : entry.name;
     if (
+      Object.keys(entry).some((key) => !ANSWER_FIELDS.has(key)) ||
       typeof group !== "string" ||
       !(CLASSIFIER_SORT_GROUPS as readonly string[]).includes(group) ||
       !isReadableName(name)
@@ -531,6 +546,7 @@ export async function runSortingCall(
     outcome = await port.runStructuredDraft(scopedDb, {
       model,
       schema: sortingAnswerSchema(),
+      replySchema: sortingReplySchema(),
       prompt: sortingCallPrompt(call),
       maxOutputTokens: INTEGRATION_CLASSIFIER_SORT_MAX_OUTPUT_TOKENS,
       service: INTEGRATION_CLASSIFIER_SORT_SERVICE,

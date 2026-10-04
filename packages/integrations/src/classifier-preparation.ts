@@ -81,6 +81,8 @@ export interface ClassifierPreparationPort {
     input: {
       readonly model: PreparationChatModel;
       readonly schema: Record<string, unknown>;
+      /** The schema the reply is checked against, when looser than `schema`. */
+      readonly replySchema?: Record<string, unknown>;
       readonly prompt: string;
       readonly maxOutputTokens: number;
       /** Names the call in activity history. Omitted calls record as the module worker. */

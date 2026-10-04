@@ -38,6 +38,7 @@ export function createClassifierPreparationPort(deps: {
         {
           service: input.service ?? MODULE_WORKER_SERVICE_KEY,
           schema: input.schema,
+          ...(input.replySchema ? { replySchema: input.replySchema } : {}),
           prompt: input.prompt,
           explicitModel: {
             id: input.model.id,
