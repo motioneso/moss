@@ -102,7 +102,20 @@ export function createClassifierGatePortsFactory(
                 service: MODULE_WORKER_SERVICE_KEY,
                 state: input.state,
                 question: input.question,
-                signal: input.signal
+                signal: input.signal,
+                // #2956: the owner is this attempt's actor; the turn rides in.
+                ...(input.activity
+                  ? {
+                      activity: {
+                        ownerUserId: actorUserId,
+                        ...(input.activity.actionCode
+                          ? { actionCode: input.activity.actionCode }
+                          : {}),
+                        ...(input.activity.turnId ? { turnId: input.activity.turnId } : {}),
+                        ...(input.activity.parentId ? { parentId: input.activity.parentId } : {})
+                      }
+                    }
+                  : {})
               },
               classifierDeps
             )
@@ -117,7 +130,20 @@ export function createClassifierGatePortsFactory(
                 instructions: input.instructions,
                 state: input.state,
                 schema: input.schema,
-                signal: input.signal
+                signal: input.signal,
+                // #2956: the owner is this attempt's actor; the turn rides in.
+                ...(input.activity
+                  ? {
+                      activity: {
+                        ownerUserId: actorUserId,
+                        ...(input.activity.actionCode
+                          ? { actionCode: input.activity.actionCode }
+                          : {}),
+                        ...(input.activity.turnId ? { turnId: input.activity.turnId } : {}),
+                        ...(input.activity.parentId ? { parentId: input.activity.parentId } : {})
+                      }
+                    }
+                  : {})
               },
               classifierDeps
             )

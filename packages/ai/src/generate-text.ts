@@ -6,6 +6,7 @@ import type { StructuredRunPriority } from "./adapters/http-api-structured.js";
 import type { ProviderKind } from "./adapters/transcript-reader.js";
 import type { ChatProviderAdapter, ChatTurn } from "./chat-adapter.js";
 import { parseAiApiKeyCredential } from "./credentials.js";
+import { modelActivityStructuredCode } from "./model-activity.js";
 import type { AiSecretCipher } from "./crypto.js";
 import type { AiRepository } from "./repository.js";
 import type { GenerateStructuredDeps } from "./structured/generate-structured.js";
@@ -33,6 +34,13 @@ export type GenerateTextInput = {
   readonly service?: ModuleServiceKey;
   readonly signal?: AbortSignal;
   readonly priority?: StructuredRunPriority;
+  /**
+   * #2956: activity context for the line. The action code defaults to the
+   * service's structured code; the owner is read from the scoped actor.
+   */
+  readonly actionCode?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
 };
 
 export type GenerateTextDeps = {
@@ -77,13 +85,20 @@ export async function generateText(
   );
   if (!provider) return { ok: false, error: "needs_config" };
 
+  // #2956: the owner is the scoped actor on both transports; the line carries
+  // the service's structured code unless the caller names its own.
+  const actorUserId = await readScopedActorUserId(scopedDb);
+  const textActionCode = input.actionCode ?? modelActivityStructuredCode(input.service);
+  const textTurn = {
+    ...(input.turnId ? { turnId: input.turnId } : {}),
+    ...(input.parentId ? { parentId: input.parentId } : {})
+  };
   let run: () => Promise<string>;
   if (provider.auth_method === "cli") {
     // A login provider stores a sealed marker, not a key. Route before decrypt.
     const createCli = deps.createCliStructuredAdapter;
     if (!createCli) return { ok: false, error: "needs_config" };
     // #2674: the CLI runs in this user's per-user slot.
-    const actorUserId = await readScopedActorUserId(scopedDb);
     run = async () =>
       readText(
         await createCli(kind).generateStructured({
@@ -95,7 +110,8 @@ export async function generateText(
           signal: input.signal,
           priority: input.priority,
           acpAgentId: provider.acp_agent_id,
-          ...(actorUserId ? { actorUserId } : {})
+          ...(actorUserId ? { actorUserId } : {}),
+          ...textTurn
         })
       );
   } else {
@@ -121,7 +137,10 @@ export async function generateText(
           model,
           messages: input.messages,
           maxOutputTokens: input.maxOutputTokens,
-          ...(input.signal ? { signal: input.signal } : {})
+          ...(input.signal ? { signal: input.signal } : {}),
+          actionCode: textActionCode,
+          ...(actorUserId ? { ownerUserId: actorUserId } : {}),
+          ...textTurn
         })
       ).text;
   }

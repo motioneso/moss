@@ -1,8 +1,10 @@
 /**
- * Plan 3.6b (#2890): live chat records one model activity row per turn, including CLI chat turns
- * the provider-adapter seam cannot see. `withTurnActivityRecording` wraps the session engine at the
- * composition seam, so the row is per turn (inner tool-loop calls are not visible). Only transport
- * facts are recorded — kind, action, outcome, the session's actual model. No message text.
+ * #2956 slice B: live chat records one owned answer line per completed turn.
+ * The manager mints the turn id once where the turn starts, so the shadow
+ * record, the audit rows, the check lines and the answer line share one value,
+ * and writes the line (with that id) when the turn stores. Turns that never
+ * store — failed, stopped, private — write no line; their steps reference a
+ * missing parent, by design.
  */
 import { describe, expect, it } from "vitest";
 
@@ -15,7 +17,6 @@ import {
   type Clock
 } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { PersonaFs } from "../../packages/chat/src/live/persona.js";
-import { withTurnActivityRecording } from "../../packages/chat/src/live/turn-activity-engine.js";
 import type { CliChatEngine, TranscriptRecord } from "../../packages/chat/src/live/types.js";
 
 const NOW = 1_725_000_000_000;
@@ -27,6 +28,8 @@ class FakeClock implements Clock {
 }
 
 class FakePersistence implements ChatPersistencePort {
+  constructor(private readonly store = true) {}
+
   active: { provider: ProviderKind; model: string } = {
     provider: "anthropic",
     model: "claude-x"
@@ -37,7 +40,8 @@ class FakePersistence implements ChatPersistencePort {
   async listPriorTurns(): Promise<{ recent: never[]; oldSummary: null }> {
     return { recent: [], oldSummary: null };
   }
-  async recordTurn(): Promise<{ userMessageId: string; assistantMessageId: string }> {
+  async recordTurn(): Promise<{ userMessageId: string; assistantMessageId: string } | undefined> {
+    if (!this.store) return undefined;
     return { userMessageId: "u1", assistantMessageId: "a1" };
   }
   async openNewConversation(): Promise<void> {}
@@ -99,66 +103,207 @@ const noopPersonaFs: PersonaFs = {
   async writeFile() {}
 };
 
-/** A manager whose engine factory records turn activity, mirroring the runtime composition seam. */
-function makeManager(build: () => CliChatEngine): ChatSessionManager {
-  const persistence = new FakePersistence();
+function makeManager(
+  build: () => CliChatEngine,
+  seen: { setCalls: Array<[string, string]>; clearCalls: string[] },
+  store = true
+): ChatSessionManager {
   const deps: ChatSessionManagerDeps = {
-    engineFactory: () => withTurnActivityRecording(build()),
-    persistence,
+    engineFactory: () => build(),
+    persistence: new FakePersistence(store),
     personaFs: noopPersonaFs,
     clock: new FakeClock(),
     idleMs: 60_000,
     neutralBase: "/tmp",
     persona: "persona",
-    pollMs: 0
+    pollMs: 0,
+    setCurrentTurnId: (sessionId, turnId) => seen.setCalls.push([sessionId, turnId]),
+    clearCurrentTurnId: (sessionId) => seen.clearCalls.push(sessionId)
   };
   return new ChatSessionManager(deps);
 }
 
-function collect(): { entries: ModelActivityEntry[]; restore: () => void } {
+function collect(): {
+  entries: ModelActivityEntry[];
+  seen: { setCalls: Array<[string, string]>; clearCalls: string[] };
+  restore: () => void;
+} {
   const entries: ModelActivityEntry[] = [];
   installModelActivityRecorder((entry) => entries.push(entry));
-  return { entries, restore: () => installModelActivityRecorder(null) };
+  return {
+    entries,
+    seen: { setCalls: [], clearCalls: [] },
+    restore: () => installModelActivityRecorder(null)
+  };
 }
 
-describe("live chat model activity recording (plan 3.6b, #2890)", () => {
-  it("records exactly one chat row per completed turn with the session's model", async () => {
-    const { entries, restore } = collect();
+describe("chat answer lines (#2956 slice B)", () => {
+  it("writes one owned chat.answer line per completed turn, keyed by the turn id", async () => {
+    const { entries, seen, restore } = collect();
     try {
-      const manager = makeManager(() => new OkEngine("anthropic"));
+      const manager = makeManager(() => new OkEngine("anthropic"), seen);
       await manager.submitTurn("user-1", "Ben", "hello");
       await manager.submitTurn("user-1", "Ben", "again");
 
       expect(entries).toHaveLength(2);
-      expect(entries[0]).toMatchObject({
-        kind: "chat",
-        action: "chat",
-        outcome: "ok",
-        modelName: "claude-x",
-        result: "completed"
-      });
+      for (const entry of entries) {
+        expect(entry).toMatchObject({
+          kind: "chat",
+          action: "chat",
+          actionCode: "chat.answer",
+          outcome: "ok",
+          modelName: "claude-x",
+          result: "completed",
+          ownerUserId: "user-1"
+        });
+        // One id for the row, the turn link and the steps' parent.
+        expect(typeof entry.id).toBe("string");
+        expect(entry.turnId).toBe(entry.id);
+      }
+      expect(entries[0]?.id).not.toBe(entries[1]?.id);
+      // The turn is filed while it runs and released when it ends.
+      expect(seen.setCalls).toHaveLength(2);
+      expect(seen.clearCalls).toHaveLength(2);
+      expect(seen.setCalls[0]?.[1]).toBe(entries[0]?.id);
     } finally {
       restore();
     }
   });
 
-  it("records an error row when the turn throws, and never the message text", async () => {
-    const { entries, restore } = collect();
+  it("records tool counts, tokens, duration and steps; message words stay in owner detail", async () => {
+    const { entries, seen, restore } = collect();
     try {
-      const SENTINEL = "SENTINEL-chat-message-do-not-record";
-      const manager = makeManager(() => new FailEngine("anthropic"));
-      await expect(manager.submitTurn("user-1", "Ben", SENTINEL)).rejects.toThrow("readNew failed");
+      const engine = new OkEngine("anthropic");
+      const manager = makeManager(() => engine, seen);
+      const SENTINEL = "SENTINEL-chat-message-stays-in-detail";
+      await manager.submitTurn("user-1", "Ben", SENTINEL);
 
       expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ kind: "chat", outcome: "error", result: "failed" });
-      expect(JSON.stringify(entries)).not.toContain(SENTINEL);
+      const entry = entries[0]!;
+      expect(entry.factCounts).toMatchObject({ tools: 0, tools_failed: 0 });
+      // The bare line carries no message words; the quoted words ride the
+      // owner-only detail row, which expires after 30 days.
+      const bare = { ...entry, detail: undefined };
+      expect(JSON.stringify(bare)).not.toContain(SENTINEL);
+      expect(entry.detail?.quote).toBe(SENTINEL);
+      expect(entry.detail?.steps?.at(-1)).toMatchObject({ title: "Answer" });
     } finally {
       restore();
     }
   });
 
-  it("records an aborted row when the caller stops the turn", async () => {
-    const { entries, restore } = collect();
+  it("stores templated step words only: thinking, tool text and the reply never land", async () => {
+    const { entries, seen, restore } = collect();
+    try {
+      const engine: CliChatEngine = {
+        provider: "anthropic" as ProviderKind,
+        async launch() {
+          return { offset: 0 };
+        },
+        async submit() {},
+        async readNew(afterOffset: number) {
+          return {
+            records: [
+              { kind: "thinking", text: "SECRET-thinking-reasoning" },
+              {
+                kind: "tool",
+                text: "SECRET-tool-output-words",
+                toolName: "calendar.list",
+                outcome: "executed"
+              },
+              { kind: "reply", text: "SECRET-reply-words" }
+            ],
+            offset: afterOffset + 1,
+            complete: true
+          };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {},
+        async interrupt() {}
+      };
+      const manager = makeManager(() => engine, seen);
+      await manager.submitTurn("user-1", "Ben", "what is on today");
+
+      expect(entries).toHaveLength(1);
+      const steps = entries[0]!.detail?.steps ?? [];
+      // Thinking is skipped; the tool and answer steps keep titles only.
+      expect(steps.map((step) => step.title)).toEqual(["calendar.list", "Answer"]);
+      const dumped = JSON.stringify(steps);
+      expect(dumped).not.toContain("SECRET-thinking-reasoning");
+      expect(dumped).not.toContain("SECRET-tool-output-words");
+      expect(dumped).not.toContain("SECRET-reply-words");
+      // Templated results name the outcome, never the text.
+      expect(steps[0]?.result).toMatch(/^Finished\./);
+      expect(steps[1]?.result).toMatch(/^Answered\./);
+    } finally {
+      restore();
+    }
+  });
+
+  it("counts tools, tokens and duration, and names each step", async () => {
+    const { entries, seen, restore } = collect();
+    try {
+      const engine: CliChatEngine = {
+        provider: "anthropic" as ProviderKind,
+        async launch() {
+          return { offset: 0 };
+        },
+        async submit() {},
+        async readNew(afterOffset: number) {
+          return {
+            records: [
+              { kind: "tool", text: "calendar.list, today", toolName: "calendar.list" },
+              {
+                kind: "reply",
+                text: "Found 2 events.",
+                elapsedMs: 6200,
+                usage: { inputTokens: 100, outputTokens: 50 }
+              }
+            ],
+            offset: afterOffset + 1,
+            complete: true
+          };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {},
+        async interrupt() {}
+      };
+      const manager = makeManager(() => engine, seen);
+      await manager.submitTurn("user-1", "Ben", "what is on today");
+
+      expect(entries).toHaveLength(1);
+      const entry = entries[0]!;
+      expect(entry).toMatchObject({
+        durationMs: 6200,
+        inputTokens: 100,
+        outputTokens: 50,
+        factCounts: { tools: 1, tools_failed: 0 }
+      });
+      expect(entry.detail?.steps).toMatchObject([{ title: "calendar.list" }, { title: "Answer" }]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("writes no line when the turn fails, and the error still surfaces", async () => {
+    const { entries, seen, restore } = collect();
+    try {
+      const manager = makeManager(() => new FailEngine("anthropic"), seen);
+      await expect(manager.submitTurn("user-1", "Ben", "hello")).rejects.toThrow("readNew failed");
+      expect(entries).toHaveLength(0);
+      // The filing slot is still released.
+      expect(seen.clearCalls).toHaveLength(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("writes no line when the caller stops the turn", async () => {
+    const { entries, seen, restore } = collect();
     try {
       let release!: (records: TranscriptRecord[]) => void;
       const gate = new Promise<TranscriptRecord[]>((resolve) => {
@@ -180,96 +325,29 @@ describe("live chat model activity recording (plan 3.6b, #2890)", () => {
         async kill() {},
         async interrupt() {}
       };
-      const manager = makeManager(() => engine);
+      const manager = makeManager(() => engine, seen);
       const turn = manager.submitTurn("user-1", "Ben", "stop me");
-      // Give the turn time to submit before stopping it.
       await new Promise((resolve) => setTimeout(resolve, 20));
       await manager.stopTurn("user-1");
       release([]);
       await turn;
 
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ kind: "chat", outcome: "aborted", result: "stopped" });
+      expect(entries).toHaveLength(0);
+      expect(seen.clearCalls).toHaveLength(1);
     } finally {
       restore();
     }
   });
-});
 
-describe("turn wrapper state (plan 3.6b, #2890)", () => {
-  it("does not double-log when a failed submit is retried and then completes", async () => {
-    const entries: ModelActivityEntry[] = [];
-    installModelActivityRecorder((entry) => entries.push(entry));
+  it("writes no line when the turn is not stored (private turns persist nothing)", async () => {
+    const { entries, seen, restore } = collect();
     try {
-      let submitCount = 0;
-      const engine: CliChatEngine = {
-        provider: "anthropic" as ProviderKind,
-        async launch() {
-          return { offset: 0 };
-        },
-        async submit() {
-          submitCount += 1;
-          if (submitCount === 1) throw new Error("engine unavailable, never entered");
-        },
-        async readNew(afterOffset: number) {
-          // One scripted reply, delivered on the first read after a successful submit.
-          return {
-            records: [{ kind: "reply", text: "ok" }],
-            offset: afterOffset + 1,
-            complete: true
-          };
-        },
-        async isAlive() {
-          return true;
-        },
-        async kill() {},
-        async interrupt() {}
-      };
-      const wrapped = withTurnActivityRecording(engine);
-
-      await expect(wrapped.submit("first")).rejects.toThrow("never entered");
-      await wrapped.submit("retry");
-      await wrapped.readNew(0);
-
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ kind: "chat", outcome: "ok" });
+      const manager = makeManager(() => new OkEngine("anthropic"), seen, false);
+      await manager.submitTurn("user-1", "Ben", "hello");
+      expect(entries).toHaveLength(0);
+      expect(seen.clearCalls).toHaveLength(1);
     } finally {
-      installModelActivityRecorder(null);
-    }
-  });
-
-  it("logs an abandoned turn as error when the next submit starts first", async () => {
-    const entries: ModelActivityEntry[] = [];
-    installModelActivityRecorder((entry) => entries.push(entry));
-    try {
-      const engine: CliChatEngine = {
-        provider: "anthropic" as ProviderKind,
-        async launch() {
-          return { offset: 0 };
-        },
-        async submit() {},
-        async readNew(afterOffset: number) {
-          return { records: [], offset: afterOffset, complete: false };
-        },
-        async isAlive() {
-          return true;
-        },
-        async kill() {},
-        async interrupt() {}
-      };
-      const wrapped = withTurnActivityRecording(engine);
-
-      await wrapped.submit("turn one");
-      // No terminal event; the manager abandons it and starts a new turn.
-      await wrapped.submit("turn two");
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ outcome: "error" });
-
-      // The second turn completes.
-      void wrapped;
-      entries.length = 0;
-    } finally {
-      installModelActivityRecorder(null);
+      restore();
     }
   });
 });

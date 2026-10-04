@@ -1,11 +1,15 @@
 import type { FastifyBaseLogger } from "fastify";
 
-import type { DataContextDb } from "@moss/db";
+import { readScopedActorUserId, type ActivityFactCounts, type DataContextDb } from "@moss/db";
 import type { ModuleServiceKey } from "@moss/shared";
 
 import { parseAiApiKeyCredential } from "../credentials.js";
 import type { AiSecretCipher } from "../crypto.js";
-import { recordModelActivity } from "../model-activity.js";
+import {
+  modelActivityStructuredCode,
+  recordModelActivity,
+  type ModelActivityFailureCode
+} from "../model-activity.js";
 import type { AiRepository } from "../repository.js";
 
 export type ChoiceQuestionInput = {
@@ -19,12 +23,25 @@ export type ChoiceAnswer = {
   readonly probabilities: Readonly<Record<string, number>>;
 };
 
+/**
+ * #2956: activity context for a System One line. The gate names `chat.tool_check`
+ * with its turn; other callers take the service structured code. The owner
+ * defaults to the scoped actor.
+ */
+export type GenerateChoicesActivity = {
+  readonly ownerUserId?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
+  readonly actionCode?: string;
+};
+
 export type GenerateChoicesInput = {
   readonly service: ModuleServiceKey;
   /** JSON-serialisable content the questions refer to. */
   readonly state: Record<string, unknown>;
   readonly questions: Readonly<Record<string, ChoiceQuestionInput>>;
   readonly requireExplicitBinding?: boolean;
+  readonly activity?: GenerateChoicesActivity;
   /** Run against this exact model instead of routing by service binding. */
   readonly explicitModel?: {
     readonly id: string;
@@ -93,13 +110,39 @@ export async function generateChoices(
 
   const answers = validateAnswers(input.questions, posted.payload);
   if (!answers) {
+    recordSystemOneActivity(posted.modelName, "error", {
+      ...posted.activity,
+      durationMs: posted.durationMs,
+      inputTokens: posted.usage.inputTokens,
+      outputTokens: posted.usage.outputTokens,
+      failureCode: "bad_shape"
+    });
     deps.logger?.warn(
       { service: input.service, code: "invalid_response" },
       "ai.generateChoices invalid response"
     );
     return { ok: false, error: "invalid_response" };
   }
+  recordSystemOneActivity(posted.modelName, "ok", {
+    ...posted.activity,
+    durationMs: posted.durationMs,
+    inputTokens: posted.usage.inputTokens,
+    outputTokens: posted.usage.outputTokens,
+    factCounts: { confidence: topConfidence(Object.values(answers)) }
+  });
   return { ok: true, answers, usage: posted.usage };
+}
+
+/**
+ * #2956: the headline confidence for a choice line. One question reports its
+ * own; several report the strongest, so the line never invents an average.
+ */
+function topConfidence(answers: readonly { readonly confidence: number }[]): number {
+  let top = 0;
+  for (const answer of answers) {
+    if (answer.confidence > top) top = answer.confidence;
+  }
+  return top;
 }
 
 /** A System One yes/no ("noul") question. A high `noul` value means yes. */
@@ -147,12 +190,28 @@ export async function generateNoul(
 
   const probabilities = validateNoulAnswers(input.questions, posted.payload);
   if (!probabilities) {
+    recordSystemOneActivity(posted.modelName, "error", {
+      ...posted.activity,
+      durationMs: posted.durationMs,
+      inputTokens: posted.usage.inputTokens,
+      outputTokens: posted.usage.outputTokens,
+      failureCode: "bad_shape"
+    });
     deps.logger?.warn(
       { service: input.service, code: "invalid_response" },
       "ai.generateNoul invalid response"
     );
     return { ok: false, error: "invalid_response" };
   }
+  // A noul answer carries no separate confidence; its probability is the reading.
+  const readings = Object.values(probabilities).map((noul) => ({ confidence: noul }));
+  recordSystemOneActivity(posted.modelName, "ok", {
+    ...posted.activity,
+    durationMs: posted.durationMs,
+    inputTokens: posted.usage.inputTokens,
+    outputTokens: posted.usage.outputTokens,
+    factCounts: { confidence: topConfidence(readings) }
+  });
   return { ok: true, probabilities, usage: posted.usage };
 }
 
@@ -161,8 +220,32 @@ type SystemOnePost =
       readonly ok: true;
       readonly payload: Record<string, unknown>;
       readonly usage: { readonly inputTokens: number; readonly outputTokens: number };
+      readonly modelName: string;
+      readonly durationMs: number;
+      readonly activity: SystemOneActivity;
     }
   | { readonly ok: false; readonly error: GenerateChoicesFailure };
+
+/** #2956: the activity line's identity for one System One call. */
+export type SystemOneActivity = {
+  readonly ownerUserId?: string;
+  readonly turnId?: string;
+  readonly parentId?: string;
+  readonly actionCode: string;
+};
+
+async function systemOneActivity(
+  scopedDb: DataContextDb,
+  input: Omit<GenerateChoicesInput, "questions">
+): Promise<SystemOneActivity> {
+  const scopedOwner = input.activity?.ownerUserId ?? (await readScopedActorUserId(scopedDb));
+  return {
+    actionCode: input.activity?.actionCode ?? modelActivityStructuredCode(input.service),
+    ...(scopedOwner ? { ownerUserId: scopedOwner } : {}),
+    ...(input.activity?.turnId ? { turnId: input.activity.turnId } : {}),
+    ...(input.activity?.parentId ? { parentId: input.activity.parentId } : {})
+  };
+}
 
 /** Resolves the model and credential, posts one request to System One and reads the JSON body. */
 async function postSystemOne(
@@ -228,6 +311,10 @@ async function postSystemOne(
   // Plan 3.6b (#2890): System One is reached by a raw fetch, not through the provider adapters
   // 3.6a records. Log one row per real post attempt at the same transport-facts-only standard.
   // The outcome reflects the whole call: an unusable body is a failed call, like the adapters.
+  // #2956: the row carries the line code, owner, turn and duration. Confidence lands
+  // with the success record in the caller, which is the only place that knows it.
+  const activity = await systemOneActivity(scopedDb, input);
+  const startedAt = Date.now();
   let posted: Awaited<ReturnType<typeof postSystemOneRequest>>;
   try {
     posted = await postSystemOneRequest(
@@ -242,21 +329,34 @@ async function postSystemOne(
       logPrefix
     );
   } catch (error) {
-    recordSystemOneActivity(model.provider_model_id, "error");
+    recordSystemOneActivity(model.provider_model_id, "error", {
+      ...activity,
+      durationMs: Date.now() - startedAt,
+      failureCode: "unknown"
+    });
     throw error;
   }
 
   if (!posted.ok) {
     recordSystemOneActivity(
       model.provider_model_id,
-      posted.error === "aborted" ? "aborted" : "error"
+      posted.error === "aborted" ? "aborted" : "error",
+      {
+        ...activity,
+        durationMs: Date.now() - startedAt,
+        failureCode: posted.error === "aborted" ? "cancelled" : "unknown"
+      }
     );
     return posted;
   }
 
   const payload = posted.payload;
   if (!isRecord(payload)) {
-    recordSystemOneActivity(model.provider_model_id, "error");
+    recordSystemOneActivity(model.provider_model_id, "error", {
+      ...activity,
+      durationMs: Date.now() - startedAt,
+      failureCode: "bad_shape"
+    });
     deps.logger?.warn(
       { service: input.service, code: "invalid_response" },
       `${logPrefix} invalid response`
@@ -264,7 +364,6 @@ async function postSystemOne(
     return { ok: false, error: "invalid_response" };
   }
 
-  recordSystemOneActivity(model.provider_model_id, "ok");
   const usage = isRecord(payload.usage) ? payload.usage : {};
   return {
     ok: true,
@@ -272,18 +371,40 @@ async function postSystemOne(
     usage: {
       inputTokens: readTokenCount(usage["input_tokens"]),
       outputTokens: readTokenCount(usage["output_tokens"])
-    }
+    },
+    modelName: model.provider_model_id,
+    durationMs: Date.now() - startedAt,
+    activity
   };
 }
 
 /** Record one System One post attempt. Transport facts only; never the state, questions or key. */
-function recordSystemOneActivity(modelName: string, outcome: "ok" | "error" | "aborted"): void {
+export function recordSystemOneActivity(
+  modelName: string,
+  outcome: "ok" | "error" | "aborted",
+  activity: SystemOneActivity & {
+    readonly durationMs?: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly factCounts?: ActivityFactCounts;
+    readonly failureCode?: ModelActivityFailureCode;
+  }
+): void {
   recordModelActivity({
     kind: "structured",
     action: "choices",
     outcome,
     modelName,
-    result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
+    result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed",
+    actionCode: activity.actionCode,
+    ...(activity.ownerUserId ? { ownerUserId: activity.ownerUserId } : {}),
+    ...(activity.turnId ? { turnId: activity.turnId } : {}),
+    ...(activity.parentId ? { parentId: activity.parentId } : {}),
+    ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
+    ...(activity.inputTokens !== undefined ? { inputTokens: activity.inputTokens } : {}),
+    ...(activity.outputTokens !== undefined ? { outputTokens: activity.outputTokens } : {}),
+    ...(activity.factCounts ? { factCounts: activity.factCounts } : {}),
+    ...(activity.failureCode ? { failureCode: activity.failureCode } : {})
   });
 }
 

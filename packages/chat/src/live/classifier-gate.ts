@@ -4,7 +4,8 @@ import {
   type ClassifierChoiceResult,
   type ClassifierExtractionResult,
   type ClassifierHandle,
-  type GatewayGateOutcome
+  type GatewayGateOutcome,
+  type GenerateChoicesActivity
 } from "@moss/ai";
 import { normalizeClassifierCandidates } from "@moss/module-sdk";
 
@@ -110,6 +111,8 @@ export interface ClassifierGatePorts {
         readonly state: Record<string, unknown>;
         readonly question: ClassifierChoiceQuestion;
         readonly signal: AbortSignal;
+        /** #2956: the turn the check line joins. */
+        readonly activity?: GenerateChoicesActivity;
       }
     ): Promise<ClassifierChoiceResult>;
     extract(
@@ -119,6 +122,8 @@ export interface ClassifierGatePorts {
         readonly state: Record<string, unknown>;
         readonly schema: Record<string, unknown>;
         readonly signal: AbortSignal;
+        /** #2956: the turn the check line joins. */
+        readonly activity?: GenerateChoicesActivity;
       }
     ): Promise<ClassifierExtractionResult>;
   };
@@ -146,6 +151,12 @@ export interface GateRequest {
   readonly mode: GateMode;
   /** The turn's cancellation. Aborting it stops the gate without a fallback. */
   readonly signal?: AbortSignal;
+  /**
+   * #2956: the turn this check belongs to. The check line carries it (and the
+   * answer line id as its parent) so one turn reads as one group.
+   */
+  readonly turnId?: string;
+  readonly parentId?: string;
 }
 
 const FAILED_ACTION_MESSAGE =
@@ -281,9 +292,25 @@ export class ClassifierGate {
     );
     if (menu.length === 0) return new Stop("no_eligible_tools");
 
-    const area = await this.chooseArea(handle, request.message, menu, signal, trace);
+    // #2956: every check in this turn carries the turn and its answer line, so
+    // the activity page groups the checks with the answer they informed.
+    const activity: GenerateChoicesActivity = {
+      ownerUserId: request.actorUserId,
+      actionCode: "chat.tool_check",
+      ...(request.turnId ? { turnId: request.turnId } : {}),
+      ...(request.parentId ? { parentId: request.parentId } : {})
+    };
+
+    const area = await this.chooseArea(handle, request.message, menu, signal, trace, activity);
     if (area instanceof Stop) return area;
-    const tool = await this.chooseTool(handle, request.message, area.tools, signal, trace);
+    const tool = await this.chooseTool(
+      handle,
+      request.message,
+      area.tools,
+      signal,
+      trace,
+      activity
+    );
     if (tool instanceof Stop) return tool;
 
     trace.moduleId = tool.tool.moduleId;
@@ -292,7 +319,14 @@ export class ClassifierGate {
     const bars = this.barCheck(tool.tool, area.answer, tool.answer);
     if (bars) return bars;
 
-    const input = await this.chooseArguments(handle, request.message, tool.tool, signal, trace);
+    const input = await this.chooseArguments(
+      handle,
+      request.message,
+      tool.tool,
+      signal,
+      trace,
+      activity
+    );
     if (input instanceof Stop) return input;
     return { tool: tool.tool, input };
   }
@@ -310,10 +344,11 @@ export class ClassifierGate {
     state: Record<string, unknown>,
     question: ClassifierChoiceQuestion,
     signal: AbortSignal,
-    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] }
+    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
+    activity: GenerateChoicesActivity
   ): Promise<Answer | Stop> {
     const result = await this.run(
-      this.ports.classifier.choose(handle, { state, question, signal }),
+      this.ports.classifier.choose(handle, { state, question, signal, activity }),
       signal
     );
     if (!result.ok) return this.failure(result.error);
@@ -335,7 +370,8 @@ export class ClassifierGate {
     message: string,
     menu: readonly GateTool[],
     signal: AbortSignal,
-    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] }
+    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
+    activity: GenerateChoicesActivity
   ): Promise<{ tools: GateTool[]; answer: Answer } | Stop> {
     const areas = new Map<string, GateTool[]>();
     for (const tool of menu) {
@@ -360,7 +396,8 @@ export class ClassifierGate {
         criteria
       },
       signal,
-      trace
+      trace,
+      activity
     );
     if (answer instanceof Stop) return answer;
     if (answer.choice === NONE) return new Stop("none");
@@ -374,7 +411,8 @@ export class ClassifierGate {
     message: string,
     tools: readonly GateTool[],
     signal: AbortSignal,
-    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] }
+    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
+    activity: GenerateChoicesActivity
   ): Promise<{ tool: GateTool; answer: Answer } | Stop> {
     const usable = tools.filter((tool) => tool.name !== NONE);
     if (usable.length === 0) return new Stop("no_eligible_tools");
@@ -387,7 +425,8 @@ export class ClassifierGate {
       { message },
       { instructions: "Which tool fits this message? Choose none if unsure.", criteria },
       signal,
-      trace
+      trace,
+      activity
     );
     if (answer instanceof Stop) return answer;
     if (answer.choice === NONE) return new Stop("none");
@@ -410,7 +449,8 @@ export class ClassifierGate {
     message: string,
     tool: GateTool,
     signal: AbortSignal,
-    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] }
+    trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
+    activity: GenerateChoicesActivity
   ): Promise<Record<string, unknown> | Stop> {
     const plan = planArguments(tool);
     const options = await this.optionsFor(tool, plan, signal);
@@ -423,7 +463,8 @@ export class ClassifierGate {
           instructions: `Extract the argument values for the tool described as: ${tool.classifier!.description}`,
           state: { message },
           schema: extractionSchema(tool, plan, options),
-          signal
+          signal,
+          activity
         }),
         signal
       );
@@ -446,7 +487,8 @@ export class ClassifierGate {
             criteria
           },
           signal,
-          trace
+          trace,
+          activity
         );
         if (answer instanceof Stop) return answer;
         if (answer.choice === ARGUMENT_NONE) return new Stop("none");

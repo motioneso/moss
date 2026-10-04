@@ -43,6 +43,9 @@ export interface ClassifierGateWiringDeps {
       options?: GateTokenMintOptions
     ): string;
     revokeBySessionId(chatSessionId: string): void;
+    /** #2956: file a gate session's tool rows under its chat turn. */
+    setCurrentTurnId(chatSessionId: string, turnId: string): void;
+    clearCurrentTurnId(chatSessionId: string): void;
   };
   /**
    * #2907 (plan 3.5) — the production attempt ports: the actor's tool menu, the classifier calls,
@@ -99,8 +102,15 @@ export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): Class
           },
           options
         ),
-      revoke: (correlationId) =>
-        deps.tokens.revokeBySessionId(classifierGateSessionId(correlationId)),
+      // #2956: files the attempt's tool rows under the chat turn, under the
+      // same gate session id the mint above uses. Revoke clears it.
+      noteTurn: (correlationId, turnId) => {
+        if (turnId) deps.tokens.setCurrentTurnId(classifierGateSessionId(correlationId), turnId);
+      },
+      revoke: (correlationId) => {
+        deps.tokens.clearCurrentTurnId(classifierGateSessionId(correlationId));
+        deps.tokens.revokeBySessionId(classifierGateSessionId(correlationId));
+      },
       tokenOptions: { ttlMs: GATE_TOKEN_TTL_MS, fixedExpiry: true }
     },
     now: deps.now ?? (() => Date.now())
@@ -119,6 +129,12 @@ export interface GateTokenCallbacks {
    * carries the gate token's own TTL and fixed-expiry flag when the wiring sets them.
    */
   mint(actorUserId: string, correlationId: string, options?: GateTokenMintOptions): string;
+  /**
+   * #2956: files this attempt's tool rows under the chat turn. Called with the
+   * request's turn id (or nothing) right after mint; the production revoke
+   * clears it. Optional so test doubles keep working.
+   */
+  noteTurn?(correlationId: string, turnId: string | undefined): void;
   /** Revokes that token alone. Never revokes an existing model session's tokens. */
   revoke(correlationId: string): void;
   /**
@@ -167,6 +183,9 @@ export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): Clas
     async evaluate(request) {
       const correlationId = newCorrelationId();
       const token = deps.tokens.mint(request.actorUserId, correlationId, deps.tokens.tokenOptions);
+      // #2956: the gate executes tools under its own session id, so the turn is
+      // registered under that id too. Cleared by the revoke below.
+      deps.tokens.noteTurn?.(correlationId, request.turnId);
       try {
         if (!deps.createPorts) return declineWithoutPorts();
         const attempt = deps.createPorts(request.actorUserId, token);

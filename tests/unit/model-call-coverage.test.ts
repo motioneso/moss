@@ -146,7 +146,7 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/ai/src/adapters/tmux-bridge.ts",
-    "shared tmux runner that hosts the persistent Claude and Codex chat sessions; it launches the model CLI but each turn is recorded by the chat runtime wrapper (turn-activity-engine.ts), not here"
+    "shared tmux runner that hosts the persistent Claude and Codex chat sessions; it launches the model CLI but each turn is recorded by the chat session manager's answer line, not here"
   ],
   [
     "packages/ai/src/cli-availability.ts",
@@ -158,7 +158,7 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/cli-runner/src/acp-host.ts",
-    "spawns the ACP model adapter and the process-kill stoppers; the adapter's turns are recorded by the chat engine wrapper (turn-activity-engine.ts)"
+    "spawns the ACP model adapter and the process-kill stoppers; the adapter's turns are recorded by the chat session manager's answer line"
   ],
   [
     "packages/cli-runner/src/acp-transcript-purge.ts",
@@ -178,7 +178,7 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/cli-runner/src/runner-io.ts",
-    "sanitized-env tmux and file I/O for the engine host; hosts the persistent chat sessions whose turns the chat runtime wrapper records"
+    "sanitized-env tmux and file I/O for the engine host; hosts the persistent chat sessions whose turns the chat session manager records"
   ],
   [
     "packages/module-registry/src/external/worker-runtime.ts",
@@ -198,11 +198,11 @@ const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/chat/src/live/runtime.ts",
-    "chat composition root; the engines built over this runner run inside the per-turn recording wrapper"
+    "chat composition root; the engines built over this runner answer through the chat session manager's answer line"
   ],
   [
     "packages/cli-runner/src/acp-host.ts",
-    "builds owner-run login reads and the shell-command manager for module builds; the ACP model adapter's turns are recorded by the chat wrapper"
+    "builds owner-run login reads and the shell-command manager for module builds; the ACP model adapter's turns are recorded by the chat session manager's answer line"
   ],
   [
     "packages/cli-runner/src/main.ts",
@@ -210,7 +210,7 @@ const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/cli-runner/src/per-user-slot.ts",
-    "builds the per-user runner for the persistent runtime, whose turns the chat wrapper records"
+    "builds the per-user runner for the persistent runtime, whose turns the chat session manager records"
   ],
   [
     "packages/cli-runner/src/per-user-structured.ts",
@@ -218,17 +218,17 @@ const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/cli-runner/src/engine-host.ts",
-    "picks the per-user runner for each persistent or structured launch; the launched turns run inside the per-turn recording wrapper"
+    "picks the per-user runner for each persistent or structured launch; the launched chat turns are recorded by the chat session manager's answer line"
   ],
   [
     "packages/module-registry/src/chat-multiplexer.ts",
-    "builds the runner for CLI probes, provider checks and persistent engines; probes and checks are recorded, engine turns go through the chat wrapper"
+    "builds the runner for CLI probes, provider checks and persistent engines; probes and checks are recorded, engine turns go through the chat session manager's answer line"
   ]
 ]);
 
 /**
  * Files allowed to build a chat engine. Every one is a recorded composition seam: the engine it
- * builds is wrapped for per-turn recording (turn-activity-engine.ts) or is itself the recording
+ * builds is recorded by the chat session manager's answer line or is itself the recording
  * adapter. A new engine built anywhere else fails until its file is added here with a reason.
  */
 const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
@@ -243,7 +243,7 @@ const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/chat/src/live/acp-chat-engine.ts",
-    "defines the ACP engine and its factory; wrapped by the chat runtime for per-turn recording"
+    "defines the ACP engine and its factory; its turns are recorded by the chat session manager's answer line"
   ],
   [
     "packages/chat/src/live/cli-check-turn.ts",
@@ -259,11 +259,11 @@ const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
   ],
   [
     "packages/chat/src/live/persistent-runtime-engine.ts",
-    "builds the persistent runtime engines; wrapped by the chat runtime for per-turn recording"
+    "builds the persistent runtime engines; their turns are recorded by the chat session manager's answer line"
   ],
   [
     "packages/chat/src/live/runtime.ts",
-    "the chat composition root: builds the engine factory and installs the per-turn recording wrapper"
+    "the chat composition root: builds the engine factory whose turns the chat session manager records"
   ],
   [
     "packages/chat/src/live/structured-engine-selection.ts",
@@ -552,12 +552,12 @@ function uncovered(
 
 /**
  * A file that reaches the recorder itself must keep doing so. These are the files where recording
- * is explicit (a probe, a turn wrapper, an embedding sink, the adapter boundary, the fill-in
+ * is explicit (a probe, a chat answer line, an embedding sink, the adapter boundary, the fill-in
  * choices fetch). Removing the call from one of them must fail the guard, which is exactly the
  * "new unlogged call" the plan wants caught.
  */
 const RECORDER_REF_RE =
-  /(?:recordModelActivity|withModelActivityRecording|installModelActivityRecorder|installEmbeddingActivityRecorder|withEmbeddingActivity|withTurnActivityRecording|onModelCall|createDbModelActivityRecorder)/;
+  /(?:recordModelActivity|withModelActivityRecording|installModelActivityRecorder|installEmbeddingActivityRecorder|withEmbeddingActivity|onModelCall|createDbModelActivityRecorder)/;
 
 const EXPLICIT_RECORDING_FILES = [
   "packages/ai/src/adapters/http-api.ts",
@@ -566,8 +566,7 @@ const EXPLICIT_RECORDING_FILES = [
   "packages/chat/src/live/cli-structured-adapter.ts",
   "packages/chat/src/live/provider-probe.ts",
   "packages/chat/src/live/cli-check-turn.ts",
-  "packages/chat/src/live/turn-activity-engine.ts",
-  "packages/chat/src/live/runtime.ts",
+  "packages/chat/src/live/chat-session-manager.ts",
   "packages/memory/src/embedding-provider-config.ts",
   "packages/module-registry/src/chat-multiplexer.ts",
   "packages/module-registry/src/index.ts",

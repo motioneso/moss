@@ -47,6 +47,13 @@ export const webModuleManifest = {
       actions: ["view"]
     }
   ],
+  features: [
+    {
+      // #2956: the Activity history line title for this module's structured calls.
+      id: "structured.web-research",
+      description: "Researched the web"
+    }
+  ],
   assistantTools: [
     {
       name: "web.search",
