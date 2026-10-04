@@ -5,8 +5,9 @@ import Foundation
 import os
 
 // Kill-gate follow-up (#2638, 2026-09-24): the day-1 CPU sample failed at 10.8%, so this measures
-// where the time goes across trial builds. Numbers only — no app, window, address or text
-// ever reaches these lines; the unified log keeps them where `log show` can count them:
+// where the time goes across trial builds. Numbers, fixed reason words and the bundle id of an app
+// the policy already allows; no window title, address or text ever reaches these lines. The
+// unified log keeps them where `log show` can count them:
 //
 //   /usr/bin/log show --last 2h --predicate 'subsystem == "com.moss.trailmarker" AND category == "backtrack-metrics"'
 //

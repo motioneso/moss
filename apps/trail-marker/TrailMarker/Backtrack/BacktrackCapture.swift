@@ -58,19 +58,22 @@ struct VisionTextRecognizer: TextRecognizing {
 /// `WorkspaceFrontmostSource.focusedWindowIdentity` does, but keeping the element so what is read
 /// from it (secure fields, the address) is bound to the window the capture was bound to.
 enum BacktrackAX {
-    static func focusedWindow(pid: pid_t) -> AXUIElement? {
+    static func focusedWindow(pid: pid_t, messagingTimeout: Float? = nil) -> AXUIElement? {
         guard AXIsProcessTrusted() else { return nil }
         let application = AXUIElementCreateApplication(pid)
+        if let messagingTimeout { AXUIElementSetMessagingTimeout(application, messagingTimeout) }
         var windowRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
               let windowRef, CFGetTypeID(windowRef) == AXUIElementGetTypeID()
         else { return nil }
-        return (windowRef as! AXUIElement)
+        let window = windowRef as! AXUIElement
+        if let messagingTimeout { AXUIElementSetMessagingTimeout(window, messagingTimeout) }
+        return window
     }
 
     /// The focused window of `pid`, only if it is still exactly `identity`.
-    static func window(pid: pid_t, matching identity: WindowIdentity) -> AXUIElement? {
-        guard let element = focusedWindow(pid: pid),
+    static func window(pid: pid_t, matching identity: WindowIdentity, messagingTimeout: Float? = nil) -> AXUIElement? {
+        guard let element = focusedWindow(pid: pid, messagingTimeout: messagingTimeout),
               let title = string(element, kAXTitleAttribute),
               let frame = frame(of: element),
               WindowIdentity(frame: frame, title: title).matches(identity)

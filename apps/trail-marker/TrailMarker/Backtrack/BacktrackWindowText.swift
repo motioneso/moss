@@ -237,13 +237,22 @@ enum WindowTextWalker {
 /// The real tree. Reads role, subrole, frame and children in one call per element, and text only
 /// for elements that aren't secure fields.
 struct AccessibilityTextTree: TextTree {
+    /// A timeout belongs to one element object, not its children, so every element is given it
+    /// before it is asked anything. A hung app then costs a fraction of a second per call, not ~6 s.
+    var messagingTimeout: Float?
+
+    private func bounded(_ node: AXUIElement) -> AXUIElement {
+        if let messagingTimeout { AXUIElementSetMessagingTimeout(node, messagingTimeout) }
+        return node
+    }
+
     private static let infoAttributes = [
         kAXRoleAttribute, kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXChildrenAttribute
     ] as CFArray
     private static let textAttributes = [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute] as CFArray
 
     func info(_ node: AXUIElement) -> TextNodeInfo<AXUIElement>? {
-        guard let values = Self.copy(node, Self.infoAttributes), values.count == 5 else { return nil }
+        guard let values = Self.copy(bounded(node), Self.infoAttributes), values.count == 5 else { return nil }
         var frame: CGRect?
         var position = CGPoint.zero
         var size = CGSize.zero
@@ -258,11 +267,12 @@ struct AccessibilityTextTree: TextTree {
     }
 
     func text(_ node: AXUIElement) -> (value: String?, title: String?, description: String?) {
-        guard let values = Self.copy(node, Self.textAttributes), values.count == 3 else { return (nil, nil, nil) }
+        guard let values = Self.copy(bounded(node), Self.textAttributes), values.count == 3 else { return (nil, nil, nil) }
         return (Self.nonEmpty(values[0]), Self.nonEmpty(values[1]), Self.nonEmpty(values[2]))
     }
 
     func visiblePart(_ node: AXUIElement) -> String? {
+        let node = bounded(node)
         var rangeRef: CFTypeRef?
         var countRef: CFTypeRef?
         var range = CFRange()
@@ -287,7 +297,7 @@ struct AccessibilityTextTree: TextTree {
         ]
         var value: CFTypeRef?
         guard AXUIElementCopyParameterizedAttributeValue(
-            webArea, "AXUIElementsForSearchPredicate" as CFString, predicate as CFDictionary, &value
+            bounded(webArea), "AXUIElementsForSearchPredicate" as CFString, predicate as CFDictionary, &value
         ) == .success, let array = value as? [AXUIElement]
         else { return nil }
         return array
@@ -319,11 +329,12 @@ struct AXWindowTextReader: WindowTextReading {
 
     func visibleText(pid: pid_t, window identity: WindowIdentity, budget: TimeInterval) async -> WindowTextResult? {
         await Task.detached(priority: .utility) {
-            let application = AXUIElementCreateApplication(pid)
-            AXUIElementSetMessagingTimeout(application, Self.messagingTimeout)
-            guard let window = BacktrackAX.window(pid: pid, matching: identity) else { return nil }
-            AXUIElementSetMessagingTimeout(window, Self.messagingTimeout)
-            return WindowTextWalker.walk(AccessibilityTextTree(), root: window, windowFrame: identity.frame, budget: budget)
+            guard let window = BacktrackAX.window(pid: pid, matching: identity, messagingTimeout: Self.messagingTimeout)
+            else { return nil }
+            return WindowTextWalker.walk(
+                AccessibilityTextTree(messagingTimeout: Self.messagingTimeout), root: window,
+                windowFrame: identity.frame, budget: budget
+            )
         }.value
     }
 }

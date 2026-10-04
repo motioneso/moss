@@ -129,7 +129,9 @@ final class BacktrackRuntime: ObservableObject {
     private var sleeping = false
     private var timer: BacktrackTimer?
     private var activityTimer: Timer?
-    private var tasks: [Task<Void, Never>] = []
+    /// In-flight work, keyed so each task can drop itself when done; reads that end without an
+    /// event (an Accessibility read, an unchanged screen) would otherwise pile up all day.
+    private var tasks: [UUID: Task<Void, Never>] = [:]
     /// Masked pixels and the address for the chain in flight, never kept past it.
     private var held: (generation: Int, image: CGImage, address: String?, key: DedupeKey)?
     private var cancellables = Set<AnyCancellable>()
@@ -312,7 +314,7 @@ final class BacktrackRuntime: ObservableObject {
     private func send(_ event: BacktrackEvent) {
         switch event {
         case .recognized(let generation, _, _, _), .failed(let generation, _):
-            if generation == machine.generation { tasks = [] }
+            if generation == machine.generation { tasks = [:] }
         default: break
         }
         apply(machine.handle(event))
@@ -339,8 +341,8 @@ final class BacktrackRuntime: ObservableObject {
                 run { [weak self] in await self?.recognize(generation: generation) }
             case .cancelInFlight:
                 timer?.cancel()
-                for task in tasks { task.cancel() }
-                tasks = []
+                for task in tasks.values { task.cancel() }
+                tasks = [:]
                 held = nil
             case .emit(let segment):
                 metrics.emittedLines = segment.lines.count
@@ -356,7 +358,12 @@ final class BacktrackRuntime: ObservableObject {
     }
 
     private func run(_ work: @escaping @MainActor () async -> Void) {
-        tasks.append(Task { @MainActor in await work() })
+        let id = UUID()
+        // Runs on the main actor after this insert, so it can't finish before it is tracked.
+        tasks[id] = Task { @MainActor [weak self] in
+            await work()
+            self?.tasks[id] = nil
+        }
     }
 
     private func publish() {

@@ -671,7 +671,8 @@ Rules:
   `AXStaticTextSearchKey`, falling back to the walk if unsupported.
 - **Cost.** One `AXUIElementCopyMultipleAttributeValues` call per element (role, subrole, value,
   title, description, position, size). Budget 150 ms and 3000 elements, `AXUIElementSetMessagingTimeout`
-  0.2 s on the application element. Runs on a utility task, never the main actor.
+  0.2 s on the application, the window and every element before it is queried (a timeout set on one
+  element doesn't pass to its children). Runs on a utility task, never the main actor.
 - **Thin → OCR** when: no result; fewer than 100 characters; content characters under 30% of the
   total; the bundle is on a fixed canvas list (Figma, Miro, Canva) or the address host is
   docs.google.com, figma.com, miro.com, canva.com, excalidraw.com or tldraw.com; or the bundle is on
