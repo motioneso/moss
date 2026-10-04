@@ -235,7 +235,7 @@ describe("activity history storage (#2956)", () => {
     ).rejects.toThrow(/permission denied/i);
   });
 
-  it("rejects text in fact_counts and unknown failure codes at the CHECK", async () => {
+  it("rejects text and unknown keys in fact_counts, and unknown failure codes", async () => {
     const repository = new AiRepository();
     const runner = new DataContextRunner(appDb);
     await expect(
@@ -252,6 +252,22 @@ describe("activity history storage (#2956)", () => {
       )
     ).rejects.toThrow(/check|fact_counts/i);
 
+    // A numeric value under a free-text key is still refused: key names stay on
+    // the bare line forever, so only the allow-listed vocabulary may land.
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+        repository.insertModelActivity(scopedDb.db, {
+          kind: "chat",
+          action: "chat",
+          outcome: "ok",
+          modelName: "m",
+          result: "completed",
+          ownerUserId: ids.userA,
+          factCounts: { tools: 1, leaked_key: 2 }
+        })
+      )
+    ).rejects.toThrow(/allow-list|fact_counts/i);
+
     await expect(
       runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
         repository.insertModelActivity(scopedDb.db, {
@@ -267,7 +283,78 @@ describe("activity history storage (#2956)", () => {
     ).rejects.toThrow(/check|failure_code/i);
   });
 
-  it("keeps detail owner-only: others cannot read, add, or change it", async () => {
+  it("refuses a detail row attached to another person's line", async () => {
+    const repository = new AiRepository();
+    const runner = new DataContextRunner(appDb);
+    // A bare line of user A's with no detail yet, so a missing refusal cannot
+    // hide behind a primary-key collision.
+    const bareId = randomUUID();
+    await runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      sql`
+        INSERT INTO app.moss_model_activity_log
+          (id, kind, action, outcome, model_name, result, owner_user_id)
+        VALUES (${bareId}, 'chat', 'chat', 'ok', 'uat-model-alpha', 'completed', ${ids.userA})
+      `.execute(scopedDb.db)
+    );
+
+    // User B plants a detail row on user A's line while claiming B as owner. The
+    // owner-sync trigger refuses: B's row-security view cannot see A's line, so
+    // the lookup misses and fails closed (a visible mismatch would fail the
+    // owner-only INSERT policy instead).
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userB }, (scopedDb) =>
+        sql`INSERT INTO app.moss_activity_detail (activity_id, owner_user_id, steps)
+            VALUES (${bareId}, ${ids.userB}, '[]'::jsonb)`.execute(scopedDb.db)
+      )
+    ).rejects.toThrow(/owned line|row-level security|permission denied/i);
+
+    // Nothing landed.
+    const landed = await runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      repository.getModelActivityDetail(scopedDb, bareId)
+    );
+    expect(landed).toBeUndefined();
+  });
+
+  it("refuses a detail row on an ownerless System line", async () => {
+    const runner = new DataContextRunner(appDb);
+    const systemRows = await runner.withDataContext({ actorUserId: ids.adminUser }, (scopedDb) =>
+      scopedDb.db
+        .selectFrom("app.moss_model_activity_log")
+        .select("id")
+        .where("owner_user_id", "is", null)
+        .execute()
+    );
+    expect(systemRows.length).toBeGreaterThan(0);
+    await expect(
+      runner.withDataContext({ actorUserId: ids.adminUser }, (scopedDb) =>
+        sql`INSERT INTO app.moss_activity_detail (activity_id, owner_user_id, steps)
+            VALUES (${systemRows[0]!.id}, ${ids.adminUser}, '[]'::jsonb)`.execute(scopedDb.db)
+      )
+    ).rejects.toThrow(/ownerless/i);
+  });
+
+  it("refuses a detail insert that outlives the 30-day retention", async () => {
+    const runner = new DataContextRunner(appDb);
+    const farId = randomUUID();
+    await runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      sql`
+        INSERT INTO app.moss_model_activity_log
+          (id, kind, action, outcome, model_name, result, owner_user_id)
+        VALUES (${farId}, 'chat', 'chat', 'ok', 'uat-model-alpha', 'completed', ${ids.userA})
+      `.execute(scopedDb.db)
+    );
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+        sql`
+          INSERT INTO app.moss_activity_detail
+            (activity_id, owner_user_id, steps, expires_at)
+          VALUES (${farId}, ${ids.userA}, '[]'::jsonb, now() + interval '60 days')
+        `.execute(scopedDb.db)
+      )
+    ).rejects.toThrow(/30 days/i);
+  });
+
+  it("keeps detail owner-only: others cannot read or change it", async () => {
     const repository = new AiRepository();
     const runner = new DataContextRunner(appDb);
 
@@ -417,48 +504,9 @@ describe("activity history storage (#2956)", () => {
     }
   });
 
-  it("rejects a non-admin on the endpoint with 403", async () => {
-    const res = await server.inject({
-      method: "GET",
-      url: "/api/ai/model-activity",
-      headers: { authorization: `Bearer ${ids.sessionA}` }
-    });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it("returns 400 for a malformed beforeId cursor instead of a server error", async () => {
-    const res = await server.inject({
-      method: "GET",
-      url: "/api/ai/model-activity?before=2026-01-01T00:00:00.000Z&beforeId=not-a-uuid",
-      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("returns an admin's own lines plus System lines, newest first, including a 400-day-old row", async () => {
-    const res = await server.inject({
-      method: "GET",
-      url: "/api/ai/model-activity?model=uat-model-alpha",
-      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as {
-      entries: Array<{ occurredAt: string; kind: string; modelName: string; result: string }>;
-      nextBefore: string | null;
-      nextBeforeId: string | null;
-    };
-    // The admin's own line and the ownerless System line; user A's line stays hidden.
-    expect(body.entries).toHaveLength(2);
-    expect(new Date(body.entries[0]!.occurredAt).getTime()).toBeGreaterThan(
-      new Date(body.entries[1]!.occurredAt).getTime()
-    );
-    const oldest = body.entries[1]!;
-    expect(Date.now() - new Date(oldest.occurredAt).getTime()).toBeGreaterThan(
-      399 * 24 * 60 * 60 * 1000
-    );
-    expect(body.nextBefore).toBeNull();
-    expect(body.nextBeforeId).toBeNull();
-  });
+  // #2956 (slice D): the old admin-only /api/ai/model-activity endpoint retired with
+  // its page. Endpoint-level admin coverage lives on /api/ai/activity-lines in
+  // activity-lines.test.ts; this file keeps the row-security proofs below.
 
   it("installs the recorder at API startup so a production record call writes a row", async () => {
     recordModelActivity({

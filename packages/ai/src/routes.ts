@@ -73,10 +73,7 @@ import {
   type ListActionAuditLogResponse,
   listActivityLinesRouteSchema,
   type ActivityLineDto,
-  type ListActivityLinesResponse,
-  listModelActivityRouteSchema,
-  type ModelActivityEntryDto,
-  type ListModelActivityResponse
+  type ListActivityLinesResponse
 } from "@moss/shared";
 
 import {
@@ -871,58 +868,9 @@ export function registerAiRoutes(
     }
   );
 
-  const MODEL_ACTIVITY_MAX_LIMIT = 200;
-  const MODEL_ACTIVITY_DEFAULT_LIMIT = 100;
-
-  // Plan 3.6a (#2889): admin-only read of the model activity log. The explicit admin check gives
-  // a non-admin a 403; the admin-only SELECT policy is the second, database-level lock. There is
-  // no retention floor — the log is kept indefinitely (ruling 14).
-  server.get<{
-    Querystring: {
-      kind?: string;
-      model?: string;
-      result?: string;
-      since?: string;
-      before?: string;
-      beforeId?: string;
-      limit?: number;
-    };
-  }>("/api/ai/model-activity", { schema: listModelActivityRouteSchema }, async (request, reply) => {
-    try {
-      const accessContext = await dependencies.resolveAccessContext(request);
-
-      return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
-
-        const limit = Math.min(
-          request.query.limit ?? MODEL_ACTIVITY_DEFAULT_LIMIT,
-          MODEL_ACTIVITY_MAX_LIMIT
-        );
-        const since = parseOptionalTimestamp(request.query.since);
-        const before = parseOptionalTimestamp(request.query.before);
-        const rows = await repository.listModelActivity(scopedDb, {
-          ...(request.query.kind ? { kind: request.query.kind } : {}),
-          ...(request.query.model ? { modelName: request.query.model } : {}),
-          ...(request.query.result ? { outcome: request.query.result } : {}),
-          ...(since ? { since } : {}),
-          ...(before ? { before } : {}),
-          ...(before && request.query.beforeId ? { beforeId: request.query.beforeId } : {}),
-          limit
-        });
-
-        const entries = rows.map(serializeModelActivityEntry);
-        const last = entries.at(-1);
-        const response: ListModelActivityResponse = {
-          entries,
-          nextBefore: entries.length === limit && last ? last.occurredAt : null,
-          nextBeforeId: entries.length === limit && last ? last.id : null
-        };
-        return response;
-      });
-    } catch (error) {
-      return handleRouteError(error, reply);
-    }
-  });
+  // #2956 (slice D): the old admin-only model activity endpoint is retired with
+  // its page. Admins read the same rows through /api/ai/activity-lines, which is
+  // owner-scoped by row security instead of an admin-wide read policy.
 
   server.get(
     "/api/ai/assistant-tools",
@@ -1541,19 +1489,6 @@ function serializeActivityLine(
               : String(detail.expires_at)
         }
       : null
-  };
-}
-
-function serializeModelActivityEntry(row: MossModelActivityLog): ModelActivityEntryDto {
-  return {
-    id: row.id,
-    occurredAt:
-      row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at),
-    kind: row.kind,
-    action: row.action,
-    outcome: row.outcome,
-    modelName: row.model_name,
-    result: row.result
   };
 }
 

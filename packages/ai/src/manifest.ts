@@ -45,7 +45,6 @@ import {
   patchAiActionPolicyResponseSchema,
   listActionAuditLogRouteSchema,
   listActivityLinesRouteSchema,
-  listModelActivityRouteSchema,
   approveModuleBuildResponseSchema,
   listMyModuleBuildsResponseSchema
 } from "@moss/shared";
@@ -585,13 +584,9 @@ export const aiModuleManifest = {
       permissionId: "ai.assistant-actions"
     },
     {
-      // Plan 3.6a (#2889): the admin-only model activity log the Settings screen reads.
-      method: "GET",
-      path: "/api/ai/model-activity",
-      responseSchema: listModelActivityRouteSchema.response[200],
-      permissionId: "ai.manage"
-    },
-    {
+      // #2956 (slice D): the old admin-only model activity endpoint retired with its
+      // page. Admins read the same rows through this route, which is owner-scoped
+      // by row security instead of an admin-wide read policy.
       // #2956 (slice C): the viewer's own activity lines the Activity page reads.
       // Owner-scoped like the audit log above, so it carries the same permission.
       method: "GET",

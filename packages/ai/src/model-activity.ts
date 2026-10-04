@@ -174,13 +174,20 @@ function truncateBytes(value: string, maxBytes: number): string {
   return value.slice(0, end);
 }
 
-/** Fact counts carry numbers and booleans only; anything else is dropped, never stored. */
+/**
+ * Fact counts carry allow-listed keys with number or boolean values only; anything
+ * else is dropped, never stored. The database trigger is the second lock and rejects
+ * the write outright.
+ */
+const FACT_COUNT_KEYS = new Set(["tools", "tools_failed", "jev_agreed", "confidence"]);
+
 export function boundModelActivityFacts(
   facts: ActivityFactCounts | undefined
 ): ActivityFactCounts | undefined {
   if (!facts) return undefined;
   const bounded: ActivityFactCounts = {};
   for (const [key, value] of Object.entries(facts)) {
+    if (!FACT_COUNT_KEYS.has(key)) continue;
     if (typeof value === "number" || typeof value === "boolean") bounded[key] = value;
   }
   return bounded;

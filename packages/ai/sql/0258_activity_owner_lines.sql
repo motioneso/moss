@@ -57,6 +57,11 @@ BEGIN
     RETURN NEW;
   END IF;
   FOR entry IN SELECT * FROM jsonb_each(NEW.fact_counts) LOOP
+    -- Allow-listed key names (spec section 5.1 example). Free-text keys would stay on
+    -- the bare line forever, so anything outside the vocabulary fails the write.
+    IF entry.key NOT IN ('tools', 'tools_failed', 'jev_agreed', 'confidence') THEN
+      RAISE EXCEPTION 'moss_model_activity_log: fact_counts keys are allow-listed (tools, tools_failed, jev_agreed, confidence)';
+    END IF;
     IF jsonb_typeof(entry.value) NOT IN ('number', 'boolean') THEN
       RAISE EXCEPTION 'moss_model_activity_log: fact_counts holds numbers and booleans only';
     END IF;
@@ -180,6 +185,62 @@ DROP TRIGGER IF EXISTS moss_activity_detail_lock_owner ON app.moss_activity_deta
 CREATE TRIGGER moss_activity_detail_lock_owner
 BEFORE UPDATE ON app.moss_activity_detail
 FOR EACH ROW EXECUTE FUNCTION app.moss_activity_detail_lock_owner();
+
+-- The detail row's owner always equals its line's owner (spec section 5.2). The
+-- trigger copies the line's owner onto the row, so a cross-owner attempt fails
+-- the owner-only INSERT policy instead of slipping through. A lookup miss fails
+-- closed: the row security view can hide another person's line from the inserter,
+-- and passing such a row through would plant a detail row the policy then
+-- accepts. Ownerless lines never get a detail row. UPDATE needs no sync: the
+-- lock trigger above already freezes the owner.
+CREATE OR REPLACE FUNCTION app.moss_activity_detail_sync_owner()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  line_owner uuid;
+BEGIN
+  SELECT owner_user_id INTO line_owner
+  FROM app.moss_model_activity_log
+  WHERE id = NEW.activity_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'moss_activity_detail: detail rows require an owned line';
+  END IF;
+  IF line_owner IS NULL THEN
+    RAISE EXCEPTION 'moss_activity_detail: ownerless lines never get a detail row';
+  END IF;
+  NEW.owner_user_id := line_owner;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION app.moss_activity_detail_sync_owner() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.moss_activity_detail_sync_owner() TO jarvis_app_runtime;
+
+DROP TRIGGER IF EXISTS moss_activity_detail_sync_owner ON app.moss_activity_detail;
+CREATE TRIGGER moss_activity_detail_sync_owner
+BEFORE INSERT ON app.moss_activity_detail
+FOR EACH ROW EXECUTE FUNCTION app.moss_activity_detail_sync_owner();
+
+-- Expiry is capped at 30 days after creation: a raw insert cannot keep quoted
+-- words forever. UPDATE cannot move expiry (the lock trigger above), so this
+-- fires on INSERT only.
+CREATE OR REPLACE FUNCTION app.moss_activity_detail_cap_expiry()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.expires_at > NEW.created_at + interval '30 days' THEN
+    RAISE EXCEPTION 'moss_activity_detail: expires_at is at most 30 days after creation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS moss_activity_detail_cap_expiry ON app.moss_activity_detail;
+CREATE TRIGGER moss_activity_detail_cap_expiry
+BEFORE INSERT ON app.moss_activity_detail
+FOR EACH ROW EXECUTE FUNCTION app.moss_activity_detail_cap_expiry();
 
 -- Maintenance access for the SECURITY DEFINER purge function below (same shape as the
 -- 0251 shadow-table purge; 0255 removed that function, this one is new).

@@ -39,8 +39,10 @@ interface ModelActivityEntry {
 }
 
 async function fetchModelActivity(page: Page): Promise<readonly ModelActivityEntry[]> {
-  const response = await page.request.get("/api/ai/model-activity?limit=25");
-  expect(response.ok(), `model-activity -> ${response.status()}`).toBeTruthy();
+  // #2956 slice D retired /api/ai/model-activity; the owner-scoped lines endpoint
+  // carries the same kind/outcome fields for the admin's own rows.
+  const response = await page.request.get("/api/ai/activity-lines?limit=25");
+  expect(response.ok(), `activity-lines -> ${response.status()}`).toBeTruthy();
   return ((await response.json()) as { entries: readonly ModelActivityEntry[] }).entries;
 }
 
@@ -66,7 +68,7 @@ async function sendThroughDrawer(page: Page): Promise<void> {
   });
 }
 
-test("a live chat turn appears in the admin model activity log (#2890)", async ({ page }) => {
+test("a live chat turn appears in the Activity lines (#2890)", async ({ page }) => {
   if (REQUIRE_REAL_CHAT && !REAL_CHAT_CONFIGURED) {
     throw new Error(
       "JARVIS_UAT_REQUIRE_REAL_CHAT is set but no real Codex login was copied into this stack " +

@@ -192,6 +192,56 @@ describe("chat answer lines (#2956 slice B)", () => {
     }
   });
 
+  it("stores templated step words only: thinking, tool text and the reply never land", async () => {
+    const { entries, seen, restore } = collect();
+    try {
+      const engine: CliChatEngine = {
+        provider: "anthropic" as ProviderKind,
+        async launch() {
+          return { offset: 0 };
+        },
+        async submit() {},
+        async readNew(afterOffset: number) {
+          return {
+            records: [
+              { kind: "thinking", text: "SECRET-thinking-reasoning" },
+              {
+                kind: "tool",
+                text: "SECRET-tool-output-words",
+                toolName: "calendar.list",
+                outcome: "executed"
+              },
+              { kind: "reply", text: "SECRET-reply-words" }
+            ],
+            offset: afterOffset + 1,
+            complete: true
+          };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {},
+        async interrupt() {}
+      };
+      const manager = makeManager(() => engine, seen);
+      await manager.submitTurn("user-1", "Ben", "what is on today");
+
+      expect(entries).toHaveLength(1);
+      const steps = entries[0]!.detail?.steps ?? [];
+      // Thinking is skipped; the tool and answer steps keep titles only.
+      expect(steps.map((step) => step.title)).toEqual(["calendar.list", "Answer"]);
+      const dumped = JSON.stringify(steps);
+      expect(dumped).not.toContain("SECRET-thinking-reasoning");
+      expect(dumped).not.toContain("SECRET-tool-output-words");
+      expect(dumped).not.toContain("SECRET-reply-words");
+      // Templated results name the outcome, never the text.
+      expect(steps[0]?.result).toMatch(/^Finished\./);
+      expect(steps[1]?.result).toMatch(/^Answered\./);
+    } finally {
+      restore();
+    }
+  });
+
   it("counts tools, tokens and duration, and names each step", async () => {
     const { entries, seen, restore } = collect();
     try {

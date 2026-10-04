@@ -129,10 +129,13 @@ interface ModelActivityEntry {
 }
 
 async function modelCalls(page: Page): Promise<readonly ModelActivityEntry[]> {
+  // #2956 slice D retired /api/ai/model-activity; the owner-scoped lines endpoint
+  // carries the same entry fields, and the counted setup calls are ownerless worker
+  // rows, which stay visible to the signed-in admin.
   return (
     await apiJson<{ entries: readonly ModelActivityEntry[] }>(
       page,
-      "/api/ai/model-activity?limit=200"
+      "/api/ai/activity-lines?limit=200"
     )
   ).entries;
 }
