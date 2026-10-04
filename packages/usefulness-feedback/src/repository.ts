@@ -596,14 +596,26 @@ export class UsefulnessFeedbackRepository {
     targetKind: FeedbackTargetKind,
     surface: FeedbackSurface
   ): Promise<Set<string>> {
+    return this.listActiveRefs(scopedDb, ownerUserId, targetKind, surface, ["dismiss"]);
+  }
+
+  /** Target refs with an active signal of any of the given kinds. */
+  async listActiveRefs(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    targetKind: FeedbackTargetKind,
+    surface: FeedbackSurface,
+    kinds: readonly UsefulnessFeedbackKind[]
+  ): Promise<Set<string>> {
     assertDataContextDb(scopedDb);
+    if (kinds.length === 0) return new Set();
     const result = await sql<{ target_ref: string }>`
-      SELECT target_ref
+      SELECT DISTINCT target_ref
       FROM app.usefulness_feedback_signals
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND target_kind = ${targetKind}
         AND surface = ${surface}
-        AND kind = 'dismiss'
+        AND kind IN (${sql.join(kinds.map((kind) => sql`${kind}`))})
         AND status = 'active'
     `.execute(scopedDb.db);
     return new Set(result.rows.map((row) => row.target_ref));

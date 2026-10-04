@@ -93,6 +93,7 @@ import {
 import { isBehaviorEnabled, type SourceBehaviorPreferencesPort } from "@moss/source-behaviors";
 import {
   BRIEFINGS_QUEUE_DEFINITIONS,
+  CATCH_UP_HANDLED_KINDS,
   projectPlanContext,
   BriefingsRepository,
   briefingsModuleManifest,
@@ -2301,6 +2302,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             const name = row?.name?.trim();
             return name && name.length > 0 ? name : actorUserId;
           },
+          catchUpHandledRefs: (scopedDb, ownerUserId) =>
+            usefulnessFeedbackRepository.listActiveRefs(
+              scopedDb,
+              ownerUserId,
+              "briefing_item",
+              "briefing",
+              CATCH_UP_HANDLED_KINDS
+            ),
           memoryRetriever: runtimeMemoryRetriever as unknown as MemoryRetriever,
           logger: briefingsLogger,
           connectorSyncAt: async (scopedDb, kind) => {

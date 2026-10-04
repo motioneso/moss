@@ -58,6 +58,11 @@ export interface ComposeDeps {
   }) => Promise<readonly FocusSignalInput[]>;
   readonly sourceBehaviorPolicy?: SourceBehaviorPolicyDeps;
   readonly resolveUserName?: (scopedDb: DataContextDb, actorUserId: string) => Promise<string>;
+  /** Catch-up entry ids the owner dismissed or turned into a task (#3028). */
+  readonly catchUpHandledRefs?: (
+    scopedDb: DataContextDb,
+    ownerUserId: string
+  ) => Promise<ReadonlySet<string>>;
   /**
    * Structured logger for tool-failure observability (briefing_tool_failed events).
    * Optional for back-compat; production injects a module logger (observability spec).

@@ -1,5 +1,7 @@
 import type {
   BriefingActionRowDto,
+  BriefingCatchUpDto,
+  BriefingCatchUpEntryDto,
   BriefingStructuredPayloadV1,
   TaskSuggestionMetadataV1
 } from "@moss/shared";
@@ -14,6 +16,7 @@ import {
   type ComposeRunInput
 } from "./compose-shared.js";
 import { SECTION_ITEM_CAP } from "./compose-shared.js";
+import { catchUpEntryId } from "./feedback-targets.js";
 import { withToolSavepoint } from "./savepoint.js";
 
 interface SuggestedTaskShape {
@@ -229,20 +232,88 @@ export function filterEmailItems(
   });
 }
 
+export const CATCH_UP_ENTRY_CAP = 8;
+
+/** The mail the catch-up digest covers: a start time for the label, and the membership test. */
+export interface CatchUpWindow {
+  readonly since: Date | null;
+  readonly includes: (receivedAt: unknown) => boolean;
+}
+
+/** Morning: everything since the previous morning run, else the last 24 hours. */
+export function catchUpWindowSince(since: Date): CatchUpWindow {
+  return {
+    since,
+    includes: (receivedAt) => {
+      const at = typeof receivedAt === "string" ? Date.parse(receivedAt) : Number.NaN;
+      return Number.isFinite(at) && at >= since.getTime();
+    }
+  };
+}
+
+/**
+ * Catch-up entry ids the owner already dismissed or turned into a task, so they never take
+ * one of the capped slots. Best-effort: the runs route filters the same ids on read.
+ */
+export async function loadCatchUpHandledRefs(
+  scopedDb: DataContextDb,
+  ownerUserId: string,
+  deps: Pick<ComposeDeps, "catchUpHandledRefs">
+): Promise<ReadonlySet<string>> {
+  const load = deps.catchUpHandledRefs;
+  if (!load) return new Set();
+  try {
+    return await withToolSavepoint(scopedDb, () => load(scopedDb, ownerUserId));
+  } catch {
+    return new Set();
+  }
+}
+
+const LEFT_OUT_ACTIONABILITY = new Set(["noise", "receipt_or_notice"]);
+
+/**
+ * Important informational mail for the Today catch-up digest (#3028).
+ *
+ * Shows fyi and waiting-on-someone mail from the window that is not already an action row,
+ * not low importance, not list mail unless marked high, and has a guarded summary. Counts the
+ * in-window mail it leaves out as newsletters, receipts and notifications; unsorted mail is
+ * neither shown nor counted.
+ */
 export async function buildEmailCatchUp(
   scopedDb: DataContextDb,
   items: readonly Record<string, unknown>[],
   actionRowSourceRefs: ReadonlySet<string>,
-  connectorSyncAt: ComposeDeps["connectorSyncAt"]
-) {
-  const eligible = filterEmailItems(items, actionRowSourceRefs).filter(
-    (item) => item.actionability === "waiting_on_someone" || item.actionability === "fyi"
+  connectorSyncAt: ComposeDeps["connectorSyncAt"],
+  window: CatchUpWindow,
+  handledRefs: ReadonlySet<string> = new Set()
+): Promise<BriefingCatchUpDto | null> {
+  const candidates = filterEmailItems(items, actionRowSourceRefs).filter((item) =>
+    window.includes(item.receivedAt)
   );
-  if (eligible.length === 0) return null;
-  const summaries = eligible
-    .map((item) => (typeof item.summary === "string" ? item.summary.trim() : ""))
-    .filter(Boolean)
-    .slice(0, 3);
+  const eligible: Record<string, unknown>[] = [];
+  let leftOutCount = 0;
+  for (const item of candidates) {
+    const actionability = item.actionability;
+    if (typeof actionability === "string" && LEFT_OUT_ACTIONABILITY.has(actionability)) {
+      leftOutCount += 1;
+      continue;
+    }
+    if (actionability !== "fyi" && actionability !== "waiting_on_someone") continue;
+    if (item.awaitingJudgement === true || summaryOf(item) === null) continue;
+    if (item.importance === "low" || (item.bulk === true && item.importance !== "high")) {
+      leftOutCount += 1;
+      continue;
+    }
+    eligible.push(item);
+  }
+  const entries = eligible
+    .sort(compareCatchUpItems)
+    .flatMap((item) => {
+      const entry = catchUpEntry(item);
+      return entry && !handledRefs.has(entry.id) ? [entry] : [];
+    })
+    .slice(0, CATCH_UP_ENTRY_CAP);
+  if (entries.length === 0) return null;
   let asOf: string | null = null;
   try {
     const syncAt = connectorSyncAt
@@ -250,12 +321,117 @@ export async function buildEmailCatchUp(
       : null;
     asOf = syncAt?.toISOString() ?? null;
   } catch {
-    // Freshness is best-effort; the count and guarded summaries remain useful.
+    // Freshness is best-effort; the entries remain useful.
   }
   return {
-    source: "email" as const,
-    itemCount: eligible.length,
-    summaryText: summaries.length > 0 ? summaries.join("\n") : "No safe summary is available yet.",
-    asOf
+    source: "email",
+    itemCount: entries.length,
+    since: window.since?.toISOString() ?? null,
+    leftOutCount,
+    asOf,
+    entries
   };
+}
+
+function summaryOf(item: Record<string, unknown>): string | null {
+  if (typeof item.summary !== "string") return null;
+  const summary = decodeEntities(item.summary).replace(/\s+/g, " ").trim();
+  return summary.length > 0 ? summary : null;
+}
+
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  hellip: "\u2026",
+  ldquo: "\u201c",
+  lsquo: "\u2018",
+  lt: "<",
+  mdash: "\u2014",
+  nbsp: " ",
+  ndash: "\u2013",
+  quot: '"',
+  rdquo: "\u201d",
+  rsquo: "\u2019"
+};
+
+/** Summaries and sender names can carry HTML entities from the message; the UI renders plain text. */
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, reference: string) => {
+    if (reference.startsWith("#")) {
+      const codePoint = reference.toLowerCase().startsWith("#x")
+        ? Number.parseInt(reference.slice(2), 16)
+        : Number.parseInt(reference.slice(1), 10);
+      const valid =
+        Number.isInteger(codePoint) &&
+        codePoint >= 0 &&
+        codePoint <= 0x10ffff &&
+        (codePoint < 0xd800 || codePoint > 0xdfff);
+      return valid ? String.fromCodePoint(codePoint) : entity;
+    }
+    return NAMED_ENTITIES[reference.toLowerCase()] ?? entity;
+  });
+}
+
+function catchUpRank(item: Record<string, unknown>): number {
+  if (item.importance === "high") return 0;
+  return item.actionability === "waiting_on_someone" ? 1 : 2;
+}
+
+function compareCatchUpItems(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const rank = catchUpRank(a) - catchUpRank(b);
+  if (rank !== 0) return rank;
+  return receivedMs(b) - receivedMs(a);
+}
+
+function receivedMs(item: Record<string, unknown>): number {
+  const at = typeof item.receivedAt === "string" ? Date.parse(item.receivedAt) : Number.NaN;
+  return Number.isFinite(at) ? at : 0;
+}
+
+function catchUpEntry(item: Record<string, unknown>): BriefingCatchUpEntryDto | null {
+  const sourceRef = emailSourceRefForItem(item);
+  const summary = summaryOf(item);
+  if (sourceRef === null || summary === null || typeof item.receivedAt !== "string") return null;
+  return {
+    id: catchUpEntryId(sourceRef),
+    senderName: senderDisplayName(item.sender),
+    summary,
+    receivedAt: item.receivedAt,
+    reason:
+      item.importance === "high"
+        ? "important"
+        : item.actionability === "waiting_on_someone"
+          ? "waiting_on_them"
+          : null,
+    cacheMessageId:
+      typeof item.cacheMessageId === "string" && item.cacheMessageId.length > 0
+        ? item.cacheMessageId
+        : null,
+    openHref: httpsHref(item.sourceHref)
+  };
+}
+
+/** Display name from a From header, else the address local part. */
+export function senderDisplayName(sender: unknown): string {
+  const raw = typeof sender === "string" ? decodeEntities(sender).trim() : "";
+  const angled = /^(.*?)<([^>]*)>\s*$/.exec(raw);
+  const name = (angled?.[1] ?? "")
+    .trim()
+    .replace(/^"(.*)"$/, "$1")
+    .trim();
+  if (name.length > 0) return name;
+  const address = (angled?.[2] ?? raw).trim();
+  const at = address.indexOf("@");
+  const local = at > 0 ? address.slice(0, at) : address;
+  return local.length > 0 ? local : "Unknown sender";
+}
+
+function httpsHref(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    return new URL(value).protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
 }
