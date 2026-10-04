@@ -48,7 +48,12 @@ import {
 } from "./priority-consumer.js";
 import { fallback } from "./fallback.js";
 import { briefingSignalFeedbackItemId } from "./feedback-targets.js";
-import { buildEmailCatchUp, filterEmailItems, gatherActionRows } from "./action-rows.js";
+import {
+  buildEmailCatchUp,
+  catchUpWindowSince,
+  filterEmailItems,
+  gatherActionRows
+} from "./action-rows.js";
 import {
   buildMorningEmailLines,
   gatherCommitmentSuggestions,
@@ -67,6 +72,7 @@ import {
 // ── Caps (one conservative economy budget) ─────────────────────────────────────
 const VAULT_CHUNK_CAP = 6;
 const VAULT_EXCERPT_CHARS = 400;
+const CATCH_UP_FALLBACK_MS = 24 * 60 * 60 * 1000; // morning catch-up window with no prior run
 
 function orderByPriority<T>(
   items: readonly T[],
@@ -442,7 +448,10 @@ export async function composeBriefing(
         scopedDb,
         rawEmail.rawItems ?? [],
         actionRows.sourceRefs,
-        deps.connectorSyncAt
+        deps.connectorSyncAt,
+        catchUpWindowSince(
+          input.previousMorningRunAt ?? new Date(now.getTime() - CATCH_UP_FALLBACK_MS)
+        )
       )
     : null;
   const structuredPayload = {

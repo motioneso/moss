@@ -51,11 +51,30 @@ export interface BriefingActionRowDto {
   readonly resurfaceReason: BriefingActionResurfaceReason | null;
 }
 
+export type BriefingCatchUpReason = "important" | "waiting_on_them";
+
+/** One email in the Today catch-up digest (#3028). */
+export interface BriefingCatchUpEntryDto {
+  /** Usefulness-feedback target ref: `email-digest:` plus a hash of the message source ref. */
+  readonly id: string;
+  readonly senderName: string;
+  readonly summary: string;
+  readonly receivedAt: string;
+  readonly reason: BriefingCatchUpReason | null;
+  readonly cacheMessageId: string | null;
+  /** Provider deep link, https only; null when the provider has no web view. */
+  readonly openHref: string | null;
+}
+
 export interface BriefingCatchUpDto {
   readonly source: "email";
   readonly itemCount: number;
-  readonly summaryText: string;
+  /** Start of the window the digest covers; null when unknown. */
+  readonly since: string | null;
+  /** In-window mail left out as newsletters, receipts or notifications. */
+  readonly leftOutCount: number;
   readonly asOf: string | null;
+  readonly entries: readonly BriefingCatchUpEntryDto[];
 }
 
 export interface BriefingPlanBlockV1 {
@@ -214,15 +233,32 @@ export const briefingActionRowDtoSchema = {
   }
 } as const;
 
+const briefingCatchUpEntryDtoSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "senderName", "summary", "receivedAt", "reason", "cacheMessageId", "openHref"],
+  properties: {
+    id: { type: "string" },
+    senderName: { type: "string" },
+    summary: { type: "string" },
+    receivedAt: { type: "string" },
+    reason: { type: ["string", "null"], enum: ["important", "waiting_on_them", null] },
+    cacheMessageId: { type: ["string", "null"] },
+    openHref: { type: ["string", "null"] }
+  }
+} as const;
+
 export const briefingCatchUpDtoSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["source", "itemCount", "summaryText", "asOf"],
+  required: ["source", "itemCount", "since", "leftOutCount", "asOf", "entries"],
   properties: {
     source: { type: "string", enum: ["email"] },
     itemCount: { type: "integer", minimum: 0 },
-    summaryText: { type: "string" },
-    asOf: { type: ["string", "null"] }
+    since: { type: ["string", "null"] },
+    leftOutCount: { type: "integer", minimum: 0 },
+    asOf: { type: ["string", "null"] },
+    entries: { type: "array", items: briefingCatchUpEntryDtoSchema }
   }
 } as const;
 

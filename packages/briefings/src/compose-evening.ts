@@ -25,7 +25,8 @@ import {
   type ComposeResult,
   type ComposeRunInput,
   type Section,
-  type SynthesisFailureReason
+  type SynthesisFailureReason,
+  withinLocalDay
 } from "./compose-shared.js";
 import { collectExternalBriefingContributions } from "./external-contributions.js";
 import { filterEveningCalendar, partitionEveningTasks } from "./evening-lenses.js";
@@ -387,7 +388,8 @@ export async function composeEveningBriefing(
         scopedDb,
         rawEmail.rawItems ?? [],
         actionRows.sourceRefs,
-        deps.connectorSyncAt
+        deps.connectorSyncAt,
+        { since: null, includes: (receivedAt) => withinLocalDay(receivedAt, now, timeZone) }
       )
     : null;
   const structuredPayload = {

@@ -2,10 +2,14 @@ import { type ReactNode } from "react";
 
 export interface RowIndexProps {
   readonly children: ReactNode;
+
+  /** Compact rows sit inside a section block: body-size title, tighter padding, no trailing gap. */
+  readonly density?: "default" | "compact";
 }
 
 export function RowIndex(props: RowIndexProps) {
-  return <div className="jds-index">{props.children}</div>;
+  const className = props.density === "compact" ? "jds-index jds-index--compact" : "jds-index";
+  return <div className={className}>{props.children}</div>;
 }
 
 export interface RowIndexItemProps {

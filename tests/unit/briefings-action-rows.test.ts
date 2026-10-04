@@ -4,6 +4,7 @@ import { composeBriefing } from "../../packages/briefings/src/compose.js";
 import { composeEveningBriefing } from "../../packages/briefings/src/compose-evening.js";
 import {
   buildEmailCatchUp,
+  catchUpWindowSince,
   gatherActionRows,
   projectActionRows
 } from "../../packages/briefings/src/action-rows.js";
@@ -192,43 +193,164 @@ describe("structured briefing action rows", () => {
     expect(JSON.stringify(logs)).not.toContain("private");
   });
 
-  it("builds bounded email-only catch-up from guarded summaries", async () => {
-    const asOf = new Date("2026-06-13T12:30:00.000Z");
-    const catchUp = await buildEmailCatchUp(
+  const since = new Date("2026-06-13T07:00:00.000Z");
+  const asOf = new Date("2026-06-13T12:30:00.000Z");
+  const mail = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    connectorAccountId: "acct",
+    sender: `${id} <${id}@example.com>`,
+    receivedAt: "2026-06-13T09:00:00.000Z",
+    actionability: "fyi",
+    importance: "normal",
+    summary: `${id} summary`,
+    cacheMessageId: `row-${id}`,
+    sourceHref: null,
+    bulk: false,
+    ...overrides
+  });
+  const digest = (items: readonly Record<string, unknown>[], excluded: string[] = []) =>
+    buildEmailCatchUp(
       fakeScopedDb,
-      [
-        { id: "excluded", connectorAccountId: "acct", actionability: "fyi", summary: "row" },
-        { id: "one", connectorAccountId: "acct", actionability: "fyi", summary: "one" },
-        {
-          id: "two",
-          connectorAccountId: "acct",
-          actionability: "waiting_on_someone",
-          summary: "two"
-        },
-        { id: "three", connectorAccountId: "acct", actionability: "fyi", summary: "three" },
-        { id: "four", connectorAccountId: "acct", actionability: "fyi", summary: "four" },
-        { id: "noise", connectorAccountId: "acct", actionability: "noise", summary: "noise" }
-      ],
-      new Set(["acct:excluded"]),
-      async () => asOf
+      items,
+      new Set(excluded),
+      async () => asOf,
+      catchUpWindowSince(since)
     );
 
-    expect(catchUp).toEqual({
+  it("lists important informational mail with sender, summary, reason and a hashed id", async () => {
+    const catchUp = await digest(
+      [
+        mail("row"),
+        mail("plain", {
+          sender: '"Priya Raman" <priya@example.com>',
+          sourceHref: "https://mail.example.com/p"
+        }),
+        mail("waiting", { actionability: "waiting_on_someone", sender: "hollis@example.com" })
+      ],
+      ["acct:row"]
+    );
+
+    expect(catchUp).toMatchObject({
       source: "email",
-      itemCount: 4,
-      summaryText: "one\ntwo\nthree",
+      itemCount: 2,
+      since: since.toISOString(),
+      leftOutCount: 0,
       asOf: asOf.toISOString()
+    });
+    expect(catchUp?.entries).toEqual([
+      {
+        id: expect.stringMatching(/^email-digest:[0-9a-f]{16}$/),
+        senderName: "hollis",
+        summary: "waiting summary",
+        receivedAt: "2026-06-13T09:00:00.000Z",
+        reason: "waiting_on_them",
+        cacheMessageId: "row-waiting",
+        openHref: null
+      },
+      {
+        id: expect.stringMatching(/^email-digest:[0-9a-f]{16}$/),
+        senderName: "Priya Raman",
+        summary: "plain summary",
+        receivedAt: "2026-06-13T09:00:00.000Z",
+        reason: null,
+        cacheMessageId: "row-plain",
+        openHref: "https://mail.example.com/p"
+      }
+    ]);
+    expect(JSON.stringify(catchUp)).not.toContain("acct:");
+  });
+
+  it("keeps the entry id stable for the same message across runs", async () => {
+    const first = await digest([mail("same")]);
+    const second = await digest([mail("same", { summary: "reworded" })]);
+    expect(first?.entries[0]?.id).toBe(second?.entries[0]?.id);
+  });
+
+  it("leaves out low-importance, list, receipt and noise mail and counts them", async () => {
+    const catchUp = await digest(
+      [
+        mail("keep"),
+        mail("low", { importance: "low" }),
+        mail("list", { bulk: true }),
+        mail("list-high", { bulk: true, importance: "high" }),
+        mail("receipt", { actionability: "receipt_or_notice" }),
+        mail("noise", { actionability: "noise" }),
+        mail("unsorted", { actionability: "unknown" }),
+        mail("reply", { actionability: "needs_reply" }),
+        mail("no-summary", { summary: "  " }),
+        mail("closer-look", { awaitingJudgement: true }),
+        mail("noise-row", { actionability: "noise" })
+      ],
+      ["acct:noise-row"]
+    );
+
+    expect(catchUp?.entries.map((entry) => entry.summary)).toEqual([
+      "list-high summary",
+      "keep summary"
+    ]);
+    expect(catchUp?.entries[0]?.reason).toBe("important");
+    expect(catchUp?.leftOutCount).toBe(4);
+  });
+
+  it("only covers mail inside the window", async () => {
+    const catchUp = await digest([
+      mail("before", { receivedAt: "2026-06-13T06:59:59.000Z", actionability: "noise" }),
+      mail("old", { receivedAt: "2026-06-12T09:00:00.000Z" }),
+      mail("undated", { receivedAt: "not a date" }),
+      mail("fresh", { receivedAt: "2026-06-13T07:00:00.000Z" })
+    ]);
+    expect(catchUp?.entries.map((entry) => entry.summary)).toEqual(["fresh summary"]);
+    expect(catchUp?.leftOutCount).toBe(0);
+  });
+
+  it("orders important first, then waiting on them, then newest, capped at eight", async () => {
+    const items = Array.from({ length: 10 }, (_, index) =>
+      mail(`fyi-${index}`, { receivedAt: `2026-06-13T1${index}:00:00.000Z` })
+    );
+    const catchUp = await digest([
+      ...items,
+      mail("waiting", {
+        actionability: "waiting_on_someone",
+        receivedAt: "2026-06-13T08:00:00.000Z"
+      }),
+      mail("important", { importance: "high", receivedAt: "2026-06-13T07:30:00.000Z" })
+    ]);
+    expect(catchUp?.entries.map((entry) => entry.summary)).toEqual([
+      "important summary",
+      "waiting summary",
+      "fyi-9 summary",
+      "fyi-8 summary",
+      "fyi-7 summary",
+      "fyi-6 summary",
+      "fyi-5 summary",
+      "fyi-4 summary"
+    ]);
+    expect(catchUp?.itemCount).toBe(8);
+  });
+
+  it("decodes HTML entities in summaries and sender names", async () => {
+    const catchUp = await digest([
+      mail("amp", {
+        sender: "Smith &amp; Sons <hello@example.com>",
+        summary: "Quote for the deck &amp; railing &#8211; &quot;final&quot;\n  price"
+      })
+    ]);
+    expect(catchUp?.entries[0]).toMatchObject({
+      senderName: "Smith & Sons",
+      summary: 'Quote for the deck & railing \u2013 "final" price'
     });
   });
 
-  it("omits catch-up when no eligible email items remain", async () => {
-    await expect(
-      buildEmailCatchUp(
-        fakeScopedDb,
-        [{ id: "noise", connectorAccountId: "acct", actionability: "noise" }],
-        new Set(),
-        async () => new Date("2026-06-13T12:30:00.000Z")
-      )
-    ).resolves.toBeNull();
+  it("drops provider links that are not https", async () => {
+    const catchUp = await digest([
+      mail("http", { sourceHref: "http://mail.example.com/x" }),
+      mail("script", { sourceHref: "javascript:alert(1)" }),
+      mail("junk", { sourceHref: "not a url" })
+    ]);
+    expect(catchUp?.entries.map((entry) => entry.openHref)).toEqual([null, null, null]);
+  });
+
+  it("omits catch-up when nothing important arrived", async () => {
+    await expect(digest([mail("noise", { actionability: "noise" })])).resolves.toBeNull();
   });
 });
