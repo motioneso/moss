@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
-// #2788: the Today hero has no contour-line layer behind it, and both "Prepared at" times (the
+// #2788: the Today hero draws its contour-line layer behind the text (#3016), and both "Prepared at" times (the
 // hero line and the full reader) show the 12-hour clock with am/pm. Signs in as the seeded admin
 // and generates a real morning briefing whose prose comes from the writer fixture.
 export const uatLevel = {
@@ -28,7 +28,7 @@ async function signIn(page: Page): Promise<void> {
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
 }
 
-test("hero has no contour layer and Prepared at shows am/pm in the hero and the reader", async ({
+test("hero draws the contour layer and Prepared at shows am/pm in the hero and the reader", async ({
   page
 }) => {
   test.setTimeout(180_000);
@@ -98,9 +98,9 @@ test("hero has no contour layer and Prepared at shows am/pm in the hero and the 
   const heroPrepared = hero.locator(".today-hero__prepared-time");
   await expect(heroPrepared).toHaveText(PREPARED_AT);
 
-  // No decorative layer: the hero's ::before paints no image.
+  // The hero's ::before paints the contour texture.
   const beforeImage = await hero.evaluate((el) => getComputedStyle(el, "::before").backgroundImage);
-  expect(beforeImage).toBe("none");
+  expect(beforeImage).toContain("/textures/hero-contours.svg");
 
   const shotDir = process.env.JARVIS_UAT_SHOT_DIR;
   if (shotDir) await hero.screenshot({ path: `${shotDir}/2788-hero.png` });
@@ -110,5 +110,7 @@ test("hero has no contour layer and Prepared at shows am/pm in the hero and the 
   await expect(readerPrepared).toHaveText(PREPARED_AT);
   if (shotDir) await readerPrepared.screenshot({ path: `${shotDir}/2788-reader-prepared.png` });
 
-  console.log("[live proof] hero and reader both show Prepared at with am/pm, no contour layer");
+  console.log(
+    "[live proof] hero and reader both show Prepared at with am/pm, contour layer present"
+  );
 });
