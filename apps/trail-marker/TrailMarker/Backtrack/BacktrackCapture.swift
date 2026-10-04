@@ -19,21 +19,7 @@ protocol TextRecognizing {
 struct VisionTextRecognizer: TextRecognizing {
     func recognize(_ image: CGImage) async throws -> [String] {
         try await withCheckedThrowingContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
-                let sorted = observations.sorted {
-                    abs($0.boundingBox.midY - $1.boundingBox.midY) > 0.01
-                        ? $0.boundingBox.midY > $1.boundingBox.midY
-                        : $0.boundingBox.minX < $1.boundingBox.minX
-                }
-                continuation.resume(returning: sorted.compactMap { $0.topCandidates(1).first?.string })
-            }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
+            let request = Self.makeRequest { result in continuation.resume(with: result) }
             DispatchQueue.global(qos: .utility).async {
                 do {
                     try VNImageRequestHandler(cgImage: image).perform([request])
@@ -43,6 +29,27 @@ struct VisionTextRecognizer: TextRecognizing {
             }
         }
     }
+
+    /// `.accurate` without language correction: about 1.7x cheaper with no accuracy loss on screen
+    /// text (plan §7, retry 2, task 1; omi's `ocr-quality.md` §3).
+    static func makeRequest(completion: @escaping (Result<[String], Error>) -> Void) -> VNRecognizeTextRequest {
+        let request = VNRecognizeTextRequest { request, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+            let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
+            let sorted = observations.sorted {
+                abs($0.boundingBox.midY - $1.boundingBox.midY) > 0.01
+                    ? $0.boundingBox.midY > $1.boundingBox.midY
+                    : $0.boundingBox.minX < $1.boundingBox.minX
+            }
+            completion(.success(sorted.compactMap { $0.topCandidates(1).first?.string }))
+        }
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        return request
+    }
 }
 
 // MARK: - Accessibility helpers
@@ -51,19 +58,22 @@ struct VisionTextRecognizer: TextRecognizing {
 /// `WorkspaceFrontmostSource.focusedWindowIdentity` does, but keeping the element so what is read
 /// from it (secure fields, the address) is bound to the window the capture was bound to.
 enum BacktrackAX {
-    static func focusedWindow(pid: pid_t) -> AXUIElement? {
+    static func focusedWindow(pid: pid_t, messagingTimeout: Float? = nil) -> AXUIElement? {
         guard AXIsProcessTrusted() else { return nil }
         let application = AXUIElementCreateApplication(pid)
+        if let messagingTimeout { AXUIElementSetMessagingTimeout(application, messagingTimeout) }
         var windowRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
               let windowRef, CFGetTypeID(windowRef) == AXUIElementGetTypeID()
         else { return nil }
-        return (windowRef as! AXUIElement)
+        let window = windowRef as! AXUIElement
+        if let messagingTimeout { AXUIElementSetMessagingTimeout(window, messagingTimeout) }
+        return window
     }
 
     /// The focused window of `pid`, only if it is still exactly `identity`.
-    static func window(pid: pid_t, matching identity: WindowIdentity) -> AXUIElement? {
-        guard let element = focusedWindow(pid: pid),
+    static func window(pid: pid_t, matching identity: WindowIdentity, messagingTimeout: Float? = nil) -> AXUIElement? {
+        guard let element = focusedWindow(pid: pid, messagingTimeout: messagingTimeout),
               let title = string(element, kAXTitleAttribute),
               let frame = frame(of: element),
               WindowIdentity(frame: frame, title: title).matches(identity)
@@ -202,25 +212,75 @@ struct AXBrowserAddressReader: BrowserAddressReading {
 /// "Has the window changed?" from a tiny greyscale thumbnail, so an unchanged screen costs only
 /// this check (spec §5).
 protocol ThumbnailComparing: AnyObject {
-    func changed(_ key: DedupeKey, thumbnail: CGImage) -> Bool
+    func changed(_ key: DedupeKey, thumbnail: CGImage, at: Date) -> Bool
+    func recognized(_ key: DedupeKey, thumbnail: CGImage, at: Date)
     func reset()
 }
 
 final class ThumbnailChangeDetector: ThumbnailComparing {
     static let side = 32
-    /// Mean absolute difference, 0–255, above which the window counts as changed.
-    static let threshold = 2.0
-    private var last: [DedupeKey: [UInt8]] = [:]
+    static let maxWindows = 32
+    static let maxScreens = 8
+    /// A read screen is read again after this, so a small text change is never hidden longer.
+    static let refreshInterval: TimeInterval = 300
+    private struct Fingerprint {
+        let hash: UInt64
+        let brightness: Double
 
-    func changed(_ key: DedupeKey, thumbnail: CGImage) -> Bool {
-        guard let pixels = Self.greyscale(thumbnail) else { return true }
-        defer { last[key] = pixels }
-        guard let previous = last[key], previous.count == pixels.count else { return true }
-        let total = zip(previous, pixels).reduce(0) { $0 + abs(Int($1.0) - Int($1.1)) }
-        return Double(total) / Double(pixels.count) > Self.threshold
+        func resembles(_ other: Fingerprint) -> Bool {
+            (hash ^ other.hash).nonzeroBitCount <= 5 && abs(brightness - other.brightness) <= 10
+        }
+    }
+    private struct ReadScreen {
+        let fingerprint: Fingerprint
+        let at: Date
+    }
+    private var histories: [DedupeKey: [ReadScreen]] = [:]
+    private var order: [DedupeKey] = []
+
+    func changed(_ key: DedupeKey, thumbnail: CGImage, at: Date) -> Bool {
+        guard let fingerprint = Self.fingerprint(thumbnail), let screens = histories[key]
+        else { return true }
+        return !screens.contains {
+            at >= $0.at && at.timeIntervalSince($0.at) < Self.refreshInterval && $0.fingerprint.resembles(fingerprint)
+        }
     }
 
-    func reset() { last = [:] }
+    /// Checks and failed/cancelled captures never mark a screen as read.
+    func recognized(_ key: DedupeKey, thumbnail: CGImage, at: Date) {
+        guard let fingerprint = Self.fingerprint(thumbnail) else { return }
+        var screens = histories[key] ?? []
+        screens.removeAll { $0.fingerprint.resembles(fingerprint) }
+        screens.append(ReadScreen(fingerprint: fingerprint, at: at))
+        histories[key] = Array(screens.suffix(Self.maxScreens))
+        order.removeAll { $0 == key }
+        order.append(key)
+        if order.count > Self.maxWindows { histories[order.removeFirst()] = nil }
+    }
+
+    func reset() {
+        histories = [:]
+        order = []
+    }
+
+    /// A 64-bit horizontal difference hash and average luminance; no image is retained.
+    private static func fingerprint(_ image: CGImage) -> Fingerprint? {
+        let width = 9, height = 8
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(
+            data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var hash: UInt64 = 0
+        for y in 0..<height {
+            for x in 0..<8 where pixels[y * width + x] > pixels[y * width + x + 1] {
+                hash |= UInt64(1) << (y * 8 + x)
+            }
+        }
+        return Fingerprint(hash: hash, brightness: Double(pixels.reduce(0) { $0 + Int($1) }) / Double(pixels.count))
+    }
 
     static func greyscale(_ image: CGImage) -> [UInt8]? {
         var pixels = [UInt8](repeating: 0, count: side * side)
