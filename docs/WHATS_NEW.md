@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-04
+
+#### Fixed
+
+- **Clearer notice about what is shared when preparing tools.** The notice shown before preparing a connection's tools now says plainly that text from the service, such as tool descriptions, is sent as written and is not checked for secrets. [PR #2996](https://github.com/motioneso/moss/pull/2996)
+
 ### 2026-10-03
 
 #### Changed
