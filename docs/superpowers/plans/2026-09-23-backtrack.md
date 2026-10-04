@@ -459,6 +459,9 @@ change.
 
 ## 6. Phases 2 to 4 constraints (fixed now, detailed after the gate)
 
+Phase 2 is now planned in detail in `2026-10-03-backtrack-phase2.md`, which records where it
+departs from this section and why.
+
 - **Ingest:** a platform route following the focus routes (`apps/api/src/companion-routes.ts:273-361`;
   `requireCompanion` at `:126-139`, owner from the credential at `:280-282`, the module guard
   rejects the companion credential at `:274-278`). It is IP-rate-limited (`:62-80`). The server

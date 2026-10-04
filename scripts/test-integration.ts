@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { getMossDatabaseUrls } from "@moss/db";
+import { assertGateRunDatabaseAccess, getMossDatabaseUrls } from "@moss/db";
 import pg from "pg";
 
 const { Client } = pg;
@@ -94,6 +94,10 @@ function runVitest(args: readonly string[]): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Backstop (#2989): refuse a bare run that would open databases outside a
+  // gate. Unit tests import the planner above without running main, so they
+  // never reach this.
+  assertGateRunDatabaseAccess(process.env);
   const entropySuffix = `${process.pid}_${randomBytes(4).toString("hex")}`;
   const plan = createDatabaseIsolationPlan(process.env, entropySuffix);
 

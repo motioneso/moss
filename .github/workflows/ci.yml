@@ -222,9 +222,17 @@ jobs:
 
       - name: Verify UAT seed
         if: matrix.shard == 1
+        # #2989 backstop: the seed refuses to open a database outside a gate
+        # run. CI's database is ephemeral per job (down -v below), so CI sets
+        # the deliberate direct-use override explicitly.
+        env:
+          JARVIS_ALLOW_DIRECT_DB: "1"
         run: pnpm test:uat-seed
 
       - name: Run integration shard
+        # #2989 backstop, same as above: CI's database is ephemeral per job.
+        env:
+          JARVIS_ALLOW_DIRECT_DB: "1"
         run: |
           status=0
           timeout --verbose --signal=TERM 30m pnpm test:integration tests/integration --shard=${{ matrix.shard }}/4 || status=$?

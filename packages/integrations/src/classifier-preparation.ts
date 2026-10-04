@@ -103,8 +103,8 @@ export interface PreparationDefinitionPayload {
  * Whitelist the definition. Transport URL, base URL, credential placement, credential envelope,
  * `invoke` recipes and every other field on the discovered object are dropped by construction.
  * Inside the input schema, credential header parameters (an OpenAPI header parameter, recorded on
- * the tool's `invoke` recipe) and every `default`/`example`/`examples` value are removed too, so a
- * schema-embedded credential or sample secret never reaches the model.
+ * the tool's `invoke` recipe) and every `default`/`example`/`examples` value are removed too.
+ * The description is sent as the service wrote it and is not checked for secrets.
  */
 export function buildPreparationDefinitionPayload(
   tool: IntegrationToolDescriptor
