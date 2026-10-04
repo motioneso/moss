@@ -33,22 +33,31 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
       name: "Use this capture mode as my default"
     });
     await expect(defaultControl).toBeEnabled();
+    // The shared switch's input is deliberately zero-sized; click its visible label/track.
+    // This uses the real control without forcing a hidden element or changing DOM state.
+    const defaultLabel = page.locator("label.jds-switch").filter({ has: defaultControl });
     if (await defaultControl.isChecked()) {
-      const clearResponse = page.waitForResponse(
+      const [clearResponse] = await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith("/api/meetings/preferences") &&
+            response.request().method() === "PUT"
+        ),
+        defaultLabel.click()
+      ]);
+      expect(clearResponse.status()).toBe(200);
+      await expect(defaultControl).not.toBeChecked();
+      await expect(defaultControl).toBeEnabled();
+    }
+    const [defaultResponse] = await Promise.all([
+      page.waitForResponse(
         (response) =>
           response.url().endsWith("/api/meetings/preferences") &&
           response.request().method() === "PUT"
-      );
-      await defaultControl.uncheck();
-      expect((await clearResponse).status()).toBe(200);
-    }
-    const defaultResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/meetings/preferences") &&
-        response.request().method() === "PUT"
-    );
-    await defaultControl.check();
-    expect((await defaultResponse).status()).toBe(200);
+      ),
+      defaultLabel.click()
+    ]);
+    expect(defaultResponse.status()).toBe(200);
     await expect(defaultControl).toBeChecked();
     expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual({
       defaultCaptureMode: "selected-app"
