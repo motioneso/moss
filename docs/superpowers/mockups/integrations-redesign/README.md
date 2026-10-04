@@ -35,7 +35,7 @@ Ben's answer to question 2. When a connection is added, Moss runs one cheap pass
 ## Classifier states shown (issue 2984)
 
 1. Off.
-2. Turning it on: the one-time notice, using the shipped wording of what is sent, who reads it, the cost, and what is never sent.
+2. Turning it on: the one-time notice, using the shipped wording of what is sent, who reads it, the cost, and what is and is not sent.
 3. Preparing, with progress. Quick requests use the default model until it finishes.
 4. Ready: "74 of 75 tools can answer quick requests. 6 always ask you before they run."
 5. A tool changed: it is prepared again by itself, and its row says "Preparing again".

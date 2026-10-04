@@ -164,10 +164,10 @@ export const INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE: IntegrationClassifie
       "to that model's provider.",
     cost: "Preparing, and preparing again after a change, uses model usage and may cost money.",
     excluded:
-      "Server addresses, your saved sign-in details and the results of tool calls are never " +
-      "sent. Moss does not check tool descriptions for secrets, so anything a service puts in " +
-      "one is sent with it. A tool's own fixed choice list is part of its schema and is sent " +
-      "with it."
+      "Moss does not add the connection's saved address or sign-in settings to this request, " +
+      "and it does not run any tool for this step. Text the service provides, such as tool " +
+      "descriptions and choice lists, is sent as written and is not checked for secrets, " +
+      "including saved sign-in details."
   };
 
 /** Why one tool's draft could not be produced. Fixed codes; never raw provider text. */

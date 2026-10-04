@@ -208,7 +208,7 @@ const DISCLOSURE = [
   ["What is sent", "Each tool's name, description, group, input schema and read-only, repeatable and destructive hints. Credential header parameters and default or example values are removed from the schema first."],
   ["Who reads it", "Your current default chat model reads these once; if it is a hosted model, they also go to that model's provider."],
   ["What it costs", "Preparing, and preparing again after a change, uses model usage and may cost money."],
-  ["Never sent", "Transport addresses, sign-in details, secrets and raw tool results."],
+  ["Not sent", "The saved address and sign-in settings are not added, and no tool is run. Text the service provides is sent as written, unchecked for secrets."],
 ];
 
 function classifierBlock(state, { app = "Home Assistant", n = 75, on = 74 } = {}) {
