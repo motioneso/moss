@@ -122,13 +122,14 @@ export async function runClassifierSortJob(
       if (targets.length === 0) return { status: "nothing_to_sort" };
 
       // Without a model that can sort, every target fails so the page offers Try again; no
-      // automatic path resends a failed sort (spec 8.4).
+      // automatic path resends a failed sort (spec 8.4). The reason is kept so the page can say
+      // a model is missing.
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
       if (!selection?.structured) {
         await repository.saveClassifierToolSorts(
           scopedDb,
           connectionId,
-          failedSortResults(targets, "error", now().toISOString())
+          failedSortResults(targets, "no_model", now().toISOString())
         );
         return { status: "no_model" };
       }

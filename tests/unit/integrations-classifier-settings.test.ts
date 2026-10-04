@@ -404,6 +404,34 @@ describe("classifierSortView standing (#2984 R2.5b)", () => {
     expect(standing({ discoveredTools: [combinator] }).classifierState).toBe("not_used");
   });
 
+  it("reads failed for want of a model when the sort failed for that reason", () => {
+    const failedSort = (failure: "error" | "no_model") =>
+      withSortResult(emptySortMap(), "turn_on", {
+        status: "failed",
+        failure,
+        sortFingerprint: toolSortFingerprint(toolRiskInputs(tool())),
+        sortedAt: "2026-10-03T00:00:00.000Z"
+      })!;
+    const missing = standing({ classifierSort: failedSort("no_model") });
+    expect(missing).toMatchObject({
+      status: "failed",
+      failure: "no_model",
+      classifierState: "failed",
+      preparationFailure: "no_model",
+      failedAt: "2026-10-03T00:00:00.000Z"
+    });
+
+    const errored = standing({ classifierSort: failedSort("error") });
+    expect(errored).toMatchObject({
+      classifierState: "not_used",
+      preparationFailure: null,
+      failedAt: "2026-10-03T00:00:00.000Z"
+    });
+
+    const off = standing({ classifierEnabled: false, classifierSort: failedSort("no_model") });
+    expect(off).toMatchObject({ classifierState: "off", preparationFailure: null });
+  });
+
   it("reads preparing while the sort is never tried or stale, and before first preparation", () => {
     expect(standing({ classifierSort: emptySortMap() }).classifierState).toBe("preparing");
     const stale = sortedAs([tool({ description: "Older text" })]);
@@ -423,6 +451,7 @@ describe("classifierSortView standing (#2984 R2.5b)", () => {
     const failed = standing({ classifierPreparation: failedAgainst(fingerprint) });
     expect(failed.classifierState).toBe("failed");
     expect(failed.preparationFailure).toBe("no_model");
+    expect(failed.failedAt).toBe("t");
     expect(failed.preparedAt).toBeNull();
     const old = standing({ classifierPreparation: failedAgainst("sha256:older") });
     expect(old.classifierState).toBe("preparing");
@@ -558,5 +587,31 @@ describe("sortedBy on stored sorts (#2984 R2.5b)", () => {
     expect(view.status).toBe("current");
     expect(view.risk).toBe("write");
     expect(view.sortedBy).toBeNull();
+  });
+
+  it("records how a sort was made, and reads an older sort's method as unknown", () => {
+    const sortedWith = (sortMethod: "model" | "local") =>
+      withSortResult(emptySortMap(), "turn_on", {
+        status: "current",
+        risk: "write",
+        readableName: "Turn on",
+        sortFingerprint: fingerprint,
+        sortedAt: "2026-10-03T00:00:00.000Z",
+        sortedBy: { model: "House model", provider: "Home server" },
+        sortMethod
+      })!;
+    const byModel = parseSortMap(JSON.parse(JSON.stringify(sortedWith("model"))));
+    expect(viewWith(byModel)).toMatchObject({
+      sortMethod: "model",
+      sortedBy: { model: "House model", provider: "Home server" }
+    });
+
+    // A local sort read no model, whatever names came with it.
+    expect(viewWith(sortedWith("local"))).toMatchObject({ sortMethod: "local", sortedBy: null });
+
+    expect(viewWith(stored(undefined)).sortMethod).toBeNull();
+    expect(viewWith(stored({ model: "House model", provider: "Home server" })).sortMethod).toBe(
+      null
+    );
   });
 });

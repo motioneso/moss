@@ -46,6 +46,8 @@ function sorted(
     readableName: toolName,
     sortedAt: status === "current" ? "2026-10-02T09:00:00.000Z" : null,
     sortedBy: null,
+    sortMethod: null,
+    failedAt: null,
     keptOut: false,
     classifierState: "off",
     preparationFailure: null,
@@ -353,5 +355,102 @@ describe("useIntegrationDetail classifier (#2984 R2.5b)", () => {
       await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 3);
     });
     expect(api.getIntegration).toHaveBeenCalledTimes(reads);
+  });
+});
+
+describe("useIntegrationDetail Try again waits for the worker (#2984 R2.5b)", () => {
+  const FAILED_AT = "2026-10-03T08:00:00.000Z";
+  const tool = (name: string) => shown().classifierTools.find((entry) => entry.toolName === name)!;
+
+  function withReadA(change: Partial<IntegrationClassifierToolSort>, enabled: boolean) {
+    const base = detail({ classifierEnabled: enabled });
+    return {
+      ...base,
+      classifierTools: base.classifierTools.map((entry) =>
+        entry.toolName === "read_a"
+          ? { ...entry, ...change }
+          : enabled
+            ? { ...entry, classifierState: "ready" as const }
+            : entry
+      )
+    };
+  }
+
+  it("keeps re-reading after a preparation retry until the worker replaces the failure", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let stored = withReadA(
+      { classifierState: "failed", preparationFailure: "provider_error", failedAt: FAILED_AT },
+      true
+    );
+    api.getIntegration.mockImplementation(async () => stored);
+    api.prepareIntegrationClassifierTools.mockResolvedValue({});
+    await mount();
+    expect(tool("read_a").classifierState).toBe("failed");
+
+    // The request is accepted, and the read after it still holds the old failure.
+    act(() => state!.retryPreparation());
+    await act(async () => {
+      await vi.waitFor(() => expect(api.getIntegration).toHaveBeenCalledTimes(2));
+    });
+    expect(tool("read_a").classifierState).toBe("preparing");
+    expect(tool("read_a").preparationFailure).toBeNull();
+
+    stored = withReadA({ classifierState: "ready" }, true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 3);
+    });
+    expect(tool("read_a").classifierState).toBe("ready");
+
+    const reads = api.getIntegration.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 3);
+    });
+    expect(api.getIntegration).toHaveBeenCalledTimes(reads);
+  });
+
+  it("keeps re-reading after a sort retry until the worker replaces the failure", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let stored = withReadA(
+      { status: "failed", risk: null, failure: "error", sortedAt: null, failedAt: FAILED_AT },
+      false
+    );
+    api.getIntegration.mockImplementation(async () => stored);
+    api.sortIntegrationClassifierTools.mockResolvedValue({ status: "queued" });
+    await mount();
+    expect(tool("read_a").status).toBe("failed");
+
+    // The request is accepted, and the read after it still holds the old failure.
+    act(() => state!.retrySort());
+    await act(async () => {
+      await vi.waitFor(() => expect(api.getIntegration).toHaveBeenCalledTimes(2));
+    });
+    expect(tool("read_a").status).toBe("never_tried");
+    expect(tool("read_a").failure).toBeNull();
+
+    stored = withReadA({}, false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 3);
+    });
+    expect(tool("read_a").status).toBe("current");
+    expect(tool("read_a").risk).toBe("read");
+  });
+
+  it("shows the failure again when the retry is refused", async () => {
+    const stored = withReadA(
+      { status: "failed", risk: null, failure: "error", sortedAt: null, failedAt: FAILED_AT },
+      false
+    );
+    api.getIntegration.mockImplementation(async () => stored);
+    api.sortIntegrationClassifierTools.mockRejectedValue(new Error("refused"));
+    await mount();
+
+    act(() => state!.retrySort());
+    expect(tool("read_a").status).toBe("never_tried");
+    await act(async () => {
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(tool("read_a").status).toBe("failed"));
+    });
   });
 });

@@ -60,8 +60,11 @@ export interface IntegrationClassifierToolSort {
   readonly status: IntegrationClassifierSortStatus;
   /** The sorted group as its risk. Set only when `status` is `current`. */
   readonly risk: IntegrationClassifierRisk | null;
-  /** `unsafe`: the tool's text held the stored credential, so it was not sent. Set only when failed. */
-  readonly failure: "error" | "unsafe" | null;
+  /**
+   * Why the sort failed. Set only when failed. `unsafe`: the tool's text held the stored
+   * credential, so it was not sent. `no_model`: no default chat model could sort it.
+   */
+  readonly failure: "error" | "unsafe" | "no_model" | null;
   /** The owner allowed this Sends things out tool to run without asking. */
   readonly sendWithoutAsking: boolean;
   /** Ordinary chat shows an approval card before running this tool, unless YOLO mode is on. */
@@ -72,6 +75,14 @@ export interface IntegrationClassifierToolSort {
   readonly sortedAt: string | null;
   /** The model that made the current sort. `null` when unknown or not current. */
   readonly sortedBy: IntegrationClassifierSortedBy | null;
+  /** How the current sort was made. `null` when unknown or not current. */
+  readonly sortMethod: IntegrationClassifierSortMethod | null;
+  /**
+   * When the failure this tool shows was recorded: its failed preparation when `classifierState`
+   * is `failed`, otherwise its failed sort. `null` when neither failed. A retry is finished once
+   * this changes.
+   */
+  readonly failedAt: string | null;
   /** The owner kept this tool out of the classifier. Ordinary chat can still use it. */
   readonly keptOut: boolean;
   /** Where this tool stands with the classifier (#2984 R2.5b). */
@@ -81,6 +92,12 @@ export interface IntegrationClassifierToolSort {
   /** When the tool's current preparation was saved. Set only when `classifierState` is `ready`. */
   readonly preparedAt: string | null;
 }
+
+/**
+ * How a tool's current sort was made. `model`: a model read the tool's name, description and
+ * inputs. `local`: Moss sorted it without a model call, so its text was not sent.
+ */
+export type IntegrationClassifierSortMethod = "model" | "local";
 
 /** The model that sorted a tool, as display names only. */
 export interface IntegrationClassifierSortedBy {
@@ -95,7 +112,8 @@ export interface IntegrationClassifierSortedBy {
  * - `not_used`: the tool is off for chat, its sort failed, or its inputs cannot be prepared.
  * - `preparing`: waiting for its sort or its first preparation.
  * - `preparing_again`: its saved preparation was made against an older definition.
- * - `failed`: its last preparation failed; it waits for the owner's Try again.
+ * - `failed`: its last preparation failed, or its sort failed for want of a model; it waits for
+ *   the owner's Try again.
  * - `ready`: the classifier may offer it.
  */
 export type IntegrationClassifierToolState =

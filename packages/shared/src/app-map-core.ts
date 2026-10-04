@@ -171,18 +171,22 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Can't reach it with the error), how it connects, its address, how many tools were found " +
       "and when it was last checked, a Check for new tools button (Check again after an error; " +
       "hidden for a pasted spec) and Remove. Under them a sorting line says Moss is sorting the " +
-      "tools while it does, then Sorted by what they do on a date, naming the model that sorted " +
-      "them and saying it read each tool's name, description and inputs, and so did its " +
-      "provider if the model is hosted; tools whose sort failed get a Try again. Below the " +
+      "tools while it does and what is sent, then Sorted by what they do on a date, naming the " +
+      "model or models that read each tool's name, description and inputs, saying how many " +
+      "tools Moss sorted itself without sending them, or giving only the date when how they " +
+      "were sorted is not recorded; tools whose sort failed get a Try again. Below the " +
       "Connection panel a Classifier panel has a Let the classifier use this connection switch " +
-      "and shows one of seven states: Off; a one-time confirmation before anything is sent, " +
+      "and shows one of eight states: Off; a one-time confirmation before anything is sent, " +
       "listing what is sent, who reads it, what it costs and what is not sent, with Turn on and " +
       "prepare and Cancel; Preparing, with how many tools are done and a progress bar; Ready, " +
       "with how many tools can answer quick requests, how many always ask before they run, that " +
       "YOLO mode skips the asking, and when they were prepared; a tool changed, which says how " +
       "many are being prepared again; Couldn't prepare, saying why (for example the default chat " +
-      "model did not answer) with Try again and Change default model, which opens Your " +
-      "assistant; and Paused, when the app can't be reached, which picks up again by itself. " +
+      "model did not answer) with Try again, which also sorts again any tool whose sort " +
+      "failed, plus Change default model, which opens Your assistant, when no model is set " +
+      "up or the model did not answer properly; No tools left, when every tool is off, kept " +
+      "out, failed to sort or cannot be prepared, so quick requests go through the default " +
+      "model; and Paused, when the app can't be reached, which picks up again by itself. " +
       "While it is on, a What is sent, and what it costs link shows the same notice. The notice " +
       "says Moss does not add the connection's saved address or sign-in settings to the request " +
       "and runs no tool for the step, and that text the service provides is sent as written and " +

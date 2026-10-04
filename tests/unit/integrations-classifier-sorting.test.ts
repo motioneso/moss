@@ -4,6 +4,7 @@ import { generateStructured, modelActivityStructuredCode } from "@moss/ai";
 import type { DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
 import { assertMetadataOnlyPayload } from "@moss/jobs";
 import {
+  classifierSortView,
   enqueueClassifierSort,
   INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL,
   INTEGRATION_CLASSIFIER_SORT_QUEUE,
@@ -565,8 +566,8 @@ describe("what gets sent, and when", () => {
       const h = harness(connection([tool("a"), tool("b")]), { structured });
       expect(await h.run()).toEqual({ status: "no_model" });
       expect(h.runs).toHaveLength(0);
-      expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "error" });
-      expect(entry(h.state, "b")).toMatchObject({ status: "failed", failure: "error" });
+      expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "no_model" });
+      expect(entry(h.state, "b")).toMatchObject({ status: "failed", failure: "no_model" });
 
       // Only Try again resends them.
       expect(await h.run()).toEqual({ status: "nothing_to_sort" });
@@ -580,10 +581,27 @@ describe("what gets sent, and when", () => {
     await h.run();
     expect(entry(h.state, "a")).toMatchObject({
       status: "current",
+      sortMethod: "model",
       sortedBy: { model: "Fast model", provider: "Home lab" }
     });
-    // A tool settled without a call was not sorted by any model.
-    expect(entry(h.state, "huge")).toMatchObject({ status: "current", sortedBy: null });
+    // A tool settled without a call was sorted locally, by no model.
+    expect(entry(h.state, "huge")).toMatchObject({
+      status: "current",
+      sortMethod: "local",
+      sortedBy: null
+    });
+  });
+
+  it("explains the missing model on first setup, when no tool could be sorted", async () => {
+    const h = harness(connection([tool("a"), tool("b")], { classifierEnabled: true }), {
+      structured: null
+    });
+    expect(await h.run()).toEqual({ status: "no_model" });
+
+    const tools = classifierSortView(h.state.row);
+    expect(tools.map((sort) => sort.classifierState)).toEqual(["failed", "failed"]);
+    expect(tools[0]).toMatchObject({ preparationFailure: "no_model", failure: "no_model" });
+    expect(tools[0]!.failedAt).not.toBeNull();
   });
 
   it("stores no sorter when the model has no readable names", async () => {

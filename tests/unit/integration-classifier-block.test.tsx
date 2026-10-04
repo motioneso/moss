@@ -54,6 +54,8 @@ function sorted(
     readableName: toolName,
     sortedAt: "2026-10-02T09:00:00.000Z",
     sortedBy: null,
+    sortMethod: null,
+    failedAt: null,
     keptOut: false,
     classifierState: "off",
     preparationFailure: null,
@@ -363,18 +365,28 @@ describe("IntegrationClassifierBlock", () => {
 describe("sortingLine", () => {
   const day = (iso: string) => iso.slice(0, 10);
 
-  it("says Moss is sorting while any sort is pending", () => {
+  const byModel = (model: string | null, sortedAt = "2026-10-02T09:00:00.000Z") => ({
+    sortMethod: "model" as const,
+    sortedAt,
+    sortedBy: model ? { model, provider: "Anthropic" } : null
+  });
+  const allByModel = (model: string | null) =>
+    Object.fromEntries(NAMES.map((name) => [name, byModel(model)]));
+
+  it("says what is sent while any sort is pending, and what is not", () => {
     const line = sortingLine(detail({}, "off", { Notify: { status: "never_tried" } }), day);
-    expect(line.text).toMatch(/^Moss is sorting these tools\. Your default chat model reads/);
+    expect(line.text).toBe(
+      "Moss is sorting 1 tool. It sends its name, description and inputs to your default chat " +
+        "model, and to its provider if the model is hosted. A tool that is very long, or holds " +
+        "your sign-in details, is not sent."
+    );
   });
 
-  it("names the model that made the newest sort, and its date", () => {
+  it("names the one model that read every tool, and the newest date", () => {
     const line = sortingLine(
       detail({}, "off", {
-        Notify: {
-          sortedAt: "2026-10-03T08:00:00.000Z",
-          sortedBy: { model: "Claude Sonnet", provider: "Anthropic" }
-        }
+        ...allByModel("Claude Sonnet"),
+        Notify: byModel("Claude Sonnet", "2026-10-03T08:00:00.000Z")
       }),
       day
     );
@@ -386,13 +398,57 @@ describe("sortingLine", () => {
     });
   });
 
-  it("falls back to the default chat model when the sorter is unknown, and counts failures", () => {
+  it("names every model when tools were sorted by different models", () => {
     const line = sortingLine(
-      detail({}, "off", { Unlock: { status: "failed", risk: null, sortedAt: null } }),
+      detail({}, "off", {
+        ...allByModel("Claude Sonnet"),
+        Unlock: byModel("House model"),
+        Notify: byModel(null)
+      }),
       day
     );
-    expect(line.text).toContain("on 2026-10-02. Your default chat model read each tool's");
-    expect(line.text).toContain("1 tool couldn't be sorted.");
+    expect(line.text).toBe(
+      "Sorted by what they do on 2026-10-02. Claude Sonnet, House model and your default chat " +
+        "model at the time read the name, description and inputs of these tools between them, " +
+        "and so did their providers if the models are hosted."
+    );
+  });
+
+  it("counts the tools Moss sorted itself and claims no model read them", () => {
+    const line = sortingLine(
+      detail({}, "off", {
+        ...allByModel("Claude Sonnet"),
+        Unlock: { sortMethod: "local" },
+        Notify: { sortMethod: "local" }
+      }),
+      day
+    );
+    expect(line.text).toBe(
+      "Sorted by what they do on 2026-10-02. Claude Sonnet read the name, description and " +
+        "inputs of 2 tools, and so did its provider if the model is hosted. Moss sorted 2 tools " +
+        "itself, without sending their details to a model."
+    );
+  });
+
+  it("gives only the date for sorts with no record of how they were made", () => {
+    const line = sortingLine(detail({}, "off"), day);
+    expect(line).toEqual({ text: "Sorted by what they do on 2026-10-02.", failed: 0 });
+  });
+
+  it("says which sorts have no record when the history is mixed, and counts failures", () => {
+    const line = sortingLine(
+      detail({}, "off", {
+        GetState: byModel(null),
+        SetLight: byModel(null),
+        Unlock: { status: "failed", risk: null, sortedAt: null }
+      }),
+      day
+    );
+    expect(line.text).toBe(
+      "Sorted by what they do on 2026-10-02. Your default chat model at the time read the name, " +
+        "description and inputs of 2 tools, and so did its provider if the model is hosted. Moss " +
+        "has no record of how 1 tool was sorted. 1 tool couldn't be sorted."
+    );
     expect(line.failed).toBe(1);
   });
 
@@ -445,5 +501,32 @@ describe("the page's own updates before the server answers", () => {
       withPreparationRetried(failed).classifierTools.every((t) => t.classifierState === "preparing")
     ).toBe(true);
     expect(withSortRetried(failed).classifierTools[0]?.status).toBe("never_tried");
+  });
+
+  it("Try again from a missing model also sends the failed sorts back to waiting", () => {
+    const failed = detail({}, "failed", {
+      GetState: {
+        status: "failed",
+        risk: null,
+        failure: "no_model",
+        preparationFailure: "no_model"
+      }
+    });
+    expect(withPreparationRetried(failed).classifierTools[0]).toMatchObject({
+      status: "never_tried",
+      failure: null,
+      classifierState: "preparing",
+      preparationFailure: null
+    });
+  });
+
+  it("counts a tool whose sort failed for want of a model among those the classifier would prepare", () => {
+    const state = classifierBlockState(
+      detail({}, "off", {
+        Notify: { status: "failed", risk: null, failure: "no_model" },
+        Unlock: { status: "failed", risk: null, failure: "error" }
+      })
+    );
+    expect(state).toMatchObject({ kind: "off", total: 3 });
   });
 });

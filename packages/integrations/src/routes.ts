@@ -424,8 +424,10 @@ export function registerIntegrationsRoutes(
 
   /**
    * #2984 R2.4: the owner's Try again for preparation. Queues a background run that also re-sends
-   * tools whose last preparation failed; nothing else resends them. The reply keeps the earlier
-   * draft shape with nothing in it, because the job saves each prepared tool itself.
+   * tools whose last preparation failed; nothing else resends them. A tool whose sort failed, such
+   * as for want of a model, cannot be prepared until it is sorted, so a sort that re-sends it is
+   * queued too; preparation follows that sort. The reply keeps the earlier draft shape with
+   * nothing in it, because the job saves each prepared tool itself.
    */
   server.post<{ Params: IdParams }>(
     "/api/integrations/:id/classifier/prepare",
@@ -443,6 +445,17 @@ export function registerIntegrationsRoutes(
         if (!row) throw new HttpError(404, "Integration not found");
         if (!row.classifierEnabled) {
           throw new HttpError(409, "Turn on the connection classifier before preparing its tools.");
+        }
+        const sortFailed = row.discoveredTools.some(
+          (tool) => toolSortState(row.classifierSort, tool).status === "failed"
+        );
+        if (sortFailed) {
+          await enqueueClassifierSort(
+            dependencies.boss,
+            accessContext.actorUserId,
+            row.id,
+            "retry"
+          );
         }
         await enqueueClassifierPreparation(
           dependencies.boss,

@@ -18,7 +18,9 @@ import {
   INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS,
   isReadableName,
   toolSortState,
+  type ClassifierSortFailure,
   type ClassifierSortMap,
+  type ClassifierSortMethod,
   type ClassifierSortResult
 } from "./classifier-settings.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
@@ -478,7 +480,7 @@ export interface SortingToolResult {
 
 function failedResult(
   tool: DiscoveredTool,
-  failure: "error" | "unsafe",
+  failure: ClassifierSortFailure,
   sortedAt: string
 ): SortingToolResult {
   return {
@@ -496,7 +498,8 @@ function currentResult(
   tool: DiscoveredTool,
   group: ClassifierSortGroup | null,
   readableName: string,
-  sortedAt: string
+  sortedAt: string,
+  sortMethod: ClassifierSortMethod
 ): SortingToolResult {
   const inputs = toolRiskInputs(tool);
   return {
@@ -506,12 +509,16 @@ function currentResult(
       risk: sortedToolRisk(group, inputs),
       readableName,
       sortFingerprint: toolSortFingerprint(inputs),
-      sortedAt
+      sortedAt,
+      sortMethod
     }
   };
 }
 
-/** Results for tools settled without a call: unsafe ones fail, oversized ones are Sensitive. */
+/**
+ * Results for tools settled without a call: unsafe ones fail, oversized ones are Sensitive. No
+ * model reads either, so an oversized tool's sort is stored as made locally.
+ */
 export function resultsWithoutCall(
   plan: SortingPlan,
   freeNames: ReadonlyMap<string, string>,
@@ -520,7 +527,7 @@ export function resultsWithoutCall(
   return [
     ...plan.unsafe.map((tool) => failedResult(tool, "unsafe", sortedAt)),
     ...plan.oversized.map((tool) =>
-      currentResult(tool, null, freeNames.get(tool.name) ?? tool.name, sortedAt)
+      currentResult(tool, null, freeNames.get(tool.name) ?? tool.name, sortedAt, "local")
     )
   ];
 }
@@ -528,7 +535,7 @@ export function resultsWithoutCall(
 /** Failed results for tools that could not be sent, such as when no model can sort them. */
 export function failedSortResults(
   tools: readonly DiscoveredTool[],
-  failure: "error" | "unsafe",
+  failure: ClassifierSortFailure,
   sortedAt: string
 ): readonly SortingToolResult[] {
   return tools.map((tool) => failedResult(tool, failure, sortedAt));
@@ -592,12 +599,13 @@ export async function runSortingCall(
   return call.map((entry) => {
     const answer = answers.get(entry.id);
     return answer
-      ? currentResult(entry.tool, answer.group, answer.name, sortedAt)
+      ? currentResult(entry.tool, answer.group, answer.name, sortedAt, "model")
       : currentResult(
           entry.tool,
           null,
           freeNames.get(entry.tool.name) ?? entry.tool.name,
-          sortedAt
+          sortedAt,
+          "model"
         );
   });
 }

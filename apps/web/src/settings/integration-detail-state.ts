@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { IntegrationDetail } from "@moss/shared";
 
@@ -14,10 +14,12 @@ import {
 import { queryKeys } from "../api/query-keys";
 import {
   preparationPending,
+  retriedFailures,
+  retryPending,
   withClassifierEnabled,
   withKeptOut,
-  withPreparationRetried,
-  withSortRetried
+  withRetriesAwaited,
+  type AwaitedRetries
 } from "./integration-classifier-state";
 import { toolsOnPatch } from "./integration-tool-groups";
 
@@ -67,6 +69,10 @@ export function withSendWithoutAsking(
  *
  * While tools wait to be sorted or prepared the detail re-reads every few seconds, so the
  * groups and the classifier's progress appear without a reload.
+ *
+ * Try again only queues work, and the server shows the old failure until the worker replaces it.
+ * The page remembers each retried failure and its time, keeps re-reading while the server still
+ * shows it, and shows those tools as waiting meanwhile.
  */
 export function useIntegrationDetail(id: string, onError: (error: unknown) => void) {
   const queryClient = useQueryClient();
@@ -76,18 +82,35 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
   const latest = useRef<IntegrationDetail | undefined>(undefined);
   const [changing, setChanging] = useState(false);
   const watchedFrom = useRef(Date.now());
+  const [awaited, setAwaited] = useState<AwaitedRetries>(() => new Map());
 
   const detailQuery = useQuery({
     queryKey: key,
     queryFn: () => getIntegration(id),
     retry: false,
+    select: useCallback(
+      (detail: IntegrationDetail) => withRetriesAwaited(detail, awaited),
+      [awaited]
+    ),
     refetchInterval: (query) =>
       !changing &&
-      (sortPending(query.state.data) || preparationPending(query.state.data)) &&
+      (sortPending(query.state.data) ||
+        preparationPending(query.state.data) ||
+        retryPending(query.state.data, awaited)) &&
       Date.now() - watchedFrom.current < SORT_WATCH_MS
         ? SORT_POLL_MS
         : false
   });
+
+  // A retry the worker never answers shows its failure again once the wait ends.
+  useEffect(() => {
+    if (awaited.size === 0) return;
+    const timer = setTimeout(
+      () => setAwaited(new Map()),
+      Math.max(0, SORT_WATCH_MS - (Date.now() - watchedFrom.current))
+    );
+    return () => clearTimeout(timer);
+  }, [awaited]);
 
   const change = (
     next: (detail: IntegrationDetail) => IntegrationDetail,
@@ -144,15 +167,33 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
     );
   };
 
-  const retryPreparation = () => {
+  /** Await the failures a Try again re-sends; a refused request shows them again. */
+  const retry = (kind: "sort" | "preparation", send: () => Promise<unknown>) => {
+    const detail = queryClient.getQueryData<IntegrationDetail>(key);
+    if (!detail) return;
+    const failures = retriedFailures(detail, kind);
     watchedFrom.current = Date.now();
-    change(withPreparationRetried, () => prepareIntegrationClassifierTools(id, {}));
+    setAwaited((current) => new Map([...current, ...failures]));
+    change(
+      (current) => current,
+      () =>
+        send().catch((error: unknown) => {
+          setAwaited((current) => {
+            const left = new Map(current);
+            for (const [name, failedAt] of failures) {
+              if (left.get(name) === failedAt) left.delete(name);
+            }
+            return left;
+          });
+          throw error;
+        })
+    );
   };
 
-  const retrySort = () => {
-    watchedFrom.current = Date.now();
-    change(withSortRetried, () => sortIntegrationClassifierTools(id));
-  };
+  const retryPreparation = () =>
+    retry("preparation", () => prepareIntegrationClassifierTools(id, {}));
+
+  const retrySort = () => retry("sort", () => sortIntegrationClassifierTools(id));
 
   return {
     detailQuery,

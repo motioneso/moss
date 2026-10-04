@@ -3,6 +3,7 @@ import type {
   IntegrationClassifierArgument,
   IntegrationClassifierRisk,
   IntegrationClassifierSortedBy,
+  IntegrationClassifierSortMethod,
   IntegrationClassifierToolSort,
   IntegrationClassifierToolState,
   IntegrationToolDescriptor
@@ -541,8 +542,9 @@ type ToolStanding = { readonly tool: RiskInputSource } & (
     }
   | {
       readonly state: "failed";
-      readonly sort: CurrentSortState;
-      readonly failure: ClassifierPreparationFailure;
+      readonly sort: ClassifierToolSortState;
+      readonly reason: ClassifierPreparationFailureReason;
+      readonly failedAt: string;
     }
   | {
       readonly state: Exclude<IntegrationClassifierToolState, "ready" | "failed">;
@@ -569,8 +571,14 @@ function toolStandings(state: ClassifierStandingInput): ToolStanding[] {
     const sort = toolSortState(state.classifierSort, tool);
     if (!state.classifierEnabled) return { tool, sort, state: "off" };
     if (keptOut.has(tool.name)) return { tool, sort, state: "kept_out" };
-    if (!ordinaryEnabled.has(tool.name) || sort.status === "failed") {
-      return { tool, sort, state: "not_used" };
+    if (!ordinaryEnabled.has(tool.name)) return { tool, sort, state: "not_used" };
+
+    // A sort that failed for want of a model fails the classifier the same way, so the page
+    // explains the missing model and offers the fix.
+    if (sort.status === "failed") {
+      return sort.failure === "no_model"
+        ? { tool, sort, state: "failed", reason: "no_model", failedAt: sort.failedAt }
+        : { tool, sort, state: "not_used" };
     }
     const entry = preparationEntry(state.classifierPreparation, tool.name);
 
@@ -584,7 +592,7 @@ function toolStandings(state: ClassifierStandingInput): ToolStanding[] {
     if (schemaHasRootCombinator(tool.inputSchema)) return { tool, sort, state: "not_used" };
     const failure = preparationFailure(state.classifierPreparation, tool.name);
     if (failure?.definitionFingerprint === fingerprint) {
-      return { tool, sort, state: "failed", failure };
+      return { tool, sort, state: "failed", reason: failure.reason, failedAt: failure.failedAt };
     }
     return { tool, sort, state: entry ? "preparing_again" : "preparing" };
   });
@@ -642,8 +650,23 @@ export const INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS = 80;
 
 export type ClassifierSortStatus = "current" | "failed" | "never_tried";
 
-/** Why a sort failed. `unsafe` means the tool's text held the stored credential and was not sent. */
-export type ClassifierSortFailure = "error" | "unsafe";
+/**
+ * Why a sort failed. `unsafe` means the tool's text held the stored credential and was not sent.
+ * `no_model` means no default chat model that can sort was selected.
+ */
+export type ClassifierSortFailure = "error" | "unsafe" | "no_model";
+
+const SORT_FAILURES: readonly ClassifierSortFailure[] = ["error", "unsafe", "no_model"];
+
+/**
+ * How a current sort was made. `model` means a model read the tool's text; `local` means Moss
+ * settled it without a model call, so its text was never sent.
+ */
+export type ClassifierSortMethod = IntegrationClassifierSortMethod;
+
+function parseSortMethod(value: unknown): ClassifierSortMethod | null {
+  return value === "model" || value === "local" ? value : null;
+}
 
 export interface ClassifierSortEntry {
   readonly status: ClassifierSortStatus;
@@ -653,6 +676,8 @@ export interface ClassifierSortEntry {
   readonly readableName: string | null;
   /** The model that made the current sort, as display names. `null` when unknown. */
   readonly sortedBy: IntegrationClassifierSortedBy | null;
+  /** How the current sort was made. `null` when not current, or stored before this was kept. */
+  readonly sortMethod: ClassifierSortMethod | null;
   /** The risk-inputs fingerprint the sort or the failure was made against. */
   readonly sortFingerprint: string | null;
   readonly sortedAt: string | null;
@@ -676,10 +701,15 @@ export type ClassifierToolSortState =
       readonly readableName: string;
       readonly sortedAt: string;
       readonly sortedBy: IntegrationClassifierSortedBy | null;
+      readonly sortMethod: ClassifierSortMethod | null;
       readonly sendWithoutAsking: boolean;
     }
   | { readonly status: "stale" }
-  | { readonly status: "failed"; readonly failure: ClassifierSortFailure }
+  | {
+      readonly status: "failed";
+      readonly failure: ClassifierSortFailure;
+      readonly failedAt: string;
+    }
   | { readonly status: "never_tried" };
 
 /** One sorting result to store. */
@@ -692,6 +722,8 @@ export type ClassifierSortResult =
       readonly sortedAt: string;
       /** The sorting model's display names. Invalid names are stored as unknown. */
       readonly sortedBy?: IntegrationClassifierSortedBy | null;
+      /** How the sort was made. A result without one is stored as unknown. */
+      readonly sortMethod?: ClassifierSortMethod;
     }
   | {
       readonly status: "failed";
@@ -762,6 +794,7 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
       risk: null,
       readableName: null,
       sortedBy: null,
+      sortMethod: null,
       sortFingerprint: null,
       sortedAt: null,
       failure: null,
@@ -770,16 +803,18 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
   }
   if (!isIdentifier(raw.sortFingerprint) || !isIdentifier(raw.sortedAt)) return null;
   if (raw.status === "failed") {
-    if (raw.failure !== "error" && raw.failure !== "unsafe") return null;
+    const failure = SORT_FAILURES.find((candidate) => candidate === raw.failure);
+    if (!failure) return null;
     return {
       ...base,
       status: "failed",
       risk: null,
       readableName: null,
       sortedBy: null,
+      sortMethod: null,
       sortFingerprint: raw.sortFingerprint,
       sortedAt: raw.sortedAt,
-      failure: raw.failure,
+      failure,
       sendWithoutAsking: false
     };
   }
@@ -793,6 +828,8 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
     readableName: raw.readableName,
     // An entry stored before sortedBy existed, or with unreadable names, stays valid.
     sortedBy: parseSortedBy(raw.sortedBy),
+    // An entry stored before sortMethod existed reads as unknown, never as a model sort.
+    sortMethod: parseSortMethod(raw.sortMethod),
     sortFingerprint: raw.sortFingerprint,
     sortedAt: raw.sortedAt,
     failure: null,
@@ -829,7 +866,9 @@ export function toolSortState(
   if (entry.sortFingerprint !== toolSortFingerprint(toolRiskInputs(tool))) {
     return { status: "stale" };
   }
-  if (entry.status === "failed") return { status: "failed", failure: entry.failure ?? "error" };
+  if (entry.status === "failed") {
+    return { status: "failed", failure: entry.failure ?? "error", failedAt: entry.sortedAt! };
+  }
   const risk = higherRisk(entry.risk!, entry.legacyRiskFloor);
   return {
     status: "current",
@@ -837,6 +876,7 @@ export function toolSortState(
     readableName: entry.readableName!,
     sortedAt: entry.sortedAt!,
     sortedBy: entry.sortedBy,
+    sortMethod: entry.sortMethod,
     sendWithoutAsking: entry.sendWithoutAsking && risk === "outbound"
   };
 }
@@ -863,6 +903,7 @@ export function withSortResult(
   if (result.status === "current") {
     if (!(RISKS as readonly string[]).includes(result.risk)) return null;
     if (!isReadableName(result.readableName)) return null;
+    const sortMethod = parseSortMethod(result.sortMethod);
     const keepsChoice =
       previous?.status === "current" &&
       previous.sortFingerprint === result.sortFingerprint &&
@@ -871,7 +912,9 @@ export function withSortResult(
       status: "current",
       risk: result.risk,
       readableName: result.readableName,
-      sortedBy: parseSortedBy(result.sortedBy),
+      // A sort made without a model names none.
+      sortedBy: sortMethod === "local" ? null : parseSortedBy(result.sortedBy),
+      sortMethod,
       sortFingerprint: result.sortFingerprint,
       sortedAt: result.sortedAt,
       failure: null,
@@ -879,12 +922,13 @@ export function withSortResult(
       legacyRiskFloor
     };
   } else {
-    if (result.failure !== "error" && result.failure !== "unsafe") return null;
+    if (!SORT_FAILURES.includes(result.failure)) return null;
     entry = {
       status: "failed",
       risk: null,
       readableName: null,
       sortedBy: null,
+      sortMethod: null,
       sortFingerprint: result.sortFingerprint,
       sortedAt: result.sortedAt,
       failure: result.failure,
@@ -977,9 +1021,16 @@ export function classifierSortView(
       readableName: current ? sort.readableName : (freeNames.get(tool.name) ?? tool.name),
       sortedAt: current ? sort.sortedAt : null,
       sortedBy: current ? sort.sortedBy : null,
+      sortMethod: current ? sort.sortMethod : null,
+      failedAt:
+        standing.state === "failed"
+          ? standing.failedAt
+          : sort.status === "failed"
+            ? sort.failedAt
+            : null,
       keptOut: keptOut.has(tool.name),
       classifierState: standing.state,
-      preparationFailure: standing.state === "failed" ? standing.failure.reason : null,
+      preparationFailure: standing.state === "failed" ? standing.reason : null,
       preparedAt: standing.state === "ready" ? standing.entry.reviewedAt : null
     };
   });

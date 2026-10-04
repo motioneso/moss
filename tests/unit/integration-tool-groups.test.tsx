@@ -42,6 +42,8 @@ function sorted(
     readableName: toolName,
     sortedAt: "2026-10-02T09:00:00.000Z",
     sortedBy: null,
+    sortMethod: null,
+    failedAt: null,
     keptOut: false,
     classifierState: "off",
     preparationFailure: null,

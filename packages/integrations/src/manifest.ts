@@ -87,7 +87,7 @@ export const integrationsModuleManifest = {
       description:
         "The Classifier panel shows Off, a one-time confirmation of what is sent and what it " +
         "costs, Preparing with progress, Ready with how many tools answer and always ask, a " +
-        "tool changed, Couldn't prepare with Try again, or Paused."
+        "tool changed, Couldn't prepare with Try again, No tools left, or Paused."
     },
     {
       id: "integrations.connection_classifier_keep_out",
@@ -96,11 +96,11 @@ export const integrationsModuleManifest = {
         "use a kept-out tool. Let the classifier use it puts the tool back and prepares it."
     },
     {
-      id: "integrations.connection_tool_sorting",
+      id: "integrations.connection_sorting_line",
       description:
-        "Each tool shows a readable name over its raw name. The Connection panel says when " +
-        "tools were sorted and by which model, which read each tool's name, description and " +
-        "inputs. A failed sort gets Try again."
+        "Tools show a readable name over the raw name. The Connection panel says when tools " +
+        "were sorted, which models read them, and how many Moss sorted without sending them " +
+        "(only the date if unrecorded). A failed sort gets Try again."
     },
     {
       id: "integrations.connection_classifier_preparation",

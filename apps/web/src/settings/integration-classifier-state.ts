@@ -74,11 +74,18 @@ const FAILURE_ORDER: readonly IntegrationClassifierPreparationFailure[] = [
   "unsupported_shape"
 ];
 
-/** True when the tool would be prepared if the switch were on. */
+/**
+ * True when the tool would be prepared if the switch were on. A sort that failed for want of a
+ * model counts, because the server shows it as a failed preparation that a model fixes.
+ */
 function wouldPrepare(detail: ClassifierDetail, sort: IntegrationClassifierToolSort): boolean {
   const tool = detail.tools.find((entry) => entry.name === sort.toolName);
   if (!tool) return false;
-  return isToolOnIn(detail, tool) && !sort.keptOut && sort.status !== "failed";
+  return (
+    isToolOnIn(detail, tool) &&
+    !sort.keptOut &&
+    (sort.status !== "failed" || sort.failure === "no_model")
+  );
 }
 
 function count(detail: ClassifierDetail, state: IntegrationClassifierToolState): number {
@@ -204,41 +211,90 @@ export interface SortingLine {
 
 /**
  * The Connection panel's line about sorting. `formatDay` renders an ISO time as a short date.
+ *
+ * It names a reader only for sorts the server recorded as made by a model. A tool Moss sorted
+ * without a model was never sent, and a sort with no record of how it was made claims no reader.
  */
 export function sortingLine(
   detail: Pick<IntegrationDetail, "classifierTools">,
   formatDay: (iso: string) => string
 ): SortingLine {
   const failed = detail.classifierTools.filter((tool) => tool.status === "failed").length;
-  const pending = detail.classifierTools.some(
+  const pending = detail.classifierTools.filter(
     (tool) => tool.status === "never_tried" || tool.status === "stale"
-  );
-  if (pending) {
+  ).length;
+  if (pending > 0) {
     return {
       text:
-        "Moss is sorting these tools. Your default chat model reads each tool's name, " +
-        "description and inputs, and so does its provider if the model is hosted.",
+        `Moss is sorting ${toolCount(pending)}. It sends ${pending === 1 ? "its" : "their"} ` +
+        "name, description and inputs to your default chat model, and to its provider if the " +
+        "model is hosted. A tool that is very long, or holds your sign-in details, is not sent.",
       failed
     };
   }
-  const latest = detail.classifierTools
-    .filter((tool) => tool.status === "current" && tool.sortedAt)
-    .sort((a, b) => (a.sortedAt as string).localeCompare(b.sortedAt as string))
+
+  const current = detail.classifierTools.filter((tool) => tool.status === "current");
+  const latest = current
+    .flatMap((tool) => (tool.sortedAt ? [tool.sortedAt] : []))
+    .sort()
     .at(-1);
-  if (!latest?.sortedAt) {
+  if (!latest) {
     return {
       text: failed > 0 ? `Moss couldn't sort ${toolCount(failed)} by what they do.` : null,
       failed
     };
   }
-  const reader = latest.sortedBy?.model ?? "Your default chat model";
-  const unsorted = failed > 0 ? ` ${capitalise(toolCount(failed))} couldn't be sorted.` : "";
-  return {
-    text:
-      `Sorted by what they do on ${formatDay(latest.sortedAt)}. ${reader} read each tool's ` +
-      `name, description and inputs, and so did its provider if the model is hosted.${unsorted}`,
-    failed
-  };
+
+  const byModel = current.filter((tool) => tool.sortMethod === "model");
+  const local = current.filter((tool) => tool.sortMethod === "local").length;
+  const unknown = current.length - byModel.length - local;
+  const sentences = [`Sorted by what they do on ${formatDay(latest)}.`];
+  if (byModel.length > 0) {
+    sentences.push(readersSentence(byModel, byModel.length === current.length));
+  }
+  if (local > 0) {
+    sentences.push(
+      `Moss sorted ${toolCount(local)} itself, without sending ${local === 1 ? "its" : "their"} ` +
+        "details to a model."
+    );
+  }
+  if (unknown > 0 && unknown < current.length) {
+    sentences.push(
+      `Moss has no record of how ${toolCount(unknown)} ${unknown === 1 ? "was" : "were"} sorted.`
+    );
+  }
+  if (failed > 0) sentences.push(`${capitalise(toolCount(failed))} couldn't be sorted.`);
+  return { text: sentences.join(" "), failed };
+}
+
+/** Who read the tools a model sorted. A sort with no saved model name was the default's. */
+function readersSentence(tools: readonly IntegrationClassifierToolSort[], all: boolean): string {
+  const names = [...new Set(tools.flatMap((tool) => (tool.sortedBy ? [tool.sortedBy.model] : [])))];
+  const unnamed = tools.some((tool) => !tool.sortedBy);
+  const readers =
+    names.length === 0
+      ? ["Your default chat model at the time"]
+      : unnamed
+        ? [...names, "your default chat model at the time"]
+        : names;
+  if (readers.length === 1) {
+    const what = all
+      ? "each tool's name, description and inputs"
+      : `the name, description and inputs of ${toolCount(tools.length)}`;
+    return `${readers[0]} read ${what}, and so did its provider if the model is hosted.`;
+  }
+  const which = all ? "these tools" : toolCount(tools.length);
+  return (
+    `${listed(readers)} read the name, description and inputs of ${which} between them, and so ` +
+    "did their providers if the models are hosted."
+  );
+}
+
+/** "A and B", or "A, B and C". */
+function listed(items: readonly string[]): string {
+  return items.length < 2
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /** Turns the switch on or off the way the server will, before it answers. */
@@ -283,24 +339,77 @@ export function withKeptOut(
   };
 }
 
+/** One tool after Try again for sorting: a failed sort waits for the worker once more. */
+function sortRetried(tool: IntegrationClassifierToolSort): IntegrationClassifierToolSort {
+  return tool.status === "failed" ? { ...tool, status: "never_tried", failure: null } : tool;
+}
+
+/**
+ * One tool after Try again for preparation: a failed tool waits for the worker once more. A tool
+ * whose sort failed for want of a model is sorted again first, so its sort waits too.
+ */
+function preparationRetried(tool: IntegrationClassifierToolSort): IntegrationClassifierToolSort {
+  return tool.classifierState === "failed"
+    ? { ...sortRetried(tool), classifierState: "preparing", preparationFailure: null }
+    : tool;
+}
+
 /** Try again for preparation: failed tools wait for the worker once more. */
 export function withPreparationRetried(detail: IntegrationDetail): IntegrationDetail {
-  return {
-    ...detail,
-    classifierTools: detail.classifierTools.map((tool) =>
-      tool.classifierState === "failed"
-        ? { ...tool, classifierState: "preparing", preparationFailure: null }
-        : tool
-    )
-  };
+  return { ...detail, classifierTools: detail.classifierTools.map(preparationRetried) };
 }
 
 /** Try again for sorting: failed sorts wait for the worker once more. */
 export function withSortRetried(detail: IntegrationDetail): IntegrationDetail {
+  return { ...detail, classifierTools: detail.classifierTools.map(sortRetried) };
+}
+
+/**
+ * The failures a Try again was pressed on: tool name to the failure's `failedAt`. The server
+ * keeps showing a failure until the worker replaces it, so a tool is still waiting while it shows
+ * the same failure at the same time, and settled once it shows anything else.
+ */
+export type AwaitedRetries = ReadonlyMap<string, string>;
+
+/** The tools a Try again re-sends, with the failure each one shows now. */
+export function retriedFailures(
+  detail: IntegrationDetail,
+  kind: "sort" | "preparation"
+): AwaitedRetries {
+  const out = new Map<string, string>();
+  for (const tool of detail.classifierTools) {
+    const failing = kind === "sort" ? tool.status === "failed" : tool.classifierState === "failed";
+    if (failing && tool.failedAt) out.set(tool.toolName, tool.failedAt);
+  }
+  return out;
+}
+
+function stillAwaited(tool: IntegrationClassifierToolSort, awaited: AwaitedRetries): boolean {
+  return (
+    awaited.get(tool.toolName) === tool.failedAt &&
+    (tool.status === "failed" || tool.classifierState === "failed")
+  );
+}
+
+/** True while any retried tool still shows the failure Try again was pressed on. */
+export function retryPending(
+  detail: IntegrationDetail | undefined,
+  awaited: AwaitedRetries
+): boolean {
+  if (!detail || awaited.size === 0) return false;
+  return detail.classifierTools.some((tool) => stillAwaited(tool, awaited));
+}
+
+/** Shows each retried tool that still holds its old failure as waiting for the worker. */
+export function withRetriesAwaited(
+  detail: IntegrationDetail,
+  awaited: AwaitedRetries
+): IntegrationDetail {
+  if (!retryPending(detail, awaited)) return detail;
   return {
     ...detail,
     classifierTools: detail.classifierTools.map((tool) =>
-      tool.status === "failed" ? { ...tool, status: "never_tried", failure: null } : tool
+      stillAwaited(tool, awaited) ? preparationRetried(sortRetried(tool)) : tool
     )
   };
 }
