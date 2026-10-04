@@ -8,6 +8,12 @@ import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
 import {
+  backtrackModuleManifest,
+  backtrackModuleSqlMigrationDirectory,
+  BACKTRACK_INDEX_QUEUE,
+  BACKTRACK_UPKEEP_QUEUE
+} from "@moss/backtrack";
+import {
   commitmentsModuleManifest,
   commitmentsModuleSqlMigrationDirectory,
   COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
@@ -2941,6 +2947,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         cipher: createAiSecretCipher(),
         createCliStructuredAdapter: deps.createCliStructuredAdapter
       })
+  },
+  {
+    // #2638 Backtrack phase 2a (plan 2026-10-03-backtrack-phase2.md §4.2): table, RLS and the
+    // repository land in this task. The ingest route, the index/upkeep jobs and the user routes
+    // are a later task's commits on this same branch -- registerRoutes/registerWorkers are
+    // deliberately absent here, not stubbed, so their eventual presence is a real diff.
+    manifest: backtrackModuleManifest,
+    sqlMigrationDirectories: [backtrackModuleSqlMigrationDirectory],
+    queueDefinitions: [
+      { name: BACKTRACK_INDEX_QUEUE, options: {} },
+      { name: BACKTRACK_UPKEEP_QUEUE, options: {} }
+    ]
   }
 ];
 

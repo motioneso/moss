@@ -16,6 +16,8 @@
       "@moss/acp": ["packages/acp/src/index.ts"],
       "@moss/auth": ["packages/auth/src/index.ts"],
       "@moss/ai": ["packages/ai/src/index.ts"],
+      "@moss/backtrack": ["packages/backtrack/src/index.ts"],
+      "@moss/backtrack/settings": ["packages/backtrack/src/settings/index.tsx"],
       "@moss/briefings": ["packages/briefings/src/index.ts"],
       "@moss/calendar": ["packages/calendar/src/index.ts"],
       "@moss/chat": ["packages/chat/src/index.ts"],

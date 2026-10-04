@@ -1,0 +1,20 @@
+{
+  "name": "@moss/backtrack",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./settings": "./src/settings/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moss/db": "workspace:*",
+    "@moss/module-sdk": "workspace:*",
+    "@moss/settings-ui": "workspace:*",
+    "kysely": "^0.29.2",
+    "react": "^19.0.0"
+  }
+}
