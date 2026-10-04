@@ -48,6 +48,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Choose your page header colour.** Custom themes can now set the colour of the header at the top of every page. [PR #3021](https://github.com/motioneso/moss/pull/3021)
 - **A redesigned theme editor with a nav bar color.** Your own color themes can now set the color of the navigation bar, pick from a pasted palette in every color box, and change a color by clicking that part of the preview. [PR #3004](https://github.com/motioneso/moss/pull/3004)
 
 ### 2026-10-03
