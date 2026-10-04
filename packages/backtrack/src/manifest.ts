@@ -43,20 +43,37 @@ export const backtrackModuleManifest: MossModuleManifest = {
       id: "backtrack.day_memory",
       description:
         "Trail Marker can read your screen through the day and keep it as searchable day memory " +
-        "in Moss, kept 37 days plus up to an hourly run. An admin must turn storage on first; " +
-        "Settings says when it is not available yet.",
+        "in Moss, kept 37 days, plus up to one hourly run. An admin must turn storage on first.",
       errors: [
         {
           code: "backtrack_unavailable",
           class: "transient",
-          description: "Backtrack storage is not turned on for this Moss yet."
+          description:
+            "Backtrack storage is not turned on for this Moss yet; Settings > Modules > " +
+            "Backtrack says so, and an admin turns it on (the backtrack.storage instance switch)."
         },
         {
           code: "backtrack_paused",
           class: "validation",
-          description: "Recording is paused from Moss, so nothing new is stored until it resumes."
+          description:
+            "Recording is paused from Moss, so nothing new is stored; turn Recording back on in " +
+            "Settings > Modules > Backtrack."
+        },
+        {
+          code: "backtrack_clock",
+          class: "validation",
+          description:
+            "A Mac's clock is more than an hour off, so its upload is refused and kept on the " +
+            "Mac; correct the Mac's date and time."
         }
       ]
+    },
+    {
+      id: "backtrack.delete_history",
+      description:
+        "Settings > Modules > Backtrack deletes stored history for the last hour, today, a chosen " +
+        "day or everything. It is permanent and works with no Mac linked, even if storage is off.",
+      errors: []
     }
   ],
   settings: [
@@ -64,8 +81,9 @@ export const backtrackModuleManifest: MossModuleManifest = {
       id: "backtrack.module-settings",
       label: "Backtrack",
       description:
-        "Turn Backtrack recording on or off across your linked Macs, see how much day memory is " +
-        "kept, and delete the last hour, today, a chosen day, or everything.",
+        "Pause or resume Backtrack for all your Macs, see days and size kept (37 days, plus up " +
+        "to one hourly run), and delete history. Shows an empty state with no Mac and no " +
+        "history, and a note when an admin has not turned storage on.",
       path: "/settings?section=modules&module=backtrack",
       scope: "user",
       permissionId: "backtrack.manage",

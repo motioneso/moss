@@ -20,6 +20,8 @@
     "@moss/settings": "workspace:*",
     "@moss/settings-ui": "workspace:*",
     "@moss/shared": "workspace:*",
+    "@moss/ui": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
     "fastify": "^5.8.5",
     "kysely": "^0.29.2",
     "pg-boss": "^12.18.2",
