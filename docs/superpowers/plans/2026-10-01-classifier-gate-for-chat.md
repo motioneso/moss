@@ -54,7 +54,7 @@ that replace it. Where this section and an older task disagree, this section win
 | 2b.6 screen proof                | Replaced by R2.6.                                                                                                                                                        |
 | 1.2 On precondition              | "At least one approved release row" becomes "the admin shadow-review record for the current classifier selection" (R2.4).                                                |
 | 4.2 release eligibility          | Per-tool admin approval is retired. Connected tools are released by sort and preparation; module tools by declaration; Ben's single shadow review unlocks On (spec 8.5). |
-| Ordinary policy, "out of scope"  | Narrowed. Sensitive connected tools now ask in every mode (spec 8.3). All other ordinary approval stays unchanged.                                                       |
+| Ordinary policy, "out of scope"  | Unchanged. A sorted group sets only the gate's confidence bar; YOLO follows its own spec's D1 and D2 (spec 8.3).                                                         |
 
 Unchanged: the gate engine, shadow records and their retention, the activity log, the gateway's
 no-card path, candidate lists and the reply contract (2b.5), the handled-turn lifecycle (4.1), and
@@ -63,7 +63,8 @@ the live activation proof (4.3).
 ### Slices, in build order
 
 Each slice is one session with its own PR, app-map and manifest updates in the same PR, and the
-verify-gate skill for any database test. R2.1 to R2.3 change no screen. R2.4 needs R2.1 and R2.2.
+verify-gate skill for any database test. R2.1 to R2.3 change no screen. R2.4 needs R2.1 and R2.2,
+and starts only after PR 2976 (activity history) merges, because both edit the gate's wiring files.
 R2.5 needs R2.1 to R2.4. R2.6 needs all of them.
 
 **R2.1 Sort storage, readable names and the old-entry conversion (one backend session).** Own
@@ -89,13 +90,16 @@ unsorted and shows "Try again"; no automatic retry.
   hint or delete method raises it; a skipped or invalid tool becomes Sensitive; a hostile
   description cannot change another tool's group or name; job payloads carry IDs only.
 
-**R2.3 Sensitive tools ask first (one gateway and integrations session).** Own
-`packages/integrations/src/tool-manifests.ts`. A tool sorted Sensitive gets the existing
-always-confirm hook on its synthetic manifest. Manifest risk stays `outbound`.
+**R2.3 Sorted group sets the gate's bar (one integrations session).** Own the classifier metadata
+in `packages/integrations/src/tool-manifests.ts` and the eligibility read in
+`classifier-settings.ts`. The sorted group replaces the owner-reviewed risk as the gate's risk for a
+connected tool, including the empty-success reply fallback that 3.5 noted still keys off the
+server's read-only hint. Manifest risk and execution policy stay as they are.
 
-- Proves: a Sensitive connected tool raises a card in normal mode and in YOLO, seen failing with
-  the hook removed; the gate's no-card path declines it with zero handler calls; other groups keep
-  today's behavior in both modes.
+- Proves: each group gets its bar, and a Sensitive tool below 0.98 is refused, seen failing with the
+  bar removed; the synthetic manifest's risk and policy are byte-identical before and after
+  sorting; in normal mode the gate declines a connected tool with zero handler calls and the main
+  model shows the card; in YOLO a Sensitive tool above its bar runs once under the existing rule.
 
 **R2.4 Automatic preparation and the release record (one backend session).** Own the prepare route
 and a background job in `packages/integrations/src/`, `packages/chat/src/live/classifier-gate-wiring.ts`,
@@ -105,8 +109,7 @@ that is on, saving validated output directly. A changed tool re-prepares by itse
 release check reads connected-tool eligibility (spec 8.5) and module declarations, not the per-tool
 admin table. On needs the shadow-review record for the current classifier selection, checked when
 read. The per-tool table stops being read; its drop is a later migration.
-Open PR 2976 (activity history) edits the same gate wiring files; start after it merges or
-rebase onto it.
+Start only after PR 2976 (activity history) merges; it edits the same gate wiring files.
 
 - Proves: eligibility drops when a tool is kept out, switched off, changed or unsorted, and returns
   after automatic re-preparation; a forged request cannot set On without the review record; a
@@ -116,7 +119,7 @@ rebase onto it.
 **R2.5 The connection's page (one UI session).** Use the design-system skill. Own
 `apps/web/src/settings/settings-integrations-pane.tsx` and focused new components. Build the
 pieces in spec 8.6 from the integrations-redesign mockups: full width with "Back to connections",
-readable and raw names, groups, "Asks first", "Keep out of the classifier", the classifier rail and
+readable and raw names, groups, "Keep out of the classifier", the classifier rail and
 its states, and the sorting line. Remove the per-tool review editor.
 
 - Proves: unit tests for each classifier state, keep-out and the sorting line; design token and
@@ -129,7 +132,8 @@ stand-in tool server is allowed for the claim about what Moss sends, disclosed o
 
 - Proves: a new connection's tools all start on with no review; sorting runs with the classifier
   off and its call count matches the changed tools; the sorting line shows; turning the classifier
-  on prepares with no further clicks; a Sensitive tool asks in YOLO; a kept-out tool stays usable
+  on prepares with no further clicks; normal mode declines connected tools to the usual card and
+  YOLO handles a Sensitive tool only above its bar; a kept-out tool stays usable
   in ordinary chat and never appears in shadow records; shadow records appear for released tools.
 
 After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as written.
@@ -141,14 +145,17 @@ After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as
     ruling 5 and the review half of ruling 6.
 18. **Sorting pass.** One cheap default-model pass sorts each tool by what it does, even with the
     classifier off. It also writes the readable name.
-19. **Risky tools ask.** Sensitive tools start on and ask before every run.
+19. **Risky tools start on and still ask.** The gate declines whenever the gateway would ask. YOLO
+    keeps its own rule: decisions D1 and D2 of
+    `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` auto-run calls that would
+    otherwise ask, destructive ones included (spec 8.3).
 20. **Keep out of the classifier** in a tool's menu; ordinary chat is unaffected.
 21. **The name stays "Classifier".**
 22. **No sorting notice.** A line on the connection's page says what is sent and who reads it.
 23. **Full-width connection page** with "Back to connections".
 
 Open for Ben (spec 8.10): whether one shadow review per classifier selection replaces per-tool
-evidence, and whether Sensitive tools asking in YOLO is the intended reading of ruling 19.
+evidence.
 
 ## Seams check and rulings ledger
 
