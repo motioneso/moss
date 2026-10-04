@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nav bar colors - mockup</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+<div class="sheet">
+  <h1>The nav bar on light and dark colors</h1>
+  <p>Each column is the real nav at full size. Moss picks dark or light text for the chosen color, keeps quieter links above 4.5 to 1, and swaps the selected item to a tinted wash when the accent would vanish into the nav. Switch light and dark mode, or the theme, in the bar above.</p>
+  <div class="sheet__grid" id="grid"></div>
+</div>
+<script src="mockup.js"></script>
+<script>
+  var cells = [
+    ["default", "Theme default", null],
+    ["butter", "Butter (light)", "#f1e4b8"],
+    ["white", "Paper white (light)", "#fbfaf6"],
+    ["clay", "Clay (middle)", "#b8664a"],
+    ["accent", "Accent (same as buttons)", "accent"],
+    ["navy", "Navy (dark)", "#1f2c44"],
+    ["charcoal", "Charcoal (dark)", "#24221d"]
+  ];
+  var grid = document.getElementById("grid");
+  grid.innerHTML = cells.map(function (c) {
+    return '<div class="sheet__cell"><span class="sheet__cap">' + c[1] + '</span><nav class="nav" data-cell="' + c[0] + '">' + navMarkup() + '</nav><span class="sheet__meta" data-meta="' + c[0] + '"></span></div>';
+  }).join("");
+  window.onRender = function () {
+    var acc = themeAccent();
+    cells.forEach(function (c) {
+      var el = grid.querySelector('[data-cell="' + c[0] + '"]');
+      var meta = grid.querySelector('[data-meta="' + c[0] + '"]');
+      clearNav(el);
+      if (!c[2]) {
+        ["--nv-bg","--nv-fg","--nv-muted","--nv-line","--nv-hover","--nv-active-bg","--nv-active-fg","--nv-brand"].forEach(function (k) {
+          el.style.setProperty(k, "initial");
+          el.style.removeProperty(k);
+        });
+        el.style.setProperty("--nv-bg", "var(--sage-light)");
+        el.style.setProperty("--nv-fg", "var(--ink)");
+        el.style.setProperty("--nv-muted", "var(--muted)");
+        el.style.setProperty("--nv-line", "var(--line)");
+        el.style.setProperty("--nv-active-bg", "var(--forest)");
+        el.style.setProperty("--nv-active-fg", "var(--accent-label)");
+        el.style.setProperty("--nv-brand", "var(--accent-fg)");
+        meta.textContent = "No color chosen. The nav follows the theme, as today.";
+        return;
+      }
+      var g = c[2] === "accent" ? acc.accent : c[2];
+      var nav = deriveNav(g, acc.accent, acc.label);
+      applyNav(el, nav);
+      meta.textContent = g + ". " + (nav.textKind === "dark" ? "Dark" : "Light") + " text, " + nav.textRatio.toFixed(1) + " to 1; quiet links " + nav.mutedRatio.toFixed(1) + " to 1" + (nav.strong ? " (full " + (nav.textKind === "dark" ? "black" : "white") + " text, a middle tone)" : "") + ". Selected item: " + (nav.activeKind === "accent" ? "accent pill" : "tinted wash, because the accent would not stand out") + ".";
+    });
+  };
+  bar("Nav bar colors", '<a href="desktop.html">Desktop</a> <a href="phone.html">Phone</a> <a href="README.md">Notes</a>');
+  state.nav = "default";
+  readHash();
+  render();
+</script>
+</body>
+</html>
