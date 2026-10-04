@@ -51,8 +51,18 @@ export async function assertMeetingHistoryLayout(page: Page, title: string): Pro
   await assertMeetingTextContrast(page, rail.locator(".jds-index__meta").first());
   await assertMeetingTextContrast(page, rail.locator(".jds-hint").first());
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await assertMeetingHistoryKeyboardFocus(page, title);
+}
+
+export async function assertMeetingHistoryKeyboardFocus(page: Page, title: string): Promise<void> {
   const row = page.getByRole("button", { name: title, exact: true });
-  await row.focus();
+  // The State filter immediately precedes the first result. Enter the result with real
+  // keyboard navigation; programmatic focus after pointer use has different modality.
+  await page.getByLabel("State", { exact: true }).focus();
+  await page.keyboard.press("Tab");
   await expect(row).toBeFocused();
-  expect(await row.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  expect(await row.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+  // Shared Button deliberately uses a 3px shadow ring with outline:none.
+  await expect(row).toHaveCSS("box-shadow", /0px 0px 0px 3px$/);
+  await expect(row).not.toHaveCSS("box-shadow", /^rgba\([^)]*,\s*0\) /);
 }

@@ -33,7 +33,10 @@ describe("0267 current-history upgrade", () => {
   it("backfills pre-projection Unicode data without altering authoritative bytes and skips completed replay", async () => {
     // Rewind only the new feature in this already guarded disposable server, as existing
     // migration-upgrade suites do. No checked-in or previously applied SQL file is edited.
+    // This one new index uses only pre-0267 columns, so column teardown cannot remove it.
+    // The other 0267 indexes disappear with the projection table or their new columns.
     await sql`DROP TABLE app.meeting_history_segments;
+      DROP INDEX app.meeting_output_artifacts_history_head;
       ALTER TABLE app.meeting_records DROP COLUMN history_search_terms;
       ALTER TABLE app.meeting_transcript_batches DROP COLUMN history_sources_json,DROP COLUMN history_omitted_sources;
       ALTER TABLE app.meeting_output_requests DROP COLUMN history_kind,DROP COLUMN history_result_status,DROP COLUMN history_result_code;
