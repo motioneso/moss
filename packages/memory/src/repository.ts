@@ -107,6 +107,37 @@ export class MemoryRepository {
     `.execute(scopedDb.db);
   }
 
+  /**
+   * Delete every chunk matching one or more exact source paths of a given kind, for one owner, in
+   * a single statement. Backtrack's hourly purge and its explicit delete-range route use this to
+   * remove `source_kind = 'screen'` chunks by `sourcePath = "backtrack/<segment id>"` — neither
+   * ever queries `app.memory_chunks` directly, keeping module isolation (#2638 plan §4.1).
+   *
+   * Capped at 500 paths per call so one statement can't be handed an unbounded `IN`/`= ANY` list;
+   * callers with more ids batch their own calls. Returns the number of rows actually removed.
+   */
+  async deleteChunksForSources(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    sourcePaths: readonly string[],
+    sourceKind: string
+  ): Promise<number> {
+    assertDataContextDb(scopedDb);
+    if (sourcePaths.length === 0) return 0;
+    if (sourcePaths.length > 500) {
+      throw new Error(
+        `deleteChunksForSources accepts at most 500 source paths per call, got ${sourcePaths.length}`
+      );
+    }
+    const result = await sql`
+      DELETE FROM app.memory_chunks
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND source_kind = ${sourceKind}
+        AND source_path = ANY(${[...sourcePaths]}::text[])
+    `.execute(scopedDb.db);
+    return Number(result.numAffectedRows ?? 0n);
+  }
+
   async deleteAllForUser(scopedDb: DataContextDb, ownerUserId: string): Promise<void> {
     assertDataContextDb(scopedDb);
     await sql`

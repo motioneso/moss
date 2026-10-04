@@ -86,7 +86,8 @@ export const expectedBuiltInModuleIds = [
   "jarvis.commitments",
   "people",
   "workflows",
-  "workshop"
+  "workshop",
+  "backtrack"
 ];
 
 /**

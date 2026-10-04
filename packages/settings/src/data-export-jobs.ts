@@ -134,6 +134,8 @@ export async function handleExportBuildJob(
         },
         // #2637: kept 30 days, then purged nightly.
         focus_judgments: userExport.tables.focusJudgments,
+        // #2638 Backtrack phase 2a: kept 37 days plus up to one hourly run, then purged.
+        backtrack_segments: userExport.tables.backtrackSegments,
         vault_files: []
       }
     };

@@ -138,6 +138,22 @@ export const modulesResponse: ListModulesResponse = {
       settings: []
     },
     {
+      id: "backtrack",
+      name: "Backtrack",
+      version: "0.1.0",
+      lifecycle: "required",
+      navigation: [],
+      settings: [
+        {
+          id: "backtrack.module-settings",
+          label: "Backtrack",
+          path: "/settings?section=modules&module=backtrack",
+          scope: "user",
+          order: 55
+        }
+      ]
+    },
+    {
       id: "settings",
       name: "Settings",
       version: "0.0.0",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BACKTRACK_STORAGE_CONFIG_KEY,
   BRAVE_API_KEY_CONFIG_KEY,
   CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
@@ -48,7 +49,7 @@ describe("runtime config registry", () => {
       moduleOwner: "ai"
     });
     expect(SECRET_INSTANCE_SETTING_KEYS.has(BRAVE_API_KEY_CONFIG_KEY)).toBe(true);
-    expect(RUNTIME_CONFIG_REGISTRY).toHaveLength(6);
+    expect(RUNTIME_CONFIG_REGISTRY).toHaveLength(7);
   });
 
   it("registers persistent-pool keys with minValue bounds (#1554)", () => {
@@ -89,5 +90,18 @@ describe("runtime config registry", () => {
     expect(SECRET_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(false);
     // Task 1.3 (#2892): the web settings row and this registry share one literal.
     expect(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY).toBe(SHARED_GATE_KEY);
+  });
+
+  it("registers the Backtrack storage instance switch, defaulting off (#2638 plan §4.3)", () => {
+    expect(getRuntimeConfigEntry(BACKTRACK_STORAGE_CONFIG_KEY)).toMatchObject({
+      key: "backtrack.storage",
+      type: "enum",
+      defaultValue: "off",
+      envVar: "MOSS_BACKTRACK_STORAGE",
+      enumValues: ["off", "on"],
+      moduleOwner: "backtrack"
+    });
+    expect(KNOWN_INSTANCE_SETTING_KEYS.has(BACKTRACK_STORAGE_CONFIG_KEY)).toBe(true);
+    expect(SECRET_INSTANCE_SETTING_KEYS.has(BACKTRACK_STORAGE_CONFIG_KEY)).toBe(false);
   });
 });

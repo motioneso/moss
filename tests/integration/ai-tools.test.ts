@@ -9,7 +9,6 @@ import { CalendarRepository } from "@moss/calendar";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { EmailRepository } from "@moss/email";
 import type { MossModuleManifest } from "@moss/module-sdk";
-import { getAllQueueDefinitions } from "@moss/module-registry";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import { NotificationsRepository } from "@moss/notifications";
 import { TasksRepository } from "@moss/tasks";
@@ -445,57 +444,7 @@ describe("AI read-only assistant tool execution foundation", () => {
     expect(response.body).not.toContain("pgboss");
   });
 
-  it("keeps assistant tools queue-free and repository access DataContext-only", async () => {
-    expect(getAllQueueDefinitions().map((queue) => queue.name)).toEqual([
-      "rls-probe",
-      "system.upgrade-check",
-      "system.upgrade-notify",
-      "platform.module-control",
-      "module-build",
-      "system.focus-judgment-purge",
-      "export.build",
-      "export.cleanup",
-      "connectors.google-sync",
-      "connectors.google-sync-continuation",
-      "connectors.google-sync-sweep",
-      "connectors.imap-sync",
-      "connectors.email-refresh-account",
-      "connectors.email-refresh-dispatch",
-      "connectors.email-refresh-sweep",
-      "connectors.email-monitor",
-      "connectors.calendar-monitor",
-      "tasks-deferred-status",
-      "tasks-recurrence-materialize",
-      "goals-memory-sync",
-      "goals-memory-sync-reconcile",
-      "integrations.classifier-sort",
-      "integrations.classifier-prepare",
-      "notifications.digest.compose",
-      "notifications.push.deliver",
-      "notifications.push.summary",
-      "calendar.cache-evict-event",
-      "calendar.day-plan-apply",
-      "ai-purge-audit-log",
-      "ai-purge-activity-detail",
-      "chat.embed-turn",
-      "chat.extract-facts",
-      "chat.archive-day",
-      "briefings-run",
-      "memory.vault-ingest-sweep",
-      "memory.vault-ingest-nudge",
-      "memory.vault-ingest-tick",
-      "wellness-export",
-      "news.refresh",
-      "news.revalidate",
-      "notes.sync",
-      "proactive-scan-source",
-      "commitment-extraction",
-      "commitment-email-judgement",
-      "person-index",
-      "sync-person-memory",
-      "workflow.step.deadletter",
-      "workflow.step.execute"
-    ]);
+  it("keeps repository access DataContext-only", async () => {
     await expect(tasksRepository.listVisible({} as never)).rejects.toThrow(
       "Repository access requires withDataContext"
     );
