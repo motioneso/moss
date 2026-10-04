@@ -1,0 +1,66 @@
+name: Meeting draft UI acceptance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/meeting-drafts-uat.yml"
+      - "packages/meetings/**"
+      - "packages/shared/src/meeting-*.ts"
+      - "tests/uat/run-meetings-uat.ts"
+      - "tests/uat/specs/2981-meeting-drafts.uat.spec.ts"
+      - "apps/web/src/app-route-metadata.ts"
+      - "apps/web/src/shell/nav-icons.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meeting-drafts-uat-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  draft-workspace:
+    name: Verify real meeting draft UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install browser
+        timeout-minutes: 5
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start the isolated gate's database container
+        run: pnpm db:up
+      - name: Run credential-free Meetings UAT through the supported gate
+        timeout-minutes: 20
+        run: |
+          scripts/run-gate.sh start --gate test:uat:2981-meetings
+          scripts/run-gate.sh wait --follow
+      - name: Record bounded test evidence
+        if: always()
+        run: |
+          if [ -d /tmp/jarv1s-gate ]; then
+            find /tmp/jarv1s-gate -maxdepth 1 -name '*.log' -type f -exec tail -n 160 {} \;
+          fi
+      - name: Stop the gate and its development containers
+        if: always()
+        timeout-minutes: 3
+        run: |
+          scripts/run-gate.sh stop || true
+          pnpm db:down
