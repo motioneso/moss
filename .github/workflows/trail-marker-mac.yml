@@ -31,6 +31,16 @@ jobs:
         working-directory: apps/trail-marker
         run: xcodegen generate
 
+      - name: Compile Release without signing
+        working-directory: apps/trail-marker
+        run: |
+          xcodebuild build \
+            -scheme TrailMarker \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
       # The UI tests (TrailMarkerUITests) need macOS UI automation, which otherwise waits for a
       # password prompt nobody can answer on a runner.
       - name: Enable UI automation
