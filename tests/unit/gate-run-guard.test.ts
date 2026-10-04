@@ -73,6 +73,37 @@ describe("assertGateRunDatabaseAccess (#2989)", () => {
       ).toThrow();
     });
 
+    it("refuses an address whose query options can redirect the driver", () => {
+      // The driver lets ?host=, ?port=, ?dbname= and similar override the address,
+      // so a URL that looks like the stack can still reach the shared dev database.
+      for (const query of [
+        "?host=jarv1s-postgres",
+        "?host=/var/run/postgresql",
+        "?port=55433",
+        "?dbname=other",
+        "?hostaddr=192.0.2.1",
+        "?sslmode=disable"
+      ]) {
+        expect(() =>
+          assertGateRunDatabaseAccess({
+            ...stackUrls,
+            JARVIS_APP_DATABASE_URL: `postgres://a:pw@postgres:5432/jarv1s${query}`,
+            JARVIS_UAT_SEED_CONFIRM: "1"
+          } as NodeJS.ProcessEnv)
+        ).toThrow();
+      }
+    });
+
+    it("refuses a stack address on another port", () => {
+      expect(() =>
+        assertGateRunDatabaseAccess({
+          ...stackUrls,
+          JARVIS_APP_DATABASE_URL: "postgres://a:pw@postgres:55433/jarv1s",
+          JARVIS_UAT_SEED_CONFIRM: "1"
+        } as NodeJS.ProcessEnv)
+      ).toThrow();
+    });
+
     it("refuses stack URLs without the seed flag", () => {
       expect(() => assertGateRunDatabaseAccess(stackUrls as NodeJS.ProcessEnv)).toThrow();
     });

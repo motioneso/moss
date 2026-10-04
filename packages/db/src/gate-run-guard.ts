@@ -1,13 +1,25 @@
 import { getMossDatabaseUrls } from "./urls.js";
 
-// Compose service name of a UAT stack's own throwaway Postgres.
+// Compose service name and port of a UAT stack's own throwaway Postgres.
 const UAT_STACK_DB_HOST = "postgres";
+const UAT_STACK_DB_PORT = "5432";
+
+// The driver lets query options (?host=, ?port=, ?dbname=, ?hostaddr=) override the
+// address, so the host of the URL proves nothing when any are present. Stack URLs
+// carry none, so any query string or fragment is refused.
+function isUatStackDatabaseUrl(url: string): boolean {
+  const parsed = new URL(url);
+  return (
+    parsed.hostname === UAT_STACK_DB_HOST &&
+    (parsed.port === "" || parsed.port === UAT_STACK_DB_PORT) &&
+    parsed.search === "" &&
+    parsed.hash === ""
+  );
+}
 
 function pointsOnlyAtUatStackDatabase(env: NodeJS.ProcessEnv): boolean {
   try {
-    return Object.values(getMossDatabaseUrls(env)).every(
-      (url) => new URL(url).hostname === UAT_STACK_DB_HOST
-    );
+    return Object.values(getMossDatabaseUrls(env)).every(isUatStackDatabaseUrl);
   } catch {
     return false;
   }
