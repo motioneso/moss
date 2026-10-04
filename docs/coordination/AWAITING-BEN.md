@@ -19,6 +19,16 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
+## People sync: which notes count as a person? (2026-10-04, run overnight-2026-10-03)
+
+People sync skipped 56 of 59 notes because it only reads Moss's own strict note format (issue #2997).
+The fix reads ordinary person notes, takes the name from the file name or heading, and keeps other
+fields when it writes back. Blocked: which notes in the People folder it should treat as people.
+
+- Option A: every note in the People folder is a person.
+- Option B: only notes marked `type: person` (53 of the 59 are).
+- Recommendation: B, because it skips stray index or template notes and already covers almost all of them.
+
 <!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
 Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
 is no longer the gate for this batch. -->
@@ -75,6 +85,5 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-Nothing open.
 
 <!-- RESOLVED 2026-10-03: 2026-10-03 17:15, run overnight-2026-10-03, issue #2956 (PR #2976): the activity detail popup has "asked for" and "returned" rows that nothing fills, because the spec never says what they hold. Options: (1) hide those rows when nothing is recorded, in slice D; (2) define what they show per step kind and have the writers fill them, as a spec addition and a follow-up issue; (3) both, hide now and fill later. Coordinator recommends 3. Not blocking slice D. Ben chose 3: slice D hides the rows; filling them is https://github.com/motioneso/moss/issues/2987. -->
