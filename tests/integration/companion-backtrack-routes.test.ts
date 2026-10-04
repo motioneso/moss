@@ -371,10 +371,10 @@ describe("what is stored, and what is never kept", () => {
     const ok = await upload(credentialA, marked);
     expect(ok.statusCode).toBe(200);
 
-    // Schema-invalid: a bad field type and an unknown field next to marked text.
+    // Schema-invalid: a missing field and an unknown field next to marked text.
     const invalid = await upload(credentialA, {
       sentAt: new Date().toISOString(),
-      segments: [{ ...marked.segments[0], endedAt: 12345, extra: MARKER }]
+      segments: [{ ...marked.segments[0], endedAt: undefined, extra: MARKER }]
     });
     expect(invalid.statusCode).toBe(400);
     const tooLong = await upload(credentialA, {
@@ -393,10 +393,8 @@ describe("what is stored, and what is never kept", () => {
   });
 
   it("enqueues ids only, after the commit, and nothing for a batch that stored nothing", async () => {
-    const res = await upload(
-      credentialA,
-      request([{ start: -5 * MINUTE }, { start: -4 * MINUTE }])
-    );
+    const batch = request([{ start: -5 * MINUTE }, { start: -4 * MINUTE }]);
+    const res = await upload(credentialA, batch);
     expect(res.statusCode).toBe(200);
     const rows = await stored(ids.userA);
     expect(sendCalls).toHaveLength(1);
@@ -408,17 +406,7 @@ describe("what is stored, and what is never kept", () => {
 
     // The identical batch again is all duplicates: no new rows, so no job.
     sendCalls.length = 0;
-    const dup = await upload(credentialA, {
-      sentAt: new Date().toISOString(),
-      segments: rows.map((row) => ({
-        startedAt: row.started_at.toISOString(),
-        endedAt: new Date(row.started_at.getTime() + 20_000).toISOString(),
-        appName: "Safari",
-        bundleId: "com.apple.Safari",
-        windowTitle: "A page",
-        body: row.body
-      }))
-    });
+    const dup = await upload(credentialA, { ...batch, sentAt: new Date().toISOString() });
     expect(dup.statusCode).toBe(200);
     expect(sendCalls).toHaveLength(0);
   });
