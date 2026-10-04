@@ -44,11 +44,12 @@ describe("credential-free meeting draft UAT", () => {
 });
 
 describe("bounded credential-free UAT group selection", () => {
-  it("keeps the original three Meetings specs by default", () => {
+  it("keeps the four bounded Meetings specs by default", () => {
     expect(meetingUatSpecs()).toEqual([
       "2981-meeting-drafts.uat.spec.ts",
       "2981-meeting-chat.uat.spec.ts",
-      "2981-meeting-outputs.uat.spec.ts"
+      "2981-meeting-outputs.uat.spec.ts",
+      "2981-meeting-history.uat.spec.ts"
     ]);
   });
   it("selects only fixed groups and never includes real-provider conditional specs", () => {
@@ -59,8 +60,8 @@ describe("bounded credential-free UAT group selection", () => {
       "model-fixtures"
     ]);
     const specs = Object.keys(MEETING_UAT_GROUPS).flatMap((group) => [...meetingUatSpecs(group)]);
-    expect(specs).toHaveLength(16);
-    expect(new Set(specs).size).toBe(16);
+    expect(specs).toHaveLength(17);
+    expect(new Set(specs).size).toBe(17);
     for (const spec of [
       "1909-sports-public-source-completion",
       "notes-default-retrieval",

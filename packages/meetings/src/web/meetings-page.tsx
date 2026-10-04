@@ -7,6 +7,8 @@ import { MeetingHistory } from "./meeting-history.js";
 import { MeetingRecord } from "./meeting-record.js";
 import { useMeetingDate } from "./locale.js";
 import { isMeetingAccessDenied, meetingKeys, meetingRecordQueryOptions } from "./client.js";
+import { historyKeys } from "./history-client.js";
+import { historyFilter } from "./history-presentation.js";
 import "./styles.css";
 
 export function MeetingsPage() {
@@ -14,6 +16,13 @@ export function MeetingsPage() {
   const id = params.get("id");
   const date = useMeetingDate();
   const client = useQueryClient();
+  const historyView = useQuery({
+    queryKey: historyKeys.view,
+    queryFn: () => ({ query: "" }),
+    initialData: () => client.getQueryData<{ query: string }>(historyKeys.view) ?? { query: "" },
+    enabled: false,
+    gcTime: Infinity
+  });
   const navigation = useLocation().key;
   const hasReference = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"].some(
     (field) => params.has(field)
@@ -28,9 +37,19 @@ export function MeetingsPage() {
   }, [client, id, hasReference, navigation]);
   const history = params.get("view") === "history";
   const record = useQuery(meetingRecordQueryOptions(id ?? ""));
-  const showHistory = () => setParams({ view: "history" });
+  const showHistory = () => {
+    const next = new URLSearchParams({ view: "history" });
+    const selected = id ?? params.get("selected");
+    if (selected) next.set("selected", selected);
+    if (params.has("state")) next.set("state", historyFilter(params.get("state")));
+    setParams(next);
+  };
   const showSetup = () => setParams({});
-  const open = (meetingId: string) => setParams({ id: meetingId });
+  const open = (meetingId: string) => {
+    const next = new URLSearchParams({ id: meetingId, selected: meetingId });
+    if (params.has("state")) next.set("state", historyFilter(params.get("state")));
+    setParams(next);
+  };
   return (
     <div className="meetings-page">
       <Masthead
@@ -51,7 +70,9 @@ export function MeetingsPage() {
             ? !isMeetingAccessDenied(record.error) && record.data
               ? date(record.data.meeting.createdAt)
               : undefined
-            : "Create a draft, keep your personal notes, and find them again."
+            : history
+              ? "Find a conversation, revisit its notes, or ask Moss what happened."
+              : "Create a draft, keep your personal notes, and find them again."
         }
         aside={
           <Button variant={id ? "secondary" : "field"} onClick={history ? showSetup : showHistory}>
@@ -63,7 +84,48 @@ export function MeetingsPage() {
         {id ? (
           <MeetingRecord key={id} id={id} onBack={showHistory} />
         ) : history ? (
-          <MeetingHistory onOpen={open} onNew={showSetup} />
+          <MeetingHistory
+            search={historyView.data?.query ?? ""}
+            filter={historyFilter(params.get("state"))}
+            selectedId={params.get("selected")}
+            detailOpen={params.has("selected") && params.get("panel") !== "results"}
+            onSearch={(query) => {
+              client.setQueryData<{ query: string }>(historyKeys.view, (current) =>
+                current ? { query } : undefined
+              );
+              setParams(
+                (current) => {
+                  current.delete("selected");
+                  current.delete("panel");
+                  return current;
+                },
+                { replace: true }
+              );
+            }}
+            onFilter={(filter) =>
+              setParams((current) => {
+                current.set("state", filter);
+                current.delete("selected");
+                current.delete("panel");
+                return current;
+              })
+            }
+            onSelect={(selected) =>
+              setParams((current) => {
+                current.set("selected", selected);
+                current.delete("panel");
+                return current;
+              })
+            }
+            onResults={() =>
+              setParams((current) => {
+                current.set("panel", "results");
+                return current;
+              })
+            }
+            onOpen={open}
+            onNew={showSetup}
+          />
         ) : (
           <MeetingSetup onCreated={open} />
         )}

@@ -1,3 +1,4 @@
+import { projectMeetingRequestInput, projectMeetingRequestResult } from "./history-projection.js";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -221,11 +222,13 @@ export class MeetingOutputsRepository {
     await db.db
       .updateTable("app.meeting_output_requests")
       .set({
-        result_json: sql<string>`json_build_object('status', 'failed', 'requestKey', request_key, 'code', 'meeting_output_interrupted')::text`
+        result_json: sql<string>`json_build_object('status', 'failed', 'requestKey', request_key, 'code', 'meeting_output_interrupted')::text`,
+        history_result_status: "failed",
+        history_result_code: "meeting_output_interrupted"
       })
       .where("meeting_id", "=", meetingId)
       .where("result_json", "is", null)
-      .where(sql<boolean>`input_json::jsonb ->> 'kind' = 'generate'`)
+      .where("history_kind", "=", "generate")
       .where("expires_at", "<=", sql<Date>`clock_timestamp()`)
       .execute();
     const pending = await db.db
@@ -233,7 +236,7 @@ export class MeetingOutputsRepository {
       .select("request_key")
       .where("meeting_id", "=", meetingId)
       .where("result_json", "is", null)
-      .where(sql<boolean>`input_json::jsonb ->> 'kind' = 'generate'`)
+      .where("history_kind", "=", "generate")
       .where("expires_at", ">", sql<Date>`clock_timestamp()`)
       .orderBy("expires_at", "desc")
       .limit(1)
@@ -247,6 +250,7 @@ export class MeetingOutputsRepository {
         meeting_id: meetingId,
         request_key: requestKey,
         input_json: input,
+        ...projectMeetingRequestInput(input),
         result_json: null
       })
       .execute();
@@ -254,7 +258,7 @@ export class MeetingOutputsRepository {
   async finish(db: DataContextDb, meetingId: string, requestKey: string, result: unknown) {
     await db.db
       .updateTable("app.meeting_output_requests")
-      .set({ result_json: JSON.stringify(result) })
+      .set({ result_json: JSON.stringify(result), ...projectMeetingRequestResult(result) })
       .where("meeting_id", "=", meetingId)
       .where("request_key", "=", requestKey)
       .where("result_json", "is", null)
@@ -287,6 +291,10 @@ export class MeetingOutputsRepository {
         meeting_id: input.meetingId,
         version,
         artifact_json: JSON.stringify(artifact),
+        history_origin: artifact.origin,
+        history_notes_revision: artifact.inputs.notesRevision,
+        history_transcript_revision: artifact.inputs.transcript?.transcriptRevision ?? 0,
+        history_stale: artifact.stale,
         inactive: input.stale
       })
       .execute();

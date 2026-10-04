@@ -155,6 +155,7 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.meeting_records",
         "app.meeting_note_writes",
         "app.meeting_transcript_batches",
+        "app.meeting_history_segments",
         "app.meeting_output_requests",
         "app.meeting_output_artifacts",
         "app.meeting_action_candidates",

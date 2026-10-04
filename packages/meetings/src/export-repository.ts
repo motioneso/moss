@@ -111,7 +111,10 @@ export class MeetingExportsRepository {
         meeting_id: meetingId,
         artifact_version: version,
         content_hash: contentHash,
-        receipt_json: JSON.stringify(receipt)
+        receipt_json: JSON.stringify(receipt),
+        history_write_status: receipt.writeStatus,
+        history_index_status: receipt.indexStatus,
+        history_updated_at: receipt.updatedAt
       })
       .execute();
   }
@@ -123,7 +126,12 @@ export class MeetingExportsRepository {
     assertDataContextDb(db);
     await db.db
       .updateTable("app.meeting_export_receipts")
-      .set({ receipt_json: JSON.stringify(receipt) })
+      .set({
+        receipt_json: JSON.stringify(receipt),
+        history_write_status: receipt.writeStatus,
+        history_index_status: receipt.indexStatus,
+        history_updated_at: receipt.updatedAt
+      })
       .where("meeting_id", "=", receipt.meetingId)
       .where("artifact_version", "=", receipt.artifactVersion)
       .execute();

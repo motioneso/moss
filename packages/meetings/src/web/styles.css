@@ -94,8 +94,73 @@
   max-width: 100%;
   overflow-x: auto;
 }
+.meetings-history {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(15rem, 18rem);
+  gap: var(--space-7);
+  align-items: start;
+  min-width: 0;
+}
+.meetings-history-results {
+  grid-column: 1;
+}
+.meetings-history--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.meetings-history-rail,
+.meetings-history-heading,
+.meetings-history-source-details,
+.meetings-history-rail-actions {
+  display: grid;
+  min-width: 0;
+}
+.meetings-history-rail {
+  gap: var(--space-5);
+  overflow-wrap: anywhere;
+}
+.meetings-history-heading {
+  gap: var(--space-2);
+}
+.meetings-history-source-details,
+.meetings-history-rail-actions {
+  gap: var(--space-3);
+}
+.meetings-history-source-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+.meetings-history-divider {
+  display: flex;
+  height: 100%;
+}
+.meetings-history-back,
+.meetings-history-mobile-status {
+  display: none;
+}
+@media (max-width: 1080px) {
+  .meetings-history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meetings-history-divider {
+    display: none;
+  }
+}
 @media (max-width: 760px) {
   .meetings-history-filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .meetings-history-status-column,
+  .meetings-history-rail,
+  .meetings-history--detail .meetings-history-results {
+    display: none;
+  }
+  .meetings-history-mobile-status,
+  .meetings-history-back {
+    display: block;
+  }
+  .meetings-history--detail .meetings-history-rail {
+    display: grid;
   }
 }

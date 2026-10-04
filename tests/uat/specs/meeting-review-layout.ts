@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /** Real rendered DOM assertions only; no screenshots or network interception. */
 export async function assertMeetingReviewLayout(page: Page): Promise<void> {
@@ -65,6 +65,10 @@ export async function assertProvisionalContrast(page: Page): Promise<void> {
     .getByRole("region", { name: "Retained transcript", exact: true })
     .locator(".jds-badge")
     .filter({ hasText: /^Provisional$/ });
+  await assertMeetingTextContrast(page, badge);
+}
+
+export async function assertMeetingTextContrast(page: Page, badge: Locator): Promise<void> {
   for (const theme of [
     { mode: "light", park: "forest" },
     { mode: "dark", park: "forest" },

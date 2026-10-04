@@ -6,7 +6,8 @@ Issue [#2981](https://github.com/motioneso/moss/issues/2981), approved
 
 This package is not yet a meeting recorder. The current checkpoint contains:
 
-- A package-owned `/meetings` screen for Setup, draft history and personal notes.
+- A package-owned `/meetings` screen for Setup, searchable History and personal notes.
+- Current-text server search, state filters and a selected-meeting rail with factual receipts.
 - Explicit capture-mode defaults; Start remains unavailable until native capture exists.
 - Real draft creation, reopening, version-checked notes, conflict review and confirmed deletion.
 - In-memory unsaved-note recovery across signed-in navigation; save before closing/signing out.
@@ -52,6 +53,33 @@ the records and receipts; 0261 separately grants owner-policy-governed draft del
 
 Meetings is optional but default-enabled, as required by the repository's deny-only built-in
 module model. Existing module controls can disable it. This does not start any recording.
+
+## History API
+
+- `POST /api/meetings/history/search`: `{ query?, filter?, limit?, before? }` returns
+  lightweight meeting metadata and an actual next-page cursor. The default limit is 30, maximum 50.
+- `GET /api/meetings/history/:id`: reauthorizes a selected meeting independently of the loaded page;
+  absent and inaccessible identities return the same 404.
+
+Search matches all words across current title, personal notes and current transcript segments,
+before pagination. It excludes old corrections, generated output and independent copies. Up to
+16 normalized words, 256 UTF-16 characters and 512 UTF-8 bytes are accepted; punctuation-only
+searches return no matches. Search text stays in the POST body and signed-in query memory, not
+URLs or persistent browser storage. Both endpoints set `Cache-Control: no-store`.
+
+History supports all states, retained transcripts, needs review, saved versions and notes without
+a transcript. The table and selection rail show retained-text spans, summary state, candidate
+review counts and separate vault write/index receipts. These do not establish native recording,
+continuous coverage, current Task contents or a fresh filesystem/index check. Mobile selection
+has an explicit Back to results action; review navigation preserves the session's search.
+
+Migration 0267 maintains a current-segment search projection in the existing transcript transaction.
+Its explicitly declared, checksummed first-party sidecar backfills metadata from original TEXT JSON
+inside the migration transaction; it preserves original payloads and UTF-16 segment identities.
+The canonical runner restores FORCE RLS before committing and rolls back on a backfill failure.
+External module installation remains SQL-only. Isolated CI integration and real History UI tests
+are required before treating this slice as verified; do not run local DB gates while the hold below
+applies.
 
 ## Transcript storage API
 
@@ -192,8 +220,8 @@ scripts/run-gate.sh wait --follow
 ```
 
 The underlying `test:uat:2981-meetings` command runs `tests/uat/run-meetings-uat.ts`, which includes
-`2981-meeting-drafts.uat.spec.ts`, `2981-meeting-chat.uat.spec.ts` and the new
-`2981-meeting-outputs.uat.spec.ts`. These commands are documented for the CI workflow, **not for
+`2981-meeting-drafts.uat.spec.ts`, `2981-meeting-chat.uat.spec.ts`,
+`2981-meeting-outputs.uat.spec.ts` and `2981-meeting-history.uat.spec.ts`. These commands are documented for the CI workflow, **not for
 local execution before #2989**. The dedicated wrapper selects an absent host-login file in a fresh
 temporary directory; it never needs real provider credentials, host chat login, audio or a user's
 vault. The chat/summary tests disclose local third-party HTTP stand-ins while exercising Moss's
@@ -216,7 +244,7 @@ The same supported `test:uat:2981-meetings` gate entry accepts the closed
 before provisioning rather than falling back to all tests. This does not lift the local DB hold
 pending #2989.
 
-- `meetings`: draft/review (2 tests), meeting chat (1), summary/Task/private exports (1).
+- `meetings`: draft/review (2 tests), meeting chat (1), summary/Task/private exports (1), History (1).
 - `chat`: private drawer #1089/#1090 (2), attachments #1133 (2 active, 1 fixme), runtime context
   (2 active, 2 fixmes), assistant naming (4).
 - `runtime`: module install/restart (1), vault ownership #1217 (1), install grant #1311
@@ -234,7 +262,7 @@ screenshot or video artifacts. The wrapper overrides any inherited host-auth loc
 absent temporary file and clears inherited real-chat readiness. No real provider login is used.
 Module installation may still download the public Finance module; that is not provider proof.
 
-The groups contain **24 active tests and 4 pre-existing fixmes**, not 28 passing assertions.
+The groups contain **25 active tests and 4 pre-existing fixmes**, not 29 passing assertions.
 Attachments do not prove a model read the file; runtime-context does not prove the model's refusal
 or page-error resolution; install-grant does not prove model-driven Task dispatch. Scripted shadow
 delete proves refusal/retention, not the real-model approval round trip. The private-drawer test
@@ -259,11 +287,12 @@ synthetic leaked row, rolls back, then rechecks RLS and owner isolation. This mu
 it has not run in the Docker-free cloud workspace. Earlier draft-table negative proof remains
 separate. Current DB proof must come from the isolated GitHub-hosted CI jobs described above;
 local DB gates remain withheld until #2989 provides per-run server isolation and cleanup.
-Draft-only real UI acceptance is verified at `468aaa8` by
-[CI](https://github.com/motioneso/moss/actions/runs/37165385320) and
-[UI UAT](https://github.com/motioneso/moss/actions/runs/37165385348). This does not verify the
-new transcript storage/review, meeting-question or summary/Task/private-export slices.
-Exact-commit CI, database and live-path results for those slices are recorded on [PR #2982](https://github.com/motioneso/moss/pull/2982).
+The preceding draft/transcript/chat/output checkpoint is verified at `bee892ce` by
+[CI](https://github.com/motioneso/moss/actions/runs/37180058593) and
+[credential-free UI UAT](https://github.com/motioneso/moss/actions/runs/37180058600): 24 active tests
+passed and four pre-existing fixmes were skipped. That evidence predates this History slice and
+must not be reused as its verification. The additional History test and migration fixtures need
+fresh exact-commit results. Neither checkpoint establishes native capture or real-provider proof.
 The meeting-chat UAT uses a disclosed local HTTP provider stand-in to inspect real outbound requests,
 not real provider credentials or rewritten Moss responses. Chat cleanup uses a bounded database
 function; direct runtime deletion remains unavailable and thread surfaces are immutable. The

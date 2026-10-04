@@ -107,8 +107,9 @@ describe("Meeting request reconciliation", () => {
     expect(queries[0]?.sql).toContain("meeting_output_interrupted");
     expect(queries[0]?.sql).toContain('"expires_at" <= clock_timestamp()');
     expect(queries[1]?.sql).toContain('"expires_at" > clock_timestamp()');
-    expect(queries[1]?.sql).toContain("input_json::jsonb ->> 'kind' = 'generate'");
-    expect(queries[1]?.parameters).toEqual([meetingId, 1]);
+    expect(queries[1]?.sql).toContain('"history_kind" = $2');
+    expect(queries[1]?.sql).not.toContain("::jsonb");
+    expect(queries[1]?.parameters).toEqual([meetingId, "generate", 1]);
   });
 
   it("treats reordered request object fields as the same input but preserves value conflicts", async () => {

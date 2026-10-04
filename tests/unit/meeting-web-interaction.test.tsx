@@ -4,6 +4,8 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import type { MeetingRecord } from "@moss/shared";
+import { historyItem } from "./fixtures/meeting-history.js";
+import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import * as api from "../../packages/meetings/src/web/client.js";
 
@@ -20,6 +22,11 @@ vi.mock("../../packages/meetings/src/web/client.js", async (original) => {
     deleteMeeting: vi.fn()
   };
 });
+vi.mock("../../packages/meetings/src/web/history-client.js", async (original) => ({
+  ...(await original<typeof historyApi>()),
+  searchMeetingHistory: vi.fn(),
+  getMeetingHistoryItem: vi.fn()
+}));
 const meeting: MeetingRecord = {
   id: "11223344-1122-4122-8122-112233445566",
   title: "Design review",
@@ -111,6 +118,11 @@ beforeEach(() => {
   vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
   vi.mocked(api.getMeetingPreferences).mockResolvedValue({ defaultCaptureMode: null });
   vi.mocked(api.listMeetings).mockResolvedValue({ meetings: [meeting] });
+  vi.mocked(historyApi.searchMeetingHistory).mockResolvedValue({
+    meetings: [historyItem(meeting)],
+    nextCursor: null
+  });
+  vi.mocked(historyApi.getMeetingHistoryItem).mockResolvedValue({ meeting: historyItem(meeting) });
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
@@ -124,6 +136,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     await typeNotes("Unsaved note");
     await click("View meeting history");
     await click("Design review");
+    await click("Open review");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Unsaved note"
     );
@@ -348,6 +361,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     await click("View meeting history");
     expect(hasSessionUnsavedChanges(client)).toBe(true);
     await click("Design review");
+    await click("Open review");
     vi.mocked(api.saveMeetingNotes).mockResolvedValue({
       status: "saved",
       replayed: false,

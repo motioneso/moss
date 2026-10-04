@@ -1,3 +1,7 @@
+import {
+  registerMeetingHistoryRoutes,
+  type MeetingHistoryRoutesDependencies
+} from "./history-routes.js";
 import { registerMeetingTranscriptRoutes } from "./transcript-routes.js";
 import type { PreferencesRepository } from "@moss/structured-state";
 import { registerMeetingPreferenceRoutes } from "./preferences-routes.js";
@@ -18,7 +22,7 @@ import {
   MeetingRecordsRepository
 } from "./repository.js";
 
-export interface MeetingRecordRoutesDependencies {
+export interface MeetingRecordRoutesDependencies extends MeetingHistoryRoutesDependencies {
   /** General authenticated user session only. Existing companion tokens gain no access here. */
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
@@ -37,6 +41,7 @@ export function registerMeetingRecordRoutes(
   dependencies: MeetingRecordRoutesDependencies
 ): void {
   const repository = dependencies.repository ?? new MeetingRecordsRepository();
+  registerMeetingHistoryRoutes(server, dependencies);
   registerMeetingPreferenceRoutes(server, dependencies);
   registerMeetingTranscriptRoutes(server, dependencies);
   server.delete<{ Params: { id: string } }>(

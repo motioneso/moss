@@ -140,6 +140,9 @@ function setup() {
         request_key: key,
         input_json: encoded,
         result_json: null,
+        history_kind: "generate",
+        history_result_status: null,
+        history_result_code: null,
         expires_at: new Date(Date.now() + 180_000)
       });
     });
@@ -343,6 +346,9 @@ describe("meeting output generation service", () => {
       request_key: INPUT.requestKey,
       input_json: JSON.stringify({ kind: "generate", ...INPUT }),
       result_json: null,
+      history_kind: "generate",
+      history_result_status: null,
+      history_result_code: null,
       expires_at: new Date(0)
     });
     const result = await harness.service.generate(ACTOR, MEETING_ID, INPUT);

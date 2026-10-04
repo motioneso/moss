@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/meeting-drafts-uat.yml"
       - "packages/meetings/**"
+      - "packages/db/src/migrations/sql-runner.ts"
       - "packages/chat/**"
       - "packages/module-web-sdk/**"
       - "packages/module-registry/src/meeting-*.ts"
@@ -22,6 +23,7 @@ on:
       - "packages/ui/**"
       - "tests/uat/subnet-selection.ts"
       - "tests/uat/specs/2981-meeting-*.uat.spec.ts"
+      - "tests/uat/specs/meeting-history-layout.ts"
       - "tests/uat/fixtures/meeting-*.ts"
       - "apps/web/src/app-route-metadata.ts"
       - "apps/web/src/shell/nav-icons.ts"

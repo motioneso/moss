@@ -2,10 +2,15 @@ import { type ReactNode } from "react";
 
 export interface RowIndexProps {
   readonly children: ReactNode;
+  readonly variant?: "default" | "facts";
 }
 
 export function RowIndex(props: RowIndexProps) {
-  return <div className="jds-index">{props.children}</div>;
+  return (
+    <div className={props.variant === "facts" ? "jds-index jds-index--facts" : "jds-index"}>
+      {props.children}
+    </div>
+  );
 }
 
 export interface RowIndexItemProps {

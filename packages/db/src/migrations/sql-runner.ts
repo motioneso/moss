@@ -29,8 +29,11 @@ export interface MigrationFile {
   readonly name: string;
   readonly checksum: string;
   readonly sql: string;
+  /** Captured UTF-8 source; inspection never imports it or reads it again at execution. */
+  readonly backfill?: { readonly name: string; readonly source: string };
 }
 
+/** Canonical first-party migrations only. External modules use module-sql-runner.ts. */
 export async function runSqlMigrations(
   options: SqlMigrationRunnerOptions
 ): Promise<MigrationRunResult> {
@@ -70,6 +73,19 @@ export async function runSqlMigrations(
       await client.query("BEGIN");
       try {
         await client.query(file.sql);
+        if (file.backfill) {
+          // Trusted first-party code, not a sandbox: globals remain available. A query-only
+          // facade avoids coupling the frozen migration to connection lifecycle or new helpers.
+          try {
+            const sourceUrl = `data:text/javascript;base64,${Buffer.from(file.backfill.source).toString("base64")}`;
+            const module: { backfill?: unknown } = await import(sourceUrl);
+            if (typeof module.backfill !== "function") throw new Error("Missing backfill export");
+            await module.backfill(Object.freeze({ query: client.query.bind(client) }));
+          } catch {
+            // Neither private historical payloads nor a data-URL source stack may reach logs.
+            throw new Error(`Migration backfill ${file.backfill.name} failed`);
+          }
+        }
         await client.query(
           `
             INSERT INTO ${qualifiedIdentifier(migrationsSchema, migrationsTable)}
@@ -178,21 +194,71 @@ async function readMigrationFiles(directory: string): Promise<MigrationFile[]> {
       .filter((file) => file.endsWith(".sql"))
       .sort()
       .map(async (fileName) => {
-        const sql = await readFile(join(directory, fileName), "utf8");
+        const sqlBytes = await readFile(join(directory, fileName));
+        const sql = decodeMigrationUtf8(sqlBytes, fileName);
         const [version] = fileName.split("_", 1);
 
         if (!version) {
           throw new Error(`Migration file ${fileName} is missing a version prefix`);
         }
 
+        const backfillName = declaredBackfill(sql, fileName);
+        if (!backfillName) {
+          return {
+            version,
+            name: basename(fileName),
+            checksum: createHash("sha256").update(sqlBytes).digest("hex"),
+            sql
+          };
+        }
+
+        const backfillBytes = await readFile(join(directory, backfillName));
+        const source = decodeMigrationUtf8(backfillBytes, backfillName);
         return {
           version,
           name: basename(fileName),
-          checksum: createHash("sha256").update(sql).digest("hex"),
-          sql
+          // Domain and explicit byte lengths distinguish this from the legacy SQL-only hash
+          // and prevent ambiguous concatenation. Preserve every byte, including BOM/CRLF.
+          checksum: createHash("sha256")
+            .update("moss:sql-migration+backfill:v1\0")
+            .update(`${sqlBytes.length}:`)
+            .update(sqlBytes)
+            .update(`${backfillBytes.length}:`)
+            .update(backfillBytes)
+            .digest("hex"),
+          sql,
+          backfill: { name: backfillName, source }
         };
       })
   );
+}
+
+function decodeMigrationUtf8(bytes: Uint8Array, name: string): string {
+  try {
+    // ignoreBOM preserves the BOM in the decoded source instead of stripping hashed bytes.
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new Error(`Migration file ${name} must contain valid UTF-8`);
+  }
+}
+
+function declaredBackfill(sql: string, name: string): string | undefined {
+  const lines = sql.split(/\r?\n/).map((line) => line.trim());
+  const declarations = lines.filter((line) => /^--\s*moss:backfill/.test(line));
+  if (declarations.length === 0) return undefined;
+
+  const declaration = declarations[0]!;
+  const expectedName = name.replace(/\.sql$/, ".backfill.mjs");
+  const header = lines.slice(0, lines.indexOf(declaration));
+  if (
+    declarations.length !== 1 ||
+    !/^[A-Za-z0-9][A-Za-z0-9_-]*\.backfill\.mjs$/.test(expectedName) ||
+    declaration !== `-- moss:backfill ${expectedName}` ||
+    header.some((line) => line !== "" && !line.startsWith("--"))
+  ) {
+    throw new Error(`Migration ${name} has an invalid backfill declaration`);
+  }
+  return expectedName;
 }
 
 async function ensureMigrationTable(

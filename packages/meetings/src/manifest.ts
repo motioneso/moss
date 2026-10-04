@@ -20,13 +20,15 @@ export const meetingsModuleManifest = {
       "sql/0261_meeting_draft_delete.sql",
       "sql/0262_meeting_transcript_batches.sql",
       "sql/0265_meeting_outputs.sql",
-      "sql/0266_meeting_exports.sql"
+      "sql/0266_meeting_exports.sql",
+      "sql/0267_meeting_history.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
       "app.meeting_records",
       "app.meeting_note_writes",
       "app.meeting_transcript_batches",
+      "app.meeting_history_segments",
       "app.meeting_output_requests",
       "app.meeting_output_artifacts",
       "app.meeting_action_candidates",
@@ -65,6 +67,8 @@ export const meetingsModuleManifest = {
     }
   ],
   routes: [
+    { method: "POST", path: "/api/meetings/history/search", permissionId: "meetings.read" },
+    { method: "GET", path: "/api/meetings/history/:id", permissionId: "meetings.read" },
     { method: "GET", path: "/api/meetings/records/:id/exports", permissionId: "meetings.read" },
     { method: "POST", path: "/api/meetings/records/:id/exports", permissionId: "meetings.write" },
     { method: "GET", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.read" },
@@ -100,6 +104,30 @@ export const meetingsModuleManifest = {
     { method: "PUT", path: "/api/meetings/records/:id/notes", permissionId: "meetings.write" }
   ],
   features: [
+    {
+      id: "meetings.history",
+      description:
+        "Search current titles, notes and transcripts across your history; filter review and export receipts. Select metadata, open Review or Ask Moss. Capture is unavailable; receipt states do not verify current Tasks or vault files.",
+      errors: [
+        {
+          code: "meeting_history_rate_limited",
+          class: "transient",
+          description: "Too many history requests. Wait for the retry interval, then try again."
+        },
+        {
+          code: "meeting_history_invalid_input",
+          class: "validation",
+          description:
+            "Use a shorter search with at most 16 distinct words, a supported filter, and a valid page cursor."
+        },
+        {
+          code: "meeting_history_unavailable",
+          class: "transient",
+          description:
+            "History could not finish within its query budget or is temporarily unavailable. Retry or narrow the search."
+        }
+      ]
+    },
     {
       id: "meetings.unsaved_changes",
       description:
@@ -313,7 +341,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.draft_records",
       description:
-        "Review Summary and actions, Transcript and My notes tabs at /meetings. History searches loaded titles/notes and filters saved notes. Accept reviewed Tasks and save private copies. Native recording remains unavailable.",
+        "Review Summary and actions, Transcript and My notes at /meetings. Search current titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native recording remains unavailable.",
       errors: [
         {
           code: "meeting_request_conflict",
@@ -349,6 +377,7 @@ export const meetingsModuleManifest = {
         { table: "app.meeting_records", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_note_writes", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_transcript_batches", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_history_segments", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_output_requests", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_output_artifacts", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_action_candidates", countPredicate: "owner_user_id = $1::uuid" },

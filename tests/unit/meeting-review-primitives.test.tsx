@@ -1,13 +1,21 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RadioCardGroup, Switch, Tabs } from "@moss/ui";
+import { RadioCardGroup, RowIndex, RowIndexItem, Switch, Tabs } from "@moss/ui";
 let renderer: ReactTestRenderer;
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
   vi.unstubAllGlobals();
 });
 describe("meeting review shared primitives", () => {
+  it("offers compact factual rows without changing the default RowIndex", () => {
+    const row = <RowIndexItem title="Transcript" meta="2 retained turns" />;
+    expect(renderToStaticMarkup(<RowIndex>{row}</RowIndex>)).not.toContain("jds-index--facts");
+    const facts = renderToStaticMarkup(<RowIndex variant="facts">{row}</RowIndex>);
+    expect(facts).toContain("jds-index--facts");
+    expect(facts).toContain("2 retained turns");
+    expect(facts).not.toContain("button");
+  });
   it("keeps panels mounted with tab relationships and keyboard navigation", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const change = vi.fn();

@@ -1,6 +1,6 @@
 # Meeting history metadata, search, and selection (#2981)
 
-Status: implementation plan; committed before code begins. Encoding/backfill design review is incorporated below.
+Status: implementation checkpoint; plan was committed before code. Isolated database and real-UI verification of this new slice remain pending publication.
 Build: [#2981](https://github.com/motioneso/moss/issues/2981), [PR #2982](https://github.com/motioneso/moss/pull/2982).
 Base inspected: `bee892ce`.
 Approved design: `docs/superpowers/specs/2026-10-03-meeting-companion.md`, sections 4–5 and actual `2026-10-03-meeting-companion/Moss-meeting-04.png` pixels.
@@ -416,3 +416,34 @@ assertions are recorded for the final commit, status remains code-complete, unve
   surrogates, including when extracting an unrelated scalar. Chosen ordinary write-time scalar
   metadata plus an immutable JS migration sidecar; rejected a bespoke SQL JSON/Unicode sanitizer
   and retroactively tightened validators. Authoritative evidence remains unchanged.
+
+## Implementation checkpoint (2026-10-04)
+
+The additive metadata/search routes, scalar/current-segment projection, frozen transactional
+backfill and History table/selection rail are implemented in this tree. The existing records API
+and authoritative JSON payloads remain the source contracts. Capture remains unavailable.
+
+- Final focused local run: 503 tests passed across 35 Meetings/runner suites.
+- Root/test/web and external-module type checks, full ESLint/Prettier, nine static audits,
+  app-map generation and the web production build passed locally. The existing large-bundle
+  warning remains.
+- Observed negative controls: removing the migration callback scrubber exposes the synthetic
+  private marker; removing History route error scrubbing also exposes its marker. Both protections
+  were restored and their focused tests passed. These are pure synthetic checks, not DB proof.
+- Independent review found and resolved incorrect framework 429 handling, denied-cache
+  resurrection, auto-selected chat cleanup, missing-row focus recovery, mobile panel navigation,
+  and offline queries being paused rather than sent. An in-memory test using the actual rate-limit
+  plugin returned safe 429 plus Retry-After. Source/pure review does not establish browser focus.
+- The new real-UI History test uses production APIs and genuine browser offline/reconnect state.
+  It checks older-than-first-page and cross-document search, correction semantics, filters,
+  selected review/back, deletion, viewport/theme contrast and keyboard navigation. It is added to
+  the credential-free allowlist alongside the prior three Meetings specs.
+- New isolated integration fixtures exercise owner/admin RLS, rollback/cascade, exact legacy JSON
+  preservation, maximum accepted segment text/identity, same-millisecond cursor ties, receipt
+  metadata and the natural runtime-RLS plan of the actual production query. Generic runner fixtures
+  test DDL/data/FORCE/ledger rollback, concurrent retry and replay. These have not run locally.
+- A broad local unit attempt during implementation finished with 10,814 passed, 70 failed and
+  18 skipped tests (22 failed files, including suite setup failures). Failures include blocked
+  sockets/network-interface inspection, absent Docker/browser/native PTY and tool-runtime setup;
+  it is not an aggregate green result or final frozen-tree proof. Exact-commit hosted CI and the real History UAT must pass
+  before this slice is called verified. Real capture/provider gates and the local DB hold remain.

@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { MeetingRecord } from "@moss/shared";
+import { historyItem } from "./fixtures/meeting-history.js";
+import { historyKeys } from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { meetingKeys } from "../../packages/meetings/src/web/client.js";
 import {
@@ -62,27 +64,29 @@ describe("Meetings draft screen", () => {
   });
   it("distinguishes loading from empty history", () => {
     const loading = render("/meetings?view=history");
-    expect(loading).toContain("Loading your meeting drafts");
+    expect(loading).toContain("Searching your meetings");
     expect(loading).not.toContain("Your first draft");
     const empty = render("/meetings?view=history", (client) =>
-      client.setQueryData(meetingKeys.history, {
-        pages: [{ meetings: [] }],
+      client.setQueryData(historyKeys.search("", "all"), {
+        pages: [{ meetings: [], nextCursor: null }],
         pageParams: [undefined]
       })
     );
     expect(empty).toContain("Your first draft starts here");
-    expect(empty).not.toContain("Loading your meeting drafts");
+    expect(empty).not.toContain("Searching your meetings");
   });
-  it("shows factual history columns and bounded search", () => {
+  it("shows factual history columns and server search", () => {
     const html = render("/meetings?view=history", (client) =>
-      client.setQueryData(meetingKeys.history, {
-        pages: [{ meetings: [meeting] }],
+      client.setQueryData(historyKeys.search("", "all"), {
+        pages: [{ meetings: [historyItem(meeting)], nextCursor: null }],
         pageParams: [undefined]
       })
     );
     expect(html).toContain("Design review");
-    expect(html).toContain("Search loaded meetings and notes");
-    expect(html).toContain("Last edited");
+    expect(html).toContain("Search meetings");
+    expect(html).toContain("Processing");
+    expect(html).toContain("Capture");
+    expect(html).toContain("Unavailable");
     expect(html).not.toContain("Saved to vault");
   });
   it("opens real notes and explicitly disables meeting chat", () => {

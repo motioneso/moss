@@ -78,3 +78,5 @@ export * from "./meeting-chat-api.js";
 export * from "./meeting-output-api.js";
 
 export * from "./meeting-export-api.js";
+
+export * from "./meeting-history-api.js";

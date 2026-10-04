@@ -183,6 +183,7 @@ export interface ExternalModulesTable {
 
 /** Meeting draft records; capture and transcript persistence are separate later contracts. */
 export interface MeetingRecordsTable {
+  history_search_terms: ColumnType<string[], never, never>;
   id: ColumnType<string, string | undefined, never>;
   owner_user_id: ColumnType<string, string | undefined, never>;
   request_key: ColumnType<string, string, never>;
@@ -191,6 +192,17 @@ export interface MeetingRecordsTable {
   notes_revision: ColumnType<number, number | undefined, number>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
+}
+
+export interface MeetingHistorySegmentsTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  segment_key: string;
+  revision: number;
+  start_ms: number;
+  end_ms: number;
+  finality: "provisional" | "final";
+  search_terms: string[];
 }
 
 export interface MeetingNoteWritesTable {
@@ -203,6 +215,8 @@ export interface MeetingNoteWritesTable {
 }
 
 export interface MeetingTranscriptBatchesTable {
+  history_sources_json: ColumnType<string, string | undefined, string>;
+  history_omitted_sources: ColumnType<number, number | undefined, number>;
   meeting_id: string;
   owner_user_id: ColumnType<string, string | undefined, never>;
   request_key: string;
@@ -215,6 +229,9 @@ export interface MeetingTranscriptBatchesTable {
 }
 
 export interface MeetingExportReceiptsTable {
+  history_write_status: ColumnType<string | null, string | null | undefined, string | null>;
+  history_index_status: ColumnType<string | null, string | null | undefined, string | null>;
+  history_updated_at: ColumnType<string | null, string | null | undefined, string | null>;
   meeting_id: string;
   owner_user_id: ColumnType<string, string | undefined, never>;
   artifact_version: number;
@@ -230,6 +247,9 @@ export interface MeetingExportRequestsTable {
 }
 
 export interface MeetingOutputRequestsTable {
+  history_kind: ColumnType<string | null, string | null | undefined, string | null>;
+  history_result_status: ColumnType<string | null, string | null | undefined, string | null>;
+  history_result_code: ColumnType<string | null, string | null | undefined, string | null>;
   expires_at: TimestampColumn;
   meeting_id: string;
   owner_user_id: ColumnType<string, string | undefined, never>;
@@ -238,6 +258,14 @@ export interface MeetingOutputRequestsTable {
   result_json: string | null;
 }
 export interface MeetingOutputArtifactsTable {
+  history_origin: ColumnType<
+    "generated" | "manual" | null,
+    "generated" | "manual" | null | undefined,
+    never
+  >;
+  history_notes_revision: ColumnType<number | null, number | null | undefined, never>;
+  history_transcript_revision: ColumnType<number | null, number | null | undefined, never>;
+  history_stale: ColumnType<boolean | null, boolean | null | undefined, never>;
   id: ColumnType<string, string | undefined, never>;
   meeting_id: string;
   owner_user_id: ColumnType<string, string | undefined, never>;
@@ -1813,6 +1841,7 @@ export interface MossDatabase {
   "app.meeting_records": MeetingRecordsTable;
   "app.meeting_note_writes": MeetingNoteWritesTable;
   "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;
+  "app.meeting_history_segments": MeetingHistorySegmentsTable;
   "app.workshop_projects": WorkshopProjectsTable;
   "app.workshop_project_feed": WorkshopProjectFeedTable;
   "app.module_credentials": ModuleCredentialsTable;

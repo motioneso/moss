@@ -1,3 +1,4 @@
+import { projectMeetingSegments, projectMeetingSources } from "./history-projection.js";
 import {
   assertDataContextDb,
   assertUuid,
@@ -136,10 +137,12 @@ export class MeetingTranscriptRepository {
         input_json: encoded,
         transcript_revision: ledger.transcriptRevision,
         cursor: ledger.cursor,
-        stop_cutoff_ms: input.stopCutoffMs
+        stop_cutoff_ms: input.stopCutoffMs,
+        ...projectMeetingSources(input.sources)
       })
       .returningAll()
       .executeTakeFirstOrThrow();
+    await projectMeetingSegments(scopedDb, input.meetingId, input.events);
     return { status: "saved", replayed: false, receipt: receipt(inserted) };
   }
 

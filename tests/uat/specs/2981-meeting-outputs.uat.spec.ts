@@ -206,6 +206,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await page.getByRole("button", { name: "View meeting history", exact: true }).click();
     await page.getByRole("button", { name: title, exact: true }).click();
+    await page.getByRole("button", { name: "Open review", exact: true }).click();
     const summary = page.getByRole("region", { name: "Summary and actions", exact: true });
     await expect(summary).toBeVisible();
     await expect(
@@ -380,6 +381,25 @@ test("reviewed summary versions create independent Tasks and private vault copie
       });
       expect(observation.promptBytes).toBeLessThanOrEqual(65536);
     }
+    // History uses actual receipts and accepted suggestions, not inferred Task/vault state.
+    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
+    await page.getByRole("button", { name: title, exact: true }).click();
+    const selectedHistory = page.getByRole("complementary", {
+      name: "Selected meeting",
+      exact: true
+    });
+    await expect(selectedHistory).toContainText("Version 3 saved");
+    await expect(selectedHistory).toContainText(`Search indexing ${manualReceipt.indexStatus}`);
+    await expect(
+      selectedHistory.locator(".jds-index__row").filter({ hasText: "Accepted suggestions" })
+    ).toContainText("1");
+    await expect(
+      selectedHistory.locator(".jds-index__row").filter({ hasText: "Saved versions" })
+    ).toContainText("2");
+    await expect(selectedHistory.getByRole("link", { name: "Open note", exact: true })).toHaveCount(
+      0
+    );
+    await expect(selectedHistory).not.toContainText("Indexed");
     // Meeting deletion removes provenance, never independently accepted Tasks/private copies.
     expect((await page.request.delete(path)).status()).toBe(204);
     expect((await page.request.get(`${path}/outputs`)).status()).toBe(404);

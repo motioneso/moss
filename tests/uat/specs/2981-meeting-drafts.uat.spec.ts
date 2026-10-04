@@ -98,6 +98,7 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     await expect(notes).toHaveValue("Unsent notes retained through navigation.");
     await page.goForward();
     await page.getByRole("button", { name: title, exact: true }).click();
+    await page.getByRole("button", { name: "Open review", exact: true }).click();
     await page.getByRole("tab", { name: /^My notes/ }).click();
     await expect(notes).toHaveValue("Unsent notes retained through navigation.");
     const saveResponse = page.waitForResponse(
@@ -218,6 +219,7 @@ test("Retained transcript review shows real source labels and immutable earlier 
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await page.getByRole("button", { name: "View meeting history", exact: true }).click();
     await page.getByRole("button", { name: title, exact: true }).click();
+    await page.getByRole("button", { name: "Open review", exact: true }).click();
     await page.getByRole("tab", { name: /^Transcript/ }).click();
     const transcript = page.getByRole("region", { name: "Retained transcript", exact: true });
     await expect(transcript).toContainText("Synthetic desk microphone");

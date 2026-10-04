@@ -185,7 +185,7 @@ blocking	tests/uat/seed/chunks/classifier-ai.ts	tests/uat/specs/classifier-shado
 blocking	tests/uat/fixtures/classifier-fixture-server.ts	tests/uat/specs/classifier-shadow.uat.spec.ts
 # #2942 mid-conversation tools: session-allowlist refusal hint and its live proof.
 blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/2942-midchat-tools.uat.spec.ts
-# #2981: bounded Meetings UI/API checkpoints. All three run through the credential-free
+# #2981: bounded Meetings UI/API checkpoints. All four run through the credential-free
 # test:uat:2981-meetings wrapper; model HTTP stand-ins never replace Moss responses.
 # Shared Meetings records, sources, routes and review navigation can affect every checkpoint.
 blocking	packages/meetings/**	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
@@ -223,3 +223,12 @@ blocking	tests/uat/run-meetings-uat.ts	tests/uat/specs/2981-meeting-outputs.uat.
 blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
 blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-chat.uat.spec.ts
 blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-outputs.uat.spec.ts
+blocking	packages/meetings/**	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	packages/db/src/migrations/sql-runner.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	packages/shared/src/meeting-history-api.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	packages/ui/src/row-index.tsx	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	packages/ui/src/styles/components-moss-today.css	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	tests/uat/specs/2981-meeting-history.uat.spec.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	tests/uat/run-meetings-uat.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	tests/uat/specs/meeting-history-layout.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
