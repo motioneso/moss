@@ -4,6 +4,7 @@ import type { AestheticThemeTokens } from "@moss/shared";
 import {
   applyThemeTokens,
   deriveNavColors,
+  isSolidThemeColor,
   type CSSStyleDeclarationLike
 } from "../../apps/web/src/theme/theme-runtime.js";
 
@@ -76,6 +77,40 @@ describe("custom-theme nav color", () => {
     const sameAsAccent = deriveNavColors(baseTokens.accent, baseTokens.accent);
     expect(sameAsAccent?.activeKind).toBe("wash");
     expect(sameAsAccent?.vars["--nav-active-fg"]).toBe(sameAsAccent?.vars["--nav-fg"]);
+  });
+
+  it("keeps selected and hover text at 4.5:1 on their own grounds", () => {
+    const grounds = ["#1f2c44", "#f1e4b8", "#b8664a", "#777777", "#2c5d8a", "#ffffff", "#000000"];
+    const accents = ["#777777", "#ffffff", "#000000", "#2c5d8a", "#e63946", "#f1e4b8"];
+    for (const ground of grounds) {
+      for (const accent of accents) {
+        const vars = deriveNavColors(ground, accent)!.vars;
+        const label = `${ground} on ${accent}`;
+        expect(
+          ratio(vars["--nav-active-fg"], vars["--nav-active-bg"]),
+          label
+        ).toBeGreaterThanOrEqual(4.5);
+        expect(ratio(vars["--nav-fg"], vars["--nav-hover"]), label).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("picks the selected label against the accent pill, not the nav", () => {
+    const vars = deriveNavColors("#000000", "#ffffff")!.vars;
+    expect(vars["--nav-active-bg"]).toBe("#ffffff");
+    expect(vars["--nav-active-fg"]).toBe("#282c25");
+  });
+
+  it("accepts opaque rgba nav colors and refuses see-through ones", () => {
+    expect(isSolidThemeColor("rgba(0, 0, 0, 1)")).toBe(true);
+    expect(isSolidThemeColor("rgb(29, 53, 87)")).toBe(true);
+    expect(isSolidThemeColor("rgba(0, 0, 0, 0.5)")).toBe(false);
+    expect(deriveNavColors("rgba(0,0,0,1)", baseTokens.accent)?.vars["--nav-bg"]).toBe("#000000");
+    expect(deriveNavColors("rgba(0,0,0,0.5)", baseTokens.accent)).toBeNull();
+
+    const style = fakeStyle();
+    applyThemeTokens(style, { ...baseTokens, nav: "rgba(0,0,0,1)" });
+    expect(style.values.get("--nav-bg")).toBe("#000000");
   });
 
   it("rejects a ground that is not a color", () => {

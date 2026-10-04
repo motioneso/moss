@@ -195,6 +195,46 @@ describe("settings theme preferences", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("rejects a see-through nav color but accepts an opaque rgba one", async () => {
+    const seeThrough = await putTheme(ids.sessionA, "glass-nav", {
+      name: "Glass",
+      tokens: { ...validThemeTokens, nav: "rgba(0, 0, 0, 0.5)" }
+    });
+    expect(seeThrough.statusCode).toBe(400);
+
+    const opaque = await putTheme(ids.sessionA, "glass-nav", {
+      name: "Glass",
+      tokens: { ...validThemeTokens, nav: "rgba(0, 0, 0, 1)" }
+    });
+    expect(opaque.statusCode).toBe(200);
+    expect(opaque.json<PutCustomThemeResponse>().theme.tokens.nav).toBe("rgba(0, 0, 0, 1)");
+  });
+
+  it("reads a highlight saved under its old gold name", async () => {
+    await putTheme(ids.sessionA, "legacy-gold", { name: "Legacy", tokens: validThemeTokens });
+    const stored = (await readPreference("themes.custom")) as unknown as Array<{
+      id: string;
+      tokens: Record<string, string>;
+    }>;
+    const legacy = stored.map((theme) =>
+      theme.id === "legacy-gold"
+        ? { ...theme, tokens: { ...theme.tokens, gold: "#c2872b" } }
+        : theme
+    );
+    await writePreference("themes.custom", legacy);
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/themes",
+      headers: userHeaders(ids.sessionA)
+    });
+    const theme = list.json<ListThemesResponse>().custom.find((item) => item.id === "legacy-gold");
+    expect(theme?.tokens.highlight).toBe("#c2872b");
+
+    const rename = await putTheme(ids.sessionA, "legacy-gold", { name: "Legacy renamed" });
+    expect(rename.json<PutCustomThemeResponse>().theme.tokens.highlight).toBe("#c2872b");
+  });
+
   it("does not delete built-ins or the active theme", async () => {
     const builtInDelete = await server.inject({
       method: "DELETE",
@@ -254,6 +294,19 @@ describe("settings theme preferences", () => {
       headers: { ...userHeaders(sessionId), "content-type": "application/json" },
       payload: { id }
     });
+  }
+
+  async function writePreference(key: string, value: unknown): Promise<void> {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      await client.query(
+        "UPDATE app.preferences SET value_json = $1 WHERE owner_user_id = $2 AND key = $3",
+        [JSON.stringify(value), ids.userA, key]
+      );
+    } finally {
+      await client.end();
+    }
   }
 
   async function readPreference(key: string): Promise<Record<string, unknown>> {

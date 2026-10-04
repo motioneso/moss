@@ -25,6 +25,7 @@ import { queryKeys } from "../api/query-keys";
 import {
   applyThemeTokens,
   deriveNavColors,
+  isSolidThemeColor,
   isThemeColor,
   parsePalette,
   readCurrentAestheticTokens
@@ -124,6 +125,15 @@ const FIELD_NAMES = Object.fromEntries(
   ])
 ) as Record<EditorTokenKey, string>;
 
+/* The nav derives its text contrast from its own ground, so it must be opaque. */
+export function themeColorError(key: EditorTokenKey, value: string): string | null {
+  if (!isThemeColor(value)) return "Use #rrggbb or rgb(r, g, b).";
+  if (key === "nav" && !isSolidThemeColor(value)) {
+    return "The nav needs a solid color. Use #rrggbb, rgb(r, g, b), or rgba with alpha 1.";
+  }
+  return null;
+}
+
 type PickerState =
   | { readonly key: EditorTokenKey; readonly from: "box" }
   | {
@@ -196,7 +206,7 @@ export function AppearancePane() {
       current ? { ...current, tokens: { ...current.tokens, [key]: value } } : current
     );
     setStatus(null);
-    setError(isThemeColor(value) ? null : "Use #rrggbb or rgb(r, g, b).");
+    setError(themeColorError(key, value));
   };
   const resetNav = () => {
     setDraft((current) => {
@@ -227,12 +237,13 @@ export function AppearancePane() {
   };
   const saveDraft = () => {
     if (!draft) return;
-    const invalid = [...AESTHETIC_THEME_TOKEN_KEYS, "highlight" as const, "nav" as const].find(
-      (key) => draft.tokens[key] !== undefined && !isThemeColor(draft.tokens[key])
-    );
-    if (invalid) {
-      setError(`${FIELD_NAMES[invalid]} must be #rrggbb or rgb(r, g, b).`);
-      return;
+    for (const key of [...AESTHETIC_THEME_TOKEN_KEYS, "highlight" as const, "nav" as const]) {
+      const value = draft.tokens[key];
+      const problem = value === undefined ? null : themeColorError(key, value);
+      if (problem) {
+        setError(`Check ${FIELD_NAMES[key]}. ${problem}`);
+        return;
+      }
     }
     saveMutation.mutate(draft);
   };

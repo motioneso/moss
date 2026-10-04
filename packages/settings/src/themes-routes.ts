@@ -203,7 +203,11 @@ function normalizeCustomThemes(value: unknown): readonly CustomThemeDto[] {
         id: record.id,
         name: sanitizeName(record.name),
         builtIn: false,
-        tokens: pickAestheticTokens(record.tokens)
+        // Themes saved before the highlight rename stored it as gold.
+        tokens: pickAestheticTokens({
+          highlight: (record.tokens as { gold?: unknown }).gold,
+          ...record.tokens
+        })
       }
     ];
   });

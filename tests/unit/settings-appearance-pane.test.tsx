@@ -10,6 +10,7 @@ import {
   contrastRatio,
   saveThemeDraft,
   slugifyThemeId,
+  themeColorError,
   tokensToCssVars
 } from "../../apps/web/src/settings/settings-appearance-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
@@ -144,6 +145,13 @@ describe("appearance pane helpers", () => {
 
     expect(response.theme.id).toBe("my-blue");
     expect(calls).toEqual(["put:my-blue:My Blue", "active:my-blue"]);
+  });
+
+  it("refuses a see-through nav color but allows one elsewhere", () => {
+    expect(themeColorError("nav", "rgba(0, 0, 0, 0.5)")).toMatch(/solid color/);
+    expect(themeColorError("nav", "rgba(0, 0, 0, 1)")).toBeNull();
+    expect(themeColorError("accent", "rgba(0, 0, 0, 0.5)")).toBeNull();
+    expect(themeColorError("nav", "navy")).toMatch(/#rrggbb/);
   });
 
   it("slugifies theme names into route-safe ids", () => {

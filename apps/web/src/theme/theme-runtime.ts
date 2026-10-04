@@ -77,6 +77,11 @@ export function isThemeColor(value: string): boolean {
   return THEME_COLOR_RE.test(value.trim());
 }
 
+/* Opaque colors only. Contrast math needs a solid ground, so the nav refuses see-through rgba. */
+export function isSolidThemeColor(value: string): boolean {
+  return isThemeColor(value) && parseThemeColor(value) !== null;
+}
+
 export function parsePalette(input: string): string[] {
   const matches = input.match(/#[0-9a-fA-F]{6}\b|rgba?\([^)]*\)/g) ?? [];
   return [...new Set(matches.map((value) => value.trim()).filter(isThemeColor))];
@@ -117,18 +122,15 @@ export interface NavColors {
  * falling back to black or white on mid-tones, so it always clears 4.5:1.
  * Quieter links dim toward the ground only as far as 4.5:1 allows. The
  * selected item keeps the accent pill when the accent clears 3:1 against the
- * ground, otherwise it becomes a wash of the text color.
+ * ground, otherwise it becomes a wash of the text color. Text on the hover,
+ * wash and pill grounds is checked against that ground, not the nav.
  */
 export function deriveNavColors(nav: string, accent: string): NavColors | null {
   const bg = parseThemeColor(nav);
   if (!bg) return null;
 
-  let fg = ratio(NAV_DARK_TEXT, bg) >= ratio(NAV_LIGHT_TEXT, bg) ? NAV_DARK_TEXT : NAV_LIGHT_TEXT;
-  let strongText = false;
-  if (ratio(fg, bg) < TEXT_FLOOR) {
-    fg = ratio(BLACK, bg) >= ratio(WHITE, bg) ? BLACK : WHITE;
-    strongText = true;
-  }
+  const fg = readableText(bg);
+  const strongText = fg === BLACK || fg === WHITE;
 
   let muted = fg;
   for (let step = 20; step >= 0; step -= 1) {
@@ -141,7 +143,7 @@ export function deriveNavColors(nav: string, accent: string): NavColors | null {
 
   const accentColor = parseThemeColor(accent);
   const accentRatio = accentColor ? ratio(accentColor, bg) : 1;
-  const accentPill = accentRatio >= ACCENT_PILL_FLOOR;
+  const accentPill = accentColor !== null && accentRatio >= ACCENT_PILL_FLOOR;
   const fgHex = rgbToHex(fg);
 
   return {
@@ -150,10 +152,10 @@ export function deriveNavColors(nav: string, accent: string): NavColors | null {
       "--nav-fg": fgHex,
       "--nav-muted": rgbToHex(muted),
       "--nav-line": rgbToHex(mix(bg, fg, 0.2)),
-      "--nav-hover": rgbToHex(mix(bg, fg, 0.08)),
-      "--nav-active-bg": accentPill ? accent : rgbToHex(mix(bg, fg, 0.16)),
-      "--nav-active-fg": accentPill ? "var(--accent-label)" : fgHex,
-      "--nav-brand": accentRatio >= TEXT_FLOOR ? accent : fgHex
+      "--nav-hover": rgbToHex(shade(bg, fg, 0.08)),
+      "--nav-active-bg": accentPill ? rgbToHex(accentColor) : rgbToHex(shade(bg, fg, 0.16)),
+      "--nav-active-fg": accentPill ? rgbToHex(readableText(accentColor)) : fgHex,
+      "--nav-brand": accentColor && accentRatio >= TEXT_FLOOR ? rgbToHex(accentColor) : fgHex
     },
     textRatio: ratio(fg, bg),
     mutedRatio: ratio(muted, bg),
@@ -231,11 +233,30 @@ function parseThemeColor(value: string): Rgb | null {
       b: parseInt(trimmed.slice(5, 7), 16)
     };
   }
-  const rgb = /^rgb\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\)$/.exec(trimmed);
+  const rgb = /^rgba?\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})(?:,\s*([\d.]+))?\)$/.exec(trimmed);
   if (!rgb) return null;
-  const channels = rgb.slice(1).map(Number);
+  if (rgb[4] !== undefined && Number(rgb[4]) !== 1) return null;
+  const channels = rgb.slice(1, 4).map(Number);
   if (channels.some((channel) => channel < 0 || channel > 255)) return null;
   return { r: channels[0]!, g: channels[1]!, b: channels[2]! };
+}
+
+/* House ink or bone when either clears 4.5:1, else black or white. One of
+   those two always clears it, so any ground gets readable text. */
+function readableText(ground: Rgb): Rgb {
+  const house =
+    ratio(NAV_DARK_TEXT, ground) >= ratio(NAV_LIGHT_TEXT, ground) ? NAV_DARK_TEXT : NAV_LIGHT_TEXT;
+  if (ratio(house, ground) >= TEXT_FLOOR) return house;
+  return ratio(BLACK, ground) >= ratio(WHITE, ground) ? BLACK : WHITE;
+}
+
+/* A hover or selected ground. It leans toward the text color, unless that
+   drops the text under 4.5:1; then it leans away, which only adds contrast. */
+function shade(ground: Rgb, text: Rgb, amount: number): Rgb {
+  const toward = mix(ground, text, amount);
+  if (ratio(text, toward) >= TEXT_FLOOR) return toward;
+  const away = luminance(text) < luminance(ground) ? WHITE : BLACK;
+  return mix(ground, away, amount);
 }
 
 function ratio(a: Rgb, b: Rgb): number {
