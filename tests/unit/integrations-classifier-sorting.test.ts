@@ -167,13 +167,15 @@ function harness(
     displayNames?: { model: string; provider: string };
     /** Saving a call's results throws, as a lost database connection would. */
     resultSaveFails?: () => boolean;
+    /** Decides each model selection: false means no model is set up. */
+    select?: () => Promise<boolean>;
   } = {}
 ) {
   const state = { row };
   const runs: RunInput[] = [];
   const port: ClassifierPreparationPort = {
     selectDefaultChatModel: async () =>
-      config.structured === null
+      config.structured === null || (config.select && !(await config.select()))
         ? null
         : {
             model: {
@@ -654,12 +656,12 @@ describe("what gets sent, and when", () => {
     expect(entry(h.state, "a")).toMatchObject({ status: "current", sortedBy: null });
   });
 
-  it("fails as no model when the model turns out not to be set up, since none was reached", async () => {
+  it("leaves the started call for Try again when the model turns out not to be set up", async () => {
     const h = harness(connection([tool("a")]), {
       answer: () => ({ ok: false, error: "needs_config" })
     });
-    expect(await h.run()).toMatchObject({ status: "sorted" });
-    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "no_model" });
+    expect(await h.run()).toMatchObject({ status: "stopped" });
+    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "interrupted" });
   });
 
   it("batches large connections and bounds each call", async () => {
@@ -875,6 +877,40 @@ describe("a sorting call that started", () => {
     expect(h.runs).toHaveLength(1);
     expect(entry(h.state, "a")).toMatchObject({ status: "current" });
   });
+
+  // The reviewer's order: an older run reads its targets, then waits on model selection while a
+  // newer run claims the tool and reaches the provider. The older run's no-model write must not
+  // put the tool back where a model being added would send it again.
+  it.each([
+    ["was cut off", () => ({ ok: false, error: "aborted" }) as const, "interrupted"],
+    ["was sorted", undefined, "current"]
+  ] as const)(
+    "keeps an older run's no-model write off a tool whose call %s",
+    async (_case, answer, after) => {
+      let olderSelect = (_found: boolean) => {};
+      const olderSelection = new Promise<boolean>((resolve) => (olderSelect = resolve));
+      const selections: Promise<boolean>[] = [olderSelection];
+      const h = harness(noModelRow(), {
+        select: () => selections.shift() ?? Promise.resolve(true),
+        ...(answer ? { answer } : {})
+      });
+
+      const older = h.run("retry");
+      await vi.waitFor(() => expect(selections).toHaveLength(0));
+      await h.run("model_ready");
+      expect(h.runs).toHaveLength(1);
+      olderSelect(false);
+      expect(await older).toEqual({ status: "no_model" });
+
+      expect(entry(h.state, "a")).toMatchObject({
+        status: after === "current" ? "current" : "failed"
+      });
+      if (after === "interrupted")
+        expect(entry(h.state, "a")).toMatchObject({ failure: "interrupted" });
+      expect(await h.run("model_ready")).toEqual({ status: "nothing_to_sort" });
+      expect(h.runs).toHaveLength(1);
+    }
+  );
 
   it("shows as waiting while it may run, then as a failure only Try again resends", async () => {
     const h = harness(noModelRow(), { answer: () => ({ ok: false, error: "aborted" }) });

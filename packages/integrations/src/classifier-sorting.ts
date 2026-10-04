@@ -568,8 +568,8 @@ export function freeReadableNames(tools: readonly DiscoveredTool[]): ReadonlyMap
 /**
  * Run one sorting call. A provider or answer-shape failure, or a thrown error, marks the call's
  * tools failed. A tool the answer skips, or answers invalidly, is Sensitive under its free name.
- * A model that turns out not to be set up was never reached, so the tools fail as `no_model`.
- * `null` means the call was cancelled: write nothing, so the tools keep their started-call mark.
+ * `null` means the call was cancelled, or the model turned out not to be set up: nothing is
+ * written, so the tools keep their started-call mark and wait for Try again.
  */
 export async function runSortingCall(
   scopedDb: DataContextDb,
@@ -596,9 +596,8 @@ export async function runSortingCall(
   }
   const sortedAt = now().toISOString();
   if (!outcome.ok) {
-    if (outcome.error === "aborted") return null;
-    const failure = outcome.error === "needs_config" ? "no_model" : "error";
-    return call.map((entry) => failedResult(entry.tool, failure, sortedAt));
+    if (outcome.error === "aborted" || outcome.error === "needs_config") return null;
+    return call.map((entry) => failedResult(entry.tool, "error", sortedAt));
   }
 
   const answers = parseSortingAnswer(

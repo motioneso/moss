@@ -399,6 +399,10 @@ Today every connected tool asks with YOLO off, because its synthetic manifest ca
   cut off, or whose result cannot be saved, leaves the mark, so only "Try again" sends the tool
   again. For the job's 30-minute expiry no run sends a marked tool and the page shows it as
   waiting; after that it shows as an ordinary failure.
+- The no-model failure is one-way. A save that would set it is refused, under the same row lock,
+  when the tool already holds a started call, a result or any other failure for its current
+  definition, so a run that found no model cannot undo a newer run's call. A call that finds the
+  model is not set up after all keeps its started-call mark.
 - A lost connection pauses the classifier for it, which resumes by itself after the next successful
   discovery.
 

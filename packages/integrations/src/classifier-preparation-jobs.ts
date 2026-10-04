@@ -142,7 +142,8 @@ export async function runClassifierPreparationJob(
 
   /**
    * Record one run-level failure on each named tool that is still a target, against its current
-   * definition. A tool whose failure has no room is skipped. Returns how many were recorded.
+   * definition. A tool whose failure has no room is skipped. Returns how many were recorded. The
+   * targets are read under the row lock, so a tool another run claimed meanwhile is left alone.
    */
   const failRemaining = async (
     scopedDb: DataContextDb,
@@ -150,7 +151,7 @@ export async function runClassifierPreparationJob(
     reason: FailureReason
   ): Promise<number> => {
     if (toolNames.length === 0) return 0;
-    const row = await repository.getConnection(scopedDb, connectionId);
+    const row = await repository.getConnectionForUpdate(scopedDb, connectionId);
     if (!row || !classifierActive(row)) return 0;
     const names = new Set(toolNames);
     let recorded = 0;

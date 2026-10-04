@@ -415,9 +415,7 @@ export async function prepareClassifierTool(
     maxOutputTokens: INTEGRATION_CLASSIFIER_PREPARE_MAX_OUTPUT_TOKENS,
     service: INTEGRATION_CLASSIFIER_PREPARE_SERVICE
   });
-  // A model that turns out not to be set up was never reached.
   if (!outcome.ok) {
-    if (outcome.error === "needs_config") return failed("no_model");
     return failed(outcome.error === "validation_failed" ? "invalid_draft" : "provider_error");
   }
 

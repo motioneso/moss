@@ -448,7 +448,31 @@ export function preparationFailureHasRoom(
   );
 }
 
-/** The failure history with one tool's failure recorded, or null when it has no room. */
+/**
+ * A `no_model` failure only lands on a tool with nothing recorded for its definition, or with an
+ * earlier `no_model`. A started call, a prepared entry or any other failure for the same
+ * definition means a model was reached, and `no_model` would let a model being added send it
+ * again. A run that read its targets before another run claimed them is refused here.
+ */
+function noModelFailureRefused(
+  map: ClassifierPreparationMap,
+  toolName: string,
+  failure: ClassifierPreparationFailure
+): boolean {
+  if (failure.reason !== "no_model") return false;
+  const entry = preparationEntry(map, toolName);
+  if (entry?.definitionFingerprint === failure.definitionFingerprint) return true;
+  const previous = preparationFailure(map, toolName);
+  return (
+    previous?.definitionFingerprint === failure.definitionFingerprint &&
+    previous.reason !== "no_model"
+  );
+}
+
+/**
+ * The failure history with one tool's failure recorded, or null when it has no room. A refused
+ * `no_model` failure leaves the history as it is.
+ */
 export function withPreparationFailure(
   map: ClassifierPreparationMap,
   discoveredTools: readonly IntegrationToolDescriptor[],
@@ -457,6 +481,7 @@ export function withPreparationFailure(
 ): Record<string, ClassifierPreparationFailure> | null {
   if (!preparationFailureHasRoom(map, discoveredTools, toolName)) return null;
   const failures = blockingFailures(map, discoveredTools);
+  if (noModelFailureRefused(map, toolName, failure)) return failures;
   failures[toolName] = {
     reason: failure.reason,
     definitionFingerprint: failure.definitionFingerprint,
@@ -751,6 +776,10 @@ export function toolSortState(
  * Store one sorting result. The old reviewed floor survives. A send-without-asking choice
  * survives only a result made against the same risk inputs as the current sort it was set on.
  * Returns `null` for a result whose shape is not storable.
+ *
+ * A `no_model` failure only lands on a tool with no entry for its risk inputs, or with an earlier
+ * `no_model`. Over a sort, a started call or any other failure for the same inputs a model was
+ * reached, so the map is returned unchanged; otherwise a model being added would send it again.
  */
 export function withSortResult(
   map: ClassifierSortMap,
@@ -760,6 +789,14 @@ export function withSortResult(
   if (!isIdentifier(toolName) || !isIdentifier(result.sortFingerprint)) return null;
   if (!isIdentifier(result.sortedAt)) return null;
   const previous = sortEntry(map, toolName);
+  if (
+    result.status === "failed" &&
+    result.failure === "no_model" &&
+    previous?.sortFingerprint === result.sortFingerprint &&
+    !(previous.status === "failed" && previous.failure === "no_model")
+  ) {
+    return map;
+  }
   if (!previous && Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES) {
     return null;
   }

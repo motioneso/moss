@@ -624,6 +624,50 @@ describe("a preparation call that started", () => {
     expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["was cut off", false],
+    ["was prepared", true]
+  ] as const)(
+    "keeps an older run that found no model from undoing a call that %s",
+    async (_label, prepared) => {
+      const fake = noModelFake();
+      const port = fakePort();
+      if (!prepared) {
+        const aborted = new Error("The operation was aborted");
+        aborted.name = "AbortError";
+        port.runStructuredDraft.mockRejectedValueOnce(aborted);
+      }
+
+      // The older run reads its targets and finds no model, but its no_model save waits on the
+      // row while a newer run claims the tool and calls the provider.
+      const save = vi.mocked(fake.repository.saveClassifierPreparationFailure);
+      const apply = save.getMockImplementation()!;
+      let release = () => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      save.mockImplementationOnce(async (...args) => {
+        await held;
+        return apply(...args);
+      });
+      const olderPort = fakePort();
+      vi.mocked(olderPort.selectDefaultChatModel).mockResolvedValue(null);
+      const older = runOn(fake, "retry", olderPort);
+      await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+
+      const newer = runOn(fake, "model_ready", port);
+      if (!prepared) await expect(newer).rejects.toThrow("aborted");
+      else expect(await newer).toEqual({ status: "prepared", prepared: 1, failed: 0 });
+      expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+
+      release();
+      expect(await older).toEqual({ status: "no_model" });
+      const stored = fake.state.row.classifierPreparation;
+      expect(stored.failures?.lamp?.reason).toBe("interrupted");
+      expect(Object.keys(stored.entries)).toEqual(prepared ? ["lamp"] : []);
+      expect(await runOn(fake, "model_ready", port)).toEqual({ status: "nothing_to_prepare" });
+      expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+    }
+  );
+
   it("shows as preparing while it may run, then as a failure only Try again resends", async () => {
     const fake = noModelFake();
     const port = fakePort();
