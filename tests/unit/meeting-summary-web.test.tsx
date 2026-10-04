@@ -578,6 +578,110 @@ describe("meeting summary owner review", () => {
     );
   });
 
+  it("selects its own generated result after closing a clean editor, then selects its own saved edit", async () => {
+    await mount();
+    await click("Edit this version");
+    await click("Close editor");
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "meeting-template" })
+        .props.onChange({ target: { value: "general" } })
+    );
+    await flush();
+    const generated = { ...artifact, id: "generated-2", version: 2 };
+    vi.mocked(api.generateMeetingOutput).mockResolvedValueOnce({
+      status: "saved",
+      artifact: generated,
+      replayed: false
+    });
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [generated, artifact],
+      candidates: [candidate],
+      headVersion: 2,
+      templates: [{ id: "general", version: 1, name: "General meeting" }]
+    });
+    await click("Generate new version");
+    expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(2);
+    expect(renderer.root.findAllByProps({ id: "output-overview" })).toHaveLength(0);
+    await click("Edit this version");
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "output-overview" })
+        .props.onChange({ target: { value: "Owner saved version three" } })
+    );
+    await flush();
+    const manual = {
+      ...generated,
+      id: "manual-3",
+      version: 3,
+      origin: "manual" as const,
+      content: { ...artifact.content, overview: "Owner saved version three" }
+    };
+    vi.mocked(api.editMeetingOutput).mockResolvedValueOnce(manual);
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [manual, generated, artifact],
+      candidates: [candidate],
+      headVersion: 3,
+      templates: [{ id: "general", version: 1, name: "General meeting" }]
+    });
+    await click("Save edits as new version");
+    expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(3);
+    expect(renderer.root.findAllByProps({ id: "output-overview" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Owner saved version three");
+    expect(hasSessionUnsavedChanges(client)).toBe(false);
+  });
+
+  it("preserves edits made during generation and offers the completed version without rebasing", async () => {
+    await mount();
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "meeting-template" })
+        .props.onChange({ target: { value: "general" } })
+    );
+    await flush();
+    let finish!: (result: Awaited<ReturnType<typeof api.generateMeetingOutput>>) => void;
+    vi.mocked(api.generateMeetingOutput).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    await click("Generate new version");
+    await click("Edit this version");
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "output-overview" })
+        .props.onChange({ target: { value: "Keep my in-flight edits" } })
+    );
+    await flush();
+    const editor = renderer.root.findByProps({ id: "output-overview" });
+    const generated = { ...artifact, id: "generated-2", version: 2 };
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [generated, artifact],
+      candidates: [candidate],
+      headVersion: 2,
+      templates: [{ id: "general", version: 1, name: "General meeting" }]
+    });
+    await act(async () => finish({ status: "saved", artifact: generated, replayed: false }));
+    await flush();
+    expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(1);
+    expect(renderer.root.findByProps({ id: "output-overview" })).toBe(editor);
+    expect(editor.props.value).toBe("Keep my in-flight edits");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    await click("View generated version");
+    expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(2);
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "meeting-output-version" })
+        .props.onChange({ target: { value: "1" } })
+    );
+    await flush();
+    await click("Review kept edits");
+    expect(renderer.root.findByProps({ id: "output-overview" }).props.value).toBe(
+      "Keep my in-flight edits"
+    );
+  });
+
   it("distinguishes saved, pending, delayed and conflicting writes from indexing", () => {
     expect(exportStatus(receipt)).toContain("queued");
     expect(exportStatus({ ...receipt, indexStatus: "delayed" })).toContain("Saved");

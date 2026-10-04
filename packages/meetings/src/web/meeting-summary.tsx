@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
 import {
@@ -23,9 +23,10 @@ import { generateMeetingOutput, getMeetingOutputs, outputKeys } from "./output-c
 import { operationError, useOutputSession, type OutputOperation } from "./output-session.js";
 import { OutputEvidence } from "./output-evidence.js";
 import { MeetingCandidateSource } from "./meeting-candidate-source.js";
-import { MeetingOutputEditor } from "./meeting-output-editor.js";
+import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
 interface SummaryState {
+  readonly generatedVersion?: number;
   readonly pinnedArtifact?: MeetingOutputArtifact;
   readonly templateId: GenerateMeetingOutputInput["templateId"] | "";
   readonly operation?: OutputOperation<GenerateMeetingOutputInput>;
@@ -70,6 +71,13 @@ export function MeetingSummary({
   readonly sourceLoading: boolean;
   readonly unsavedNotes: boolean;
 }) {
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const session = useOutputSession<SummaryState>(meeting.id, "generation", () => ({
     templateId: ""
   }));
@@ -127,16 +135,25 @@ export function MeetingSummary({
         };
     update((current) => ({
       ...current,
+      generatedVersion: undefined,
       operation: { input, status: "running", message: "Generating a proposed version…" }
     }));
     try {
       const result = await generateMeetingOutput(meeting.id, input);
       if (!session.authorized()) return;
+      const latestSession = client.getQueryData<SummaryState>(session.key);
+      if (latestSession?.operation?.input.requestKey !== input.requestKey) return;
+      const preserveEdits =
+        !!latestSession.pinnedArtifact && hasKeptOutputEdits(client, latestSession.pinnedArtifact);
       update((current) =>
         current.operation?.input.requestKey !== input.requestKey
           ? current
           : {
               ...current,
+              pinnedArtifact:
+                result.status === "saved" && !preserveEdits ? undefined : current.pinnedArtifact,
+              generatedVersion:
+                result.status === "saved" ? result.artifact.version : current.generatedVersion,
               operation: {
                 input,
                 status: result.status === "saved" ? "done" : result.status,
@@ -149,6 +166,11 @@ export function MeetingSummary({
               }
             }
       );
+      if (result.status === "saved" && !preserveEdits && active.current) {
+        setSelected(result.artifact.version);
+        setEditing(false);
+        setCompare(false);
+      }
       void client.invalidateQueries({ queryKey: outputKeys.list(meeting.id) });
     } catch (error) {
       if (session.deny(error) || !session.authorized()) return;
@@ -234,6 +256,23 @@ export function MeetingSummary({
             <p role="status" className="jds-hint">
               {state.operation.message}
             </p>
+          ) : null}
+          {state.generatedVersion && artifact?.version !== state.generatedVersion ? (
+            <div className="meetings-actions">
+              <p className="jds-hint">
+                The new version is ready. Your kept edits stay with their original version.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSelected(state.generatedVersion);
+                  setEditing(false);
+                  setCompare(false);
+                }}
+              >
+                View generated version
+              </Button>
+            </div>
           ) : null}
           {data.omittedArtifactCount ? (
             <p className="jds-hint">

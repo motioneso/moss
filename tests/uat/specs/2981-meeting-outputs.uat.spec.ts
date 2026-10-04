@@ -1,3 +1,4 @@
+import { assertMeetingReviewLayout } from "./meeting-review-layout.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -214,6 +215,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await clickCommand(page, "Generate summary", `${path}/outputs`);
     await expect(summary).toContainText(OUTPUT_FIXTURE_OVERVIEW);
     await expect(summary).toContainText(OUTPUT_FIXTURE_DECISION);
+    await assertMeetingReviewLayout(page);
     let outputs = await readOutputs(page, path);
     expect(outputs.headVersion).toBe(1);
     expect(outputs.candidates).toHaveLength(1);

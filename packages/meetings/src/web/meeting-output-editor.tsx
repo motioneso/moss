@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { randomUuid, setSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { Button, Field, FormLabel } from "@moss/ui";
@@ -11,6 +12,20 @@ import { operationError, useOutputSession, type OutputOperation } from "./output
 interface EditState {
   readonly content: MeetingOutputContent;
   readonly operation?: OutputOperation<EditMeetingOutputInput>;
+}
+/** Read at mutation completion: edits can change while generation is in flight. */
+export function hasKeptOutputEdits(client: QueryClient, artifact: MeetingOutputArtifact): boolean {
+  const editor = client.getQueryData<EditState>([
+    ...outputKeys.session(artifact.meetingId),
+    `edit:${artifact.version}`
+  ]);
+  return (
+    !!editor &&
+    JSON.stringify(editor.content) !==
+      JSON.stringify(
+        editor.operation?.status === "done" ? editor.operation.input.content : artifact.content
+      )
+  );
 }
 export function MeetingOutputEditor({
   artifact,
