@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Moss no longer stalls for minutes on some requests.** Moss stays responsive while it indexes your notes and memory in the background, and checking your email no longer hangs for minutes. [PR #3030](https://github.com/motioneso/moss/pull/3030)
 - **Top bar readable in custom themes.** The top bar stays readable when you make a custom theme while dark mode is on. [PR #3018](https://github.com/motioneso/moss/pull/3018)
 - **Task window close button back in the corner.** The close button on the task details window now sits in the top-right corner, and the title lines up with the rest of the form. [PR #3007](https://github.com/motioneso/moss/pull/3007)
 - **Clearer notice about what is shared when preparing tools.** The notice shown before preparing a connection's tools now says plainly that text from the service, such as tool descriptions, is sent as written and is not checked for secrets. [PR #2996](https://github.com/motioneso/moss/pull/2996)
