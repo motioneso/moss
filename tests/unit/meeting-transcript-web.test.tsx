@@ -85,7 +85,7 @@ describe("retained transcript review", () => {
       .setState({ status: "error", error: new ApiError(403, "Forbidden") });
     const html = renderToString(
       <QueryClientProvider client={client}>
-        <MeetingTranscript meetingId="meeting" />
+        <MeetingTranscript meetingId="meeting" revision={undefined} onRevisionChange={() => {}} />
       </QueryClientProvider>
     );
     expect(html).toContain("Transcript access is unavailable");

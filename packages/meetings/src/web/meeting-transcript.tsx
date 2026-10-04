@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "@moss/module-web-sdk";
 import { Badge, Button, Divider, Note, SectionHead } from "@moss/ui";
@@ -83,8 +82,15 @@ export function useMeetingTranscript(meetingId: string, revision?: number) {
 }
 
 /** Read-only retained text. Refresh is explicit; this view does not start capture or generation. */
-export function MeetingTranscript({ meetingId }: { readonly meetingId: string }) {
-  const [revision, setRevision] = useState<number>();
+export function MeetingTranscript({
+  meetingId,
+  revision,
+  onRevisionChange
+}: {
+  readonly meetingId: string;
+  readonly revision: number | undefined;
+  readonly onRevisionChange: (revision: number | undefined) => void;
+}) {
   const transcript = useMeetingTranscript(meetingId, revision);
   const snapshot = transcript.data?.snapshot;
   return (
@@ -102,13 +108,13 @@ export function MeetingTranscript({ meetingId }: { readonly meetingId: string })
           <Button
             variant="quiet"
             disabled={transcript.isFetching || snapshot.transcriptRevision <= 1}
-            onClick={() => setRevision(snapshot.transcriptRevision - 1)}
+            onClick={() => onRevisionChange(snapshot.transcriptRevision - 1)}
           >
             Previous revision
           </Button>
         ) : null}
         {revision !== undefined ? (
-          <Button variant="quiet" onClick={() => setRevision(undefined)}>
+          <Button variant="quiet" onClick={() => onRevisionChange(undefined)}>
             Latest revision
           </Button>
         ) : null}

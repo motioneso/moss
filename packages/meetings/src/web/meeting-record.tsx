@@ -30,6 +30,7 @@ export function MeetingRecord({
   readonly id: string;
   readonly onBack: () => void;
 }) {
+  const [transcriptRevision, setTranscriptRevision] = useState<number>();
   const record = useQuery(meetingRecordQueryOptions(id));
   const { clearMeetingChat } = useMeetingChat();
   const accessDenied = isMeetingAccessDenied(record.error);
@@ -60,15 +61,26 @@ export function MeetingRecord({
         </div>
       </EmptyState>
     );
-  return <MeetingNotes key={id} meeting={record.data.meeting} onDeleted={onBack} />;
+  return (
+    <MeetingNotes
+      meeting={record.data.meeting}
+      onDeleted={onBack}
+      transcriptRevision={transcriptRevision}
+      onTranscriptRevisionChange={setTranscriptRevision}
+    />
+  );
 }
 
 export function MeetingNotes({
   meeting,
-  onDeleted
+  onDeleted,
+  transcriptRevision,
+  onTranscriptRevisionChange
 }: {
   readonly meeting: MeetingRecordDto;
   readonly onDeleted: () => void;
+  readonly transcriptRevision: number | undefined;
+  readonly onTranscriptRevisionChange: (revision: number | undefined) => void;
 }) {
   const date = useMeetingDate();
   const { openMeetingChat } = useMeetingChat();
@@ -176,7 +188,11 @@ export function MeetingNotes({
     <div className="meetings-workspace">
       <div className="meetings-section">
         <TranscriptEvidence meetingId={meeting.id} />
-        <MeetingTranscript meetingId={meeting.id} />
+        <MeetingTranscript
+          meetingId={meeting.id}
+          revision={transcriptRevision}
+          onRevisionChange={onTranscriptRevisionChange}
+        />
         <section className="meetings-section">
           <SectionHead number="02" title="My notes" rule meta="Draft · Not recorded" />
           <Field>

@@ -1,15 +1,29 @@
-import { useSearchParams } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useLocation, useSearchParams } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Masthead } from "@moss/ui";
 import { MeetingSetup } from "./meeting-setup.js";
 import { MeetingHistory } from "./meeting-history.js";
 import { MeetingRecord } from "./meeting-record.js";
-import { meetingRecordQueryOptions } from "./client.js";
+import { meetingKeys, meetingRecordQueryOptions } from "./client.js";
 import "./styles.css";
 
 export function MeetingsPage() {
   const [params, setParams] = useSearchParams();
   const id = params.get("id");
+  const client = useQueryClient();
+  const navigation = useLocation().key;
+  const hasReference = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"].some(
+    (field) => params.has(field)
+  );
+  // Citation navigation can stay on this mounted meeting while newer text arrives.
+  // Reauthorize the record as well as refreshing the latest transcript; keep this
+  // effect above the loading boundary so child remounts cannot retrigger it.
+  useEffect(() => {
+    if (!id || !hasReference) return;
+    void client.invalidateQueries({ queryKey: meetingKeys.record(id), exact: true });
+    void client.invalidateQueries({ queryKey: meetingKeys.transcript(id), exact: true });
+  }, [client, id, hasReference, navigation]);
   const history = params.get("view") === "history";
   const record = useQuery(meetingRecordQueryOptions(id ?? ""));
   const showHistory = () => setParams({ view: "history" });
@@ -42,7 +56,7 @@ export function MeetingsPage() {
       />
       <main className="meetings-body">
         {id ? (
-          <MeetingRecord id={id} onBack={showHistory} />
+          <MeetingRecord key={id} id={id} onBack={showHistory} />
         ) : history ? (
           <MeetingHistory onOpen={open} onNew={showSetup} />
         ) : (
