@@ -238,6 +238,81 @@ test("clicking the header in the editor preview selects the Page header color", 
   }
 });
 
+const THEME_B = "header-3019-plain";
+
+async function openEditor(page: Page, name: string) {
+  await page.goto("/settings?section=appearance");
+  const card = page.locator(`text=${name}`).first();
+  await expect(card).toBeVisible();
+  await card
+    .locator("xpath=ancestor::*[.//button[normalize-space()='Edit']][1]")
+    .getByRole("button", { name: "Edit" })
+    .click();
+  await expect(page.getByRole("heading", { name: "Page header" })).toBeVisible();
+}
+
+test("Reset to default on the Page header shows the theme's own page color in the preview", async ({
+  page
+}) => {
+  test.setTimeout(240_000);
+  await signInThroughUi(page);
+  const before = (await api(page, "GET", "/api/me/themes")).json;
+  const GREEN = "#14231a";
+  const RED = "#7a1f1f";
+  try {
+    // Active theme has a dark green header; the theme being edited has none and a bone page color.
+    const active = await api(page, "PUT", `/api/me/themes/${THEME_ID}`, {
+      name: "Header 3019",
+      tokens: { ...DARK_START, header: GREEN }
+    });
+    expect(active.status, JSON.stringify(active.json)).toBe(200);
+    const plain = await api(page, "PUT", `/api/me/themes/${THEME_B}`, {
+      name: "Plain 3019",
+      tokens: LIGHT_START
+    });
+    expect(plain.status, JSON.stringify(plain.json)).toBe(200);
+    expect((await api(page, "PUT", "/api/me/themes/active", { id: THEME_ID })).status).toBe(200);
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await openEditor(page, "Plain 3019");
+      const preview = page.locator('.theme-pv [data-part="header"]');
+      const section = page
+        .locator("section.theme-fields")
+        .filter({ has: page.getByRole("heading", { name: "Page header" }) });
+      const previewBg = () => preview.evaluate((el) => getComputedStyle(el).backgroundColor);
+      const frame = page.locator(".theme-pv");
+
+      // Before touching anything: the plain theme's own page color, not the active green.
+      expect(channels(await previewBg())).toEqual(channels(hexToRgb(LIGHT_START.paper)));
+
+      // Set a header color through the real picker.
+      await preview.click();
+      await page
+        .getByRole("dialog", { name: /Page header background/ })
+        .getByLabel("Any color")
+        .fill(RED);
+      await page.keyboard.press("Escape");
+      expect(channels(await previewBg())).toEqual(channels(hexToRgb(RED)));
+      await frame.screenshot({ path: `${SHOTS}/reset-${vp.name}-1-set.png` });
+
+      // Reset to default: the preview returns to this theme's page color.
+      await section.getByRole("button", { name: "Reset to default" }).click();
+      expect(channels(await previewBg())).toEqual(channels(hexToRgb(LIGHT_START.paper)));
+      expect(channels(await previewBg())).not.toEqual(channels(hexToRgb(GREEN)));
+      const titleColor = await preview
+        .locator(".theme-pv__header-title")
+        .evaluate((el) => getComputedStyle(el).color);
+      expect(contrast(hexToRgb(LIGHT_START.paper), titleColor)).toBeGreaterThanOrEqual(4.5);
+      await frame.screenshot({ path: `${SHOTS}/reset-${vp.name}-2-after-reset.png` });
+    }
+  } finally {
+    await api(page, "PUT", "/api/me/themes/active", { id: before.activeId });
+    await api(page, "DELETE", `/api/me/themes/${THEME_ID}`);
+    await api(page, "DELETE", `/api/me/themes/${THEME_B}`);
+  }
+});
+
 function hexToRgb(hex: string) {
   const n = parseInt(hex.slice(1), 16);
   return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`;
