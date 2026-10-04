@@ -610,8 +610,10 @@ is visible to the user. Re-enabling unchanged reviewed definitions reuses them.
 The disclosure names the discovered names/descriptions/input schemas/annotations
 sent to the user's default model, that a hosted model sends them to its provider,
 and that setup and explicit re-preparation incur model usage/cost. Do not quote an
-invented price. Strip transport URLs, credential configuration, headers and secrets;
-never include device inventories or raw tool responses in this setup request.
+invented price. Omit transport URLs, credential configuration and headers by field, and never
+include device inventories or raw tool responses in this setup request. Service-provided text
+(descriptions, schema text, choice lists) is sent as written and is not scanned for secrets until
+slice R2.4 adds the credential check; the notice must say so.
 Definitions themselves may contain private information: real sharing waits for Ben's
 ruling and the user's disclosed setup action. Reviewed descriptions/templates and
 candidate labels later sent to the classifier need their separate privacy ruling.
@@ -1020,7 +1022,9 @@ These answers supersede the matching "Decisions still needed" entries below.
 
 8. **Classifier data ceiling: anything the default model would see.** This resolves the spec 3.3
    against 3.4 conflict. Prepared descriptions and candidate lists (device names) are allowed.
-   Credentials and secrets stay excluded, as they are for the default model. Version one still sends
+   Credentials and secrets are excluded by field (saved address, sign-in settings, headers). Secrets
+   inside service-provided text are a requirement not yet enforced; slice R2.2 adds the stored-credential
+   check, and until then that text is sent unchecked. Version one still sends
    only the message and menu to keep calls cheap; adding recent turns or memory is a later choice
    inside the ceiling. The setting help text must still say messages reach the classifier provider.
 9. **Private chats bypass the gate.** No classifier call and no shadow record. This replaces the
@@ -1078,8 +1082,10 @@ Additional seams requiring a ruling, not an invented implementation assumption:
 
 - **Prepared text and candidate privacy — resolved by ruling 8 (Ben, 2026-10-01).**
   Ruling 8 set the classifier's data ceiling to anything the default model would see:
-  prepared descriptions and candidate lists (device names) are allowed, while credentials,
-  secrets and example values stay excluded. The read-only device-list preparation in 2b.5
+  prepared descriptions and candidate lists (device names) are allowed, while credentials
+  and example values stay excluded by field. Secrets inside service-provided text are a requirement
+  not yet enforced; slice R2.2 adds the stored-credential check, and until then that text is sent
+  unchecked. The read-only device-list preparation in 2b.5
   is permitted under that ceiling, and only when the reviewed record marks the listing tool
   read-only and the existing gateway permits the call. This reconciles spec 3.3 and 3.4.
   Keep real definition sharing, prepared text sharing and device inventories distinct, as
