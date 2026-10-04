@@ -81,6 +81,15 @@ import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import {
+  registerMeetingChatBoundary,
+  dereferenceMeetingCitation
+} from "./meeting-chat-boundary.js";
+import {
+  createMeetingChatRuntime,
+  readMeetingChatContext,
+  type MeetingChatData
+} from "./live/meeting-chat-runtime.js";
+import {
   asRecord,
   readShadowReportDays,
   serializeMessage,
@@ -143,6 +152,7 @@ export function buildCheckTokenMinter(
 }
 
 export interface ChatRoutesDependencies {
+  readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
@@ -282,6 +292,17 @@ export function registerChatRoutes(
     : undefined;
 
   const repository = dependencies.repository ?? new ChatRepository();
+  const meetingChat = dependencies.meetingChat
+    ? createMeetingChatRuntime({
+        ...dependencies.meetingChat,
+        dataContext: dependencies.dataContext,
+        repository
+      })
+    : undefined;
+  registerMeetingChatBoundary(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    runtime: meetingChat
+  });
   const skillsRepository = dependencies.skillsRepository ?? new ChatSkillsRepository();
   // #1133 — attachment bytes live in the actor's vault, so the service needs only the
   // vault base dir; shared by the upload route, turn wiring, and chat.readAttachment.
@@ -893,6 +914,13 @@ export function registerChatRoutes(
           return reply.code(404).send({ error: "Message not found" });
         }
         const toolMetadata = asRecord(message.tool_metadata);
+        const meetingBinding = readMeetingChatContext(toolMetadata);
+        if (
+          meetingBinding &&
+          (!meetingChat ||
+            !(await meetingChat.source.isAvailable(access, meetingBinding.coverage.meetingId)))
+        )
+          return reply.code(404).send({ error: "Meeting evidence unavailable" });
         const stored = readStoredProvenance(toolMetadata);
         const cards: AnswerSourceSupportCard[] = stored != null ? provenanceCards(stored) : [];
         return { cards };
@@ -914,6 +942,13 @@ export function registerChatRoutes(
           return reply.code(404).send({ error: "Message not found" });
         }
         const toolMetadata = asRecord(message.tool_metadata);
+        const meetingBinding = readMeetingChatContext(toolMetadata);
+        if (
+          meetingBinding &&
+          (!meetingChat ||
+            !(await meetingChat.source.isAvailable(access, meetingBinding.coverage.meetingId)))
+        )
+          return reply.code(404).send({ error: "Meeting evidence unavailable" });
         const stored = readStoredProvenance(toolMetadata);
         if (!stored) return reply.code(404).send({ error: "No provenance for this message" });
 
@@ -922,7 +957,14 @@ export function registerChatRoutes(
         );
         if (!supportItem) return reply.code(404).send({ error: "Support item not found" });
 
-        // V1: no providers registered yet — return unavailable
+        if (meetingBinding && meetingChat)
+          return dereferenceMeetingCitation(
+            meetingChat,
+            access,
+            meetingBinding,
+            request.params.supportId
+          );
+        // Other source providers are not registered yet.
         return {
           unavailableReason: "source_unavailable" as const,
           sourceLabel: supportItem.sourceLabel,

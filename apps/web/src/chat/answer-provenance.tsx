@@ -1,3 +1,4 @@
+import { MeetingSourceLink } from "./meeting-source-link";
 import { useState } from "react";
 import type { AnswerSourceSupportCard } from "@moss/shared";
 import { formatDate, useUserLocale } from "../locale/locale-format";
@@ -65,11 +66,12 @@ export function SourceTray({ card, onClose }: SourceTrayProps) {
 }
 
 interface SourceChipsProps {
+  messageId?: string;
   cards: readonly AnswerSourceSupportCard[];
   citedIds?: readonly string[];
 }
 
-export function SourceChips({ cards, citedIds }: SourceChipsProps) {
+export function SourceChips({ cards, citedIds, messageId }: SourceChipsProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const citedSet = new Set(citedIds ?? []);
@@ -83,19 +85,23 @@ export function SourceChips({ cards, citedIds }: SourceChipsProps) {
   return (
     <div className="source-chips">
       <div className="source-chips__row" role="list">
-        {visibleCards.map((card) => (
-          <button
-            key={card.supportId}
-            role="listitem"
-            className={`source-chip source-chip--${card.sourceKind}`}
-            onClick={() => setOpenId(openId === card.supportId ? null : card.supportId)}
-            aria-expanded={openId === card.supportId}
-            aria-label={`${STATE_LABELS[card.state] ?? card.state}: ${card.title}`}
-          >
-            <span aria-hidden="true">{icon(card.sourceKind)}</span>
-            <span className="source-chip__label">{card.sourceLabel}</span>
-          </button>
-        ))}
+        {visibleCards.map((card) =>
+          card.sourceKind === "meeting" ? (
+            <MeetingSourceLink key={card.supportId} card={card} messageId={messageId} />
+          ) : (
+            <button
+              key={card.supportId}
+              role="listitem"
+              className={`source-chip source-chip--${card.sourceKind}`}
+              onClick={() => setOpenId(openId === card.supportId ? null : card.supportId)}
+              aria-expanded={openId === card.supportId}
+              aria-label={`${STATE_LABELS[card.state] ?? card.state}: ${card.title}`}
+            >
+              <span aria-hidden="true">{icon(card.sourceKind)}</span>
+              <span className="source-chip__label">{card.sourceLabel}</span>
+            </button>
+          )
+        )}
       </div>
       {openCard && <SourceTray card={openCard} onClose={() => setOpenId(null)} />}
     </div>

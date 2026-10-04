@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 /**
  * The common provisioner copies host Codex auth when its configured file exists.
- * Draft-only Meetings UAT does not need it: use the supported override pointing to
+ * Meetings UAT uses only an isolated HTTP stand-in and does not need it: use the supported override pointing to
  * an absent file in a fresh private directory, without reading the host login.
  */
 export async function withMeetingUatEnvironment(
@@ -30,7 +30,13 @@ async function main(): Promise<void> {
       new Promise<number>((resolveExit, reject) => {
         const child = spawn(
           process.execPath,
-          ["--import", "tsx", "tests/uat/run-uat.ts", "2981-meeting-drafts.uat.spec.ts"],
+          [
+            "--import",
+            "tsx",
+            "tests/uat/run-uat.ts",
+            "2981-meeting-drafts.uat.spec.ts",
+            "2981-meeting-chat.uat.spec.ts"
+          ],
           { env, stdio: "inherit" }
         );
         child.on("error", reject);

@@ -65,3 +65,16 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.meetings-transcript-turn {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.meetings-transcript-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.meetings-transcript-turn .meetings-actions {
+  overflow-wrap: anywhere;
+}

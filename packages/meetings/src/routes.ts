@@ -1,7 +1,8 @@
+import { registerMeetingTranscriptRoutes } from "./transcript-routes.js";
 import type { PreferencesRepository } from "@moss/structured-state";
 import { registerMeetingPreferenceRoutes } from "./preferences-routes.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
 import {
   createMeetingRecordSchema,
@@ -21,6 +22,8 @@ export interface MeetingRecordRoutesDependencies {
   /** General authenticated user session only. Existing companion tokens gain no access here. */
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
+  /** Public-module cleanup runs atomically only for an owner-visible record. */
+  readonly beforeRemove?: (db: DataContextDb, meetingId: string) => Promise<void>;
   readonly preferences?: Pick<PreferencesRepository, "get" | "upsert">;
   readonly repository?: Pick<
     MeetingRecordsRepository,
@@ -35,15 +38,22 @@ export function registerMeetingRecordRoutes(
 ): void {
   const repository = dependencies.repository ?? new MeetingRecordsRepository();
   registerMeetingPreferenceRoutes(server, dependencies);
+  registerMeetingTranscriptRoutes(server, dependencies);
   server.delete<{ Params: { id: string } }>(
     "/api/meetings/records/:id",
     { schema: getMeetingRecordSchema },
     async (request, reply) => {
       try {
         const actor = await dependencies.resolveAccessContext(request);
-        await dependencies.dataContext.withDataContext(actor, (db) =>
-          repository.remove(db, request.params.id)
-        );
+        await dependencies.dataContext.withDataContext(actor, async (db) => {
+          if (
+            dependencies.beforeRemove &&
+            (await repository.get(db, request.params.id, { forUpdate: true }))
+          ) {
+            await dependencies.beforeRemove(db, request.params.id);
+          }
+          await repository.remove(db, request.params.id);
+        });
         return reply.code(204).send();
       } catch (error) {
         return handleRouteError(error, reply);

@@ -116,6 +116,15 @@ async function handleEmbedTurnJob(
   const userMsg = lastTwo.find((m) => m.role === "user");
   const assistantMsg = lastTwo.find((m) => m.role === "assistant");
   if (!userMsg || !assistantMsg) return;
+  if (
+    [userMsg, assistantMsg].some(
+      (message) =>
+        message.tool_metadata &&
+        typeof message.tool_metadata === "object" &&
+        "meetingChatV1" in message.tool_metadata
+    )
+  )
+    return;
 
   const text = `User: ${userMsg.body}\nAssistant: ${assistantMsg.body}`;
   const contentHash = createHash("sha256").update(text).digest("hex");
@@ -206,6 +215,15 @@ export async function handleExtractFactsJob(
       (m) => m.id === payload.assistantMessageId && m.role === "assistant" && m.status === "stored"
     );
     if (!userMsg || !assistantMsg) return;
+    if (
+      [userMsg, assistantMsg].some(
+        (message) =>
+          message.tool_metadata &&
+          typeof message.tool_metadata === "object" &&
+          "meetingChatV1" in message.tool_metadata
+      )
+    )
+      return;
 
     if (rawTurnContainsSensitiveText(userMsg.body, assistantMsg.body)) return;
 

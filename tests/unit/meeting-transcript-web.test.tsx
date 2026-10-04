@@ -1,0 +1,159 @@
+import { renderToString } from "react-dom/server";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router";
+import { ApiError } from "@moss/module-web-sdk";
+import {
+  MeetingTranscript,
+  TranscriptTimeline,
+  transcriptTime
+} from "../../packages/meetings/src/web/meeting-transcript.js";
+import {
+  parseTranscriptEvidence,
+  TranscriptEvidence
+} from "../../packages/meetings/src/web/transcript-evidence.js";
+import {
+  getMeetingTranscript,
+  getMeetingTranscriptEvidence,
+  meetingKeys,
+  type MeetingTranscriptView
+} from "../../packages/meetings/src/web/client.js";
+
+const fixture: MeetingTranscriptView = {
+  sources: [
+    {
+      sourceId: "mic",
+      epoch: 1,
+      kind: "microphone",
+      label: "Desk microphone",
+      startMs: 0,
+      endMs: 10000
+    }
+  ],
+  snapshot: {
+    meetingId: "meeting",
+    ownerUserId: "owner",
+    transcriptRevision: 2,
+    cursor: 2,
+    cutoffMs: 10000,
+    maxSegments: 500,
+    maxCharacters: 100000,
+    throughMs: 2000,
+    omittedSegments: 3,
+    containsProvisional: true,
+    segments: [
+      {
+        meetingId: "meeting",
+        segmentId: "s1",
+        sourceId: "mic",
+        epoch: 1,
+        startMs: 1000,
+        endMs: 2000,
+        revision: 2,
+        text: "<script>unsafe</script>\nA correction",
+        finality: "provisional",
+        provenance: "correction",
+        speakerId: "anonymous-1"
+      }
+    ]
+  }
+};
+afterEach(() => vi.unstubAllGlobals());
+describe("retained transcript review", () => {
+  it("renders source labels, limits, revisions and escaped text without inferred people", () => {
+    const html = renderToString(<TranscriptTimeline {...fixture} />).replaceAll("<!-- -->", "");
+    expect(html).toContain("Desk microphone");
+    expect(html).toContain("Source labels only");
+    expect(html).toContain("0:01–0:02");
+    expect(html).toContain("Revision ");
+    expect(html).toContain("Provisional");
+    expect(html).toContain("Corrected");
+    expect(html).toContain("segments omitted");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("anonymous-1");
+    expect(html).not.toContain("<script>");
+    expect(transcriptTime(3661000)).toBe("61:01");
+  });
+  it("hides previously loaded content after an authorization failure", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+    });
+    client.setQueryData(meetingKeys.transcript("meeting"), fixture);
+    client
+      .getQueryCache()
+      .find({ queryKey: meetingKeys.transcript("meeting") })!
+      .setState({ status: "error", error: new ApiError(403, "Forbidden") });
+    const html = renderToString(
+      <QueryClientProvider client={client}>
+        <MeetingTranscript meetingId="meeting" />
+      </QueryClientProvider>
+    );
+    expect(html).toContain("Transcript access is unavailable");
+    expect(html).not.toContain("A correction");
+    client.clear();
+  });
+  it("never shows cached evidence after denial, and rejects invalid URL ranges", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+    });
+    const search = "segmentId=s1&segmentRevision=1&startCharacter=0&endCharacter=8";
+    const reference = parseTranscriptEvidence("meeting", new URLSearchParams(search));
+    const queryKey = ["meetings", "evidence", "meeting", reference];
+    client.setQueryData(queryKey, {
+      evidence: { segment: fixture.snapshot.segments[0], excerpt: "private old text" }
+    });
+    client
+      .getQueryCache()
+      .find({ queryKey })!
+      .setState({ status: "error", error: new ApiError(404, "Unavailable") });
+    const render = (query: string) =>
+      renderToString(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={[`/meetings?id=meeting&${query}`]}>
+            <TranscriptEvidence meetingId="meeting" />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    expect(render(search)).toContain("This transcript reference is unavailable");
+    expect(render(search)).not.toContain("private old text");
+    expect(render("segmentId=s1&segmentRevision=-1")).toContain(
+      "This transcript reference is invalid"
+    );
+    client.clear();
+  });
+  it("reads bounded snapshots with credentialed requests and query cancellation", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture)));
+    vi.stubGlobal("fetch", fetch);
+    const controller = new AbortController();
+    await getMeetingTranscript("a/b", 1, controller.signal);
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      "/api/meetings/records/a%2Fb/transcript?maxSegments=500&maxCharacters=100000&transcriptRevision=1"
+    );
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
+      credentials: "include",
+      signal: controller.signal
+    });
+  });
+  it("validates pinned evidence ranges and requests the exact old segment revision", async () => {
+    const params = new URLSearchParams(
+      "segmentId=s1&segmentRevision=1&startCharacter=0&endCharacter=8"
+    );
+    const reference = parseTranscriptEvidence("meeting", params)!;
+    const fetch = vi.fn().mockResolvedValue(new Response('{"evidence":{}}'));
+    vi.stubGlobal("fetch", fetch);
+    await getMeetingTranscriptEvidence(reference);
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      "/api/meetings/records/meeting/transcript/evidence?segmentId=s1&segmentRevision=1&startCharacter=0&endCharacter=8"
+    );
+    for (const bad of ["-1", "1.5", "Infinity", "9007199254740992", ""]) {
+      params.set("segmentRevision", bad);
+      expect(parseTranscriptEvidence("meeting", params)).toBeNull();
+    }
+    expect(
+      parseTranscriptEvidence(
+        "meeting",
+        new URLSearchParams("segmentId=s1&segmentRevision=1&startCharacter=8&endCharacter=8")
+      )
+    ).toBeNull();
+  });
+});

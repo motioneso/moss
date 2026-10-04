@@ -207,3 +207,71 @@ notes → history/reopen → explicit default → confirmed fixture deletion. It
 rewrite API responses. The cloud workspace cannot execute its Docker-backed harness; leave this
 checkpoint code-complete, unverified until that real path runs. See the package README for the
 supported isolated gate commands. Component visual QA is explicitly separate from this proof.
+
+## Verified draft workspace and next transcript slice (4 October 2026)
+
+Commit `468aaa8bdcf1367d9b8288cbdd4796d2e57ee189` passes the full CI gate
+([run 37165385320](https://github.com/motioneso/moss/actions/runs/37165385320)) and
+real browser/API draft acceptance
+([run 37165385348](https://github.com/motioneso/moss/actions/runs/37165385348)).
+The test enters Meetings from signed-in navigation, saves an explicit default, creates a draft,
+preserves unsaved notes through navigation, verifies saved notes after reload, cancels deletion,
+then confirms deletion and cleans up its fixture. This supersedes the preceding pending UI
+proof status for the draft workspace only. Native capture remains unimplemented/unverified.
+
+The next staged slice persists transcript ingestion and immutable revisions through authenticated
+owner-context operations. Batch receipts provide same-input replay, optimistic versions serialize
+concurrent ingest, source intervals retain monotonic epoch bounds, and Stop fixes an immutable
+cutoff. Bounded snapshots and exact-revision evidence become a public Meetings API for chat.
+No ingest endpoint implies native capture proof or expands existing companion token grants.
+
+Existing chat integration must retrieve transcript data on the server, bind each turn to an
+authorized meeting/revision/cutoff, preserve citation versions, and recheck access before releasing
+content. Transcript text must never be supplied as seeded user instructions. Long-lived engine
+sessions and streamed output require explicit context isolation and revocation handling before
+the Ask Moss action can be enabled. Backend and live-path tests remain required for this slice.
+
+### Tool-free meeting questions checkpoint
+
+The initial existing-chat integration is capability-limited to the currently selected API-key
+chat model. It resolves the current chat route and hard pins, then uses the existing no-tools
+HTTP text-generation API. It must never substitute a different provider/model. CLI/subscription
+models return a specific unsupported-capability error in the normal chat flow. This restriction
+is required because the current ACP `chat` launch enables native filesystem/web tools; an MCP
+allowlist alone does not isolate those capabilities. Supporting those models requires a separately
+verified restricted ACP launch policy, not a prompt-only promise or legacy transport workaround.
+
+The meeting selector opens existing Moss chat and never automatically sends a message. Per-turn
+context binds an authenticated owner, meeting, revision, cutoff and evidence ranges; generated
+content is buffered until final authorization. Questions do not inherit unrelated memory or Notes
+retrieval, and no tools/actions execute in this first scoped mode. Reviewed Tasks and vault saves
+remain explicit meeting actions. This is a staged capability limit, not completion of meeting chat
+for CLI/subscription configurations. Questions are independent in this stage: each uses the current
+transcript evidence, not previous assistant answers. The shared drawer retains history for review,
+but follow-up questions must include their context; conversational continuity is not yet claimed.
+
+### Native implementation prerequisites
+
+The existing macOS host is Trail Marker. A future `TrailMarker/Meetings/` capture subsystem
+should separate a pure lifecycle machine, serial runtime, microphone adapter, Core Audio process
+tap, read-only preflight and permissions. The app currently targets macOS 14.0; process taps need
+an availability guard for 14.2+. Apple's documented tap recording flow triggers system-audio
+consent when the aggregate starts, so preflight must not start capture as a permission probe.
+`NSAudioCaptureUsageDescription`, microphone usage description and release audio-input entitlement
+belong to the explicit capture slice, not a background permission workaround.
+
+Trail Marker Pause All, logout, account changes, Quit and application termination must tear down
+both tracks before continuing. Its existing Backtrack recording indicator must coexist with the
+meeting indicator. A restart/reconnect must never resume meeting capture automatically. Existing
+`tm1_` authorization stays unchanged; separate meeting-device approval, bounded grants and
+revocation enforcement are prerequisites to enabling native submission.
+
+No Windows host exists in this repository. An eventual process-tree-loopback adapter can be
+spiked independently, but host UI/distribution and signed updates require an architecture/release
+decision before Windows support is claimed. Current macOS CI runs on macos-15 and may prove
+compilation/synthetic lifecycle behavior; only actual OS/device tests can prove capture scope,
+consent, Teams/Zoom compatibility, timestamps and device release.
+
+Primary API references: [Apple process taps](https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps),
+[Apple microphone consent](<https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)>),
+[Microsoft process loopback](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/).

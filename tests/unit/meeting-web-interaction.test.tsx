@@ -68,6 +68,31 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  // Keep the actual query options and their cancellation/denial handling. Its lexical
+  // getMeeting binding uses requestJson, so stub the transport rather than that binding.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) => {
+      if (path === "/api/me/locale")
+        return new Response(
+          JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
+        );
+      if (!path.startsWith("/api/meetings/records/"))
+        throw new Error(`Unexpected unit request: ${path}`);
+      if (path.includes("/transcript"))
+        return new Response('{"code":"meeting_transcript_unavailable"}', { status: 404 });
+      try {
+        const result = await api.getMeeting(decodeURIComponent(path.split("/").at(-1)!));
+        return new Response(JSON.stringify(result));
+      } catch (error) {
+        if (error instanceof ApiError)
+          return new Response(JSON.stringify({ message: error.message, code: error.code }), {
+            status: error.status
+          });
+        throw error;
+      }
+    })
+  );
   client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
@@ -242,6 +267,61 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     );
     expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toBeUndefined();
     expect(client.getQueryData(api.meetingKeys.record(meeting.id))).toBeUndefined();
+  });
+  it.each([401, 403, 404])(
+    "a later %s denial prevents an earlier save from resurrecting private data",
+    async (status) => {
+      let resolveSave!: (value: Awaited<ReturnType<typeof api.saveMeetingNotes>>) => void;
+      vi.mocked(api.saveMeetingNotes).mockReturnValue(
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        })
+      );
+      await mount();
+      await typeNotes("Private pending edit");
+      await click("Save notes");
+      vi.mocked(api.getMeeting).mockRejectedValue(new ApiError(status, "Denied"));
+      await act(async () => {
+        await client.refetchQueries({ queryKey: api.meetingKeys.record(meeting.id) });
+      });
+      await flush();
+      expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toBeUndefined();
+      await act(async () =>
+        resolveSave({
+          status: "saved",
+          replayed: false,
+          meeting: { ...meeting, personalNotes: "Private pending edit", notesRevision: 2 }
+        })
+      );
+      await flush();
+      expect(client.getQueryState(api.meetingKeys.record(meeting.id))?.status).toBe("error");
+      expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toBeUndefined();
+      expect(JSON.stringify(renderer.toJSON())).not.toContain("Private pending edit");
+      expect(JSON.stringify(renderer.toJSON())).not.toContain("Design review");
+      // Re-entry after a later successful authorization must not recover the invalidated save.
+      vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
+      await click("Retry loading draft");
+      expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+        "Saved notes"
+      );
+    }
+  );
+  it("retains unsaved recovery through an ordinary transient read failure", async () => {
+    await mount();
+    await typeNotes("Recover my edit");
+    vi.mocked(api.getMeeting).mockRejectedValueOnce(new Error("Offline"));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: api.meetingKeys.record(meeting.id) });
+    });
+    await flush();
+    expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+      text: "Recover my edit"
+    });
+    vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
+    await click("Retry loading draft");
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+      "Recover my edit"
+    );
   });
   it("refreshes clean notes from a newer real record and preserves dirty edits", async () => {
     await mount();

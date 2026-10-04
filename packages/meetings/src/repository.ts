@@ -86,14 +86,16 @@ export class MeetingRecordsRepository {
     };
   }
 
-  async get(scopedDb: DataContextDb, id: string): Promise<MeetingRecord | null> {
+  async get(
+    scopedDb: DataContextDb,
+    id: string,
+    options: { readonly forUpdate?: boolean } = {}
+  ): Promise<MeetingRecord | null> {
     assertDataContextDb(scopedDb);
     assertUuid(id, "Meeting id");
-    const row = await scopedDb.db
-      .selectFrom("app.meeting_records")
-      .selectAll()
-      .where("id", "=", id)
-      .executeTakeFirst();
+    let query = scopedDb.db.selectFrom("app.meeting_records").selectAll().where("id", "=", id);
+    if (options.forUpdate) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
     return row ? record(row) : null;
   }
 

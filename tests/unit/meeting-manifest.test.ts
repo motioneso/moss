@@ -13,7 +13,8 @@ describe("meetings composition", () => {
     });
     expect(meeting?.database?.ownedTables).toEqual([
       "app.meeting_records",
-      "app.meeting_note_writes"
+      "app.meeting_note_writes",
+      "app.meeting_transcript_batches"
     ]);
     expect(meeting?.navigation).toEqual([
       expect.objectContaining({
@@ -24,6 +25,9 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "POST /api/meetings/records/:id/transcript",
+      "GET /api/meetings/records/:id/transcript",
+      "GET /api/meetings/records/:id/transcript/evidence",
       "GET /api/meetings/preferences",
       "PUT /api/meetings/preferences",
       "DELETE /api/meetings/records/:id",
@@ -33,6 +37,9 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.questions",
+      "meetings.transcript_storage",
+      "meetings.transcript_review",
       "meetings.capture_default",
       "meetings.notes_recovery",
       "meetings.delete_draft",

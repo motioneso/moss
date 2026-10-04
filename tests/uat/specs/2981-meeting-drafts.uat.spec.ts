@@ -124,3 +124,108 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     );
   }
 });
+
+// Synthetic text is owner-ingested through the real POST route. This proves retained-text
+// review and revision lookup, not microphone capture, ASR, diarization, or meeting chat.
+test("Retained transcript review shows real source labels and immutable earlier revisions (#2981)", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  if (!requireUatProjectName().startsWith("uat-"))
+    throw new Error("Use the isolated UAT provisioner");
+  await signInUatAdmin(page);
+  let fixtureId: string | null = null;
+  const title = `UAT synthetic transcript ${randomUUID()}`;
+  try {
+    const created = await page.request.post("/api/meetings/records", {
+      data: { requestKey: randomUUID(), title }
+    });
+    expect(created.status()).toBe(201);
+    fixtureId = (await created.json()).meeting.id as string;
+    const source = {
+      sourceId: "synthetic-microphone",
+      epoch: 1,
+      kind: "microphone",
+      label: "Synthetic desk microphone",
+      startMs: 0,
+      endMs: 10000
+    };
+    const original = {
+      meetingId: fixtureId,
+      segmentId: "synthetic-segment",
+      sourceId: source.sourceId,
+      epoch: 1,
+      startMs: 1000,
+      endMs: 4000,
+      revision: 1,
+      text: "Synthetic draft wording.",
+      finality: "provisional",
+      provenance: "transcription",
+      speakerId: null
+    };
+    const first = await page.request.post(`/api/meetings/records/${fixtureId}/transcript`, {
+      data: {
+        requestKey: randomUUID(),
+        expectedVersion: 0,
+        sources: [source],
+        events: [{ cursor: 1, segment: original }],
+        stopCutoffMs: null
+      }
+    });
+    expect(first.status()).toBe(201);
+    const firstReceipt = (await first.json()).receipt;
+    const corrected = await page.request.post(`/api/meetings/records/${fixtureId}/transcript`, {
+      data: {
+        requestKey: randomUUID(),
+        expectedVersion: firstReceipt.version,
+        sources: [source],
+        events: [
+          {
+            cursor: 2,
+            segment: {
+              ...original,
+              revision: 2,
+              text: "Synthetic corrected wording.",
+              finality: "final",
+              provenance: "correction"
+            }
+          }
+        ],
+        stopCutoffMs: 10000
+      }
+    });
+    expect(corrected.status()).toBe(201);
+    await page.getByRole("link", { name: "Meetings", exact: true }).click();
+    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
+    await page.getByRole("button", { name: title, exact: true }).click();
+    const transcript = page.getByRole("region", { name: "Retained transcript", exact: true });
+    await expect(transcript).toContainText("Synthetic desk microphone");
+    await expect(transcript).toContainText("Synthetic corrected wording.");
+    await expect(transcript).toContainText("0:01–0:04");
+    await expect(transcript).toContainText("Source labels only");
+    await expect(page.getByLabel("Personal notes", { exact: true })).toHaveValue("");
+    await page.getByRole("button", { name: "Previous revision", exact: true }).click();
+    await expect(transcript).toContainText("Synthetic draft wording.");
+    await expect(transcript).toContainText("Provisional");
+    await expect(transcript).not.toContainText("Synthetic corrected wording.");
+    await page.getByRole("button", { name: "Latest revision", exact: true }).click();
+    await expect(transcript).toContainText("Synthetic corrected wording.");
+    await page.reload();
+    await expect(transcript).toContainText("Synthetic corrected wording.");
+    const url = new URL(page.url());
+    url.searchParams.set("segmentId", original.segmentId);
+    url.searchParams.set("segmentRevision", "1");
+    url.searchParams.set("startCharacter", "0");
+    url.searchParams.set("endCharacter", String(original.text.length));
+    await page.goto(url.toString());
+    const evidence = page.getByRole("region", { name: "Transcript evidence", exact: true });
+    await expect(evidence).toContainText(original.text);
+    await expect(evidence).toContainText("Segment revision 1");
+    await expect(transcript).toContainText("Synthetic corrected wording.");
+    await page.getByRole("button", { name: "Close evidence", exact: true }).click();
+    await expect(evidence).toHaveCount(0);
+  } finally {
+    if (fixtureId)
+      expect((await page.request.delete(`/api/meetings/records/${fixtureId}`)).status()).toBe(204);
+  }
+});

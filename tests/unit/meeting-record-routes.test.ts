@@ -25,7 +25,10 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-function setup(authError?: Error) {
+function setup(
+  authError?: Error,
+  beforeRemove?: (db: DataContextDb, meetingId: string) => Promise<void>
+) {
   const server = Fastify();
   servers.push(server);
   const scopedDb = {} as DataContextDb;
@@ -52,7 +55,8 @@ function setup(authError?: Error) {
         return work(scopedDb);
       }
     },
-    repository
+    repository,
+    beforeRemove
   });
   return { server, repository, contexts, scopedDb };
 }
@@ -73,6 +77,34 @@ describe("meeting draft record routes", () => {
     expect(contexts.every((context) => context.actorUserId === id)).toBe(true);
   });
 
+  it("locks an owner-visible record before atomic public-module deletion cleanup", async () => {
+    const beforeRemove = vi.fn().mockResolvedValue(undefined);
+    const { server, repository, scopedDb } = setup(undefined, beforeRemove);
+    expect(
+      (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
+    ).toBe(204);
+    expect(repository.get).toHaveBeenCalledExactlyOnceWith(scopedDb, id, { forUpdate: true });
+    expect(beforeRemove).toHaveBeenCalledExactlyOnceWith(scopedDb, id);
+    expect(beforeRemove.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.remove.mock.invocationCallOrder[0]!
+    );
+  });
+  it("does not run deletion cleanup for an inaccessible record or delete after cleanup failure", async () => {
+    const beforeRemove = vi.fn().mockResolvedValue(undefined);
+    const { server, repository } = setup(undefined, beforeRemove);
+    repository.get.mockResolvedValue(null);
+    expect(
+      (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
+    ).toBe(204);
+    expect(beforeRemove).not.toHaveBeenCalled();
+    repository.get.mockResolvedValue(record);
+    repository.remove.mockClear();
+    beforeRemove.mockRejectedValue(new HttpError(503, "Cleanup unavailable"));
+    expect(
+      (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
+    ).toBe(503);
+    expect(repository.remove).not.toHaveBeenCalled();
+  });
   it("creates a draft under the resolved actor and strips body ownership claims", async () => {
     const { server, repository, contexts, scopedDb } = setup();
     const response = await server.inject({

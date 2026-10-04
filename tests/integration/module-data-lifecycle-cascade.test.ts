@@ -154,6 +154,7 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         // #2981 meeting drafts and immutable note receipts cascade with their owner.
         "app.meeting_records",
         "app.meeting_note_writes",
+        "app.meeting_transcript_batches",
         // Workshop projects own their durable feed; both cascade with their owner.
         "app.workshop_projects",
         "app.workshop_project_feed"

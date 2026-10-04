@@ -24,7 +24,8 @@ const meeting: MeetingRecord = {
 };
 function render(path: string, seed?: (client: QueryClient) => void) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+    // SSR fixtures show settled data; query lifecycle/focus is covered separately.
+    defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchOnMount: false } }
   });
   seed?.(client);
   return renderToString(
@@ -89,7 +90,7 @@ describe("Meetings draft screen", () => {
     );
     expect(html).toContain("Design review");
     expect(html).toContain("First notes");
-    expect(html).toContain("scoped transcript integration");
+    expect(html).toContain("Meeting chat needs an available transcript");
     expect(html).toMatch(/disabled=""[^>]*aria-describedby="meeting-chat-unavailable"/);
   });
 });

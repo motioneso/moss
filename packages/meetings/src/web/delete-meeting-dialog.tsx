@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMeetingChat } from "@moss/module-web-sdk";
 import { Button, Dialog } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { deleteMeeting, meetingKeys } from "./client.js";
@@ -14,6 +15,7 @@ export function DeleteMeetingDialog({
   readonly onDeleted: () => void;
 }) {
   const client = useQueryClient();
+  const { clearMeetingChat } = useMeetingChat();
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -25,6 +27,7 @@ export function DeleteMeetingDialog({
   const mutation = useMutation({
     mutationFn: () => deleteMeeting(meeting.id),
     onSuccess: () => {
+      clearMeetingChat(meeting.id);
       client.removeQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       client.removeQueries({ queryKey: meetingKeys.editor(meeting.id), exact: true });
       void client.invalidateQueries({ queryKey: meetingKeys.history });
@@ -82,8 +85,8 @@ export function DeleteMeetingDialog({
       }
     >
       <p>
-        “{meeting.title}” and its personal notes will be permanently deleted. This cannot be undone.
-        Any unsaved edits will also be lost.
+        “{meeting.title}” and its personal notes and retained transcript revisions will be
+        permanently deleted. This cannot be undone. Any unsaved edits will also be lost.
       </p>
       {mutation.isError ? (
         <p role="alert" className="jds-hint jds-hint--error">

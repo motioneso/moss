@@ -1,5 +1,6 @@
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
 import type { SourceFreshnessV1 } from "./freshness-types.js";
+import type { MeetingChatCoverage } from "./meeting-chat-api.js";
 import type { WorkflowApprovalStatusDto } from "./workflows-api.js";
 import { errorResponseSchema } from "./schema-fragments.js";
 
@@ -82,6 +83,7 @@ export interface UploadChatAttachmentResponse {
 }
 
 export interface ChatMessageDto {
+  readonly meetingContext?: MeetingChatCoverage;
   readonly id: string;
   readonly threadId: string;
   readonly ownerUserId: string;
@@ -170,6 +172,7 @@ export interface ActionRequestPreview {
 }
 
 export interface TranscriptRecord {
+  readonly meetingContext?: MeetingChatCoverage;
   readonly kind: ChatRecordKind;
   readonly text: string;
   readonly id?: string;
@@ -366,6 +369,7 @@ export interface CurrentViewSnapshotDto {
 }
 
 export type AnswerProvenanceSourceKind =
+  | "meeting"
   | "memory"
   | "note"
   | "email"
@@ -596,7 +600,31 @@ const chatMessageSchema = {
         }
       }
     },
-    answerProvenanceCitedIds: { type: "array", items: { type: "string" } }
+    answerProvenanceCitedIds: { type: "array", items: { type: "string" } },
+    meetingContext: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "meetingId",
+        "selectionId",
+        "transcriptRevision",
+        "cursor",
+        "cutoffMs",
+        "throughMs",
+        "containsProvisional",
+        "omittedSegments"
+      ],
+      properties: {
+        meetingId: { type: "string" },
+        selectionId: { type: "string" },
+        transcriptRevision: { type: "integer" },
+        cursor: { type: "integer" },
+        cutoffMs: { type: "integer" },
+        throughMs: { anyOf: [{ type: "integer" }, { type: "null" }] },
+        containsProvisional: { type: "boolean" },
+        omittedSegments: { type: "integer" }
+      }
+    }
   }
 } as const;
 

@@ -202,6 +202,18 @@ export interface MeetingNoteWritesTable {
   saved_at: TimestampColumn;
 }
 
+export interface MeetingTranscriptBatchesTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  version: number;
+  input_json: string;
+  transcript_revision: number;
+  cursor: number;
+  stop_cutoff_ms: number | null;
+  created_at: TimestampColumn;
+}
+
 export interface WorkshopProjectsTable {
   feed_sequence: ColumnType<string, string | undefined, string>;
   id: ColumnType<string, string | undefined, never>;
@@ -1747,6 +1759,7 @@ export interface MossDatabase {
   "app.module_builds": ModuleBuildsTable;
   "app.meeting_records": MeetingRecordsTable;
   "app.meeting_note_writes": MeetingNoteWritesTable;
+  "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;
   "app.workshop_projects": WorkshopProjectsTable;
   "app.workshop_project_feed": WorkshopProjectFeedTable;
   "app.module_credentials": ModuleCredentialsTable;

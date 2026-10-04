@@ -4,19 +4,14 @@ import { Button, Masthead } from "@moss/ui";
 import { MeetingSetup } from "./meeting-setup.js";
 import { MeetingHistory } from "./meeting-history.js";
 import { MeetingRecord } from "./meeting-record.js";
-import { getMeeting, meetingKeys } from "./client.js";
+import { meetingRecordQueryOptions } from "./client.js";
 import "./styles.css";
 
 export function MeetingsPage() {
   const [params, setParams] = useSearchParams();
   const id = params.get("id");
   const history = params.get("view") === "history";
-  const record = useQuery({
-    queryKey: meetingKeys.record(id ?? ""),
-    queryFn: () => getMeeting(id!),
-    enabled: !!id,
-    retry: false
-  });
+  const record = useQuery(meetingRecordQueryOptions(id ?? ""));
   const showHistory = () => setParams({ view: "history" });
   const showSetup = () => setParams({});
   const open = (meetingId: string) => setParams({ id: meetingId });
@@ -27,7 +22,9 @@ export function MeetingsPage() {
         eyebrow={id ? "Meeting draft" : history ? "Your meetings" : "Meeting companion"}
         title={
           id
-            ? (record.data?.meeting.title ?? "Your meeting draft")
+            ? !record.isError && !record.isFetching
+              ? (record.data?.meeting.title ?? "Your meeting draft")
+              : "Your meeting draft"
             : history
               ? "Good conversations, kept useful."
               : "A clear record. Room to listen."

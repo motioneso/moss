@@ -240,8 +240,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "note are hidden even when an old setting is saved. The selected choice is passed to the ACP " +
       "chat launch only when that provider is selected and is applied when the agent advertises that option. " +
       "Codex chat supports the newer models listed after a refresh without requiring a new sign-in or separate installation. " +
-      "Live chat reports that API-key providers are not available yet and does not start an engine; " +
-      "choose a CLI provider for live chat. A migrated legacy CLI provider without a supported " +
+      "General live chat reports that API-key providers are not available yet and does not start an engine; " +
+      "choose a CLI provider for general live chat. Selected-meeting questions in the same drawer instead require the selected API-key chat model and run without tools; subscription meeting chat is not supported yet. A migrated legacy CLI provider without a supported " +
       "ACP agent remains configured but cannot start chat; the response tells the admin to add a " +
       "supported CLI provider. If the active provider changes while a message is being prepared, " +
       "the message is left unsent and the user is asked to retry. " +
@@ -429,7 +429,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "prerequisite",
     remediationRef: "core.ai.connect_cli_provider",
     description:
-      "Live chat cannot start with an API-key provider; it requires a supported CLI provider."
+      "General live chat cannot start with an API-key provider; it requires a supported CLI provider. Selected-meeting questions are the separate API-key-only capability in the same drawer."
   },
   {
     code: "core.ai.unsupported_legacy_cli_provider",
@@ -511,7 +511,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
   {
     id: "core.ai.connect_cli_provider",
     description:
-      "Ask an administrator to choose a supported CLI provider for live chat. API-key chat is not available yet.",
+      "Ask an administrator to choose a supported CLI provider for general live chat. API-key models currently support selected-meeting questions only.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
