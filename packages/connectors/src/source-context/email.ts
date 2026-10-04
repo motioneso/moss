@@ -10,6 +10,7 @@ import {
   EmailExtractNeedsConfigurationError,
   extractEmailSignals,
   looksLikeOneTimeCodeEmail,
+  resolveEmailLlmTimeoutMs,
   type EmailExtractDeps,
   type EmailSignals,
   type ParsedEmail
@@ -36,6 +37,12 @@ import {
 export const LIVE_EMAIL_CAP = 30;
 /** Max fresh LLM triages per account per read; beyond this uncached items surface as "unknown". */
 export const LIVE_TRIAGE_CAP = 8;
+/**
+ * Wall-clock budget for fresh LLM triage across one whole read (#3027). Each model call gets at
+ * most the time left, and none starts once it is spent, so a slow model cannot hold a chat tool
+ * call (and its transaction) for minutes. Untriaged items surface as "unknown".
+ */
+export const LIVE_TRIAGE_TIME_BUDGET_MS = 20_000;
 
 /**
  * Credential access is injected as RESOLVERS (not cipher + secret rows) so the live-read logic
@@ -71,6 +78,8 @@ export interface EmailSourceContextDeps {
   };
   readonly makeEmailExtractDeps: (scopedDb: DataContextDb) => EmailExtractDeps;
   readonly now?: () => Date;
+  /** Overrides LIVE_TRIAGE_TIME_BUDGET_MS. */
+  readonly liveTriageBudgetMs?: number;
   readonly logger?: SyncLogger;
 }
 
@@ -248,6 +257,10 @@ interface LiveReadOutcome {
   readonly items: EmailContextItem[];
 }
 
+function nowMs(deps: EmailSourceContextDeps): number {
+  return (deps.now?.() ?? new Date()).getTime();
+}
+
 async function readAccountLive(
   scopedDb: DataContextDb,
   deps: EmailSourceContextDeps,
@@ -255,7 +268,8 @@ async function readAccountLive(
   meta: SourceAccountMeta,
   cachedByExternalId: ReadonlyMap<string, EmailMessage>,
   credential: { kind: "google"; token: string } | { kind: "imap"; secret: ImapConnectionSecret },
-  limit: number
+  limit: number,
+  triageDeadline: number
 ): Promise<LiveReadOutcome> {
   const keys =
     credential.kind === "google"
@@ -325,14 +339,17 @@ async function readAccountLive(
       })
         ? UNTRIAGED
         : stored;
-    } else if (triageBudget > 0) {
+    } else if (triageBudget > 0 && triageDeadline - nowMs(deps) > 0) {
       triageBudget -= 1;
+      const callTimeoutMs = Math.min(triageDeadline - nowMs(deps), resolveEmailLlmTimeoutMs());
       // Extraction reads the AI settings and swallows model errors, so it runs in a savepoint.
       // A failed database read then leaves this message untriaged instead of breaking the
       // transaction for every later message.
       let extracted: Awaited<ReturnType<typeof extractEmailSignals>> | null;
       try {
-        extracted = await withSavepoint(scopedDb, () => extractEmailSignals(message, extractDeps));
+        extracted = await withSavepoint(scopedDb, () =>
+          extractEmailSignals(message, extractDeps, { callTimeoutMs })
+        );
       } catch (error) {
         if (error instanceof EmailExtractNeedsConfigurationError) throw error;
         extracted = null;
@@ -376,6 +393,7 @@ export async function listEmailContext(
     (account) => resolveEffectiveGrants(account.scopes, null).email
   );
   if (emailCapable.length === 0) return { items: [], accounts: [], gaps: [] };
+  const triageDeadline = nowMs(deps) + (deps.liveTriageBudgetMs ?? LIVE_TRIAGE_TIME_BUDGET_MS);
 
   // One cache load serves triage reuse AND transient fallback for every account.
   const cachedRows = await deps.emailRepository.listVisibleForBriefing(scopedDb);
@@ -437,7 +455,16 @@ export async function listEmailContext(
     // still has a working transaction after a failed database read.
     const attempt = () =>
       withSavepoint(scopedDb, () =>
-        readAccountLive(scopedDb, deps, account, meta, cachedByExternalId, credential, limit)
+        readAccountLive(
+          scopedDb,
+          deps,
+          account,
+          meta,
+          cachedByExternalId,
+          credential,
+          limit,
+          triageDeadline
+        )
       );
     try {
       let outcome: LiveReadOutcome;

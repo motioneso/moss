@@ -323,6 +323,14 @@ export const EMAIL_EXTRACT_BATCH_MAX_PROMPT_BYTES = 48_000;
 export const DEFAULT_EMAIL_LLM_TIMEOUT_MS = 120_000;
 
 /** Reject a chat call that exceeds the budget so one slow model can't stall the whole sync. */
+/** Per-call model timeout from JARVIS_EMAIL_LLM_TIMEOUT_MS, else DEFAULT_EMAIL_LLM_TIMEOUT_MS. */
+export function resolveEmailLlmTimeoutMs(): number {
+  return Number(
+    resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+      String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+  );
+}
+
 async function withTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
   ms: number,
@@ -853,12 +861,7 @@ export async function extractEmailSignalsBatch(
   deps: EmailExtractDeps,
   options: EmailExtractOptions = {}
 ): Promise<EmailExtractResult[]> {
-  const timeoutMs =
-    options.callTimeoutMs ??
-    Number(
-      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
-        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
-    );
+  const timeoutMs = options.callTimeoutMs ?? resolveEmailLlmTimeoutMs();
   // Callers are expected to have already routed one-time-code messages to otpSkippedResult()
   // themselves (see google-sync-phases.ts) rather than pass them in here: this function's
   // closeScope option finalizes a scoped CLI session keyed to the *call*, and a call whose
@@ -974,12 +977,7 @@ export async function extractEmailSignals(
 ): Promise<EmailExtractResult> {
   if (looksLikeOneTimeCodeEmail(parsed)) return otpSkippedResult();
 
-  const timeoutMs =
-    options.callTimeoutMs ??
-    Number(
-      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
-        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
-    );
+  const timeoutMs = options.callTimeoutMs ?? resolveEmailLlmTimeoutMs();
 
   const prompt = buildPrompt(parsed, options.knownSender ?? false);
   let result: EmailExtractResult;
