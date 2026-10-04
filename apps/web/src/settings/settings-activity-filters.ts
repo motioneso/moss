@@ -63,7 +63,7 @@ export function loadActivityFilters(
   knownModules: readonly string[]
 ): ActivityFilters {
   if (!storage) return DEFAULT_ACTIVITY_FILTERS;
-  let raw: string | null = null;
+  let raw: string | null;
   try {
     raw = storage.getItem(storageKeyForActivityFilters(userId));
   } catch {

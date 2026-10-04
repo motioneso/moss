@@ -78,16 +78,16 @@ describe("Checklist primitive (#2956 slice D)", () => {
   it("ticks all and finishes from the foot buttons", () => {
     const handlers = mountChecklist();
 
+    const buttons = host?.querySelectorAll(".jds-checklist__foot button") ?? [];
+    const tickAll = buttons[0];
+    const done = buttons[1];
+    if (!tickAll || !done) throw new Error("expected tick-all and done buttons");
     act(() => {
-      host
-        ?.querySelectorAll(".jds-checklist__foot button")[0]
-        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      tickAll.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(handlers.onTickAll).toHaveBeenCalledTimes(1);
     act(() => {
-      host
-        ?.querySelectorAll(".jds-checklist__foot button")[1]
-        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      done.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(handlers.onDone).toHaveBeenCalledTimes(1);
   });

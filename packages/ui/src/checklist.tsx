@@ -31,6 +31,7 @@ export function Checklist(props: ChecklistProps) {
     const container = ref.current;
     if (!container) return;
     function onPointerDown(event: PointerEvent) {
+      if (!container) return;
       if (event.target instanceof Node && !container.contains(event.target)) {
         props.onClose();
       }

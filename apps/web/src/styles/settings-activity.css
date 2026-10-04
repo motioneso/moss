@@ -1,6 +1,40 @@
 /* Settings — Activity history lines and detail dialog (#2956, slice C).
    Full-width list, no side rail (spec section 8). Follows the approved mockup. */
 
+/* ---- Filter bar (slice D): time range, module, Models button, note, Reset ---- */
+
+.act-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--text);
+}
+
+.act-filters__models {
+  position: relative;
+}
+
+.act-filters__group {
+  display: flex;
+  gap: var(--space-2);
+  margin-right: var(--space-3);
+}
+
+.act-filters .jds-select {
+  min-height: 32px;
+}
+
+.act-filters__spacer {
+  flex: 1;
+}
+
+.act-hidden-note {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
 .act-day {
   margin-top: var(--space-5);
 }
@@ -241,6 +275,16 @@
 /* ---- Phone (spec section 8: 44px minimums, time buttons on their own row) ---- */
 
 @media (max-width: 640px) {
+  .act-filters .jds-btn,
+  .act-filters .jds-select {
+    min-height: 44px;
+  }
+
+  .act-filters__group {
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+
   .act-line {
     grid-template-columns: 48px minmax(0, 1fr);
   }

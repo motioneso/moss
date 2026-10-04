@@ -1,15 +1,28 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { ActionAuditLogEntryDto, ActivityLineDto, LocaleSettingsDto } from "@moss/shared";
 import { localDay } from "@moss/shared";
-import { Button } from "@moss/ui";
+import { Button, Checklist, type ChecklistItem } from "@moss/ui";
 
 import { listActionAuditLog, listActivityLines } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { formatDate, formatDateTime, formatTime, useUserLocale } from "../locale/locale-format.js";
 import { ActivityDialog, type ActivityDialogData } from "./settings-activity-dialog.js";
+import {
+  DEFAULT_ACTIVITY_FILTERS,
+  NO_MODEL_FILTER_KEY,
+  SYSTEM_MODULE_FILTER,
+  isDefaultActivityFilters,
+  lineActivityModule,
+  loadActivityFilters,
+  modelsButtonLabel,
+  saveActivityFilters,
+  toolRowHiddenByModelFilter,
+  type ActivityFilters
+} from "./settings-activity-filters.js";
+import { browserSettingsStorage } from "./settings-storage.js";
 import {
   activityBadges,
   activityMeta,
@@ -74,18 +87,20 @@ function dayLabel(key: string, sample: string, locale: LocaleSettingsDto): strin
 }
 
 /**
- * Slice C keeps the existing module dropdown (options from the loaded tool rows). A model
- * line matches the filter by its action-code prefix; anything else only shows unfiltered.
- * Slice D replaces this with manifest-driven filtering.
+ * A model line matches the module filter by its owning module (action code mapped in
+ * settings-activity-filters); the admin-only System option matches ownerless lines.
  */
 function lineMatchesModule(line: ActivityLineDto, filter: string): boolean {
   if (!filter) return true;
-  const code = line.actionCode;
-  if (!code) return false;
-  if (code === `structured.${filter}`) return true;
-  if (filter === "memory" && code.startsWith("embed.")) return true;
-  if (filter === "ai" && code.startsWith("chat.")) return true;
-  return false;
+  if (filter === SYSTEM_MODULE_FILTER) return line.ownerUserId === null;
+  return lineActivityModule(line.actionCode) === filter;
+}
+
+/** A tool row matches by its module; System shows model lines only, never tool rows. */
+function toolMatchesModule(entry: ActionAuditLogEntryDto, filter: string): boolean {
+  if (!filter) return true;
+  if (filter === SYSTEM_MODULE_FILTER) return false;
+  return entry.toolModuleId === filter;
 }
 
 /** A tool row's one-line result: done, or what it did not do, in fixed words. */
@@ -336,17 +351,20 @@ function rowKey(row: ActivityRow): string {
   return row.kind === "line" ? row.line.id : row.entry.id;
 }
 
-export function ActivityPane(_props: PaneProps) {
+export function ActivityPane({ me }: PaneProps) {
   const locale = useUserLocale();
   const assistantName = useAssistantName();
-  const [range, setRange] = useState<DateRange>("30d");
-  const [familyFilter, setFamilyFilter] = useState<string>("");
+  const isAdmin = me.user.isInstanceAdmin;
+  const storage = browserSettingsStorage();
+  const [filters, setFilters] = useState<ActivityFilters>(DEFAULT_ACTIVITY_FILTERS);
+  const [modelsOpen, setModelsOpen] = useState(false);
   const [openRow, setOpenRow] = useState<ActivityRow | null>(null);
+  const hydrated = useRef(false);
 
   // sinceForRange derives from Date.now() for non-"today" ranges; unmemoized, it produced a new
   // ISO timestamp (and thus a new query key) on every render, so an abort/error re-render could
   // never settle into isError — it remounted a fresh isLoading query instead (PR #1117 CP5 RED).
-  const since = useMemo(() => sinceForRange(range), [range]);
+  const since = useMemo(() => sinceForRange(filters.range), [filters.range]);
 
   const linesQuery = useQuery({
     queryKey: queryKeys.ai.activityLines({ since, limit: 200 }),
@@ -360,23 +378,108 @@ export function ActivityPane(_props: PaneProps) {
   });
 
   const lines = linesQuery.data?.entries ?? [];
-  const audits = useMemo(
+  const auditEntries = auditQuery.data?.entries ?? [];
+
+  /** Models in the loaded range with their line counts, No model last. */
+  const modelItems: ChecklistItem[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const line of lines) counts.set(line.modelName, (counts.get(line.modelName) ?? 0) + 1);
+    const items = [...counts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, count]) => ({
+        id: name,
+        label: name,
+        count,
+        checked: !filters.untickedModels.includes(name)
+      }));
+    if (auditEntries.length > 0) {
+      items.push({
+        id: NO_MODEL_FILTER_KEY,
+        label: "No model (tool only)",
+        count: auditEntries.length,
+        checked: !filters.untickedModels.includes(NO_MODEL_FILTER_KEY)
+      });
+    }
+    return items;
+  }, [lines, auditEntries, filters.untickedModels]);
+
+  /** Module options from the loaded data, labelled; System is admin-only and appended. */
+  const moduleOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const line of lines) {
+      const owner = lineActivityModule(line.actionCode);
+      if (owner) ids.add(owner);
+    }
+    for (const entry of auditEntries) ids.add(entry.toolModuleId);
+    return [...ids].sort((a, b) => moduleLabel(a).localeCompare(moduleLabel(b)));
+  }, [lines, auditEntries]);
+
+  // Saved filters restore once the first load lands, against the models and modules the
+  // range actually names; unknown saved values are dropped. Persistence waits for this
+  // so the defaults never overwrite the saved choice.
+  useEffect(() => {
+    if (hydrated.current || linesQuery.isLoading || auditQuery.isLoading) return;
+    if (linesQuery.isError || auditQuery.isError) return;
+    hydrated.current = true;
+    setFilters(
+      loadActivityFilters(
+        storage,
+        me.user.id,
+        modelItems.map((item) => item.id),
+        moduleOptions
+      )
+    );
+  }, [
+    storage,
+    me.user.id,
+    linesQuery.isLoading,
+    linesQuery.isError,
+    auditQuery.isLoading,
+    auditQuery.isError,
+    modelItems,
+    moduleOptions
+  ]);
+
+  useEffect(() => {
+    if (!hydrated.current) return;
+    saveActivityFilters(storage, me.user.id, filters);
+  }, [storage, me.user.id, filters]);
+
+  const toggleModel = (id: string): void => {
+    setFilters((current) => ({
+      ...current,
+      untickedModels: current.untickedModels.includes(id)
+        ? current.untickedModels.filter((name) => name !== id)
+        : [...current.untickedModels, id]
+    }));
+  };
+
+  const moduleRows = useMemo(
     () =>
-      (auditQuery.data?.entries ?? []).filter(
-        (entry) => !familyFilter || entry.toolModuleId === familyFilter
+      groupActivity(
+        lines.filter((line) => lineMatchesModule(line, filters.module)),
+        auditEntries.filter((entry) => toolMatchesModule(entry, filters.module))
       ),
-    [auditQuery.data, familyFilter]
+    [lines, auditEntries, filters.module]
   );
   const rows = useMemo(
     () =>
       groupActivity(
-        lines.filter((line) => lineMatchesModule(line, familyFilter)),
-        audits
+        lines.filter(
+          (line) =>
+            lineMatchesModule(line, filters.module) &&
+            !filters.untickedModels.includes(line.modelName)
+        ),
+        auditEntries.filter(
+          (entry) =>
+            toolMatchesModule(entry, filters.module) &&
+            !toolRowHiddenByModelFilter(filters.untickedModels)
+        )
       ),
-    [lines, audits, familyFilter]
+    [lines, auditEntries, filters]
   );
-
-  const families = Array.from(new Set((auditQuery.data?.entries ?? []).map((e) => e.toolModuleId)));
+  const hiddenByModel = moduleRows.length - rows.length;
+  const tickedCount = modelItems.filter((item) => item.checked).length;
 
   const days = useMemo(() => {
     const now = new Date();
@@ -408,31 +511,64 @@ export function ActivityPane(_props: PaneProps) {
         </p>
       </header>
 
-      <div className="audfilter">
-        {(["today", "7d", "30d", "90d"] as DateRange[]).map((r) => (
+      <div className="act-filters">
+        <div className="act-filters__group" role="group" aria-label="Time range">
+          {(["today", "7d", "30d", "90d"] as DateRange[]).map((r) => (
+            <Button
+              key={r}
+              variant="quiet"
+              size="sm"
+              active={filters.range === r}
+              aria-pressed={filters.range === r}
+              onClick={() => setFilters((current) => ({ ...current, range: r }))}
+            >
+              {RANGE_LABELS[r]}
+            </Button>
+          ))}
+        </div>
+        <Select
+          aria-label="Filter by module"
+          value={filters.module}
+          onChange={(e) => setFilters((current) => ({ ...current, module: e.target.value }))}
+        >
+          <option value="">All modules</option>
+          {moduleOptions.map((id) => (
+            <option key={id} value={id}>
+              {moduleLabel(id)}
+            </option>
+          ))}
+          {isAdmin && <option value={SYSTEM_MODULE_FILTER}>System</option>}
+        </Select>
+        <div className="act-filters__models">
           <Button
-            key={r}
-            variant="quiet"
+            variant="secondary"
             size="sm"
-            active={range === r}
-            onClick={() => setRange(r)}
+            aria-expanded={modelsOpen}
+            onClick={() => setModelsOpen((open) => !open)}
           >
-            {RANGE_LABELS[r]}
+            {modelsButtonLabel(tickedCount, modelItems.length)}
           </Button>
-        ))}
-        {families.length > 0 && (
-          <Select
-            aria-label="Filter by module"
-            value={familyFilter}
-            onChange={(e) => setFamilyFilter(e.target.value)}
-          >
-            <option value="">All modules</option>
-            {families.map((f) => (
-              <option key={f} value={f}>
-                {moduleLabel(f)}
-              </option>
-            ))}
-          </Select>
+          {modelsOpen && (
+            <Checklist
+              items={modelItems}
+              ariaLabel="Models to show"
+              onToggle={toggleModel}
+              onTickAll={() => setFilters((current) => ({ ...current, untickedModels: [] }))}
+              onDone={() => setModelsOpen(false)}
+              onClose={() => setModelsOpen(false)}
+            />
+          )}
+        </div>
+        <span className="act-filters__spacer" />
+        {hiddenByModel > 0 && (
+          <span className="act-hidden-note">
+            {hiddenByModel} {hiddenByModel === 1 ? "entry" : "entries"} hidden by the model filter
+          </span>
+        )}
+        {!isDefaultActivityFilters(filters) && (
+          <Button variant="quiet" size="sm" onClick={() => setFilters(DEFAULT_ACTIVITY_FILTERS)}>
+            Reset filters
+          </Button>
         )}
       </div>
 
@@ -453,7 +589,11 @@ export function ActivityPane(_props: PaneProps) {
 
       {!isError && !isLoading && rows.length === 0 && (
         <div className="aud__empty">
-          <p>No {assistantName} activity in this period.</p>
+          <p>
+            {lines.length > 0 || auditEntries.length > 0
+              ? "No activity matches these filters."
+              : `No ${assistantName} activity in this period.`}
+          </p>
         </div>
       )}
 
