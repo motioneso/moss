@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { randomUuid } from "@moss/module-web-sdk";
+import { ApiError, randomUuid } from "@moss/module-web-sdk";
 import {
   Badge,
   Button,
@@ -25,11 +25,14 @@ import { OutputEvidence } from "./output-evidence.js";
 import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
+import { summaryGenerationFailure, SummaryModelRecovery } from "./summary-generation-error.js";
 interface SummaryState {
   readonly generatedVersion?: number;
   readonly pinnedArtifact?: MeetingOutputArtifact;
   readonly templateId: GenerateMeetingOutputInput["templateId"] | "";
-  readonly operation?: OutputOperation<GenerateMeetingOutputInput>;
+  readonly operation?: OutputOperation<GenerateMeetingOutputInput> & {
+    readonly remediation?: "ai-providers";
+  };
 }
 export function ArtifactContent({ artifact }: { readonly artifact: MeetingOutputArtifact }) {
   return (
@@ -154,16 +157,17 @@ export function MeetingSummary({
                 result.status === "saved" && !preserveEdits ? undefined : current.pinnedArtifact,
               generatedVersion:
                 result.status === "saved" ? result.artifact.version : current.generatedVersion,
-              operation: {
-                input,
-                status: result.status === "saved" ? "done" : result.status,
-                message:
-                  result.status === "saved"
-                    ? `Version ${result.artifact.version} saved. Earlier versions remain available.`
-                    : result.status === "pending"
-                      ? "Generation is still pending. Check this request again."
-                      : "Generation failed. Choose Generate to start a new request."
-              }
+              operation:
+                result.status === "failed"
+                  ? { input, ...summaryGenerationFailure(result.code) }
+                  : {
+                      input,
+                      status: result.status === "saved" ? "done" : "pending",
+                      message:
+                        result.status === "saved"
+                          ? `Version ${result.artifact.version} saved. Earlier versions remain available.`
+                          : "Generation is still pending. Check this request again."
+                    }
             }
       );
       if (result.status === "saved" && !preserveEdits && active.current) {
@@ -177,7 +181,15 @@ export function MeetingSummary({
       update((current) =>
         current.operation?.input.requestKey !== input.requestKey
           ? current
-          : { ...current, operation: { input, ...operationError(error) } }
+          : {
+              ...current,
+              operation: {
+                input,
+                ...(error instanceof ApiError && error.status === 422
+                  ? summaryGenerationFailure(error.code)
+                  : operationError(error))
+              }
+            }
       );
     }
   }
@@ -257,6 +269,7 @@ export function MeetingSummary({
               {state.operation.message}
             </p>
           ) : null}
+          {state.operation?.remediation === "ai-providers" ? <SummaryModelRecovery /> : null}
           {state.generatedVersion && artifact?.version !== state.generatedVersion ? (
             <div className="meetings-actions">
               <p className="jds-hint">

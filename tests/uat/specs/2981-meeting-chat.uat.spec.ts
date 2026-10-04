@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
-import type { MeetingChatTurnResponse } from "@moss/shared";
+import { meetingChatSurface, type MeetingChatTurnResponse } from "@moss/shared";
 import {
   MEETING_FIXTURE_MODEL,
   MEETING_FIXTURE_QUESTION,
@@ -183,6 +183,27 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     await expect(
       page.getByRole("button", { name: "Clear meeting selection", exact: true })
     ).toBeVisible();
+
+    await test.step("Encoded turn routes retain the meeting selection boundary", async () => {
+      for (const path of ["/%61pi/chat/turn", "/api/%63hat/turn", "/api/chat/%74urn"]) {
+        for (const meetingContext of [undefined, { meetingId: selected.id, selectionId: "" }]) {
+          const rejected = await page.request.post(path, {
+            data: {
+              surface: meetingChatSurface(selected.id),
+              text: MEETING_FIXTURE_QUESTION,
+              ...(meetingContext === undefined ? {} : { meetingContext })
+            }
+          });
+          expect(new URL(rejected.url()).pathname).toBe(path);
+          expect(rejected.status(), path).toBe(400);
+          expect(await rejected.json(), path).toEqual({
+            error: "Invalid meeting question. Attachments and actions are unavailable."
+          });
+        }
+      }
+      expect(await fixtureEvidence(fixtureName)).toEqual([]);
+    });
+
     const first = await sendQuestion(page);
     expect(first.meetingContext.meetingId).toBe(selected.id);
     expect(first.meetingContext.transcriptRevision).toBe(selected.version);
@@ -297,7 +318,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     expect(url.searchParams.get("startCharacter")).toBe("0");
     expect(url.searchParams.get("endCharacter")).toBe(String(MEETING_FIXTURE_OLD.length));
     console.log(
-      "MEETINGS_CHAT_UAT real UI/API; disclosed local HTTP provider; 2 observed requests; same model; no tools/search; selected latest text only; disabled pinned model rejected without another provider call; immutable revision-1 citation opened"
+      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 2 observed requests; same model; no tools/search; selected latest text only; disabled pinned model rejected without another provider call; immutable revision-1 citation opened"
     );
   } finally {
     // The provisioner destroys the isolated DB too; restoring settings makes failures diagnosable.

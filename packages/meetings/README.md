@@ -4,7 +4,14 @@ Issue [#2981](https://github.com/motioneso/moss/issues/2981), approved
 [design](../../docs/superpowers/specs/2026-10-03-meeting-companion.md) and
 [plan](../../docs/superpowers/plans/2026-10-03-2981-meeting-companion.md).
 
-This package is not yet a meeting recorder. The current checkpoint contains:
+This package is not yet a meeting recorder. The ordinary UI supports creating/reopening drafts,
+personal notes, searchable History and deletion. Saved personal notes can also supply evidence
+for summaries, reviewed Tasks and private exports when an active API-key model with the required
+summary capabilities is configured. Transcript review and Ask Moss require transcript text
+supplied through the authenticated API: there is no user-facing recording or transcript-import
+path yet. Meetings is default-enabled, but recording remains unavailable.
+
+The current checkpoint contains:
 
 - A package-owned `/meetings` screen for Setup, searchable History and personal notes.
 - Current-text server search, state filters and a selected-meeting rail with factual receipts.
@@ -76,7 +83,8 @@ has an explicit Back to results action; review navigation preserves the session'
 Migration 0280 maintains a current-segment search projection in the existing transcript transaction.
 Its explicitly declared, checksummed first-party sidecar backfills metadata from original TEXT JSON
 inside the migration transaction; it preserves original payloads and UTF-16 segment identities.
-The canonical runner restores FORCE RLS before committing and rolls back on a backfill failure.
+The History sidecar restores FORCE RLS before returning; the canonical runner commits the
+SQL and sidecar together, or rolls the transaction back on failure.
 External module installation remains SQL-only. Isolated CI integration and real History UI tests
 are required on the final commit before treating this slice as verified. Use only the supported
 isolated gate described below for database checks.
@@ -293,6 +301,39 @@ Four additional blocking trigger targets still require an explicitly authorized 
 `workshop-chat-handover` (all `.uat.spec.ts`). They are excluded from these credential-free groups;
 a run that skips them is not passing live proof. Sports also needs actual public-publisher access.
 Do not mark those gates complete or infer visual/layout/keyboard proof from these functional tests.
+
+## Owner-run real-provider validation
+
+The bounded `test:uat:2981-real-providers` script selects exactly the four blocking specs above.
+It uses the existing real-provider harness; it is intentionally separate from credential-free CI.
+The owner/operator must control this launch and authentication step. The harness automatically
+copies the operator's existing signed-in Codex login into each disposable test stack, installs
+and logs in its CLI, and makes real provider requests using an eligible economy-tier chat model.
+This can consume the account's usage. Sports also accesses real public publishers and requires
+an available JSON-capable model. This is not a generic API-key-provider test entry point.
+
+Do not upload a login file to an agent or CI, disclose its bytes, create a new credential for this
+PR, or put secrets in command arguments. Do not fabricate `JARVIS_UAT_REAL_CHAT_CONFIGURED` or
+other readiness/authorization markers. If existing authorized login/runtime/network access is
+unavailable, report the affected gates as not run. Read the pinned checkout's `verify-gate` skill,
+use a separate worktree and fresh disposable servers, and launch only through its supported wrapper:
+
+```sh
+scripts/run-gate.sh start --gate test:uat:2981-real-providers
+scripts/run-gate.sh wait --follow
+```
+
+The script disables Playwright trace, screenshot and video capture. It does not alter the
+harness's existing authentication behavior, per-spec provisioning or cleanup. Never point these
+commands at development/production databases or substitute a bare UAT command. Use the wrapper's
+sentinel and actual exit status; do not pipe it through a command that hides failure.
+
+Record the exact commit, clean/dirty fingerprint, toolchain, isolated server identity, executed
+spec names, individual outcomes and teardown result without credentials/private connection data.
+The required outcome is **four executed tests passing, with zero skips**. A zero runner exit code
+with skipped tests is incomplete proof, not a pass of these gates. The generic runner stops on
+the first failed spec, so later specs may be not run. Return failures and unrun targets explicitly;
+only separately approved PR publication can add the final live-proof comment.
 
 ## Remaining release proof
 

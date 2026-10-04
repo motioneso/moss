@@ -69,6 +69,7 @@ import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
 import type { ChatSessionRuntime } from "./live/runtime.js";
+import { rejectMeetingChatOnGeneralRoute } from "./meeting-chat-boundary.js";
 
 // Per-user rate-limit key via the shared module-sdk helper: a UUID-shaped session bearer or
 // a valid session cookie is hashed (a one-way fingerprint, never the raw secret) to a
@@ -127,6 +128,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       const bodyResult = readTurnBody(request.body);
       if ("error" in bodyResult) {
@@ -244,6 +246,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       try {
         const surfaceResult = readOptionalSurface(
@@ -264,6 +267,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       try {
         const surfaceResult = readOptionalSurface(
@@ -295,6 +299,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       try {
         const userName = await runtime.resolveUserName(access.actorUserId);
@@ -329,6 +334,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       try {
         const surfaceResult = readOptionalSurface(
@@ -358,6 +364,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       const { id: threadId } = request.params as { id: string };
       if (!threadId || typeof threadId !== "string") {
@@ -391,6 +398,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       const bodyResult = readEveningInterviewBody(request.body);
       if ("error" in bodyResult) {
@@ -449,6 +457,7 @@ export function registerChatLiveRoutes(
     async (request, reply) => {
       const access = await resolveOr401(dependencies, request, reply);
       if (!access) return reply;
+      if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
       const bodyResult = readSeedBody(request.body);
       if ("error" in bodyResult) {
@@ -501,6 +510,7 @@ export function registerChatLiveRoutes(
   server.get("/api/chat/stream", async (request, reply) => {
     const access = await resolveOr401(dependencies, request, reply);
     if (!access) return reply;
+    if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
 
     const surfaceResult = readOptionalSurface((request.query as Record<string, unknown>).surface);
     if ("error" in surfaceResult) return reply.code(400).send({ error: surfaceResult.error });

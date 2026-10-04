@@ -45,3 +45,54 @@ Do not mark the PR merge-ready on the basis of this document. Record exact final
 Final review-fix tree: 546 focused tests across 42 suites passed. Root, test, web and external-module TypeScript checks, full ESLint and Prettier, static audits/app map, and web production build passed. A separate wider local unit run had five existing UAT provisioner tests blocked by this environment's network-interface restriction; they were not waived or counted as passing and remain in normal CI.
 
 The expanded credential-free CI configuration runs 16 specs in four isolated groups. It records four existing fixmes as skipped and excludes four real-provider/login-gated suites; those remain release-proof requirements. No real credential is created, loaded or transmitted for these fixture groups; synthetic fixture values are used. Corrected viewport/theme/focus and export-owner assertions await actual execution after publication.
+
+## Subsequent review: encoded routes and actionable summary failures
+
+The independent review of `69150727` found a reproducible encoded-path bypass: raw URL prefix
+checks could miss a Fastify-decoded chat route and allow a reserved meeting surface into the
+general engine. This supersedes the earlier source-level claim that the hook alone proves the
+boundary. The narrow repair must use matched-route identity and independently reject meeting
+selection at general turn/stream/seed/switch entry points. Regression proof must exercise encoded
+URLs through the real router and observe failures with each protection removed. Final results
+must be tied to the repaired commit; the earlier green tests did not cover this case.
+
+The summary UI must retain allowlisted capability errors instead of replacing an unsupported
+CLI-only configuration with generic retry advice. Admins can follow the existing AI providers
+link; other users need a clear explanation and administrator-directed recovery. Provider/model
+pins and the API-key-only checkpoint remain unchanged, without raw provider errors or secrets
+returned to the browser.
+
+### Proposed release note
+
+Category: Added
+Title: Meeting drafts and notes
+Description: Create meeting drafts, save personal notes and find them in History; recording is not available yet.
+
+This is the wording to use in the PR's authoritative Release note section once its description
+update is approved. Keeping it here does not update that section. The README now distinguishes
+ordinary UI access and notes-grounded outputs from transcript review/Ask Moss, which require
+API-supplied transcript text. Notes-only summaries are supported with a suitable API-key model;
+the review’s broader statement that all output flows require a transcript is not supported by
+the UI and service code.
+
+### Remaining publication and provider proof
+
+The final repaired commit still needs exact-head CI, native compile/synthetic tests and real-UI
+acceptance, plus the required live-proof PR comment. Real-provider Sports, note retrieval, note
+path-boundary and Workshop chat-handover gates remain separate and unrun here. They are not
+waived by credential-free tests. The owner must control authentication material for any local
+real-provider gate; no real credential or audio activation belongs in this repair.
+
+### Local repair evidence
+
+Restored source passed 662 focused tests across 48 suites, root/test/web/external-module
+TypeScript, full lint/format/static checks and the web production build. Independent removal
+of matched-route dispatch produced four failing regressions; removal of matched-route response
+authorization produced three; removal of only general-handler rejection produced 41. The
+summary UI regressions failed before the repair, and a raw-provider-error mutation failed its
+redaction assertion. Restored focused suites passed.
+
+The existing chat and output UAT cases now include six encoded-route rejection requests and
+real capability-failure recovery through the Moss API. Neither was run locally in this cloud
+workspace; exact published-commit CI and UAT results belong in the PR proof, not in these local
+test counts. No live provider authentication, database mutation or capture was performed here.

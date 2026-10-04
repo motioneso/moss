@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { Link, MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import type {
@@ -165,6 +165,148 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("meeting summary owner review", () => {
+  it.each(["response", "http-error"] as const)(
+    "explains an unsupported summary model from a %s without offering blind retries",
+    async (transport) => {
+      const code = "meeting_output_route_unavailable";
+      if (transport === "response")
+        vi.mocked(api.generateMeetingOutput).mockResolvedValueOnce({
+          status: "failed",
+          requestKey: "failed-request",
+          code
+        });
+      else
+        vi.mocked(api.generateMeetingOutput).mockRejectedValueOnce(
+          new ApiError(422, "Private provider credential error", code)
+        );
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
+      );
+      await mount();
+      await act(async () =>
+        renderer.root
+          .findByProps({ id: "meeting-template" })
+          .props.onChange({ target: { value: "general" } })
+      );
+      await flush();
+      await click("Generate new version");
+      await flush();
+      const rendered = JSON.stringify(renderer.toJSON());
+      expect(rendered).toContain("API-key model with summarization and structured-output support");
+      expect(rendered).toContain("CLI models aren’t supported for summaries");
+      expect(rendered).toContain("Contact an instance admin");
+      expect(rendered).not.toContain("Private provider credential error");
+      expect(rendered).not.toContain("Choose Generate to start a new request");
+      expect(
+        renderer.root
+          .findAllByType(Link)
+          .filter((node) => node.props.to === "/settings?section=aiproviders")
+      ).toHaveLength(0);
+      expect(button("Check or retry generation")).toBeUndefined();
+      await act(async () => renderer.unmount());
+      await mount();
+      expect(JSON.stringify(renderer.toJSON())).toContain("Contact an instance admin");
+      expect(api.generateMeetingOutput).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each([true, false, "unavailable"] as const)(
+    "offers AI provider settings only with confirmed admin access: %s",
+    async (admin) => {
+      vi.mocked(api.generateMeetingOutput).mockRejectedValueOnce(
+        new ApiError(422, "Private provider error", "meeting_output_route_unavailable")
+      );
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            admin === "unavailable"
+              ? new Response("Unavailable", { status: 503 })
+              : new Response(JSON.stringify({ user: { isInstanceAdmin: admin } }))
+          )
+      );
+      await mount();
+      await act(async () =>
+        renderer.root
+          .findByProps({ id: "meeting-template" })
+          .props.onChange({ target: { value: "general" } })
+      );
+      await flush();
+      await click("Generate new version");
+      await flush();
+      const links = renderer.root
+        .findAllByType(Link)
+        .filter((node) => node.props.to === "/settings?section=aiproviders");
+      expect(links).toHaveLength(admin === true ? 1 : 0);
+      const rendered = JSON.stringify(renderer.toJSON());
+      expect(rendered).toContain(
+        admin === true ? "Settings → AI providers" : "Contact an instance admin"
+      );
+      expect(rendered).not.toContain("Private provider error");
+      expect(rendered).not.toContain("Meeting profiles");
+    }
+  );
+
+  it.each(["response", "http-error"] as const)(
+    "does not display unknown failure codes or provider text from a %s",
+    async (transport) => {
+      const code = "Private provider credential error";
+      if (transport === "response")
+        vi.mocked(api.generateMeetingOutput).mockResolvedValueOnce({
+          status: "failed",
+          requestKey: "failed-request",
+          code
+        });
+      else
+        vi.mocked(api.generateMeetingOutput).mockRejectedValueOnce(new ApiError(422, code, code));
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      await mount();
+      await act(async () =>
+        renderer.root
+          .findByProps({ id: "meeting-template" })
+          .props.onChange({ target: { value: "general" } })
+      );
+      await flush();
+      await click("Generate new version");
+      const rendered = JSON.stringify(renderer.toJSON());
+      expect(rendered).not.toContain(code);
+      expect(rendered).toContain("Generation failed. Review the saved inputs");
+      expect(fetch).not.toHaveBeenCalled();
+      expect(button("Check or retry generation")).toBeUndefined();
+    }
+  );
+
+  it("explains a changed model configuration before starting a new request", async () => {
+    vi.mocked(api.generateMeetingOutput).mockRejectedValueOnce(
+      new ApiError(422, "Private credentials rotated", "meeting_output_route_changed")
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
+    );
+    await mount();
+    await act(async () =>
+      renderer.root
+        .findByProps({ id: "meeting-template" })
+        .props.onChange({ target: { value: "general" } })
+    );
+    await flush();
+    await click("Generate new version");
+    await flush();
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      "The summary model configuration changed during generation"
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Private credentials rotated");
+    expect(button("Check or retry generation")).toBeUndefined();
+    await click("Generate new version");
+    const calls = vi.mocked(api.generateMeetingOutput).mock.calls;
+    expect(calls[1]![1].requestKey).not.toBe(calls[0]![1].requestKey);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Contact an instance admin");
+  });
+
   it("requires explicit template selection and renders source text without remote markup", async () => {
     await mount();
     expect(button("Generate new version").props.disabled).toBe(true);

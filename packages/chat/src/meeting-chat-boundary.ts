@@ -17,6 +17,28 @@ function object(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function isMeetingChatRequest(request: Pick<FastifyRequest, "body" | "query">): boolean {
+  const body = object(request.body);
+  const query = object(request.query);
+  return (
+    [body.surface, query.surface].some(
+      (value) => typeof value === "string" && value.startsWith("mtg-")
+    ) ||
+    body.meetingContext !== undefined ||
+    query.meetingContext !== undefined
+  );
+}
+
+/** General live handlers fail closed even when the meeting dispatch hook is absent. */
+export function rejectMeetingChatOnGeneralRoute(
+  request: FastifyRequest,
+  reply: FastifyReply
+): FastifyReply | undefined {
+  if (isMeetingChatRequest(request)) {
+    return reply.code(400).send({ error: "This operation is unavailable in meeting questions." });
+  }
+}
+
 export function meetingChatFailure(error: unknown, reply: FastifyReply) {
   if (error instanceof MeetingContextUnavailableError)
     return reply.code(404).send({ code: "meeting_context_unavailable", error: error.message });
@@ -48,16 +70,15 @@ export function registerMeetingChatBoundary(
     reply.code(400).send({ error: "Select a meeting." })
   );
   server.addHook("preHandler", async (request, reply) => {
-    const path = request.url.split("?")[0]!;
-    if (!path.startsWith("/api/chat/")) return;
+    // Fastify has already decoded and matched the route. Raw request.url can contain
+    // percent-encoded static segments, so it is not the authorization boundary.
+    const path = request.routeOptions.url;
+    if (!path?.startsWith("/api/chat/")) return;
     const body = object(request.body);
     const query = object(request.query);
     const rawSurface = body.surface ?? query.surface;
     const selection = object(body.meetingContext);
-    const reserved = [body.surface, query.surface].some(
-      (value) => typeof value === "string" && value.startsWith("mtg-")
-    );
-    if (!reserved && body.meetingContext === undefined) return;
+    if (!isMeetingChatRequest(request)) return;
     let meetingId: string | null;
     let surface;
     try {
@@ -143,7 +164,8 @@ export function registerMeetingChatBoundary(
     }
   });
   server.addHook("onSend", async (request, reply, payload) => {
-    if (reply.statusCode >= 400 || !request.url.startsWith("/api/chat/")) return payload;
+    if (reply.statusCode >= 400 || !request.routeOptions.url?.startsWith("/api/chat/"))
+      return payload;
     const raw = object(request.body).surface ?? object(request.query).surface;
     if (typeof raw !== "string" || !raw.startsWith("mtg-")) return payload;
     try {

@@ -213,7 +213,67 @@ test("reviewed summary versions create independent Tasks and private vault copie
       page.getByRole("button", { name: "Generate summary", exact: true })
     ).toBeDisabled();
     await page.getByLabel("Summary template", { exact: true }).selectOption("general");
-    await clickCommand(page, "Generate summary", `${path}/outputs`);
+    const failedRequestKey =
+      await test.step("unsupported summary model explains real configuration recovery", async () => {
+        // Change the real synthetic model, not a Moss response. The hard pin stays selected;
+        // missing structured-output capability must fail before the provider is dispatched.
+        try {
+          expect(
+            (
+              await page.request.patch(`/api/ai/models/${modelId}`, {
+                data: { capabilities: ["summarization"] }
+              })
+            ).status()
+          ).toBe(200);
+          const rejectedGeneration = page.waitForResponse(
+            (r) => r.url().endsWith(`${path}/outputs`) && r.request().method() === "POST"
+          );
+          await page.getByRole("button", { name: "Generate summary", exact: true }).click();
+          const rejected = await rejectedGeneration;
+          expect(rejected.status()).toBe(422);
+          const requestKey = rejected.request().postDataJSON().requestKey as string;
+          expect(await rejected.json()).toEqual({
+            status: "failed",
+            requestKey,
+            code: "meeting_output_route_unavailable"
+          });
+          await expect(summary).toContainText(
+            "Summaries need an available API-key model with summarization and structured-output support."
+          );
+          await expect(summary).toContainText("CLI models aren’t supported for summaries.");
+          await expect(summary).not.toContainText("Choose Generate to start a new request");
+          expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
+          const recovery = summary.getByRole("link", {
+            name: "Settings → AI providers",
+            exact: true
+          });
+          await expect(recovery).toHaveAttribute("href", "/settings?section=aiproviders");
+          const reviewUrl = page.url();
+          const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+          await recovery.click();
+          await expect(page).toHaveURL(/\/settings\?section=aiproviders$/);
+          await expect(
+            page.getByRole("heading", { name: "AI providers", exact: true })
+          ).toBeVisible();
+          expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+          await page.goBack();
+          await expect(page).toHaveURL(reviewUrl);
+          expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+          await expect(summary).toContainText("CLI models aren’t supported for summaries.");
+          await expect(page.getByLabel("Summary template", { exact: true })).toHaveValue("general");
+          return requestKey;
+        } finally {
+          expect(
+            (
+              await page.request.patch(`/api/ai/models/${modelId}`, {
+                data: { capabilities: ["summarization", "json"] }
+              })
+            ).status()
+          ).toBe(200);
+        }
+      });
+    const generated = await clickCommand(page, "Generate summary", `${path}/outputs`);
+    expect(generated.request().postDataJSON().requestKey).not.toBe(failedRequestKey);
     await expect(summary).toContainText(OUTPUT_FIXTURE_OVERVIEW);
     await expect(summary).toContainText(OUTPUT_FIXTURE_DECISION);
     await assertMeetingReviewLayout(page);
@@ -409,7 +469,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
     meetingId = undefined;
     console.log(
-      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. No whole long-meeting/model-quality/audio proof."
+      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. CLI rejection is unit-tested, not a live CLI login. No whole long-meeting/model-quality/audio proof."
     );
   } finally {
     try {
