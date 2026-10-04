@@ -140,14 +140,14 @@ export function registerThemeRoutes(
             throw new HttpError(400, "Theme tokens are required");
           }
 
+          // A complete set replaces the saved colors, so an optional token it omits is cleared.
+          // A partial set patches the saved colors.
+          const base = hasCompleteTokens(body.tokens) ? {} : (existing?.tokens ?? {});
           const theme: CustomThemeDto = {
             id,
             name: sanitizeName(body.name ?? existing?.name ?? "Untitled theme"),
             builtIn: false,
-            tokens: {
-              ...(existing?.tokens ?? {}),
-              ...pickAestheticTokens(body.tokens ?? {})
-            } as AestheticThemeTokens
+            tokens: { ...base, ...pickAestheticTokens(body.tokens ?? {}) } as AestheticThemeTokens
           };
           const next = [...custom.filter((item) => item.id !== id), theme];
           await dependencies.preferencesRepository.upsert(scopedDb, CUSTOM_THEMES_KEY, next);

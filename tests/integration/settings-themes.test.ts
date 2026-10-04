@@ -138,6 +138,37 @@ describe("settings theme preferences", () => {
     expect(stored?.tokens.nav).toBe("#1f3a5f");
   });
 
+  it("clears optional tokens a complete save leaves out, and keeps them on a partial save", async () => {
+    await putTheme(ids.sessionA, "reset-theme", {
+      name: "Harbor",
+      tokens: { ...validThemeTokens, nav: "#1f3a5f", highlight: "#c2872b" }
+    });
+
+    const partial = await putTheme(ids.sessionA, "reset-theme", { tokens: { accent: "#2f6f8f" } });
+    expect(partial.json<PutCustomThemeResponse>().theme.tokens).toMatchObject({
+      accent: "#2f6f8f",
+      nav: "#1f3a5f",
+      highlight: "#c2872b"
+    });
+
+    const complete = await putTheme(ids.sessionA, "reset-theme", {
+      tokens: { ...validThemeTokens, highlight: "#c2872b" }
+    });
+    expect(complete.statusCode).toBe(200);
+    expect(complete.json<PutCustomThemeResponse>().theme.tokens.nav).toBeUndefined();
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/themes",
+      headers: userHeaders(ids.sessionA)
+    });
+    const stored = list
+      .json<ListThemesResponse>()
+      .custom.find((theme) => theme.id === "reset-theme");
+    expect(stored?.tokens.nav).toBeUndefined();
+    expect(stored?.tokens.highlight).toBe("#c2872b");
+  });
+
   it("persists active custom theme per user", async () => {
     await putTheme(ids.sessionA, "my-blue", { name: "My Blue", tokens: validThemeTokens });
     const active = await setActive(ids.sessionA, "my-blue");
