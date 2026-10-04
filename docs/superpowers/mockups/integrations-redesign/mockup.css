@@ -321,11 +321,12 @@ svg.i { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stro
   .grp__help { padding:8px 0 0; }
   .sortnote { padding:10px 0; flex-wrap:wrap; row-gap:6px; }
   .grp__more { padding:12px 0; }
-  .tool { grid-template-columns:minmax(0,1fr) 38px; gap:6px 12px; padding:14px 0; }
+  .tool { grid-template-columns:minmax(0,1fr) 38px 40px; gap:6px 8px; padding:14px 0; }
   .tool__id { grid-column:1; grid-row:1; }
   .tool .tog { grid-column:2; grid-row:1; align-self:start; margin-top:2px; }
   .tool__desc { grid-column:1 / -1; grid-row:2; }
-  .tool__more { display:none; }
+  .tool__more { grid-column:3; grid-row:1; align-self:start; width:40px; height:40px; margin-top:-7px; }
+  .tmenu { top:44px; }
   .cgrid { grid-template-columns:1fr; }
   .crow { padding:12px 0; }
 }
