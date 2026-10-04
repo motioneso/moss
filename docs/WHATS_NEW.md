@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **A clearer page for each connection.** Opening a connection now uses the full width, groups its tools by what they do, marks the ones that ask before running, and lets you allow sending tools to send without asking. [PR #3014](https://github.com/motioneso/moss/pull/3014)
 - **Today header contour lines are back.** The faint contour lines behind the Today header are back. [PR #3017](https://github.com/motioneso/moss/pull/3017)
 - **Connection tools get ready for the classifier on their own.** When you turn on the classifier for a connection, Moss now prepares that connection's tools in the background, and again whenever you switch a tool back on, so you no longer review each tool by hand before it can be used. [PR #3009](https://github.com/motioneso/moss/pull/3009)
 - **Safe connected tools run without asking.** When a connected service's tool is sorted as only looking things up or changing things, Moss now uses it in chat without asking you first, while sensitive tools, tools that send things out and tools not yet sorted still ask. [PR #3011](https://github.com/motioneso/moss/pull/3011)
