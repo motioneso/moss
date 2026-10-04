@@ -1,6 +1,6 @@
 import type { CredentialPlacement, IntegrationDetail, IntegrationKind } from "@moss/shared";
 
-import { classifierSortView } from "./classifier-settings.js";
+import { classifierSortView } from "./classifier-standing.js";
 import {
   effectiveEnabledTools,
   isGroupOptIn,

@@ -11,13 +11,13 @@ import {
   parseReviewedEntry,
   preparationEntry,
   preparationFailure,
-  schemaHasRootCombinator,
   toolSortState,
   type ClassifierPreparationFailureReason,
   type ClassifierPreparationMap,
   type ClassifierSortMap,
   type ParseResult
 } from "./classifier-settings.js";
+import { schemaHasRootCombinator } from "./classifier-standing.js";
 import { payloadHoldsCredential, type CredentialMatcher } from "./classifier-sorting.js";
 import { effectiveEnabledTools, type CurationState } from "./curation.js";
 

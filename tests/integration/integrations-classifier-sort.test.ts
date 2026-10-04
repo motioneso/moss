@@ -165,7 +165,8 @@ describe("integrations classifier sort storage and conversion (#2984 R2.1)", () 
       readableName: "Announce through the house",
       sendWithoutAsking: false,
       sortedAt: expect.any(String),
-      sortedBy: null
+      sortedBy: null,
+      sortMethod: null
     });
     expect(reread!.classifierKeptOutTools).toEqual([]);
   });
