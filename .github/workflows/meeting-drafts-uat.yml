@@ -7,6 +7,7 @@ on:
       - "packages/meetings/**"
       - "packages/shared/src/meeting-*.ts"
       - "tests/uat/run-meetings-uat.ts"
+      - "tests/uat/subnet-selection.ts"
       - "tests/uat/specs/2981-meeting-drafts.uat.spec.ts"
       - "apps/web/src/app-route-metadata.ts"
       - "apps/web/src/shell/nav-icons.ts"
