@@ -576,6 +576,16 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0270",
           name: "0270_integration_classifier_sort_worker.sql"
+        },
+        // #2984 R2.4 — one admin shadow review per classifier selection unlocks the gate's `on`.
+        {
+          version: "0271",
+          name: "0271_chat_classifier_shadow_reviews.sql"
+        },
+        // #2984 R2.4 — the preparation worker writes prepared tools for its owner only.
+        {
+          version: "0272",
+          name: "0272_integration_classifier_prepare_worker.sql"
         }
       ]);
     } finally {

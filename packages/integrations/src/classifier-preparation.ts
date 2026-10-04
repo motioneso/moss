@@ -1,39 +1,37 @@
 import type { DataContextDb } from "@moss/db";
-import {
-  INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE,
-  type IntegrationClassifierArgument,
-  type IntegrationClassifierPreparationDisclosure,
-  type IntegrationClassifierToolDraft,
-  type IntegrationClassifierToolDraftFailure,
-  type IntegrationToolDescriptor
-} from "@moss/shared";
+import type { IntegrationClassifierArgument, IntegrationToolDescriptor } from "@moss/shared";
 
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import type { RiskInputSource } from "./classifier-risk-inputs.js";
 import {
   INTEGRATION_CLASSIFIER_MAX_ARGUMENT_VALUES,
   INTEGRATION_CLASSIFIER_MAX_DESCRIPTION_CHARS,
   INTEGRATION_CLASSIFIER_MAX_IDENTIFIER_CHARS,
   INTEGRATION_CLASSIFIER_MAX_TEMPLATE_CHARS,
+  parseReviewedEntry,
   preparationEntry,
+  preparationFailure,
+  toolSortState,
+  type ClassifierPreparationFailureReason,
   type ClassifierPreparationMap,
+  type ClassifierSortMap,
   type ParseResult
 } from "./classifier-settings.js";
+import { payloadHoldsCredential, type CredentialMatcher } from "./classifier-sorting.js";
 import { effectiveEnabledTools, type CurationState } from "./curation.js";
 
 /**
- * One-time default-model preparation for connected tools (plan 2b.3, #2894; Ben's ruling 6).
+ * Default-model preparation for connected tools (plan 2b.3, #2894; spec 8.4, #2984).
  *
- * This module is pure: it selects the owner's current default chat model through an injected port,
- * asks it once per tool to draft a one-line description and a reply template, derives the argument
- * declarations from the tool's own schema, and validates everything before returning a transient
- * draft. It never stores, never executes a tool, never reaches the classifier and never names a
- * provider or model. Storage is 2b.2's explicit save; the screen is 2b.4.
+ * For each tool, the owner's current default chat model drafts a one-line description and a reply
+ * template from the tool's definition. Argument declarations come from the tool's own schema. The
+ * output is validated before it is returned; the background job in classifier-preparation-jobs.ts
+ * saves it with no review step. This module never stores, never executes a tool, never reaches
+ * the classifier, never sets risk and never names a provider or model.
  */
 
-/** At most this many tools are drafted in one prepare request; `remaining` reports the rest. */
-export const INTEGRATION_CLASSIFIER_PREPARE_MAX_TOOLS = 20;
-/** Draft calls run at most this many at a time. */
-export const INTEGRATION_CLASSIFIER_PREPARE_CONCURRENCY = 2;
+/** Activity history names preparation calls with this service. */
+export const INTEGRATION_CLASSIFIER_PREPARE_SERVICE = "module.integrations.tool-prepare" as const;
 /** Output bound for one draft. */
 export const INTEGRATION_CLASSIFIER_PREPARE_MAX_OUTPUT_TOKENS = 700;
 /** One tool's serialized definition may not exceed this; over it the tool fails, never truncates. */
@@ -108,7 +106,8 @@ export interface PreparationDefinitionPayload {
  * `invoke` recipes and every other field on the discovered object are dropped by construction.
  * Inside the input schema, credential header parameters (an OpenAPI header parameter, recorded on
  * the tool's `invoke` recipe) and every `default`/`example`/`examples` value are removed too.
- * The description is sent as the service wrote it and is not checked for secrets.
+ * Names and descriptions are sent as the service wrote them. `prepareClassifierTool` refuses a
+ * payload that holds the stored credential; any other secret a service publishes goes out as is.
  */
 export function buildPreparationDefinitionPayload(
   tool: IntegrationToolDescriptor
@@ -328,148 +327,121 @@ function schemaHasRootCombinator(schema: Record<string, unknown> | null): boolea
   return schema !== null && ROOT_COMBINATORS.some((key) => key in schema);
 }
 
-export interface PreparationTargetsInput {
-  readonly discoveredTools: readonly IntegrationToolDescriptor[];
-  readonly preparation: ClassifierPreparationMap;
-  readonly curation: CurationState;
-  /** Explicit re-preparation: re-draft even a target whose reviewed definition is unchanged. */
-  readonly force: boolean;
-  readonly signal?: AbortSignal;
-}
-
-export interface PreparationTargets {
-  readonly targets: readonly IntegrationToolDescriptor[];
-  readonly reused: readonly string[];
-  readonly remaining: number;
-}
-
 /**
- * Choose what this request drafts. A target is reused (no model call) when its stored entry already
- * matches the current definition fingerprint and `force` is false, so re-enabling unchanged
- * reviewed definitions costs nothing. Everything else is drafted once, up to the per-call bound.
+ * The tools a preparation job drafts, in discovered order: on for ordinary chat, not kept out,
+ * sorted against their current risk inputs, with a schema the classifier can declare, and with no
+ * preparation for their current definition. A tool whose last attempt failed against its current
+ * definition waits for the owner's Try again (`retryFailed`), so no automatic retry repeats a cost.
  */
-export function preparationTargets(input: PreparationTargetsInput): PreparationTargets {
+export interface PreparationJobTargetsInput {
+  readonly discoveredTools: readonly RiskInputSource[];
+  readonly preparation: ClassifierPreparationMap;
+  readonly sort: ClassifierSortMap;
+  readonly keptOut: readonly string[];
+  readonly curation: CurationState;
+  readonly retryFailed: boolean;
+}
+
+export function preparationJobTargets(input: PreparationJobTargetsInput): RiskInputSource[] {
   const ordinary = new Set(
     effectiveEnabledTools(input.discoveredTools, input.curation).map((tool) => tool.name)
   );
-  const eligible = input.discoveredTools.filter(
-    (tool) => ordinary.has(tool.name) && !schemaHasRootCombinator(tool.inputSchema)
-  );
-  const reused: string[] = [];
-  const pending: IntegrationToolDescriptor[] = [];
-  for (const tool of eligible) {
-    const entry = preparationEntry(input.preparation, tool.name);
-    const current =
-      entry !== undefined && entry.definitionFingerprint === toolDefinitionFingerprint(tool);
-    if (current && !input.force) {
-      reused.push(tool.name);
-      continue;
+  const keptOut = new Set(input.keptOut);
+  return input.discoveredTools.filter((tool) => {
+    if (!ordinary.has(tool.name) || keptOut.has(tool.name)) return false;
+    if (schemaHasRootCombinator(tool.inputSchema)) return false;
+    if (toolSortState(input.sort, tool).status !== "current") return false;
+    const fingerprint = toolDefinitionFingerprint(tool);
+    if (preparationEntry(input.preparation, tool.name)?.definitionFingerprint === fingerprint) {
+      return false;
     }
-    pending.push(tool);
-  }
-  const targets = pending.slice(0, INTEGRATION_CLASSIFIER_PREPARE_MAX_TOOLS);
-  return { targets, reused, remaining: pending.length - targets.length };
+    const failure = preparationFailure(input.preparation, tool.name);
+    return input.retryFailed || failure?.definitionFingerprint !== fingerprint;
+  });
 }
 
-export type PrepareClassifierDraftsResult =
-  | {
-      readonly ok: true;
-      readonly status: "ok";
-      readonly disclosure: IntegrationClassifierPreparationDisclosure;
-      readonly drafts: readonly IntegrationClassifierToolDraft[];
-      readonly reused: readonly string[];
-      readonly failed: readonly IntegrationClassifierToolDraftFailure[];
-      readonly remaining: number;
-    }
-  | {
-      readonly ok: false;
-      readonly status: "unavailable" | "unsupported_model";
-      readonly disclosure: IntegrationClassifierPreparationDisclosure;
-    };
+/** One tool's preparation, ready to save, or why it could not be made. */
+export type PreparationOutcome =
+  | { readonly kind: "prepared"; readonly entry: PreparedEntry }
+  | { readonly kind: "failure"; readonly reason: ClassifierPreparationFailureReason };
+
+export interface PreparedEntry {
+  readonly definitionFingerprint: string;
+  readonly description: string;
+  readonly arguments: Record<string, IntegrationClassifierArgument>;
+  readonly replyTemplate: string;
+}
 
 /**
- * Draft this request's targets on the owner's current default chat model. No default model is
- * `unavailable`; a selection that cannot produce the structured draft is `unsupported_model`; both
- * make zero draft calls. Nothing is stored, so a cancelled review persists nothing.
+ * Prepare one tool on the selected model. The credential check runs on the exact definition
+ * payload before the call, the same check sorting runs; a tool whose text holds the stored
+ * credential is never sent and fails as `unsafe`. The model's answer is validated before it is
+ * returned. Nothing is stored here.
  */
-export async function prepareClassifierToolDrafts(
-  scopedDb: DataContextDb,
-  input: PreparationTargetsInput,
-  port: ClassifierPreparationPort
-): Promise<PrepareClassifierDraftsResult> {
-  const disclosure = INTEGRATION_CLASSIFIER_PREPARATION_DISCLOSURE;
-  const selection = await port.selectDefaultChatModel(scopedDb);
-  if (!selection) return { ok: false, status: "unavailable", disclosure };
-  if (!selection.structured) return { ok: false, status: "unsupported_model", disclosure };
-
-  const { targets, reused, remaining } = preparationTargets(input);
-  const schema = preparationDraftSchema();
-  const drafts: IntegrationClassifierToolDraft[] = [];
-  const failed: IntegrationClassifierToolDraftFailure[] = [];
-
-  const queue = [...targets];
-  const workerCount = Math.min(INTEGRATION_CLASSIFIER_PREPARE_CONCURRENCY, queue.length);
-  const workers = Array.from({ length: workerCount }, async () => {
-    for (;;) {
-      const tool = queue.shift();
-      if (!tool) return;
-      const outcome = await draftOne(scopedDb, tool, selection.model, schema, port, input.signal);
-      if (outcome.kind === "draft") drafts.push(outcome.draft);
-      else failed.push(outcome.failure);
-    }
-  });
-  await Promise.all(workers);
-
-  return { ok: true, status: "ok", disclosure, drafts, reused, failed, remaining };
-}
-
-type DraftOutcome =
-  | { readonly kind: "draft"; readonly draft: IntegrationClassifierToolDraft }
-  | { readonly kind: "failure"; readonly failure: IntegrationClassifierToolDraftFailure };
-
-async function draftOne(
+export async function prepareClassifierTool(
   scopedDb: DataContextDb,
   tool: IntegrationToolDescriptor,
   model: PreparationChatModel,
-  schema: Record<string, unknown>,
   port: ClassifierPreparationPort,
-  signal: AbortSignal | undefined
-): Promise<DraftOutcome> {
-  const failed = (reason: IntegrationClassifierToolDraftFailure["reason"]): DraftOutcome => ({
+  matcher: CredentialMatcher
+): Promise<PreparationOutcome> {
+  const failed = (reason: ClassifierPreparationFailureReason): PreparationOutcome => ({
     kind: "failure",
-    failure: { toolName: tool.name, reason }
+    reason
   });
-  if (signal?.aborted) return failed("aborted");
+  const payload = buildPreparationDefinitionPayload(tool);
+  if (payloadHoldsCredential(payload, matcher)) return failed("unsafe");
 
-  const serialized = JSON.stringify(buildPreparationDefinitionPayload(tool));
+  const serialized = JSON.stringify(payload);
   if (serialized.length > INTEGRATION_CLASSIFIER_MAX_DEFINITION_CHARS) {
     return failed("definition_too_large");
   }
 
+  // The arguments come from the schema alone, so a shape that can never be stored fails here,
+  // before the model is paid.
+  const definitionFingerprint = toolDefinitionFingerprint(tool);
+  const args = derivePreparationArguments(tool.inputSchema, headerParamNames(tool));
+  if (!storableEntry(definitionFingerprint, args, "-", "-")) return failed("unsupported_shape");
+
   const outcome = await port.runStructuredDraft(scopedDb, {
     model,
-    schema,
+    schema: preparationDraftSchema(),
     prompt: buildPreparationPrompt(serialized),
     maxOutputTokens: INTEGRATION_CLASSIFIER_PREPARE_MAX_OUTPUT_TOKENS,
-    ...(signal ? { signal } : {})
+    service: INTEGRATION_CLASSIFIER_PREPARE_SERVICE
   });
   if (!outcome.ok) {
-    if (outcome.error === "aborted") return failed("aborted");
-    if (outcome.error === "validation_failed") return failed("invalid_draft");
-    return failed("provider_error");
+    return failed(outcome.error === "validation_failed" ? "invalid_draft" : "provider_error");
   }
 
   const parsed = parsePreparationDraft(outcome.object);
   if (!parsed.ok) return failed("invalid_draft");
 
-  return {
-    kind: "draft",
-    draft: {
-      toolName: tool.name,
-      definitionFingerprint: toolDefinitionFingerprint(tool),
-      description: parsed.value.description,
-      arguments: derivePreparationArguments(tool.inputSchema, headerParamNames(tool)),
-      replyTemplate: parsed.value.replyTemplate
-    }
+  const entry: PreparedEntry = {
+    definitionFingerprint,
+    description: parsed.value.description,
+    arguments: args,
+    replyTemplate: parsed.value.replyTemplate
   };
+  if (!storableEntry(entry.definitionFingerprint, args, entry.description, entry.replyTemplate)) {
+    return failed("unsupported_shape");
+  }
+  return { kind: "prepared", entry };
+}
+
+/** Whether an entry passes the same checks the stored read applies, so it is never dropped. */
+function storableEntry(
+  definitionFingerprint: string,
+  args: Record<string, IntegrationClassifierArgument>,
+  description: string,
+  replyTemplate: string
+): boolean {
+  return parseReviewedEntry({
+    optIn: true,
+    reviewedRisk: null,
+    description,
+    arguments: args,
+    replyTemplate,
+    reviewedFingerprint: definitionFingerprint
+  }).ok;
 }

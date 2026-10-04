@@ -224,14 +224,14 @@ export const aiModuleManifest = {
       id: "ai.classifier_gate_setting",
       description:
         "Classifier gate: the Chat gate choice (Off, Shadow, On) in the Classifier row on Settings > " +
-        "AI providers, an instance-wide setting beside the Classifier binding. On is unavailable " +
-        "until a tool release is approved.",
+        "AI providers, an instance-wide setting. On needs a shadow review of the current " +
+        "classifier; changing the classifier drops On back to Shadow.",
       remediations: [
         {
           id: "ai.classifier_gate_setting.not_released",
           description:
-            "Leave the Classifier gate on Off or Shadow until a tool release has been approved; " +
-            "the gate cannot be turned On before then.",
+            "Run the Classifier gate on Shadow and record a shadow review for the current " +
+            "classifier; the gate cannot be turned On before then.",
           path: "/settings?section=aiproviders"
         }
       ],
@@ -241,7 +241,8 @@ export const aiModuleManifest = {
           class: "prerequisite",
           remediationRef: "ai.classifier_gate_setting.not_released",
           description:
-            "Setting the classifier gate to On was refused because no approved tool release exists."
+            "Setting the classifier gate to On was refused because no shadow review is recorded " +
+            "for the current classifier."
         }
       ]
     },

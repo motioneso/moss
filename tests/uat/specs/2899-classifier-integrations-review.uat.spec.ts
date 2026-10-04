@@ -4,9 +4,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // Classifier gate 2b.4 (#2899): proves the real connection-detail classifier section on a live
-// instance. No chat-capable model exists at any UAT seed level (#1121), so the prepare path is
-// exercised as the honest setup-failure branch, and the reviewed entry is seeded through the same
-// real PUT the screen uses (fingerprint computed here exactly as
+// instance. No chat-capable model exists at any UAT seed level (#1121), and preparation runs
+// as a background job (#2984 R2.4), so the reviewed entry is seeded through the same real PUT the
+// screen uses (fingerprint computed here exactly as
 // packages/integrations/src/classifier-fingerprint.ts does). This proves the screen path, the
 // consent contract (the connection switch never opts a tool in) and persistence across reload.
 //
@@ -159,12 +159,7 @@ test("reviewed classifier switches on a real connection (#2899)", async ({ page 
     page.getByRole("checkbox", { name: "Let the classifier use this connection" })
   ).toBeChecked();
 
-  // 5. Prepare with no default chat model: the setup failure is named, the fix is linked, and
-  //    nothing is stored. The connection switch did not opt the tool in by itself.
-  await page.getByRole("button", { name: "Prepare 1 tool" }).click();
-  await expect(page.getByText("No default chat model is set.")).toBeVisible();
-  await expect(page.getByRole("link", { name: /structured output/ })).toBeVisible();
-  await expect(page.getByText("Nothing changed.")).toBeVisible();
+  // 5. The connection switch stores nothing and does not opt the tool in by itself.
   let detail = await fetchDetail(page, connectionId);
   expect(detail.classifierPreparation).toHaveLength(0);
 

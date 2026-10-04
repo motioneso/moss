@@ -129,7 +129,7 @@ import {
   buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
-  ClassifierReleaseRepository,
+  isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
@@ -314,9 +314,11 @@ import {
   GOALS_MEMORY_SYNC_RECONCILE_QUEUE
 } from "@moss/goals";
 import {
+  INTEGRATION_CLASSIFIER_PREPARE_QUEUE_DEFINITION,
   INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION,
   integrationsModuleManifest,
   integrationsModuleSqlMigrationDirectory,
+  registerClassifierPreparationWorkers,
   registerClassifierSortWorkers,
   registerIntegrationsRoutes,
   resolverCache
@@ -1742,11 +1744,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         repository: new SettingsRepository(),
-        // Classifier gate activation (task 1.2, #2881): the settings boundary stays module-isolated
-        // and calls this injected port; the chat-owned reader supplies the answer.
+        // Classifier gate activation (#2984 R2.4): the settings boundary stays module-isolated
+        // and calls this injected port; the chat-owned check supplies the answer.
         classifierActivation: {
-          hasEligibleRelease: (scopedDb) =>
-            new ClassifierReleaseRepository().hasEligibleRelease(scopedDb)
+          hasShadowReviewForCurrentClassifier: (scopedDb) =>
+            isCurrentClassifierReviewed(scopedDb, {
+              classifierDeps: { repository: new AiRepository() }
+            })
         }
       });
       installWebSearchResolvers({
@@ -1919,35 +1923,37 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: integrationsModuleManifest,
     sqlMigrationDirectories: [integrationsModuleSqlMigrationDirectory],
-    queueDefinitions: [INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION],
+    queueDefinitions: [
+      INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION,
+      INTEGRATION_CLASSIFIER_PREPARE_QUEUE_DEFINITION
+    ],
     registerRoutes: (server, deps) =>
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        // Plan 2b.3 (#2894): composition-layer model port, so the integrations package keeps no
-        // @moss/ai dependency.
-        preparationPort: createClassifierPreparationPort({
-          ...(deps.createCliStructuredAdapter
-            ? { createCliStructuredAdapter: deps.createCliStructuredAdapter }
-            : {})
-        }),
         // Master key store (#2312): per-request family key, never eager at boot.
         resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY),
         boss: deps.boss
       }),
-    // #2984 R2.2: background tool sorting on the owner's default chat model.
-    registerWorkers: (boss, deps) =>
-      registerClassifierSortWorkers(boss, {
+    // #2984 R2.2, R2.4: background tool sorting and preparation on the owner's default chat
+    // model. The composition-layer port keeps the integrations package free of @moss/ai.
+    registerWorkers: async (boss, deps) => {
+      const jobDeps = {
         dataContext: deps.dataContext,
-        rootDb: deps.rootDb,
         port: createClassifierPreparationPort({
           createCliStructuredAdapter: createCliStructuredAdapterFactory()
         }),
         cipherSources: {
-          resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
+          resolveKeyring: (scopedDb: DataContextDb) =>
+            loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
         },
         ...(deps.logger ? { logger: deps.logger } : {})
-      })
+      };
+      return [
+        ...(await registerClassifierPreparationWorkers(boss, jobDeps)),
+        ...(await registerClassifierSortWorkers(boss, { ...jobDeps, rootDb: deps.rootDb }))
+      ];
+    }
   },
   {
     manifest: webModuleManifest,

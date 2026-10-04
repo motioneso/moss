@@ -2,6 +2,7 @@ export * from "./call-memory.js";
 export * from "./classifier-candidates.js";
 export * from "./classifier-fingerprint.js";
 export * from "./classifier-preparation.js";
+export * from "./classifier-preparation-jobs.js";
 export * from "./classifier-readable-name.js";
 export * from "./classifier-reply.js";
 export * from "./classifier-risk-inputs.js";
