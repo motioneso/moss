@@ -73,6 +73,34 @@ describe("settings persona preferences", () => {
     });
   });
 
+  it("serves each user an install manifest carrying their own assistant name", async () => {
+    await server.inject({
+      method: "PUT",
+      url: "/api/me/persona",
+      headers: { cookie: ownerCookie, "content-type": "application/json" },
+      payload: { persona: { assistantName: "Juniper", personaText: "" } }
+    });
+
+    const owner = await server.inject({
+      method: "GET",
+      url: "/api/me/install-manifest",
+      headers: { cookie: ownerCookie }
+    });
+    expect(owner.statusCode).toBe(200);
+    expect(owner.headers["content-type"]).toContain("application/manifest+json");
+    expect(owner.json()).toMatchObject({ name: "Juniper", short_name: "Juniper", start_url: "/" });
+
+    const member = await server.inject({
+      method: "GET",
+      url: "/api/me/install-manifest",
+      headers: { cookie: memberCookie }
+    });
+    expect(member.json()).toMatchObject({ name: "Moss", short_name: "Moss" });
+
+    const anonymous = await server.inject({ method: "GET", url: "/api/me/install-manifest" });
+    expect(anonymous.statusCode).toBe(401);
+  });
+
   it("persists persona bundle and reloads it for the same user only", async () => {
     const put = await server.inject({
       method: "PUT",

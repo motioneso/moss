@@ -33,7 +33,7 @@ import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
 import { getFamilyKeys, getMyModules } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { FeedbackProvider } from "./settings-feedback";
 import { ProfilePane } from "./settings-personal-panes";
 import {

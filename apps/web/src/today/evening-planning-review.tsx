@@ -37,6 +37,7 @@ import {
 import { StepIntro } from "./evening-planning-sections.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
+import { personalize } from "../api/use-assistant-name.js";
 
 function blockTitle(block: DayPlanBlockDto, tasks: readonly DayPlanTaskSummary[]): string {
   if (block.taskId === null) return block.title ?? "Untitled block";
@@ -140,7 +141,9 @@ export function ReviewSection(props: {
         headingId="evening-review-heading"
       />
       <p className="evening-plan__prose">
-        {evening.policyMode === "auto" ? EVENING_REVIEW_PROSE_AUTO : EVENING_REVIEW_PROSE_PROPOSE}
+        {evening.policyMode === "auto"
+          ? personalize(EVENING_REVIEW_PROSE_AUTO)
+          : EVENING_REVIEW_PROSE_PROPOSE}
       </p>
       {fixedEvents.length > 0 ? (
         <div className="evening-plan__record">
@@ -224,7 +227,7 @@ export function ReviewSection(props: {
             <div className="evening-plan__notes">
               <h4>
                 {evening.policyMode === "auto"
-                  ? EVENING_REVIEW_CHANGES_AUTO
+                  ? personalize(EVENING_REVIEW_CHANGES_AUTO)
                   : EVENING_REVIEW_CHANGES_PROPOSE}
               </h4>
               {changed.length > 0 ? (
@@ -265,7 +268,7 @@ export function ReviewSection(props: {
           </div>
           {notes.length > 0 ? (
             <div className="evening-plan__notes">
-              <h4>{EVENING_REVIEW_NOTES_HEADING}</h4>
+              <h4>{personalize(EVENING_REVIEW_NOTES_HEADING)}</h4>
               {notes.map((note, index) => (
                 <p key={index}>{note}</p>
               ))}

@@ -3,6 +3,7 @@ import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from
 import { Settings } from "lucide-react";
 
 import type { AestheticThemeTokens } from "@moss/shared";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export type EditorTokenKey = keyof AestheticThemeTokens;
 
@@ -65,7 +66,7 @@ export function ThemePreview(props: {
         onPointerLeave={() => setHot(null)}
       >
         <div {...part("nav", "theme-pv__nav")}>
-          <span className="theme-pv__brand">Moss</span>
+          <span className="theme-pv__brand">{assistantName()}</span>
           <span className="theme-pv__link is-active">Today</span>
           <span className="theme-pv__link">The Workshop</span>
           <span className="theme-pv__link">Tasks</span>

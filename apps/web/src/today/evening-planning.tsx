@@ -43,6 +43,7 @@ import {
   EveningStepStrip,
   type EveningStepId
 } from "./evening-planning-frame.js";
+import { personalize } from "../api/use-assistant-name.js";
 
 export interface EveningPlanningDialogProps {
   readonly evening: EveningPlanningController;
@@ -179,7 +180,7 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
   return (
     <BriefingDialog
       title={EVENING_DIALOG_TITLE}
-      eyebrow={EVENING_DIALOG_EYEBROW}
+      eyebrow={personalize(EVENING_DIALOG_EYEBROW)}
       variant="report"
       opener={props.opener}
       onClose={props.onClose}

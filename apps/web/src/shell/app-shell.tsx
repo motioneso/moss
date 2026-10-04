@@ -12,7 +12,7 @@ import {
 import { useLocation, useNavigate } from "react-router";
 
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { buildShellNavigation, resolvePageHeading, webRoutes } from "../app-route-metadata";
 import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";

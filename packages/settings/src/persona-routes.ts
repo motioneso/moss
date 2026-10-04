@@ -37,6 +37,15 @@ interface PersonaRoutesDependencies {
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
 }
 
+const INSTALL_MANIFEST_BASE = {
+  start_url: "/",
+  scope: "/",
+  display: "standalone",
+  background_color: "#f7f8fa",
+  theme_color: "#0f766e",
+  icons: [{ src: "/icons/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }]
+} as const;
+
 export function registerPersonaRoutes(
   server: FastifyInstance,
   dependencies: PersonaRoutesDependencies
@@ -62,6 +71,34 @@ export function registerPersonaRoutes(
       }
     }
   );
+
+  // The install manifest carrying the user's assistant name. The browser loads it as a
+  // same-origin document, so it needs no extra content security policy source. Every URL in
+  // it is an absolute path, so it resolves against the site root, not this route.
+  server.get("/api/me/install-manifest", async (request, reply) => {
+    try {
+      const accessContext = await dependencies.resolveAccessContext(request);
+      const persona = await dependencies.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb) => {
+          await requireKnownUser(dependencies.repository, scopedDb, accessContext.actorUserId);
+          return normalizePersonaSettings(
+            await dependencies.preferencesRepository.get(scopedDb, PERSONA_PREFERENCE_KEY)
+          );
+        }
+      );
+      reply.header("Content-Type", "application/manifest+json; charset=utf-8");
+      reply.header("Cache-Control", "no-store");
+      return {
+        name: persona.assistantName,
+        short_name: persona.assistantName,
+        description: `${persona.assistantName} app shell`,
+        ...INSTALL_MANIFEST_BASE
+      };
+    } catch (error) {
+      return handleSettingsRouteError(error, reply);
+    }
+  });
 
   server.put(
     "/api/me/persona",

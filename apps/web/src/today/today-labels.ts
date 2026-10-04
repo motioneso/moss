@@ -253,7 +253,6 @@ export const EVENING_STEP_NAMES = [
 export const EVENING_REFLECT_QUESTION =
   "What should I understand about today before we plan tomorrow?";
 export const EVENING_RAIL_HEADING = "Tomorrow, taking shape.";
-export const EVENING_SPEAKER_NAME = "Moss";
 export const EVENING_SPEAKER_NOTE = "Looking back with you";
 
 /** Evening steps 2 to 4 (V8): speaker notes, large messages and review groups. */

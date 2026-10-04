@@ -13,6 +13,7 @@
 import { useId } from "react";
 
 import { Button, Dialog } from "@moss/ui";
+import { assistantName } from "../api/use-assistant-name.js";
 
 export interface ThrowAwayDraftDialogProps {
   readonly moduleId: string;
@@ -48,8 +49,8 @@ export function ThrowAwayDraftDialog(props: ThrowAwayDraftDialogProps) {
       }
     >
       <p className="jds-card__meta" data-module-id={props.moduleId}>
-        There is no undo, and no earlier version to go back to. If you want this module again, Moss
-        has to build it from scratch.
+        There is no undo, and no earlier version to go back to. If you want this module again,{" "}
+        {assistantName()} has to build it from scratch.
       </p>
       {props.error ? (
         <p className="jds-card__meta" role="alert">

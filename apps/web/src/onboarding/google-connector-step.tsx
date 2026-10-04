@@ -23,7 +23,7 @@ import {
   revokeConnectorAccount,
   testImapConnection
 } from "../api/client";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName } from "../api/use-assistant-name.js";
 import { queryKeys } from "../api/query-keys";
 import {
   GOOGLE_CONNECT_SUCCESS_QUERY_KEYS,
