@@ -100,14 +100,14 @@ describe("settings theme preferences", () => {
     expect(Object.keys(await readPreference("themes.custom"))).not.toContain("red");
   });
 
-  it("persists the optional gold token when provided", async () => {
-    const put = await putTheme(ids.sessionA, "gold-theme", {
+  it("persists the optional highlight token when provided", async () => {
+    const put = await putTheme(ids.sessionA, "highlight-theme", {
       name: "Golden",
-      tokens: { ...validThemeTokens, gold: "#c2872b" }
+      tokens: { ...validThemeTokens, highlight: "#c2872b" }
     });
 
     expect(put.statusCode).toBe(200);
-    expect(put.json<PutCustomThemeResponse>().theme.tokens.gold).toBe("#c2872b");
+    expect(put.json<PutCustomThemeResponse>().theme.tokens.highlight).toBe("#c2872b");
 
     const list = await server.inject({
       method: "GET",
@@ -116,8 +116,8 @@ describe("settings theme preferences", () => {
     });
     const stored = list
       .json<ListThemesResponse>()
-      .custom.find((theme) => theme.id === "gold-theme");
-    expect(stored?.tokens.gold).toBe("#c2872b");
+      .custom.find((theme) => theme.id === "highlight-theme");
+    expect(stored?.tokens.highlight).toBe("#c2872b");
   });
 
   it("persists the optional nav token when provided", async () => {

@@ -13,7 +13,7 @@ export interface CSSStyleDeclarationLike {
 const THEME_COLOR_RE =
   /^#[0-9a-fA-F]{6}$|^rgba?\((25[0-5]|2[0-4]\d|1?\d?\d),\s*(25[0-5]|2[0-4]\d|1?\d?\d),\s*(25[0-5]|2[0-4]\d|1?\d?\d)(,\s*(0|1|0?\.\d+))?\)$/;
 
-/* Only the required 12 map 1:1 to a var; the optional gold slot derives a ramp below. */
+/* Only the required 12 map 1:1 to a var; the optional highlight slot derives the gold ramp below. */
 const TOKEN_TO_VAR: Record<AestheticThemeTokenKey, string> = {
   paper: "--paper",
   surface: "--surface",
@@ -188,13 +188,13 @@ export function applyThemeTokens(
   style.setProperty("--accent-strong", "var(--accent-hover)");
   style.setProperty("--focus-ring", `color-mix(in srgb, ${tokens.accent} 45%, transparent)`);
 
-  if (tokens.gold) {
-    const gold = parseThemeColor(tokens.gold);
+  if (tokens.highlight) {
+    const gold = parseThemeColor(tokens.highlight);
     if (gold) {
       // Mix toward --paper (not pure white) for the same reason as the accent
       // ramp above (#787) — keeps the gold softs oat-tinted, not chalky.
       const paper = parseThemeColor(tokens.paper) ?? { r: 255, g: 255, b: 255 };
-      style.setProperty("--gold", tokens.gold);
+      style.setProperty("--gold", tokens.highlight);
       style.setProperty("--gold-strong", rgbToHex(mix(gold, { r: 0, g: 0, b: 0 }, 0.18)));
       style.setProperty("--gold-soft", rgbToHex(mix(gold, paper, 0.82)));
       style.setProperty("--gold-soft-2", rgbToHex(mix(gold, paper, 0.72)));
