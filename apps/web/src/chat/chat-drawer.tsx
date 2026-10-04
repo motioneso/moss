@@ -1,8 +1,10 @@
+import { requestJson } from "@moss/module-web-sdk";
+import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
+import { HistoryList } from "./history-list";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   Clock,
-  MessageSquareText,
   Maximize2,
   Minimize2,
   MoreHorizontal,
@@ -19,7 +21,7 @@ import {
   useState
 } from "react";
 
-import { BrandMark, EmptyState as JdsEmptyState, IconButton, Menu } from "@moss/ui";
+import { BrandMark, Chip, IconButton, Menu } from "@moss/ui";
 
 import {
   cancelChatTurn,
@@ -41,10 +43,9 @@ import {
   DEFAULT_CHAT_SURFACE,
   type ChatAttachmentDto,
   type ChatSurface,
-  type LocaleSettingsDto,
   type LookupAiCapabilityRouteResponse
 } from "@moss/shared";
-import { formatDate, useUserLocale } from "../locale/locale-format";
+import { useUserLocale } from "../locale/locale-format";
 import { ChatModelPill } from "./chat-model-pill";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
@@ -67,6 +68,8 @@ import "../styles/kit-chat-skills.css";
 const PHONE_QUERY = "(max-width: 720px)";
 
 export function ChatDrawer(props: {
+  readonly meetingContext?: MeetingChatSelection & { readonly title: string };
+  readonly onMeetingUnavailable?: () => void;
   readonly open: boolean;
   readonly onClose: () => void;
   readonly records: readonly TranscriptRecord[];
@@ -92,6 +95,13 @@ export function ChatDrawer(props: {
   readonly expanded?: boolean;
   readonly onToggleExpanded?: () => void;
 }) {
+  const generationRef = useRef(0);
+  useEffect(
+    () => () => {
+      generationRef.current += 1;
+    },
+    []
+  );
   const queryClient = useQueryClient();
   const assistantName = useAssistantName("");
   const surfaceRef = useRef(props.surface);
@@ -298,7 +308,8 @@ export function ChatDrawer(props: {
         isSending ||
         privateEnded ||
         activatingPrivate ||
-        historyActivationPending
+        historyActivationPending ||
+        (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
         return;
       }
@@ -311,41 +322,77 @@ export function ChatDrawer(props: {
       setIsSending(true);
       setPendingUser({ text: trimmed, attachments });
       const initiatingSurface = props.surface;
+      const generation = generationRef.current;
       void (async () => {
         try {
-          const result = await sendChatTurn(
-            trimmed,
-            attachments?.map((attachment) => attachment.id),
-            undefined,
-            initiatingSurface
-          );
+          const result = props.meetingContext
+            ? await requestJson<MeetingChatTurnResponse>("/api/chat/turn", {
+                method: "POST",
+                body: {
+                  text: trimmed,
+                  surface: initiatingSurface,
+                  meetingContext: {
+                    meetingId: props.meetingContext.meetingId,
+                    selectionId: props.meetingContext.selectionId
+                  }
+                }
+              })
+            : await sendChatTurn(
+                trimmed,
+                attachments?.map((attachment) => attachment.id),
+                undefined,
+                initiatingSurface
+              );
           void queryClient.invalidateQueries({
             queryKey: queryKeys.chat.threads(initiatingSurface)
           });
-          if (surfaceRef.current !== initiatingSurface) return;
+          if (surfaceRef.current !== initiatingSurface || generation !== generationRef.current)
+            return;
           setPendingUser(null);
           const postResponseRecords: readonly TranscriptRecord[] = [
-            { kind: "user", text: trimmed, messageId: result.userMessageId, attachments },
+            {
+              kind: "user",
+              text: trimmed,
+              messageId: result.userMessageId,
+              attachments,
+              ...("meetingContext" in result ? { meetingContext: result.meetingContext } : {})
+            },
             {
               kind: "reply",
               text: result.reply,
               messageId: result.assistantMessageId,
-              sourceFreshness: result.sourceFreshness
+              sourceFreshness: "sourceFreshness" in result ? result.sourceFreshness : undefined,
+              ...("meetingContext" in result
+                ? {
+                    meetingContext: result.meetingContext,
+                    answerProvenance: result.answerProvenance,
+                    answerProvenanceCitedIds: result.answerProvenanceCitedIds
+                  }
+                : {})
             }
           ];
           setFallbackRecords((current) =>
             reconcileFallbacks([...current, ...postResponseRecords], latestRecordsRef.current)
           );
         } catch (caught) {
-          if (surfaceRef.current !== initiatingSurface) return;
+          if (surfaceRef.current !== initiatingSurface || generation !== generationRef.current)
+            return;
           setPendingUser(null);
+          if (
+            props.meetingContext &&
+            caught &&
+            typeof caught === "object" &&
+            "status" in caught &&
+            [401, 403, 404].includes(Number(caught.status))
+          )
+            props.onMeetingUnavailable?.();
           if (isNoActiveChatModelError(caught)) {
             setNeedsProvider(true);
             return;
           }
           setSendError(caught instanceof Error ? caught.message : "Could not send message");
         } finally {
-          if (surfaceRef.current === initiatingSurface) {
+          if (surfaceRef.current === initiatingSurface && generation === generationRef.current) {
             setIsSending(false);
           }
         }
@@ -358,7 +405,10 @@ export function ChatDrawer(props: {
       messagesQuery.data?.messages,
       privateEnded,
       queryClient,
-      reviewThreadId
+      reviewThreadId,
+      props.surface,
+      props.meetingContext,
+      props.onMeetingUnavailable
     ]
   );
 
@@ -506,6 +556,7 @@ export function ChatDrawer(props: {
   };
 
   const startNewChat = () => {
+    generationRef.current += 1;
     setReviewThreadId(null);
     setShowHistory(false);
     setIsSending(false);
@@ -635,7 +686,9 @@ export function ChatDrawer(props: {
               ? "Model unavailable"
               : noModelAvailable
                 ? "Not connected"
-                : "Here when you need me"}
+                : props.meetingContext
+                  ? "Meeting questions only"
+                  : "Here when you need me"}
           </div>
         </div>
         <IconButton aria-label="New chat" title="New chat" onClick={startNewChat}>
@@ -683,6 +736,13 @@ export function ChatDrawer(props: {
         </IconButton>
       </div>
 
+      {props.meetingContext ? (
+        <div className="chatd__head">
+          <Chip onRemove={props.onClose} removeLabel="Clear meeting selection">
+            {props.meetingContext.title}
+          </Chip>
+        </div>
+      ) : null}
       <div className="chatd__body-wrap">
         <div className="chatd__body" ref={bodyRef} onScroll={handleBodyScroll}>
           {showHistory ? (
@@ -692,7 +752,8 @@ export function ChatDrawer(props: {
               onSelect={(id) => {
                 setReviewThreadId(id);
                 setShowHistory(false);
-                resumeMutation.mutate({ threadId: id, surface: props.surface });
+                if (!props.meetingContext)
+                  resumeMutation.mutate({ threadId: id, surface: props.surface });
               }}
               activating={resumeMutation.isPending}
             />
@@ -729,6 +790,7 @@ export function ChatDrawer(props: {
               renderRecord={(record) => (
                 <RecordRow
                   record={record}
+                  meetingScoped={Boolean(props.meetingContext)}
                   focusActionRequestId={props.focusActionRequestId}
                   onActionRequestFocused={props.onActionRequestFocused}
                 />
@@ -736,6 +798,11 @@ export function ChatDrawer(props: {
             />
           ) : noModelAvailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
+          ) : props.meetingContext ? (
+            <div className="chatd-empty">
+              <div className="chatd-empty__title">Ask about this meeting</div>
+              <div className="chatd-empty__sub">Meeting questions only</div>
+            </div>
           ) : (
             <EmptyState
               onSend={sendMessage}
@@ -813,16 +880,26 @@ export function ChatDrawer(props: {
         ) : null}
       </div>
 
+      {props.meetingContext ? (
+        <p className="jds-hint">
+          Each question uses the current transcript. Include context in follow-up questions.
+        </p>
+      ) : null}
       <Composer
+        textOnly={Boolean(props.meetingContext)}
         modelSelector={
           <ChatModelPill
-            disabled={privateEnded || isSending || historyActivationPending}
+            disabled={
+              Boolean(props.meetingContext) || privateEnded || isSending || historyActivationPending
+            }
             privateMode={privateMode}
             surface={props.surface}
             onCrossProviderSwitch={switchToNewModelChat}
           />
         }
-        readOnly={privateEnded || historyActivationPending}
+        readOnly={
+          privateEnded || historyActivationPending || (Boolean(props.meetingContext) && reviewing)
+        }
         isFounder={props.isFounder}
         initialText={props.initialText}
         isSending={isSending}
@@ -838,57 +915,6 @@ export function ChatDrawer(props: {
         onStop={stopSending}
       />
     </aside>
-  );
-}
-
-function HistoryList(props: {
-  readonly threads: readonly {
-    readonly id: string;
-    readonly title: string;
-    readonly lastActiveAt: string;
-    readonly lastMessagePreview: string | null;
-  }[];
-  readonly selectedThreadId: string | null;
-  readonly onSelect: (threadId: string) => void;
-  readonly activating: boolean;
-}) {
-  const locale = useUserLocale();
-  if (props.threads.length === 0) {
-    return (
-      <div className="chatd-sess chatd-sess--empty">
-        <JdsEmptyState
-          icon={<MessageSquareText size={18} aria-hidden="true" />}
-          title="No past conversations yet."
-        />
-      </div>
-    );
-  }
-  return (
-    <div className="chatd-sess">
-      <div className="chatd-sess__hd">History</div>
-      {props.threads.map((thread) => (
-        <button
-          className={`chatd-sess__row${props.selectedThreadId === thread.id ? " is-selected" : ""}`}
-          disabled={props.activating}
-          key={thread.id}
-          type="button"
-          onClick={() => props.onSelect(thread.id)}
-        >
-          <span className="chatd-sess__ic">
-            <MessageSquareText size={14} aria-hidden="true" />
-          </span>
-          <span className="chatd-sess__main">
-            <span className="chatd-sess__title">{thread.title}</span>
-            {thread.lastMessagePreview ? (
-              <span className="chatd-sess__preview">{thread.lastMessagePreview}</span>
-            ) : null}
-          </span>
-          <span className="chatd-sess__when">
-            {relativeThreadTime(thread.lastActiveAt, locale)}
-          </span>
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -921,17 +947,6 @@ function reconcileFallbacks(
 
 export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
   return data?.route?.available === true;
-}
-
-function relativeThreadTime(value: string, locale: LocaleSettingsDto): string {
-  const then = new Date(value).getTime();
-  if (Number.isNaN(then)) return "";
-  const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return formatDate(value, locale, { month: "short", day: "numeric" });
 }
 
 function EmptyState(props: {

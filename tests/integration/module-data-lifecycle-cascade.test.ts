@@ -151,6 +151,10 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.integration_connections",
         // #2236 scratchpad — one owner-keyed row per user, cascades with the user.
         "app.scratchpads",
+        // #2981 meeting drafts and immutable note receipts cascade with their owner.
+        "app.meeting_records",
+        "app.meeting_note_writes",
+        "app.meeting_transcript_batches",
         // Workshop projects own their durable feed; both cascade with their owner.
         "app.workshop_projects",
         "app.workshop_project_feed"

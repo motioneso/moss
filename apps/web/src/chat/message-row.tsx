@@ -1,3 +1,4 @@
+import { meetingCoverageLabel } from "./meeting-source-link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -42,6 +43,7 @@ import { WorkflowApprovalCard } from "./workflow-approval-card";
 
 export function RecordRow(props: {
   readonly record: TranscriptRecord;
+  readonly meetingScoped?: boolean;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
 }) {
@@ -75,7 +77,7 @@ export function RecordRow(props: {
       <div className="chatd-msg chatd-msg--me">
         <AttachmentChips attachments={props.record.attachments} />
         {text ? <div className="chatd-bubble">{text}</div> : null}
-        {props.record.messageId ? (
+        {props.record.messageId && !props.record.meetingContext && !props.meetingScoped ? (
           <ChatFeedbackMenu messageId={props.record.messageId} canRemember />
         ) : null}
       </div>
@@ -120,13 +122,18 @@ export function RecordRow(props: {
         </span>
         <div className="chatd-bubble">
           <MarkdownMessage
+            messageId={props.record.messageId}
+            disableRemoteImages={Boolean(props.record.meetingContext) || props.meetingScoped}
             text={text}
             answerProvenance={props.record.answerProvenance}
             answerProvenanceCitedIds={props.record.answerProvenanceCitedIds}
           />
         </div>
+        {props.record.meetingContext ? (
+          <p className="chatd-empty__sub">{meetingCoverageLabel(props.record.meetingContext)}</p>
+        ) : null}
         <ChatFreshnessFooter sourceFreshness={props.record.sourceFreshness} />
-        {props.record.messageId ? (
+        {props.record.messageId && !props.record.meetingContext && !props.meetingScoped ? (
           <ChatFeedbackMenu messageId={props.record.messageId} canRemember={false} corner />
         ) : null}
       </div>

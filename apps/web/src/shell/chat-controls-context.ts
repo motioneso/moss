@@ -1,6 +1,9 @@
+import { setMeetingChatHook, type OpenMeetingChatInput } from "@moss/module-web-sdk";
 import { createContext, useContext } from "react";
 
 export interface ChatControls {
+  readonly clearMeetingChat?: (meetingId: string) => void;
+  readonly openMeetingChat?: (input: OpenMeetingChatInput) => void;
   /** Open the chat drawer without submitting a new user turn. */
   readonly openChat: () => void;
   /** Open the chat drawer and send `prompt` as a turn. */
@@ -28,3 +31,11 @@ export function useChatControls(): ChatControls {
   }
   return ctx;
 }
+
+setMeetingChatHook(() => {
+  const controls = useChatControls();
+  return {
+    openMeetingChat: (input) => controls.openMeetingChat?.(input),
+    clearMeetingChat: (meetingId) => controls.clearMeetingChat?.(meetingId)
+  };
+});

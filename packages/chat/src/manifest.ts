@@ -57,7 +57,9 @@ export const chatModuleManifest = {
       "sql/0174_chat_surface.sql",
       "sql/0251_chat_classifier_shadow_records.sql",
       "sql/0252_chat_classifier_release_eligibility.sql",
-      "sql/0255_chat_classifier_shadow_retention.sql"
+      "sql/0255_chat_classifier_shadow_retention.sql",
+      "sql/0263_meeting_chat_cleanup.sql",
+      "sql/0264_chat_surface_immutable.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -105,8 +107,50 @@ export const chatModuleManifest = {
   features: [
     {
       id: "chat.acp_answers",
-      description: "Chat answers through the agent protocol for every conversation.",
+      description:
+        "General chat answers through the agent protocol. Selected-meeting questions use the configured API-key chat model without tools.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.meeting_questions",
+      description:
+        "Independent questions use one meeting’s current transcript in shared chat, with cutoff and exact-revision citations. The API-key model and pins apply. No tools, unrelated memory or automatic export; subscription models are unsupported.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "meeting_chat_unsupported",
+          class: "prerequisite",
+          remediationRef: "chat.meeting_questions.configure",
+          description:
+            "The selected model is missing, inactive, revoked or uses unsupported subscription authentication. No fallback model is selected."
+        },
+        {
+          code: "meeting_context_unavailable",
+          class: "permission",
+          description:
+            "The selected meeting was deleted, disabled or is unavailable to this person. Its answer and evidence are withheld."
+        },
+        {
+          code: "meeting_chat_changed",
+          class: "transient",
+          description:
+            "The meeting question was stopped or its selected model or conversation changed. Ask again in the selected meeting."
+        },
+        {
+          code: "meeting_chat_failed",
+          class: "transient",
+          description:
+            "The selected model failed or no transcript evidence fits the current answer-size limit. No ungrounded fallback answer is generated."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.meeting_questions.configure",
+          description:
+            "Choose an allowed active API-key chat model in AI providers. Administrator pins are enforced; subscription meeting chat requires a future supported adapter.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
     },
     {
       id: "chat.acp_sign_in_expired",
@@ -220,6 +264,7 @@ export const chatModuleManifest = {
       responseSchema: listChatThreadMessagesResponseSchema,
       permissionId: "chat.view"
     },
+    { method: "GET", path: "/api/chat/meeting-context", permissionId: "chat.view" },
     { method: "POST", path: "/api/chat/turn", permissionId: "chat.message" },
     // #1133 — file/image upload staged for the next turn; sending is what needs the
     // message permission, so the upload shares it.

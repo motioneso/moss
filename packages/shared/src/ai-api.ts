@@ -538,14 +538,28 @@ export const lookupAiCapabilityRouteResponseSchema = {
   }
 } as const;
 
-// Transcript text only in the response — the audio body that produced it is a raw upload
+// Transcript text plus explicitly requested clip-relative segments; the audio is a raw upload
 // (not JSON, see transcribeAudioRouteSchema below) and is never echoed back or persisted.
 export const transcribeAudioResponseSchema = {
   type: "object",
   additionalProperties: false,
   required: ["text"],
   properties: {
-    text: { type: "string" }
+    text: { type: "string" },
+    segments: {
+      type: "array",
+      maxItems: 10000,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["start", "end", "text"],
+        properties: {
+          start: { type: "number", minimum: 0 },
+          end: { type: "number", minimum: 0 },
+          text: { type: "string", maxLength: 1048576 }
+        }
+      }
+    }
   }
 } as const;
 
@@ -842,6 +856,11 @@ export const lookupAiCapabilityRouteRouteSchema = {
 // No `body` schema: the request body is a raw audio upload (content-type audio/*), not JSON —
 // validated by the route handler itself, not ajv.
 export const transcribeAudioRouteSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    properties: { timestamps: { type: "string", enum: ["segment"] } }
+  },
   response: {
     200: transcribeAudioResponseSchema,
     400: errorResponseSchema,

@@ -1,0 +1,87 @@
+name: Meeting draft UI acceptance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/meeting-drafts-uat.yml"
+      - "packages/meetings/**"
+      - "packages/chat/**"
+      - "packages/module-web-sdk/**"
+      - "packages/module-registry/src/meeting-chat.ts"
+      - "apps/web/src/chat/**"
+      - "apps/web/src/shell/**"
+      - "packages/shared/src/chat-api.ts"
+      - "packages/shared/src/meeting-*.ts"
+      - "tests/uat/run-meetings-uat.ts"
+      - "tests/uat/subnet-selection.ts"
+      - "tests/uat/specs/2981-meeting-*.uat.spec.ts"
+      - "apps/web/src/app-route-metadata.ts"
+      - "apps/web/src/shell/nav-icons.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meeting-drafts-uat-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  draft-workspace:
+    name: Verify real meeting draft UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install browser
+        timeout-minutes: 5
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start the isolated gate's database container
+        run: pnpm db:up
+      - name: Run credential-free Meetings UAT through the supported gate
+        timeout-minutes: 20
+        run: |
+          scripts/run-gate.sh start --gate test:uat:2981-meetings
+          scripts/run-gate.sh wait --follow
+      - name: Record bounded test evidence
+        if: always()
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import re
+          for path in Path("/tmp/jarv1s-gate").glob("*.log"):
+              lines = re.sub(r"\x1b\[[0-9;]*m", "", path.read_text(errors="replace")).splitlines()
+              selected = set(range(max(0, len(lines) - 60), len(lines)))
+              matches = 0
+              for index, line in enumerate(lines):
+                  if re.search(r"Error:|TimeoutError|expect\(|[0-9]+\) \[chromium\]|MEETINGS_UAT|\[uat\] running|[0-9]+ passed|[0-9]+ failed", line):
+                      selected.update(range(max(0, index - 4), min(len(lines), index + 35)))
+                      matches += 1
+                      if matches >= 12:
+                          break
+              print(f"Evidence from {path.name}")
+              for index in sorted(selected)[:500]:
+                  print(lines[index])
+          PYCODE
+      - name: Stop the gate and its development containers
+        if: always()
+        timeout-minutes: 3
+        run: |
+          scripts/run-gate.sh stop || true
+          pnpm db:down

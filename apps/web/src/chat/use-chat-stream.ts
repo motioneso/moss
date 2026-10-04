@@ -280,6 +280,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
           kind: "user",
           text: message.body,
           messageId: message.id,
+          meetingContext: message.meetingContext,
           attachments: message.attachments
         }
       ];
@@ -299,6 +300,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
         text: message.body,
         messageId: message.id,
         sourceFreshness: message.sourceFreshness,
+        meetingContext: message.meetingContext,
         answerProvenance: message.answerProvenance,
         answerProvenanceCitedIds: message.answerProvenanceCitedIds,
         ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),

