@@ -6,7 +6,7 @@
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 ## Queue
 
@@ -16,7 +16,7 @@
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | reaped | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | merged (a1369fbed) | - | reaped | fix-2942-midchat-tools | #2974 | 1 |
-| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | slice D done 22:40 (b52cac588, live proof posted; full gate re-run after 2989 proof); security review FAIL 23:20 (3 blocking: missing detail owner trigger, no observed-red row security tests, 20 blocking browser specs not run); fix lane started. Slice C done 17:05: full gate green except 2 known worker-timing flakes (pass alone), live proof on a provisioned stack, PR comment 5974411839. Gap for later: detail popup "asked for" and "returned" facts unfilled; slice D lane reports whether spec requires them. Brief ~/.coord-briefs/overnight/lane-2956-slice-d.md. Then Opus QA, Ben sign-off | 2956 security fixes (Muse) | w1:p12D | feat-2956-activity-history | #2976 | 0 |
+| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | merged (9d4463820) 2026-10-04 on Ben's 21:35 OK after round-3 security review GREEN (comment 5978295081), CI green, live proof posted | 2956 security fixes (Muse) | w1:p12D (reap pending) | feat-2956-activity-history | #2976 | 0 |
 | Gate runs get their own throwaway Postgres (Ben ask 20:50 after shared server crashed mid-gate) | #2989 | sensitive (gate tooling) | PR open, database-free checks green; two-gates proof held until slice D gate and review stack finish | 2989 gate own database (Muse) | w1:p128 | fix-2989-gate-own-postgres | #2991 | 0 |
 | Review and test meeting companion PR #2982 (Ben ask 21:00; findings only, no pushes to the shared branch) | #2981 | review only | done 21:30: RED at a86c3e7, 2 blockers, 9 major, 14 minor; comment 5976578877; database suites blocked on #2989 | - | closed | detached review worktree | #2982 | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
@@ -338,3 +338,16 @@ merges_since_relay 1 (PR #2991). Ben asleep; his 21:35 merge interpretation gove
 - Self-knowledge research done: build the app map from what Moss already registers (screens, settings, tools, modules) with a test that fails on any missing entry; cheap first step is telling every chat surface to check before saying no. Pane w1:p12Q closed. RELAY POINT 8 step 2 complete; findings go to Ben in the morning report.
 - 2976 interim blocker fixed by lane: head c3fa5327c, new migration 0260 (main ends at 0257, no clash), lane reports observed red then rc=0. QA pane w1:p12H reset itself from its own handoff (now session 914b4abe); asked to review d4cad8efb..c3fa5327c with its own red run and fold it into the full verdict. Background watcher on new PR 2976 comments is armed.
 - Ben ruled the People sync question: every note in the People folder is a person (option A). Recorded on issue #2997, removed from AWAITING-BEN.md. Not built in this run. Reply watcher stopped.
+- 2976 MERGED 9d4463820 (security tier). QA round 3 GREEN at c3fa5327c (comment 5978295081): re-parent fix red then green 17/17, CI green; 5 browser specs also fail on main; classifier-shadow 1 of 2 on branch, a browser fetch failure that never reached the server. Merged on Ben's 21:35 OK.
+- Ben ruled after midnight: Tailscale integration (see and act on tailnet devices) filed as #3003 on project 2, needs-spec, not in this run. Research reports Taildropped to Ben's MacBook (music-production-m1-air).
+
+## RELAY POINT 9 (session 32206ccd, security merge of 2976; relay rule fired)
+
+merges_since_relay 1 (PR #2976, security). Ben's 21:35 note governs. Nothing is building or under review.
+
+1. **Bookkeeping for #2956:** confirm the issue closed (close it if not), move its project 2 item to Done.
+2. **Reap, after confirming 9d4463820 is on origin/main:**
+   - Muse lane pane "2956 security fixes (Muse)" (was w1:p12D, Builders tab). First ask it (herdr pane run, confirm with bounded read) to confirm it left no dev server running and no seeded rows; then close it. Worktree .claude/worktrees/feat-2956-activity-history: run scripts/worktree-reapable.sh, record its line, remove, delete local branch.
+   - QA pane "QA 2976 round 3 (Opus)" (was w1:p12H, agent qa-2976-r3, qa tab; it reset itself once, session now 914b4abe). Close it. QA worktrees qa-2976-r3 and qa-2976-main: git worktree remove --force (QA never edits source). Check both for leftover .qa-uat helper scripts first; nothing there is work.
+3. **PR #2982:** never merge from this run.
+4. **End:** point ~/.claude/projects and ~/.codex/sessions at /media/ben/Downloads/agent-logs once no session is writing (see the disk bullet under Relay 7); if any session is still writing, leave it and note it for Ben. Then end-coordination: closing entry, stop coordinator-watchdog.timer, release the name, worktree clean.
