@@ -195,6 +195,9 @@ test("a real model call appears as an Activity line with a working detail dialog
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Admin / Setup" }).click();
     await expect(page.getByRole("button", { name: "Model activity" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible({
+      timeout: 15_000
+    });
     await shot(page, "settings-admin-no-model-activity");
   });
 });
