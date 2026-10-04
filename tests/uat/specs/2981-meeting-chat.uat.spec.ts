@@ -248,7 +248,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     // A disabled hard-pinned model is a configuration error, never permission to substitute.
     expect(
       (
-        await page.request.put(`/api/ai/models/${modelId}`, { data: { status: "disabled" } })
+        await page.request.patch(`/api/ai/models/${modelId}`, { data: { status: "disabled" } })
       ).status()
     ).toBe(200);
     const rejectedTurn = page.waitForResponse(
@@ -265,7 +265,9 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     ).toBeVisible();
     expect(await fixtureEvidence(fixtureName)).toHaveLength(2);
     expect(
-      (await page.request.put(`/api/ai/models/${modelId}`, { data: { status: "active" } })).status()
+      (
+        await page.request.patch(`/api/ai/models/${modelId}`, { data: { status: "active" } })
+      ).status()
     ).toBe(200);
 
     // The OLD answer's chip must still dereference revision 1 after revision 2 is current.

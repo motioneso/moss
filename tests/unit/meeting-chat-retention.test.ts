@@ -42,7 +42,7 @@ describe("meeting-derived chat retention boundaries", () => {
   it("deletes all derived meeting threads on the canonical surface in the caller transaction", async () => {
     const { scoped, queries } = makeRecordingDb();
     await deleteMeetingChatThreads(scoped, meetingId);
-    expect(queries[0]?.sql).toContain('delete from "app"."chat_threads"');
+    expect(queries[0]?.sql).toContain("SELECT app.delete_meeting_chat_threads_for_cleanup(");
     expect(queries[0]?.parameters).toEqual([meetingChatSurface(meetingId)]);
   });
   it("rejects meeting-message remember and feedback before exposing an excerpt", async () => {

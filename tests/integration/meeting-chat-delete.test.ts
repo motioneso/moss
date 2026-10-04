@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql, type Kysely } from "kysely";
-import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
+import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { ChatRepository, deleteMeetingChatThreads } from "@moss/chat";
 import {
   MeetingRecordsRepository,
@@ -234,39 +234,58 @@ describe("owner-approved meeting deletion with real chat runtime permissions", (
         title: "Protected thread",
         surface: normalizeChatSurface(rawSurface)
       });
-      // DELETE now has a table grant; owner-only surface RLS must still affect zero rows.
-      expect(
-        await db.db
-          .deleteFrom("app.chat_threads")
-          .where("id", "=", thread.id)
-          .returning("id")
-          .execute()
-      ).toEqual([]);
+      await sql`SELECT app.delete_meeting_chat_threads_for_cleanup(${rawSurface}::text)`.execute(
+        db.db
+      );
       expect(
         await chats.getThreadById(db, thread.id, normalizeChatSurface(rawSurface))
       ).toBeDefined();
     });
   });
-  it("keeps direct deletion of incognito meeting surfaces unavailable", async () => {
-    await context.withDataContext({ actorUserId: owner }, async (db) => {
-      const thread = await chats.openNewThread(db, {
-        title: "Private bookkeeping",
-        surface: meetingChatSurface(randomUUID()),
-        incognito: true
-      });
-      expect(
+  it.each(["ordinary-to-meeting", "meeting-to-drawer", "meeting-to-meeting"])(
+    "rejects runtime surface retargeting (%s) without changing rows or bindings",
+    async (direction) => {
+      const f = await fixture();
+      const threadId = direction === "ordinary-to-meeting" ? f.unrelatedId : f.threadIds[0]!;
+      const originalSurface = direction === "ordinary-to-meeting" ? "drawer" : f.surface;
+      const targetSurface =
+        direction === "meeting-to-drawer" ? "drawer" : meetingChatSurface(randomUUID());
+      await expect(
+        context.withDataContext({ actorUserId: owner }, async (db) => {
+          const principal = await sql<{ role: string }>`SELECT current_user AS role`.execute(db.db);
+          expect(principal.rows[0]?.role).toBe("jarvis_app_runtime");
+          await db.db
+            .updateTable("app.chat_threads")
+            .set({ surface: targetSurface })
+            .where("id", "=", threadId)
+            .execute();
+        })
+      ).rejects.toMatchObject({ code: "42501", message: "chat thread surface cannot be changed" });
+      await assertPresent(f);
+      await context.withDataContext({ actorUserId: owner }, async (db) => {
+        expect(
+          await db.db
+            .selectFrom("app.chat_threads")
+            .select(["id", "surface", "owner_user_id", "incognito"])
+            .where("id", "=", threadId)
+            .executeTakeFirstOrThrow()
+        ).toEqual({
+          id: threadId,
+          surface: originalSurface,
+          owner_user_id: owner,
+          incognito: false
+        });
+        // Ordinary updates and no-op surface assignments remain supported.
+        await chats.updateThreadTitle(db, threadId, "Updated title");
         await db.db
-          .deleteFrom("app.chat_threads")
-          .where("id", "=", thread.id)
-          .returning("id")
-          .execute()
-      ).toEqual([]);
-      await sql`SELECT app.delete_incognito_chat_thread_for_cleanup(${thread.id}::uuid)`.execute(
-        db.db
-      );
-    });
-  });
-  it("observes ordinary-thread protection fail without the surface restriction and rolls back the probe", async () => {
+          .updateTable("app.chat_threads")
+          .set({ surface: originalSurface })
+          .where("id", "=", threadId)
+          .execute();
+      });
+    }
+  );
+  it("observes surface retargeting without its trigger and rolls back the security probe", async () => {
     assertIsolatedTestDatabase(connectionStrings.bootstrap);
     const name = new URL(connectionStrings.bootstrap).pathname.slice(1);
     if (!/^(jarvis_gate_|jarvis_test_)/.test(name))
@@ -276,40 +295,103 @@ describe("owner-approved meeting deletion with real chat runtime permissions", (
         ?.name
     ).toBe(name);
     const f = await fixture();
-    const check = (db: DataContextDb) =>
-      db.db
-        .deleteFrom("app.chat_threads")
-        .where("id", "=", f.unrelatedId)
-        .returning("id")
-        .execute();
-    expect(await context.withDataContext({ actorUserId: owner }, check)).toEqual([]);
-    class ScopeProtectionRemoved extends Error {}
+    class SurfaceProtectionRemoved extends Error {}
     await expect(
       bootstrap.transaction().execute(async (transaction) => {
-        await sql`ALTER POLICY chat_threads_meeting_delete ON app.chat_threads USING (owner_user_id = app.current_actor_user_id())`.execute(
+        await sql`ALTER TABLE app.chat_threads DISABLE TRIGGER chat_threads_prevent_surface_change`.execute(
           transaction
         );
         await sql`SET LOCAL ROLE jarvis_app_runtime`.execute(transaction);
         await sql`SELECT set_config('app.actor_user_id', ${owner}, true)`.execute(transaction);
-        const deleted = await transaction
-          .deleteFrom("app.chat_threads")
+        const changed = await transaction
+          .updateTable("app.chat_threads")
+          .set({ surface: f.surface })
           .where("id", "=", f.unrelatedId)
-          .returning("id")
+          .returning(["id", "surface"])
           .execute();
-        if (deleted.length !== 1)
-          throw new Error("Protection-removal probe did not reach its assertion");
-        throw new ScopeProtectionRemoved(
-          "Ordinary chat became deletable with its restriction removed"
+        expect(changed).toEqual([{ id: f.unrelatedId, surface: f.surface }]);
+        throw new SurfaceProtectionRemoved(
+          "Ordinary chat could be retargeted with its trigger disabled"
         );
       })
-    ).rejects.toBeInstanceOf(ScopeProtectionRemoved);
-    expect(await context.withDataContext({ actorUserId: owner }, check)).toEqual([]);
+    ).rejects.toBeInstanceOf(SurfaceProtectionRemoved);
+    await expect(
+      context.withDataContext({ actorUserId: owner }, (db) =>
+        db.db
+          .updateTable("app.chat_threads")
+          .set({ surface: f.surface })
+          .where("id", "=", f.unrelatedId)
+          .execute()
+      )
+    ).rejects.toMatchObject({ code: "42501" });
     expect(
       await bootstrap
         .selectFrom("app.chat_threads")
-        .select("id")
+        .select("surface")
         .where("id", "=", f.unrelatedId)
-        .execute()
-    ).toHaveLength(1);
+        .executeTakeFirstOrThrow()
+    ).toEqual({ surface: "drawer" });
+    await assertPresent(f);
+  });
+  it("keeps incognito meeting rows outside the meeting cleanup function", async () => {
+    await context.withDataContext({ actorUserId: owner }, async (db) => {
+      const thread = await chats.openNewThread(db, {
+        title: "Private bookkeeping",
+        surface: meetingChatSurface(randomUUID()),
+        incognito: true
+      });
+      await sql`SELECT app.delete_meeting_chat_threads_for_cleanup(${thread.surface}::text)`.execute(
+        db.db
+      );
+      expect(
+        await chats.getThreadById(db, thread.id, normalizeChatSurface(thread.surface))
+      ).toBeDefined();
+      await sql`SELECT app.delete_incognito_chat_thread_for_cleanup(${thread.id}::uuid)`.execute(
+        db.db
+      );
+    });
+  });
+  it("exposes only the bounded cleanup function and keeps its trigger invoker-scoped", async () => {
+    const result = await sql<{
+      name: string;
+      definer: boolean;
+      owner: string;
+      config: string[] | null;
+      public_execute: boolean;
+    }>`
+      SELECT p.proname AS name, p.prosecdef AS definer,
+        pg_get_userbyid(p.proowner) AS owner, p.proconfig AS config,
+        EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+          WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE') AS public_execute
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'app' AND p.proname IN ('delete_meeting_chat_threads_for_cleanup', 'prevent_chat_thread_surface_change')
+      ORDER BY p.proname`.execute(bootstrap);
+    expect(result.rows).toEqual([
+      {
+        name: "delete_meeting_chat_threads_for_cleanup",
+        definer: true,
+        owner: "jarvis_migration_owner",
+        config: ["search_path=app, pg_temp"],
+        public_execute: false
+      },
+      {
+        name: "prevent_chat_thread_surface_change",
+        definer: false,
+        owner: "jarvis_migration_owner",
+        config: null,
+        public_execute: false
+      }
+    ]);
+  });
+  it("keeps direct runtime deletion forbidden for ordinary and meeting threads", async () => {
+    const f = await fixture();
+    for (const id of [f.unrelatedId, ...f.threadIds]) {
+      await expect(
+        context.withDataContext({ actorUserId: owner }, (db) =>
+          db.db.deleteFrom("app.chat_threads").where("id", "=", id).execute()
+        )
+      ).rejects.toMatchObject({ code: "42501" });
+    }
+    await assertPresent(f);
   });
 });

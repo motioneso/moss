@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { assertDataContextDb, type AccessContext, type DataContextDb } from "@moss/db";
 import {
@@ -171,10 +172,9 @@ export async function deleteMeetingChatThreads(
   meetingId: string
 ): Promise<void> {
   assertDataContextDb(db);
-  await db.db
-    .deleteFrom("app.chat_threads")
-    .where("surface", "=", meetingChatSurface(meetingId))
-    .execute();
+  await sql`SELECT app.delete_meeting_chat_threads_for_cleanup(${meetingChatSurface(meetingId)}::text)`.execute(
+    db.db
+  );
 }
 
 export async function dereferenceMeetingCitation(

@@ -162,7 +162,12 @@ separate. Run through `scripts/run-gate.sh start --gate test:integration`, then
 Draft-only real UI acceptance is verified at `468aaa8` by
 [CI](https://github.com/motioneso/moss/actions/runs/37165385320) and
 [UI UAT](https://github.com/motioneso/moss/actions/runs/37165385348). This does not verify the
-new transcript storage/review and meeting-question slices. Their fresh CI, DB tests and real-path UAT remain pending. The meeting-chat UAT uses a disclosed local HTTP provider stand-in to inspect real outbound requests, not real provider credentials or rewritten Moss responses.
+new transcript storage/review and meeting-question slices. Exact-commit CI, database and live-path
+results for those slices are recorded on [PR #2982](https://github.com/motioneso/moss/pull/2982).
+The meeting-chat UAT uses a disclosed local HTTP provider stand-in to inspect real outbound requests,
+not real provider credentials or rewritten Moss responses. Chat cleanup uses a bounded database
+function; direct runtime deletion remains unavailable and thread surfaces are immutable. The
+cleanup integration suite exercises the actual route and rollback-only protection-removal probes.
 
 The Linux checks cannot prove macOS/Windows audio routes, permissions, device release, Teams/Zoom
 compatibility, real-provider handling, diarization, native live/post-meeting capture or capture latency.
