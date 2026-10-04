@@ -163,7 +163,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "the chosen notes folder. An info icon explains how folders get listed. " +
       "Apps & services: connect external tools and services. A connection's detail screen lists its discovered " +
       "tools and lets the owner choose which are on for ordinary chat, with one on or off " +
-      "switch per tool. It also has a classifier section: a Let the classifier use this connection " +
+      "switch per tool. Tools are listed in groups, each with its own switch. A group switch reads " +
+      "on only when every tool in the group is on, and a group that is partly on reads off. Turning a " +
+      "group switch on turns on every tool in the group, including tools that were switched off " +
+      "one by one, and turning it off turns off every tool in the group, including tools that " +
+      "were switched on one by one. It also has a classifier section: a Let the classifier use this connection " +
       "switch that only marks the connection eligible, a note that messages and device names go " +
       "to the classifier provider, and a cost and sharing notice shown open above an explicit " +
       "Prepare action that names which tool definitions are sent to the owner's default chat " +
