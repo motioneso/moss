@@ -45,8 +45,11 @@ export const INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION: QueueDefinition = {
   }
 };
 
-/** `sort` sorts never-tried and stale tools. `retry` also re-sends tools whose sort failed. */
-export type ClassifierSortJobOp = "sort" | "retry";
+/**
+ * `sort` sorts never-tried and stale tools. `retry` also re-sends tools whose sort failed.
+ * `model_ready` also re-sends only tools whose sort failed for want of a model.
+ */
+export type ClassifierSortJobOp = "sort" | "retry" | "model_ready";
 
 export interface ClassifierSortJobPayload {
   readonly actorUserId: string;
@@ -117,15 +120,18 @@ export async function runClassifierSortJob(
       const targets = sortingTargets({
         discoveredTools: row.discoveredTools,
         sort: row.classifierSort,
-        retryFailed: op === "retry"
+        retryFailed: op === "retry",
+        retryNoModel: op === "model_ready"
       });
       if (targets.length === 0) return { status: "nothing_to_sort" };
 
       // Without a model that can sort, every target fails so the page offers Try again; no
       // automatic path resends a failed sort (spec 8.4). The reason is kept so the page can say
-      // a model is missing.
+      // a model is missing. A `model_ready` run that still finds none leaves those failures as
+      // they are.
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
       if (!selection?.structured) {
+        if (op === "model_ready") return { status: "no_model" };
         await repository.saveClassifierToolSorts(
           scopedDb,
           connectionId,
@@ -207,6 +213,10 @@ export interface RegisterClassifierSortWorkersDeps extends ClassifierSortJobDeps
   readonly workOptions?: WorkOptions;
 }
 
+function sortJobOp(op: unknown): ClassifierSortJobOp {
+  return op === "retry" || op === "model_ready" ? op : "sort";
+}
+
 export async function registerClassifierSortWorkers(
   boss: PgBoss,
   deps: RegisterClassifierSortWorkersDeps
@@ -216,7 +226,7 @@ export async function registerClassifierSortWorkers(
     deps.workOptions ?? { pollingIntervalSeconds: 2 },
     async ([job]) => {
       if (!job) throw new Error("pg-boss invoked tool sorting without a job");
-      const op: ClassifierSortJobOp = job.data.op === "retry" ? "retry" : "sort";
+      const op = sortJobOp(job.data.op);
       const outcome = await runClassifierSortJob(
         deps,
         toAccessContext(job),

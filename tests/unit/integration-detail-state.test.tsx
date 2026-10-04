@@ -24,8 +24,10 @@ const api = vi.hoisted(() => ({
 
 vi.mock("../../apps/web/src/api/client.js", () => api);
 
+import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import {
   SORT_POLL_MS,
+  SORT_WATCH_MS,
   useIntegrationDetail
 } from "../../apps/web/src/settings/integration-detail-state.js";
 
@@ -452,5 +454,81 @@ describe("useIntegrationDetail Try again waits for the worker (#2984 R2.5b)", ()
     await act(async () => {
       await vi.waitFor(() => expect(tool("read_a").status).toBe("failed"));
     });
+  });
+});
+
+describe("useIntegrationDetail model settings (#2984 R2.5b)", () => {
+  const tool = (name: string) => shown().classifierTools.find((entry) => entry.toolName === name)!;
+
+  function withReadA(change: Partial<IntegrationClassifierToolSort>): IntegrationDetail {
+    const base = detail({ classifierEnabled: true });
+    return {
+      ...base,
+      classifierTools: base.classifierTools.map((entry) =>
+        entry.toolName === "read_a"
+          ? { ...entry, ...change }
+          : { ...entry, classifierState: "ready" as const }
+      )
+    };
+  }
+
+  it("re-reads when the model settings change, then follows the resumed preparation", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let stored = withReadA({
+      classifierState: "failed",
+      preparationFailure: "no_model",
+      failedAt: "2026-10-03T08:00:00.000Z"
+    });
+    api.getIntegration.mockImplementation(async () => stored);
+    await mount();
+    expect(tool("read_a").preparationFailure).toBe("no_model");
+
+    // The page has stopped watching by the time the owner adds a model elsewhere.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_WATCH_MS + SORT_POLL_MS);
+    });
+    const reads = api.getIntegration.mock.calls.length;
+    await act(async () => {
+      client.setQueryData(queryKeys.settings.providers, []);
+      await client.invalidateQueries({ queryKey: queryKeys.settings.providers });
+    });
+    expect(api.getIntegration).toHaveBeenCalledTimes(reads);
+
+    // The server now has a model and shows the tool preparing again.
+    stored = withReadA({ classifierState: "preparing" });
+    await act(async () => {
+      client.setQueryData(queryKeys.ai.models, []);
+      await client.invalidateQueries({ queryKey: queryKeys.ai.models });
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(tool("read_a").classifierState).toBe("preparing"));
+    });
+    expect(tool("read_a").preparationFailure).toBeNull();
+
+    stored = withReadA({ classifierState: "ready" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 2);
+    });
+    expect(tool("read_a").classifierState).toBe("ready");
+  });
+
+  it("re-reads on reopening, even when the last read is still fresh", async () => {
+    api.getIntegration.mockResolvedValue(detail());
+    client = new QueryClient({
+      defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 15_000 } }
+    });
+    const open = async () => {
+      await act(async () => {
+        renderer = create(createElement(QueryClientProvider, { client }, createElement(Harness)));
+      });
+      await act(async () => {
+        await vi.waitFor(() => expect(state?.detailQuery.isFetching).toBe(false));
+      });
+    };
+    await open();
+    expect(api.getIntegration).toHaveBeenCalledTimes(1);
+    act(() => renderer?.unmount());
+    await open();
+    expect(api.getIntegration).toHaveBeenCalledTimes(2);
   });
 });

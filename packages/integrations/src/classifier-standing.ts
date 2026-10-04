@@ -101,7 +101,7 @@ type ToolStanding = { readonly tool: RiskInputSource } & (
  * and the gate cannot disagree. A tool with a root-combinator schema is never prepared, so it is
  * `not_used` unless an older preparation for its current definition already makes it ready.
  */
-function toolStandings(state: ClassifierStandingInput): ToolStanding[] {
+function toolStandings(state: ClassifierStandingInput, modelReady = false): ToolStanding[] {
   const ordinaryEnabled = new Set(
     effectiveEnabledTools(state.discoveredTools, {
       enabledGroups: state.enabledGroups,
@@ -116,29 +116,54 @@ function toolStandings(state: ClassifierStandingInput): ToolStanding[] {
     if (keptOut.has(tool.name)) return { tool, sort, state: "kept_out" };
     if (!ordinaryEnabled.has(tool.name)) return { tool, sort, state: "not_used" };
 
-    // A sort that failed for want of a model fails the classifier the same way, so the page
-    // explains the missing model and offers the fix.
-    if (sort.status === "failed") {
-      return sort.failure === "no_model"
-        ? { tool, sort, state: "failed", reason: "no_model", failedAt: sort.failedAt }
-        : { tool, sort, state: "not_used" };
-    }
     const entry = preparationEntry(state.classifierPreparation, tool.name);
+    const waiting = entry ? "preparing_again" : "preparing";
+
+    // A sort that failed for want of a model fails the classifier the same way, so the page
+    // explains the missing model and offers the fix. Once a model exists it is sorted again.
+    if (sort.status === "failed") {
+      if (sort.failure !== "no_model") return { tool, sort, state: "not_used" };
+      if (modelReady) return { tool, sort, state: waiting };
+      return { tool, sort, state: "failed", reason: "no_model", failedAt: sort.failedAt };
+    }
 
     // A changed tool is sorted again before it is prepared again; both read as preparing again.
-    if (sort.status !== "current") {
-      return { tool, sort, state: entry ? "preparing_again" : "preparing" };
-    }
+    if (sort.status !== "current") return { tool, sort, state: waiting };
 
     const fingerprint = toolDefinitionFingerprint(tool);
     if (entry?.definitionFingerprint === fingerprint) return { tool, sort, state: "ready", entry };
     if (schemaHasRootCombinator(tool.inputSchema)) return { tool, sort, state: "not_used" };
     const failure = preparationFailure(state.classifierPreparation, tool.name);
-    if (failure?.definitionFingerprint === fingerprint) {
+    if (
+      failure?.definitionFingerprint === fingerprint &&
+      !(modelReady && failure.reason === "no_model")
+    ) {
       return { tool, sort, state: "failed", reason: failure.reason, failedAt: failure.failedAt };
     }
-    return { tool, sort, state: entry ? "preparing_again" : "preparing" };
+    return { tool, sort, state: waiting };
   });
+}
+
+/** Which of a connection's stored failures were for want of a model, and so cost nothing. */
+export interface NoModelFailures {
+  /** A discovered tool's sort failed for want of a model. */
+  readonly sort: boolean;
+  /** A tool's preparation failed for want of a model, against its current definition. */
+  readonly preparation: boolean;
+}
+
+export function noModelFailures(state: ClassifierStandingInput): NoModelFailures {
+  const sort = state.discoveredTools.some((tool) => {
+    const sortState = toolSortState(state.classifierSort, tool);
+    return sortState.status === "failed" && sortState.failure === "no_model";
+  });
+  const preparation = toolStandings(state).some(
+    (standing) =>
+      standing.state === "failed" &&
+      standing.reason === "no_model" &&
+      standing.sort.status === "current"
+  );
+  return { sort, preparation };
 }
 
 /**
@@ -171,16 +196,25 @@ export function effectiveClassifierTools(
   return out;
 }
 
+export interface ClassifierSortViewOptions {
+  /**
+   * A model that can sort and prepare now exists and the `model_ready` runs are queued, so a
+   * failure for want of a model reads as preparing.
+   */
+  readonly modelReady?: boolean;
+}
+
 /**
  * The API view: each discovered tool's sort against its current risk inputs, whether it asks, and
  * where it stands with the classifier. A tool without a current sort shows the free rule's name.
  */
 export function classifierSortView(
-  state: ClassifierStandingInput & { readonly discoveredTools: readonly DiscoveredTool[] }
+  state: ClassifierStandingInput & { readonly discoveredTools: readonly DiscoveredTool[] },
+  options: ClassifierSortViewOptions = {}
 ): IntegrationClassifierToolSort[] {
   const freeNames = readableToolNames(state.discoveredTools);
   const keptOut = new Set(state.classifierKeptOutTools);
-  return toolStandings(state).map((standing) => {
+  return toolStandings(state, options.modelReady).map((standing) => {
     const { tool, sort } = standing;
     const current = sort.status === "current";
     return {

@@ -330,6 +330,7 @@ export function derivePreparationArguments(
  * sorted against their current risk inputs, with a schema the classifier can declare, and with no
  * preparation for their current definition. A tool whose last attempt failed against its current
  * definition waits for the owner's Try again (`retryFailed`), so no automatic retry repeats a cost.
+ * A `no_model` failure never reached a provider, so a model being added retries it (`retryNoModel`).
  */
 export interface PreparationJobTargetsInput {
   readonly discoveredTools: readonly RiskInputSource[];
@@ -338,6 +339,7 @@ export interface PreparationJobTargetsInput {
   readonly keptOut: readonly string[];
   readonly curation: CurationState;
   readonly retryFailed: boolean;
+  readonly retryNoModel?: boolean;
 }
 
 export function preparationJobTargets(input: PreparationJobTargetsInput): RiskInputSource[] {
@@ -354,7 +356,8 @@ export function preparationJobTargets(input: PreparationJobTargetsInput): RiskIn
       return false;
     }
     const failure = preparationFailure(input.preparation, tool.name);
-    return input.retryFailed || failure?.definitionFingerprint !== fingerprint;
+    if (failure?.definitionFingerprint !== fingerprint) return true;
+    return input.retryFailed || (input.retryNoModel === true && failure.reason === "no_model");
   });
 }
 

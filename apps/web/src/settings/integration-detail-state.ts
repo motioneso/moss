@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { IntegrationDetail } from "@moss/shared";
@@ -31,6 +31,18 @@ export const SORT_POLL_MS = 3_000;
  * classifier on or pressing Try again starts the wait over.
  */
 export const SORT_WATCH_MS = 10 * 60_000;
+
+/** Model settings whose change can give a connection the model its tools waited for. */
+const MODEL_SETTINGS_KEYS: readonly QueryKey[] = [
+  queryKeys.ai.summary,
+  queryKeys.ai.providers,
+  queryKeys.ai.models,
+  queryKeys.ai.chatModelOverride
+];
+
+function isModelSettingsKey(key: QueryKey): boolean {
+  return MODEL_SETTINGS_KEYS.some((prefix) => prefix.every((part, index) => key[index] === part));
+}
 
 /** True while the worker still owes a sort for at least one tool. */
 export function sortPending(detail: IntegrationDetail | undefined): boolean {
@@ -70,6 +82,9 @@ export function withSendWithoutAsking(
  * While tools wait to be sorted or prepared the detail re-reads every few seconds, so the
  * groups and the classifier's progress appear without a reload.
  *
+ * Changing the model settings re-reads the detail and starts the wait over, since tools that
+ * failed for want of a model resume once one exists. Reopening the page always re-reads.
+ *
  * Try again only queues work, and the server shows the old failure until the worker replaces it.
  * The page remembers each retried failure and its time, keeps re-reading while the server still
  * shows it, and shows those tools as waiting meanwhile.
@@ -88,6 +103,7 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
     queryKey: key,
     queryFn: () => getIntegration(id),
     retry: false,
+    refetchOnMount: "always",
     select: useCallback(
       (detail: IntegrationDetail) => withRetriesAwaited(detail, awaited),
       [awaited]
@@ -101,6 +117,19 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
         ? SORT_POLL_MS
         : false
   });
+
+  // A busy change queue re-reads once it drains, so a model change only restarts the wait then.
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.type !== "updated" || event.action.type !== "invalidate") return;
+        if (!isModelSettingsKey(event.query.queryKey)) return;
+        watchedFrom.current = Date.now();
+        if (queued.current > 0) return;
+        void queryClient.invalidateQueries({ queryKey: queryKeys.integrations.detail(id) });
+      }),
+    [queryClient, id]
+  );
 
   // A retry the worker never answers shows its failure again once the wait ends.
   useEffect(() => {

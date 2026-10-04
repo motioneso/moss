@@ -1,6 +1,6 @@
 import type { CredentialPlacement, IntegrationDetail, IntegrationKind } from "@moss/shared";
 
-import { classifierSortView } from "./classifier-standing.js";
+import { classifierSortView, type ClassifierSortViewOptions } from "./classifier-standing.js";
 import {
   effectiveEnabledTools,
   isGroupOptIn,
@@ -23,7 +23,11 @@ export async function discoverTools(
   return convertOpenApiSpec(await fetchOpenApiSpec(url, secret, placement));
 }
 
-export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): IntegrationDetail {
+export function toDetail(
+  row: ConnectionRow,
+  tools: readonly DiscoveredTool[],
+  viewOptions: ClassifierSortViewOptions = {}
+): IntegrationDetail {
   const state = {
     enabledGroups: row.enabledGroups,
     enabledTools: row.enabledTools,
@@ -63,16 +67,19 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     groupOptIn: isGroupOptIn(tools),
     specPasted: row.specPasted,
     classifierEnabled: row.classifierEnabled,
-    classifierTools: classifierSortView({
-      classifierEnabled: row.classifierEnabled,
-      discoveredTools: tools,
-      enabledGroups: row.enabledGroups,
-      enabledTools: row.enabledTools,
-      mutedTools: row.mutedTools,
-      classifierPreparation: row.classifierPreparation,
-      classifierSort: row.classifierSort,
-      classifierKeptOutTools: row.classifierKeptOutTools
-    })
+    classifierTools: classifierSortView(
+      {
+        classifierEnabled: row.classifierEnabled,
+        discoveredTools: tools,
+        enabledGroups: row.enabledGroups,
+        enabledTools: row.enabledTools,
+        mutedTools: row.mutedTools,
+        classifierPreparation: row.classifierPreparation,
+        classifierSort: row.classifierSort,
+        classifierKeptOutTools: row.classifierKeptOutTools
+      },
+      viewOptions
+    )
   };
 }
 

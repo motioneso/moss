@@ -1934,7 +1934,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         // Master key store (#2312): per-request family key, never eager at boot.
         resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY),
-        boss: deps.boss
+        boss: deps.boss,
+        // Opening a connection resumes tools that failed for want of a model once one exists.
+        modelSelector: createClassifierPreparationPort({
+          createCliStructuredAdapter: createCliStructuredAdapterFactory()
+        })
       }),
     // #2984 R2.2, R2.4: background tool sorting and preparation on the owner's default chat
     // model. The composition-layer port keeps the integrations package free of @moss/ai.

@@ -342,6 +342,33 @@ describe("runClassifierPreparationJob", () => {
     expect(retried.outcome).toEqual({ status: "prepared", prepared: 1, failed: 0 });
   });
 
+  it("resends only no-model failures once a model exists, and leaves them while none does", async () => {
+    const lamp = discovered("lamp");
+    const fan = discovered("fan");
+    const failure = (tool: typeof lamp, reason: "no_model" | "provider_error") => ({
+      reason,
+      definitionFingerprint: toolDefinitionFingerprint(tool),
+      failedAt: "2026-10-03T00:00:00.000Z"
+    });
+    const failedRow = row({
+      discoveredTools: [lamp, fan],
+      classifierPreparation: {
+        ...emptyPreparationMap(),
+        failures: { lamp: failure(lamp, "no_model"), fan: failure(fan, "provider_error") }
+      }
+    });
+
+    const port = fakePort();
+    vi.mocked(port.selectDefaultChatModel).mockResolvedValue(null);
+    const waiting = await run(failedRow, "model_ready", port);
+    expect(waiting.outcome).toEqual({ status: "no_model" });
+    expect(waiting.failures).toEqual([]);
+
+    const resumed = await run(failedRow, "model_ready");
+    expect(resumed.outcome).toEqual({ status: "prepared", prepared: 1, failed: 0 });
+    expect(sentPrompts(resumed.port).map((prompt) => prompt.includes("lamp"))).toEqual([true]);
+  });
+
   it("stops after a provider failure and records the rest as failed with it", async () => {
     const port = fakePort();
     port.runStructuredDraft.mockResolvedValue({ ok: false, error: "provider_error" });

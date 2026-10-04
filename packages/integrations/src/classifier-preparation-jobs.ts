@@ -43,8 +43,11 @@ export const INTEGRATION_CLASSIFIER_PREPARE_QUEUE_DEFINITION: QueueDefinition = 
   }
 };
 
-/** `prepare` drafts unprepared and changed tools. `retry` also re-sends tools that failed. */
-export type ClassifierPreparationJobOp = "prepare" | "retry";
+/**
+ * `prepare` drafts unprepared and changed tools. `retry` also re-sends tools that failed.
+ * `model_ready` also re-sends only tools that failed for want of a model.
+ */
+export type ClassifierPreparationJobOp = "prepare" | "retry" | "model_ready";
 
 export interface ClassifierPreparationJobPayload {
   readonly actorUserId: string;
@@ -108,7 +111,8 @@ function targetsFor(row: ConnectionRow, op: ClassifierPreparationJobOp) {
       enabledTools: row.enabledTools,
       mutedTools: row.mutedTools
     },
-    retryFailed: op === "retry"
+    retryFailed: op === "retry",
+    retryNoModel: op === "model_ready"
   });
 }
 
@@ -173,9 +177,11 @@ export async function runClassifierPreparationJob(
       if (targets.length === 0) return { status: "nothing_to_prepare" };
 
       // Without a model that can draft, every target fails so the page leaves Preparing and
-      // offers Try again.
+      // offers Try again. A `model_ready` run that still finds none leaves those failures as
+      // they are.
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
       if (!selection?.structured) {
+        if (op === "model_ready") return { status: "no_model" };
         await failRemaining(
           scopedDb,
           targets.map((tool) => tool.name),
@@ -273,6 +279,10 @@ export interface RegisterClassifierPreparationWorkersDeps extends ClassifierPrep
   readonly workOptions?: WorkOptions;
 }
 
+function preparationJobOp(op: unknown): ClassifierPreparationJobOp {
+  return op === "retry" || op === "model_ready" ? op : "prepare";
+}
+
 export async function registerClassifierPreparationWorkers(
   boss: PgBoss,
   deps: RegisterClassifierPreparationWorkersDeps
@@ -282,7 +292,7 @@ export async function registerClassifierPreparationWorkers(
     deps.workOptions ?? { pollingIntervalSeconds: 2 },
     async ([job]) => {
       if (!job) throw new Error("pg-boss invoked tool preparation without a job");
-      const op: ClassifierPreparationJobOp = job.data.op === "retry" ? "retry" : "prepare";
+      const op = preparationJobOp(job.data.op);
       const outcome = await runClassifierPreparationJob(
         deps,
         toAccessContext(job),

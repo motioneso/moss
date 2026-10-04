@@ -26,8 +26,13 @@ import {
 import { resolveIntegrationsCipher } from "./credentials.js";
 import { candidateCache } from "./classifier-candidates.js";
 import { enqueueClassifierSort, type ClassifierSortJobOp } from "./classifier-sort-jobs.js";
-import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
+import type { ClassifierPreparationPort } from "./classifier-preparation.js";
+import {
+  enqueueClassifierPreparation,
+  type ClassifierPreparationJobOp
+} from "./classifier-preparation-jobs.js";
 import { INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES, toolSortState } from "./classifier-settings.js";
+import { noModelFailures } from "./classifier-standing.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
 import { IntegrationUserError } from "./errors.js";
@@ -59,6 +64,11 @@ export interface IntegrationsRouteDependencies {
    * means nothing is queued and the Try again requests answer 503.
    */
   readonly boss?: PgBoss;
+  /**
+   * Reads the owner's default chat model, so opening a connection can resume tools that failed
+   * for want of one once a model exists. Absent (older wiring/tests) means they wait for Try again.
+   */
+  readonly modelSelector?: Pick<ClassifierPreparationPort, "selectDefaultChatModel">;
 }
 
 interface IdParams {
@@ -120,11 +130,12 @@ export function registerIntegrationsRoutes(
   async function queuePreparation(
     request: FastifyRequest,
     actorUserId: string,
-    connectionId: string
+    connectionId: string,
+    op: ClassifierPreparationJobOp = "prepare"
   ): Promise<void> {
     if (!dependencies.boss) return;
     try {
-      await enqueueClassifierPreparation(dependencies.boss, actorUserId, connectionId, "prepare");
+      await enqueueClassifierPreparation(dependencies.boss, actorUserId, connectionId, op);
     } catch (error) {
       request.log.warn(
         { connectionId, error: error instanceof Error ? error.message : "unknown" },
@@ -209,11 +220,34 @@ export function registerIntegrationsRoutes(
   server.get<{ Params: IdParams }>("/api/integrations/:id", async (request, reply) => {
     try {
       const accessContext = await dependencies.resolveAccessContext(request);
-      const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-        repository.getConnection(scopedDb, request.params.id)
+      const read = await dependencies.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb) => {
+          const row = await repository.getConnection(scopedDb, request.params.id);
+          if (!row) return null;
+          const waiting = noModelFailures(row);
+          if (!waiting.sort && !waiting.preparation) return { row, waiting, modelReady: false };
+          if (!dependencies.boss || !dependencies.modelSelector) {
+            return { row, waiting, modelReady: false };
+          }
+          const selection = await dependencies.modelSelector.selectDefaultChatModel(scopedDb);
+          return { row, waiting, modelReady: selection?.structured === true };
+        }
       );
-      if (!row) return reply.code(404).send({ error: "Integration not found" });
-      return toDetail(row, row.discoveredTools);
+      if (!read) return reply.code(404).send({ error: "Integration not found" });
+      const { row, waiting, modelReady } = read;
+
+      // A failure for want of a model never reached a provider, so once a model exists it is
+      // resumed here rather than left waiting for Try again. The singleton key keeps repeated
+      // reads to one queued run.
+      if (modelReady) {
+        const { actorUserId } = accessContext;
+        if (waiting.sort) await queueSort(request, actorUserId, row.id, "model_ready");
+        if (waiting.preparation) {
+          await queuePreparation(request, actorUserId, row.id, "model_ready");
+        }
+      }
+      return toDetail(row, row.discoveredTools, { modelReady });
     } catch (error) {
       return handleRouteError(error, reply);
     }

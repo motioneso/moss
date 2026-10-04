@@ -12,7 +12,10 @@ import {
   integrationsModuleManifest,
   reduceSortingInputSchema,
   runClassifierSortJob,
+  emptySortMap,
   sortEntry,
+  toolRiskInputs,
+  toolSortFingerprint,
   toolSortState,
   withSortResult,
   type ClassifierPreparationPort,
@@ -602,6 +605,33 @@ describe("what gets sent, and when", () => {
     expect(tools.map((sort) => sort.classifierState)).toEqual(["failed", "failed"]);
     expect(tools[0]).toMatchObject({ preparationFailure: "no_model", failure: "no_model" });
     expect(tools[0]!.failedAt).not.toBeNull();
+  });
+
+  it("resends only no-model failures once a model exists, and leaves them while none does", async () => {
+    const failedAt = "2026-10-03T00:00:00.000Z";
+    let sort = emptySortMap();
+    for (const [t, failure] of [
+      [tool("a"), "no_model"],
+      [tool("b"), "error"]
+    ] as const) {
+      sort = withSortResult(sort, t.name, {
+        status: "failed",
+        failure,
+        sortFingerprint: toolSortFingerprint(toolRiskInputs(t)),
+        sortedAt: failedAt
+      })!;
+    }
+    const row = connection([tool("a"), tool("b")], { classifierSort: sort });
+
+    const waiting = harness(row, { structured: null });
+    expect(await waiting.run("model_ready")).toEqual({ status: "no_model" });
+    expect(entry(waiting.state, "a")).toMatchObject({ failure: "no_model", sortedAt: failedAt });
+
+    const resumed = harness(row);
+    await resumed.run("model_ready");
+    expect(resumed.runs.map((run) => promptIds(run.prompt).length)).toEqual([1]);
+    expect(entry(resumed.state, "a")).toMatchObject({ status: "current" });
+    expect(entry(resumed.state, "b")).toMatchObject({ status: "failed", failure: "error" });
   });
 
   it("stores no sorter when the model has no readable names", async () => {

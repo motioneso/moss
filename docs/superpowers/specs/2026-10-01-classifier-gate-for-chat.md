@@ -389,7 +389,10 @@ Today every connected tool asks with YOLO off, because its synthetic manifest ca
   tools without the choice. A short line under it says YOLO mode skips the asking.
 - A changed tool is sorted and prepared again by itself, and its row says "Preparing again". Until
   then it is out of the classifier and still works in ordinary chat. A new tool starts on.
-- A failed sort or preparation shows "Try again". No automatic retry repeats the cost.
+- A failed sort or preparation shows "Try again". No automatic retry repeats the cost. A failure
+  for want of a model never reached a provider, so it resumes by itself once the owner adds one.
+  The connection's page starts it again when it next reads the connection, and re-reads when the
+  model settings change.
 - A lost connection pauses the classifier for it, which resumes by itself after the next successful
   discovery.
 

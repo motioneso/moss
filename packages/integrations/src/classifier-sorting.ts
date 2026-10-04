@@ -377,17 +377,21 @@ export interface SortingTargetsInput {
   readonly sort: ClassifierSortMap;
   /** The owner's Try again: also re-send tools whose sort failed against their current inputs. */
   readonly retryFailed: boolean;
+  /** A model was added: also re-send tools whose sort failed for want of one, which cost nothing. */
+  readonly retryNoModel?: boolean;
 }
 
 /**
  * Tools without a current sort: never tried, or stale because a risk input changed. A tool whose
- * sort failed against its current inputs waits for Try again; no other path resends it.
+ * sort failed against its current inputs waits for Try again; the only other path that resends it
+ * is a model being added after a `no_model` failure, which never reached a provider.
  */
 export function sortingTargets(input: SortingTargetsInput): readonly DiscoveredTool[] {
   return input.discoveredTools.filter((tool) => {
     const state = toolSortState(input.sort, tool);
     if (state.status === "never_tried" || state.status === "stale") return true;
-    return state.status === "failed" && input.retryFailed;
+    if (state.status !== "failed") return false;
+    return input.retryFailed || (input.retryNoModel === true && state.failure === "no_model");
   });
 }
 
