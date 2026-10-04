@@ -34,8 +34,10 @@
 #       Launches a throwaway pgvector Postgres server just for this run (own
 #       container, own host port, nothing shared with the dev database or any
 #       other gate), CREATEs a fresh gate database inside it, exports the
-#       database environment at it, launches the gate fully detached,
-#       confirms the runner recorded its PID (about a second on success),
+#       database environment at it, launches the gate fully detached
+#       (the runner migrates the fresh database first, then runs the gate,
+#       so narrowed gates work on empty servers too), confirms the runner
+#       recorded its PID (about a second on success),
 #       then prints the log path and returns. If no PID lands within the
 #       launch bound the start fails loudly (exit 4) and marks the log, so
 #       status/wait report DEAD with the reason — a failed launch never reads
@@ -652,7 +654,15 @@ cmd___run() {
 
   # --exclusive is accepted for compatibility but no longer serializes
   # anything: each run owns its server, so concurrent gates never contend.
-  pnpm "$gate" >>"$log" 2>&1
+  #
+  # Migrate first, then gate (#2989 follow-up). The throwaway server starts
+  # empty and the bootstrap deliberately creates roles WITHOUT passwords, so
+  # only `db:migrate` (applyRolePasswords) makes role logins work. A narrowed
+  # gate without a prior migrate would fail every database login on a fresh
+  # server — on the old shared server this was invisible because passwords
+  # persisted. Migrate is idempotent, so full gates just re-confirm.
+  # A failed migrate fails the run with its own errors in the log.
+  pnpm db:migrate >>"$log" 2>&1 && pnpm "$gate" >>"$log" 2>&1
 }
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ cat >"$task_tmp/bin/pnpm" <<'EOF'
 case "$1" in
   fake-fast-gate) sleep 2; exit 0 ;;
   fake-slow-gate) sleep 20; exit 0 ;;
+  db:migrate) exit 0 ;;
   *) echo "unexpected pnpm script: $1" >&2; exit 9 ;;
 esac
 EOF

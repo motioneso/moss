@@ -111,6 +111,8 @@ case "$1" in
   fake-fast-gate) sleep 1; exit 0 ;;
   fake-fail-gate) sleep 1; exit 3 ;;
   fake-slow-gate) sleep 60; exit 0 ;;
+  # The runner migrates before gating; the fake provision is instant.
+  db:migrate) exit 0 ;;
   *) echo "unexpected pnpm script: $1" >&2; exit 9 ;;
 esac
 EOF
@@ -265,7 +267,7 @@ read R8 B8 G8 <<<"$(new_env)"
 SCRATCH="$SCRATCH $R8 $B8 $G8"
 export PATH="$B8:/usr/bin:/bin"
 export JARVIS_GATE_DIR="$G8" FAKE_DOCKER_STATE="$G8/state"
-export JARVIS_GATE_PGREADY_SECS=120 JARVIS_GATE_LAUNCH_GRACE_SECS=4
+export JARVIS_GATE_PGREADY_SECS=300 JARVIS_GATE_LAUNCH_GRACE_SECS=30
 export FAKE_DOCKER_HOLD_FIRST=1
 ( cd "$R8" && setsid ./scripts/run-gate.sh start --gate fake-fast-gate >"$G8/a.out" 2>&1 & echo $! >"$G8/apid" )
 # Wait until A is actually stuck bringing its server up (not just slow to
@@ -292,7 +294,9 @@ grep -qF "$A_C" "$G8/state/containers" || fail "T8: start A's server is gone aft
 ( cd "$R8" && ./scripts/run-gate.sh wait --follow --log "$B_LOG" >/dev/null 2>&1 ) \
   || fail "T8: start B did not pass"
 kill -KILL "$(cat "$G8/apid")" 2>/dev/null || true
-sleep 6
+# Must exceed the launch grace above: only then does A's killed run read
+# terminal, whatever the box load.
+sleep 35
 unset FAKE_DOCKER_HOLD_FIRST
 ( cd "$R8" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G8/c.out" 2>&1 ) \
   || fail "T8: start C failed"

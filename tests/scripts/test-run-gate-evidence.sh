@@ -46,6 +46,7 @@ EOF
 case "$1" in
   --version) echo "9.9.9-fake" ;;
   fake-fast-gate) sleep 2; exit 0 ;;
+  db:migrate) exit 0 ;;
   *) echo "unexpected pnpm script: $1" >&2; exit 9 ;;
 esac
 EOF

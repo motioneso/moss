@@ -19,7 +19,8 @@ hand. The script does all of it correctly.
 # 1. Launch — starts a throwaway pgvector Postgres server just for this run
 #    (own container, own port, nothing shared with the dev database or any
 #    other gate), detaches, confirms the runner started (about a second),
-#    prints the log path, and returns.
+#    prints the log path, and returns. The runner migrates the fresh database
+#    first, then runs the gate — so narrowed gates work on empty servers too.
 scripts/run-gate.sh start            # add --gate <pnpm-script> for a narrower gate
 
 # 2. Wait — launch this as ONE Bash call with run_in_background: true. It never gives up
