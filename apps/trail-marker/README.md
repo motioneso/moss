@@ -60,3 +60,40 @@ it forgets Accessibility and Screen Recording. To avoid that on a development Ma
 Builds without that file behave exactly as before. Release builds keep hardened runtime on;
 development builds turn it off because it refuses to load the debug library and Sparkle when they
 are signed with a different identity.
+
+## Backtrack performance trial (Debug only)
+
+Build and test from `~/Jarv1s/apps/trail-marker`. Backtrack's preview remembers text only in memory;
+quitting or restarting the app clears that text. Run the new build only after finishing with any
+history you want to consult in the current instance.
+
+The retry checks recent screen fingerprints after switches as well as periodically, refreshes
+each screen after five minutes, and pauses capture after five minutes without input. Keyboard or
+mouse input resumes capture within five seconds. A window whose reads keep finding nothing new is
+read less often, down to once a minute, and periodic reads wait while you type (at most 30
+seconds); switching windows is never delayed. Each read first takes the window's visible text
+through Accessibility, skipping password fields without reading them, and changes no setting in the
+app being read. Only when that gives too little (under 100 characters, mostly buttons and menus, a
+canvas app such as Figma, or a terminal such as kitty that exposes no text) does it take a picture
+for on-device recognition, without language correction, at most 1600 px. This means passive reading or screen sharing without
+input pauses too; include those cases when judging usefulness.
+
+After launching the trial build and turning Backtrack on through its existing consent flow, sample
+a normal working day from another terminal:
+
+```sh
+cd ~/Jarv1s/apps/trail-marker
+bash scripts/backtrack-cpu-trial.sh
+bash scripts/backtrack-metrics-report.sh 8h "$(pgrep -x 'Trail Marker')"
+```
+
+Pass the trial app's pid to the metrics report: unit-test runs log to the same category and would
+otherwise be counted. The report includes a per-app table of Accessibility reads and recognition
+passes. The CPU sample also reports `mediaanalysisd` alongside, ungated.
+
+The CPU sample runs for about eight hours and fails above 3% mean CPU or if the process exits before
+all samples are collected. The first CPU reading is discarded because it is not an interval
+measurement. The metrics report estimates OCR, capture and thumbnail costs, split by trigger, using
+process CPU deltas that can overlap other work. A short or idle-only run cannot pass the working-day
+gate. Record the sample and whether the text answers three real "what did I see?" questions on the
+PR; Phase 2 stays gated until both CPU and usefulness pass.
