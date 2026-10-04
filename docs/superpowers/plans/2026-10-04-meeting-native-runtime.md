@@ -117,3 +117,17 @@ No Windows host decision is made here. No merge or deployment is authorized by t
 - [Apple AUHAL input and device selection](https://developer.apple.com/library/archive/documentation/MusicAudio/Conceptual/CoreAudioOverview/ARoadmaptoCommonTasks/ARoadmaptoCommonTasks.html)
 - [Apple microphone authorization](https://developer.apple.com/documentation/bundleresources/requesting-authorization-for-media-capture-on-macos)
 - [Apple PID-to-process-object property](https://developer.apple.com/documentation/coreaudio/kaudiohardwarepropertytranslatepidtoprocessobject)
+
+## First native compile checkpoint — deb403c7
+
+[Mac CI](https://github.com/motioneso/moss/actions/runs/37186127734) passed on
+`deb403c796583f8a04cacc5f481c519ba4425234`: unsigned Release build, Debug build, all 54 new generated-
+sample/fake-device tests, 308 existing unit tests and five UI tests. No capture hardware was opened
+by the new tests, and the host still creates no meeting runtime.
+
+The compiler exposed two new pointer-bridging warnings despite passing tests. The follow-up reads
+caller-owned tap UID values into explicit unmanaged storage before retained transfer to ARC, and
+replaces an unconstrained AUHAL generic setter with seven concrete C payload writes. Four new
+synthetic UID tests bring the meeting count to 58. A bounded read-only Mac CI diagnostic checks the
+ownership paragraph in the installed Apple SDK; it does not infer hardware behavior from a mock.
+These follow-up builds/tests and warning clearance require a new Mac CI result before verification.

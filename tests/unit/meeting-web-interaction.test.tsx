@@ -7,6 +7,7 @@ import type { MeetingRecord } from "@moss/shared";
 import { historyItem } from "./fixtures/meeting-history.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
+import { MeetingNotes } from "../../packages/meetings/src/web/meeting-record.js";
 import * as api from "../../packages/meetings/src/web/client.js";
 
 vi.mock("../../packages/meetings/src/web/client.js", async (original) => {
@@ -41,6 +42,15 @@ async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
+}
+async function waitForRender(assertion: () => void) {
+  await vi.waitFor(
+    async () => {
+      await act(async () => {});
+      assertion();
+    },
+    { timeout: 5000 }
+  );
 }
 function button(label: string) {
   return renderer.root.findAllByType("button").find((node) => node.children.join("") === label)!;
@@ -389,25 +399,48 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
   });
   it("refreshes clean notes from a newer real record and preserves dirty edits", async () => {
     await mount();
+    // Settle the initial transport read before injecting a newer record. Record observer
+    // notification, the rebase effect, and editor observer notification are separate turns.
+    await waitForRender(() => {
+      expect(client.getQueryState(api.meetingKeys.record(meeting.id))).toMatchObject({
+        status: "success",
+        fetchStatus: "idle"
+      });
+      expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+        "Saved notes"
+      );
+    });
     await act(async () => {
       client.setQueryData(api.meetingKeys.record(meeting.id), {
         meeting: { ...meeting, personalNotes: "New saved version", notesRevision: 2 }
       });
     });
-    await flush();
-    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
-      "New saved version"
-    );
+    await waitForRender(() => {
+      expect(renderer.root.findByType(MeetingNotes).props.meeting.notesRevision).toBe(2);
+      expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+        "New saved version"
+      );
+      expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+        base: { notesRevision: 2 },
+        text: "New saved version"
+      });
+    });
     await typeNotes("My unsaved version");
     await act(async () => {
       client.setQueryData(api.meetingKeys.record(meeting.id), {
         meeting: { ...meeting, personalNotes: "Another saved version", notesRevision: 3 }
       });
     });
-    await flush();
-    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
-      "My unsaved version"
-    );
+    await waitForRender(() => {
+      expect(renderer.root.findByType(MeetingNotes).props.meeting.notesRevision).toBe(3);
+      expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+        "My unsaved version"
+      );
+      expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+        base: { notesRevision: 2 },
+        text: "My unsaved version"
+      });
+    });
   });
   it("never downgrades a newer record when an old save receipt is replayed", async () => {
     let resolveSave!: (value: Awaited<ReturnType<typeof api.saveMeetingNotes>>) => void;

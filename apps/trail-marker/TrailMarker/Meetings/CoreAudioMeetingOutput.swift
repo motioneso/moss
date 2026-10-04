@@ -107,10 +107,10 @@ struct SystemMeetingOutputHardware: MeetingOutputHardware {
     }
 
     func createAggregate(tap: AudioObjectID) throws -> AudioObjectID {
-        var uid: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
         var address = property(kAudioTapPropertyUID)
-        try check(AudioObjectGetPropertyData(tap, &address, 0, nil, &size, &uid), "read-tap-uid")
+        let uid = try Self.readTapUID { size, value in
+            AudioObjectGetPropertyData(tap, &address, 0, nil, size, value)
+        }
         let description: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Moss meeting capture",
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
@@ -121,6 +121,26 @@ struct SystemMeetingOutputHardware: MeetingOutputHardware {
         var id = AudioObjectID(kAudioObjectUnknown)
         try check(AudioHardwareCreateAggregateDevice(description as CFDictionary, &id), "create-output-aggregate")
         return id
+    }
+
+    /// AudioHardware.h specifies that kAudioTapPropertyUID returns a caller-owned CFString.
+    /// The C write must target unmanaged pointer storage, not overwrite an ARC-managed value.
+    /// The injected read is synchronous and must not retain either output pointer.
+    static func readTapUID(
+        _ read: (UnsafeMutablePointer<UInt32>, UnsafeMutableRawPointer) -> OSStatus
+    ) throws -> CFString {
+        var value: Unmanaged<CFString>?
+        let expectedSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var size = expectedSize
+        let status = withUnsafeMutablePointer(to: &value) { pointer in
+            read(&size, UnsafeMutableRawPointer(pointer))
+        }
+        guard status == noErr else {
+            throw MeetingAudioFailure.deviceFailure(operation: "read-tap-uid", status: status)
+        }
+        // Do not interpret a partial pointer or an unsuccessful read as an owned CF object.
+        guard size == expectedSize, let value else { throw MeetingAudioFailure.invalidFormat }
+        return value.takeRetainedValue()
     }
 
     func createIO(device: AudioObjectID, tap: AudioObjectID, format: AudioStreamBasicDescription,

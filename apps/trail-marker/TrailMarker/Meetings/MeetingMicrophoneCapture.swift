@@ -301,17 +301,20 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
 
     func enableInput() throws {
         var value: UInt32 = 1
-        try set(kAudioOutputUnitProperty_EnableIO, scope: kAudioUnitScope_Input, element: 1, value: &value)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_EnableIO,
+            kAudioUnitScope_Input, 1, &value, UInt32(MemoryLayout<UInt32>.size)), "enable AUHAL input")
     }
 
     func disableOutput() throws {
         var value: UInt32 = 0
-        try set(kAudioOutputUnitProperty_EnableIO, scope: kAudioUnitScope_Output, element: 0, value: &value)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_EnableIO,
+            kAudioUnitScope_Output, 0, &value, UInt32(MemoryLayout<UInt32>.size)), "disable AUHAL output")
     }
 
     func selectDevice(_ deviceID: AudioDeviceID) throws {
         var value = deviceID
-        try set(kAudioOutputUnitProperty_CurrentDevice, scope: kAudioUnitScope_Global, element: 0, value: &value)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global, 0, &value, UInt32(MemoryLayout<AudioDeviceID>.size)), "select AUHAL device")
     }
 
     func inputFormat() throws -> AudioStreamBasicDescription {
@@ -330,12 +333,16 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
             mFormatFlags: kAudioFormatFlagsNativeFloatPacked, mBytesPerPacket: 4, mFramesPerPacket: 1,
             mBytesPerFrame: 4, mChannelsPerFrame: 1, mBitsPerChannel: 32, mReserved: 0
         )
-        try set(kAudioUnitProperty_StreamFormat, scope: kAudioUnitScope_Output, element: 1, value: &format)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Output, 1, &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)),
+            "configure AUHAL mono format")
         // Mono means the first input channel, not an unapproved device/route fallback.
         var channel: Int32 = 0
-        try set(kAudioOutputUnitProperty_ChannelMap, scope: kAudioUnitScope_Output, element: 1, value: &channel)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_ChannelMap,
+            kAudioUnitScope_Output, 1, &channel, UInt32(MemoryLayout<Int32>.size)), "configure AUHAL channel map")
         var allocate: UInt32 = 0
-        try set(kAudioUnitProperty_ShouldAllocateBuffer, scope: kAudioUnitScope_Output, element: 1, value: &allocate)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_ShouldAllocateBuffer,
+            kAudioUnitScope_Output, 1, &allocate, UInt32(MemoryLayout<UInt32>.size)), "configure AUHAL buffer ownership")
     }
 
     func maximumFramesPerSlice() throws -> UInt32 {
@@ -359,7 +366,9 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
             },
             inputProcRefCon: retained.toOpaque()
         )
-        try set(kAudioOutputUnitProperty_SetInputCallback, scope: kAudioUnitScope_Global, element: 0, value: &callback)
+        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_SetInputCallback,
+            kAudioUnitScope_Global, 0, &callback, UInt32(MemoryLayout<AURenderCallbackStruct>.size)),
+            "install AUHAL input callback")
     }
 
     func initialize() throws { try check(AudioUnitInitialize(try liveUnit()), "AudioUnitInitialize") }
@@ -403,14 +412,6 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
     private func liveUnit() throws -> AudioUnit {
         guard let unit else { throw MeetingAudioFailure.invalidTransition }
         return unit
-    }
-
-    private func set<T>(
-        _ property: AudioUnitPropertyID, scope: AudioUnitScope, element: AudioUnitElement, value: inout T
-    ) throws {
-        try check(AudioUnitSetProperty(
-            try liveUnit(), property, scope, element, &value, UInt32(MemoryLayout<T>.size)
-        ), "AudioUnitSetProperty(\(property), \(scope), \(element))")
     }
 
     private func check(_ status: OSStatus, _ operation: String) throws {

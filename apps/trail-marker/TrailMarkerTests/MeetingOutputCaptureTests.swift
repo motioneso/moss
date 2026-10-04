@@ -126,4 +126,63 @@ final class MeetingOutputCaptureTests: XCTestCase {
         gate.receive(hostTimeNanoseconds: 1, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 0 })
         XCTAssertEqual(receiver.received, 1)
     }
+
+    /// This verifies our +1 ownership transfer with a synthetic CF object, not HAL behavior.
+    func testTapUIDReadConsumesRetainedReferenceWithoutOpeningHardware() throws {
+        weak var observed: AnyObject?
+        let expected = "synthetic-meeting-tap-\(UUID().uuidString)"
+        try autoreleasepool {
+            let uid = try SystemMeetingOutputHardware.readTapUID { size, output in
+                XCTAssertEqual(size.pointee, UInt32(MemoryLayout<Unmanaged<CFString>?>.size))
+                let created = CFStringCreateWithCString(nil, expected, CFStringBuiltInEncodings.UTF8.rawValue)!
+                observed = created
+                output.assumingMemoryBound(to: Unmanaged<CFString>?.self).pointee = Unmanaged.passRetained(created)
+                return noErr
+            }
+            XCTAssertEqual(uid as String, expected)
+            withExtendedLifetime(uid) { XCTAssertNotNil(observed) }
+        }
+        XCTAssertNil(observed, "The +1 synthetic property reference must be consumed exactly once")
+    }
+
+    func testTapUIDReadRejectsMissingValueWithoutOpeningHardware() {
+        XCTAssertThrowsError(try SystemMeetingOutputHardware.readTapUID { _, _ in noErr }) {
+            XCTAssertEqual($0 as? MeetingAudioFailure, .invalidFormat)
+        }
+    }
+
+    func testTapUIDReadRejectsMalformedByteCountWithNonNullOutput() {
+        for size in [UInt32(0), UInt32(MemoryLayout<Unmanaged<CFString>?>.size - 1), UInt32.max] {
+            weak var observed: AnyObject?
+            autoreleasepool {
+                let expected = "synthetic-invalid-size-\(UUID().uuidString)"
+                let created = CFStringCreateWithCString(nil, expected, CFStringBuiltInEncodings.UTF8.rawValue)!
+                observed = created
+                let retained = Unmanaged.passRetained(created)
+                do {
+                    let uid = try SystemMeetingOutputHardware.readTapUID { byteCount, output in
+                        output.assumingMemoryBound(to: Unmanaged<CFString>?.self).pointee = retained
+                        byteCount.pointee = size
+                        return noErr
+                    }
+                    XCTFail("A non-null value must not bypass the byte-count check: \(size)")
+                    // If the size guard regresses, the successful return consumes our +1.
+                    // Leave it to ARC rather than releasing that reference a second time.
+                    withExtendedLifetime(uid) {}
+                } catch {
+                    // Rejection does not consume an untrusted output slot. The fixture still
+                    // owns this known-valid synthetic reference and must balance it itself.
+                    retained.release()
+                    XCTAssertEqual(error as? MeetingAudioFailure, .invalidFormat)
+                }
+            }
+            XCTAssertNil(observed, "Synthetic output ownership must be balanced on either outcome")
+        }
+    }
+
+    func testTapUIDReadReportsStatusFailure() {
+        XCTAssertThrowsError(try SystemMeetingOutputHardware.readTapUID { _, _ in -77 }) {
+            XCTAssertEqual($0 as? MeetingAudioFailure, .deviceFailure(operation: "read-tap-uid", status: -77))
+        }
+    }
 }
