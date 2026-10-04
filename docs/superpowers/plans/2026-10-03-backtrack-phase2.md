@@ -164,20 +164,38 @@ Open questions, each with an owner:
    Phase 4; showing either would describe something that isn't there. Phase 4 adds both.
 9. **Search stays out of Phase 2.** The generated `tsvector` and the `screen` embeddings are built
    now, so Phase 3 starts with data. Nothing reads them until Phase 3's tool.
-10. **A deletion stays deleted (review round 1, spec 1).** Every user delete writes a deletion marker
-    `[from, to)`. "Everything" writes `(-infinity, deleted_at]`. Ingest runs under the same owner
-    lock as delete. It drops any segment whose `[started_at, ended_at]` overlaps a marker and counts
-    it as `discarded`. A batch whose response was lost, then retried after a delete, or an offline
-    second Mac uploading later, can't bring deleted text back. Markers are kept 38 days, longer than
-    any segment ingest still accepts (decision 11). _Rejected: relying on the unique key_, because
-    the delete removes the key that made a retry idempotent.
-11. **Ingest bounds client time, and retention also counts from receipt (review round 1, spec 5).**
-    A segment is accepted only when `started_at` is no more than 26 hours old (the 24-hour buffer
-    plus slack) and `ended_at` is no more than 5 minutes ahead of server time. Anything else is
-    dropped and counted as `rejected_clock`. The purge removes rows past 37 days by `started_at`
-    **or** by `created_at`, so a wrong clock can't stretch the life of a row. The promise is "37
-    days, plus up to one hourly run", stated in exactly those words wherever it appears (consent,
-    app map, settings).
+10. **A deletion covers what was captured before it, and stays deleted (review rounds 1 and 2).**
+    - **Server time everywhere.** Every upload carries `sentAt`, the Mac's clock when the request
+      left. The server computes `skew = received_at - sentAt` and stores `started_at` and
+      `ended_at` shifted by it, so they are in server time. A Mac's clock error then can't move
+      a segment across a deletion boundary. The raw client start is kept only as
+      `client_started_at`, for the idempotency key, because a retry's skew differs by network
+      latency (decision 11 bounds the skew).
+    - **Markers end at the moment of deletion.** A delete of `[from, to)` at server time `D`
+      writes the marker `[from, least(to, D))`. "Everything" writes `(-infinity, D)`. So
+      deleting "Today" at 10:00 covers midnight to 10:00, not the rest of the day, and new
+      captures keep arriving while Recording is on (round 2, spec 1).
+    - **One predicate, in two places.** Delete removes, and ingest refuses, exactly the segments
+      whose server-time `[started_at, ended_at]` overlaps a marker. Ingest runs under the same
+      owner lock as delete and counts refused segments as `discarded`.
+    - **What this guarantees:**
+      - a lost-response retry after a delete can't bring text back, whatever the Mac's clock;
+      - neither can an offline second Mac uploading later;
+      - this includes round 2's fast-clock case, where the retry's server-time interval falls
+        before `D`.
+    - **Marker lifetime.** Markers are kept 38 days, longer than any segment ingest still accepts.
+    - _Rejected: relying on the unique key_, because the delete removes the key that made a retry
+      idempotent. _Rejected: widening "Everything" by the allowed skew_, because it would discard
+      genuine new captures (round 2, spec 2).
+11. **Ingest bounds client time, and retention also counts from receipt (review rounds 1 and 2).**
+    - **Skew.** A request whose `|skew|` exceeds one hour is refused with 422 `backtrack_clock`. The
+      Mac shows "This Mac's clock looks wrong" and keeps the batch.
+    - **Window.** After shifting, a segment is accepted only when `started_at` is no more than 26
+      hours old (the 24-hour buffer plus slack) and `ended_at` is not after the time it was
+      received. Anything else is dropped and counted as `rejectedClock`.
+    - **Purge.** The purge removes rows past 37 days by `started_at` **or** by `created_at`.
+    - **Wording.** The promise is "37 days, plus up to one hourly run", stated in exactly those words
+      wherever it appears (consent, app map, settings).
 12. **The module can't be disabled (review round 1, spec 3).** `lifecycle: "required"` and
     `availability: { defaultEnabled: true, required: true, supportsUserDisable: false,
 supportsWorkspaceDisable: false }`, as calendar is (`packages/calendar/src/manifest.ts:87`). Its
@@ -218,7 +236,7 @@ CREATE TABLE app.backtrack_segments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   device_id uuid NOT NULL,                                          -- no FK: decision 4
-  started_at timestamptz NOT NULL,
+  started_at timestamptz NOT NULL,                                  -- server time (decision 10)
   ended_at timestamptz NOT NULL,
   app_name text NOT NULL CHECK (octet_length(app_name) <= 400),
   bundle_id text NOT NULL CHECK (octet_length(bundle_id) <= 255),
@@ -230,7 +248,8 @@ CREATE TABLE app.backtrack_segments (
   indexed_at timestamptz,                                           -- decision 5
   created_at timestamptz NOT NULL DEFAULT now(),
   CHECK (ended_at >= started_at),
-  UNIQUE (owner_user_id, device_id, body_hash, started_at)
+  client_started_at timestamptz NOT NULL,                           -- the Mac's raw start, for idempotency only
+  UNIQUE (owner_user_id, device_id, body_hash, client_started_at)
 );
 CREATE INDEX backtrack_segments_owner_time ON app.backtrack_segments (owner_user_id, started_at DESC);
 CREATE INDEX backtrack_segments_unindexed ON app.backtrack_segments (created_at) WHERE indexed_at IS NULL;
@@ -254,7 +273,7 @@ CREATE TABLE app.backtrack_preferences (
 CREATE TABLE app.backtrack_deletions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  range tstzrange NOT NULL,                       -- '[from,to)', or '(,deleted_at]' for everything
+  range tstzrange NOT NULL,                       -- '[from, least(to, deleted_at))', or '(,deleted_at)' for everything
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX backtrack_deletions_owner ON app.backtrack_deletions (owner_user_id);  -- a person has few markers
@@ -318,7 +337,7 @@ Tests (each fails against the named broken build):
 
 - Contract in `packages/shared/src/companion-api.ts`:
   - `BacktrackSegmentUpload { startedAt: string; endedAt: string; appName: string; bundleId: string; windowTitle: string; address?: string; body: string }`
-  - `BacktrackUploadRequest { segments: readonly BacktrackSegmentUpload[] }`, 1 to 200 segments,
+  - `BacktrackUploadRequest { sentAt: string; segments: readonly BacktrackSegmentUpload[] }`, 1 to 200 segments,
     `additionalProperties: false`, string `maxLength`s as character pre-checks.
   - `BacktrackUploadResponse { accepted: number; duplicates: number; discarded: number; rejectedClock: number; state: BacktrackState }`
     (`discarded`: overlaps a deletion marker, decision 10; `rejectedClock`: outside the time window,
@@ -329,7 +348,8 @@ Tests (each fails against the named broken build):
   - Error codes: `backtrack_unavailable` (409, switch off), `backtrack_paused` (409).
 - Route `POST /api/companion/backtrack` in `apps/api/src/companion-routes.ts`, after the focus routes:
   `requireCompanion` → switch check → in the owner's data context, under the owner lock: pause
-  check, time window (decision 11), deletion markers (decision 10), `redactSecrets` on title,
+  check, skew and shift to server time, time window (decision 11), deletion markers (decision 10),
+  `redactSecrets` on title,
   address and body, byte-length check, `body_hash`, insert with `ON CONFLICT DO NOTHING`
   `RETURNING id` → `sendJob(boss, "backtrack.index", { actorUserId, segmentIds })` after commit.
   Route `bodyLimit: 2 MiB` (decision 13; Fastify's default is 1 MiB). `ipRateLimit(10)` a minute.
@@ -354,11 +374,20 @@ Tests:
   fails at Fastify's default 1 MiB limit; round 1 reproduced a 1,669,014-byte batch getting
   `FST_ERR_CTP_BODY_TOO_LARGE`.
 - **Lost-response retry:** a batch is stored, then deleted through "Today", then sent again
-  unchanged. Nothing is stored and no chunk is created; the batch is counted `discarded`.
-- **Late second Mac:** after "Everything", another device uploads segments timed before the
-  delete. They are discarded. Segments timed after the delete are accepted.
-- A segment starting 27 hours ago, or ending 6 minutes in the future, is counted `rejectedClock`
-  and not stored.
+  unchanged with a new `sentAt`. Nothing is stored and no chunk is created; the batch is counted
+  `discarded`.
+- **Today at midday (round 2, spec 1):** with "Today" deleted at 10:00, a pre-delete segment
+  arriving late from an offline Mac is discarded, and a segment captured at 10:10 is accepted.
+- **Fast clock (round 2, spec 2, the exact sequence):** the Mac is 3 minutes fast. At server 09:59
+  it uploads a segment stamped 10:02, and the response is lost. "Everything" is deleted at 10:00.
+  The retry at 10:01 is discarded. A capture at 10:05 is accepted. The same pair runs with a
+  3-minute-slow clock.
+- **Late second Mac:** after "Everything", another device uploads segments captured before the
+  delete; they are discarded. Its segments captured after the delete are accepted.
+- A request with `sentAt` two hours off is refused with 422 `backtrack_clock`. A segment starting
+  27 hours ago (after shifting) is counted `rejectedClock` and not stored.
+- A retry of the same segment under a slightly different skew (latency) is a duplicate, not a
+  second row. That case fails if the unique key uses the shifted `started_at`.
 
 ### 4.5 Index job
 
@@ -445,7 +474,9 @@ rows; status and delete work with storage off.
 - `final class BacktrackUploader: BacktrackSink` (`Backtrack/BacktrackUploader.swift`):
   `requiredConsentVersion = 2`; `accept` appends to the buffer; a 60 s timer sends the oldest
   segments, up to 200 **and** 1.5 MiB of encoded JSON (measured, decision 13), through
-  `CompanionClient.backtrackUpload(credential:_:) async throws -> BacktrackUploadResponse`;
+  `CompanionClient.backtrackUpload(credential:_:) async throws -> BacktrackUploadResponse`, with
+  `sentAt` set from the Mac's clock on every attempt, never reused from an earlier one; on 422
+  `backtrack_clock`, keeps the batch and shows the clock message;
   removes them from the buffer on 2xx (whatever the `discarded` and `rejectedClock` counts); keeps
   them on network errors; on 413 or a schema 400, halves the batch, and drops a single segment that
   still fails; drops them and stops on `backtrack_unavailable` or `backtrack_paused`; drops
@@ -554,3 +585,11 @@ Round 1 (Codex, 2026-10-03, on `2373b14a6`). All six findings were checked again
 | 4   | 200 × 8 KB exceeds Fastify's 1 MiB default                                  | **Valid**, and reproduced (1,669,014 bytes → `FST_ERR_CTP_BODY_TOO_LARGE`). → decision 13: route `bodyLimit` of 2 MiB, a 1.5 MiB encoded budget in the uploader, halving on 413/400, a poison segment dropped.                                             |
 | 5   | Client clocks can stretch retention; "37 days at most" overstates the bound | **Valid.** → decision 11: a time window at ingest, a purge by `started_at` or `created_at`, and the wording "37 days, plus up to one hourly run".                                                                                                          |
 | Q6  | The local embedder caps input at 512 tokens                                 | **Accepted as the answer to Q6.** → §4.5 splits each segment to fit.                                                                                                                                                                                       |
+
+Round 2 (Codex, 2026-10-03, on `7ee3f1409`). It found no standards findings and rated S1 and spec
+2–5 addressed. Spec 1 was partly addressed; the two remaining issues are both **valid**:
+
+| #    | Finding                                                                        | Ruling                                                                                                                                                                                                                   |
+| ---- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R2-1 | A "Today" marker runs to midnight, so it silently discards the rest of the day | **Valid.** → decision 10: markers end at the deletion instant (`least(to, D)`); the midday test checks that a late pre-delete segment is discarded and a 10:10 capture accepted.                                         |
+| R2-2 | A fast Mac's lost-response retry slips past an "Everything" marker             | **Valid**, reproduced by the reviewer. → decision 10: segments are stored and compared in server time via `sentAt`; the idempotency key uses the raw client start; the exact sequence is a test, with a slow-clock twin. |
