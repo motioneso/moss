@@ -276,3 +276,10 @@ Status: closed 13:20, REOPENED 13:35 (below).
 ## Run reopened (13:35 PDT, session 66aed34b)
 
 Ben asked to start slice C (Activity page lines + detail dialog) right after close. Coordinator name reclaimed, watchdog started again. Slice B's detached gate on 9c19f3765 was RED only on the file-size check (gateway.ts 1002, chat-session-manager.ts 1119 lines); the slice C session fixes that first. Slice C spawned as Muse (muse-spark-1.3, high) in w1:p11Z "2956 slice C", new Builders tab w1:t9T. Message it with herdr pane run + bounded read. merges_since_relay 0.
+
+## Ben, 21:35 PDT: "keep working on this until merged"
+
+- Ben left for the night and said to keep working until merged; a logged-in Chrome is available if needed.
+- Read as his OK to merge PR #2976 (security tier) once the adversarial security review comes back with no blocking findings and the live proof is posted. Anything serious gets fixed first; anything needing his judgment goes to AWAITING-BEN and the PR stays unmerged.
+- PR #2991 (sensitive, gate tooling) merges after its two-gates proof and an independent review.
+- PR #2982 (meetings) is another builder's work: reviewed only, never merged by this run.
