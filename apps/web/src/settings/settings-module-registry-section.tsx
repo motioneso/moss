@@ -40,7 +40,7 @@ const STATE_LABELS: Record<ModuleRegistryRowDto["state"], string> = {
   "update-pending-restart": "Update downloaded. Restart to apply.",
   "install-failed": "Install failed",
   "declared-not-present": "Declared in compose — will install on restart",
-  incompatible: personalize("Incompatible with this Moss version")
+  incompatible: "Incompatible with this Moss version"
 };
 
 // #1187 decision 4: lead the pre-download confirm with a plain consequence sentence built
@@ -114,7 +114,7 @@ export function libraryAction(row: ModuleRegistryRowDto): LibraryAction {
     case "incompatible":
       return {
         kind: "none",
-        label: STATE_LABELS.incompatible,
+        label: personalize(STATE_LABELS.incompatible),
         reason: row.requiresCore ? `Requires ${assistantName()} ${row.requiresCore}.` : undefined
       };
   }

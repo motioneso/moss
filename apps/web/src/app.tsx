@@ -23,7 +23,7 @@ import {
   shipExternalModule,
   throwAwayExternalModuleDraft
 } from "./api/client";
-import { assistantName, loadPersonaSettings } from "./api/use-assistant-name.js";
+import { assistantName, bindAssistantUser, loadPersonaSettings } from "./api/use-assistant-name.js";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";
@@ -113,6 +113,7 @@ export function App() {
     queryFn: () => getMe(),
     retry: false
   });
+  bindAssistantUser(meQuery.data?.user.id ?? null);
   const modulesQuery = useQuery({
     enabled: meQuery.isSuccess,
     queryKey: queryKeys.modules,

@@ -119,7 +119,7 @@ const FIELD_GROUPS: readonly {
 const NAV_FIELD: FieldSpec = {
   key: "nav",
   name: "Background",
-  desc: personalize("Behind the links, icons and the Moss mark")
+  desc: "Behind the links, icons and the Moss mark"
 };
 
 const HEADER_FIELD: FieldSpec = {
@@ -127,6 +127,11 @@ const HEADER_FIELD: FieldSpec = {
   name: "Background",
   desc: "Behind the page title, the date line and the settings cog"
 };
+
+/** Description of the navigation background field, using the current assistant name. */
+export function navFieldDesc(): string {
+  return personalize(NAV_FIELD.desc);
+}
 
 const FIELD_NAMES = Object.fromEntries(
   [...FIELD_GROUPS.flatMap((group) => group.fields), NAV_FIELD, HEADER_FIELD].map((field) => [
@@ -518,7 +523,7 @@ export function AppearancePane() {
                   The column of links down the left side. On a phone it also colors the top bar and
                   the menu. Text and icons pick dark or light by themselves.
                 </p>
-                <Row name={NAV_FIELD.name} desc={NAV_FIELD.desc} control={colorBox(NAV_FIELD)} />
+                <Row name={NAV_FIELD.name} desc={navFieldDesc()} control={colorBox(NAV_FIELD)} />
                 <div
                   className="theme-navstrip"
                   style={(navColors?.vars ?? {}) as CSSProperties}

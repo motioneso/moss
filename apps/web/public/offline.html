@@ -51,5 +51,15 @@
       <h1>Offline</h1>
       <p>Reconnect and refresh to continue.</p>
     </main>
+    <script>
+      (function () {
+        try {
+          var name = (localStorage.getItem("moss.assistantName") || "").trim();
+          if (name) document.title = name + " Offline";
+        } catch (e) {
+          return;
+        }
+      })();
+    </script>
   </body>
 </html>

@@ -11,7 +11,8 @@ import { CORE_APP_SETTINGS } from "../../packages/shared/src/app-map-core.js";
 vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({
   useAssistantName: () => "Moss",
   assistantName: () => "Moss",
-  personalize: (text: string) => text
+  personalize: (text: string) => text,
+  personalizeMarkdown: (text: string) => text
 }));
 
 // This root-level test suite runs under the plain vitest config, which does not load the Vite
