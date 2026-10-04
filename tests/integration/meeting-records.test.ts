@@ -309,6 +309,38 @@ describe("Meeting draft records", () => {
     });
   });
 
+  it("deletes only the owner's draft and its receipts, with idempotent retries", async () => {
+    const { meeting } = await context.withDataContext({ actorUserId: owner }, (db) =>
+      repo.create(db, input())
+    );
+    await context.withDataContext({ actorUserId: owner }, (db) =>
+      repo.putNotes(db, {
+        meetingId: meeting.id,
+        requestKey: randomUUID(),
+        expectedRevision: 0,
+        personalNotes: "Disposable notes"
+      })
+    );
+    for (const actorUserId of [ids.userB, ids.adminUser]) {
+      await context.withDataContext({ actorUserId }, (db) => repo.remove(db, meeting.id));
+      expect(
+        await context.withDataContext({ actorUserId: owner }, (db) => repo.get(db, meeting.id))
+      ).not.toBeNull();
+    }
+    await context.withDataContext({ actorUserId: owner }, async (db) => {
+      await repo.remove(db, meeting.id);
+      await repo.remove(db, meeting.id);
+      expect(await repo.get(db, meeting.id)).toBeNull();
+      expect(
+        await db.db
+          .selectFrom("app.meeting_note_writes")
+          .selectAll()
+          .where("meeting_id", "=", meeting.id)
+          .execute()
+      ).toEqual([]);
+    });
+  });
+
   it("cascades note receipts with the owning record", async () => {
     const { meeting } = await context.withDataContext({ actorUserId: owner }, (db) =>
       repo.create(db, input())

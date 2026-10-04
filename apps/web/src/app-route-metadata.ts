@@ -13,6 +13,7 @@ const SECTION_ORDER: readonly string[] = [TOP_SECTION, "Plan", "Your world"];
 const SECTION_OF: Record<string, string> = {
   tasks: "Plan",
   calendar: "Plan",
+  meetings: "Plan",
   wellness: "Your world",
   sports: "Your world",
   news: "Your world"

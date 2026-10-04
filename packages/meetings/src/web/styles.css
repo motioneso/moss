@@ -1,0 +1,67 @@
+.meetings-page {
+  display: grid;
+  gap: var(--space-7);
+  padding: var(--space-4);
+}
+.meetings-body {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--space-7);
+}
+.meetings-section {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.meetings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.meetings-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.meetings-sources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.meetings-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: var(--space-7);
+}
+.meetings-title-input {
+  max-width: 44rem;
+}
+.meetings-input {
+  padding: var(--space-3);
+  width: 100%;
+}
+.meetings-notes {
+  min-height: 20rem;
+  resize: vertical;
+}
+.meetings-dialog {
+  max-width: 36rem;
+}
+@media (max-width: 760px) {
+  .meetings-modes,
+  .meetings-sources,
+  .meetings-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meetings-page {
+    padding: var(--space-2);
+  }
+}
+.meetings-page .jds-btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

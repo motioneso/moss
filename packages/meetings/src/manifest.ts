@@ -5,7 +5,7 @@ export const meetingsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
 );
 
-/** Draft records only. No navigation or recording capability is advertised by this slice. */
+/** Draft records and personal notes. Native recording is not available yet. */
 export const meetingsModuleManifest = {
   id: "meetings",
   name: "Meetings",
@@ -15,7 +15,7 @@ export const meetingsModuleManifest = {
   compatibility: { jarv1s: ">=0.0.0" },
   availability: { defaultEnabled: true, required: false, supportsUserDisable: true },
   database: {
-    migrations: ["sql/0260_meeting_records.sql"],
+    migrations: ["sql/0260_meeting_records.sql", "sql/0261_meeting_draft_delete.sql"],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: ["app.meeting_records", "app.meeting_note_writes"]
   },
@@ -29,13 +29,29 @@ export const meetingsModuleManifest = {
     },
     {
       id: "meetings.write",
-      label: "Write meeting drafts",
-      description: "Create a meeting draft or save personal notes with version checks.",
+      label: "Manage meeting drafts",
+      description:
+        "Create and delete drafts, save personal notes with version checks, and manage capture defaults.",
       scope: "user",
-      actions: ["create", "update"]
+      actions: ["create", "update", "delete"]
+    }
+  ],
+  navigation: [
+    {
+      id: "meetings",
+      label: "Meetings",
+      path: "/meetings",
+      icon: "mic",
+      order: 36,
+      description:
+        "Create meeting drafts, find their history, and edit personal notes. Recording is unavailable.",
+      permissionId: "meetings.read"
     }
   ],
   routes: [
+    { method: "GET", path: "/api/meetings/preferences", permissionId: "meetings.read" },
+    { method: "PUT", path: "/api/meetings/preferences", permissionId: "meetings.write" },
+    { method: "DELETE", path: "/api/meetings/records/:id", permissionId: "meetings.write" },
     { method: "GET", path: "/api/meetings/records", permissionId: "meetings.read" },
     { method: "GET", path: "/api/meetings/records/:id", permissionId: "meetings.read" },
     { method: "POST", path: "/api/meetings/records", permissionId: "meetings.write" },
@@ -43,9 +59,24 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.capture_default",
+      description:
+        "Explicitly save or clear a personal capture-mode default in meeting Setup. Choosing another mode does not change the saved default. Native recording remains unavailable."
+    },
+    {
+      id: "meetings.notes_recovery",
+      description:
+        "Unsaved notes survive signed-in app navigation in memory. Save before closing or signing out. On a version conflict, compare current saved notes before explicitly rebasing your edits."
+    },
+    {
+      id: "meetings.delete_draft",
+      description:
+        "Permanently delete a draft and its personal notes after a confirmation dialog. Cancellation preserves unsaved edits; deletion cannot be undone."
+    },
+    {
       id: "meetings.draft_records",
       description:
-        "Development foundation: the meeting-draft API stores titles and personal notes with version checks. It does not record audio, transcribe, summarize, or expose a Meetings screen.",
+        "Create titled drafts, browse history, and save personal notes with version checks and retry-safe requests at /meetings. Native recording, transcripts, summaries, Tasks, vault export, and meeting chat are unavailable.",
       errors: [
         {
           code: "meeting_request_conflict",

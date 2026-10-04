@@ -124,6 +124,40 @@ export const aiModuleManifest = {
   // #2208: Moss's app map for the Providers card's model controls (Settings > AI providers).
   features: [
     {
+      id: "ai.clip_transcription_timestamps",
+      description:
+        "Transcription can return clip-relative segment timestamps when requested. This is file transcription, not streaming or speaker separation. Invalid or unsupported timestamps fail without changing providers.",
+      remediations: [
+        {
+          id: "ai.clip_transcription.configure",
+          description:
+            "Check the transcription endpoint, selected model and its timestamp support in AI providers. Admin model restrictions still apply.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "ai.clip_transcription.unavailable",
+          class: "prerequisite",
+          remediationRef: "ai.clip_transcription.configure",
+          description:
+            "No transcription-capable model, provider or usable credential is configured (HTTP 422)."
+        },
+        {
+          code: "ai.clip_transcription.provider_failed",
+          class: "transient",
+          description:
+            "The provider failed, or returned an invalid or unsupported timestamp response (HTTP 502). No transcript from that response is returned."
+        },
+        {
+          code: "ai.clip_transcription.timeout",
+          class: "transient",
+          description:
+            "The transcription request timed out (HTTP 504); Moss aborts its fetch. This does not establish whether the provider has stopped processing already-received audio."
+        }
+      ]
+    },
+    {
       id: "ai.refresh_provider_models",
       description:
         "Refresh models: ask a provider for its current model list and store it. Vanished discovered " +

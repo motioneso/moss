@@ -168,3 +168,42 @@ API and can be disabled through the existing module controls. This does not star
 contact providers, or add a recording UI. This repository compatibility rule was verified
 in `packages/module-registry/src/compat-gate.ts`; a default-disabled built-in would prevent
 application startup and must not be used.
+
+## Next runnable workspace checkpoint
+
+Add the real package-owned Meetings web contribution and sidebar entry, using the approved
+Masthead/SectionHead/RowIndex vocabulary. The three capture choices are explicit and may be
+saved only as an intentional personal default. Source selectors and Start remain unavailable
+until native capture exists. History lists actual drafts, not invented recordings. Personal
+notes use the existing draft API with same-input retry keys, version conflict review and
+memory-only recovery across signed-in navigation. Unmounted or cleared-session callbacks must
+not restore another session's cached data. Permanent draft deletion requires an explicit
+confirmation and a separate unapplied migration, 0261, for its runtime grant.
+
+The independent AI change adds explicitly requested segment timestamps to the existing
+pin-respecting transcription route, plus fetch cancellation on timeout/disconnect. Plain text
+callers retain their previous form/response. Timestamp parsing is bounded and rejects malformed
+ranges without a provider fallback or diarization claim. Provider errors are not logged as raw
+objects by this route. This does not wire native capture or validate a meeting provider profile.
+
+Seams verified for this checkpoint:
+
+- `packages/settings-ui/src/scanner.ts:151–200` discovers `./web` package exports and checks
+  their backend navigation. `apps/web/src/app.tsx:318–326` gates contributed routes.
+- `packages/module-web-sdk/src/index.ts:65–164` provides browser-safe requests and UUIDs.
+- `packages/ui/src/masthead.tsx` and `section-head.tsx` own the visual primitives. The later
+  Tasks redesign adds an optional Masthead mark without changing the props used here.
+- `packages/structured-state/src/preferences-repository.ts` supplies actor-scoped preference
+  reads/writes. A missing or invalid capture default stays null rather than broadening capture.
+- `packages/ai/src/adapters/http-api.ts:127–160` was the existing file-ASR seam. Provider routing
+  remains in the unchanged repository resolver; this slice extends only the explicit response
+  request and cancellation behavior.
+- Existing chat surface seeding gives text user-turn authority, so it must not be used to feed
+  a transcript as instructions. Meeting chat remains unavailable until its separate authorized,
+  revision/cutoff-bound server retrieval path exists.
+
+`tests/uat/specs/2981-meeting-drafts.uat.spec.ts` exercises real sign-in → Meetings → create →
+notes → history/reopen → explicit default → confirmed fixture deletion. It must not intercept or
+rewrite API responses. The cloud workspace cannot execute its Docker-backed harness; leave this
+checkpoint code-complete, unverified until that real path runs. See the package README for the
+supported isolated gate commands. Component visual QA is explicitly separate from this proof.

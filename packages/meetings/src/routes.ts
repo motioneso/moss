@@ -1,3 +1,5 @@
+import type { PreferencesRepository } from "@moss/structured-state";
+import { registerMeetingPreferenceRoutes } from "./preferences-routes.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
@@ -19,7 +21,11 @@ export interface MeetingRecordRoutesDependencies {
   /** General authenticated user session only. Existing companion tokens gain no access here. */
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
-  readonly repository?: Pick<MeetingRecordsRepository, "create" | "get" | "list" | "putNotes">;
+  readonly preferences?: Pick<PreferencesRepository, "get" | "upsert">;
+  readonly repository?: Pick<
+    MeetingRecordsRepository,
+    "create" | "get" | "list" | "putNotes" | "remove"
+  >;
 }
 
 /** Browser-authenticated draft records. No route starts capture or contacts a provider. */
@@ -28,6 +34,22 @@ export function registerMeetingRecordRoutes(
   dependencies: MeetingRecordRoutesDependencies
 ): void {
   const repository = dependencies.repository ?? new MeetingRecordsRepository();
+  registerMeetingPreferenceRoutes(server, dependencies);
+  server.delete<{ Params: { id: string } }>(
+    "/api/meetings/records/:id",
+    { schema: getMeetingRecordSchema },
+    async (request, reply) => {
+      try {
+        const actor = await dependencies.resolveAccessContext(request);
+        await dependencies.dataContext.withDataContext(actor, (db) =>
+          repository.remove(db, request.params.id)
+        );
+        return reply.code(204).send();
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
   server.post<{ Body: CreateMeetingRecordInput }>(
     "/api/meetings/records",
     { schema: createMeetingRecordSchema },

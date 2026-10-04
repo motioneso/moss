@@ -31,6 +31,7 @@ function setup(authError?: Error) {
   const scopedDb = {} as DataContextDb;
   const contexts: AccessContext[] = [];
   const repository = {
+    remove: vi.fn<MeetingRecordsRepository["remove"]>().mockResolvedValue(undefined),
     create: vi
       .fn<MeetingRecordsRepository["create"]>()
       .mockResolvedValue({ created: true, meeting: record }),
@@ -57,6 +58,21 @@ function setup(authError?: Error) {
 }
 
 describe("meeting draft record routes", () => {
+  it("deletes through the actor context and returns no content on retries", async () => {
+    const { server, repository, scopedDb, contexts } = setup();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await server.inject({
+        method: "DELETE",
+        url: `/api/meetings/records/${id}`
+      });
+      expect(response.statusCode).toBe(204);
+      expect(response.body).toBe("");
+    }
+    expect(repository.remove).toHaveBeenCalledTimes(2);
+    expect(repository.remove).toHaveBeenCalledWith(scopedDb, id);
+    expect(contexts.every((context) => context.actorUserId === id)).toBe(true);
+  });
+
   it("creates a draft under the resolved actor and strips body ownership claims", async () => {
     const { server, repository, contexts, scopedDb } = setup();
     const response = await server.inject({

@@ -15,13 +15,28 @@ describe("meetings composition", () => {
       "app.meeting_records",
       "app.meeting_note_writes"
     ]);
-    expect(meeting?.navigation ?? []).toEqual([]);
+    expect(meeting?.navigation).toEqual([
+      expect.objectContaining({
+        id: "meetings",
+        path: "/meetings",
+        icon: "mic",
+        permissionId: "meetings.read"
+      })
+    ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "GET /api/meetings/preferences",
+      "PUT /api/meetings/preferences",
+      "DELETE /api/meetings/records/:id",
       "GET /api/meetings/records",
       "GET /api/meetings/records/:id",
       "POST /api/meetings/records",
       "PUT /api/meetings/records/:id/notes"
     ]);
-    expect(meeting?.features?.map((feature) => feature.id)).toEqual(["meetings.draft_records"]);
+    expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.capture_default",
+      "meetings.notes_recovery",
+      "meetings.delete_draft",
+      "meetings.draft_records"
+    ]);
   });
 });

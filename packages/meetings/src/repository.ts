@@ -97,6 +97,13 @@ export class MeetingRecordsRepository {
     return row ? record(row) : null;
   }
 
+  /** Idempotent; an inaccessible or absent record has the same no-content outcome. */
+  async remove(scopedDb: DataContextDb, id: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    assertUuid(id, "Meeting id");
+    await scopedDb.db.deleteFrom("app.meeting_records").where("id", "=", id).execute();
+  }
+
   async list(
     scopedDb: DataContextDb,
     options: {

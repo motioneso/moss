@@ -72,3 +72,4 @@ export * from "./scratchpad-shortcut.js";
 export * from "./meeting-api.js";
 export * from "./meeting-transcript-api.js";
 export * from "./meeting-record-api.js";
+export * from "./meeting-preferences-api.js";
