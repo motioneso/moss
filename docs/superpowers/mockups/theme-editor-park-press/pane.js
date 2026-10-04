@@ -2,10 +2,10 @@
 
 function thumb(theme, custom) {
   var scope = custom
-    ? ' style="--paper:#eef1f4;--bg:#eef1f4;--surface:#f8fafb;--ink:#1d2733;--ink-3:#6b7684;--line:#c9d1da;--forest:#2c5d8a;--gold:#d39b3c;--text-on-accent:#ffffff;--sage-light:#dfe6ee"'
+    ? ' style="--paper:#eef1f4;--bg:#eef1f4;--surface:#f8fafb;--ink:#1d2733;--ink-3:#6b7684;--line:#c9d1da;--forest:#2c5d8a;--gold:#d39b3c;--text-on-accent:#ffffff;--sage-light:#dfe6ee;--nv-override:var(--harbor-nav, #dfe6ee)"'
     : theme
-      ? ' data-theme="' + theme + '"'
-      : "";
+      ? ' data-builtin data-theme="' + theme + '"'
+      : " data-builtin data-forest";
   return (
     '<span class="mini"' +
     scope +
@@ -16,15 +16,13 @@ function thumb(theme, custom) {
 
 function tcard(name, theme, opts) {
   opts = opts || {};
-  var actions = opts.current
-    ? ""
-    : '<button class="jds-btn jds-btn--secondary jds-btn--sm">Apply</button>';
+  var actions = '<button class="jds-btn jds-btn--secondary jds-btn--sm tcard__apply">Apply</button>';
   if (opts.custom) actions += '<button class="jds-btn jds-btn--quiet jds-btn--sm">Edit</button>';
   actions += '<button class="jds-btn jds-btn--quiet jds-btn--sm">Duplicate</button>';
   if (opts.custom) actions += '<button class="jds-btn jds-btn--quiet jds-btn--sm">Delete</button>';
   return (
-    '<article class="tcard' +
-    (opts.current ? " is-current" : "") +
+    '<article class="tcard" data-theme-card="' +
+    opts.id +
     '"><button class="tcard__thumb" aria-label="Apply ' +
     name +
     '">' +
@@ -32,7 +30,7 @@ function tcard(name, theme, opts) {
     '</button><div class="tcard__row"><span class="tcard__name">' +
     name +
     "</span>" +
-    (opts.current ? '<span class="tcard__state">Current</span>' : "") +
+    '<span class="tcard__state">Current</span>' +
     '</div><div class="tcard__actions">' +
     actions +
     "</div></article>"
@@ -90,28 +88,19 @@ function previewMarkup() {
 
 function paneMarkup() {
   return (
-    '<div class="pane__head"><h2 class="pane__title">Appearance</h2><p class="pane__desc">Pick a color theme and a nav bar color for this account, or build your own theme. Warning and error colors stay fixed so they always read correctly.</p></div>' +
+    '<div class="pane__head"><h2 class="pane__title">Appearance</h2><p class="pane__desc">Pick a color theme for this account, or build your own. Warning and error colors stay fixed so they always read correctly.</p></div>' +
     /* Theme */
-    '<section class="pane__card"><header class="pane__cardhead"><div class="pane__cardheadmain"><div class="pane__cardtitle">Theme</div><div class="pane__carddesc">Built-in themes follow light or dark. Your own themes keep the colors you saved.</div></div><div class="pane__cardaction"><button class="jds-btn jds-btn--secondary jds-btn--sm">+ New theme</button></div></header>' +
-    '<div class="pane__cardbody"><div class="set-row"><div class="set-row__main"><div class="set-row__name">Color mode</div><div class="set-row__desc">Applies to every built-in theme.</div></div><div class="set-row__control"><div class="jds-segmented" role="group"><button class="jds-segmented__opt" data-pick="mode:light">Light</button><button class="jds-segmented__opt" data-pick="mode:dark">Dark</button></div></div></div>' +
+    '<section class="pane__card"><header class="pane__cardhead"><div class="pane__cardheadmain"><div class="pane__cardtitle">Theme</div><div class="pane__carddesc">Built-in themes follow light or dark. Your own themes keep the colors you saved, nav bar included.</div></div><div class="pane__cardaction"><button class="jds-btn jds-btn--secondary jds-btn--sm">+ New theme</button></div></header>' +
+    '<div class="pane__cardbody"><div class="set-row"><div class="set-row__main"><div class="set-row__name">Color mode</div><div class="set-row__desc" data-mode-desc>Applies to every built-in theme.</div></div><div class="set-row__control"><div class="jds-segmented" role="group"><button class="jds-segmented__opt" data-pick="mode:light">Light</button><button class="jds-segmented__opt" data-pick="mode:dark">Dark</button></div></div></div>' +
     '<div class="jds-eyebrow jds-eyebrow--muted gal-label">Built in</div><div class="gal">' +
-    tcard("Forest", "", { current: true }) +
-    tcard("Sage", "sage") +
-    tcard("Canyon", "canyon") +
-    tcard("Teal", "teal") +
-    tcard("Dusk", "dusk") +
+    tcard("Forest", "", { id: "" }) +
+    tcard("Sage", "sage", { id: "sage" }) +
+    tcard("Canyon", "canyon", { id: "canyon" }) +
+    tcard("Teal", "teal", { id: "teal" }) +
+    tcard("Dusk", "dusk", { id: "dusk" }) +
     '</div><div class="jds-eyebrow jds-eyebrow--muted gal-label">Your themes</div><div class="gal">' +
-    tcard("Harbor", null, { custom: true }) +
+    tcard("Harbor", null, { custom: true, id: "harbor" }) +
     "</div></div></section>" +
-    /* Nav bar */
-    '<section class="pane__card"><header class="pane__cardhead"><div class="pane__cardheadmain"><div class="pane__cardtitle">Nav bar</div><div class="pane__carddesc">The column of links down the left side. On a phone it colors the bar across the top and the menu.</div></div></header>' +
-    '<div class="pane__cardbody"><div class="set-row"><div class="set-row__main"><div class="set-row__name">Color</div><div class="set-row__desc">Works with every theme, light or dark. Saved as soon as you pick.</div></div></div>' +
-    '<div class="navpick" role="radiogroup" aria-label="Nav bar color">' +
-    swatchesMarkup() +
-    '<span class="colorfield"><input type="color" data-nav-color aria-label="Custom nav color"><input class="jds-input jds-input--sm" data-nav-hex aria-label="Nav color value"></span></div>' +
-    '<div class="navstrip" aria-hidden="true">' +
-    navStripMarkup() +
-    '</div><div class="navrow-foot"><p class="readout" data-readout></p><button class="jds-btn jds-btn--quiet jds-btn--sm" data-reset>Reset to theme default</button></div></div></section>' +
     /* Editor */
     '<section class="pane__card" id="editor"><header class="pane__cardhead"><div class="pane__cardheadmain"><div class="pane__cardtitle">Edit Harbor</div><div class="pane__carddesc">The preview changes as you type. Nothing is applied until you save.</div></div></header>' +
     '<div class="editor"><div class="slots"><div class="jds-field slots__name"><label class="jds-label">Name</label><input class="jds-input" value="Harbor"></div>' +
@@ -136,10 +125,17 @@ function paneMarkup() {
       slot("Accent", "Buttons, links, the Today band", "#2c5d8a", { selected: true }),
       slot("Gold", "Rules and markers only", "#d39b3c")
     ]) +
+    '<section class="navgroup" id="navgroup"><h4 class="slotgroup__title">Nav bar</h4><p class="slotgroup__hint">The column of links down the left side. On a phone it also colors the top bar and the menu. Text and icons pick dark or light by themselves.</p>' +
+    '<div class="navpick" role="radiogroup" aria-label="Nav bar color">' +
+    swatchesMarkup() +
+    '<span class="colorfield"><input type="color" data-nav-color aria-label="Custom nav color"><input class="jds-input jds-input--sm" data-nav-hex aria-label="Nav color value"></span></div>' +
+    '<div class="navstrip" data-nav-scope aria-hidden="true">' +
+    navStripMarkup() +
+    '</div><div class="navrow-foot"><p class="readout" data-readout></p><button class="jds-btn jds-btn--quiet jds-btn--sm" data-reset>Reset to Harbor default</button></div></section>' +
     '<section class="palette"><h4 class="slotgroup__title">Paste a palette</h4><p class="slotgroup__hint">Paste colors from a palette tool, then click one to put it in the slot you last touched (Accent).</p><textarea class="jds-textarea" aria-label="Paste palette">#2c5d8a #d39b3c #eef1f4 #1d2733 #b8664a</textarea>' +
     '<div class="staged"><button style="--sw:#2c5d8a" aria-label="Use #2c5d8a"></button><button style="--sw:#d39b3c" aria-label="Use #d39b3c"></button><button style="--sw:#eef1f4" aria-label="Use #eef1f4"></button><button style="--sw:#1d2733" aria-label="Use #1d2733"></button><button style="--sw:#b8664a" aria-label="Use #b8664a"></button></div></section>' +
     "</div>" +
-    '<aside class="side"><div><h4 class="side__title">Preview</h4><div class="harbor" style="--paper:#eef1f4;--bg:#eef1f4;--surface:#f8fafb;--text:#1d2733;--ink:#1d2733;--text-muted:#4d5a69;--border:#c9d1da;--border-subtle:#dde3ea;--forest:#2c5d8a;--accent:#2c5d8a;--accent-fg:#2c5d8a;--gold:#d39b3c;--hero-fg:#ffffff;--sage-light:#e3eaf2;--btn-primary-bg:#2c5d8a">' +
+    '<aside class="side"><div><h4 class="side__title">Preview</h4><div class="harbor" data-nav-scope style="--paper:#eef1f4;--bg:#eef1f4;--surface:#f8fafb;--text:#1d2733;--ink:#1d2733;--text-muted:#4d5a69;--border:#c9d1da;--border-subtle:#dde3ea;--forest:#2c5d8a;--accent:#2c5d8a;--accent-fg:#2c5d8a;--gold:#d39b3c;--hero-fg:#ffffff;--sage-light:#e3eaf2;--btn-primary-bg:#2c5d8a">' +
     previewMarkup() +
     "</div></div>" +
     '<div><h4 class="side__title">Can people read it?</h4><ul class="checks">' +
@@ -167,8 +163,6 @@ function navStripMarkup() {
     '<a class="nav__link" href="#">' +
     svg("cal") +
     "<span>Calendar</span></a>" +
-    '<a class="nav__link" href="#">' +
-    svg("news") +
-    "<span>News</span></a>"
+    ""
   );
 }

@@ -112,7 +112,6 @@ function deriveNav(groundHex, accentHex, accentLabelHex) {
   var accentStands = ratio(accent, bg) >= 3;
   var out = {
     "--nv-bg": groundHex,
-    "--nv-override": groundHex,
     "--nv-fg": rgbToHex(fg),
     "--nv-muted": rgbToHex(muted),
     "--nv-line": rgbToHex(mix(bg, fg, 0.2)),
@@ -135,7 +134,7 @@ function applyNav(scope, nav) {
   });
 }
 function clearNav(scope) {
-  ["--nv-bg", "--nv-override", "--nv-fg", "--nv-muted", "--nv-line", "--nv-hover", "--nv-active-bg", "--nv-active-fg", "--nv-brand"].forEach(
+  ["--nv-bg", "--nv-fg", "--nv-muted", "--nv-line", "--nv-hover", "--nv-active-bg", "--nv-active-fg", "--nv-brand"].forEach(
     function (k) {
       scope.style.removeProperty(k);
     }
@@ -148,10 +147,37 @@ function themeAccent() {
   return { accent: cs.getPropertyValue("--forest").trim(), label: cs.getPropertyValue("--accent-label").trim() };
 }
 
+/* ---- Harbor, the custom theme being edited ---- */
+
+/* A custom theme saves one set of colors and the app runs it in light mode, so its nav
+   color is one value that belongs to the theme. */
+var HARBOR = {
+  "--paper": "#eef1f4", "--bg": "#eef1f4", "--surface": "#f8fafb", "--surface-2": "#e9eef3",
+  "--ink": "#1d2733", "--text": "#1d2733", "--ink-2": "#4d5a69", "--text-muted": "#4d5a69",
+  "--muted": "#4d5a69", "--ink-3": "#6b7684", "--text-faint": "#6b7684",
+  "--line": "#c9d1da", "--border": "#c9d1da", "--border-subtle": "#dde3ea", "--border-strong": "#9aa6b3",
+  "--forest": "#2c5d8a", "--accent": "#2c5d8a", "--accent-fg": "#2c5d8a", "--btn-primary-bg": "#2c5d8a",
+  "--accent-label": "#ffffff", "--text-on-accent": "#ffffff", "--hero-fg": "#ffffff",
+  "--gold": "#d39b3c", "--sage-light": "#dfe6ee", "--hover-tint": "rgb(44 93 138 / 0.08)"
+};
+
+/* Harbor's own nav when no nav color is chosen: its pale ground, ink text, accent pill. */
+var HARBOR_DEFAULT_NAV = {
+  "--nv-bg": "#dfe6ee", "--nv-fg": "#1d2733", "--nv-muted": "#4d5a69", "--nv-line": "#c9d1da",
+  "--nv-hover": "#d0d9e3", "--nv-active-bg": "#2c5d8a", "--nv-active-fg": "#ffffff", "--nv-brand": "#2c5d8a"
+};
+
+function setVars(el, vars, on) {
+  Object.keys(vars).forEach(function (k) {
+    if (on) el.style.setProperty(k, vars[k]);
+    else el.style.removeProperty(k);
+  });
+}
+
 /* ---- Review bar ---- */
 
 var NAV_CHOICES = [
-  ["default", "Theme default", null],
+  ["default", "Harbor default", null],
   ["accent", "Accent", "accent"],
   ["charcoal", "Charcoal", "#24221d"],
   ["butter", "Butter", "#f1e4b8"],
@@ -159,7 +185,7 @@ var NAV_CHOICES = [
   ["clay", "Clay", "#b8664a"]
 ];
 
-var state = { mode: "light", theme: "", nav: "navy" };
+var state = { mode: "light", theme: "harbor", nav: "navy" };
 
 function readHash() {
   location.hash
@@ -176,42 +202,59 @@ function navGround(choice) {
     return x[0] === choice;
   })[0];
   if (!c || !c[2]) return null;
-  if (c[2] === "accent") return themeAccent().accent;
+  if (c[2] === "accent") return HARBOR["--forest"];
   return c[2];
 }
 
 function render() {
   var root = document.documentElement;
-  root.setAttribute("data-color-mode", state.mode);
-  if (state.theme) root.setAttribute("data-theme", state.theme);
+  var harbor = state.theme === "harbor";
+  root.setAttribute("data-color-mode", harbor ? "light" : state.mode);
+  if (state.theme && !harbor) root.setAttribute("data-theme", state.theme);
   else root.removeAttribute("data-theme");
+  root.classList.toggle("is-harbor", harbor);
+  setVars(root, HARBOR, harbor);
   history.replaceState(null, "", "#mode=" + state.mode + "&theme=" + state.theme + "&nav=" + state.nav);
 
+  /* The nav color belongs to Harbor: the editor always shows it, the app only while Harbor is applied. */
   var ground = navGround(state.nav);
-  var acc = themeAccent();
-  var nav = ground ? deriveNav(ground, acc.accent, acc.label) : null;
-  if (nav) applyNav(root, nav);
-  else clearNav(root);
+  var nav = ground ? deriveNav(ground, HARBOR["--forest"], HARBOR["--accent-label"]) : HARBOR_DEFAULT_NAV;
+  var scopes = Array.prototype.slice.call(document.querySelectorAll("[data-nav-scope]"));
+  clearNav(root);
+  if (harbor) scopes.push(root);
+  scopes.forEach(function (el) {
+    applyNav(el, nav);
+  });
+  root.style.setProperty("--harbor-nav", nav["--nv-bg"]);
 
+  document.querySelectorAll("[data-theme-card]").forEach(function (c) {
+    c.classList.toggle("is-current", c.dataset.themeCard === state.theme);
+  });
   document.querySelectorAll("[data-pick]").forEach(function (b) {
     var p = b.dataset.pick.split(":");
-    b.setAttribute("aria-pressed", String(state[p[0]] === p[1]));
+    b.setAttribute("aria-pressed", String(state[p[0]] === p[1] && !(harbor && p[0] === "mode")));
+    if (p[0] === "mode" && b.closest(".pane__card")) b.disabled = harbor;
+  });
+  document.querySelectorAll("[data-mode-desc]").forEach(function (el) {
+    el.textContent = harbor
+      ? "Built-in themes only. Your own themes keep their saved colors in light mode."
+      : "Applies to every built-in theme.";
   });
   document.querySelectorAll("[data-navswatch]").forEach(function (b) {
     b.setAttribute("aria-checked", String(b.dataset.navswatch === state.nav));
   });
   document.querySelectorAll("[data-nav-hex]").forEach(function (el) {
     el.value = ground || "";
-    el.placeholder = "Theme default";
+    el.placeholder = "Harbor default";
   });
   document.querySelectorAll("[data-nav-color]").forEach(function (el) {
-    el.value = ground || "#e7ebdf";
+    el.value = ground || HARBOR_DEFAULT_NAV["--nv-bg"];
   });
   document.querySelectorAll("[data-reset]").forEach(function (el) {
     el.disabled = state.nav === "default";
   });
   document.querySelectorAll("[data-readout]").forEach(function (el) {
-    el.innerHTML = nav
+    el.innerHTML = ground
       ? "Text and icons switch to <b>" +
         nav.textKind +
         "</b> on this color. Labels read at <b>" +
@@ -222,9 +265,9 @@ function render() {
         (nav.strong
           ? " This is a middle tone, so Moss uses full " + (nav.textKind === "dark" ? "black" : "white") + " text."
           : "")
-      : "Using the theme's own nav color. It changes with light and dark.";
+      : "Using Harbor's own pale nav, drawn from its page and accent colors.";
   });
-  if (window.onRender) window.onRender(nav);
+  if (window.onRender) window.onRender(ground ? nav : null);
 }
 
 function bar(title, links) {
@@ -233,8 +276,8 @@ function bar(title, links) {
   var html = "<b>" + title + "</b>";
   html += '<span class="mk-group">Mode <button data-pick="mode:light">Light</button><button data-pick="mode:dark">Dark</button></span>';
   html +=
-    '<span class="mk-group">Theme <button data-pick="theme:">Forest</button><button data-pick="theme:sage">Sage</button><button data-pick="theme:canyon">Canyon</button><button data-pick="theme:teal">Teal</button><button data-pick="theme:dusk">Dusk</button></span>';
-  html += '<span class="mk-group">Nav color ';
+    '<span class="mk-group">Theme <button data-pick="theme:">Forest</button><button data-pick="theme:sage">Sage</button><button data-pick="theme:canyon">Canyon</button><button data-pick="theme:teal">Teal</button><button data-pick="theme:dusk">Dusk</button><button data-pick="theme:harbor">Harbor (yours)</button></span>';
+  html += '<span class="mk-group">Harbor nav ';
   NAV_CHOICES.forEach(function (c) {
     html += '<button data-pick="nav:' + c[0] + '">' + c[1] + "</button>";
   });
@@ -265,7 +308,7 @@ function bar(title, links) {
 
 function swatchesMarkup() {
   return NAV_CHOICES.map(function (c) {
-    var bg = c[2] === "accent" ? "var(--forest)" : c[2] || "var(--sage-light)";
+    var bg = c[2] === "accent" ? HARBOR["--forest"] : c[2] || HARBOR_DEFAULT_NAV["--nv-bg"];
     return (
       '<button class="swatch" role="radio" data-navswatch="' +
       c[0] +

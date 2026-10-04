@@ -5,13 +5,13 @@ Static mockups for sign-off before any build. Nothing here ships.
 ## Open them
 
 Open the files straight from disk in a browser. The bar across the top switches light and dark
-mode, the built-in theme and the nav color, and links between the pages.
+mode, which theme is applied (Harbor is the custom theme being edited) and Harbor's nav color.
 
 | File | Shows |
 | --- | --- |
 | `desktop.html` | The full Appearance pane at 1440 wide, inside the real app frame |
-| `phone.html` | Three 390 wide screens: top of the pane, the theme editor, the menu open |
-| `nav-colors.html` | The nav at full size on seven colors, with the contrast each one reaches |
+| `phone.html` | Three 390 wide screens: top of the pane, Harbor's nav color, the menu open |
+| `nav-colors.html` | Harbor's nav at full size on seven colors, with the contrast each one reaches |
 
 `app.css` and `fonts/` are a frozen copy of the shipped tokens, `@moss/ui` styles, settings
 styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder is in
@@ -21,7 +21,7 @@ styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder 
 
 | Today's editor | Mockup |
 | --- | --- |
-| No nav color control | New "Nav bar" section: six swatches, a custom color, a live nav strip, a contrast readout and "Reset to theme default" |
+| No nav color control | A "Nav bar" group inside the custom theme editor: six swatches, a custom color, a live nav strip, a contrast readout and "Reset to Harbor default" |
 | Each color slot boxed in its own card | Hairline-ruled rows, name and purpose on the left, picker and value on the right |
 | Technical slot names (surface-2, ink-3, line-strong) | Plain names with a one-line purpose: Page, Card, Soft card, Track, Text, Soft text and so on |
 | Line colors with transparency show as white swatches | Line slots show a ruled sample at the real weight |
@@ -30,6 +30,15 @@ styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder 
 | Accent ramp listed with internal names | Removed; the preview shows the ramp in use |
 | Warnings like "Accent on paper 1.79:1" | "Can people read it?" list: each pairing in words, "Reads well, 6.2 to 1" or "Faint, 2.1 to 1. Aim for 3 to 1" |
 | Generic theme thumbnails | Thumbnails draw a small Moss screen in the theme's colors, nav included |
+
+## Where the nav color lives
+
+- The nav color belongs to a custom theme and saves with it. Built-in themes keep their own nav.
+- A custom theme saves one set of colors, and the app always runs custom themes in light mode.
+  So each custom theme has one nav color, not one per mode.
+- The app's nav, the phone top bar and the phone menu take the color while that theme is applied.
+- With a built-in theme applied, the color mode switch works as today. With a custom theme
+  applied, it explains that custom themes keep their saved colors.
 
 ## How the nav color stays readable
 
@@ -42,10 +51,9 @@ styles and Archivo. `mockup.css` holds only the mockup's own layout. The folder 
 - The Moss mark uses the accent when it reads at 4.5 to 1, otherwise the text color.
 - On a phone the top bar and the menu drawer take the same color.
 
-## Questions for Ben
+## Ben's answers
 
-1. Should the nav color be its own setting that works with every theme (as drawn), or part of a
-   custom theme only?
-2. Should the phone's top bar take the nav color too (as drawn), or only the menu drawer?
-3. One nav color serves both light and dark mode (as drawn). Is that right, or should each mode
-   keep its own?
+1. The nav color is a setting inside custom themes only.
+2. The phone's top bar and the menu both take the nav color.
+3. Custom themes have no separate light and dark colors (checked in the app shell), so there is
+   one nav color per custom theme.
