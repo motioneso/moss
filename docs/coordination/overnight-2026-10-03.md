@@ -293,3 +293,8 @@ merges_since_relay 0. Ben asleep; his 21:35 merge interpretation (section above)
 2. **PR #2976 (issue #2956, activity history, security tier, draft).** Head d4cad8efb. Lane: Muse pane labelled for the 2956 security fixes (was w1:p12D). Round 2 security FAIL (comment 5977191037: expiry cap counted from an inserter-set created_at; plus two nits) is fixed and pushed in d4cad8efb. Lane is now running the 20 blocking browser specs one at a time on one provisioned stack, then the final full gate on the final head, then a PR comment. Then: round-3 security re-review (resume a896ddc524ad5e7d4, or fresh coordinated-qa opus) that must check the expiry fix with a red run. Merge per Ben's 21:35 note only when security review clean + specs + gate + CI green + live proof posted: mark ready, gh pr merge --squash --auto. Security merge = relay right after. Anything needing Ben's judgment goes to AWAITING-BEN and the PR stays unmerged.
 3. **PR #2982 (meetings, Codex builder):** review done, RED, reported. Never merge it from this run. Builder's later commit 48cbf2e0f looks to fix both blockers; the schema catalog test still misses migrations 0265 and 0266. No action unless Ben asks.
 4. When 1 and 2 are merged or parked: end-coordination (closing entry, stop coordinator-watchdog.timer, release the name).
+
+## Relay 7 adopted (session 18a6b85a, pane w1:p12E)
+
+- Lock taken, old coordinator w1:p11Y closed, watchdog active. merges_since_relay 0.
+- 2989 lane (w1:p128): re-running the two-gates proof and chasing the exit 127. 2956 lane (w1:p12D): browser spec 13 of 20. Both told the new coordinator pane; delivery confirmed. Waiting on their reports; RELAY POINT 7 steps 1-4 still govern.
