@@ -1,12 +1,12 @@
 # Coordination Run - overnight-2026-10-03
 
 **Date:** 2026-10-03
-**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `32206ccd-a8b4-44e2-9fbf-ab753f7a297b` (relay 8). Resolve panes fresh by label; pane ids below are hints only.
+**Coordinator lock:** agent name `coordinator`, pane label `Coordinator`, anchor = Claude session id `2c4dc2d2-3d6e-41d3-a4e6-f0685ae14de8` (relay 9). Resolve panes fresh by label; pane ids below are hints only.
 **Brief:** ~/.coord-briefs/overnight-2026-10-03.md (Ben asleep, whole queue approved). Lane briefs: ~/.coord-briefs/overnight/.
 **Merge policy:** routine/sensitive auto-merge after verified QA + live-path proof. Security tier: Opus adversarial QA + verdict comment, then park for Ben's merge sign-off (needs-ben) in the morning.
 **Build lanes:** Muse Spark in the Builders tab (w1:t9J). Ben 2026-10-03 06:30 PDT: NEW lanes spawned before 11:00 PDT use Claude Opus 5.5 (`--model opus`, herdr agent start, verify pane says Opus); running Muse lanes are not switched. After 11:00 PDT, back to Muse. Ben 09:50 PDT: Opus agents run at high effort for now (running lanes switched with /effort high; new Opus spawns pass --effort high). Ben 10:12 PDT: from 11:00 new lanes may also run DeepSeek 4.1 Flash in interactive OpenCode (start opencode in the pane, pick the model with /models, read the pane to confirm; config overrides fall back to glm-5.2). Message OpenCode lanes with herdr pane run. Ben also asked to fit more work into the run. QA: Opus, own pane in a QA tab.
 **Lane worktrees:** nested at ~/Jarv1s/.claude/worktrees/overnight-coord/.claude/worktrees/<branch> (created from this worktree).
-**merges_since_relay:** 1
+**merges_since_relay:** 0
 
 ## Queue
 
@@ -16,14 +16,14 @@
 | Coverage guard gaps | #2933 | routine | merged (6f9d95af6) | - | reaped | - | #2962 | 0 |
 | New chat stops running turn | #2934 | security | merged (b861a8093) on Ben's delegated sign-off | - | reaped | fix-2934-newchat-stop | #2963 | 0 |
 | Mid-chat tools hint + switched-off refusal test | #2942 | sensitive | merged (a1369fbed) | - | reaped | fix-2942-midchat-tools | #2974 | 1 |
-| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | merged (9d4463820) 2026-10-04 on Ben's 21:35 OK after round-3 security review GREEN (comment 5978295081), CI green, live proof posted | 2956 security fixes (Muse) | w1:p12D (reap pending) | feat-2956-activity-history | #2976 | 0 |
-| Gate runs get their own throwaway Postgres (Ben ask 20:50 after shared server crashed mid-gate) | #2989 | sensitive (gate tooling) | PR open, database-free checks green; two-gates proof held until slice D gate and review stack finish | 2989 gate own database (Muse) | w1:p128 | fix-2989-gate-own-postgres | #2991 | 0 |
+| Activity history redesign (slices A-D, one PR) | #2956 | security (migrations + row security) | merged (9d4463820) 2026-10-04 on Ben's 21:35 OK after round-3 security review GREEN (comment 5978295081), CI green, live proof posted | - | reaped | feat-2956-activity-history | #2976 | 0 |
+| Gate runs get their own throwaway Postgres (Ben ask 20:50 after shared server crashed mid-gate) | #2989 | sensitive (gate tooling) | merged (228900f14) | - | reaped | fix-2989-gate-own-postgres | #2991 | 0 |
 | Review and test meeting companion PR #2982 (Ben ask 21:00; findings only, no pushes to the shared branch) | #2981 | review only | done 21:30: RED at a86c3e7, 2 blockers, 9 major, 14 minor; comment 5976578877; database suites blocked on #2989 | - | closed | detached review worktree | #2982 | 0 |
 | Temporary shadow report page | #2957 | security (new private-data read route) | merged (a968e0a1f) on Ben's sign-off | - | reaped | - | #2964 | 0 |
-| Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | QA round 2: all findings fixed, only CI static check red (export test file 1011 lines > 1000); lane moving the assertion; on CI green -> AWAITING-BEN + needs-ben, never merge | 2637 focus history cleanup | w1:p11A | fix-2637-focus-retention | #2977 | 0 |
-| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | path test fixed; 6 GB cap ended memory kills (peak 3.65 GiB); follow-up #2969 filed; retrieval runs failed on timeouts at box load 92-117, lane waiting (event-driven, 60 min cap) for load < 30 | 2912 notes browser tests | w1:p117 | fix-2912-notes-specs | #2970 (draft) | 0 |
+| Focus judgment 30-day purge | #2637 | security (raised 07:15: new delete policy + definer function = policy-touching migration; Ben sign-off to merge) | merged (2c3c12da0) on Ben's sign-off | - | reaped | fix-2637-focus-retention | #2977 | 0 |
+| Notes browser tests failing on main | #2912 | routine (product fix would need live proof) | merged (ba84d9387) | - | reaped | fix-2912-notes-specs | #2970 | 0 |
 | Weather test stale wording | #2891 | routine (test-only) | merged (05769bf43) | - | reaped | - | #2968 | 0 |
-| Classifier review storage hardening | #2893 | routine | merged (103e94141) | 2893 review storage (Opus) | w1:p11D | fix-2893-review-storage | #2973 | 0 |
+| Classifier review storage hardening | #2893 | routine | merged (103e94141) | - | reaped | fix-2893-review-storage | #2973 | 0 |
 | Job search browser test signs in real chat | #2735 | routine (test-only) | merged (b7dbb4636) | - | reaped | fix-2735-jobsearch-uat | #2975 | 0 |
 
 ## Dependency / merge order
@@ -147,6 +147,7 @@ None.
 - w1:p11V "Coordinator (old)" (session b1e6e877, relay 5 coordinator) - merged #2970 and #2977 (security, Ben sign-off); relayed at RELAY POINT 6; closed by relay 6.
 - w1:p11Y "Coordinator (old)" (session 66aed34b, relay 6 coordinator) - ran slices C and D of #2956, the 2982 review and the 2989 lane; relayed at RELAY POINT 7 on a compaction tripwire; closed by relay 7 (session 18a6b85a).
 - w1:p12N "Diagnose prod prepared tools (Opus)" (diag-prod-classifier) - read-only; found prod HA preparations were never saved (Prepare drafts only in the page; save needs approve per tool); finding posted on issue #2984; worktree removed.
+- w1:p12T "Coordinator (old)" (session 32206ccd, relay 8 coordinator) - merged #2976 (security, on Ben's 21:35 OK); relayed at RELAY POINT 9; closed by relay 9 (session 2c4dc2d2).
 
 ## Continuation note
 
@@ -351,3 +352,13 @@ merges_since_relay 1 (PR #2976, security). Ben's 21:35 note governs. Nothing is 
    - QA pane "QA 2976 round 3 (Opus)" (was w1:p12H, agent qa-2976-r3, qa tab; it reset itself once, session now 914b4abe). Close it. QA worktrees qa-2976-r3 and qa-2976-main: git worktree remove --force (QA never edits source). Check both for leftover .qa-uat helper scripts first; nothing there is work.
 3. **PR #2982:** never merge from this run.
 4. **End:** point ~/.claude/projects and ~/.codex/sessions at /media/ben/Downloads/agent-logs once no session is writing (see the disk bullet under Relay 7); if any session is still writing, leave it and note it for Ben. Then end-coordination: closing entry, stop coordinator-watchdog.timer, release the name, worktree clean.
+
+## Relay 9 adopted and run closed (session 2c4dc2d2, pane w1:p12Y)
+
+- Lock taken; old coordinator w1:p12T (session 32206ccd) closed. merges_since_relay 0.
+- #2956: issue closed, project 2 item already Done.
+- Reaped: Muse lane w1:p12D "2956 security fixes (Muse)" (confirmed no dev server, no seeded rows; work landed as #2976 at head c3fa5327c). Worktree feat-2956-activity-history reap check: "VERDICT: REAPABLE (gates clear; ahead=38)"; removed, local branch deleted. QA pane w1:p12H "QA 2976 round 3 (Opus)" (session 914b4abe; verdict comment 5978295081) closed; worktree qa-2976-r3 clean, removed; qa-2976-main was already gone.
+- Log folders NOT moved: ~/.claude/projects had 7 files written in the last 5 minutes and several live Codex processes hold files open under ~/.codex/sessions. Left for Ben to do when no session is running (old-log move script and undo list in /media/ben/Downloads/agent-logs).
+- Backlog sweep: removed 0, kept 12. In use (5): build-2984-r21, fix-page-headers, fix-task-dialog-close, theme-editor-park-press, dev-worker. Unmerged work, no merged PR (7): uat-2719-20260926 (~/.worktrees), agent-a101c005c38757550, agent-a9d7688981cec9030, bt2a-gate, classifier-gate-spec, /tmp/jarv1s-moss2521-baseline-ff0233a (PR #2708 closed unmerged), /tmp/moss-weekly-pages.lOrs0b (gh-pages checkout). Flagged for Ben, not deleted.
+- Shipped this run: #2965, #2962, #2963, #2974, #2976, #2991, #2964, #2977, #2970, #2968, #2973, #2975. Reviewed only, never merged: #2982. Filed, not built: #2997 (People sync, ruled option A), #3003 (Tailscale integration, needs spec).
+- AWAITING-BEN: nothing open from this run. Watchdog stopped, coordinator name released. Run closed.
