@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Clearer notice about what is shared when preparing tools.** The notice shown before preparing a connection's tools now says plainly that text from the service, such as tool descriptions, is sent as written and is not checked for secrets. [PR #2996](https://github.com/motioneso/moss/pull/2996)
 
+#### Changed
+
+- **One activity history for everything Moss does.** Your Activity page now shows every kind of work Moss did for you, with what happened, how long it took, and the details of each step. Filter by time, module, or model; your choices are remembered. [PR #2976](https://github.com/motioneso/moss/pull/2976)
+
 ### 2026-10-03
 
 #### Changed
