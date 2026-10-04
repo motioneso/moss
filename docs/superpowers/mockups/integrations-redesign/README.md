@@ -29,7 +29,7 @@ Ben's answer to question 2. When a connection is added, Moss runs one cheap pass
 - While it runs, the list shows A to Z with a "Sorting" note, and every tool works.
 - Once it finishes, tools group into Looks things up, Changes things, Sends things out and Sensitive.
 - The Connection block in the rail says when the tools were sorted.
-- The same pass can write the readable names (question 4).
+- The same call replaces the free rule's names with better model-written ones (question 4).
 - Radarr keeps its own sections, because web services already say whether each tool reads, changes or deletes.
 
 ## Classifier states shown (issue 2984)
@@ -49,9 +49,9 @@ There is no Prepare button, no per-tool risk choice and no per-tool review row. 
 1. One switch per tool, plus "Keep out of the classifier" in the tool's menu. The mockups already show it.
 2. Run a cheap sorting pass that groups tools by what they do, even with the classifier off.
 3. A connection's screen hides the settings list so the tools get the full width, with "Back to connections" at the top.
+4. Both names. The free rule gives an instant readable name, and the sorting pass replaces it with a better model-written name in the call it already makes.
 
 ## Open questions for Ben
 
-4. Is a model-written readable name worth having, given the free rule is decent?
 5. Rename "classifier" to something plainer, such as "Quick answers"?
 6. Sorting sends each tool's name and description to the default chat model, and to its provider if it is hosted. The classifier shows a notice before it sends the same kind of thing. Should adding a connection say this once too, or is the line in the Connection block enough?
