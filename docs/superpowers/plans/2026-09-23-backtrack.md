@@ -299,7 +299,7 @@ static let backtrackEnabled = "backtrackEnabled"; static let backtrackConsentAcc
   is recognised, at the deadline, and only if it is still recording and still frontmost. Ticks use
   the same deadline. A budget change applies to the next deadline.
 - **Thumbnail decides.** A `tick` emits `checkThumbnail`. Only `thumbnailChecked(changed: true)`
-  leads to `capture`. A switch-triggered chain skips the thumbnail.
+  leads to `capture`, including switch-triggered chains (performance retry, §7).
 - **Emit threshold.** Emit a segment only if the deduper returns at least 3 new lines or 80 new
   characters. `start` is the chain's first `at`, and `end` is the `recognized` event's `at`.
 
@@ -539,6 +539,259 @@ revoking a Mac cascade to its rows or keep them?
 
 ## 7. Kill gate (after Phase 1; Ben decides)
 
+### Performance retry 2 (authorized by Ben, 2026-10-02)
+
+Retry 1 (below) failed its working-day sample: **11.4% mean CPU** (2026-10-01 15:49 to 2026-10-02
+01:36 UTC, 479 readings, peak 45.1%). Its eight-hour metrics report shows where the cost went:
+
+| Measurement (8.04 h)                         | Value                                 |
+| -------------------------------------------- | ------------------------------------- |
+| OCR passes from the periodic "changed" check | 892 (111/h), mean 1858 ms CPU         |
+| OCR passes from switches                     | 259 (32/h), mean 1546 ms CPU          |
+| Passes that emitted nothing new              | 465 of 1151 (40%)                     |
+| Thumbnail checks that said "changed"         | 1251 of 1315; 754 of them at diff ≤10 |
+| OCR share of process CPU (estimate)          | 7.1% of 8.0%                          |
+
+At about 1.7 s CPU a pass, 3% of one core allows roughly 60 passes an hour; retry 1 ran 143. The
+change check is not the lever (it fires on cursors, clocks and terminal output); the number and
+cost of OCR passes are. Retry 2 attacks both, in four tasks, each followed by a short metrics read
+(`scripts/backtrack-metrics-report.sh 1h`, exit 0) that is evidence for the next task, not a gate
+verdict. Everything stays Debug-only; Phase 2 stays closed. Retry 1's rule "no accessibility-text
+extraction in this pass" is superseded for this pass only by Ben's ruling of 2026-10-02.
+
+Sources (research, 2026-10-02, read at HEAD): Screenpipe (`screenpipe/screenpipe` at `bf131a9`:
+`crates/screenpipe-capture/src/paired_capture.rs` `a11y_content_is_thin`,
+`crates/screenpipe-capture/src/ocr_gate.rs`, `crates/screenpipe-a11y/src/budget.rs`,
+`crates/screenpipe-a11y/src/tree/macos.rs`, issue #2685); omi
+(`desktop/context-for-claude/docs/ocr-quality.md` §3–4, `.../Capture/ScreenWatcher.swift`); rem
+issue #59; Windrecorder `windrecorder/record.py`. None publishes a measured whole-app figure under
+5%, so these are mechanisms to borrow, not proven results.
+
+#### Seams (cited against `backtrack-performance-pass` at `7ed8fc221`)
+
+- OCR request: `.accurate` with `usesLanguageCorrection = true` (`Backtrack/BacktrackCapture.swift:35-36`);
+  capture up to 2048 px (`Backtrack/BacktrackRuntime.swift:97`).
+- Fingerprint memory expires after 60 s (`Backtrack/BacktrackCapture.swift:214`), keyed by
+  `DedupeKey` (`Backtrack/BacktrackMachine.swift:89`).
+- One global gap, 10 s or 60 s (`Backtrack/BacktrackMachine.swift:17`); every reschedule uses it
+  (`:200`, `:229`, `:235`, `:252`). "Material change" is `minNewLines = 3` / `minNewCharacters = 80`
+  (`:133-134`) via `SegmentDeduper.newLines` (`:109`) — this is the "nothing new" signal; no new
+  similarity measure is needed.
+- AX helpers exist: `BacktrackAX.window(pid:matching:)` (`Backtrack/BacktrackCapture.swift:65`),
+  `children` (`:97`), and the web-area search predicate (`:149-158`) already used for secure fields.
+- The runtime and its AX calls run on the main actor (`Backtrack/BacktrackRuntime.swift:90-91`,
+  `locateSecureFields` at `:382`). A longer text walk must not.
+- Input idleness comes from `CGEventSource.secondsSinceLastEventType` (`Backtrack/BacktrackRuntime.swift:59`).
+  The same call with `.keyDown` gives "typing recently".
+- The source check forbids disk, network and preferences APIs in Backtrack files
+  (`scripts/check-backtrack-sources.sh`). Detecting Electron by reading the app bundle would need
+  `FileManager`, so this pass does not detect Electron at all (see Task 3, browsers).
+
+Open question, owner the Task 4 builder (moot: Task 4 was dropped, see below): **Q5** — the CPU
+cost of `VNDetectTextRectanglesRequest` on a 1600 px window image. If it costs more than 100 ms CPU
+a pass, Task 4 drops it and the gate hashes a fixed 64×64 greyscale downscale of the masked image
+instead.
+
+#### Task 1 — cheaper passes (`Backtrack/BacktrackCapture.swift`, `Backtrack/BacktrackRuntime.swift`)
+
+- `usesLanguageCorrection = false`; keep `.accurate` (omi: 464 ms vs 801 ms, no accuracy loss).
+- `captureMaxDimension` 2048 → 1600 (omi: cost tracks text regions, not pixels, and native-2x
+  input was less accurate than about 2400 px).
+- Expose `static func makeRequest(completion:) -> VNRecognizeTextRequest` so the settings are testable.
+- Test: the request has `recognitionLevel == .accurate` and `usesLanguageCorrection == false`.
+  Fails if either is changed back.
+- Then: one working hour, `backtrack-metrics-report.sh 1h`; record OCR mean CPU per pass in the PR.
+
+#### Task 2 — fewer passes (`Backtrack/BacktrackMachine.swift`, `Backtrack/BacktrackCapture.swift`)
+
+- **Per-window backoff.** A pass whose deduped lines are below the material-change rule doubles that
+  window's gap: 10 → 20 → 40 → 60 s (cap). A pass that emits resets it to the global gap. Gaps are
+  kept for at most 32 windows, dropped with the rest on `discardAll` and on `reset`. The effective
+  gap for a periodic read is `max(budget.minGap, windowGap)`; switches keep the global deadline
+  only, so returning to a window is never slowed.
+- **Longer screen memory.** Fingerprints expire after 300 s instead of 60 s. A read screen is
+  re-read within five minutes at most, so a small text change is never hidden longer than that.
+- **Not while typing.** A periodic read is deferred while a key was pressed in the last 2 s,
+  re-checking every 2 s, deferred at most 30 s in total. Switches are not deferred.
+
+```swift
+case tick(generation: Int, at: Date, typingRecently: Bool)   // replaces tick(generation:at:)
+static let maxWindowGap: TimeInterval = 60
+static let typingQuiet: TimeInterval = 2
+static let maxTypingDeferral: TimeInterval = 30
+// ThumbnailChangeDetector.refreshInterval: 60 → 300
+```
+
+Tests (machine, with a fake clock):
+
+- Three empty passes in one window schedule 20, 40, 60 s; a fourth stays at 60. A passing build that
+  ignores the result schedules 10 s every time.
+- An emitting pass resets that window to 10 s; another window's gap is unaffected. Fails if gaps
+  are global.
+- With `.reduced` (60 s), the window gap never shortens the budget. Fails if `min` is used for `max`.
+- A switch to a backed-off window is scheduled after `switchSettle`, not after the window gap.
+- A periodic tick with `typingRecently` schedules a retry after 2 s and starts nothing; a switch
+  tick with `typingRecently` starts its check; after 30 s of continuous typing the read starts.
+- The 33rd window evicts the oldest gap; `discardAll` clears all gaps.
+- Fingerprint: a resembling screen is skipped at 299 s and read at 301 s. Update retry 1's 60 s
+  tests to these values.
+
+#### Task 3 — accessibility text first (new `Backtrack/BacktrackWindowText.swift`)
+
+```swift
+struct WindowTextResult: Equatable {
+    let lines: [String]            // visible text, top to bottom, raw (the machine sanitises)
+    let contentCharacters: Int     // from content roles (static text, text area/field, cell, heading, link)
+    let controlCharacters: Int     // from controls (button, tab, menu item, checkbox, combo box)
+    let truncated: Bool            // hit the element or time budget
+    let walkMilliseconds: Int
+}
+protocol WindowTextReading: Sendable {
+    /// Nil when the window is no longer `window` or AX can't be read. Runs off the main actor.
+    func visibleText(pid: pid_t, window: WindowIdentity, budget: TimeInterval) async -> WindowTextResult?
+}
+enum WindowTextVerdict: Equatable { case use, thin(String) }   // the reason is a fixed word, never text
+```
+
+Machine: a new first stage. A tick starts `.readingText`, emitting `.readText(observation,
+generation:)`. The runtime answers `.textRead(generation:result:at:)`. If the verdict is `.use`,
+the lines enter the existing `.recognized` path (same sanitiser, deduper, material-change rule and
+backoff) without a picture. If `.thin`, the chain continues to `.checking` exactly as today. The
+global gap still counts from the start of a read, whichever source answers.
+
+Rules:
+
+- **Window binding.** Read from `BacktrackAX.window(pid:matching:)`, the same window the never-watch
+  check and the address use. Re-check `freshWindow` after the read; any difference discards it.
+  Never-watch, private-window, consent, pause and lock checks run before the read, as for capture.
+- **Never read secure fields.** Skip any element with subrole `AXSecureTextField` without reading
+  its `AXValue`, and skip its subtree. Skip scroll bars, images, menu bars, menus and toolbars.
+- **Visible only.** Native trees: keep an element only if its `AXPosition`/`AXSize` intersects the
+  window frame. Web areas: `AXUIElementsForSearchPredicate` with `AXVisibleOnly: true` and
+  `AXStaticTextSearchKey`, falling back to the walk if unsupported.
+- **Cost.** One `AXUIElementCopyMultipleAttributeValues` call per element (role, subrole, value,
+  title, description, position, size). Budget 150 ms and 3000 elements, `AXUIElementSetMessagingTimeout`
+  0.2 s on the application, the window and every element before it is queried (a timeout set on one
+  element doesn't pass to its children). Runs on a utility task, never the main actor.
+- **Thin → OCR** when: no result; fewer than 100 characters; content characters under 30% of the
+  total; the bundle is on a fixed canvas list (Figma, Miro, Canva) or the address host is
+  docs.google.com, figma.com, miro.com, canva.com, excalidraw.com or tldraw.com; or the bundle is on
+  a fixed OCR-only terminal list (kitty, Alacritty, WezTerm, Warp, Hyper), which also gets a 30 s
+  per-app floor.
+- **Slow apps.** Keep the last 8 walk times per bundle (32 bundles). If the mean exceeds 100 ms, or
+  3 of the last 8 were truncated, that app skips straight to OCR for 10 minutes.
+- **Browsers.** Set no accessibility flag on any app (`AXEnhancedUserInterface`,
+  `AXManualAccessibility`). Chrome and Electron apps that expose little fall back to OCR. Rejected
+  for now, with its steelman: setting the flag would turn most Chrome and Electron passes into
+  millisecond reads, the largest likely saving. It is rejected because of documented side effects
+  (AppKit animates every window move; Chrome starts full accessibility processing; Screenpipe saw
+  buffered keystrokes replayed on quit, #3884; the flag may persist until the app restarts). It is
+  reconsidered only if the per-app breakdown shows these apps dominate the remaining OCR.
+- **Terminals with scrollback.** iTerm2 returns the whole scrollback as `AXValue`, and both iTerm2
+  and Ghostty report `AXVisibleCharacterRange` as the whole buffer, so it can't be trusted. For
+  iTerm2, keep the last 80 lines. Ghostty and Terminal.app return the screen.
+
+Tests (fake `WindowTextReading` and a fake AX tree):
+
+- A visible `AXSecureTextField` whose value is "hunter2": the value never appears in the result,
+  and the fake records that `AXValue` was never requested for it. **Observe this fail with the skip
+  removed**, then restore it (record in the PR).
+- An element outside the window frame is excluded.
+- Thin cases each produce a `.capture` effect: 99 characters; 25% content; a canvas bundle; a
+  terminal on the OCR-only list; a nil result. A good result produces `.emit` with no `.capture`.
+- AX lines pass through the sanitiser: an `sk-` key in AX text is stripped before the ring.
+- The window changes during the read: nothing is emitted, and the next read is scheduled.
+- A never-watched app: `.readText` is never emitted.
+- An app averaging 120 ms goes straight to OCR for 10 minutes, then is tried again.
+- The runtime calls `visibleText` off the main actor (assert `!Thread.isMainThread` in the fake).
+
+#### Task 4 — skip OCR when the text area is unchanged (`Backtrack/BacktrackCapture.swift`, runtime)
+
+**Dropped, 2026-10-03 (Ben).** Not built. Tasks 1–3 passed the gate without it, and in the trial
+window only 38 of 284 OCR passes (13%) found nothing new, so a text-area hash gate has little left
+to save. It stays here as the first option if CPU climbs again.
+
+After masking and before OCR, find text regions with `VNDetectTextRectanglesRequest` (see Q5), hash
+the masked pixels inside them at reduced scale, and compare with the last hash for that window
+(32 windows). A match skips OCR and counts as an empty pass for Task 2's backoff. The hash is stored
+only after OCR succeeds on the current generation, so a failed pass retries. When the regions cover
+under half the window, OCR runs with `regionOfInterest` set to their union.
+
+Tests: an identical masked image skips OCR and backs off; a changed pixel inside a region runs OCR;
+a changed pixel outside every region skips it; a failed OCR leaves no hash, so the next pass runs
+OCR; `reset`/`discardAll` clear the hashes.
+
+#### Measurement and docs
+
+- Metrics: per pass, log `source=ax|ocr|skipped`, the thin reason word, AX walk ms and character
+  count, and the app bundle id (local `os_log` only; a bundle id is app metadata, never content or a
+  title). The report adds a per-app table (passes/h, source split, CPU) and samples `mediaanalysisd`
+  alongside Trail Marker; rem's main cost showed up there. `mediaanalysisd` is reported, not gated.
+- Update spec §5 (when it reads, what it reads, recognition source, budget), the README section,
+  and the app-map description at `packages/shared/src/app-map-core.ts:100` ("a fresh read after at
+  most a minute" becomes "at most five minutes"; Accessibility text is read before recognition) in
+  the same PR.
+- Release exclusion unchanged: Release builds contain no Backtrack strings or symbols.
+
+#### Verification (from the repo root; never piped)
+
+```bash
+cd apps/trail-marker && xcodegen generate > /tmp/tm-gen.log 2>&1; echo "EXIT=$?"                                  # 0 (new source file)
+cd apps/trail-marker && xcodebuild test -scheme TrailMarker -destination 'platform=macOS' > /tmp/tm-test.log 2>&1; echo "EXIT=$?"   # 0 (unit + UI tests)
+cd apps/trail-marker && xcodebuild -scheme TrailMarker -configuration Release -destination 'platform=macOS' -derivedDataPath /tmp/tm-rel build > /tmp/tm-rel.log 2>&1; echo "EXIT=$?"   # 0
+nm "/tmp/tm-rel/Build/Products/Release/Trail Marker.app/Contents/MacOS/Trail Marker" > /tmp/tm-nm.txt 2>&1; grep -c -E 'BacktrackRuntime|WindowTextReading' /tmp/tm-nm.txt; echo "EXIT=$?"   # prints 0, EXIT=1
+bash apps/trail-marker/scripts/check-backtrack-sources.sh --self-test > /tmp/tm-src.log 2>&1; echo "EXIT=$?"   # 0
+bash apps/trail-marker/scripts/backtrack-cpu-trial.sh "$(pgrep -x 'Trail Marker')" 480 60 > /tmp/tm-trial.log 2>&1; echo "EXIT=$?"   # 0 = pass (mean ≤3.00%), 1 = fail
+```
+
+Live path, before the gate: on the installed Debug build, Show text… shows text read by
+accessibility from Safari, Mail and Ghostty (metrics `source=ax`), by OCR from Figma or a Chrome
+canvas page, and no text from a Safari password field. Recorded on the PR.
+
+#### Gate (Ben decides)
+
+The original gate below applies unchanged to a fresh working-day sample of this build: mean CPU
+≤3.0% with no battery drain Ben notices, three real "what did I see" moments answered, and no
+unmasked secret or never-watched text. If it still fails, the next options are Vision `.fast` for
+the OCR fallback (held in reserve; Screenpipe never uses it) and the browser flag above, each a
+plan change for Ben's approval.
+
+**Result (2026-10-03, recorded on #2638): passed.** The eight-hour `top` sample started 12:19 PDT
+on 2026-10-02 but never completed: Ben stopped working at about 16:05, the Mac stayed idle and then
+slept, and `top` keeps only an end-of-run summary. Ben ruled that the working window counts. The
+app's own five-minute process-CPU totals for 12:19–16:05 (3.8 h) give a **2.3% mean** (30 of 44
+blocks at or under 3%). OCR ran 75 passes an hour at about 480 ms CPU each, almost all in apps
+that expose no accessibility text (Zen, Moonlight). Ben confirmed recall was useful and that no
+password-field, private-window or never-watched text appeared in Show text…. Next time, the trial
+runner should keep every `top` reading so a run cut short is still readable.
+
+### Performance retry 1 (authorized by Ben, 2026-10-01)
+
+The first trial failed at 10.8% mean CPU; recognition usefulness passed (#2638). The next pass
+keeps Phase 1 Debug-only and the Phase 2 gate closed:
+
+- All triggers use the thumbnail check, including app and title switches. Remove `pendingSwitch`.
+- Remember up to eight successful screen fingerprints per window, for at most 32 windows. Use a
+  64-bit horizontal difference hash (distance at most 5) plus mean luminance (difference at most 10).
+  Each fingerprint expires after 60 seconds; checks do not extend that expiry. Commit a fingerprint
+  only after successful, current-generation OCR, using the actual masked image that OCR read.
+- Stop after 300 seconds without input. A five-second activity poll resumes recording; check idle
+  again at capture/recognition boundaries. Keep text while idle, and preserve all existing stop,
+  consent, window-identity and secure-field checks.
+- Reuse the existing `backtrack-cpu-metrics` instrumentation. Bound its thumbnail history to 32
+  windows, distinguish switch and periodic checks, and label step CPU as estimates because process
+  work can overlap. The metrics report must fail if logs fail or there are no complete totals.
+- Add a bounded `scripts/backtrack-cpu-trial.sh` sample (480 readings, 60 seconds apart, first reading
+  discarded). It rejects incomplete runs and returns nonzero above 3% mean CPU.
+- Verify machine and runtime cancellation, unchanged-switch skips, retry after failed/cancelled
+  recognition, expiry despite intervening checks or other reads, cache bounds and reset, existing
+  masking and sanitizing, and the Release exclusion. Record a new working-day sample and usefulness
+  verdict before passing the gate. A short synthetic sample is not a working-day verdict.
+
+No server storage, upload, accessibility-text extraction or Phase 2 implementation in this pass.
+
+### Original gate
+
 Two working days on the Phase 1 Debug build. The line stops, or returns to design, if any of these
 happens:
 
@@ -603,3 +856,7 @@ Other facts kept from earlier work:
 - The companion credential is scoped by construction (`companion-routes.ts:40-43,126-139`); there
   is no allow-list table.
 - Emails are kept in Backtrack and stripped in Focus. The two redactors differ on purpose.
+- Retry 1's working-day sample failed at 11.4% mean CPU (2026-10-01/02); OCR passes, not change
+  checks, were the cost (§7, retry 2). Raw output stayed on Ben's Mac; only the figures are here.
+- Language correction was on and capture ran at up to 2048 px in Phase 1 and retry 1
+  (`BacktrackCapture.swift:35-36`, `BacktrackRuntime.swift:97`).

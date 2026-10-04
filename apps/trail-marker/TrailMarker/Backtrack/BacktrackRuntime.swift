@@ -43,6 +43,12 @@ struct BacktrackServices {
     var freshWindowIdentity: (pid_t) -> WindowIdentity?
     var clock: () -> Date
     var scheduler: BacktrackScheduling
+    var idleSeconds: () -> TimeInterval = { 0 }
+    /// Seconds since a key last went down; periodic reads wait while the person types.
+    var keyboardIdleSeconds: () -> TimeInterval = { .infinity }
+    /// Accessibility text first (plan §7, retry 2, task 3). The default reads nothing, so
+    /// recognition decides, as before.
+    var windowText: WindowTextReading = NoWindowText()
 
     static func live() -> BacktrackServices {
         BacktrackServices(
@@ -53,7 +59,12 @@ struct BacktrackServices {
             thumbnails: ThumbnailChangeDetector(),
             freshWindowIdentity: { WorkspaceFrontmostSource.focusedWindowIdentity(pid: $0) },
             clock: Date.init,
-            scheduler: RunLoopScheduler()
+            scheduler: RunLoopScheduler(),
+            idleSeconds: {
+                CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+            },
+            keyboardIdleSeconds: { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) },
+            windowText: AXWindowTextReader()
         )
     }
     /// For the UI test harness: every capture fails, so nothing is ever read from the screen.
@@ -89,9 +100,13 @@ final class BacktrackRuntime: ObservableObject {
     static let consentVersion = 1
     /// Secure fields must be found within this, or the capture is skipped (plan §4.3).
     static let secureFieldBudget: TimeInterval = 0.05
-    /// Recognition wants more pixels than a vision description does, for small text.
-    static let captureMaxDimension: CGFloat = 2048
+    /// One Accessibility text walk, off the main actor (plan §7, retry 2, task 3).
+    static let windowTextBudget: TimeInterval = 0.15
+    /// Recognition wants more pixels than a vision description does, for small text. Past about
+    /// 1600 px Vision costs more without reading better (plan §7, retry 2, task 1).
+    static let captureMaxDimension: CGFloat = 1600
     static let thumbnailMaxDimension: CGFloat = 32
+    static let idleThreshold: TimeInterval = 300
 
     @Published private(set) var isRecording = false
     @Published private(set) var enabled: Bool
@@ -113,12 +128,18 @@ final class BacktrackRuntime: ObservableObject {
     private var screenLocked = false
     private var sleeping = false
     private var timer: BacktrackTimer?
-    private var tasks: [Task<Void, Never>] = []
+    private var activityTimer: Timer?
+    /// In-flight work, keyed so each task can drop itself when done; reads that end without an
+    /// event (an Accessibility read, an unchanged screen) would otherwise pile up all day.
+    private var tasks: [UUID: Task<Void, Never>] = [:]
     /// Masked pixels and the address for the chain in flight, never kept past it.
-    private var held: (generation: Int, image: CGImage, address: String?)?
+    private var held: (generation: Int, image: CGImage, address: String?, key: DedupeKey)?
     private var cancellables = Set<AnyCancellable>()
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var didStart = false
+    /// Kill-gate measurement (#2638): timings and counts only.
+    private let metrics = BacktrackMetrics()
+    private var trigger = "switch"
 
     init(
         connection: ConnectionRuntime,
@@ -144,13 +165,18 @@ final class BacktrackRuntime: ObservableObject {
 
     // MARK: - Lifecycle
 
+    deinit { activityTimer?.invalidate() }
+
     func start() {
         guard !didStart else { return }
         didStart = true
+        metrics.start()
         inputs = currentInputs()
         apply(machine.handle(.started(inputs, at: services.clock())))
         observer.start { [weak self] observation in
             guard let self else { return }
+            self.inputsMayHaveChanged()
+            self.trigger = "switch"
             self.apply(self.machine.handle(.frontmostChanged(observation, at: self.services.clock())))
         }
         apply(machine.handle(.frontmostChanged(observer.current, at: services.clock())))
@@ -183,6 +209,9 @@ final class BacktrackRuntime: ObservableObject {
         observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { $0.noteScreenLocked(false) }
         observe(NotificationCenter.default, ProcessInfo.thermalStateDidChangeNotification) { _ in }
         observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { _ in }
+        activityTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.inputsMayHaveChanged() }
+        }
         publish()
     }
 
@@ -251,6 +280,7 @@ final class BacktrackRuntime: ObservableObject {
             pausedAll: connection.state == .disconnected,
             screenLocked: screenLocked,
             sleeping: sleeping,
+            idle: services.idleSeconds() >= Self.idleThreshold,
             linked: connection.identity != nil,
             accessibilityGranted: permissions.accessibility == .granted,
             screenRecordingGranted: permissions.screenRecording == .granted,
@@ -282,6 +312,11 @@ final class BacktrackRuntime: ObservableObject {
     // MARK: - Effects
 
     private func send(_ event: BacktrackEvent) {
+        switch event {
+        case .recognized(let generation, _, _, _), .failed(let generation, _):
+            if generation == machine.generation { tasks = [:] }
+        default: break
+        }
         apply(machine.handle(event))
     }
 
@@ -292,8 +327,12 @@ final class BacktrackRuntime: ObservableObject {
                 timer?.cancel()
                 timer = services.scheduler.schedule(after: delay) { [weak self] in
                     guard let self else { return }
-                    self.send(.tick(generation: generation, at: self.services.clock()))
+                    self.inputsMayHaveChanged()
+                    let typingRecently = self.services.keyboardIdleSeconds() < BacktrackMachine.typingQuiet
+                    self.send(.tick(generation: generation, at: self.services.clock(), typingRecently: typingRecently))
                 }
+            case .readText(let observation, let generation):
+                run { [weak self] in await self?.readText(observation, generation: generation) }
             case .checkThumbnail(let observation, let generation):
                 run { [weak self] in await self?.checkThumbnail(observation, generation: generation) }
             case .capture(let observation, let generation):
@@ -301,14 +340,17 @@ final class BacktrackRuntime: ObservableObject {
             case .recognize(let generation):
                 run { [weak self] in await self?.recognize(generation: generation) }
             case .cancelInFlight:
-                for task in tasks { task.cancel() }
-                tasks = []
+                timer?.cancel()
+                for task in tasks.values { task.cancel() }
+                tasks = [:]
                 held = nil
             case .emit(let segment):
+                metrics.emittedLines = segment.lines.count
                 sink.accept(segment)
             case .discardAll:
                 held = nil
                 services.thumbnails.reset()
+                metrics.reset()
                 sink.discardAll()
             }
         }
@@ -316,7 +358,12 @@ final class BacktrackRuntime: ObservableObject {
     }
 
     private func run(_ work: @escaping @MainActor () async -> Void) {
-        tasks.append(Task { @MainActor in await work() })
+        let id = UUID()
+        // Runs on the main actor after this insert, so it can't finish before it is tracked.
+        tasks[id] = Task { @MainActor [weak self] in
+            await work()
+            self?.tasks[id] = nil
+        }
     }
 
     private func publish() {
@@ -361,19 +408,51 @@ final class BacktrackRuntime: ObservableObject {
         return services.secureFields.secureFieldFrames(pid: observation.pid, window: window, budget: Self.secureFieldBudget)
     }
 
-    private func checkThumbnail(_ observation: Observation, generation: Int) async {
+    /// Plan §7, retry 2, task 3: the visible text of the bound window, read off the main actor,
+    /// and kept only if the window is still the same one afterwards.
+    private func readText(_ observation: Observation, generation: Int) async {
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
         guard let window = freshWindow(for: observation) else {
             noteSkipped(observation, "its window couldn't be identified, or it is never watched")
             return send(.failed(generation: generation, at: services.clock()))
         }
+        let step = BacktrackStopwatch()
+        let result = await services.windowText.visibleText(pid: observation.pid, window: window, budget: Self.windowTextBudget)
+        guard !Task.isCancelled else { return }
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
+        guard freshWindow(for: observation) == window else {
+            noteSkipped(observation, "its window changed while its text was read")
+            return send(.failed(generation: generation, at: services.clock()))
+        }
+        let address = services.addresses.address(pid: observation.pid, window: window, bundleId: observation.bundleId)
+        let trigger = self.trigger
+        let verdict = WindowTextPolicy.verdict(result, address: address)
+        send(.textRead(generation: generation, result: result, address: address, at: services.clock()))
+        metrics.text(trigger: trigger, app: observation.bundleId, step, result: result, verdict: verdict)
+        if verdict == .use { self.trigger = "changed" }
+    }
+
+    private func checkThumbnail(_ observation: Observation, generation: Int) async {
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
+        guard let window = freshWindow(for: observation) else {
+            noteSkipped(observation, "its window couldn't be identified, or it is never watched")
+            return send(.failed(generation: generation, at: services.clock()))
+        }
+        let step = BacktrackStopwatch()
         do {
             let image = try await services.capture.capture(
                 window, pid: observation.pid, maxDimension: Self.thumbnailMaxDimension
             )
             guard !Task.isCancelled else { return }
-            let changed = services.thumbnails.changed(
-                DedupeKey(bundleId: observation.bundleId, frame: window.frame), thumbnail: image
-            )
+            inputsMayHaveChanged()
+            guard machine.isRecording, generation == machine.generation else { return }
+            let key = DedupeKey(bundleId: observation.bundleId, frame: window.frame)
+            let changed = services.thumbnails.changed(key, thumbnail: image, at: services.clock())
+            metrics.thumbnail(trigger: trigger, step, distance: metrics.distance(key, image: image), changed: changed)
+            if !changed { trigger = "changed" }
             send(.thumbnailChecked(generation: generation, changed: changed, at: services.clock()))
         } catch {
             guard !Task.isCancelled else { return }
@@ -386,8 +465,12 @@ final class BacktrackRuntime: ObservableObject {
     /// identical, the picture bound to the fresh window, the fields painted black, the address read
     /// from that same window.
     private func capture(_ observation: Observation, generation: Int) async {
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
+        let step = BacktrackStopwatch()
         let failed = { [weak self] in
             guard let self, !Task.isCancelled else { return }
+            self.metrics.skipped("capture")
             self.send(.failed(generation: generation, at: self.services.clock()))
         }
         guard let window = freshWindow(for: observation) else {
@@ -411,6 +494,9 @@ final class BacktrackRuntime: ObservableObject {
             return failed()
         }
         guard !Task.isCancelled else { return }
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
+        let distance = metrics.distance(DedupeKey(bundleId: observation.bundleId, frame: window.frame), image: image)
         guard let after = locateSecureFields(observation, window: window), after == before else {
             noteSkipped(observation, "a password field moved or appeared during the picture")
             return failed()
@@ -425,18 +511,30 @@ final class BacktrackRuntime: ObservableObject {
             "Backtrack: \(observation.appName) · \(before.count) password field(s) masked (\(locateMilliseconds) ms) · "
                 + (address == nil ? "no address exposed" : "address read")
         )
-        held = (generation, masked, address)
+        metrics.capture(trigger: trigger, step, distance: distance)
+        held = (generation, masked, address, DedupeKey(bundleId: observation.bundleId, frame: window.frame))
         send(.captured(generation: generation, at: services.clock()))
     }
 
     private func recognize(generation: Int) async {
+        inputsMayHaveChanged()
+        guard machine.isRecording, generation == machine.generation else { return }
         guard let held, held.generation == generation else { return }
         self.held = nil
+        let trigger = self.trigger
+        let step = BacktrackStopwatch()
         do {
             let lines = try await services.recognizer.recognize(held.image)
             guard !Task.isCancelled else { return }
+            inputsMayHaveChanged()
+            guard machine.isRecording, generation == machine.generation else { return }
+            services.thumbnails.recognized(held.key, thumbnail: held.image, at: services.clock())
+            metrics.emittedLines = nil
             send(.recognized(generation: generation, lines: lines, address: held.address, at: services.clock()))
+            metrics.recognition(trigger: trigger, app: held.key.bundleId, step, lines: lines.count)
+            self.trigger = "changed"
         } catch {
+            metrics.skipped("ocr")
             guard !Task.isCancelled else { return }
             focusDebug("Backtrack: skipped — the text couldn't be recognised")
             send(.failed(generation: generation, at: services.clock()))
