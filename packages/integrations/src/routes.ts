@@ -18,6 +18,7 @@ import {
   type IntegrationSummary,
   type ListIntegrationsResponse,
   type PrepareIntegrationClassifierResponse,
+  type SetIntegrationSendWithoutAskingRequest,
   type SortIntegrationClassifierResponse
 } from "@moss/shared";
 
@@ -398,6 +399,40 @@ export function registerIntegrationsRoutes(
   );
 
   /**
+   * #2984 R2.3: the owner allows or undoes sending without asking, for one tool or a whole group.
+   * All or nothing: any tool not currently sorted as sending things out refuses the whole request,
+   * so a Sensitive tool can never carry the flag.
+   */
+  server.put<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/send-without-asking",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const body = parseSendWithoutAsking(request.body);
+        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.setClassifierSendWithoutAsking(
+            scopedDb,
+            request.params.id,
+            body.toolNames,
+            body.allow
+          )
+        );
+        if (result.status === "not_found") throw new HttpError(404, "Integration not found");
+        if (result.status === "refused") {
+          throw new HttpError(
+            409,
+            "Only a tool sorted as sending things out can send without asking."
+          );
+        }
+        cache.drop(accessContext.actorUserId);
+        return toDetail(result.connection, result.connection.discoveredTools);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  /**
    * Plan 2b.3 (#2894): draft the owner-reviewed classifier preparation for this connection on the
    * owner's current default chat model. Transient — nothing is stored here; the owner saves each
    * reviewed draft through PUT .../classifier/tools/:toolName. When there is no default chat model,
@@ -609,6 +644,22 @@ function requiredString(value: unknown, fieldName: string): string {
 function requiredStringArray(value: unknown, fieldName: string): string[] {
   if (!Array.isArray(value)) throw new HttpError(400, `${fieldName} must be an array`);
   return value.map((item, index) => requiredString(item, `${fieldName}[${index}]`));
+}
+
+const SEND_WITHOUT_ASKING_MAX_TOOLS = 500;
+const TOOL_NAME_MAX_LENGTH = 200;
+
+function parseSendWithoutAsking(body: unknown): SetIntegrationSendWithoutAskingRequest {
+  const value = requireObject(body);
+  if (typeof value.allow !== "boolean") throw new HttpError(400, "allow must be a boolean");
+  const toolNames = requiredStringArray(value.toolNames, "toolNames");
+  if (toolNames.length === 0 || toolNames.length > SEND_WITHOUT_ASKING_MAX_TOOLS) {
+    throw new HttpError(400, `toolNames must hold 1 to ${SEND_WITHOUT_ASKING_MAX_TOOLS} names`);
+  }
+  if (toolNames.some((name) => name.length > TOOL_NAME_MAX_LENGTH)) {
+    throw new HttpError(400, "A tool name is too long");
+  }
+  return { allow: value.allow, toolNames: [...new Set(toolNames)] };
 }
 
 function handleRouteError(error: unknown, reply: FastifyReply) {

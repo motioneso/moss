@@ -364,7 +364,8 @@ export class AssistantToolGateway {
       found.tool,
       found.dto.moduleId,
       confirmOverride,
-      effectiveLookup
+      effectiveLookup,
+      await this.computeSortedSafe(found, ctx)
     )) === "run"
       ? { kind: "auto-run" }
       : { kind: "confirm" };
@@ -723,6 +724,25 @@ export class AssistantToolGateway {
       );
     } catch {
       return true;
+    }
+  }
+
+  /**
+   * Resolves a connected tool's `runsWithoutAsking` check (#2984, spec 8.3) under the actor's own
+   * data context. Only an external write or outbound tool is asked; reads already run and
+   * destructive tools always ask. Fails closed: a throw or anything but `true` means the tool asks.
+   */
+  private async computeSortedSafe(found: ExecutableTool, ctx: ToolContext): Promise<boolean> {
+    const { risk, isExternal, runsWithoutAsking: hook } = found.tool;
+    if (!hook || isExternal !== true || risk === "read" || risk === "destructive") return false;
+    const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    try {
+      const safe = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+        Promise.resolve(hook(scopedDb, ctx))
+      );
+      return safe === true;
+    } catch {
+      return false;
     }
   }
 
