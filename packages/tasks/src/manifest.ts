@@ -856,6 +856,11 @@ export const tasksModuleManifest = {
       ]
     },
     {
+      id: "tasks.details_window",
+      description:
+        "Open a task from List or Grid to edit it in the Task details window. The close button (X) is in the top right corner. Closing it, or Cancel or Escape, discards unsaved edits to the task's fields; subtasks, tags and comments save as you go."
+    },
+    {
       id: "tasks.breakdown",
       description:
         "Turn a big task into ordered subtasks, so one task becomes a list of next steps."
