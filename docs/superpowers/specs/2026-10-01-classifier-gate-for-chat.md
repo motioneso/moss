@@ -103,8 +103,8 @@ The gate runs the chosen tool through the same gateway call path chat uses now. 
 of rules. That path already provides:
 
 - the per-tool risk level (`read`, `write`, `outbound`, `destructive`). A connected tool's level
-  comes from Moss's sorting pass (section 8.2) and sets the gate's confidence bar. A tool sorted
-  Sensitive asks before it runs unless YOLO is on (section 8.3)
+  comes from Moss's sorting pass (section 8.2) and sets the gate's confidence bar. Outside YOLO a
+  safe group runs without asking, and Sensitive or unsorted tools ask (section 8.3)
 - the user's trust setting per tool family and the per-call confirmation override
 - YOLO handling. A non-read tool in YOLO mode still goes to an approval card when its family is not
   trusted for auto-run or a per-call override applies, and it is rate limited
@@ -268,8 +268,8 @@ Ruling 7's line names inputs as well as name and description, because the pass s
   that raises risk (a destructive hint, a web service's delete method). A read-only hint or a web
   service's read method never lowers the model's group. A tool the model skips or answers invalidly
   is Sensitive.
-- **Before sorting finishes** a tool has no group. It works in ordinary chat and is out of the
-  classifier.
+- **Before sorting finishes** a tool has no group. It works in ordinary chat, asks before it runs
+  and is out of the classifier.
 - **Readable name.** Code makes one at once from the raw name: split the words, drop a prefix the
   tools share, sentence case. The model's name replaces it after validation as bounded plain text.
   The name is for display only. The raw name stays the tool's identity, shows small underneath and
@@ -283,22 +283,43 @@ Ruling 7's line names inputs as well as name and description, because the pass s
   what they do. A web-service connection keeps its own sections on screen; its risk still follows
   the rule above.
 
-### 8.3 Risky tools ask before running
+### 8.3 Safe tools run, risky tools ask
 
-- A tool sorted Sensitive starts on and asks before it runs, from ordinary chat and from the
-  classifier. The page marks it "Asks first".
-- YOLO mode skips the asking. YOLO is off by default and admin-only. Decisions D1 and D2 of
-  `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (locked with Ben, 2026-06-29) auto-run calls that would otherwise ask, destructive ones
-  included. Issue 2419's exception covers first-party destructive tools only, and connected tools
-  are external tools.
-- No new gateway hook is needed. Every connected tool's synthetic manifest carries risk `outbound`,
-  and with YOLO off the gateway already asks before any outbound tool runs. Manifest risk and
-  execution policy stay as they are.
-- A sorted group also sets the gate's confidence bar (section 3.6). Sensitive needs 0.98.
-- The gate declines whenever the gateway would ask, so the main model handles the message and shows
-  the usual card. The gate never raises a card (section 4). With YOLO off this declines every
-  connected tool, not only Sensitive ones (question 2 in section 8.10).
+Ben ruled on 2026-10-04 that connected tools Moss sorts as safe run without asking, and risky ones
+still ask, outside YOLO (section 8.10).
+
+- **Safe.** A tool sorted Looks things up, Changes things or Sends things out runs without a card in
+  ordinary chat, and the gate may run it under that group's bar (section 3.6).
+- **Risky.** A tool sorted Sensitive starts on and asks before every run, from ordinary chat and
+  from the classifier. The page marks it "Asks first".
+- **Fails closed.** A tool with no sort, a failed sort, a stale sort (its definition fingerprint has
+  changed) or an unreadable sort record is treated as risky and asks. A tool the model skips or
+  answers invalidly is already Sensitive (section 8.2).
+- **YOLO.** YOLO mode skips the asking. It is off by default and admin-only. Decisions D1 and D2 of
+  `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (locked with Ben,
+  2026-06-29) auto-run calls that would otherwise ask, destructive ones included. Issue 2419's
+  exception covers first-party destructive tools only, and connected tools are external tools.
+- **Confidence bar.** The sorted group sets the gate's bar. Sensitive needs 0.98.
+- **The gate never raises a card** (section 4). It declines whenever the gateway would ask, so the
+  main model handles the message and shows the usual card.
 - The user cannot change a tool's group in version one.
+
+#### The gateway change
+
+Today every connected tool asks with YOLO off, because its synthetic manifest carries risk
+`outbound` and the gateway's ordinary policy confirms every outbound tool. The change:
+
+- The integrations module marks a connected tool's synthetic manifest as sorted safe only when the
+  owner's stored sort for that tool is a safe group and its fingerprint matches the current
+  definition. Every other case leaves the mark off.
+- The gateway's ordinary policy runs an external tool that carries the mark, unless a per-call
+  confirmation override applies. The check sits after the destructive check and before the outbound
+  check. A first-party outbound tool never carries the mark and still asks.
+- Manifest risk stays `outbound` and execution policy stays as it is. YOLO handling is unchanged.
+- The mark is read at call time from the owner's row under owner-only security. A sort record that
+  cannot be read gives no mark.
+- This changes ordinary chat with the classifier off too, so the slice that ships it carries a
+  user-facing release note.
 
 ### 8.4 The connection's classifier switch
 
@@ -336,6 +357,7 @@ changes both.
 - **Module tools.** First-party and external module tools are released by their author's
   declaration (section 3.5).
 - **Kill gate.** One admin record per classifier selection holds Ben's shadow review (section 3.10).
+  Ben ruled on 2026-10-04 that one review per classifier is enough, with no per-tool sign-off.
   That record unlocks On. The gate's effective state is checked when read, so a changed classifier
   selection or a deleted record drops it back to shadow at once. This closes the known gap where a
   stored On outlived its releases.
@@ -366,10 +388,10 @@ changes both.
 | Review editor (2b.4)      | Per-tool editor with a diff and approve                | Removed; replaced by section 8.6                                                          |
 | Changed tool (2b.2)       | Stale until the user prepares and reviews it again     | Sorted and prepared again by itself                                                       |
 | Release record (1.2, 4.2) | Admin rows per tool; On needs one row                  | Connected tools released by sort and preparation; On needs the admin shadow-review record |
-| Sensitive tools           | No group; ask outside YOLO like every connected tool   | Marked "Asks first"; still ask outside YOLO; YOLO skips the asking                        |
+| Ordinary-chat approval    | Every connected tool asks outside YOLO                 | Safe groups run; Sensitive, unsorted and stale tools ask; YOLO skips the asking           |
 | Notice                    | One-time notice before preparing                       | Kept for the classifier switch; sorting has a page line instead                           |
 | Tool names on screen      | Raw names                                              | Readable name, raw name underneath                                                        |
-| Live proof (2b.6)         | Prepare, edit and approve a draft; opt in chosen tools | All tools on with no review; sorting calls counted; Sensitive asks outside YOLO           |
+| Live proof (2b.6)         | Prepare, edit and approve a draft; opt in chosen tools | All tools on with no review; sorting calls counted; safe runs and Sensitive asks          |
 
 Stored preparation entries from the old flow convert once. An entry the owner saved with opt-in off
 becomes kept out, because that may have been a choice. An owner-reviewed risk is kept only when it is
@@ -383,11 +405,15 @@ higher than the sorted group.
   payloads.
 - Code signals can raise a tool's risk, never lower it. A model answer can never lower risk below a
   code signal, and a read-only hint never lowers risk at all.
-- Gate execution still goes through the unchanged gateway. Kept-out, ordinary-chat state and the
-  definition fingerprint are checked again at dispatch.
+- Gate execution still goes through the gateway, whose only change is the sorted-safe check in
+  section 8.3. Kept-out, ordinary-chat state and the definition fingerprint are checked again at
+  dispatch.
+- Only a current safe sort lets a connected tool run without asking. No sort, a failed or stale
+  sort, or an unreadable record means it asks.
 - Tests seen failing with the guard removed: secrets absent from the sorting prompt for a
-  connection whose configuration holds a secret, a Sensitive tool asking with YOLO off, and a
-  Sensitive tool refused by the gate below the 0.98 bar.
+  connection whose configuration holds a secret; a Sensitive, unsorted or stale tool asking with
+  YOLO off; a first-party outbound tool still asking; and a Sensitive tool refused by the gate below
+  the 0.98 bar.
 
 ### 8.9 Out of scope
 
@@ -395,12 +421,10 @@ higher than the sorted group.
 - A per-tool "run without asking" setting.
 - A gate-raised approval card.
 
-### 8.10 Open for Ben
+### 8.10 Decided after review (Ben, 2026-10-04)
 
-1. Section 8.5 makes the kill gate one review per classifier selection rather than evidence per
-   tool. Plan task 4.2 had said one tool's results must not release another. Is one review enough?
-2. With YOLO off, today's gateway asks before every connected tool, because each carries risk
-   `outbound`. "Asks first" marks the Sensitive group, but the other groups ask too, so the gate
-   can answer no connected tool outside YOLO. Should the other groups run without asking outside
-   YOLO, in line with the 2026-08-19 ruling that installing grants normal use? That is a gateway
-   change, and this version keeps today's rule.
+1. One look at the shadow-review report per classifier selection is enough to unlock On. There is no
+   per-tool sign-off (section 8.5). This replaces plan task 4.2's rule that one tool's results must
+   not release another.
+2. Connected tools Moss sorts as safe run without asking, and risky ones still ask, outside YOLO.
+   This needs the gateway change in section 8.3.

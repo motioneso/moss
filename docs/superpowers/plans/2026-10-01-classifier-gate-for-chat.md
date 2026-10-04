@@ -54,7 +54,7 @@ that replace it. Where this section and an older task disagree, this section win
 | 2b.6 screen proof                | Replaced by R2.6.                                                                                                                                                        |
 | 1.2 On precondition              | "At least one approved release row" becomes "the admin shadow-review record for the current classifier selection" (R2.4).                                                |
 | 4.2 release eligibility          | Per-tool admin approval is retired. Connected tools are released by sort and preparation; module tools by declaration; Ben's single shadow review unlocks On (spec 8.5). |
-| Ordinary policy, "out of scope"  | Unchanged. Sensitive tools ask outside YOLO through today's outbound rule; YOLO skips the asking under its own spec's D1 and D2 (spec 8.3).                              |
+| Ordinary policy, "out of scope"  | Narrowed. Connected tools sorted safe run without asking; Sensitive, unsorted and stale ones ask; YOLO keeps its own spec's D1 and D2 (spec 8.3, R2.3).                  |
 
 Unchanged: the gate engine, shadow records and their retention, the activity log, the gateway's
 no-card path, candidate lists and the reply contract (2b.5), the handled-turn lifecycle (4.1), and
@@ -65,7 +65,7 @@ the live activation proof (4.3).
 Each slice is one session with its own PR, app-map and manifest updates in the same PR, and the
 verify-gate skill for any database test. R2.1 to R2.3 change no screen. R2.4 needs R2.1 and R2.2,
 and starts only after PR 2976 (activity history) merges, because both edit the gate's wiring files.
-R2.5 needs R2.1 to R2.4. R2.6 needs all of them.
+R2.3 needs R2.1 and R2.2. R2.5 needs R2.1 to R2.4. R2.6 needs all of them.
 
 **R2.1 Sort storage, readable names and the old-entry conversion (one backend session).** Own
 `packages/integrations/src/classifier-settings.ts`, the repository and a new migration under
@@ -90,18 +90,25 @@ unsorted and shows "Try again"; no automatic retry.
   hint or delete method raises it; a skipped or invalid tool becomes Sensitive; a hostile
   description cannot change another tool's group or name; job payloads carry IDs only.
 
-**R2.3 Sorted group sets the gate's bar and "Asks first" (one integrations session).** Own the classifier metadata
-in `packages/integrations/src/tool-manifests.ts` and the eligibility read in
-`classifier-settings.ts`. The sorted group replaces the owner-reviewed risk as the gate's risk for a
-connected tool, including the empty-success reply fallback that 3.5 noted still keys off the
-server's read-only hint. Expose whether a tool asks first for the page. Manifest risk and
-execution policy stay as they are.
+**R2.3 Safe tools run, risky tools ask (one gateway and integrations session).** Own the classifier
+metadata in `packages/integrations/src/tool-manifests.ts`, the eligibility read in
+`classifier-settings.ts`, and `packages/ai/src/gateway/policy.ts`. Carry the gateway change in spec
+8.3. The integrations module marks a connected tool's synthetic manifest sorted safe only when the
+owner's current sort is a safe group and its fingerprint matches. The gateway's ordinary policy runs
+an external tool with that mark unless a confirmation override applies; the check sits after the
+destructive check and before the outbound check. The sorted group also replaces the owner-reviewed
+risk as the gate's risk, including the empty-success reply fallback that 3.5 noted still keys off
+the server's read-only hint. Expose whether a tool asks first for the page. Manifest risk and
+execution policy stay as they are. The PR carries a user-facing release note, because ordinary chat
+changes with the classifier off.
 
-- Proves: each group gets its bar, and a Sensitive tool below 0.98 is refused, seen failing with the
-  bar removed; the synthetic manifest's risk and policy are byte-identical before and after
-  sorting; in normal mode the gate declines a connected tool with zero handler calls and the main
-  model shows the card; a Sensitive tool asks with YOLO off, seen failing with its outbound risk
-  lowered; in YOLO a Sensitive tool above its bar runs once under the existing rule.
+- Proves, each seen failing with its guard removed: a safe connected tool runs with no card with
+  YOLO off; a Sensitive, unsorted, failed-sort or stale tool asks; an unreadable sort record asks; a
+  first-party outbound tool still asks; a confirmation override still asks; another owner's sort
+  never marks a tool safe.
+- Also proves: each group gets its bar, and a Sensitive tool below 0.98 is refused; the gate runs a
+  safe connected tool outside YOLO and declines a Sensitive one with zero handler calls; YOLO
+  routing is byte-identical before and after.
 
 **R2.4 Automatic preparation and the release record (one backend session).** Own the prepare route
 and a background job in `packages/integrations/src/`, `packages/chat/src/live/classifier-gate-wiring.ts`,
@@ -122,7 +129,8 @@ Start only after PR 2976 (activity history) merges; it edits the same gate wirin
 `apps/web/src/settings/settings-integrations-pane.tsx` and focused new components. Build the
 pieces in spec 8.6 from the integrations-redesign mockups: full width with "Back to connections",
 readable and raw names, groups, "Asks first" with its YOLO line, "Keep out of the classifier",
-the classifier rail and its states with the "always ask" count, and the sorting line. Remove the per-tool review editor.
+the classifier rail and its states with the "always ask" count, and the sorting line. Remove the
+per-tool review editor.
 
 - Proves: unit tests for each classifier state, keep-out and the sorting line; design token and
   class checks; desktop 1440x900 and phone 390x844 screenshots with no crowded text; app map
@@ -134,10 +142,9 @@ stand-in tool server is allowed for the claim about what Moss sends, disclosed o
 
 - Proves: a new connection's tools all start on with no review; sorting runs with the classifier
   off and its call count matches the changed tools; the sorting line shows; turning the classifier
-  on prepares with no further clicks; a Sensitive tool shows "Asks first" and asks with YOLO off;
-  normal mode declines connected tools to the usual card and YOLO handles a Sensitive tool only
-  above its bar; a kept-out tool stays usable
-  in ordinary chat and never appears in shadow records; shadow records appear for released tools.
+  on prepares with no further clicks; with YOLO off a safe tool runs with no card and a Sensitive
+  tool shows "Asks first" and asks; YOLO handles a Sensitive tool only above its bar; a kept-out
+  tool stays usable in ordinary chat and never appears in shadow records; shadow records appear for released tools.
 
 After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as written.
 
@@ -149,15 +156,20 @@ After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as
 18. **Sorting pass.** One cheap default-model pass sorts each tool by what it does, even with the
     classifier off. It also writes the readable name.
 19. **Risky tools start on and still ask.** Sensitive tools show "Asks first" and ask before every
-    run outside YOLO. YOLO mode, off by default and admin-only, skips the asking under decisions D1
+    run outside YOLO (see ruling 25 for safe tools). YOLO mode, off by default and admin-only, skips the asking under decisions D1
     and D2 of `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (spec 8.3).
 20. **Keep out of the classifier** in a tool's menu; ordinary chat is unaffected.
 21. **The name stays "Classifier".**
 22. **No sorting notice.** A line on the connection's page says what is sent and who reads it.
 23. **Full-width connection page** with "Back to connections".
 
-Open for Ben (spec 8.10): whether one shadow review per classifier selection replaces per-tool
-evidence, and whether non-Sensitive connected tools should run without asking outside YOLO.
+24. **One shadow review per classifier (Ben, 2026-10-04).** One look at the practice report per
+    classifier selection unlocks On. No per-tool sign-off (spec 8.10).
+25. **Safe connected tools run without asking (Ben, 2026-10-04).** Outside YOLO, tools sorted safe
+    run without a card; Sensitive, unsorted, failed-sort and stale tools ask. Needs the gateway
+    change carried by R2.3 (spec 8.3).
+
+No questions from revision 2 remain open.
 
 ## Seams check and rulings ledger
 
