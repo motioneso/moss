@@ -177,7 +177,7 @@ const GROUPS = [
 function toolRow(raw, { desc, flag = "", off = false, menu = false, codeDesc = false } = {}) {
   const d = desc ?? DESC[raw];
   const descHtml = d ? `<div class="tool__desc">${codeDesc ? `<span class="code">${d}</span>` : d}</div>` : `<div class="tool__desc none">No description from the app</div>`;
-  const menuHtml = menu ? `<div class="tmenu"><span>Move to another group<small>Change what Moss treats it as</small></span><span>Keep out of the classifier<small>Chat can still use it</small></span><span>Show full description</span></div>` : "";
+  const menuHtml = menu ? `<div class="tmenu"><span>Keep out of the classifier<small>Chat can still use it</small></span><span>Show full description</span></div>` : "";
   return `<div class="tool${off ? " off" : ""}${menu ? " menu-open" : ""}">
     <div class="tool__id"><div class="tool__name">${nice(raw)}</div><div class="tool__meta"><span class="tool__raw">${raw}</span>${flag}</div></div>
     ${descHtml}
