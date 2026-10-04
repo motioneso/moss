@@ -315,6 +315,42 @@ describe("activity history storage (#2956)", () => {
     expect(landed).toBeUndefined();
   });
 
+  it("refuses moving a detail row onto another person's line", async () => {
+    const repository = new AiRepository();
+    const runner = new DataContextRunner(appDb);
+    // User B's bare line with no detail yet.
+    const bBareId = randomUUID();
+    await runner.withDataContext({ actorUserId: ids.userB }, (scopedDb) =>
+      sql`
+        INSERT INTO app.moss_model_activity_log
+          (id, kind, action, outcome, model_name, result, owner_user_id)
+        VALUES (${bBareId}, 'chat', 'chat', 'ok', 'uat-model-beta', 'completed', ${ids.userB})
+      `.execute(scopedDb.db)
+    );
+
+    // User A re-parents their own detail row onto B's line. The row policy
+    // allows the update (it is A's row), so only the immutability trigger
+    // can refuse it.
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+        sql`UPDATE app.moss_activity_detail SET activity_id = ${bBareId} WHERE activity_id = ${userALineId}`.execute(
+          scopedDb.db
+        )
+      )
+    ).rejects.toThrow(/immutable/i);
+
+    // A's detail still sits on A's line, and B's slot is free: B can write
+    // their own detail afterwards.
+    const stillA = await runner.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      repository.getModelActivityDetail(scopedDb, userALineId)
+    );
+    expect(stillA?.quote).toBe("Turn on the kitchen light");
+    await runner.withDataContext({ actorUserId: ids.userB }, (scopedDb) =>
+      sql`INSERT INTO app.moss_activity_detail (activity_id, owner_user_id, steps)
+          VALUES (${bBareId}, ${ids.userB}, '[]'::jsonb)`.execute(scopedDb.db)
+    );
+  });
+
   it("refuses a detail row on an ownerless System line", async () => {
     const runner = new DataContextRunner(appDb);
     const systemRows = await runner.withDataContext({ actorUserId: ids.adminUser }, (scopedDb) =>

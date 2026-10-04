@@ -555,6 +555,12 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0259",
           name: "0259_audit_log_turn_id.sql"
+        },
+        // #2956 round 3 — a detail row can never move to another line: the
+        // immutability trigger also freezes activity_id.
+        {
+          version: "0260",
+          name: "0260_activity_detail_no_reparent.sql"
         }
       ]);
     } finally {
