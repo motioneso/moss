@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connections and connection screens, redesigned</title>
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20h4"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc__head">
+    <div>
+      <h1 class="doc__title">Connections, redone in the Today style</h1>
+      <p class="doc__lede">Five mockups of the apps-and-services list and a connection's own screen, plus the classifier flow you ruled on in issue 2984. Each screen shows the wide window and the phone side by side, drawn from the same markup so they cannot drift apart. The connections and tool names are the real ones on the dev account.</p>
+    </div>
+    <div class="doc__tools">
+      <span class="lbl">Colours</span>
+      <span class="seg" id="modeSeg"><span class="on" data-mode="dark">Dark</span><span data-mode="light">Light</span></span>
+      <span class="lbl">Size</span>
+      <span class="seg" id="sizeSeg"><span class="on" data-size="fit">Fit to window</span><span data-size="full">Actual size</span></span>
+    </div>
+  </header>
+  <nav class="doc__toc">
+    <a href="#m1">1. Apps and services list</a><a href="#m2">2. A connection's screen</a><a href="#m3">3. Classifier states</a><a href="#m4">4. A very big connection</a><a href="#m5">5. Readable tool names</a><a href="#qs">Questions for you</a>
+  </nav>
+
+  <section class="mock" id="m1">
+    <div class="mock__head"><h2 class="mock__title">1. Apps and services list</h2>
+      <span class="seg" data-target="m1" data-key="state"><span class="on" data-v="problem">One problem</span><span data-v="fine">All fine</span></span></div>
+    <div class="mock__note">
+      <p><b>What changed.</b> Each connection is one ruled row, read left to right: who it is, whether it works, how many tools are on, and whether the classifier can use it. The whole row opens the connection, so the separate Configure button is gone. The tool-server and web-API badges are gone too, because they describe plumbing, not anything you act on.</p>
+      <p><b>Why.</b> Today the counts and status crowd onto one line that wraps into three on a phone and spills out of its box. When something breaks, the row now says what broke and offers the one button that helps, instead of a red badge with no next step.</p>
+    </div>
+    <div class="frames">
+      <div class="frame-wrap"><p class="frame-cap">Wide window, 1440</p><div class="frame frame--desk" data-screen="list"></div></div>
+      <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><div class="frame frame--phone" data-screen="list"></div></div>
+    </div>
+  </section>
+
+  <section class="mock" id="m2">
+    <div class="mock__head"><h2 class="mock__title">2. A connection's screen</h2>
+      <span class="seg" data-target="m2" data-key="cstate"><span data-v="new">Just added</span><span data-v="off">Off</span><span data-v="confirm">Turning on</span><span data-v="preparing">Preparing</span><span class="on" data-v="ready">Ready</span><span data-v="reprep">A tool changed</span><span data-v="failed">Failed</span><span data-v="down">Disconnected</span></span></div>
+    <div class="mock__note">
+      <p><b>What changed.</b> The connection opens as its own full-width screen, with no settings list and a "Back to connections" link at the top. The tools fill the main column; the connection's status and the classifier switch sit in a rail on the right, so they stay in view while you scroll. Tools are grouped by what they do, each group shows six and folds the rest, and a search and an on/off filter sit on top. Group switches are gone; "Turn all off" says exactly what it does. Each tool's menu sits beside its switch on phones too, so "Keep out of the classifier" is reachable everywhere.</p>
+      <p><b>Sorting, with the classifier off.</b> When a connection is added, Moss runs one cheap pass that sorts its tools by what they do, whether or not the classifier is on. "Just added" shows the list while that runs, A to Z. The rail's Connection block says when the tools were sorted, and that the default chat model read each tool's name and description.</p>
+      <p><b>Why.</b> Today this page is about sixteen screens tall, lists all 75 tools twice, and the only action in the classifier section sits 7,000 pixels down. The group switches also show the wrong state. Use the buttons above to see each classifier state in place.</p>
+    </div>
+    <div class="frames">
+      <div class="frame-wrap"><p class="frame-cap">Wide window, 1440, with one tool's menu open</p><div class="frame frame--desk" data-screen="ha" data-menu="1"></div></div>
+      <div class="frame-wrap"><p class="frame-cap">Phone, 390, with the same menu open</p><div class="frame frame--phone" data-screen="ha" data-menu="1"></div></div>
+    </div>
+  </section>
+
+  <section class="mock" id="m3">
+    <div class="mock__head"><h2 class="mock__title">3. Classifier states</h2></div>
+    <div class="mock__note">
+      <p><b>The flow from issue 2984.</b> There is no Prepare button and no risk to pick for each tool. Turning the switch on shows what is sent and what it costs, once. After that Moss prepares every tool by itself. Every tool you have on stays on, the risky ones still ask you before they run, and you only ever switch tools off. A tool that changes is prepared again without asking.</p>
+      <p><b>What is left to show.</b> Seven states remain, drawn here at the real width of the rail. The phone row underneath is the same block at phone width, where it sits above the tool list.</p>
+    </div>
+    <div class="states" id="statesDesk"></div>
+    <p class="frame-cap" style="margin-top:44px">Phone width, 358</p>
+    <div class="states states--phone" id="statesPhone"></div>
+  </section>
+
+  <section class="mock" id="m4">
+    <div class="mock__head"><h2 class="mock__title">4. A very big connection</h2></div>
+    <div class="mock__note">
+      <p><b>What changed.</b> Radarr has 237 tools in 71 sections, and only the five movie tools are on. Today that is a 47,000-pixel page. Here the sections with everything off fold into a compact three-column index, the sections with something on stay open, and the summary says "5 of 237 on, in 1 of 71 sections" before you scroll at all.</p>
+      <p><b>Why.</b> On a big connection you are hunting for the few tools you want. Search and the folded index get you there; a wall of switches does not. Radarr's own descriptions are web addresses, so they show as code.</p>
+    </div>
+    <div class="frames">
+      <div class="frame-wrap"><p class="frame-cap">Wide window, 1440</p><div class="frame frame--desk" data-screen="radarr"></div></div>
+      <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><div class="frame frame--phone" data-screen="radarr"></div></div>
+    </div>
+  </section>
+
+  <section class="mock" id="m5">
+    <div class="mock__head"><h2 class="mock__title">5. Readable tool names</h2></div>
+    <div class="mock__note">
+      <p><b>Proposal.</b> Show a readable name in bold and the raw name underneath in small, faint type. The raw name stays searchable and copyable, but nobody has to parse it to find a tool. It stays in the normal typeface, because it is a label here, not code.</p>
+      <p><b>Where the readable name comes from.</b> A simple rule makes a decent name for free, with no model call. When Moss sorts the tools, the model can also write a better name in the same pass, at no extra call. The middle column is the free rule, the right column is the model's name.</p>
+    </div>
+    <table class="names" id="namesTable"></table>
+    <ol class="rules">
+      <li>Drop known prefixes: <span class="code">intent_script__</span>, <span class="code">Hass</span>, <span class="code">api_v3</span>.</li>
+      <li>Split joined words at capitals and underscores, then lower-case all but the first word.</li>
+      <li>For web services, turn the method into a verb: get becomes "Look up" or "List", post "Add", put "Update", delete "Delete".</li>
+      <li>When the description only repeats the name ("Execute Home Assistant AddTaskWork intent"), hide it and say there is no description, instead of showing filler.</li>
+    </ol>
+  </section>
+
+  <section class="mock" id="qs">
+    <div class="mock__head"><h2 class="mock__title">Questions for you</h2></div>
+    <ol class="qs" style="margin-top:18px">
+      <li><b>One switch per tool, or two?</b> <i>Decided.</i> One switch per tool, plus "Keep out of the classifier" in the tool's menu for the rare case where chat should use a tool but the classifier should not. The mockups already show it.</li>
+      <li><b>Grouping before the classifier runs.</b> <i>Answered.</i> Moss runs a cheap sorting pass that groups tools by what they do, even with the classifier off. The mockups now show it.</li>
+      <li><b>Full-width screen for one connection.</b> <i>Decided.</i> A connection's screen hides the settings list so the tools get the full width, with "Back to connections" at the top.</li>
+      <li><b>Model-written names.</b> <i>Decided.</i> Both. The free rule gives "Add task work" at once, and the sorting pass replaces it with "Add a work task" in the call it already makes.</li>
+      <li><b>The word "classifier".</b> <i>Decided.</i> Keep "classifier". The switch reads "Let the classifier use this connection".</li>
+      <li><b>A notice for the sorting pass.</b> <i>Decided.</i> No one-time notice. A line in the Connection block says what sorting sends and who reads it.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const ic = (n) => `<svg class="i"><use href="#i-${n}"/></svg>`;
+const tog = (on, extra = "") => `<span class="tog${on ? " on" : ""}${extra}"></span>`;
+
+/* ---------- Data: the real tools on the dev account ---------- */
+
+const HA = {
+  read: ["GetLiveContext","GetDateTime","todo_get_items","WeatherNow","NextMeeting","MeetingsToday","NextEpisode","TvTonight","FinanceQuery","CheckNotifications","NextTask","FindObject","DailyRecap","MorningBriefing","EveningBriefing","DailyCommitment"],
+  change: ["HassLightSet","HassClimateSetTemperature","HassFanSetSpeed","HassVacuumStart","HassMediaSearchAndPlay","AddTaskWork","HassMediaPause","HassMediaUnpause","HassMediaNext","HassMediaPrevious","HassSetVolume","HassSetVolumeRelative","HassMediaPlayerMute","HassMediaPlayerUnmute","mute_soundbar","HassListAddItem","HassListCompleteItem","HassVacuumReturnToBase","HassVacuumCleanArea","StartTask","FinishTask","SetEnergyMode","AddShow","AddMovie","OpenShieldApp","PlayPlexShow","PlayPlexMovie","PlayPlexShowSeason","BrainDump","StartBrainDump","FinishBrainDump","WorkBrainDump","AddTaskWorkWithNotes","AddTaskPersonal","AddTaskPersonalWithNotes","AddTaskAway","AddTaskHome","ConfirmFinishTask","CancelFinishTask","MarkInProgress","SaveScratchpad","ResolveConflict","StartPomodoro","ContinuePomodoro","StopPomodoro","StoreObjectLocation"],
+  send: ["HassBroadcast","FindPhone","WorkReminder","ResearchTopic","ResearchTopicSilent","OpenResearchSlides","RunEveningBriefing"],
+  risky: ["HassTurnOff","HassTurnOn","HassListRemoveItem","HassCancelAllTimers","EnableTravelMode","DisableTravelMode"],
+};
+const DESC = {
+  GetLiveContext: "Provides real-time information about the current state, value, or mode of devices, sensors, entities, or areas.",
+  GetDateTime: "Provides the current date and time.",
+  todo_get_items: "Query a to-do list to find out what items are on it.",
+  HassLightSet: "Sets the brightness percentage or color of a light.",
+  HassClimateSetTemperature: "Sets the target temperature of a climate device or entity.",
+  HassFanSetSpeed: "Sets a fan's speed by percentage.",
+  HassVacuumStart: "Starts a vacuum.",
+  HassMediaSearchAndPlay: "Searches for media and plays the first result.",
+  HassBroadcast: "Broadcast a message through the home.",
+  HassTurnOff: "Turns off/closes a device or entity. For locks, this performs an 'unlock' action.",
+  HassTurnOn: "Turns on/opens/presses a device or entity. For locks, this performs a 'lock' action.",
+  HassListRemoveItem: "Remove one or more items from a todo list.",
+  HassCancelAllTimers: "Cancels all timers.",
+};
+const NICE = {
+  GetLiveContext: "Check what devices are doing", GetDateTime: "Get the date and time", todo_get_items: "Get to-do list items",
+  WeatherNow: "Weather right now", NextMeeting: "Next meeting", MeetingsToday: "Today's meetings", NextEpisode: "Next episode", TvTonight: "What's on TV tonight",
+  HassLightSet: "Set a light's brightness or colour", HassClimateSetTemperature: "Set the temperature", HassFanSetSpeed: "Set a fan's speed",
+  HassVacuumStart: "Start the vacuum", HassMediaSearchAndPlay: "Find and play something", AddTaskWork: "Add a work task",
+  HassBroadcast: "Announce through the house", FindPhone: "Ring my phone", WorkReminder: "Send a work reminder", ResearchTopic: "Research a topic",
+  ResearchTopicSilent: "Research a topic quietly", OpenResearchSlides: "Open the research slides",
+  HassTurnOff: "Turn off, close or unlock", HassTurnOn: "Turn on, open or lock", HassListRemoveItem: "Remove to-do items",
+  HassCancelAllTimers: "Cancel all timers", EnableTravelMode: "Turn on travel mode", DisableTravelMode: "Turn off travel mode",
+};
+function ruleName(raw) {
+  let s = raw.replace(/^intent_script__/, "").replace(/^Hass(?=[A-Z])/, "").replace(/^(get|post|put|delete)_api_v3_/, "");
+  s = s.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim().toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const nice = (raw) => NICE[raw] || ruleName(raw);
+const OFF = new Set(["HassVacuumStart"]);
+
+const GROUPS = [
+  { key: "read", title: "Looks things up", help: "Only reads. Never changes anything." },
+  { key: "change", title: "Changes things at home", help: "Turns things on and off, plays media, adds tasks." },
+  { key: "send", title: "Sends things out", help: "Sends a message, a notification or a request outside Moss." },
+  { key: "risky", title: "Sensitive", help: "Unlocks, removes or cancels. Always asks you before it runs." },
+];
+
+/* ---------- Pieces ---------- */
+
+function toolRow(raw, { desc, flag = "", off = false, menu = false, codeDesc = false } = {}) {
+  const d = desc ?? DESC[raw];
+  const descHtml = d ? `<div class="tool__desc">${codeDesc ? `<span class="code">${d}</span>` : d}</div>` : `<div class="tool__desc none">No description from the app</div>`;
+  const menuHtml = menu ? `<div class="tmenu"><span>Move to another group<small>Change what Moss treats it as</small></span><span>Keep out of the classifier<small>Chat can still use it</small></span><span>Show full description</span></div>` : "";
+  return `<div class="tool${off ? " off" : ""}${menu ? " menu-open" : ""}">
+    <div class="tool__id"><div class="tool__name">${nice(raw)}</div><div class="tool__meta"><span class="tool__raw">${raw}</span>${flag}</div></div>
+    ${descHtml}
+    ${tog(!off)}
+    <span class="tool__more">${ic("more")}${menuHtml}</span>
+  </div>`;
+}
+
+function haGroup(g, menuOn, cstate) {
+  const all = HA[g.key];
+  const shown = all.slice(0, 6);
+  const on = all.filter((t) => !OFF.has(t)).length;
+  const flag = g.key === "risky" ? `<span class="chip chip--ask">Asks first</span>` : "";
+  const rows = shown.map((t, i) => {
+    let f = flag;
+    if (cstate === "reprep" && t === "AddTaskWork") f = `<span class="chip chip--prep">Preparing again</span>`;
+    return toolRow(t, { flag: f, off: OFF.has(t), menu: menuOn && g.key === "change" && i === 0 });
+  }).join("");
+  const more = all.length > 6 ? `<div class="grp__more"><span class="linkbtn">Show ${all.length - 6} more</span></div>` : "";
+  return `<div class="grp">
+    <div class="grp__head"><h3 class="grp__title">${g.title}</h3><span class="grp__count">${on} of ${all.length} on</span><span class="linkbtn">Turn all off</span></div>
+    <div class="grp__help">${g.help}</div>
+    ${rows}${more}
+  </div>`;
+}
+
+const DISCLOSURE = [
+  ["What is sent", "Each tool's name, description, group, input schema and read-only, repeatable and destructive hints. Credential header parameters and default or example values are removed from the schema first."],
+  ["Who reads it", "Your current default chat model reads these once; if it is a hosted model, they also go to that model's provider."],
+  ["What it costs", "Preparing, and preparing again after a change, uses model usage and may cost money."],
+  ["Never sent", "Transport addresses, sign-in details, secrets and raw tool results."],
+];
+
+function classifierBlock(state, { app = "Home Assistant", n = 75, on = 74 } = {}) {
+  const isOn = state !== "off";
+  let body = "";
+  if (state === "off") {
+    body = `<p>Off. Quick requests to ${app} go through your default model.</p>
+      <p class="muted">Turning it on prepares all ${n} tools once. You will see what is sent first.</p>`;
+  } else if (state === "confirm") {
+    body = `<div class="confirm"><div class="confirm__title">Prepare ${n} tools for the classifier?</div>
+      <p style="margin:6px 0 0">Moss reads each tool once so quick requests can run it directly. Every tool you have on stays on, and risky ones still ask before they run.</p>
+      <ul>${DISCLOSURE.map(([k, v]) => `<li><b>${k}.</b> ${v}</li>`).join("")}</ul>
+      <div class="blk__acts"><span class="btn btn--primary btn--sm">Turn on and prepare</span><span class="btn btn--quiet btn--sm">Cancel</span></div></div>`;
+  } else if (state === "preparing") {
+    body = `<p><span class="pill pill--warn">Preparing</span>&nbsp; 31 of ${n} tools</p>
+      <div class="bar"><i style="width:41%"></i></div>
+      <p>You can leave this page. Until it finishes, quick requests go through your default model.</p>`;
+  } else if (state === "ready" || state === "reprep") {
+    body = `<p><span class="pill pill--ok">Ready</span></p>
+      <p><b>${on} of ${n} tools</b> can answer quick requests. <b>6</b> always ask you before they run.</p>`;
+    body += state === "reprep"
+      ? `<p><b>1 tool changed</b> and is being prepared again. It goes through your default model until then.</p>`
+      : `<p class="muted">Prepared on 2 October by your default chat model.</p>`;
+  } else if (state === "failed") {
+    body = `<p><span class="pill pill--bad">Couldn't prepare</span></p>
+      <p>Your default chat model didn't answer, so nothing was prepared. Quick requests go through your default model meanwhile.</p>
+      <div class="blk__acts" style="margin-top:4px"><span class="btn btn--sm">Try again</span><span class="btn btn--quiet btn--sm">Change default model</span></div>`;
+  } else if (state === "down") {
+    body = `<p><span class="pill pill--plain">Paused</span></p>
+      <p>${app} can't be reached, so the classifier skips it. It picks up again by itself when the connection is back.</p>`;
+  }
+  const foot = isOn && state !== "confirm" ? `<div class="blk__acts"><span class="linkbtn">What is sent, and what it costs</span></div>` : "";
+  return `<div class="blk">
+    <div class="blk__eyebrow">Classifier</div>
+    <div class="blk__line"><h3 class="blk__title">Let the classifier use this connection</h3>${tog(isOn, state === "confirm" ? " busy" : "")}</div>
+    <p class="blk__help">Quick requests can skip your default model and run a tool directly.</p>
+    <div class="blk__state">${body}</div>${foot}
+  </div>`;
+}
+
+function connBlock({ app, kind, host, tools, down, sort }) {
+  const who = "Your default chat model reads each tool's name and description, and so does its provider if the model is hosted.";
+  const sorted = sort === "sorting" ? `<p class="blk__help">Moss is sorting these tools. ${who}</p>`
+    : sort === "done" ? `<p class="blk__help">Sorted by what they do on 2 October. ${who.replace("reads", "read").replace("does", "did")}</p>` : "";
+  const status = down
+    ? `<p><span class="pill pill--bad">Can't reach it</span>&nbsp; since 14:02</p><p>Check that ${app} is running, then check again.</p>`
+    : `<p><span class="pill pill--ok">Connected</span>&nbsp; checked 4 minutes ago</p>`;
+  const acts = down
+    ? `<span class="btn btn--sm">${ic("refresh")}Check again</span><span class="btn btn--quiet btn--sm">Edit</span>`
+    : `<span class="btn btn--sm">${ic("refresh")}Check for new tools</span><span class="btn btn--quiet btn--sm">Edit</span><span class="btn btn--quiet btn--sm btn--danger">Remove</span>`;
+  return `<div class="blk blk--conn">
+    <div class="blk__eyebrow">Connection</div>
+    <div class="blk__line"><h3 class="blk__title">Use ${app}</h3>${tog(true)}</div>
+    <div class="blk__state">${status}</div>
+    <dl class="kv"><dt>Connects as</dt><dd>${kind}</dd><dt>Address</dt><dd>${host}</dd><dt>Tools found</dt><dd>${tools}, last checked 2 October</dd></dl>${sorted}
+    <div class="blk__acts">${acts}</div>
+  </div>`;
+}
+
+/* ---------- Shell ---------- */
+
+function shell(inner) {
+  const nav = [["sun", "Today"], ["chat", "Chat"], ["check", "Tasks"], ["note", "Notes"], ["bell", "Activity"], ["gear", "Settings", 1]];
+  return `<div class="app">
+    <aside class="side"><div class="side__brand"><span class="bars"><i></i><i></i><i></i></span>Moss</div>
+      ${nav.map(([i, t, on]) => `<div class="side__item${on ? " on" : ""}">${ic(i)}${t}</div>`).join("")}
+      <div class="side__user"><span class="avatar">B</span>Ben</div></aside>
+    <div class="main"><div class="top"><span class="iconbtn top__menu">${ic("menu")}</span><span class="top__title">Settings</span><span class="iconbtn">${ic("search")}</span></div>
+      <div class="content">${inner}</div></div>
+  </div>`;
+}
+
+/* ---------- Screen 1: the list ---------- */
+
+function listScreen(frame) {
+  const problem = (frame.dataset.state || "problem") === "problem";
+  const idx = [["Personal", ["Your assistant", "Profile", "Connections", "Notifications"]], ["Moss", ["AI providers", "Modules", "Privacy and data"]]];
+  const svc = (o) => `<div class="svc${o.hover ? " hover" : ""}">
+      <div class="svc__who"><span class="mark">${o.mark}</span><div><div class="svc__name">${o.name}</div><div class="svc__host">${o.host}</div></div></div>
+      <div class="svc__status">${o.status}</div>
+      <div class="svc__tools">${o.tools}<small>${o.toolsSub}</small></div>
+      <div class="svc__quick">${o.quick}<small>${o.quickSub}</small></div>
+      ${tog(true)}
+      <span class="svc__chev">${ic("right")}</span>
+      <div class="svc__facts">${o.tools} &middot; Classifier ${o.quick.toLowerCase()}</div>
+      ${o.alert || ""}
+    </div>`;
+  const rows = [
+    { mark: "HA", name: "Home Assistant", host: "homeassistant.local:8123", status: `<span class="pill pill--ok">Connected</span>`, tools: "74 of 75 tools on", toolsSub: "1 switched off", quick: "Ready", quickSub: "6 ask first", hover: true },
+    { mark: "AM", name: "Agentmail", host: "mcp.agentmail.to", status: `<span class="pill pill--ok">Connected</span>`, tools: "22 of 31 tools on", toolsSub: "1 section off", quick: "Off", quickSub: "Not prepared" },
+    problem
+      ? { mark: "RA", name: "Radarr", host: "radarr.local:7878", status: `<span class="pill pill--bad">Can't reach it</span><span>since 14:02</span>`, tools: "5 of 237 tools on", toolsSub: "1 of 71 sections", quick: "Off", quickSub: "Not prepared",
+          alert: `<div class="svc__alert">Radarr hasn't answered since 14:02. Check that it is running, then check again.<span class="btn btn--sm">${ic("refresh")}Check again</span></div>` }
+      : { mark: "RA", name: "Radarr", host: "radarr.local:7878", status: `<span class="pill pill--ok">Connected</span>`, tools: "5 of 237 tools on", toolsSub: "1 of 71 sections", quick: "Off", quickSub: "Not prepared" },
+  ];
+  return shell(`
+    <div class="mh"><h1 class="mh__title">Settings</h1><span class="field" style="width:300px">${ic("search")}Search settings</span></div>
+    <div class="sbody">
+      <nav class="idx">${idx.map(([g, items]) => `<div class="idx__grp">${g}</div>${items.map((t) => `<a class="${t === "Connections" ? "on" : ""}">${t}</a>`).join("")}`).join("")}</nav>
+      <div class="pane">
+        <div class="picker"><small>Section</small><b>Connections</b>${ic("down")}</div>
+        <h2 class="ph__title" style="margin-top:4px">Connections</h2>
+        <p class="ph__lede">The accounts, notes folder and apps Moss can reach.</p>
+        <div class="kinds"><div><b>1</b><span>Account</span></div><div><b>Linked</b><span>Notes folder</span></div><div><b>3</b><span>Apps and services</span></div></div>
+
+        <section class="sec"><div class="sec__head"><span class="sec__num">01</span><h3 class="sec__title">Accounts</h3><span class="sec__meta">1 connected</span></div>
+          <div class="subrow"><div class="svc__who"><span class="mark">G</span><div><div class="svc__name">Google</div><div class="svc__host">ben@example.com</div></div></div><span class="muted" style="font-size:13px">Mail and calendar, synced 4 minutes ago</span><span class="svc__chev">${ic("right")}</span></div>
+        </section>
+        <section class="sec"><div class="sec__head"><span class="sec__num">02</span><h3 class="sec__title">Notes folder</h3><span class="sec__meta">Linked</span></div>
+          <div class="subrow"><div class="svc__who"><span class="mark">N</span><div><div class="svc__name">Notes</div><div class="svc__host">~/Notes</div></div></div><span class="muted" style="font-size:13px">412 notes, read and written by Moss</span><span class="svc__chev">${ic("right")}</span></div>
+        </section>
+
+        <section class="sec"><div class="sec__head"><span class="sec__num">03</span><h3 class="sec__title">Apps and services</h3>
+          <span class="sec__meta">${problem ? `<span class="pill pill--bad">1 needs you</span>` : "All working"}<span class="btn btn--sm">${ic("plus")}Add connection</span></span></div>
+          <p class="sec__sub">Apps Moss can use as tools in chat. Open one to choose which of its tools Moss may use.</p>
+          <div class="svc-head"><span>Connection</span><span>Status</span><span>Tools</span><span>Classifier</span><span>On</span><span></span></div>
+          <div class="svc-list">${rows.map(svc).join("")}</div>
+        </section>
+      </div>
+    </div>`);
+}
+
+/* ---------- Screen 2: Home Assistant ---------- */
+
+function haScreen(frame) {
+  const cstate = frame.dataset.cstate || "ready";
+  const menu = frame.dataset.menu === "1";
+  const fresh = cstate === "new";
+  const groups = fresh ? sortingList() : GROUPS.map((g) => haGroup(g, menu, cstate)).join("");
+  return shell(`
+    <div class="crumb"><a>${ic("back")}Back to connections</a></div>
+    <div class="dmh"><span class="mark mark--lg">HA</span>
+      <div><h1 class="dmh__title">Home Assistant</h1><div class="dmh__sub"><span>homeassistant.local:8123</span>${cstate === "down" ? `<span class="pill pill--bad">Can't reach it</span>` : ""}</div></div>
+      <div class="dmh__acts"><span class="btn">${ic("refresh")}Check for new tools</span></div></div>
+    <div class="detail">
+      <div class="detail__main">
+        <section class="sec"><div class="sec__head"><span class="sec__num">01</span><h2 class="sec__title">Tools</h2><span class="sec__meta">${fresh ? "75 of 75 on" : "74 of 75 on"}</span></div>
+          <p class="sec__sub">Every tool starts on. Switch one off and Moss stops using it everywhere. Tools marked Asks first check with you before they run.</p>
+          <div class="toolbar"><span class="field field--grow">${ic("search")}Search 75 tools</span>
+            <span class="seg"><span class="on">All 75</span><span>On ${fresh ? 75 : 74}</span><span>Off ${fresh ? 0 : 1}</span></span>
+            <span class="field select">${fresh ? "A to Z" : "Group by what it does"}${ic("down")}</span></div>
+          ${groups}
+        </section>
+      </div>
+      <aside class="rail">
+        ${connBlock({ app: "Home Assistant", kind: "Tool server", host: "homeassistant.local:8123", tools: 75, down: cstate === "down", sort: fresh ? "sorting" : "done" })}
+        ${classifierBlock(fresh ? "off" : cstate)}
+      </aside>
+    </div>`);
+}
+
+/* A just-added connection: one flat list in the app's order while the sorting pass runs. */
+
+function sortingList() {
+  const all = Object.values(HA).flat().sort((a, b) => nice(a).localeCompare(nice(b)));
+  const rows = all.slice(0, 8).map((t) => toolRow(t)).join("");
+  return `<div class="grp">
+    <div class="sortnote"><span class="pill pill--warn">Sorting</span><span>Moss is sorting 75 tools by what they do. Until it finishes they show A to Z.</span></div>
+    ${rows}<div class="grp__more"><span class="linkbtn">Show ${all.length - 8} more</span></div>
+  </div>`;
+}
+
+/* ---------- Screen 4: Radarr ---------- */
+
+const RADARR_OFF = [["AlternativeTitle",2],["ApiInfo",1],["Authentication",2],["AutoTagging",6],["Backup",4],["Blocklist",4],["Calendar",1],["CalendarFeed",1],["Collection",4],["Command",4],["Credit",2],["CustomFilter",5],["CustomFormat",8],["Cutoff",1],["DelayProfile",6]];
+const RADARR_MOVIE = [
+  ["get_api_v3_movie", "List movies", "GET /api/v3/movie"],
+  ["post_api_v3_movie", "Add a movie", "POST /api/v3/movie"],
+  ["get_api_v3_movie_id", "Look up a movie", "GET /api/v3/movie/{id}"],
+  ["put_api_v3_movie_id", "Update a movie", "PUT /api/v3/movie/{id}"],
+  ["delete_api_v3_movie_id", "Delete a movie", "DELETE /api/v3/movie/{id}"],
+];
+
+function radarrScreen() {
+  const movie = RADARR_MOVIE.map(([raw, name, route]) => {
+    NICE[raw] = name;
+    return toolRow(raw, { desc: route, codeDesc: true, flag: raw.startsWith("delete") ? `<span class="chip chip--ask">Asks first</span>` : "" });
+  }).join("");
+  const crows = RADARR_OFF.map(([g, n]) => `<div class="crow">${ic("right")}<b>${ruleName(g)}</b><span class="grp__count">0 of ${n} on</span></div>`).join("");
+  return shell(`
+    <div class="crumb"><a>${ic("back")}Back to connections</a></div>
+    <div class="dmh"><span class="mark mark--lg">RA</span>
+      <div><h1 class="dmh__title">Radarr</h1><div class="dmh__sub"><span>radarr.local:7878</span></div></div>
+      <div class="dmh__acts"><span class="btn">${ic("refresh")}Check for new tools</span></div></div>
+    <div class="detail">
+      <div class="detail__main">
+        <section class="sec"><div class="sec__head"><span class="sec__num">01</span><h2 class="sec__title">Tools</h2><span class="sec__meta">5 of 237 on, in 1 of 71 sections</span></div>
+          <p class="sec__sub">Radarr has a lot of tools. Turn on only the sections you want Moss to use.</p>
+          <div class="toolbar"><span class="field field--grow">${ic("search")}Search 237 tools</span>
+            <span class="seg"><span class="on">All 237</span><span>On 5</span><span>Off 232</span></span>
+            <span class="field select">Group by Radarr's sections${ic("down")}</span></div>
+          <div class="grp">
+            <div class="grp__head"><h3 class="grp__title">Movie</h3><span class="grp__count">5 of 5 on</span><span class="linkbtn">Turn all off</span></div>
+            ${movie}
+          </div>
+          <div class="grp">
+            <div class="grp__head" style="border-bottom:none"><h3 class="grp__title">70 sections with everything off</h3><span class="linkbtn">Show all 70</span></div>
+            <div class="cgrid">${crows}</div>
+          </div>
+        </section>
+      </div>
+      <aside class="rail">
+        ${connBlock({ app: "Radarr", kind: "Web service", host: "radarr.local:7878", tools: 237 })}
+        ${classifierBlock("off", { app: "Radarr", n: 237, on: 5 })}
+      </aside>
+    </div>`);
+}
+
+/* ---------- Build ---------- */
+
+const SCREENS = { list: listScreen, ha: haScreen, radarr: radarrScreen };
+function build(frame) { frame.innerHTML = SCREENS[frame.dataset.screen](frame); }
+document.querySelectorAll(".frame").forEach(build);
+
+const STATES = [
+  ["off", "1. Off"], ["confirm", "2. Turning it on, shown once"], ["preparing", "3. Preparing"], ["ready", "4. Ready"],
+  ["reprep", "5. A tool changed"], ["failed", "6. Couldn't prepare"], ["down", "7. Connection lost"],
+];
+function stateCell([s, cap]) {
+  const fx = s === "reprep" ? `<div class="rowfx">${toolRow("AddTaskWork", { flag: `<span class="chip chip--prep">Preparing again</span>` })}</div>` : "";
+  return `<div class="state"><p class="state__cap"><b>${cap}</b></p>${classifierBlock(s)}${fx}</div>`;
+}
+document.getElementById("statesDesk").innerHTML = STATES.map(stateCell).join("");
+document.getElementById("statesPhone").innerHTML = STATES.map(stateCell).join("");
+
+const NAMES = [
+  ["intent_script__AddTaskWork", "Add task work", "Add a work task"],
+  ["HassClimateSetTemperature", "Climate set temperature", "Set the temperature"],
+  ["HassTurnOff", "Turn off", "Turn off, close or unlock"],
+  ["GetLiveContext", "Get live context", "Check what devices are doing"],
+  ["todo_get_items", "Todo get items", "Get to-do list items"],
+  ["HassMediaSearchAndPlay", "Media search and play", "Find and play something"],
+  ["get_api_v3_alttitle_id", "Look up alttitle", "Look up an alternative title"],
+  ["delete_api_v3_movie_id", "Delete movie", "Delete a movie"],
+];
+document.getElementById("namesTable").innerHTML =
+  `<thead><tr><th>Raw name today</th><th>Free rule</th><th>Written by the model when it sorts</th><th>How a row shows it</th></tr></thead><tbody>` +
+  NAMES.map(([raw, rule, model]) => `<tr><td>${raw}</td><td>${rule}</td><td>${model}</td><td><b>${model}</b><small>${raw}</small></td></tr>`).join("") + `</tbody>`;
+
+/* Fit the frames to the window, or show them at their real size. */
+let size = "fit";
+function fit() {
+  document.querySelectorAll(".frames").forEach((row) => {
+    const wraps = [...row.children];
+    if (size === "full") { wraps.forEach((w) => (w.style.zoom = 1)); row.style.overflowX = "auto"; return; }
+    row.style.overflowX = "visible";
+    const natural = wraps.reduce((s, w) => s + (w.querySelector(".frame--desk") ? 1442 : 392), 0) + 32 * (wraps.length - 1) + 4;
+    const z = Math.min(1, row.clientWidth / natural);
+    wraps.forEach((w) => (w.style.zoom = z));
+  });
+}
+addEventListener("resize", fit);
+fit();
+
+function wireSeg(el, fn) {
+  el.addEventListener("click", (e) => {
+    const s = e.target.closest("span[data-mode],span[data-size],span[data-v]"); if (!s) return;
+    [...el.children].forEach((c) => c.classList.toggle("on", c === s)); fn(s);
+  });
+}
+wireSeg(document.getElementById("modeSeg"), (s) => (document.documentElement.dataset.mode = s.dataset.mode));
+wireSeg(document.getElementById("sizeSeg"), (s) => { size = s.dataset.size; fit(); });
+document.querySelectorAll(".seg[data-target]").forEach((seg) => wireSeg(seg, (s) => {
+  document.querySelectorAll(`#${seg.dataset.target} .frame`).forEach((f) => { f.dataset[seg.dataset.key] = s.dataset.v; build(f); });
+}));
+</script>
+</body>
+</html>
