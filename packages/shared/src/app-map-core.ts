@@ -170,37 +170,44 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "them on a phone) has a Use switch for the whole connection, its status (Connected, Off, or " +
       "Can't reach it with the error), how it connects, its address, how many tools were found " +
       "and when it was last checked, a Check for new tools button (Check again after an error; " +
-      "hidden for a pasted spec) and Remove. The Tools section heading counts how many tools are " +
-      "on and how many always ask, and says that tools marked Asks first check with the owner " +
-      "before they run and that YOLO mode skips the asking. Every tool starts on, except on an " +
+      "hidden for a pasted spec) and Remove. Under them a sorting line says Moss is sorting the " +
+      "tools while it does, then Sorted by what they do on a date, naming the model that sorted " +
+      "them and saying it read each tool's name, description and inputs, and so did its " +
+      "provider if the model is hosted; tools whose sort failed get a Try again. Below the " +
+      "Connection panel a Classifier panel has a Let the classifier use this connection switch " +
+      "and shows one of seven states: Off; a one-time confirmation before anything is sent, " +
+      "listing what is sent, who reads it, what it costs and what is not sent, with Turn on and " +
+      "prepare and Cancel; Preparing, with how many tools are done and a progress bar; Ready, " +
+      "with how many tools can answer quick requests, how many always ask before they run, that " +
+      "YOLO mode skips the asking, and when they were prepared; a tool changed, which says how " +
+      "many are being prepared again; Couldn't prepare, saying why (for example the default chat " +
+      "model did not answer) with Try again and Change default model, which opens Your " +
+      "assistant; and Paused, when the app can't be reached, which picks up again by itself. " +
+      "While it is on, a What is sent, and what it costs link shows the same notice. The notice " +
+      "says Moss does not add the connection's saved address or sign-in settings to the request " +
+      "and runs no tool for the step, and that text the service provides is sent as written and " +
+      "is not checked for secrets. The Tools section heading counts how many tools are on and " +
+      "says that tools marked Asks first check with the owner before they run and that YOLO mode " +
+      "skips the asking. Every tool starts on, except on an " +
       "app with a lot of tools, where they start off. Tools are grouped by what they do: Looks " +
       "things up, Changes things, Sends things out, Sensitive, and Not sorted yet; before Moss " +
       "has sorted them they show A to Z with a note saying so, and the open page fills in the " +
       "groups by itself once sorting finishes. The owner can switch between " +
-      "By what it does and A to Z. A search box and an All, On or Off filter narrow the list; a " +
-      "long group shows six tools and a Show more link. Each tool has its own on or off switch, " +
+      "By what it does and A to Z. A search box, which matches a tool's readable name, its raw " +
+      "name or its description, and an All, On or Off filter narrow the list; a " +
+      "long group shows six tools and a Show more link. Each tool shows a readable name in bold " +
+      "with the service's raw tool name small underneath, its own on or off switch, " +
       "and each group has Turn all off (Turn all on when every tool in it is off). Tools that " +
-      "ask first carry an Asks first mark. On a sending tool, a menu offers Send without asking, " +
-      "after which it carries a Sends without asking mark, or Ask before sending to undo it. The " +
-      "Sends things out group has Send all without asking, which asks for confirmation first, " +
-      "and Ask first for all once any tool is allowed. It also has a classifier section: a Let the classifier use this connection " +
-      "switch that only marks the connection eligible, a note that messages and device names go " +
-      "to the classifier provider, and a cost and sharing notice shown open above an explicit " +
-      "Prepare action that names which tool definitions are sent to the owner's default chat " +
-      "model and that preparing costs model usage. The notice says Moss does not add the " +
-      "connection's saved address or sign-in settings to the request and runs no tool for the " +
-      "step, and that text the service provides, such as descriptions and choice lists, is " +
-      "sent as written and is not checked for secrets, including saved sign-in details. Prepared tools appear as drafts that look " +
-      "different from saved reviews; the owner edits each description and reply, chooses a risk, " +
-      "and switches on only the tools the classifier may use, so the connection switch never " +
-      "opts a tool in. Every unusable tool names why (connection switch off, off for ordinary " +
-      "chat, not reviewed, risk not chosen, changed since reviewed, or not allowed), and a saved " +
-      "tool with no risk shows Risk needed rather than Approved. A missing or unsupported default " +
-      "chat model is named and links to Your assistant to choose one; any other preparation error " +
-      "shows the server's own message. Nothing is stored by a cancelled or failed prepare. When " +
-      "the gate is active, a tool that needs a device or area name can pick it from the " +
-      "connection's own list, read once through a listing tool the owner reviewed as Only reads; " +
-      "the list is cached briefly for that owner only, and a missing or expired list keeps the " +
+      "ask first carry an Asks first mark, and a tool being prepared again after a change " +
+      "carries a Preparing again mark. Each tool has a menu with Keep out of the classifier " +
+      "(chat can still use it), which shows an Undo and marks the tool as kept out, and Let " +
+      "the classifier use it to reverse it. On a sending tool, the menu also offers Send " +
+      "without asking, after which it carries a Sends without asking mark, or Ask before " +
+      "sending to undo it. The Sends things out group has Send all without asking, which asks " +
+      "for confirmation first, and Ask first for all once any tool is allowed. When the gate " +
+      "is active, a tool that needs a device or area name can pick it from the connection's own " +
+      "list, read through a prepared tool sorted as Looks things up; the list is cached briefly " +
+      "for that owner only, and a missing or expired list keeps the " +
       "tool out. Old links to Connected accounts, Data sources and Integrations open this pane.",
     path: "/settings?section=connections",
     scope: "user"

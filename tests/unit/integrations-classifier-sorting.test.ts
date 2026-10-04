@@ -159,6 +159,7 @@ function harness(
     ) => PreparationStructuredOutcome | Promise<PreparationStructuredOutcome>;
     structured?: boolean | null;
     credential?: string | null;
+    displayNames?: { model: string; provider: string };
   } = {}
 ) {
   const state = { row };
@@ -174,7 +175,8 @@ function harness(
               providerKind: "opaque-kind",
               providerModelId: "opaque-model"
             },
-            structured: config.structured ?? true
+            structured: config.structured ?? true,
+            ...(config.displayNames ? { displayNames: config.displayNames } : {})
           },
     runStructuredDraft: async (_db, input) => {
       runs.push(input);
@@ -558,13 +560,36 @@ describe("what gets sent, and when", () => {
     expect(entry(h.state, "leaky")).toMatchObject({ status: "failed", failure: "unsafe" });
   });
 
-  it("writes nothing and calls nothing without a usable model", async () => {
+  it("records a failed sort on every target, without a call, when no model can sort", async () => {
     for (const structured of [null, false]) {
-      const h = harness(connection([tool("a")]), { structured });
+      const h = harness(connection([tool("a"), tool("b")]), { structured });
       expect(await h.run()).toEqual({ status: "no_model" });
       expect(h.runs).toHaveLength(0);
-      expect(entry(h.state, "a")).toBeUndefined();
+      expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "error" });
+      expect(entry(h.state, "b")).toMatchObject({ status: "failed", failure: "error" });
+
+      // Only Try again resends them.
+      expect(await h.run()).toEqual({ status: "nothing_to_sort" });
     }
+  });
+
+  it("records which model sorted each tool it sent", async () => {
+    const h = harness(connection([tool("a"), tool("huge", { description: "x".repeat(9000) })]), {
+      displayNames: { model: "Fast model", provider: "Home lab" }
+    });
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({
+      status: "current",
+      sortedBy: { model: "Fast model", provider: "Home lab" }
+    });
+    // A tool settled without a call was not sorted by any model.
+    expect(entry(h.state, "huge")).toMatchObject({ status: "current", sortedBy: null });
+  });
+
+  it("stores no sorter when the model has no readable names", async () => {
+    const h = harness(connection([tool("a")]));
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({ status: "current", sortedBy: null });
   });
 
   it("writes nothing when the model turns out not to be set up", async () => {

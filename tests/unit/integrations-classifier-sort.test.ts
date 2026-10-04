@@ -105,7 +105,9 @@ describe("classifier sort storage (#2984 R2.1)", () => {
       status: "current",
       risk: "outbound",
       readableName: "Readable",
-      sendWithoutAsking: true
+      sendWithoutAsking: true,
+      sortedAt: "2026-10-04T00:00:00.000Z",
+      sortedBy: null
     });
   });
 

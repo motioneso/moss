@@ -10,9 +10,8 @@
 //   - a tool list and schema the test can change while the server runs.
 //
 // The control routes live on the same port under /__control. The test reaches them with a
-// `docker exec` from the host (the host cannot route to the stack network), see
-// classifier-integrations.uat.spec.ts. Binds on all interfaces for the same reason as the other
-// in-network fixtures.
+// `docker exec` from the host, because the host cannot route to the stack network. Binds on all
+// interfaces for the same reason as the other in-network fixtures.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";

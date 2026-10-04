@@ -4,16 +4,19 @@ import type { PgBoss, WorkOptions } from "pg-boss";
 
 import type { AccessContext, DataContextRunner, MossDatabase } from "@moss/db";
 import { sendJob, toAccessContext, type QueueDefinition } from "@moss/jobs";
+import type { IntegrationClassifierSortedBy } from "@moss/shared";
 
 import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
 import type { ClassifierPreparationPort, PreparationChatModel } from "./classifier-preparation.js";
 import {
   credentialMatcher,
+  failedSortResults,
   freeReadableNames,
   planSortingCalls,
   resultsWithoutCall,
   runSortingCall,
   sortingTargets,
+  withSortedBy,
   type SortingCallTool
 } from "./classifier-sorting.js";
 import { loadClassifierCheckCredential, type IntegrationsCipherSources } from "./credentials.js";
@@ -84,6 +87,7 @@ export type ClassifierSortJobOutcome =
 
 interface PreparedSort {
   readonly model: PreparationChatModel;
+  readonly sortedBy: IntegrationClassifierSortedBy | null;
   readonly calls: readonly (readonly SortingCallTool[])[];
   readonly freeNames: ReadonlyMap<string, string>;
   readonly written: number;
@@ -117,8 +121,17 @@ export async function runClassifierSortJob(
       });
       if (targets.length === 0) return { status: "nothing_to_sort" };
 
+      // Without a model that can sort, every target fails so the page offers Try again; no
+      // automatic path resends a failed sort (spec 8.4).
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
-      if (!selection?.structured) return { status: "no_model" };
+      if (!selection?.structured) {
+        await repository.saveClassifierToolSorts(
+          scopedDb,
+          connectionId,
+          failedSortResults(targets, "error", now().toISOString())
+        );
+        return { status: "no_model" };
+      }
 
       const credential = await loadClassifierCheckCredential(
         scopedDb,
@@ -134,7 +147,13 @@ export async function runClassifierSortJob(
       if (settled.length > 0) {
         await repository.saveClassifierToolSorts(scopedDb, connectionId, settled);
       }
-      return { model: selection.model, calls: plan.calls, freeNames, written: settled.length };
+      return {
+        model: selection.model,
+        sortedBy: selection.displayNames ?? null,
+        calls: plan.calls,
+        freeNames,
+        written: settled.length
+      };
     }
   );
   if (!("model" in prepared)) return prepared;
@@ -151,9 +170,10 @@ export async function runClassifierSortJob(
         prepared.freeNames,
         now
       );
-      if (callResults)
-        await repository.saveClassifierToolSorts(scopedDb, connectionId, callResults);
-      return callResults;
+      if (!callResults) return null;
+      const stamped = withSortedBy(callResults, prepared.sortedBy);
+      await repository.saveClassifierToolSorts(scopedDb, connectionId, stamped);
+      return stamped;
     });
     calls += 1;
     if (!results) return { status: "stopped", calls, written };

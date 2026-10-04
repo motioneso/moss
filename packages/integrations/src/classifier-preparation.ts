@@ -11,6 +11,7 @@ import {
   parseReviewedEntry,
   preparationEntry,
   preparationFailure,
+  schemaHasRootCombinator,
   toolSortState,
   type ClassifierPreparationFailureReason,
   type ClassifierPreparationMap,
@@ -40,7 +41,6 @@ export const INTEGRATION_CLASSIFIER_MAX_DEFINITION_CHARS = 8000;
 const REPLY_FIELDS = ["status", "action", "summary"] as const;
 const PLACEHOLDER = /\{([^{}]*)\}/g;
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
 
 /** The owner's current default chat model, described without naming a provider or model. */
 export interface PreparationChatModel {
@@ -54,6 +54,8 @@ export interface PreparationChatSelection {
   readonly model: PreparationChatModel;
   /** false when this model cannot produce the required structured draft. */
   readonly structured: boolean;
+  /** The model's and its provider's display names, shown as who sorted a tool. Unvalidated. */
+  readonly displayNames?: { readonly model: string; readonly provider: string };
 }
 
 export type PreparationStructuredOutcome =
@@ -321,10 +323,6 @@ export function derivePreparationArguments(
     out[name] = values ? { kind: "enum", values } : { kind: "extract" };
   }
   return out;
-}
-
-function schemaHasRootCombinator(schema: Record<string, unknown> | null): boolean {
-  return schema !== null && ROOT_COMBINATORS.some((key) => key in schema);
 }
 
 /**

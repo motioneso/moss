@@ -16,10 +16,10 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { formatDate, useUserLocale } from "../locale/locale-format";
+import { IntegrationClassifierBlock, IntegrationSortingLine } from "./integration-classifier-block";
 import { useIntegrationDetail } from "./integration-detail-state";
 import { IntegrationToolsSection } from "./integration-tool-groups";
 import { useFeedback } from "./settings-feedback";
-import { IntegrationClassifierSection } from "./settings-integrations-classifier";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Switch } from "./settings-ui";
 
@@ -147,9 +147,15 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
   const { toast, confirm } = useFeedback();
   const locale = useUserLocale();
 
-  const { detailQuery, setToolsOn, setSendWithoutAsking } = useIntegrationDetail(id, (error) =>
-    toast(readError(error), { tone: "drift" })
-  );
+  const {
+    detailQuery,
+    setToolsOn,
+    setSendWithoutAsking,
+    setKeptOut,
+    setClassifierEnabled,
+    retryPreparation,
+    retrySort
+  } = useIntegrationDetail(id, (error) => toast(readError(error), { tone: "drift" }));
 
   const invalidateDetail = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.integrations.detail(id) });
@@ -249,8 +255,8 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
             detail={detail}
             onSetOn={setToolsOn}
             onSendWithoutAsking={setSendWithoutAsking}
+            onSetKeptOut={setKeptOut}
           />
-          <IntegrationClassifierSection detail={detail} onChanged={invalidateList} />
           {predatesHints ? (
             <Note>
               Check for new tools rereads what {detail.name} says about each tool. Press it to pick
@@ -287,12 +293,18 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
           <Row name="Connects as" control={detail.kind === "mcp" ? "Tool server" : "Web service"} />
           <Row name="Address" control={hostOf(detail.url)} />
           <Row name="Tools found" desc={lastChecked} control={String(detail.toolCount)} />
+          <IntegrationSortingLine detail={detail} onRetry={retrySort} />
           <span className="intg__controls">
             {checkButton}
             <Button variant="quiet" size="sm" onClick={onRemove}>
               Remove
             </Button>
           </span>
+          <IntegrationClassifierBlock
+            detail={detail}
+            onSetEnabled={setClassifierEnabled}
+            onRetry={retryPreparation}
+          />
         </aside>
       </div>
     </div>

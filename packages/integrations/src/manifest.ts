@@ -27,8 +27,7 @@ export const integrationsModuleManifest = {
     { method: "PATCH", path: "/api/integrations/:id" },
     { method: "POST", path: "/api/integrations/:id/refresh" },
     { method: "DELETE", path: "/api/integrations/:id" },
-    { method: "PUT", path: "/api/integrations/:id/classifier/tools/:toolName" },
-    { method: "DELETE", path: "/api/integrations/:id/classifier/tools/:toolName" },
+    { method: "PUT", path: "/api/integrations/:id/classifier/kept-out" },
     { method: "POST", path: "/api/integrations/:id/classifier/prepare" },
     { method: "POST", path: "/api/integrations/:id/classifier/sort" },
     { method: "PUT", path: "/api/integrations/:id/classifier/send-without-asking" }
@@ -84,10 +83,24 @@ export const integrationsModuleManifest = {
         "is prepared again."
     },
     {
-      id: "integrations.connection_classifier_review",
+      id: "integrations.connection_classifier_panel",
       description:
-        "The classifier section shows what is sent to a model and what it costs. Prepared " +
-        "tools are saved without a review step, and every unusable tool names why."
+        "The Classifier panel shows Off, a one-time confirmation of what is sent and what it " +
+        "costs, Preparing with progress, Ready with how many tools answer and always ask, a " +
+        "tool changed, Couldn't prepare with Try again, or Paused."
+    },
+    {
+      id: "integrations.connection_classifier_keep_out",
+      description:
+        "Each tool's menu has Keep out of the classifier, with an Undo. Ordinary chat can still " +
+        "use a kept-out tool. Let the classifier use it puts the tool back and prepares it."
+    },
+    {
+      id: "integrations.connection_tool_sorting",
+      description:
+        "Each tool shows a readable name over its raw name. The Connection panel says when " +
+        "tools were sorted and by which model, which read each tool's name, description and " +
+        "inputs. A failed sort gets Try again."
     },
     {
       id: "integrations.connection_classifier_preparation",

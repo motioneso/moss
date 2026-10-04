@@ -147,9 +147,9 @@ describe("integrations classifier sort storage and conversion (#2984 R2.1)", () 
       ).toEqual({ status: "not_found" });
       expect(
         await as(other, (scopedDb) =>
-          repository.setClassifierToolKeptOut(scopedDb, conn.id, BROADCAST.name, true)
+          repository.setClassifierToolsKeptOut(scopedDb, conn.id, [BROADCAST.name], true)
         )
-      ).toBeNull();
+      ).toEqual({ status: "not_found" });
     }
 
     // Owner B's own sort records are equally invisible to owner A.
@@ -163,7 +163,9 @@ describe("integrations classifier sort storage and conversion (#2984 R2.1)", () 
       status: "current",
       risk: "outbound",
       readableName: "Announce through the house",
-      sendWithoutAsking: false
+      sendWithoutAsking: false,
+      sortedAt: expect.any(String),
+      sortedBy: null
     });
     expect(reread!.classifierKeptOutTools).toEqual([]);
   });
@@ -186,9 +188,11 @@ describe("integrations classifier sort storage and conversion (#2984 R2.1)", () 
     });
 
     const keptOut = await as(ids.userA, (scopedDb) =>
-      repository.setClassifierToolKeptOut(scopedDb, conn.id, put.name, true)
+      repository.setClassifierToolsKeptOut(scopedDb, conn.id, [put.name], true)
     );
-    expect(keptOut!.classifierKeptOutTools).toEqual([put.name]);
+    expect(keptOut.status === "saved" && keptOut.connection.classifierKeptOutTools).toEqual([
+      put.name
+    ]);
 
     // The method changes to DELETE and back: the choice does not come back with it.
     for (const method of ["DELETE", "PUT"]) {

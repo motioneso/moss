@@ -342,14 +342,27 @@ describe("runClassifierPreparationJob", () => {
     expect(retried.outcome).toEqual({ status: "prepared", prepared: 1, failed: 0 });
   });
 
-  it("stops after a provider failure so the rest are not charged for the same error", async () => {
+  it("stops after a provider failure and records the rest as failed with it", async () => {
     const port = fakePort();
     port.runStructuredDraft.mockResolvedValue({ ok: false, error: "provider_error" });
-    const tools = [discovered("a_tool"), discovered("b_tool")];
-    const { outcome, failures } = await run(row({ discoveredTools: tools }), "prepare", port);
-    expect(outcome).toEqual({ status: "stopped", prepared: 0, failed: 1 });
+    const tools = [discovered("a_tool"), discovered("b_tool"), discovered("c_tool")];
+    const first = await run(row({ discoveredTools: tools }), "prepare", port);
+    expect(first.outcome).toEqual({ status: "stopped", prepared: 0, failed: 3 });
     expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
-    expect(failures.map((f) => f.failure.reason)).toEqual(["provider_error"]);
+    expect(first.failures.map((f) => `${f.toolName}:${f.failure.reason}`)).toEqual([
+      "a_tool:provider_error",
+      "b_tool:provider_error",
+      "c_tool:provider_error"
+    ]);
+
+    // Nothing resends them automatically; Try again resends every one.
+    const automatic = await run(first.state.row, "prepare", port);
+    expect(automatic.outcome).toEqual({ status: "nothing_to_prepare" });
+    expect(port.runStructuredDraft).toHaveBeenCalledTimes(1);
+
+    const retried = await run(first.state.row, "retry");
+    expect(retried.outcome).toEqual({ status: "prepared", prepared: 3, failed: 0 });
+    expect(retried.port.runStructuredDraft).toHaveBeenCalledTimes(3);
   });
 
   it("records a tool whose entry could never be stored, before any model call", async () => {
@@ -467,11 +480,28 @@ describe("runClassifierPreparationJob", () => {
     expect(port.runStructuredDraft).not.toHaveBeenCalled();
   });
 
-  it("makes no model call when no default chat model can draft", async () => {
+  it("records no_model on every target when no default chat model is set", async () => {
     const port = fakePort();
     vi.mocked(port.selectDefaultChatModel).mockResolvedValue(null);
-    const { outcome } = await run(row(), "prepare", port);
+    const tools = [discovered("a_tool"), discovered("b_tool")];
+    const { outcome, failures } = await run(row({ discoveredTools: tools }), "prepare", port);
     expect(outcome).toEqual({ status: "no_model" });
     expect(port.runStructuredDraft).not.toHaveBeenCalled();
+    expect(failures.map((f) => `${f.toolName}:${f.failure.reason}`)).toEqual([
+      "a_tool:no_model",
+      "b_tool:no_model"
+    ]);
+  });
+
+  it("records no_model when the default chat model cannot draft", async () => {
+    const port = fakePort();
+    vi.mocked(port.selectDefaultChatModel).mockResolvedValue({
+      model: { id: "m1", providerConfigId: "p1", providerKind: "kind", providerModelId: "model" },
+      structured: false
+    });
+    const { outcome, failures } = await run(row(), "prepare", port);
+    expect(outcome).toEqual({ status: "no_model" });
+    expect(port.runStructuredDraft).not.toHaveBeenCalled();
+    expect(failures.map((f) => f.failure.reason)).toEqual(["no_model"]);
   });
 });

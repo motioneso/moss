@@ -232,8 +232,8 @@ test("the connection page groups sorted tools and controls sending without askin
     expect(sortOf(detail, EMAIL_TOOL).risk).toBe("outbound");
   });
 
-  const toolsMeta = (on: number, total: number, ask: number) =>
-    page.getByText(`${on} of ${total} on, ${ask} always ask`, { exact: true });
+  const toolsMeta = (on: number, total: number) =>
+    page.getByText(`${on} of ${total} on`, { exact: true });
 
   await test.step("the page fills the settings area, with the rail and grouped tools", async () => {
     await expect(page.getByRole("button", { name: "Back to connections" })).toBeVisible();
@@ -247,7 +247,7 @@ test("the connection page groups sorted tools and controls sending without askin
 
     const detail = await readDetail(page);
     const asking = detail.classifierTools.filter((tool) => tool.asksFirst).length;
-    await expect(toolsMeta(detail.tools.length, detail.tools.length, asking)).toBeVisible();
+    await expect(toolsMeta(detail.tools.length, detail.tools.length)).toBeVisible();
     await expect(page.getByText("YOLO mode skips the asking.", { exact: false })).toBeVisible();
     const titles = page.locator(".intg-tools .pane__cardtitle");
     await expect(titles.filter({ hasText: "Sends things out" })).toHaveCount(1);

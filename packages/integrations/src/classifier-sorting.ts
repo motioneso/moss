@@ -1,5 +1,5 @@
 import type { DataContextDb } from "@moss/db";
-import type { IntegrationClassifierRisk } from "@moss/shared";
+import type { IntegrationClassifierRisk, IntegrationClassifierSortedBy } from "@moss/shared";
 
 import { readableToolNames } from "./classifier-readable-name.js";
 import {
@@ -523,6 +523,26 @@ export function resultsWithoutCall(
       currentResult(tool, null, freeNames.get(tool.name) ?? tool.name, sortedAt)
     )
   ];
+}
+
+/** Failed results for tools that could not be sent, such as when no model can sort them. */
+export function failedSortResults(
+  tools: readonly DiscoveredTool[],
+  failure: "error" | "unsafe",
+  sortedAt: string
+): readonly SortingToolResult[] {
+  return tools.map((tool) => failedResult(tool, failure, sortedAt));
+}
+
+/** Results with the sorting model's display names on every current sort. */
+export function withSortedBy(
+  results: readonly SortingToolResult[],
+  sortedBy: IntegrationClassifierSortedBy | null
+): readonly SortingToolResult[] {
+  if (!sortedBy) return results;
+  return results.map((entry) =>
+    entry.result.status === "current" ? { ...entry, result: { ...entry.result, sortedBy } } : entry
+  );
 }
 
 /** The free rule's names for every tool on the connection. */

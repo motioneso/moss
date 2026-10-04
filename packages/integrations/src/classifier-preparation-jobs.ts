@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { PgBoss, WorkOptions } from "pg-boss";
 
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { sendJob, toAccessContext, type QueueDefinition } from "@moss/jobs";
 
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
@@ -131,6 +131,37 @@ export async function runClassifierPreparationJob(
   const repository = deps.repository ?? new IntegrationsRepository();
   const now = deps.now ?? (() => new Date());
 
+  /**
+   * Record one run-level failure on each named tool that is still a target, against its current
+   * definition. A tool whose failure has no room is skipped. Returns how many were recorded.
+   */
+  const failRemaining = async (
+    scopedDb: DataContextDb,
+    toolNames: readonly string[],
+    reason: ClassifierPreparationFailureReason
+  ): Promise<number> => {
+    if (toolNames.length === 0) return 0;
+    const row = await repository.getConnection(scopedDb, connectionId);
+    if (!row || !classifierActive(row)) return 0;
+    const names = new Set(toolNames);
+    let recorded = 0;
+    for (const tool of targetsFor(row, op)) {
+      if (!names.has(tool.name)) continue;
+      const saved = await repository.saveClassifierPreparationFailure(
+        scopedDb,
+        connectionId,
+        tool.name,
+        {
+          reason,
+          definitionFingerprint: toolDefinitionFingerprint(tool),
+          failedAt: now().toISOString()
+        }
+      );
+      if (saved) recorded += 1;
+    }
+    return recorded;
+  };
+
   const run = await deps.dataContext.withDataContext(
     accessContext,
     async (
@@ -141,8 +172,17 @@ export async function runClassifierPreparationJob(
       const targets = targetsFor(row, op);
       if (targets.length === 0) return { status: "nothing_to_prepare" };
 
+      // Without a model that can draft, every target fails so the page leaves Preparing and
+      // offers Try again.
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
-      if (!selection?.structured) return { status: "no_model" };
+      if (!selection?.structured) {
+        await failRemaining(
+          scopedDb,
+          targets.map((tool) => tool.name),
+          "no_model"
+        );
+        return { status: "no_model" };
+      }
 
       const credential = await loadClassifierCheckCredential(
         scopedDb,
@@ -163,7 +203,7 @@ export async function runClassifierPreparationJob(
 
   let prepared = 0;
   let failed = 0;
-  for (const toolName of run.toolNames) {
+  for (const [index, toolName] of run.toolNames.entries()) {
     const step = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
       const row = await repository.getConnection(scopedDb, connectionId);
       if (!row || !classifierActive(row)) return "switched_off" as const;
@@ -216,8 +256,15 @@ export async function runClassifierPreparationJob(
     if (step === "unrecorded") return { status: "failure_history_full", prepared, failed };
     if (step === "prepared") prepared += 1;
     if (step === "failed" || step === "provider_error") failed += 1;
-    // A provider failure would repeat for every tool, so the rest wait for the next run.
-    if (step === "provider_error") return { status: "stopped", prepared, failed };
+    // A provider failure would repeat for every tool, so the rest are recorded as failed with it
+    // and wait for the owner's Try again.
+    if (step === "provider_error") {
+      const remaining = run.toolNames.slice(index + 1);
+      failed += await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
+        failRemaining(scopedDb, remaining, "provider_error")
+      );
+      return { status: "stopped", prepared, failed };
+    }
   }
   return { status: "prepared", prepared, failed };
 }

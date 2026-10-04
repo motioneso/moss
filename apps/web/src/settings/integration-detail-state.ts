@@ -3,14 +3,31 @@ import { useRef, useState } from "react";
 
 import type { IntegrationDetail } from "@moss/shared";
 
-import { getIntegration, setIntegrationSendWithoutAsking, updateIntegration } from "../api/client";
+import {
+  getIntegration,
+  prepareIntegrationClassifierTools,
+  setIntegrationKeptOut,
+  setIntegrationSendWithoutAsking,
+  sortIntegrationClassifierTools,
+  updateIntegration
+} from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import {
+  preparationPending,
+  withClassifierEnabled,
+  withKeptOut,
+  withPreparationRetried,
+  withSortRetried
+} from "./integration-classifier-state";
 import { toolsOnPatch } from "./integration-tool-groups";
 
-/** How often an open connection re-reads while tools wait to be sorted. */
+/** How often an open connection re-reads while tools wait to be sorted or prepared. */
 export const SORT_POLL_MS = 3_000;
 
-/** An open page stops waiting for sorting after this long, e.g. when no model can sort. */
+/**
+ * An open page stops waiting after this long, e.g. when no model can sort. Turning the
+ * classifier on or pressing Try again starts the wait over.
+ */
 export const SORT_WATCH_MS = 10 * 60_000;
 
 /** True while the worker still owes a sort for at least one tool. */
@@ -48,8 +65,8 @@ export function withSendWithoutAsking(
  * detail re-reads from the server once the queue drains; a read in flight when a click lands is
  * cancelled so it cannot undo the click on screen.
  *
- * While tools wait to be sorted the detail re-reads every few seconds, so the groups appear
- * without a reload.
+ * While tools wait to be sorted or prepared the detail re-reads every few seconds, so the
+ * groups and the classifier's progress appear without a reload.
  */
 export function useIntegrationDetail(id: string, onError: (error: unknown) => void) {
   const queryClient = useQueryClient();
@@ -58,14 +75,16 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
   const queued = useRef(0);
   const latest = useRef<IntegrationDetail | undefined>(undefined);
   const [changing, setChanging] = useState(false);
-  const openedAt = useRef(Date.now());
+  const watchedFrom = useRef(Date.now());
 
   const detailQuery = useQuery({
     queryKey: key,
     queryFn: () => getIntegration(id),
     retry: false,
     refetchInterval: (query) =>
-      !changing && sortPending(query.state.data) && Date.now() - openedAt.current < SORT_WATCH_MS
+      !changing &&
+      (sortPending(query.state.data) || preparationPending(query.state.data)) &&
+      Date.now() - watchedFrom.current < SORT_WATCH_MS
         ? SORT_POLL_MS
         : false
   });
@@ -111,5 +130,37 @@ export function useIntegrationDetail(id: string, onError: (error: unknown) => vo
       () => setIntegrationSendWithoutAsking(id, { allow, toolNames: [...toolNames] })
     );
 
-  return { detailQuery, setToolsOn, setSendWithoutAsking };
+  const setKeptOut = (toolNames: readonly string[], keptOut: boolean) =>
+    change(
+      (detail) => withKeptOut(detail, toolNames, keptOut),
+      () => setIntegrationKeptOut(id, { keptOut, toolNames: [...toolNames] })
+    );
+
+  const setClassifierEnabled = (on: boolean) => {
+    watchedFrom.current = Date.now();
+    change(
+      (detail) => withClassifierEnabled(detail, on),
+      () => updateIntegration(id, { classifierEnabled: on })
+    );
+  };
+
+  const retryPreparation = () => {
+    watchedFrom.current = Date.now();
+    change(withPreparationRetried, () => prepareIntegrationClassifierTools(id, {}));
+  };
+
+  const retrySort = () => {
+    watchedFrom.current = Date.now();
+    change(withSortRetried, () => sortIntegrationClassifierTools(id));
+  };
+
+  return {
+    detailQuery,
+    setToolsOn,
+    setSendWithoutAsking,
+    setKeptOut,
+    setClassifierEnabled,
+    retryPreparation,
+    retrySort
+  };
 }

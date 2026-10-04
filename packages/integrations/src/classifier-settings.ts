@@ -1,14 +1,15 @@
 import { CLASSIFIER_LIMITS } from "@moss/module-sdk";
 import type {
   IntegrationClassifierArgument,
-  IntegrationClassifierPreparationState,
   IntegrationClassifierRisk,
-  IntegrationClassifierToolPreparation,
+  IntegrationClassifierSortedBy,
   IntegrationClassifierToolSort,
+  IntegrationClassifierToolState,
   IntegrationToolDescriptor
 } from "@moss/shared";
 
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
+import { readableToolNames } from "./classifier-readable-name.js";
 import {
   higherRisk,
   toolRiskInputs,
@@ -16,6 +17,7 @@ import {
   type RiskInputSource
 } from "./classifier-risk-inputs.js";
 import { effectiveEnabledTools } from "./curation.js";
+import type { DiscoveredTool } from "./openapi-convert.js";
 
 /**
  * Owner storage and invalidation for the connected-tool classifier (#2884, #2984).
@@ -43,6 +45,7 @@ export const INTEGRATION_CLASSIFIER_MAX_ENTRY_JSON_CHARS = 8192;
 const RISKS: readonly IntegrationClassifierRisk[] = ["read", "write", "outbound", "destructive"];
 const ARGUMENT_KINDS = ["enum", "candidates", "extract"] as const;
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
 
 export interface ClassifierPreparationEntry {
   readonly optIn: boolean;
@@ -65,8 +68,9 @@ export interface ClassifierPreparationMap {
 
 /**
  * Why automatic preparation failed. `unsafe` means the tool's text held the stored credential.
- * `unsupported_shape` means the prepared entry could never be stored, and `too_many_tools` means
- * the connection already holds the most prepared tools it can store.
+ * `unsupported_shape` means the prepared entry could never be stored, `too_many_tools` means the
+ * connection already holds the most prepared tools it can store, and `no_model` means no default
+ * chat model that can draft was selected.
  */
 export type ClassifierPreparationFailureReason =
   | "unsafe"
@@ -74,7 +78,8 @@ export type ClassifierPreparationFailureReason =
   | "invalid_draft"
   | "definition_too_large"
   | "unsupported_shape"
-  | "too_many_tools";
+  | "too_many_tools"
+  | "no_model";
 
 export interface ClassifierPreparationFailure {
   readonly reason: ClassifierPreparationFailureReason;
@@ -89,7 +94,8 @@ const PREPARATION_FAILURE_REASONS: readonly ClassifierPreparationFailureReason[]
   "invalid_draft",
   "definition_too_large",
   "unsupported_shape",
-  "too_many_tools"
+  "too_many_tools",
+  "no_model"
 ];
 
 /**
@@ -507,6 +513,83 @@ export interface EligibleClassifierTool {
   readonly candidateSource?: string;
 }
 
+/** A tool input schema with a root combinator cannot be declared to the classifier. */
+export function schemaHasRootCombinator(schema: Record<string, unknown> | null): boolean {
+  return schema !== null && ROOT_COMBINATORS.some((key) => key in schema);
+}
+
+/** What a tool's classifier standing is read from. Connection reachability is not part of it. */
+export type ClassifierStandingInput = Pick<
+  ClassifierConnectionState,
+  | "classifierEnabled"
+  | "discoveredTools"
+  | "enabledGroups"
+  | "enabledTools"
+  | "mutedTools"
+  | "classifierPreparation"
+  | "classifierSort"
+  | "classifierKeptOutTools"
+>;
+
+type CurrentSortState = Extract<ClassifierToolSortState, { status: "current" }>;
+
+type ToolStanding = { readonly tool: RiskInputSource } & (
+  | {
+      readonly state: "ready";
+      readonly sort: CurrentSortState;
+      readonly entry: ClassifierPreparationEntry;
+    }
+  | {
+      readonly state: "failed";
+      readonly sort: CurrentSortState;
+      readonly failure: ClassifierPreparationFailure;
+    }
+  | {
+      readonly state: Exclude<IntegrationClassifierToolState, "ready" | "failed">;
+      readonly sort: ClassifierToolSortState;
+    }
+);
+
+/**
+ * Each discovered tool's classifier standing, in discovered order. `ready` is exactly the
+ * eligibility rule of spec 8.5 apart from the connection being enabled and reachable, so the page
+ * and the gate cannot disagree. A tool with a root-combinator schema is never prepared, so it is
+ * `not_used` unless an older preparation for its current definition already makes it ready.
+ */
+function toolStandings(state: ClassifierStandingInput): ToolStanding[] {
+  const ordinaryEnabled = new Set(
+    effectiveEnabledTools(state.discoveredTools, {
+      enabledGroups: state.enabledGroups,
+      enabledTools: state.enabledTools,
+      mutedTools: state.mutedTools
+    }).map((tool) => tool.name)
+  );
+  const keptOut = new Set(state.classifierKeptOutTools);
+  return state.discoveredTools.map((tool): ToolStanding => {
+    const sort = toolSortState(state.classifierSort, tool);
+    if (!state.classifierEnabled) return { tool, sort, state: "off" };
+    if (keptOut.has(tool.name)) return { tool, sort, state: "kept_out" };
+    if (!ordinaryEnabled.has(tool.name) || sort.status === "failed") {
+      return { tool, sort, state: "not_used" };
+    }
+    const entry = preparationEntry(state.classifierPreparation, tool.name);
+
+    // A changed tool is sorted again before it is prepared again; both read as preparing again.
+    if (sort.status !== "current") {
+      return { tool, sort, state: entry ? "preparing_again" : "preparing" };
+    }
+
+    const fingerprint = toolDefinitionFingerprint(tool);
+    if (entry?.definitionFingerprint === fingerprint) return { tool, sort, state: "ready", entry };
+    if (schemaHasRootCombinator(tool.inputSchema)) return { tool, sort, state: "not_used" };
+    const failure = preparationFailure(state.classifierPreparation, tool.name);
+    if (failure?.definitionFingerprint === fingerprint) {
+      return { tool, sort, state: "failed", failure };
+    }
+    return { tool, sort, state: entry ? "preparing_again" : "preparing" };
+  });
+}
+
 /**
  * The tools the classifier may offer for this connection, in discovered order (spec 8.5). This is
  * the connected-tool release: the gate offers exactly these.
@@ -520,22 +603,11 @@ export interface EligibleClassifierTool {
 export function effectiveClassifierTools(
   state: ClassifierConnectionState
 ): EligibleClassifierTool[] {
-  if (!state.enabled || !state.classifierEnabled || state.lastError !== null) return [];
-  const ordinaryEnabled = new Set(
-    effectiveEnabledTools(state.discoveredTools, {
-      enabledGroups: state.enabledGroups,
-      enabledTools: state.enabledTools,
-      mutedTools: state.mutedTools
-    }).map((tool) => tool.name)
-  );
-  const keptOut = new Set(state.classifierKeptOutTools);
+  if (!state.enabled || state.lastError !== null) return [];
   const out: EligibleClassifierTool[] = [];
-  for (const tool of state.discoveredTools) {
-    if (!ordinaryEnabled.has(tool.name) || keptOut.has(tool.name)) continue;
-    const sort = toolSortState(state.classifierSort, tool);
-    if (sort.status !== "current") continue;
-    const entry = preparationEntry(state.classifierPreparation, tool.name);
-    if (!entry || entry.definitionFingerprint !== toolDefinitionFingerprint(tool)) continue;
+  for (const standing of toolStandings(state)) {
+    if (standing.state !== "ready") continue;
+    const { tool, sort, entry } = standing;
     out.push({
       tool,
       risk: sort.risk,
@@ -546,21 +618,6 @@ export function effectiveClassifierTools(
     });
   }
   return out;
-}
-
-/** The API view: one row per discovered tool that has a saved review, with derived state. */
-export function classifierPreparationView(
-  state: Pick<ClassifierConnectionState, "discoveredTools" | "classifierPreparation">
-): IntegrationClassifierToolPreparation[] {
-  const view: IntegrationClassifierToolPreparation[] = [];
-  for (const tool of state.discoveredTools) {
-    const entry = preparationEntry(state.classifierPreparation, tool.name);
-    if (!entry) continue;
-    const entryState: IntegrationClassifierPreparationState =
-      entry.definitionFingerprint === toolDefinitionFingerprint(tool) ? "current" : "stale";
-    view.push({ toolName: tool.name, ...entry, state: entryState });
-  }
-  return view;
 }
 
 /*
@@ -594,6 +651,8 @@ export interface ClassifierSortEntry {
   readonly risk: IntegrationClassifierRisk | null;
   /** The model-written display name. Set only when current. */
   readonly readableName: string | null;
+  /** The model that made the current sort, as display names. `null` when unknown. */
+  readonly sortedBy: IntegrationClassifierSortedBy | null;
   /** The risk-inputs fingerprint the sort or the failure was made against. */
   readonly sortFingerprint: string | null;
   readonly sortedAt: string | null;
@@ -615,6 +674,8 @@ export type ClassifierToolSortState =
       readonly status: "current";
       readonly risk: IntegrationClassifierRisk;
       readonly readableName: string;
+      readonly sortedAt: string;
+      readonly sortedBy: IntegrationClassifierSortedBy | null;
       readonly sendWithoutAsking: boolean;
     }
   | { readonly status: "stale" }
@@ -629,6 +690,8 @@ export type ClassifierSortResult =
       readonly readableName: string;
       readonly sortFingerprint: string;
       readonly sortedAt: string;
+      /** The sorting model's display names. Invalid names are stored as unknown. */
+      readonly sortedBy?: IntegrationClassifierSortedBy | null;
     }
   | {
       readonly status: "failed";
@@ -670,6 +733,14 @@ export function isReadableName(value: unknown): value is string {
   );
 }
 
+/** Display names of the sorting model, or `null` when either is missing or not a readable name. */
+function parseSortedBy(value: unknown): IntegrationClassifierSortedBy | null {
+  if (!isRecord(value)) return null;
+  return isReadableName(value.model) && isReadableName(value.provider)
+    ? { model: value.model, provider: value.provider }
+    : null;
+}
+
 function storedRisk(value: unknown): IntegrationClassifierRisk | null | undefined {
   if (value === null || value === undefined) return null;
   return typeof value === "string" && (RISKS as readonly string[]).includes(value)
@@ -690,6 +761,7 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
       status: "never_tried",
       risk: null,
       readableName: null,
+      sortedBy: null,
       sortFingerprint: null,
       sortedAt: null,
       failure: null,
@@ -704,6 +776,7 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
       status: "failed",
       risk: null,
       readableName: null,
+      sortedBy: null,
       sortFingerprint: raw.sortFingerprint,
       sortedAt: raw.sortedAt,
       failure: raw.failure,
@@ -718,6 +791,8 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
     status: "current",
     risk,
     readableName: raw.readableName,
+    // An entry stored before sortedBy existed, or with unreadable names, stays valid.
+    sortedBy: parseSortedBy(raw.sortedBy),
     sortFingerprint: raw.sortFingerprint,
     sortedAt: raw.sortedAt,
     failure: null,
@@ -760,6 +835,8 @@ export function toolSortState(
     status: "current",
     risk,
     readableName: entry.readableName!,
+    sortedAt: entry.sortedAt!,
+    sortedBy: entry.sortedBy,
     sendWithoutAsking: entry.sendWithoutAsking && risk === "outbound"
   };
 }
@@ -794,6 +871,7 @@ export function withSortResult(
       status: "current",
       risk: result.risk,
       readableName: result.readableName,
+      sortedBy: parseSortedBy(result.sortedBy),
       sortFingerprint: result.sortFingerprint,
       sortedAt: result.sortedAt,
       failure: null,
@@ -806,6 +884,7 @@ export function withSortResult(
       status: "failed",
       risk: null,
       readableName: null,
+      sortedBy: null,
       sortFingerprint: result.sortFingerprint,
       sortedAt: result.sortedAt,
       failure: result.failure,
@@ -867,27 +946,41 @@ export function withoutStaleSendChoices(
  * and stale sorts ask, and a send choice on any group but Sends things out is ignored.
  */
 export function toolRunsWithoutAsking(map: ClassifierSortMap, tool: RiskInputSource): boolean {
-  const state = toolSortState(map, tool);
+  return sortRunsWithoutAsking(toolSortState(map, tool));
+}
+
+function sortRunsWithoutAsking(state: ClassifierToolSortState): boolean {
   if (state.status !== "current") return false;
   if (state.risk === "read" || state.risk === "write") return true;
   return state.risk === "outbound" && state.sendWithoutAsking;
 }
 
-/** The API view: each discovered tool's sort against its current risk inputs, and whether it asks. */
+/**
+ * The API view: each discovered tool's sort against its current risk inputs, whether it asks, and
+ * where it stands with the classifier. A tool without a current sort shows the free rule's name.
+ */
 export function classifierSortView(
-  map: ClassifierSortMap,
-  tools: readonly RiskInputSource[]
+  state: ClassifierStandingInput & { readonly discoveredTools: readonly DiscoveredTool[] }
 ): IntegrationClassifierToolSort[] {
-  return tools.map((tool) => {
-    const state = toolSortState(map, tool);
-    const current = state.status === "current";
+  const freeNames = readableToolNames(state.discoveredTools);
+  const keptOut = new Set(state.classifierKeptOutTools);
+  return toolStandings(state).map((standing) => {
+    const { tool, sort } = standing;
+    const current = sort.status === "current";
     return {
       toolName: tool.name,
-      status: state.status,
-      risk: current ? state.risk : null,
-      failure: state.status === "failed" ? state.failure : null,
-      sendWithoutAsking: current && state.sendWithoutAsking,
-      asksFirst: !toolRunsWithoutAsking(map, tool)
+      status: sort.status,
+      risk: current ? sort.risk : null,
+      failure: sort.status === "failed" ? sort.failure : null,
+      sendWithoutAsking: current && sort.sendWithoutAsking,
+      asksFirst: !sortRunsWithoutAsking(sort),
+      readableName: current ? sort.readableName : (freeNames.get(tool.name) ?? tool.name),
+      sortedAt: current ? sort.sortedAt : null,
+      sortedBy: current ? sort.sortedBy : null,
+      keptOut: keptOut.has(tool.name),
+      classifierState: standing.state,
+      preparationFailure: standing.state === "failed" ? standing.failure.reason : null,
+      preparedAt: standing.state === "ready" ? standing.entry.reviewedAt : null
     };
   });
 }

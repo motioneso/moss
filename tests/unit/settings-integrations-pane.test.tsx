@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { IntegrationDetail, IntegrationToolDescriptor } from "@moss/shared";
 
 vi.mock("react-router", () => ({
-  useSearchParams: () => [new URLSearchParams({ integration: "conn-1" }), vi.fn()]
+  useSearchParams: () => [new URLSearchParams({ integration: "conn-1" }), vi.fn()],
+  useNavigate: () => vi.fn()
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -30,8 +31,8 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   refreshIntegration: vi.fn(),
   deleteIntegration: vi.fn(),
   prepareIntegrationClassifierTools: vi.fn(),
-  saveIntegrationClassifierTool: vi.fn(),
-  removeIntegrationClassifierTool: vi.fn(),
+  sortIntegrationClassifierTools: vi.fn(),
+  setIntegrationKeptOut: vi.fn(),
   setIntegrationSendWithoutAsking: vi.fn()
 }));
 
@@ -81,7 +82,6 @@ function baseDetail(overrides: Partial<IntegrationDetail> = {}): IntegrationDeta
     groupOptIn: false,
     specPasted: false,
     classifierEnabled: false,
-    classifierPreparation: [],
     classifierTools: [],
     ...overrides
   };
@@ -184,13 +184,15 @@ describe("SettingsIntegrationsPane connection detail (#2984 R2.5)", () => {
     expect(html).not.toContain("Enable group");
   });
 
-  it("mounts the classifier section beside the tool controls (#2899)", () => {
+  it("puts the classifier panel in the Connection rail, below the connection (#2984 R2.5b)", () => {
     currentDetail.value = baseDetail({ tools: [tool({ name: "ToolA" })] });
 
     const html = renderToString(createElement(SettingsIntegrationsPane));
+    const rail = html.slice(html.indexOf('<aside class="intg-detail__rail"'));
 
-    expect(html).toContain("Let the classifier use this connection");
+    expect(rail).toContain("Let the classifier use this connection");
+    expect(rail.indexOf("Remove")).toBeLessThan(rail.indexOf("Let the classifier use"));
     expect(html).toContain("Enable ToolA");
-    expect(html).not.toContain("repeated");
+    expect(html).not.toContain("always ask");
   });
 });

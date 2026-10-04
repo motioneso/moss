@@ -1,0 +1,449 @@
+// @vitest-environment jsdom
+// Connection page classifier panel and sorting line (#2984 R2.5b): the seven panel states, the
+// one-time confirm, the failure lines, the sorting line, and the page's own updates before the
+// server answers.
+import { createElement } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type {
+  IntegrationClassifierRisk,
+  IntegrationClassifierToolSort,
+  IntegrationDetail
+} from "@moss/shared";
+
+import type * as LocaleFormat from "../../apps/web/src/locale/locale-format.js";
+
+const navigate = vi.hoisted(() => vi.fn());
+
+vi.mock("react-router", () => ({ useNavigate: () => navigate }));
+
+vi.mock("../../apps/web/src/locale/locale-format.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof LocaleFormat>();
+  return { ...actual, useUserLocale: () => actual.DEFAULT_LOCALE };
+});
+
+import {
+  DEFAULT_MODEL_PATH,
+  IntegrationClassifierBlock,
+  IntegrationSortingLine
+} from "../../apps/web/src/settings/integration-classifier-block.js";
+import {
+  classifierBlockState,
+  failureLine,
+  failureNeedsModel,
+  sortingLine,
+  withClassifierEnabled,
+  withKeptOut,
+  withPreparationRetried,
+  withSortRetried
+} from "../../apps/web/src/settings/integration-classifier-state.js";
+
+function sorted(
+  toolName: string,
+  risk: IntegrationClassifierRisk,
+  extra: Partial<IntegrationClassifierToolSort> = {}
+): IntegrationClassifierToolSort {
+  return {
+    toolName,
+    status: "current",
+    risk,
+    failure: null,
+    sendWithoutAsking: false,
+    asksFirst: risk === "outbound" || risk === "destructive",
+    readableName: toolName,
+    sortedAt: "2026-10-02T09:00:00.000Z",
+    sortedBy: null,
+    keptOut: false,
+    classifierState: "off",
+    preparationFailure: null,
+    preparedAt: null,
+    ...extra
+  };
+}
+
+const NAMES = ["GetState", "SetLight", "Notify", "Unlock"] as const;
+const RISKS: Record<(typeof NAMES)[number], IntegrationClassifierRisk> = {
+  GetState: "read",
+  SetLight: "write",
+  Notify: "outbound",
+  Unlock: "destructive"
+};
+
+/** Four tools, every one in `state` unless `states` says otherwise. */
+function detail(
+  overrides: Partial<IntegrationDetail> = {},
+  state: IntegrationClassifierToolSort["classifierState"] = "off",
+  states: Partial<Record<(typeof NAMES)[number], Partial<IntegrationClassifierToolSort>>> = {}
+): IntegrationDetail {
+  return {
+    id: "conn-1",
+    name: "Home Assistant",
+    kind: "mcp",
+    url: "http://homeassistant.local:8123",
+    enabled: true,
+    hasCredential: false,
+    toolCount: 4,
+    enabledToolCount: 4,
+    lastDiscoveryAt: null,
+    lastError: null,
+    credentialPlacement: null,
+    tools: NAMES.map((name) => ({
+      name,
+      description: `${name} does a thing`,
+      group: "",
+      inputSchema: null
+    })),
+    groups: [],
+    enabledGroups: [],
+    enabledTools: [],
+    mutedTools: [],
+    unsuppressedTools: [],
+    groupOptIn: false,
+    specPasted: false,
+    classifierEnabled: state !== "off",
+    classifierTools: NAMES.map((name) =>
+      sorted(name, RISKS[name], {
+        classifierState: state,
+        preparedAt: state === "ready" ? "2026-10-02T10:00:00.000Z" : null,
+        ...states[name]
+      })
+    ),
+    ...overrides
+  };
+}
+
+let renderer: ReactTestRenderer | undefined;
+const onSetEnabled = vi.fn();
+const onRetry = vi.fn();
+
+afterEach(() => {
+  act(() => renderer?.unmount());
+  renderer = undefined;
+  onSetEnabled.mockReset();
+  onRetry.mockReset();
+  navigate.mockReset();
+});
+
+function render(value: IntegrationDetail): void {
+  act(() => {
+    renderer = create(
+      createElement(IntegrationClassifierBlock, { detail: value, onSetEnabled, onRetry })
+    );
+  });
+}
+
+function flatten(children: unknown): string {
+  if (typeof children === "string" || typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(flatten).join("");
+  if (children && typeof children === "object" && "children" in children) {
+    return flatten((children as { children: unknown }).children);
+  }
+  return "";
+}
+
+/** The rendered words, with element boundaries dropped. */
+function words(): string {
+  return flatten(renderer!.toJSON()).replace(/\s+/g, " ");
+}
+
+function click(label: string): void {
+  const button = renderer!.root
+    .findAllByType("button")
+    .find((node) => flatten(node.props.children) === label);
+  if (!button) throw new Error(`no button "${label}"`);
+  act(() => button.props.onClick());
+}
+
+function switchInput() {
+  return renderer!.root.find(
+    (node) =>
+      node.type === "input" && node.props["aria-label"] === "Let the classifier use this connection"
+  );
+}
+
+describe("classifierBlockState", () => {
+  it("is off and counts the tools the classifier would prepare", () => {
+    const state = classifierBlockState(
+      detail({ mutedTools: ["SetLight"] }, "off", {
+        Notify: { keptOut: true },
+        Unlock: { status: "failed", risk: null }
+      })
+    );
+    expect(state).toMatchObject({ kind: "off", total: 1 });
+  });
+
+  it("is preparing while any tool waits for its first preparation", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", { Notify: { classifierState: "preparing" } })
+    );
+    expect(state).toMatchObject({ kind: "preparing", ready: 3, total: 4 });
+  });
+
+  it("is ready with the always-ask count and the newest preparation date", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", { Notify: { preparedAt: "2026-10-03T08:00:00.000Z" } })
+    );
+    expect(state).toMatchObject({
+      kind: "ready",
+      ready: 4,
+      total: 4,
+      alwaysAsk: 2,
+      preparedAt: "2026-10-03T08:00:00.000Z"
+    });
+  });
+
+  it("leaves kept-out and unused tools out of the count", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", {
+        Notify: { classifierState: "kept_out", keptOut: true },
+        Unlock: { classifierState: "not_used" }
+      })
+    );
+    expect(state).toMatchObject({ kind: "ready", ready: 2, total: 2 });
+  });
+
+  it("says a tool changed when ready tools wait only on preparing again", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", { SetLight: { classifierState: "preparing_again" } })
+    );
+    expect(state).toMatchObject({ kind: "changed", ready: 3, preparingAgain: 1, total: 4 });
+  });
+
+  it("couldn't prepare once nothing is still preparing, naming model trouble first", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", {
+        Notify: { classifierState: "failed", preparationFailure: "unsafe" },
+        Unlock: { classifierState: "failed", preparationFailure: "provider_error" }
+      })
+    );
+    expect(state).toMatchObject({ kind: "failed", ready: 2, failed: 2, failure: "provider_error" });
+  });
+
+  it("is paused when the connection is off or can't be reached", () => {
+    expect(classifierBlockState(detail({ lastError: "refused" }, "ready")).kind).toBe("paused");
+    expect(classifierBlockState(detail({ enabled: false }, "ready")).kind).toBe("paused");
+  });
+
+  it("says no tool is left when every tool is kept out", () => {
+    expect(classifierBlockState(detail({}, "kept_out")).kind).toBe("none");
+  });
+});
+
+describe("failureLine", () => {
+  const failed = (failure: IntegrationClassifierToolSort["preparationFailure"], ready = 0) =>
+    classifierBlockState(
+      detail({}, ready > 0 ? "ready" : "failed", {
+        Notify: { classifierState: "failed", preparationFailure: failure },
+        Unlock: { classifierState: "failed", preparationFailure: failure },
+        ...(ready > 0
+          ? {}
+          : {
+              GetState: { preparationFailure: failure },
+              SetLight: { preparationFailure: failure }
+            })
+      })
+    );
+
+  it("says the model didn't answer, for all or for some tools", () => {
+    expect(failureLine(failed("provider_error"))).toBe(
+      "Your default chat model didn't answer, so nothing was prepared."
+    );
+    expect(failureLine(failed("provider_error", 2))).toBe(
+      "Your default chat model didn't answer, so 2 tools weren't prepared."
+    );
+  });
+
+  it("says there is no default chat model, and offers to change it", () => {
+    expect(failureLine(failed("no_model"))).toBe(
+      "You don't have a default chat model, so nothing was prepared."
+    );
+    expect(failureNeedsModel(failed("no_model"))).toBe(true);
+  });
+
+  it("gives a short honest line for reasons a new model would not fix", () => {
+    expect(failureLine(failed("unsafe", 2))).toBe(
+      "2 tools weren't prepared, because their text held your saved sign-in details."
+    );
+    expect(failureLine(failed("too_many_tools"))).toBe(
+      "This connection has too many tools to prepare at once."
+    );
+    expect(failureNeedsModel(failed("unsafe", 2))).toBe(false);
+  });
+});
+
+describe("IntegrationClassifierBlock", () => {
+  it("1. off: says quick requests use the default model and how many tools it prepares", () => {
+    render(detail());
+    expect(switchInput().props.checked).toBe(false);
+    expect(words()).toContain(
+      "Off. Quick requests to Home Assistant go through your default model."
+    );
+    expect(words()).toContain("Turning it on prepares all 4 tools once.");
+    expect(words()).not.toContain("What is sent, and what it costs");
+  });
+
+  it("2. confirm: switching on shows what is sent before anything is sent", () => {
+    render(detail());
+    act(() => switchInput().props.onChange({ target: { checked: true } }));
+    expect(onSetEnabled).not.toHaveBeenCalled();
+    expect(words()).toContain("Prepare 4 tools for the classifier?");
+    for (const label of ["What is sent.", "Who reads it.", "What it costs.", "Not sent."]) {
+      expect(words()).toContain(label);
+    }
+    click("Cancel");
+    expect(onSetEnabled).not.toHaveBeenCalled();
+    expect(words()).not.toContain("Prepare 4 tools");
+
+    act(() => switchInput().props.onChange({ target: { checked: true } }));
+    click("Turn on and prepare");
+    expect(onSetEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it("3. preparing: shows progress and that the page can be left", () => {
+    render(detail({}, "ready", { Notify: { classifierState: "preparing" } }));
+    expect(words()).toContain("Preparing");
+    expect(words()).toContain("3 of 4 tools");
+    const bar = renderer!.root.find((node) => node.props.role === "progressbar");
+    expect(bar.props["aria-valuenow"]).toBe(3);
+    expect(words()).toContain("You can leave this page.");
+  });
+
+  it("4. ready: counts, the always-ask line, YOLO and the preparation date", () => {
+    render(detail({}, "ready"));
+    expect(words()).toContain("Ready");
+    expect(words()).toContain(
+      "4 of 4 tools can answer quick requests. 2 always ask you before they run."
+    );
+    expect(words()).toContain("YOLO mode skips the asking.");
+    expect(words()).toMatch(/Prepared on (2 October|October 2) by your default chat model\./);
+    expect(words()).toContain("What is sent, and what it costs");
+  });
+
+  it("5. a tool changed: says it is being prepared again", () => {
+    render(detail({}, "ready", { SetLight: { classifierState: "preparing_again" } }));
+    expect(words()).toContain("1 tool changed and is being prepared again.");
+    expect(words()).not.toContain("Prepared on");
+  });
+
+  it("6. couldn't prepare: the reason, Try again and Change default model", () => {
+    render(
+      detail({}, "failed", {
+        GetState: { preparationFailure: "provider_error" },
+        SetLight: { preparationFailure: "provider_error" },
+        Notify: { preparationFailure: "provider_error" },
+        Unlock: { preparationFailure: "provider_error" }
+      })
+    );
+    expect(words()).toContain("Couldn't prepare");
+    expect(words()).toContain(
+      "Your default chat model didn't answer, so nothing was prepared. Quick requests go through your default model meanwhile."
+    );
+    click("Try again");
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    click("Change default model");
+    expect(navigate).toHaveBeenCalledWith(DEFAULT_MODEL_PATH);
+  });
+
+  it("7. connection lost: paused, and picks up again by itself", () => {
+    render(detail({ lastError: "Connection refused" }, "ready"));
+    expect(words()).toContain("Paused");
+    expect(words()).toContain("Home Assistant can't be reached, so the classifier skips it.");
+  });
+
+  it("turns off at once, and shows the notice on request while on", () => {
+    render(detail({}, "ready"));
+    click("What is sent, and what it costs");
+    expect(words()).toContain("Who reads it.");
+    act(() => switchInput().props.onChange({ target: { checked: false } }));
+    expect(onSetEnabled).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("sortingLine", () => {
+  const day = (iso: string) => iso.slice(0, 10);
+
+  it("says Moss is sorting while any sort is pending", () => {
+    const line = sortingLine(detail({}, "off", { Notify: { status: "never_tried" } }), day);
+    expect(line.text).toMatch(/^Moss is sorting these tools\. Your default chat model reads/);
+  });
+
+  it("names the model that made the newest sort, and its date", () => {
+    const line = sortingLine(
+      detail({}, "off", {
+        Notify: {
+          sortedAt: "2026-10-03T08:00:00.000Z",
+          sortedBy: { model: "Claude Sonnet", provider: "Anthropic" }
+        }
+      }),
+      day
+    );
+    expect(line).toEqual({
+      text:
+        "Sorted by what they do on 2026-10-03. Claude Sonnet read each tool's name, description " +
+        "and inputs, and so did its provider if the model is hosted.",
+      failed: 0
+    });
+  });
+
+  it("falls back to the default chat model when the sorter is unknown, and counts failures", () => {
+    const line = sortingLine(
+      detail({}, "off", { Unlock: { status: "failed", risk: null, sortedAt: null } }),
+      day
+    );
+    expect(line.text).toContain("on 2026-10-02. Your default chat model read each tool's");
+    expect(line.text).toContain("1 tool couldn't be sorted.");
+    expect(line.failed).toBe(1);
+  });
+
+  it("renders Try again only when a sort failed", () => {
+    const value = detail({}, "off", { Unlock: { status: "failed", risk: null, sortedAt: null } });
+    act(() => {
+      renderer = create(createElement(IntegrationSortingLine, { detail: value, onRetry }));
+    });
+    click("Try again");
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    act(() =>
+      renderer!.update(createElement(IntegrationSortingLine, { detail: detail(), onRetry }))
+    );
+    expect(renderer!.root.findAllByType("button")).toHaveLength(0);
+  });
+});
+
+describe("the page's own updates before the server answers", () => {
+  it("switching on starts preparing the tools the classifier would use", () => {
+    const next = withClassifierEnabled(
+      detail({ mutedTools: ["SetLight"] }, "off", { Notify: { keptOut: true } }),
+      true
+    );
+    expect(next.classifierEnabled).toBe(true);
+    expect(next.classifierTools.map((tool) => tool.classifierState)).toEqual([
+      "preparing",
+      "not_used",
+      "kept_out",
+      "preparing"
+    ]);
+    expect(
+      withClassifierEnabled(next, false).classifierTools.every((t) => t.classifierState === "off")
+    ).toBe(true);
+  });
+
+  it("keeping out and letting back in move only the named tools", () => {
+    const out = withKeptOut(detail({}, "ready"), ["Notify"], true);
+    expect(out.classifierTools[2]).toMatchObject({ keptOut: true, classifierState: "kept_out" });
+    expect(out.classifierTools[0]).toMatchObject({ classifierState: "ready" });
+    const back = withKeptOut(out, ["Notify"], false);
+    expect(back.classifierTools[2]).toMatchObject({ keptOut: false, classifierState: "preparing" });
+    expect(withKeptOut(detail(), ["Notify"], false).classifierTools[2]?.classifierState).toBe(
+      "off"
+    );
+  });
+
+  it("Try again sends failed tools back to waiting", () => {
+    const failed = detail({}, "failed", { GetState: { status: "failed", risk: null } });
+    expect(
+      withPreparationRetried(failed).classifierTools.every((t) => t.classifierState === "preparing")
+    ).toBe(true);
+    expect(withSortRetried(failed).classifierTools[0]?.status).toBe("never_tried");
+  });
+});

@@ -18,6 +18,7 @@ import {
   type IntegrationSummary,
   type ListIntegrationsResponse,
   type PrepareIntegrationClassifierResponse,
+  type SetIntegrationKeptOutRequest,
   type SetIntegrationSendWithoutAskingRequest,
   type SortIntegrationClassifierResponse
 } from "@moss/shared";
@@ -26,7 +27,7 @@ import { resolveIntegrationsCipher } from "./credentials.js";
 import { candidateCache } from "./classifier-candidates.js";
 import { enqueueClassifierSort, type ClassifierSortJobOp } from "./classifier-sort-jobs.js";
 import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
-import { parseReviewedEntry } from "./classifier-settings.js";
+import { INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES, toolSortState } from "./classifier-settings.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
 import { IntegrationUserError } from "./errors.js";
@@ -62,10 +63,6 @@ export interface IntegrationsRouteDependencies {
 
 interface IdParams {
   readonly id: string;
-}
-
-interface ClassifierToolParams extends IdParams {
-  readonly toolName: string;
 }
 
 /** Patch fields that change which of a connection's tools chat can use. */
@@ -324,98 +321,42 @@ export function registerIntegrationsRoutes(
   });
 
   /**
-   * Save one owner-reviewed classifier tool preparation (#2884). The body is validated whole; a
-   * stale `reviewedFingerprint` (the definition changed since the tab loaded) is a 409, so an old
-   * tab can never approve a superseded review. Nothing is stored until this is called, so a
-   * cancelled review leaves no draft behind.
+   * #2984 R2.5b: the owner keeps tools out of the classifier, or lets them back in. Only
+   * discovered tool names are accepted, all or nothing. Letting tools back in with the switch on
+   * queues their preparation, and a sort first when any of them has no current sort.
    */
-  server.put<{ Params: ClassifierToolParams }>(
-    "/api/integrations/:id/classifier/tools/:toolName",
+  server.put<{ Params: IdParams }>(
+    "/api/integrations/:id/classifier/kept-out",
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const parsed = parseReviewedEntry(request.body);
-        if (!parsed.ok) {
-          return reply.code(400).send({ error: parsed.problems.join("; ") });
-        }
-        // #2984 R2.4: eligibility no longer reads opt-in, so the screen's opt-in choice is kept
-        // as the kept-out list instead. An opted-out tool must not return by automatic preparation.
-        const result = await dependencies.dataContext.withDataContext(
-          accessContext,
-          async (scopedDb) => {
-            const saved = await repository.saveClassifierToolReview(
-              scopedDb,
-              request.params.id,
-              request.params.toolName,
-              parsed.value
-            );
-            if (saved.status !== "saved") return saved;
-            const updated = await repository.setClassifierToolKeptOut(
-              scopedDb,
-              request.params.id,
-              request.params.toolName,
-              !parsed.value.optIn
-            );
-            return updated ? { ...saved, connection: updated } : saved;
-          }
+        const body = parseKeptOut(request.body);
+        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.setClassifierToolsKeptOut(
+            scopedDb,
+            request.params.id,
+            body.toolNames,
+            body.keptOut
+          )
         );
-        if (result.status === "not_found") {
-          return reply.code(404).send({ error: "Integration not found" });
+        if (result.status === "not_found") throw new HttpError(404, "Integration not found");
+        if (result.status === "unknown_tool") {
+          throw new HttpError(400, "That tool is not on this connection.");
         }
-        if (result.status === "conflict") {
-          return reply.code(409).send({
-            error:
-              result.reason === "unknown_tool"
-                ? "That tool is no longer available."
-                : "That tool changed since you opened it. Reload and review it again."
-          });
-        }
-        if (result.status === "too_many") {
-          return reply.code(400).send({ error: "This connection has too many reviews saved." });
-        }
+        const updated = result.connection;
         cache.drop(accessContext.actorUserId);
-        candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
-        return toDetail(result.connection, result.connection.discoveredTools);
-      } catch (error) {
-        return handleRouteError(error, reply);
-      }
-    }
-  );
-
-  /**
-   * Remove one saved classifier preparation entry (opt-out). The tool is also kept out, so
-   * automatic preparation does not bring it back.
-   */
-  server.delete<{ Params: ClassifierToolParams }>(
-    "/api/integrations/:id/classifier/tools/:toolName",
-    async (request, reply) => {
-      try {
-        const accessContext = await dependencies.resolveAccessContext(request);
-        const updated = await dependencies.dataContext.withDataContext(
-          accessContext,
-          async (scopedDb) => {
-            const removed = await repository.removeClassifierToolReview(
-              scopedDb,
-              request.params.id,
-              request.params.toolName
-            );
-            if (!removed) return null;
-            // Only a discovered name is kept out, so the list cannot grow with arbitrary names.
-            const discovered = removed.discoveredTools.some(
-              (tool) => tool.name === request.params.toolName
-            );
-            if (!discovered) return removed;
-            return repository.setClassifierToolKeptOut(
-              scopedDb,
-              request.params.id,
-              request.params.toolName,
-              true
-            );
-          }
-        );
-        if (!updated) return reply.code(404).send({ error: "Integration not found" });
-        cache.drop(accessContext.actorUserId);
-        candidateCache.dropConnection(accessContext.actorUserId, request.params.id);
+        candidateCache.dropConnection(accessContext.actorUserId, updated.id);
+        if (!body.keptOut && updated.classifierEnabled) {
+          const names = new Set(body.toolNames);
+          const needsSort = updated.discoveredTools.some(
+            (tool) =>
+              names.has(tool.name) &&
+              toolSortState(updated.classifierSort, tool).status !== "current"
+          );
+          // Every sort is followed by preparation, so a sort alone covers both.
+          if (needsSort) await queueSort(request, accessContext.actorUserId, updated.id);
+          else await queuePreparation(request, accessContext.actorUserId, updated.id);
+        }
         return toDetail(updated, updated.discoveredTools);
       } catch (error) {
         return handleRouteError(error, reply);
@@ -685,6 +626,22 @@ function parseSendWithoutAsking(body: unknown): SetIntegrationSendWithoutAskingR
     throw new HttpError(400, "A tool name is too long");
   }
   return { allow: value.allow, toolNames: [...new Set(toolNames)] };
+}
+
+function parseKeptOut(body: unknown): SetIntegrationKeptOutRequest {
+  const value = requireObject(body);
+  if (typeof value.keptOut !== "boolean") throw new HttpError(400, "keptOut must be a boolean");
+  const toolNames = requiredStringArray(value.toolNames, "toolNames");
+  if (toolNames.length === 0 || toolNames.length > INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES) {
+    throw new HttpError(
+      400,
+      `toolNames must hold 1 to ${INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES} names`
+    );
+  }
+  if (toolNames.some((name) => name.length > TOOL_NAME_MAX_LENGTH)) {
+    throw new HttpError(400, "A tool name is too long");
+  }
+  return { keptOut: value.keptOut, toolNames: [...new Set(toolNames)] };
 }
 
 function handleRouteError(error: unknown, reply: FastifyReply) {

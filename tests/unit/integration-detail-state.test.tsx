@@ -16,7 +16,10 @@ import type {
 const api = vi.hoisted(() => ({
   getIntegration: vi.fn(),
   updateIntegration: vi.fn(),
-  setIntegrationSendWithoutAsking: vi.fn()
+  setIntegrationSendWithoutAsking: vi.fn(),
+  setIntegrationKeptOut: vi.fn(),
+  prepareIntegrationClassifierTools: vi.fn(),
+  sortIntegrationClassifierTools: vi.fn()
 }));
 
 vi.mock("../../apps/web/src/api/client.js", () => api);
@@ -39,7 +42,14 @@ function sorted(
     risk: status === "current" ? risk : null,
     failure: null,
     sendWithoutAsking: false,
-    asksFirst: status !== "current" || risk === "outbound" || risk === "destructive"
+    asksFirst: status !== "current" || risk === "outbound" || risk === "destructive",
+    readableName: toolName,
+    sortedAt: status === "current" ? "2026-10-02T09:00:00.000Z" : null,
+    sortedBy: null,
+    keptOut: false,
+    classifierState: "off",
+    preparationFailure: null,
+    preparedAt: null
   };
 }
 
@@ -70,7 +80,6 @@ function detail(overrides: Partial<IntegrationDetail> = {}): IntegrationDetail {
     groupOptIn: false,
     specPasted: false,
     classifierEnabled: false,
-    classifierPreparation: [],
     classifierTools: [
       sorted("read_a", "read"),
       sorted("read_b", "read"),
@@ -109,6 +118,9 @@ beforeEach(() => {
   api.getIntegration.mockReset();
   api.updateIntegration.mockReset();
   api.setIntegrationSendWithoutAsking.mockReset();
+  api.setIntegrationKeptOut.mockReset();
+  api.prepareIntegrationClassifierTools.mockReset();
+  api.sortIntegrationClassifierTools.mockReset();
   onError.mockReset();
 });
 
@@ -232,6 +244,107 @@ describe("useIntegrationDetail sorting", () => {
     await act(async () => {
       await vi.waitFor(() =>
         expect(shown().classifierTools.every((tool) => tool.status === "current")).toBe(true)
+      );
+    });
+
+    const reads = api.getIntegration.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS * 3);
+    });
+    expect(api.getIntegration).toHaveBeenCalledTimes(reads);
+  });
+});
+
+describe("useIntegrationDetail classifier (#2984 R2.5b)", () => {
+  const keptOut = (name: string) =>
+    shown().classifierTools.find((tool) => tool.toolName === name)!.keptOut;
+
+  it("keeps a tool out, then Undo lets it back in, in click order", async () => {
+    let stored = detail();
+    api.getIntegration.mockImplementation(async () => stored);
+    api.setIntegrationKeptOut.mockImplementation(
+      async (_id: string, body: { keptOut: boolean; toolNames: string[] }) => {
+        stored = {
+          ...stored,
+          classifierTools: stored.classifierTools.map((tool) =>
+            body.toolNames.includes(tool.toolName) ? { ...tool, keptOut: body.keptOut } : tool
+          )
+        };
+        return stored;
+      }
+    );
+    await mount();
+
+    act(() => state!.setKeptOut(["send_a"], true));
+    expect(keptOut("send_a")).toBe(true);
+    act(() => state!.setKeptOut(["send_a"], false));
+    expect(keptOut("send_a")).toBe(false);
+
+    await act(async () => {
+      await vi.waitFor(() => expect(api.getIntegration).toHaveBeenCalledTimes(2));
+    });
+    expect(api.setIntegrationKeptOut.mock.calls.map((call) => call[1])).toEqual([
+      { keptOut: true, toolNames: ["send_a"] },
+      { keptOut: false, toolNames: ["send_a"] }
+    ]);
+    expect(keptOut("send_a")).toBe(false);
+  });
+
+  it("rolls a refused keep-out back to what the server holds, and reports it", async () => {
+    const stored = detail();
+    api.getIntegration.mockImplementation(async () => stored);
+    api.setIntegrationKeptOut.mockRejectedValue(new Error("refused"));
+    await mount();
+
+    act(() => state!.setKeptOut(["read_a"], true));
+    expect(keptOut("read_a")).toBe(true);
+    await act(async () => {
+      await vi.waitFor(() => expect(api.getIntegration).toHaveBeenCalledTimes(2));
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(keptOut("read_a")).toBe(false);
+  });
+
+  it("turns the classifier on through the connection, and Try again asks for preparation and sorting", async () => {
+    const stored = detail();
+    api.getIntegration.mockImplementation(async () => stored);
+    api.updateIntegration.mockResolvedValue(stored);
+    api.prepareIntegrationClassifierTools.mockResolvedValue({});
+    api.sortIntegrationClassifierTools.mockResolvedValue({ status: "queued" });
+    await mount();
+
+    act(() => state!.setClassifierEnabled(true));
+    expect(shown().classifierEnabled).toBe(true);
+    act(() => state!.retryPreparation());
+    act(() => state!.retrySort());
+    await act(async () => {
+      await vi.waitFor(() => expect(api.sortIntegrationClassifierTools).toHaveBeenCalledTimes(1));
+    });
+
+    expect(api.updateIntegration).toHaveBeenCalledWith("conn-1", { classifierEnabled: true });
+    expect(api.prepareIntegrationClassifierTools).toHaveBeenCalledWith("conn-1", {});
+    expect(api.sortIntegrationClassifierTools).toHaveBeenCalledWith("conn-1");
+  });
+
+  it("re-reads while tools are being prepared, then stops", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const prepared = (classifierState: IntegrationClassifierToolSort["classifierState"]) =>
+      detail({
+        classifierEnabled: true,
+        classifierTools: detail().classifierTools.map((tool) => ({ ...tool, classifierState }))
+      });
+    let stored = prepared("preparing");
+    api.getIntegration.mockImplementation(async () => stored);
+    await mount();
+
+    stored = prepared("ready");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SORT_POLL_MS);
+    });
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(shown().classifierTools.every((tool) => tool.classifierState === "ready")).toBe(true)
       );
     });
 
