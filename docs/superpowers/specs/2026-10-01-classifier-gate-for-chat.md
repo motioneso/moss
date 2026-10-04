@@ -104,7 +104,8 @@ of rules. That path already provides:
 
 - the per-tool risk level (`read`, `write`, `outbound`, `destructive`). A connected tool's level
   comes from Moss's sorting pass (section 8.2) and sets the gate's confidence bar. Outside YOLO a
-  safe group runs without asking, and Sensitive or unsorted tools ask (section 8.3)
+  look-up or change tool runs without asking, a sending tool asks unless the owner allows it, and
+  Sensitive or unsorted tools ask (section 8.3)
 - the user's trust setting per tool family and the per-call confirmation override
 - YOLO handling. A non-read tool in YOLO mode still goes to an approval card when its family is not
   trusted for auto-run or a per-call override applies, and it is rate limited
@@ -247,13 +248,26 @@ Ruling 7's line names inputs as well as name and description, because the pass s
 
 ### 8.2 The sorting pass
 
-- **When.** On connection add, and when discovery finds new or changed tool definitions. Only new and
-  changed tools are sent. An unchanged definition is never sorted twice. Never per chat message.
+- **When.** On connection add, when discovery finds new or changed tools, and once for every existing
+  connection (below). Only tools without a current sort are sent. A tool whose risk inputs are
+  unchanged is never sorted twice. Never per chat message.
 - **Model.** The user's current default chat model, through the same selection preparation already
   uses. Never the classifier. No provider or model name in code.
-- **Sent.** For each tool: its raw name, its description and its input schema, with credential
-  header parameters and default or example values removed, as preparation does today. Nothing else.
-  Never the connection address, sign-in details, headers, secrets, device lists or tool results.
+- **Sent.** For each tool: its raw name, its description, its group label and a reduced input schema.
+  The reduced schema keeps only property names, types, required lists, nesting (`items`, `anyOf`,
+  `oneOf`, `allOf`) and property descriptions. Every other schema key is dropped, including `const`,
+  `enum`, `default`, `example`, `examples`, `pattern`, `format`, `title` and vendor `x-` keys.
+  Credential header parameters are removed as preparation does today.
+- **Never sent.** The connection address, sign-in details, headers, the stored credential, device
+  lists and tool results.
+- **Credential check.** Before each call Moss checks every string it would send against the
+  connection's own stored credential, in plain, base64 and URL-encoded forms, held in memory only. A
+  tool whose text contains it is not sent. It stays unsorted with a "Could not sort safely" note, so
+  it asks. The match is never logged.
+- **Limit of the claim.** Names, descriptions and property descriptions go out as the service
+  publishes them. Moss cannot tell whether a service has written some other secret into its own
+  descriptions, so the spec claims only the reduced schema, the never-sent list and the credential
+  check.
 - **Batched.** One call covers many tools, with a bound on tools per call and on output size.
 - **Returned per tool.** A group and a readable name. Groups map to risk.
 
@@ -265,9 +279,15 @@ Ruling 7's line names inputs as well as name and description, because the pass s
 | Sensitive        | `destructive` |
 
 - **Risk rule, in code.** A tool's risk is the higher of the model's group and the tool's own signal
-  that raises risk (a destructive hint, a web service's delete method). A read-only hint or a web
+  that raises risk (a destructive hint, a web service's `DELETE` method). A read-only hint or a web
   service's read method never lowers the model's group. A tool the model skips or answers invalidly
   is Sensitive.
+- **Risk inputs and staleness.** The code rule reads one risk-inputs record per tool: the definition
+  fields the current fingerprint covers, plus the web service's HTTP method from the tool's call
+  recipe. The rule's code takes only that record, so it cannot read a field outside it. The sort
+  fingerprint hashes the same record. A change to any risk input makes the sort stale, including
+  `PUT` becoming `DELETE` under the same name, summary and schema. The existing definition
+  fingerprint excludes the call recipe and still governs preparation.
 - **Before sorting finishes** a tool has no group. It works in ordinary chat, asks before it runs
   and is out of the classifier.
 - **Readable name.** Code makes one at once from the raw name: split the words, drop a prefix the
@@ -276,25 +296,35 @@ Ruling 7's line names inputs as well as name and description, because the pass s
   stays searchable.
 - **Untrusted data.** Tool names, descriptions and model answers are data, never instructions. The
   prompt carries a worked example and the untrusted-data contract, under 150 words.
-- **Storage.** On the owner's connection row: group, readable name, definition fingerprint and
-  sorted time. Owner-only row-level security with no admin bypass. Deleted with the connection. Job
+- **Storage.** On the owner's connection row: group, readable name, sort fingerprint, sort status
+  (current, failed or never tried) and sorted time. Owner-only row-level security with no admin bypass. Deleted with the connection. Job
   payloads carry only the connection ID, the actor and the job kind.
+- **Existing connections.** Connections made before sorting ships have no sort. A one-time check at
+  worker start enqueues one sorting job per connection that has never-tried tools, keyed so it runs
+  once per connection. Discovery and turning the classifier switch on also enqueue a sort for any
+  never-tried tool. A failed tool waits for "Try again" and is never retried by these paths. Until
+  sorted, a tool asks, as every connected tool does today.
 - **On screen.** While the pass runs, tools list A to Z with a "Sorting" note. Afterwards they group by
   what they do. A web-service connection keeps its own sections on screen; its risk still follows
   the rule above.
 
-### 8.3 Safe tools run, risky tools ask
+### 8.3 Which tools ask before running
 
-Ben ruled on 2026-10-04 that connected tools Moss sorts as safe run without asking, and risky ones
-still ask, outside YOLO (section 8.10).
+Ben ruled on 2026-10-04 how sorted connected tools ask outside YOLO (section 8.10).
 
-- **Safe.** A tool sorted Looks things up, Changes things or Sends things out runs without a card in
-  ordinary chat, and the gate may run it under that group's bar (section 3.6).
-- **Risky.** A tool sorted Sensitive starts on and asks before every run, from ordinary chat and
-  from the classifier. The page marks it "Asks first".
-- **Fails closed.** A tool with no sort, a failed sort, a stale sort (its definition fingerprint has
-  changed) or an unreadable sort record is treated as risky and asks. A tool the model skips or
-  answers invalidly is already Sensitive (section 8.2).
+| Group            | Outside YOLO                                               |
+| ---------------- | ---------------------------------------------------------- |
+| Looks things up  | Runs without asking                                        |
+| Changes things   | Runs without asking                                        |
+| Sends things out | Asks first by default; the owner can allow sending (below) |
+| Sensitive        | Always asks; no choice turns this off                      |
+
+- A tool that runs without asking needs no card in ordinary chat, and the gate may run it under its
+  group's bar (section 3.6). A tool that asks shows "Asks first" on the page.
+- **Fails closed.** A tool with no sort, a failed sort, a stale sort (any risk input has changed,
+  section 8.2) or an unreadable sort record is treated as risky and asks. A tool the model skips or
+  answers invalidly is already Sensitive (section 8.2). A stale sort also clears a send-without-asking
+  choice.
 - **YOLO.** YOLO mode skips the asking. It is off by default and admin-only. Decisions D1 and D2 of
   `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (locked with Ben,
   2026-06-29) auto-run calls that would otherwise ask, destructive ones included. Issue 2419's
@@ -304,14 +334,40 @@ still ask, outside YOLO (section 8.10).
   main model handles the message and shows the usual card.
 - The user cannot change a tool's group in version one.
 
+#### Sending without asking
+
+- **Per tool.** The menu on a Sends things out row gains "Send without asking", with the small line
+  "Chat sends with this tool without checking with you". It sits above "Keep out of the classifier"
+  in the tool menu shown open in the mockups' Home Assistant frames. Once chosen, the row's "Asks
+  first" chip gives way to a faint "Sends without asking" note, and the menu item reads "Ask before
+  sending".
+- **Per group.** The Sends things out group header holds "N of M on" and "Turn all off" in the
+  mockups. It gains a second link button, "Send all without asking". That button confirms once,
+  inline: "Let chat send with these N tools without checking with you?" with "Allow" and "Cancel".
+  Allow sets the choice on every tool in the group at that moment.
+- **Undo.** One click. "Ask before sending" in a tool's menu clears that tool. While any tool in the
+  group has the choice, the header shows "Ask first for all", which clears every tool in the group.
+  Undo needs no confirmation, because it only adds asking.
+- **Not a standing rule.** The group button acts on the tools there now. A tool that joins the group
+  later, or whose risk inputs change, asks first until the owner allows it.
+- **Only Sends things out.** The choice never appears on Sensitive tools. The gateway ignores a
+  stored choice on a tool whose current sort is anything but Sends things out.
+- **Storage.** A per-tool flag on the owner's connection row, beside the sort record and tied to the
+  sort fingerprint. Owner-only row-level security, so an admin can neither read nor set it. Deleted
+  with the connection. It changes only through the owner's own integrations requests, never a job.
+- **Mockups.** The integrations-redesign mockups do not show these controls yet. Plan slice R2.5
+  adds them to the mockups' tool menu and Sends things out group header and gets Ben's sign-off on
+  the picture before building.
+
 #### The gateway change
 
 Today every connected tool asks with YOLO off, because its synthetic manifest carries risk
 `outbound` and the gateway's ordinary policy confirms every outbound tool. The change:
 
-- The integrations module marks a connected tool's synthetic manifest as sorted safe only when the
-  owner's stored sort for that tool is a safe group and its fingerprint matches the current
-  definition. Every other case leaves the mark off.
+- The integrations module marks a connected tool's synthetic manifest as sorted safe only when its
+  sort fingerprint matches the tool's current risk inputs, including the HTTP method, and its sorted
+  group is Looks things up, Changes things, or Sends things out with the owner's send-without-asking
+  choice. Every other case leaves the mark off.
 - The gateway's ordinary policy runs an external tool that carries the mark, unless a per-call
   confirmation override applies. The check sits after the destructive check and before the outbound
   check. A first-party outbound tool never carries the mark and still asks.
@@ -329,7 +385,8 @@ Today every connected tool asks with YOLO off, because its synthetic manifest ca
 - Preparation output is validated and saved directly, with no review step. The model still never
   writes executable template code, never sets risk and never approves a tool.
 - Ready reads, for example, "74 of 75 tools can answer quick requests. 6 always ask you before they
-  run." A short line under it says YOLO mode skips the asking.
+  run." The second count covers every tool that asks first now: Sensitive tools and Sends things out
+  tools without the choice. A short line under it says YOLO mode skips the asking.
 - A changed tool is sorted and prepared again by itself, and its row says "Preparing again". Until
   then it is out of the classifier and still works in ordinary chat. A new tool starts on.
 - A failed sort or preparation shows "Try again". No automatic retry repeats the cost.
@@ -344,7 +401,8 @@ user, with a reviewed risk".
 - The connection is enabled and its classifier switch is on.
 - The tool is on for ordinary chat.
 - The tool is not kept out of the classifier.
-- Its sort and preparation match its current definition fingerprint.
+- Its sort matches its current risk inputs and its preparation matches its current definition
+  fingerprint.
 - Its inputs suit the configured classifier, with current candidates where needed (unchanged).
 
 The built gate has a per-tool release table, written only by an admin in plan task 4.2. The On
@@ -368,9 +426,12 @@ changes both.
 
 - The settings list is hidden so the tools get the full width, with "Back to connections" at the top.
 - Each tool shows its readable name in bold and its raw name small and faint underneath.
-- Tools group by what they do once sorted. Sensitive tools show "Asks first", and one short line
-  says YOLO mode skips the asking.
-- Each tool keeps one switch for ordinary chat. Its menu holds "Keep out of the classifier".
+- Tools group by what they do once sorted. Tools that ask first show "Asks first", and one short
+  line says YOLO mode skips the asking.
+- Each tool keeps one switch for ordinary chat. Its menu holds "Keep out of the classifier", and on
+  Sends things out rows also "Send without asking" or "Ask before sending".
+- The Sends things out group header adds "Send all without asking" or "Ask first for all" (section
+  8.3).
 - A side rail holds the classifier switch and its states: off, turning on (the notice), preparing,
   ready, a tool preparing again, could not prepare, and connection lost.
 - The Connection block says when the tools were sorted, and that the default chat model (and its
@@ -386,12 +447,13 @@ changes both.
 | Risk (2b.2)               | Chosen by the user; unknown means ineligible           | Set by the sorting pass and the code rule; unsorted means ineligible                      |
 | Preparation (2b.3)        | The screen requests drafts; the user saves each tool   | A background job prepares every eligible tool and saves validated output                  |
 | Review editor (2b.4)      | Per-tool editor with a diff and approve                | Removed; replaced by section 8.6                                                          |
-| Changed tool (2b.2)       | Stale until the user prepares and reviews it again     | Sorted and prepared again by itself                                                       |
+| Changed tool (2b.2)       | Stale until the user prepares and reviews it again     | Sorted again when any risk input changes, method included; prepared again by itself       |
+| Existing connections      | No sort exists                                         | Sorted once by a background job, with no reconnect and no tool edit                       |
 | Release record (1.2, 4.2) | Admin rows per tool; On needs one row                  | Connected tools released by sort and preparation; On needs the admin shadow-review record |
-| Ordinary-chat approval    | Every connected tool asks outside YOLO                 | Safe groups run; Sensitive, unsorted and stale tools ask; YOLO skips the asking           |
+| Ordinary-chat approval    | Every connected tool asks outside YOLO                 | Look-up and change tools run; sending asks unless allowed; Sensitive always asks          |
 | Notice                    | One-time notice before preparing                       | Kept for the classifier switch; sorting has a page line instead                           |
 | Tool names on screen      | Raw names                                              | Readable name, raw name underneath                                                        |
-| Live proof (2b.6)         | Prepare, edit and approve a draft; opt in chosen tools | All tools on with no review; sorting calls counted; safe runs and Sensitive asks          |
+| Live proof (2b.6)         | Prepare, edit and approve a draft; opt in chosen tools | All tools on with no review; sorting calls counted; who asks, by group, checked           |
 
 Stored preparation entries from the old flow convert once. An entry the owner saved with opt-in off
 becomes kept out, because that may have been a choice. An owner-reviewed risk is kept only when it is
@@ -399,8 +461,16 @@ higher than the sorted group.
 
 ### 8.8 Security posture
 
-- Only tool names, descriptions and input schemas reach the sorting and preparation prompts, with
-  credential header parameters and default or example values removed. Secrets never do.
+- The sorting prompt carries tool names, descriptions, group labels and the reduced input schema of
+  section 8.2. It never carries the connection address, sign-in details, headers, the stored
+  credential, device lists or tool results. A tool whose text contains the stored credential is not
+  sent.
+- Moss promises no more than that. Text a service publishes in its own names and descriptions goes
+  out as published. Section 8.2 states this limit, and the page line says descriptions are read.
+- Preparation sends the same definition fields with its own cleaning, which keeps choice lists. It
+  gets the same credential check in plan slice R2.4. Its shipped notice says secrets are never sent,
+  and a code comment says a schema-embedded secret never reaches the model. Both overstate it, and
+  plan slice R2.2 corrects them.
 - Groups, readable names and prepared text are private owner data. They never reach logs or job
   payloads.
 - Code signals can raise a tool's risk, never lower it. A model answer can never lower risk below a
@@ -408,17 +478,23 @@ higher than the sorted group.
 - Gate execution still goes through the gateway, whose only change is the sorted-safe check in
   section 8.3. Kept-out, ordinary-chat state and the definition fingerprint are checked again at
   dispatch.
-- Only a current safe sort lets a connected tool run without asking. No sort, a failed or stale
-  sort, or an unreadable record means it asks.
-- Tests seen failing with the guard removed: secrets absent from the sorting prompt for a
-  connection whose configuration holds a secret; a Sensitive, unsorted or stale tool asking with
+- Only a current sort lets a connected tool run without asking: Looks things up, Changes things, or
+  Sends things out with the owner's choice. No sort, a failed or stale sort, or an unreadable record
+  means it asks. Sensitive always asks outside YOLO.
+- Tests seen failing with the guard removed: a synthetic secret placed in a `const`, `enum`,
+  `default`, `example`, `pattern`, `title` or vendor key is absent from the sorting prompt; a tool
+  whose description or property description holds the stored credential, plain or encoded, is not
+  sent and asks; a `PUT` to `DELETE` change under the same name and schema makes the sort stale and
+  the tool asks; a send-without-asking choice stored on a Sensitive tool is ignored, a stale sort
+  clears it, and another owner or an admin cannot set it; a Sensitive, unsorted or stale tool asking with
   YOLO off; a first-party outbound tool still asking; and a Sensitive tool refused by the gate below
   the 0.98 bar.
 
 ### 8.9 Out of scope
 
 - A per-tool risk choice by the user.
-- A per-tool "run without asking" setting.
+- A run-without-asking choice for Sensitive tools.
+- A standing group rule that covers tools added later.
 - A gate-raised approval card.
 
 ### 8.10 Decided after review (Ben, 2026-10-04)
@@ -426,5 +502,8 @@ higher than the sorted group.
 1. One look at the shadow-review report per classifier selection is enough to unlock On. There is no
    per-tool sign-off (section 8.5). This replaces plan task 4.2's rule that one tool's results must
    not release another.
-2. Connected tools Moss sorts as safe run without asking, and risky ones still ask, outside YOLO.
+2. Outside YOLO, connected tools Moss sorts as Looks things up or Changes things run without asking.
    This needs the gateway change in section 8.3.
+3. Sends things out tools ask first by default. The owner can allow sending without asking, per
+   tool or for the whole group, and undo it with one click. Sensitive tools always ask outside YOLO
+   (section 8.3).

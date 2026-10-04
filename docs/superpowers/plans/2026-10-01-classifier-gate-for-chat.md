@@ -49,12 +49,12 @@ that replace it. Where this section and an older task disagree, this section win
 | 2b.1 mockups, risk review editor | Superseded by `docs/superpowers/mockups/integrations-redesign/` (PR 2985).                                                                                               |
 | Risk options table, ruling 5     | Superseded. The sorting pass and a code rule set risk (spec 8.2); hints only raise it.                                                                                   |
 | 2b.2 opt-in and reviewed risk    | Storage stays. Meaning changes: on unless kept out; risk from the sort. Stale entries re-sort and re-prepare by themselves.                                              |
-| 2b.3 preparation, ruling 6       | The draft logic stays. It runs as a background job when the connection's switch turns on, and validated output is saved with no review.                                  |
+| 2b.3 preparation, ruling 6       | The draft logic stays. It runs as a background job when the connection's switch turns on, saves validated output with no review, and gains the credential check (R2.4).  |
 | 2b.4 review editor               | Removed from the screen by R2.5.                                                                                                                                         |
 | 2b.6 screen proof                | Replaced by R2.6.                                                                                                                                                        |
 | 1.2 On precondition              | "At least one approved release row" becomes "the admin shadow-review record for the current classifier selection" (R2.4).                                                |
 | 4.2 release eligibility          | Per-tool admin approval is retired. Connected tools are released by sort and preparation; module tools by declaration; Ben's single shadow review unlocks On (spec 8.5). |
-| Ordinary policy, "out of scope"  | Narrowed. Connected tools sorted safe run without asking; Sensitive, unsorted and stale ones ask; YOLO keeps its own spec's D1 and D2 (spec 8.3, R2.3).                  |
+| Ordinary policy, "out of scope"  | Narrowed. Look-up and change tools run; sending asks unless the owner allows it; Sensitive, unsorted and stale ones ask; YOLO unchanged (spec 8.3, R2.3).                |
 
 Unchanged: the gate engine, shadow records and their retention, the activity log, the gateway's
 no-card path, candidate lists and the reply contract (2b.5), the handled-turn lifecycle (4.1), and
@@ -67,35 +67,56 @@ verify-gate skill for any database test. R2.1 to R2.3 change no screen. R2.4 nee
 and starts only after PR 2976 (activity history) merges, because both edit the gate's wiring files.
 R2.3 needs R2.1 and R2.2. R2.5 needs R2.1 to R2.4. R2.6 needs all of them.
 
-**R2.1 Sort storage, readable names and the old-entry conversion (one backend session).** Own
-`packages/integrations/src/classifier-settings.ts`, the repository and a new migration under
-`packages/integrations/sql/`. Add the per-tool sort record (group, readable name, fingerprint,
-sorted time) and the "kept out" flag to the owner's connection row, and the free rule that makes a
-readable name from a raw name. Convert old entries once (spec 8.7). No model call yet.
+**R2.1 Sort storage, risk inputs, readable names and the old-entry conversion (one backend
+session).** Own `packages/integrations/src/classifier-settings.ts`, the repository, a new
+`classifier-risk-inputs.ts` and a new migration under `packages/integrations/sql/`. Add the per-tool
+sort record (group, readable name, sort fingerprint, sort status of current, failed or never tried,
+sorted time), the "kept out" flag and the send-without-asking flag to the owner's connection row.
+The send flag is tied to the sort fingerprint and cleared when the sort goes stale. Define the risk-inputs record:
+the fields the definition fingerprint covers plus the HTTP method from the tool's call recipe. The
+sort fingerprint hashes that record; the definition fingerprint stays as it is for preparation. Add
+the free rule that makes a readable name from a raw name. Convert old entries once (spec 8.7). No
+model call yet.
 
-- Proves: two owners and an admin cannot read each other's sort records; the free rule names
-  Home Assistant and web-service tools sensibly; an old entry with opt-in off becomes kept out; an
-  old reviewed risk survives only when higher; a changed fingerprint makes the sort stale.
+- Proves: two owners and an admin cannot read each other's sort records; an operation that changes
+  from `PUT` to `DELETE` with the same operationId, summary and schema changes the sort fingerprint,
+  seen failing with the method left out of the record; the free rule names Home Assistant and
+  web-service tools sensibly; an old entry with opt-in off becomes kept out; an old reviewed risk
+  survives only when higher; existing connections convert with every tool never tried.
 
 **R2.2 The sorting pass (one AI and integrations session).** Own a new
 `packages/integrations/src/classifier-sorting.ts`, its job wiring and the composition port that
 already selects the default chat model for preparation. One batched, bounded call per change sends
-only names, descriptions and cleaned input schemas. Apply the code risk rule. Validate names. Run
-on connection add and on changed discovery, with the classifier on or off. A failure leaves tools
-unsorted and shows "Try again"; no automatic retry.
+only names, descriptions, group labels and the reduced input schema (spec 8.2). Run the credential
+check before every call; a hit leaves the tool unsorted with "Could not sort safely". Apply the code
+risk rule, which takes only the risk-inputs record. Validate names. Run on connection add and on
+changed discovery, with the classifier on or off. Add the existing-connection path: a one-time
+check at worker start enqueues one job per connection with never-tried tools, keyed to run once,
+and discovery and the switch also enqueue never-tried tools. A failure marks tools failed and shows
+"Try again"; no path retries a failed tool by itself. Correct every copy of the overstated secrecy
+claim: the preparation disclosure text in `packages/shared/src/integrations-api.ts` and the comment
+on the payload builder in `packages/integrations/src/classifier-preparation.ts`.
 
-- Proves: the prompt holds no address, header, sign-in detail or secret for a connection whose
-  configuration carries one, seen failing with the cleaning removed; one call per changed
-  definition and none for an unchanged one; a read-only hint never lowers a group; a destructive
-  hint or delete method raises it; a skipped or invalid tool becomes Sensitive; a hostile
-  description cannot change another tool's group or name; job payloads carry IDs only.
+- Proves, each seen failing with its protection removed: a synthetic secret placed in a `const`,
+  `enum`, `default`, `example`, `pattern`, `title` or vendor key never reaches the prompt; a tool
+  whose description or property description holds the stored credential, plain, base64 or
+  URL-encoded, is not sent and asks; the prompt holds no address, header or sign-in detail.
+- Also proves: an existing connection with unchanged tools and no sort becomes sorted without
+  reconnecting or editing a tool; the one-time job runs once per connection; a failed tool is not
+  retried by discovery, the switch or the one-time job; one call per changed tool and none for an
+  unchanged one; a `PUT` to `DELETE` change re-sorts the tool to Sensitive; a read-only hint never
+  lowers a group; a destructive hint or `DELETE` method raises it; a skipped or invalid tool becomes
+  Sensitive; a hostile description cannot change another tool's group or name; job payloads carry
+  IDs only and never the matched credential.
 
 **R2.3 Safe tools run, risky tools ask (one gateway and integrations session).** Own the classifier
 metadata in `packages/integrations/src/tool-manifests.ts`, the eligibility read in
 `classifier-settings.ts`, and `packages/ai/src/gateway/policy.ts`. Carry the gateway change in spec
 8.3. The integrations module marks a connected tool's synthetic manifest sorted safe only when the
-owner's current sort is a safe group and its fingerprint matches. The gateway's ordinary policy runs
-an external tool with that mark unless a confirmation override applies; the check sits after the
+owner's sort fingerprint matches the tool's current risk inputs and its group is Looks things up,
+Changes things, or Sends things out with the send-without-asking flag. Add the owner-only requests
+that set and clear that flag, per tool and for every tool in the group. The gateway's ordinary
+policy runs an external tool with that mark unless a confirmation override applies; the check sits after the
 destructive check and before the outbound check. The sorted group also replaces the owner-reviewed
 risk as the gate's risk, including the empty-success reply fallback that 3.5 noted still keys off
 the server's read-only hint. Expose whether a tool asks first for the page. Manifest risk and
@@ -105,7 +126,9 @@ changes with the classifier off.
 - Proves, each seen failing with its guard removed: a safe connected tool runs with no card with
   YOLO off; a Sensitive, unsorted, failed-sort or stale tool asks; an unreadable sort record asks; a
   first-party outbound tool still asks; a confirmation override still asks; another owner's sort
-  never marks a tool safe.
+  never marks a tool safe; a tool whose method changed from `PUT` to `DELETE` after its safe sort
+  asks at the next call; a Sends things out tool asks until allowed and runs after; the flag on a
+  Sensitive tool is ignored; another owner or an admin cannot set the flag.
 - Also proves: each group gets its bar, and a Sensitive tool below 0.98 is refused; the gate runs a
   safe connected tool outside YOLO and declines a Sensitive one with zero handler calls; YOLO
   routing is byte-identical before and after.
@@ -114,7 +137,8 @@ changes with the classifier off.
 and a background job in `packages/integrations/src/`, `packages/chat/src/live/classifier-gate-wiring.ts`,
 the settings On check in `packages/settings/src/runtime-config-routes.ts`, and a new chat migration
 for the admin shadow-review record. Turning the connection's switch on prepares every sorted tool
-that is on, saving validated output directly. A changed tool re-prepares by itself. The gate's
+that is on, saving validated output directly. Preparation runs the same credential check as
+sorting before each call. A changed tool re-prepares by itself. The gate's
 release check reads connected-tool eligibility (spec 8.5) and module declarations, not the per-tool
 admin table. On needs the shadow-review record for the current classifier selection, checked when
 read. The per-tool table stops being read; its drop is a later migration.
@@ -123,16 +147,21 @@ Start only after PR 2976 (activity history) merges; it edits the same gate wirin
 - Proves: eligibility drops when a tool is kept out, switched off, changed or unsorted, and returns
   after automatic re-preparation; a forged request cannot set On without the review record; a
   changed classifier selection drops a stored On to shadow at read time; one owner's preparation
-  never releases another owner's tool; preparation job payloads carry IDs only.
+  never releases another owner's tool; preparation job payloads carry IDs only; preparation runs
+  the same credential check as sorting, seen failing with the check removed.
 
 **R2.5 The connection's page (one UI session).** Use the design-system skill. Own
 `apps/web/src/settings/settings-integrations-pane.tsx` and focused new components. Build the
 pieces in spec 8.6 from the integrations-redesign mockups: full width with "Back to connections",
 readable and raw names, groups, "Asks first" with its YOLO line, "Keep out of the classifier",
-the classifier rail and its states with the "always ask" count, and the sorting line. Remove the
-per-tool review editor.
+the classifier rail and its states with the "always ask" count, and the sorting line. Add the
+send-without-asking controls of spec 8.3: "Send without asking" and "Ask before sending" in a
+Sends things out tool's menu, and "Send all without asking" with its inline confirm and "Ask first
+for all" in that group's header. First add them to the integrations-redesign mockups and get Ben's
+sign-off on the picture. Remove the per-tool review editor.
 
-- Proves: unit tests for each classifier state, keep-out and the sorting line; design token and
+- Proves: unit tests for each classifier state, keep-out, the sorting line, and allowing and undoing
+  sending per tool and per group; design token and
   class checks; desktop 1440x900 and phone 390x844 screenshots with no crowded text; app map
   matches the screen.
 
@@ -140,10 +169,12 @@ per-tool review editor.
 with a real connection on a dev instance, through the real screen, with no faked responses. A
 stand-in tool server is allowed for the claim about what Moss sends, disclosed on the PR.
 
-- Proves: a new connection's tools all start on with no review; sorting runs with the classifier
+- Proves: a new connection's tools all start on with no review; a connection made before the
+  upgrade gets sorted with no reconnect; sorting runs with the classifier
   off and its call count matches the changed tools; the sorting line shows; turning the classifier
   on prepares with no further clicks; with YOLO off a safe tool runs with no card and a Sensitive
-  tool shows "Asks first" and asks; YOLO handles a Sensitive tool only above its bar; a kept-out
+  tool shows "Asks first" and asks; a Sends things out tool asks, runs once allowed from the group
+  header, and asks again after "Ask first for all"; YOLO handles a Sensitive tool only above its bar; a kept-out
   tool stays usable in ordinary chat and never appears in shadow records; shadow records appear for released tools.
 
 After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as written.
@@ -156,8 +187,8 @@ After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as
 18. **Sorting pass.** One cheap default-model pass sorts each tool by what it does, even with the
     classifier off. It also writes the readable name.
 19. **Risky tools start on and still ask.** Sensitive tools show "Asks first" and ask before every
-    run outside YOLO (see ruling 25 for safe tools). YOLO mode, off by default and admin-only, skips the asking under decisions D1
-    and D2 of `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (spec 8.3).
+    run outside YOLO (rulings 25 and 26 cover the other groups). YOLO mode, off by default and
+    admin-only, skips the asking under decisions D1 and D2 of `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (spec 8.3).
 20. **Keep out of the classifier** in a tool's menu; ordinary chat is unaffected.
 21. **The name stays "Classifier".**
 22. **No sorting notice.** A line on the connection's page says what is sent and who reads it.
@@ -165,9 +196,13 @@ After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as
 
 24. **One shadow review per classifier (Ben, 2026-10-04).** One look at the practice report per
     classifier selection unlocks On. No per-tool sign-off (spec 8.10).
-25. **Safe connected tools run without asking (Ben, 2026-10-04).** Outside YOLO, tools sorted safe
-    run without a card; Sensitive, unsorted, failed-sort and stale tools ask. Needs the gateway
-    change carried by R2.3 (spec 8.3).
+25. **Look-up and change tools run without asking (Ben, 2026-10-04).** Outside YOLO, tools sorted
+    Looks things up or Changes things run without a card; Sensitive, unsorted, failed-sort and
+    stale tools ask. Needs the gateway change carried by R2.3 (spec 8.3).
+26. **Sending asks first unless allowed (Ben, 2026-10-04).** Sends things out tools ask first by
+    default. The owner can allow sending without asking per tool or for the whole group, and undo
+    it with one click. Sensitive always asks outside YOLO. R2.3 carries the rule and R2.5 the
+    controls (spec 8.3).
 
 No questions from revision 2 remain open.
 
