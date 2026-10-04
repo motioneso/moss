@@ -158,3 +158,23 @@ describe("markdown such as the release notes", () => {
     );
   });
 });
+
+describe("surfaces that must load under the deployed content security policy", () => {
+  it("points the install manifest link at a same-origin address, never a blob address", () => {
+    const link = document.createElement("link");
+    link.setAttribute("rel", "manifest");
+    link.setAttribute("href", "/manifest.webmanifest");
+    document.head.appendChild(link);
+    try {
+      bindAssistantUser("user-a");
+      rememberAssistantName("Juniper");
+      expect(link.getAttribute("href")).toMatch(/^\/api\/me\/install-manifest\?v=Juniper$/);
+      expect(link.getAttribute("crossorigin")).toBe("use-credentials");
+
+      bindAssistantUser(null);
+      expect(link.getAttribute("href")).toBe("/manifest.webmanifest");
+    } finally {
+      link.remove();
+    }
+  });
+});

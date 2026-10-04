@@ -37,45 +37,24 @@ let epoch = 0;
 const listeners = new Set<() => void>();
 
 const MANIFEST_URL = "/manifest.webmanifest";
-let manifestBase: Promise<Record<string, unknown> | null> | null = null;
-let manifestBlobUrl: string | null = null;
+const USER_MANIFEST_URL = "/api/me/install-manifest";
 
-// Installing the app reads the manifest link, so it points at a copy carrying the current name.
-// The static file keeps the default name and is restored when the name is the default.
+// Installing the app reads the manifest link. Signed in, it points at the server's per-user
+// manifest, a same-origin address the deployed content security policy allows. Signed out, or
+// with the default name, it points at the static file.
 function syncManifest(): void {
-  if (typeof document === "undefined" || typeof fetch !== "function") return;
+  if (typeof document === "undefined") return;
   const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   if (!link) return;
-  if (current === DEFAULT_ASSISTANT_NAME) {
-    link.setAttribute("href", MANIFEST_URL);
-    return;
-  }
-  const forName = current;
-  manifestBase ??= fetch(MANIFEST_URL)
-    .then((response) =>
-      response.ok ? (response.json() as Promise<Record<string, unknown>>) : null
-    )
-    .catch(() => null);
-  void manifestBase.then((base) => {
-    if (!base || forName !== current) return;
-    const origin = globalThis.location.origin;
-    const icons = Array.isArray(base.icons)
-      ? base.icons.map((icon: { src: string }) => ({ ...icon, src: origin + icon.src }))
-      : base.icons;
-    const next = {
-      ...base,
-      name: forName,
-      short_name: forName,
-      description: personalize(String(base.description ?? ""), forName),
-      start_url: origin + String(base.start_url ?? "/"),
-      scope: origin + String(base.scope ?? "/"),
-      icons
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(next)], { type: "application/json" }));
-    if (manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
-    manifestBlobUrl = url;
-    link.setAttribute("href", url);
-  });
+  const personalized = activeUserId !== null && current !== DEFAULT_ASSISTANT_NAME;
+  // Browsers fetch a manifest without cookies unless told otherwise, and the per-user route
+  // needs the session cookie.
+  if (personalized) link.setAttribute("crossorigin", "use-credentials");
+  else link.removeAttribute("crossorigin");
+  link.setAttribute(
+    "href",
+    personalized ? `${USER_MANIFEST_URL}?v=${encodeURIComponent(current)}` : MANIFEST_URL
+  );
 }
 
 function syncDocumentTitle(): void {
@@ -127,6 +106,7 @@ export function bindAssistantUser(userId: string | null): void {
   if (userId === activeUserId) return;
   activeUserId = userId;
   epoch += 1;
+  syncManifest();
   if (userId === null) {
     applyName(readSaved() || DEFAULT_ASSISTANT_NAME, true);
     return;
