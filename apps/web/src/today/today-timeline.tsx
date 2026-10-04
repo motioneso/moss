@@ -4,6 +4,7 @@ import { RowButton } from "@moss/ui";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import type { ScheduleClosingLine, ScheduleGapRow } from "./day-plan-gaps.js";
 import type { DayItem } from "./day-plan-view-model.js";
+import { personalize } from "../api/use-assistant-name";
 
 export function durationText(minutes: number | null): string {
   if (minutes === null || minutes <= 0) return "";
@@ -131,7 +132,7 @@ export function TimelineLegend(props: {
     <div className="tl-legend">
       <span>
         <i className="tl-legend__filled" aria-hidden="true" />
-        {props.proposed === true ? "Proposed task" : "Moss-planned task"}
+        {props.proposed === true ? "Proposed task" : personalize("Moss-planned task")}
       </span>
       <span>
         <i className="tl-legend__open" aria-hidden="true" />

@@ -11,6 +11,7 @@ import { Button } from "@moss/ui";
 
 import { getBriefingRun, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
+import { personalize } from "../api/use-assistant-name";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const POLL_INTERVAL_MS = 1_000;
@@ -148,29 +149,33 @@ function ActiveTodayEmailRefreshAction(props: TodayEmailRefreshActionProps) {
 
   let message: string | null = null;
   if (refreshMutation.isError) {
-    message =
-      "Moss couldn’t start an email refresh. Your current report and plan choices are still available.";
+    message = personalize(
+      "Moss couldn’t start an email refresh. Your current report and plan choices are still available."
+    );
   } else if (refreshStatus === "failed") {
     message =
       "Email couldn’t be refreshed. Your current report and plan choices are still available.";
   } else if (refreshPending) {
     message = refreshQuery.isError ? "Checking whether email has finished…" : "Refreshing email…";
   } else if (runMutation.isError) {
-    message =
-      "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available.";
+    message = personalize(
+      "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available."
+    );
   } else if (runPending) {
     message = "Email refreshed. Preparing an updated briefing…";
   } else if (runQuery.data?.state === "failed" || runQuery.isError) {
-    message =
-      "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available.";
+    message = personalize(
+      "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available."
+    );
   } else if (runQuery.data?.state === "ready" && runQuery.data.run?.status === "succeeded") {
     message =
       refreshStatus === "partial"
         ? "Some email may still be missing. The updated briefing is ready."
         : "Email refreshed. The updated briefing is ready.";
   } else if (runQuery.data?.state === "ready") {
-    message =
-      "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available.";
+    message = personalize(
+      "Email refreshed, but Moss couldn’t prepare an updated briefing. Your current report and plan choices are still available."
+    );
   }
 
   const handleRefresh = () => {

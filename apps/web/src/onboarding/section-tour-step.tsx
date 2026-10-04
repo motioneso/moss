@@ -3,7 +3,7 @@ import { CalendarDays, Compass, HeartPulse, House, ListChecks, Settings } from "
 
 import { getModules, getMyModules } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name";
 import { buildTourSections, type TourSection } from "./section-tour-model";
 import { FootNote, StepHeader } from "./onboarding-ui";
 
@@ -51,7 +51,7 @@ export function SectionTourStep(props: { readonly onDone: () => void }) {
       <StepHeader
         eyebrow="Step 3 · Where to go"
         title="Here’s where to start."
-        lede="A brief orientation to help you find your way around Moss."
+        lede={personalize("A brief orientation to help you find your way around Moss.")}
       />
       <div className="onb-tour">
         {sections.map((section) => {

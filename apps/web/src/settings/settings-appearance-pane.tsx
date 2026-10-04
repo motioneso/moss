@@ -44,6 +44,7 @@ import {
 } from "./settings-theme-preview";
 import { Field, Group, Note, PaneHead, Row } from "./settings-ui";
 import { Badge, BrandMark, Button, ColorBox, ColorPopover, Segmented } from "@moss/ui";
+import { assistantName, personalize } from "../api/use-assistant-name";
 
 interface DraftTheme {
   readonly id: string;
@@ -118,7 +119,7 @@ const FIELD_GROUPS: readonly {
 const NAV_FIELD: FieldSpec = {
   key: "nav",
   name: "Background",
-  desc: "Behind the links, icons and the Moss mark"
+  desc: personalize("Behind the links, icons and the Moss mark")
 };
 
 const HEADER_FIELD: FieldSpec = {
@@ -525,7 +526,7 @@ export function AppearancePane() {
                 >
                   <span className="theme-navstrip__brand">
                     <BrandMark size={18} />
-                    Moss
+                    {assistantName()}
                   </span>
                   <span className="theme-navstrip__link is-active">
                     <House size={15} />
@@ -545,7 +546,7 @@ export function AppearancePane() {
                     {draft.tokens.nav && navColors
                       ? `Text and icons switch to ${navColors.textKind} on this color. Labels read at ${navColors.textRatio.toFixed(1)} to 1, quieter links at ${navColors.mutedRatio.toFixed(1)} to 1. Both clear the 4.5 to 1 floor.${
                           navColors.strongText
-                            ? ` This is a middle tone, so Moss uses full ${navColors.textKind === "dark" ? "black" : "white"} text.`
+                            ? ` This is a middle tone, so ${assistantName()} uses full ${navColors.textKind === "dark" ? "black" : "white"} text.`
                             : ""
                         }`
                       : "Using the default pale nav."}

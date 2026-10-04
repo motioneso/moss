@@ -1,4 +1,5 @@
 import type { RegisterPushSubscriptionRequest } from "@moss/shared";
+import { assistantName } from "../api/use-assistant-name";
 
 // #2308: keep this browser's push subscription and the server's device records in step.
 // "This device" is the record whose endpoint fingerprint matches the subscription the
@@ -80,7 +81,7 @@ export class PushCleanupIncompleteError extends Error {
   constructor(cause: unknown) {
     const reason = (cause instanceof Error ? cause.message : String(cause)).replace(/[.\s]*$/, ".");
     super(
-      `${reason} This browser kept the push registration it had just made, and Moss may ` +
+      `${reason} This browser kept the push registration it had just made, and ${assistantName()} may ` +
         "or may not have saved it. Try again to finish turning push on, or clear it in this " +
         "site's browser settings and remove any extra device listed here."
     );

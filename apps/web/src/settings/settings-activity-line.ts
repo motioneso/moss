@@ -1,6 +1,7 @@
 import type { ActionAuditLogEntryDto, ActivityLineDto } from "@moss/shared";
 
 import type { BadgeTone } from "./settings-ui.js";
+import { assistantName, personalize } from "../api/use-assistant-name";
 
 /**
  * #2956 (slice C): the Activity page's fixed vocabulary. Titles, sub-lines, badges and failure
@@ -156,14 +157,14 @@ export function failureSentence(code: string | null, service?: string, limit?: s
   switch (code) {
     case "timeout":
       return name && limit
-        ? `${name} did not answer within ${limit}, so Moss stopped waiting.`
-        : "Something did not answer in time, so Moss stopped waiting.";
+        ? `${name} did not answer within ${limit}, so ${assistantName()} stopped waiting.`
+        : personalize("Something did not answer in time, so Moss stopped waiting.");
     case "rate_limited":
-      return "The provider asked Moss to slow down. Moss will try again later.";
+      return personalize("The provider asked Moss to slow down. Moss will try again later.");
     case "auth_failed":
       return "The provider refused the sign-in. Check the account in Settings, AI.";
     case "bad_shape":
-      return "The model's answer was not in the shape Moss asked for.";
+      return personalize("The model's answer was not in the shape Moss asked for.");
     case "provider_down":
       return "The provider was unreachable.";
     case "cancelled":
@@ -171,7 +172,7 @@ export function failureSentence(code: string | null, service?: string, limit?: s
     case "tool_denied":
       return "You declined this action.";
     default:
-      return "Something went wrong that Moss could not name.";
+      return personalize("Something went wrong that Moss could not name.");
   }
 }
 

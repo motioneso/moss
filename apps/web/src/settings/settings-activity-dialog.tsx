@@ -7,6 +7,7 @@ import type { LocaleSettingsDto } from "@moss/shared";
 import { formatDate } from "../locale/locale-format.js";
 import type { ActivityBadge } from "./settings-activity-line.js";
 import { failureSentence } from "./settings-activity-line.js";
+import { assistantName } from "../api/use-assistant-name";
 
 export interface ActivityDialogStep {
   readonly key: string;
@@ -38,7 +39,7 @@ export interface ActivityDialogData {
 
 function expiryNote(expiresAt: string, locale: LocaleSettingsDto): string {
   const day = formatDate(expiresAt, locale, { day: "numeric", month: "long" });
-  return `Moss deletes the quoted words and step details on ${day}. The line itself stays.`;
+  return `${assistantName()} deletes the quoted words and step details on ${day}. The line itself stays.`;
 }
 
 export function ActivityDialog(props: {

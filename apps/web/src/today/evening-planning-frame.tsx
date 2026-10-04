@@ -30,6 +30,7 @@ import {
   EVENING_SNAPSHOT_ROOM_NOTE,
   timeLabel
 } from "./today-labels.js";
+import { personalize } from "../api/use-assistant-name";
 
 export const EVENING_STEP_IDS = ["reflect", "commitments", "shape", "review"] as const;
 
@@ -152,7 +153,7 @@ function snapshotEntries(props: EveningSnapshotProps): SnapshotEntry[] {
       startsAt: event.startsAt,
       minutes: Math.round((Date.parse(event.endsAt) - Date.parse(event.startsAt)) / 60_000),
       title: event.title,
-      note: event.isMossBlock ? "Scheduled by Moss" : "Calendar",
+      note: event.isMossBlock ? personalize("Scheduled by Moss") : "Calendar",
       draft: false
     }));
   const drafts = props.proposals.flatMap((block) => {
@@ -288,12 +289,12 @@ export function EveningNoteComposer(props: { readonly evening: EveningPlanningCo
   return (
     <div className="evening-plan__note-form">
       <label className="evening-plan__field-label" htmlFor="evening-reflect-note">
-        {EVENING_REFLECT_NOTE_LABEL}
+        {personalize(EVENING_REFLECT_NOTE_LABEL)}
       </label>
       <div className="evening-plan__note-composer">
         <textarea
           id="evening-reflect-note"
-          aria-label={EVENING_REFLECT_NOTE_LABEL}
+          aria-label={personalize(EVENING_REFLECT_NOTE_LABEL)}
           rows={2}
           maxLength={500}
           placeholder={EVENING_REFLECT_NOTE_PLACEHOLDER}

@@ -20,10 +20,10 @@ import {
   getModules,
   getMyModules,
   getOnboardingStatus,
-  getPersonaSettings,
   shipExternalModule,
   throwAwayExternalModuleDraft
 } from "./api/client";
+import { assistantName, loadPersonaSettings } from "./api/use-assistant-name";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";
@@ -195,9 +195,9 @@ export function App() {
   // same cache entry and fall back gracefully while it's pending, so boot must not gate on it.
   useQuery({
     queryKey: queryKeys.settings.persona,
-    queryFn: getPersonaSettings,
+    queryFn: loadPersonaSettings,
     enabled: meQuery.isSuccess,
-    retry: false // getPersonaSettings is itself bounded by a 30s timeout (client.ts)
+    retry: false // loadPersonaSettings is itself bounded by a 30s timeout (client.ts)
   });
 
   const handleAuthenticated = async () => {
@@ -559,7 +559,7 @@ function LoadingScreen() {
   return (
     <main className="center-screen">
       <div className="loading-mark" aria-hidden="true" />
-      <p>Loading Moss</p>
+      <p>Loading {assistantName()}</p>
     </main>
   );
 }
@@ -568,7 +568,7 @@ function FatalState(props: { readonly message: string; readonly onRetry: () => v
   return (
     <main className="center-screen">
       <section className="auth-panel">
-        <h1>Moss</h1>
+        <h1>{assistantName()}</h1>
         <p className="form-error">{props.message}</p>
         <button className="primary-button" type="button" onClick={props.onRetry}>
           Retry
@@ -582,7 +582,7 @@ function PendingApprovalScreen() {
   return (
     <main className="center-screen">
       <section className="auth-panel">
-        <h1>Moss</h1>
+        <h1>{assistantName()}</h1>
         <p>Your account is pending approval by an administrator.</p>
         <p className="form-hint">
           You will be able to sign in once your account has been approved.
@@ -596,7 +596,7 @@ function DeactivatedScreen() {
   return (
     <main className="center-screen">
       <section className="auth-panel">
-        <h1>Moss</h1>
+        <h1>{assistantName()}</h1>
         <p className="form-error">Your account has been deactivated.</p>
         <p className="form-hint">Please contact your administrator for assistance.</p>
       </section>
@@ -605,5 +605,5 @@ function DeactivatedScreen() {
 }
 
 function readErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unable to load Moss";
+  return error instanceof Error ? error.message : `Unable to load ${assistantName()}`;
 }

@@ -20,7 +20,6 @@ import {
   EVENING_SHAPE_PROSE,
   EVENING_SHAPE_REPLY,
   EVENING_START_LABEL,
-  EVENING_SPEAKER_NAME,
   EVENING_SPEAKER_NOTE,
   eveningCommitProse,
   NO_ROOM_FOUND
@@ -28,6 +27,7 @@ import {
 import { BriefingMarkdown, EVENING_SECTION_NAMES } from "./briefing-markdown.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
+import { assistantName } from "../api/use-assistant-name";
 
 const CAPACITY_OPTIONS = [
   ["normal", "A steady day", "The main task, with room for follow-through."],
@@ -78,10 +78,10 @@ export function ReflectStep(props: {
     <>
       <div className="evening-plan__speaker">
         <span className="evening-plan__initial" aria-hidden="true">
-          {EVENING_SPEAKER_NAME.slice(0, 1)}
+          {assistantName().slice(0, 1)}
         </span>
         <div>
-          {EVENING_SPEAKER_NAME}
+          {assistantName()}
           <small>{EVENING_SPEAKER_NOTE}</small>
         </div>
       </div>
@@ -118,10 +118,10 @@ export function StepIntro(props: {
     <>
       <div className="evening-plan__speaker">
         <span className="evening-plan__initial" aria-hidden="true">
-          {EVENING_SPEAKER_NAME.slice(0, 1)}
+          {assistantName().slice(0, 1)}
         </span>
         <div>
-          {EVENING_SPEAKER_NAME}
+          {assistantName()}
           <small>{props.note}</small>
         </div>
       </div>
@@ -160,10 +160,10 @@ export function CommitSection(props: {
     >
       <div className="evening-plan__speaker">
         <span className="evening-plan__initial" aria-hidden="true">
-          {EVENING_SPEAKER_NAME.slice(0, 1)}
+          {assistantName().slice(0, 1)}
         </span>
         <div>
-          {EVENING_SPEAKER_NAME}
+          {assistantName()}
           <small>{EVENING_COMMIT_NOTE}</small>
         </div>
       </div>

@@ -18,7 +18,7 @@ import {
 } from "../api/people-client";
 import { listSourceBehaviors, putSourceBehavior } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name";
 import { useFeedback } from "./settings-feedback";
 import {
   findSourceBehaviorEnabled,
@@ -411,7 +411,9 @@ export function SettingsPeoplePane() {
       <Group title="Add a person manually">
         <Row
           name="Add a person manually"
-          desc="Creates a canonical Markdown People note in the selected Moss folder."
+          desc={personalize(
+            "Creates a canonical Markdown People note in the selected Moss folder."
+          )}
           control={
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input

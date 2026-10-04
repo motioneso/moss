@@ -11,7 +11,7 @@ import {
   pollOnboardingProviderLogin,
   submitOnboardingProviderLoginToken
 } from "../api/onboarding-connect-client";
-import { useAssistantName } from "../api/use-assistant-name";
+import { useAssistantName, personalize } from "../api/use-assistant-name";
 
 // #2027 added google: the Gemini command-line tool now has a sign-in adapter on the server, so the
 // dialog can drive its link-and-paste flow like the other two.
@@ -332,7 +332,7 @@ export function ProviderLoginDialog(props: {
       {state.phase === "error" ? (
         <div role="alert">
           <p>
-            <Info size={15} aria-hidden="true" /> {state.error ?? "Login failed."}
+            <Info size={15} aria-hidden="true" /> {personalize(state.error ?? "Login failed.")}
           </p>
           <Button variant="secondary" size="sm" onClick={() => void beginLogin()}>
             Try again

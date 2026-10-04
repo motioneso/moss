@@ -20,6 +20,7 @@ import { ModuleCredentialsSection } from "./module-credentials-section.js";
 import { useFeedback } from "./settings-feedback.js";
 import { readError } from "./settings-types.js";
 import { Note, Row, Switch } from "./settings-ui.js";
+import { assistantName, personalize } from "../api/use-assistant-name";
 
 // #996/#860: props threaded down from InstanceModulesPane (Task 12) so an installed
 // registry row can reuse the same setExternalModuleEnabled mutation the External-modules
@@ -39,7 +40,7 @@ const STATE_LABELS: Record<ModuleRegistryRowDto["state"], string> = {
   "update-pending-restart": "Update downloaded. Restart to apply.",
   "install-failed": "Install failed",
   "declared-not-present": "Declared in compose — will install on restart",
-  incompatible: "Incompatible with this Moss version"
+  incompatible: personalize("Incompatible with this Moss version")
 };
 
 // #1187 decision 4: lead the pre-download confirm with a plain consequence sentence built
@@ -114,7 +115,7 @@ export function libraryAction(row: ModuleRegistryRowDto): LibraryAction {
       return {
         kind: "none",
         label: STATE_LABELS.incompatible,
-        reason: row.requiresCore ? `Requires Moss ${row.requiresCore}.` : undefined
+        reason: row.requiresCore ? `Requires ${assistantName()} ${row.requiresCore}.` : undefined
       };
   }
 }
@@ -144,7 +145,9 @@ export function ModuleRegistrySection({
       downloadRegistryModule(input.id, input.version),
     onSuccess: (result) => {
       invalidate();
-      toast(`${result.module.name} downloaded — restart Moss to apply`, { tone: "ready" });
+      toast(`${result.module.name} downloaded — restart ${assistantName()} to apply`, {
+        tone: "ready"
+      });
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
