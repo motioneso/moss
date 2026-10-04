@@ -14,7 +14,7 @@ import {
   withoutStaleSendChoices,
   withPreparationFailure,
   withSendWithoutAsking,
-  withSortResult,
+  withToolSortResults,
   type ClassifierPreparationEntry,
   type ClassifierPreparationFailure,
   type ClassifierPreparationMap,
@@ -106,6 +106,13 @@ export type SetSendWithoutAskingResult =
   /** A named tool is gone, or has no current Sends things out sort. Nothing was written. */
   | { readonly status: "refused"; readonly toolName: string };
 
+/** Outcome of keeping some tools out of the classifier or letting them back in (#2984). */
+export type SetKeptOutResult =
+  | { readonly status: "saved"; readonly connection: ConnectionRow }
+  | { readonly status: "not_found" }
+  /** A named tool is not discovered on the connection. Nothing was written. */
+  | { readonly status: "unknown_tool"; readonly toolName: string };
+
 interface ConnectionSqlRow {
   id: string;
   owner_user_id: string;
@@ -188,6 +195,15 @@ export class IntegrationsRepository {
     `.execute(scopedDb.db);
 
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
+  /**
+   * Read the connection and lock its row for the rest of the transaction, so a classifier run
+   * picks and marks its tools as one step.
+   */
+  async getConnectionForUpdate(scopedDb: DataContextDb, id: string): Promise<ConnectionRow | null> {
+    assertDataContextDb(scopedDb);
+    return this.lockConnection(scopedDb, id);
   }
 
   private async lockConnection(scopedDb: DataContextDb, id: string): Promise<ConnectionRow | null> {
@@ -390,34 +406,11 @@ export class IntegrationsRepository {
     return (result.numAffectedRows ?? 0n) > 0n;
   }
 
-  /** Remove one saved classifier preparation entry (opt-out / discard a stale review). */
-  async removeClassifierToolReview(
-    scopedDb: DataContextDb,
-    id: string,
-    toolName: string
-  ): Promise<ConnectionRow | null> {
-    assertDataContextDb(scopedDb);
-
-    // One statement, one key: removing a tool cannot clobber a concurrent save of another tool.
-    const result = await sql<ConnectionSqlRow>`
-      UPDATE app.integration_connections
-      SET classifier_preparation = CASE
-            WHEN ${WELL_FORMED_PREPARATION}
-            THEN classifier_preparation #- ARRAY['entries', ${toolName}]
-            ELSE classifier_preparation
-          END,
-          updated_at = now()
-      WHERE id = ${id}::uuid
-      RETURNING ${sql.raw(SELECT_COLUMNS)}
-    `.execute(scopedDb.db);
-
-    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
-  }
-
   /**
    * Store sorting results for some of a connection's tools (#2984). A result for a tool that is no
-   * longer discovered, or whose shape is not storable, is skipped. The row is locked for the
-   * request transaction, so the whole-map write cannot lose a concurrent change.
+   * longer discovered, made for an older definition, or whose shape is not storable, is skipped.
+   * The row is locked for the request transaction, so the whole-map write cannot lose a
+   * concurrent change.
    */
   async saveClassifierToolSorts(
     scopedDb: DataContextDb,
@@ -428,12 +421,7 @@ export class IntegrationsRepository {
 
     const row = await this.lockConnection(scopedDb, id);
     if (!row) return null;
-    const discovered = new Set(row.discoveredTools.map((tool) => tool.name));
-    let sort = row.classifierSort;
-    for (const { toolName, result } of results) {
-      if (!discovered.has(toolName)) continue;
-      sort = withSortResult(sort, toolName, result) ?? sort;
-    }
+    const sort = withToolSortResults(row.classifierSort, row.discoveredTools, results);
     return this.writeSort(scopedDb, id, sort);
   }
 
@@ -462,29 +450,40 @@ export class IntegrationsRepository {
     return updated ? { status: "saved", connection: updated } : { status: "not_found" };
   }
 
-  /** Keep one tool out of the classifier, or let it back in. Ordinary chat is unaffected. */
-  async setClassifierToolKeptOut(
+  /**
+   * Keep discovered tools out of the classifier, or let them back in, all or nothing. Ordinary
+   * chat is unaffected. Only the owner's own request reaches this; row-level security keeps every
+   * other actor out. The row lock keeps the whole-list write from losing a concurrent change.
+   */
+  async setClassifierToolsKeptOut(
     scopedDb: DataContextDb,
     id: string,
-    toolName: string,
+    toolNames: readonly string[],
     keptOut: boolean
-  ): Promise<ConnectionRow | null> {
+  ): Promise<SetKeptOutResult> {
     assertDataContextDb(scopedDb);
 
+    const row = await this.lockConnection(scopedDb, id);
+    if (!row) return { status: "not_found" };
+    const discovered = new Set(row.discoveredTools.map((tool) => tool.name));
+    const unknown = toolNames.find((toolName) => !discovered.has(toolName));
+    if (unknown !== undefined) return { status: "unknown_tool", toolName: unknown };
+
+    const names = new Set(toolNames);
+    const next = keptOut
+      ? [...new Set([...row.classifierKeptOutTools, ...toolNames])]
+      : row.classifierKeptOutTools.filter((toolName) => !names.has(toolName));
     const result = await sql<ConnectionSqlRow>`
       UPDATE app.integration_connections
-      SET classifier_kept_out_tools = CASE
-            WHEN ${keptOut} AND NOT (${toolName} = ANY(classifier_kept_out_tools))
-            THEN array_append(classifier_kept_out_tools, ${toolName})
-            WHEN NOT ${keptOut} THEN array_remove(classifier_kept_out_tools, ${toolName})
-            ELSE classifier_kept_out_tools
-          END,
+      SET classifier_kept_out_tools = ${next}::text[],
           updated_at = now()
       WHERE id = ${id}::uuid
       RETURNING ${sql.raw(SELECT_COLUMNS)}
     `.execute(scopedDb.db);
 
-    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+    return result.rows[0]
+      ? { status: "saved", connection: this.mapRow(result.rows[0]) }
+      : { status: "not_found" };
   }
 
   private async writeSort(

@@ -6,7 +6,7 @@ import type {
   IntegrationDetail,
   IntegrationToolDescriptor
 } from "@moss/shared";
-import { Button, Menu, SectionHead, Segmented } from "@moss/ui";
+import { Button, Menu, SectionHead, Segmented, type MenuItem } from "@moss/ui";
 
 import { isToolOn } from "./integration-group-state";
 import { Badge, Group, Note, Row, Switch } from "./settings-ui";
@@ -89,6 +89,23 @@ function sortOf(detail: ToolsDetail, toolName: string) {
   return detail.classifierTools.find((entry) => entry.toolName === toolName);
 }
 
+/** The sorting model's name for a tool, or a name made from the raw one. */
+export function readableName(detail: ToolsDetail, tool: IntegrationToolDescriptor): string {
+  return sortOf(detail, tool.name)?.readableName || tool.name;
+}
+
+/** Search matches a tool's readable name, its raw name and its description. */
+export function toolMatches(
+  detail: ToolsDetail,
+  tool: IntegrationToolDescriptor,
+  needle: string
+): boolean {
+  if (!needle) return true;
+  return [readableName(detail, tool), tool.name, tool.description].some((text) =>
+    text.toLowerCase().includes(needle)
+  );
+}
+
 /** Tools that are on and still show an approval card before they run. */
 export function alwaysAskCount(detail: ToolsDetail): number {
   return detail.tools.filter(
@@ -125,6 +142,7 @@ export function IntegrationToolsSection(props: {
   readonly detail: ToolsDetail;
   readonly onSetOn: (names: readonly string[], on: boolean) => void;
   readonly onSendWithoutAsking: (toolNames: readonly string[], allow: boolean) => void;
+  readonly onSetKeptOut: (toolNames: readonly string[], keptOut: boolean) => void;
 }) {
   const { detail } = props;
   const [search, setSearch] = useState("");
@@ -132,19 +150,21 @@ export function IntegrationToolsSection(props: {
   const [order, setOrder] = useState<Order>("risk");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
+  const [justKeptOut, setJustKeptOut] = useState<string | null>(null);
 
   const total = detail.tools.length;
   const onCount = detail.tools.filter((tool) => isToolOnIn(detail, tool)).length;
-  const asking = alwaysAskCount(detail);
   const sortedGroups = groupToolsByRisk(detail);
 
   const needle = search.trim().toLowerCase();
   const visible = (tool: IntegrationToolDescriptor) => {
     if (filter !== "all" && isToolOnIn(detail, tool) !== (filter === "on")) return false;
-    if (!needle) return true;
-    return (
-      tool.name.toLowerCase().includes(needle) || tool.description.toLowerCase().includes(needle)
-    );
+    return toolMatches(detail, tool, needle);
+  };
+
+  const setKeptOut = (name: string, keptOut: boolean) => {
+    setJustKeptOut(keptOut ? name : null);
+    props.onSetKeptOut([name], keptOut);
   };
 
   const groups: readonly ToolGroup[] =
@@ -158,7 +178,7 @@ export function IntegrationToolsSection(props: {
         number="01"
         title="Tools"
         titleId="intg-tools-title"
-        meta={`${onCount} of ${total} on, ${asking} always ask`}
+        meta={`${onCount} of ${total} on`}
         rule
       />
       <p className="pane__desc">
@@ -213,8 +233,10 @@ export function IntegrationToolsSection(props: {
                 key={tool.name}
                 detail={detail}
                 tool={tool}
+                undoable={justKeptOut === tool.name}
                 onSetOn={props.onSetOn}
                 onSendWithoutAsking={props.onSendWithoutAsking}
+                onSetKeptOut={setKeptOut}
               />
             ))}
             {rows.length < shown.length ? (
@@ -335,51 +357,107 @@ function ToolGroupBlock(props: {
 function ToolRow(props: {
   readonly detail: ToolsDetail;
   readonly tool: IntegrationToolDescriptor;
+  readonly undoable: boolean;
   readonly onSetOn: (names: readonly string[], on: boolean) => void;
   readonly onSendWithoutAsking: (toolNames: readonly string[], allow: boolean) => void;
+  readonly onSetKeptOut: (name: string, keptOut: boolean) => void;
 }) {
   const { detail, tool } = props;
   const sort = sortOf(detail, tool.name);
   const sending = sort?.status === "current" && sort.risk === "outbound";
+  const keptOut = sort?.keptOut === true;
+  const name = readableName(detail, tool);
+
+  const items: MenuItem[] = [];
+  if (sending) {
+    items.push(
+      sort.sendWithoutAsking
+        ? { id: "ask", label: "Ask before sending", description: "Chat checks with you first" }
+        : {
+            id: "allow",
+            label: "Send without asking",
+            description: "Chat sends with this tool without checking with you"
+          }
+    );
+  }
+  items.push(
+    keptOut
+      ? { id: "let-in", label: "Let the classifier use it" }
+      : {
+          id: "keep-out",
+          label: "Keep out of the classifier",
+          description: "Chat can still use it"
+        }
+  );
+
+  const onSelect = (id: string) => {
+    if (id === "allow" || id === "ask") props.onSendWithoutAsking([tool.name], id === "allow");
+    else props.onSetKeptOut(tool.name, id === "keep-out");
+  };
+
+  const marks = [
+    sort?.asksFirst ? (
+      <Badge key="asks" tone="amber">
+        Asks first
+      </Badge>
+    ) : null,
+    sending && sort.sendWithoutAsking ? (
+      <Badge key="sends">
+        <Check size={12} aria-hidden="true" />
+        Sends without asking
+      </Badge>
+    ) : null,
+    sort?.classifierState === "preparing_again" ? (
+      <Badge key="again" tone="steel">
+        Preparing again
+      </Badge>
+    ) : null,
+    keptOut ? <Badge key="out">Kept out of the classifier</Badge> : null,
+    keptOut && props.undoable ? (
+      <Button
+        key="undo"
+        variant="link"
+        size="sm"
+        onClick={() => props.onSetKeptOut(tool.name, false)}
+      >
+        Undo
+      </Button>
+    ) : null
+  ].filter(Boolean);
+  const raw =
+    name === tool.name ? null : (
+      <span className="jds-caption intg-tool__raw">
+        <code>{tool.name}</code>
+      </span>
+    );
 
   return (
     <Row
-      name={tool.name}
+      name={
+        <span className="intg-tool__id">
+          <span>{name}</span>
+          {raw || marks.length > 0 ? (
+            <span className="intg-tool__meta">
+              {raw}
+              {marks}
+            </span>
+          ) : null}
+        </span>
+      }
       desc={tool.description || "No description from the app."}
       control={
         <span className="intg-tools__ctl">
-          {sort?.asksFirst ? <Badge tone="amber">Asks first</Badge> : null}
-          {sending && sort.sendWithoutAsking ? (
-            <Badge>
-              <Check size={12} aria-hidden="true" />
-              Sends without asking
-            </Badge>
-          ) : null}
           <Switch
             ariaLabel={`Enable ${tool.name}`}
             checked={isToolOnIn(detail, tool)}
             onChange={(next) => props.onSetOn([tool.name], next)}
           />
-          {sending ? (
-            <Menu
-              triggerIcon={<MoreHorizontal size={16} aria-hidden="true" />}
-              triggerLabel={`More for ${tool.name}`}
-              items={[
-                sort.sendWithoutAsking
-                  ? {
-                      id: "ask",
-                      label: "Ask before sending",
-                      description: "Chat checks with you first"
-                    }
-                  : {
-                      id: "allow",
-                      label: "Send without asking",
-                      description: "Chat sends with this tool without checking with you"
-                    }
-              ]}
-              onSelect={(id) => props.onSendWithoutAsking([tool.name], id === "allow")}
-            />
-          ) : null}
+          <Menu
+            triggerIcon={<MoreHorizontal size={16} aria-hidden="true" />}
+            triggerLabel={`More for ${tool.name}`}
+            items={items}
+            onSelect={onSelect}
+          />
         </span>
       }
     />

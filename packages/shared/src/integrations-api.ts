@@ -51,42 +51,6 @@ export interface IntegrationClassifierArgument {
   readonly candidateSource?: string;
 }
 
-export type IntegrationClassifierPreparationState = "current" | "stale";
-
-/** One stored, owner-reviewed classifier preparation for a single connected tool. */
-export interface IntegrationClassifierToolPreparation {
-  readonly toolName: string;
-  /** Whether the owner opted this tool into the classifier. Default false. */
-  readonly optIn: boolean;
-  /** Reviewed risk; `null` when the owner has not classified it — the tool stays out of the menu. */
-  readonly reviewedRisk: IntegrationClassifierRisk | null;
-  readonly description: string;
-  readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
-  readonly replyTemplate: string;
-  readonly candidateSource?: string;
-  /** Fingerprint of the definition this review was saved against. */
-  readonly definitionFingerprint: string;
-  readonly reviewedAt: string;
-  /** "stale" when the discovered definition no longer matches the saved fingerprint. */
-  readonly state: IntegrationClassifierPreparationState;
-  readonly preparationVersion: number;
-}
-
-/**
- * Body for saving one reviewed tool preparation. A cancelled review never calls this, so no draft
- * is persisted. `reviewedFingerprint` is compared with the current discovered definition; a
- * mismatch is rejected so an old tab cannot approve a superseded draft.
- */
-export interface SaveIntegrationClassifierToolRequest {
-  readonly optIn: boolean;
-  readonly reviewedRisk: IntegrationClassifierRisk | null;
-  readonly description: string;
-  readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
-  readonly replyTemplate: string;
-  readonly candidateSource?: string;
-  readonly reviewedFingerprint: string;
-}
-
 /** A tool's sort as read against its current definition (#2984). Anything but `current` asks. */
 export type IntegrationClassifierSortStatus = "current" | "stale" | "failed" | "never_tried";
 
@@ -96,12 +60,89 @@ export interface IntegrationClassifierToolSort {
   readonly status: IntegrationClassifierSortStatus;
   /** The sorted group as its risk. Set only when `status` is `current`. */
   readonly risk: IntegrationClassifierRisk | null;
-  /** `unsafe`: the tool's text held the stored credential, so it was not sent. Set only when failed. */
-  readonly failure: "error" | "unsafe" | null;
+  /**
+   * Why the sort failed. Set only when failed. `unsafe`: the tool's text held the stored
+   * credential, so it was not sent. `no_model`: no default chat model could sort it.
+   */
+  readonly failure: "error" | "unsafe" | "no_model" | null;
   /** The owner allowed this Sends things out tool to run without asking. */
   readonly sendWithoutAsking: boolean;
   /** Ordinary chat shows an approval card before running this tool, unless YOLO mode is on. */
   readonly asksFirst: boolean;
+  /** The sorting model's name when the sort is current; otherwise a name made from the raw one. */
+  readonly readableName: string;
+  /** When the current sort was made. `null` unless `status` is `current`. */
+  readonly sortedAt: string | null;
+  /** The model that made the current sort. `null` when unknown or not current. */
+  readonly sortedBy: IntegrationClassifierSortedBy | null;
+  /** How the current sort was made. `null` when unknown or not current. */
+  readonly sortMethod: IntegrationClassifierSortMethod | null;
+  /**
+   * When the failure this tool shows was recorded: its failed preparation when `classifierState`
+   * is `failed`, otherwise its failed sort. `null` when neither failed. A retry is finished once
+   * this changes.
+   */
+  readonly failedAt: string | null;
+  /** The owner kept this tool out of the classifier. Ordinary chat can still use it. */
+  readonly keptOut: boolean;
+  /** Where this tool stands with the classifier (#2984 R2.5b). */
+  readonly classifierState: IntegrationClassifierToolState;
+  /** Why the last preparation failed. Set only when `classifierState` is `failed`. */
+  readonly preparationFailure: IntegrationClassifierPreparationFailure | null;
+  /** When the tool's current preparation was saved. Set only when `classifierState` is `ready`. */
+  readonly preparedAt: string | null;
+}
+
+/**
+ * How a tool's current sort was made. `model`: a model read the tool's name, description and
+ * inputs. `local`: Moss sorted it without a model call, so its text was not sent.
+ */
+export type IntegrationClassifierSortMethod = "model" | "local";
+
+/** The model that sorted a tool, as display names only. */
+export interface IntegrationClassifierSortedBy {
+  readonly model: string;
+  readonly provider: string;
+}
+
+/**
+ * One tool's classifier state, ignoring whether the connection itself is reachable.
+ * - `off`: the connection's classifier switch is off.
+ * - `kept_out`: the owner kept the tool out.
+ * - `not_used`: the tool is off for chat, its sort failed, or its inputs cannot be prepared.
+ * - `preparing`: waiting for its sort or its first preparation.
+ * - `preparing_again`: its saved preparation was made against an older definition.
+ * - `failed`: its last preparation failed, or its sort failed for want of a model; it waits for
+ *   the owner's Try again.
+ * - `ready`: the classifier may offer it.
+ */
+export type IntegrationClassifierToolState =
+  | "off"
+  | "kept_out"
+  | "not_used"
+  | "preparing"
+  | "preparing_again"
+  | "failed"
+  | "ready";
+
+/** Why a tool's preparation failed. `no_model` means no default chat model could be selected. */
+export type IntegrationClassifierPreparationFailure =
+  | "unsafe"
+  | "provider_error"
+  | "invalid_draft"
+  | "definition_too_large"
+  | "unsupported_shape"
+  | "too_many_tools"
+  | "no_model";
+
+/**
+ * Body for `PUT /api/integrations/:id/classifier/kept-out` (#2984 R2.5b). `keptOut: true` keeps
+ * the named discovered tools out of the classifier; `false` lets them back in. Replies with the
+ * connection detail.
+ */
+export interface SetIntegrationKeptOutRequest {
+  readonly keptOut: boolean;
+  readonly toolNames: readonly string[];
 }
 
 /**
@@ -128,8 +169,6 @@ export interface IntegrationDetail extends IntegrationSummary {
   readonly specPasted: boolean;
   /** Per-connection classifier opt-in (#2884). Default false. */
   readonly classifierEnabled: boolean;
-  /** Owner-reviewed classifier preparation, one entry per reviewed discovered tool. */
-  readonly classifierPreparation: readonly IntegrationClassifierToolPreparation[];
   /** One entry per discovered tool, in discovered order (#2984). */
   readonly classifierTools: readonly IntegrationClassifierToolSort[];
 }

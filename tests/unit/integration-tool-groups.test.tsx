@@ -16,6 +16,8 @@ import {
   alwaysAskCount,
   groupToolsByRisk,
   IntegrationToolsSection,
+  readableName,
+  toolMatches,
   toolsOnPatch
 } from "../../apps/web/src/settings/integration-tool-groups.js";
 
@@ -37,6 +39,15 @@ function sorted(
     failure: null,
     sendWithoutAsking: false,
     asksFirst: risk === "outbound" || risk === "destructive",
+    readableName: toolName,
+    sortedAt: "2026-10-02T09:00:00.000Z",
+    sortedBy: null,
+    sortMethod: null,
+    failedAt: null,
+    keptOut: false,
+    classifierState: "off",
+    preparationFailure: null,
+    preparedAt: null,
     ...extra
   };
 }
@@ -63,12 +74,14 @@ function detail(overrides: Partial<Detail> = {}): Detail {
 let renderer: ReactTestRenderer | undefined;
 const onSetOn = vi.fn();
 const onSend = vi.fn();
+const onKeptOut = vi.fn();
 
 afterEach(() => {
   act(() => renderer?.unmount());
   renderer = undefined;
   onSetOn.mockReset();
   onSend.mockReset();
+  onKeptOut.mockReset();
 });
 
 function render(value: Detail): void {
@@ -77,7 +90,8 @@ function render(value: Detail): void {
       createElement(IntegrationToolsSection, {
         detail: value,
         onSetOn,
-        onSendWithoutAsking: onSend
+        onSendWithoutAsking: onSend,
+        onSetKeptOut: onKeptOut
       })
     );
   });
@@ -112,12 +126,21 @@ function openMenu(toolName: string): void {
   act(() => trigger.props.onClick());
 }
 
+function menuLabels(): string[] {
+  return renderer!.root
+    .findAll((node) => node.type === "button" && node.props.role === "menuitem")
+    .map((node) => {
+      const label = node.findAll((child) => child.type === "span" && !child.props.className)[0];
+      return flatten(label ? label.props.children : node.props.children);
+    });
+}
+
 function menuItem(label: string) {
-  const item = renderer!.root.find(
+  const items = renderer!.root.findAll(
     (node) => node.type === "button" && node.props.role === "menuitem"
   );
-  const spans = item.findAll((node) => node.type === "span");
-  expect(spans.map((node) => flatten(node.props.children))).toContain(label);
+  const item = items[menuLabels().indexOf(label)];
+  if (!item) throw new Error(`no menu item "${label}"`);
   return item;
 }
 
@@ -197,7 +220,8 @@ describe("IntegrationToolsSection", () => {
   it("shows the counts, the YOLO line and the four groups", () => {
     render(detail());
     const html = text();
-    expect(html).toContain("5 of 5 on, 3 always ask");
+    expect(html).toContain("5 of 5 on");
+    expect(html).not.toContain("always ask");
     expect(html).toContain("YOLO mode skips the asking.");
     for (const title of ["Looks things up", "Changes things", "Sends things out", "Sensitive"]) {
       expect(html).toContain(title);
@@ -214,13 +238,8 @@ describe("IntegrationToolsSection", () => {
 
   it("offers Send without asking only on sending tools, and sends it for that tool", () => {
     render(detail());
-    const triggers = renderer!.root.findAll(
-      (node) => node.type === "button" && String(node.props["aria-label"]).startsWith("More for")
-    );
-    expect(triggers.map((node) => node.props["aria-label"])).toEqual([
-      "More for Notify",
-      "More for FindPhone"
-    ]);
+    openMenu("GetState");
+    expect(menuLabels()).toEqual(["Keep out of the classifier"]);
     openMenu("FindPhone");
     expect(text()).toContain("Chat sends with this tool without checking with you");
     act(() => menuItem("Send without asking").props.onClick());
@@ -330,5 +349,103 @@ describe("IntegrationToolsSection", () => {
     expect(html).toContain("so they show A to Z");
     expect(html).not.toContain("Looks things up");
     expect(html.indexOf("Enable Alpha")).toBeLessThan(html.indexOf("Enable Zed"));
+  });
+});
+
+describe("tool names and search (#2984 R2.5b)", () => {
+  const named = () =>
+    detail({
+      classifierTools: [
+        sorted("GetState", "read", { readableName: "Check what devices are doing" }),
+        sorted("SetLight", "write"),
+        sorted("Notify", "outbound"),
+        sorted("FindPhone", "outbound", { readableName: "Ring my phone" }),
+        sorted("Unlock", "destructive")
+      ]
+    });
+
+  it("shows the readable name with the raw name small underneath", () => {
+    render(named());
+    const raw = renderer!.root.findAll(
+      (node) => node.type === "span" && String(node.props.className).includes("intg-tool__raw")
+    );
+    expect(raw.map((node) => node.findByType("code").props.children)).toEqual([
+      "GetState",
+      "FindPhone"
+    ]);
+    expect(text()).toContain("Check what devices are doing");
+    expect(readableName(named(), tool("FindPhone"))).toBe("Ring my phone");
+    expect(readableName(named(), tool("Missing"))).toBe("Missing");
+  });
+
+  it("matches the readable name, the raw name and the description", () => {
+    const value = named();
+    expect(toolMatches(value, tool("FindPhone"), "ring my")).toBe(true);
+    expect(toolMatches(value, tool("FindPhone"), "findphone")).toBe(true);
+    expect(toolMatches(value, tool("FindPhone"), "does a thing")).toBe(true);
+    expect(toolMatches(value, tool("FindPhone"), "devices")).toBe(false);
+  });
+
+  it("marks a tool being prepared again", () => {
+    render(
+      detail({
+        classifierTools: [sorted("SetLight", "write", { classifierState: "preparing_again" })]
+      })
+    );
+    expect(text()).toContain("Preparing again");
+  });
+});
+
+describe("keeping a tool out of the classifier (#2984 R2.5b)", () => {
+  it("offers Keep out on every tool and sends it for that tool", () => {
+    render(detail());
+    const triggers = renderer!.root.findAll(
+      (node) => node.type === "button" && String(node.props["aria-label"]).startsWith("More for")
+    );
+    expect(triggers).toHaveLength(5);
+    openMenu("SetLight");
+    expect(text()).toContain("Chat can still use it");
+    act(() => menuItem("Keep out of the classifier").props.onClick());
+    expect(onKeptOut).toHaveBeenCalledWith(["SetLight"], true);
+  });
+
+  it("shows Undo on the tool just kept out, and Undo lets it back in", () => {
+    const value = detail();
+    render(value);
+    openMenu("SetLight");
+    act(() => menuItem("Keep out of the classifier").props.onClick());
+    act(() =>
+      renderer!.update(
+        createElement(IntegrationToolsSection, {
+          detail: {
+            ...value,
+            classifierTools: value.classifierTools.map((entry) =>
+              entry.toolName === "SetLight" ? { ...entry, keptOut: true } : entry
+            )
+          },
+          onSetOn,
+          onSendWithoutAsking: onSend,
+          onSetKeptOut: onKeptOut
+        })
+      )
+    );
+    expect(text()).toContain("Kept out of the classifier");
+    click("Undo");
+    expect(onKeptOut).toHaveBeenLastCalledWith(["SetLight"], false);
+  });
+
+  it("marks a kept-out tool without Undo when it was kept out earlier, and offers to let it in", () => {
+    render(
+      detail({
+        classifierTools: [
+          sorted("SetLight", "write", { keptOut: true, classifierState: "kept_out" })
+        ]
+      })
+    );
+    expect(text()).toContain("Kept out of the classifier");
+    expect(buttons("Undo")).toHaveLength(0);
+    openMenu("SetLight");
+    act(() => menuItem("Let the classifier use it").props.onClick());
+    expect(onKeptOut).toHaveBeenCalledWith(["SetLight"], false);
   });
 });

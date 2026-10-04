@@ -1,10 +1,9 @@
 import { CLASSIFIER_LIMITS } from "@moss/module-sdk";
 import type {
   IntegrationClassifierArgument,
-  IntegrationClassifierPreparationState,
   IntegrationClassifierRisk,
-  IntegrationClassifierToolPreparation,
-  IntegrationClassifierToolSort,
+  IntegrationClassifierSortedBy,
+  IntegrationClassifierSortMethod,
   IntegrationToolDescriptor
 } from "@moss/shared";
 
@@ -15,15 +14,15 @@ import {
   toolSortFingerprint,
   type RiskInputSource
 } from "./classifier-risk-inputs.js";
-import { effectiveEnabledTools } from "./curation.js";
 
 /**
  * Owner storage and invalidation for the connected-tool classifier (#2884, #2984).
  *
  * Preparation and sorting are versioned maps keyed by discovered tool name on the owner-only
  * connection row. This module is pure: it validates untrusted input, reads the stored maps
- * defensively, and decides which tools are currently eligible. It never calls a model and never
- * writes. Persistence and cache invalidation live in repository.ts and routes.ts.
+ * defensively, and decides which tools ask before running. Eligibility lives in
+ * classifier-standing.ts. It never calls a model and never writes. Persistence and cache
+ * invalidation live in repository.ts and routes.ts.
  */
 
 export const INTEGRATION_CLASSIFIER_PREPARATION_VERSION = 1 as const;
@@ -65,8 +64,10 @@ export interface ClassifierPreparationMap {
 
 /**
  * Why automatic preparation failed. `unsafe` means the tool's text held the stored credential.
- * `unsupported_shape` means the prepared entry could never be stored, and `too_many_tools` means
- * the connection already holds the most prepared tools it can store.
+ * `unsupported_shape` means the prepared entry could never be stored, `too_many_tools` means the
+ * connection already holds the most prepared tools it can store, and `no_model` means no default
+ * chat model that can draft was selected. `interrupted` marks a model call that started and has
+ * not saved a result (see classifier-attempt.ts).
  */
 export type ClassifierPreparationFailureReason =
   | "unsafe"
@@ -74,7 +75,9 @@ export type ClassifierPreparationFailureReason =
   | "invalid_draft"
   | "definition_too_large"
   | "unsupported_shape"
-  | "too_many_tools";
+  | "too_many_tools"
+  | "no_model"
+  | "interrupted";
 
 export interface ClassifierPreparationFailure {
   readonly reason: ClassifierPreparationFailureReason;
@@ -89,7 +92,9 @@ const PREPARATION_FAILURE_REASONS: readonly ClassifierPreparationFailureReason[]
   "invalid_draft",
   "definition_too_large",
   "unsupported_shape",
-  "too_many_tools"
+  "too_many_tools",
+  "no_model",
+  "interrupted"
 ];
 
 /**
@@ -443,7 +448,33 @@ export function preparationFailureHasRoom(
   );
 }
 
-/** The failure history with one tool's failure recorded, or null when it has no room. */
+/**
+ * A `no_model` failure only lands on a tool with nothing recorded for its definition, or with an
+ * earlier `no_model`. A started call, a prepared entry or any other failure for the same
+ * definition means a model was reached, and `no_model` would let a model being added send it
+ * again. A run that read its targets before another run claimed them is refused here.
+ */
+function noModelFailureRefused(
+  map: ClassifierPreparationMap,
+  toolName: string,
+  failure: ClassifierPreparationFailure
+): boolean {
+  if (failure.reason !== "no_model") return false;
+  const entry = preparationEntry(map, toolName);
+  if (entry?.definitionFingerprint === failure.definitionFingerprint) return true;
+  const previous = preparationFailure(map, toolName);
+  return (
+    previous?.definitionFingerprint === failure.definitionFingerprint &&
+    previous.reason !== "no_model"
+  );
+}
+
+/**
+ * The failure history with one tool's failure recorded, or null when it has no room. Every
+ * preparation failure save goes through here, under the row lock. A failure made for a definition
+ * that is no longer the tool's current one, and a refused `no_model` failure, leave the history
+ * as it is, so a late save from an older run cannot displace a newer run's call.
+ */
 export function withPreparationFailure(
   map: ClassifierPreparationMap,
   discoveredTools: readonly IntegrationToolDescriptor[],
@@ -452,6 +483,9 @@ export function withPreparationFailure(
 ): Record<string, ClassifierPreparationFailure> | null {
   if (!preparationFailureHasRoom(map, discoveredTools, toolName)) return null;
   const failures = blockingFailures(map, discoveredTools);
+  const tool = discoveredTools.find((candidate) => candidate.name === toolName);
+  if (!tool || toolDefinitionFingerprint(tool) !== failure.definitionFingerprint) return failures;
+  if (noModelFailureRefused(map, toolName, failure)) return failures;
   failures[toolName] = {
     reason: failure.reason,
     definitionFingerprint: failure.definitionFingerprint,
@@ -483,86 +517,6 @@ export function withoutPreparationEntry(
   return { ...map, version: INTEGRATION_CLASSIFIER_PREPARATION_VERSION, entries };
 }
 
-export interface ClassifierConnectionState {
-  readonly enabled: boolean;
-  readonly classifierEnabled: boolean;
-  readonly lastError: string | null;
-  readonly discoveredTools: readonly RiskInputSource[];
-  /** Ordinary-chat curation: a tool the owner switched off for chat is not classifier-eligible. */
-  readonly enabledGroups: readonly string[];
-  readonly enabledTools: readonly string[];
-  readonly mutedTools: readonly string[];
-  readonly classifierPreparation: ClassifierPreparationMap;
-  readonly classifierSort: ClassifierSortMap;
-  readonly classifierKeptOutTools: readonly string[];
-}
-
-export interface EligibleClassifierTool {
-  readonly tool: IntegrationToolDescriptor;
-  /** The current sort's risk, after the code rule and the old reviewed floor. */
-  readonly risk: IntegrationClassifierRisk;
-  readonly description: string;
-  readonly arguments: Readonly<Record<string, IntegrationClassifierArgument>>;
-  readonly replyTemplate: string;
-  readonly candidateSource?: string;
-}
-
-/**
- * The tools the classifier may offer for this connection, in discovered order (spec 8.5). This is
- * the connected-tool release: the gate offers exactly these.
- *
- * Fail-closed everywhere: a disabled connection, the switch off, a failed discovery, a tool that
- * is no longer discovered, a tool the owner switched off for ordinary chat, a kept-out tool, a
- * sort that is not current against the tool's risk inputs, or a preparation that is missing or
- * made against another definition all remove the tool. A changed tool therefore drops out at once
- * and returns only after it is sorted and prepared again.
- */
-export function effectiveClassifierTools(
-  state: ClassifierConnectionState
-): EligibleClassifierTool[] {
-  if (!state.enabled || !state.classifierEnabled || state.lastError !== null) return [];
-  const ordinaryEnabled = new Set(
-    effectiveEnabledTools(state.discoveredTools, {
-      enabledGroups: state.enabledGroups,
-      enabledTools: state.enabledTools,
-      mutedTools: state.mutedTools
-    }).map((tool) => tool.name)
-  );
-  const keptOut = new Set(state.classifierKeptOutTools);
-  const out: EligibleClassifierTool[] = [];
-  for (const tool of state.discoveredTools) {
-    if (!ordinaryEnabled.has(tool.name) || keptOut.has(tool.name)) continue;
-    const sort = toolSortState(state.classifierSort, tool);
-    if (sort.status !== "current") continue;
-    const entry = preparationEntry(state.classifierPreparation, tool.name);
-    if (!entry || entry.definitionFingerprint !== toolDefinitionFingerprint(tool)) continue;
-    out.push({
-      tool,
-      risk: sort.risk,
-      description: entry.description,
-      arguments: entry.arguments,
-      replyTemplate: entry.replyTemplate,
-      ...(entry.candidateSource !== undefined ? { candidateSource: entry.candidateSource } : {})
-    });
-  }
-  return out;
-}
-
-/** The API view: one row per discovered tool that has a saved review, with derived state. */
-export function classifierPreparationView(
-  state: Pick<ClassifierConnectionState, "discoveredTools" | "classifierPreparation">
-): IntegrationClassifierToolPreparation[] {
-  const view: IntegrationClassifierToolPreparation[] = [];
-  for (const tool of state.discoveredTools) {
-    const entry = preparationEntry(state.classifierPreparation, tool.name);
-    if (!entry) continue;
-    const entryState: IntegrationClassifierPreparationState =
-      entry.definitionFingerprint === toolDefinitionFingerprint(tool) ? "current" : "stale";
-    view.push({ toolName: tool.name, ...entry, state: entryState });
-  }
-  return view;
-}
-
 /*
  * Sort storage (spec 8.2 and 8.3, #2984).
  *
@@ -585,8 +539,29 @@ export const INTEGRATION_CLASSIFIER_MAX_READABLE_NAME_CHARS = 80;
 
 export type ClassifierSortStatus = "current" | "failed" | "never_tried";
 
-/** Why a sort failed. `unsafe` means the tool's text held the stored credential and was not sent. */
-export type ClassifierSortFailure = "error" | "unsafe";
+/**
+ * Why a sort failed. `unsafe` means the tool's text held the stored credential and was not sent.
+ * `no_model` means no default chat model that can sort was selected. `interrupted` marks a model
+ * call that started and has not saved a result (see classifier-attempt.ts).
+ */
+export type ClassifierSortFailure = "error" | "unsafe" | "no_model" | "interrupted";
+
+const SORT_FAILURES: readonly ClassifierSortFailure[] = [
+  "error",
+  "unsafe",
+  "no_model",
+  "interrupted"
+];
+
+/**
+ * How a current sort was made. `model` means a model read the tool's text; `local` means Moss
+ * settled it without a model call, so its text was never sent.
+ */
+export type ClassifierSortMethod = IntegrationClassifierSortMethod;
+
+function parseSortMethod(value: unknown): ClassifierSortMethod | null {
+  return value === "model" || value === "local" ? value : null;
+}
 
 export interface ClassifierSortEntry {
   readonly status: ClassifierSortStatus;
@@ -594,6 +569,10 @@ export interface ClassifierSortEntry {
   readonly risk: IntegrationClassifierRisk | null;
   /** The model-written display name. Set only when current. */
   readonly readableName: string | null;
+  /** The model that made the current sort, as display names. `null` when unknown. */
+  readonly sortedBy: IntegrationClassifierSortedBy | null;
+  /** How the current sort was made. `null` when not current, or stored before this was kept. */
+  readonly sortMethod: ClassifierSortMethod | null;
   /** The risk-inputs fingerprint the sort or the failure was made against. */
   readonly sortFingerprint: string | null;
   readonly sortedAt: string | null;
@@ -615,10 +594,17 @@ export type ClassifierToolSortState =
       readonly status: "current";
       readonly risk: IntegrationClassifierRisk;
       readonly readableName: string;
+      readonly sortedAt: string;
+      readonly sortedBy: IntegrationClassifierSortedBy | null;
+      readonly sortMethod: ClassifierSortMethod | null;
       readonly sendWithoutAsking: boolean;
     }
   | { readonly status: "stale" }
-  | { readonly status: "failed"; readonly failure: ClassifierSortFailure }
+  | {
+      readonly status: "failed";
+      readonly failure: ClassifierSortFailure;
+      readonly failedAt: string;
+    }
   | { readonly status: "never_tried" };
 
 /** One sorting result to store. */
@@ -629,6 +615,10 @@ export type ClassifierSortResult =
       readonly readableName: string;
       readonly sortFingerprint: string;
       readonly sortedAt: string;
+      /** The sorting model's display names. Invalid names are stored as unknown. */
+      readonly sortedBy?: IntegrationClassifierSortedBy | null;
+      /** How the sort was made. A result without one is stored as unknown. */
+      readonly sortMethod?: ClassifierSortMethod;
     }
   | {
       readonly status: "failed";
@@ -670,6 +660,14 @@ export function isReadableName(value: unknown): value is string {
   );
 }
 
+/** Display names of the sorting model, or `null` when either is missing or not a readable name. */
+function parseSortedBy(value: unknown): IntegrationClassifierSortedBy | null {
+  if (!isRecord(value)) return null;
+  return isReadableName(value.model) && isReadableName(value.provider)
+    ? { model: value.model, provider: value.provider }
+    : null;
+}
+
 function storedRisk(value: unknown): IntegrationClassifierRisk | null | undefined {
   if (value === null || value === undefined) return null;
   return typeof value === "string" && (RISKS as readonly string[]).includes(value)
@@ -690,6 +688,8 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
       status: "never_tried",
       risk: null,
       readableName: null,
+      sortedBy: null,
+      sortMethod: null,
       sortFingerprint: null,
       sortedAt: null,
       failure: null,
@@ -698,15 +698,18 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
   }
   if (!isIdentifier(raw.sortFingerprint) || !isIdentifier(raw.sortedAt)) return null;
   if (raw.status === "failed") {
-    if (raw.failure !== "error" && raw.failure !== "unsafe") return null;
+    const failure = SORT_FAILURES.find((candidate) => candidate === raw.failure);
+    if (!failure) return null;
     return {
       ...base,
       status: "failed",
       risk: null,
       readableName: null,
+      sortedBy: null,
+      sortMethod: null,
       sortFingerprint: raw.sortFingerprint,
       sortedAt: raw.sortedAt,
-      failure: raw.failure,
+      failure,
       sendWithoutAsking: false
     };
   }
@@ -718,6 +721,10 @@ function parseStoredSortEntry(raw: unknown): ClassifierSortEntry | null {
     status: "current",
     risk,
     readableName: raw.readableName,
+    // An entry stored before sortedBy existed, or with unreadable names, stays valid.
+    sortedBy: parseSortedBy(raw.sortedBy),
+    // An entry stored before sortMethod existed reads as unknown, never as a model sort.
+    sortMethod: parseSortMethod(raw.sortMethod),
     sortFingerprint: raw.sortFingerprint,
     sortedAt: raw.sortedAt,
     failure: null,
@@ -754,20 +761,51 @@ export function toolSortState(
   if (entry.sortFingerprint !== toolSortFingerprint(toolRiskInputs(tool))) {
     return { status: "stale" };
   }
-  if (entry.status === "failed") return { status: "failed", failure: entry.failure ?? "error" };
+  if (entry.status === "failed") {
+    return { status: "failed", failure: entry.failure ?? "error", failedAt: entry.sortedAt! };
+  }
   const risk = higherRisk(entry.risk!, entry.legacyRiskFloor);
   return {
     status: "current",
     risk,
     readableName: entry.readableName!,
+    sortedAt: entry.sortedAt!,
+    sortedBy: entry.sortedBy,
+    sortMethod: entry.sortMethod,
     sendWithoutAsking: entry.sendWithoutAsking && risk === "outbound"
   };
+}
+
+/**
+ * Store sorting results against the connection's current tools. Every sort save goes through
+ * here, under the row lock. A result for a tool no longer discovered, or made for a definition
+ * that has since changed, is skipped, so a late save from an older run cannot displace a newer
+ * run's call for the current definition.
+ */
+export function withToolSortResults(
+  map: ClassifierSortMap,
+  discoveredTools: readonly RiskInputSource[],
+  results: readonly { readonly toolName: string; readonly result: ClassifierSortResult }[]
+): ClassifierSortMap {
+  const current = new Map(
+    discoveredTools.map((tool) => [tool.name, toolSortFingerprint(toolRiskInputs(tool))])
+  );
+  let sort = map;
+  for (const { toolName, result } of results) {
+    if (current.get(toolName) !== result.sortFingerprint) continue;
+    sort = withSortResult(sort, toolName, result) ?? sort;
+  }
+  return sort;
 }
 
 /**
  * Store one sorting result. The old reviewed floor survives. A send-without-asking choice
  * survives only a result made against the same risk inputs as the current sort it was set on.
  * Returns `null` for a result whose shape is not storable.
+ *
+ * A `no_model` failure only lands on a tool with no entry for its risk inputs, or with an earlier
+ * `no_model`. Over a sort, a started call or any other failure for the same inputs a model was
+ * reached, so the map is returned unchanged; otherwise a model being added would send it again.
  */
 export function withSortResult(
   map: ClassifierSortMap,
@@ -777,6 +815,14 @@ export function withSortResult(
   if (!isIdentifier(toolName) || !isIdentifier(result.sortFingerprint)) return null;
   if (!isIdentifier(result.sortedAt)) return null;
   const previous = sortEntry(map, toolName);
+  if (
+    result.status === "failed" &&
+    result.failure === "no_model" &&
+    previous?.sortFingerprint === result.sortFingerprint &&
+    !(previous.status === "failed" && previous.failure === "no_model")
+  ) {
+    return map;
+  }
   if (!previous && Object.keys(map.entries).length >= INTEGRATION_CLASSIFIER_MAX_SORT_ENTRIES) {
     return null;
   }
@@ -786,6 +832,7 @@ export function withSortResult(
   if (result.status === "current") {
     if (!(RISKS as readonly string[]).includes(result.risk)) return null;
     if (!isReadableName(result.readableName)) return null;
+    const sortMethod = parseSortMethod(result.sortMethod);
     const keepsChoice =
       previous?.status === "current" &&
       previous.sortFingerprint === result.sortFingerprint &&
@@ -794,6 +841,9 @@ export function withSortResult(
       status: "current",
       risk: result.risk,
       readableName: result.readableName,
+      // A sort made without a model names none.
+      sortedBy: sortMethod === "local" ? null : parseSortedBy(result.sortedBy),
+      sortMethod,
       sortFingerprint: result.sortFingerprint,
       sortedAt: result.sortedAt,
       failure: null,
@@ -801,11 +851,13 @@ export function withSortResult(
       legacyRiskFloor
     };
   } else {
-    if (result.failure !== "error" && result.failure !== "unsafe") return null;
+    if (!SORT_FAILURES.includes(result.failure)) return null;
     entry = {
       status: "failed",
       risk: null,
       readableName: null,
+      sortedBy: null,
+      sortMethod: null,
       sortFingerprint: result.sortFingerprint,
       sortedAt: result.sortedAt,
       failure: result.failure,
@@ -867,27 +919,11 @@ export function withoutStaleSendChoices(
  * and stale sorts ask, and a send choice on any group but Sends things out is ignored.
  */
 export function toolRunsWithoutAsking(map: ClassifierSortMap, tool: RiskInputSource): boolean {
-  const state = toolSortState(map, tool);
+  return sortRunsWithoutAsking(toolSortState(map, tool));
+}
+
+export function sortRunsWithoutAsking(state: ClassifierToolSortState): boolean {
   if (state.status !== "current") return false;
   if (state.risk === "read" || state.risk === "write") return true;
   return state.risk === "outbound" && state.sendWithoutAsking;
-}
-
-/** The API view: each discovered tool's sort against its current risk inputs, and whether it asks. */
-export function classifierSortView(
-  map: ClassifierSortMap,
-  tools: readonly RiskInputSource[]
-): IntegrationClassifierToolSort[] {
-  return tools.map((tool) => {
-    const state = toolSortState(map, tool);
-    const current = state.status === "current";
-    return {
-      toolName: tool.name,
-      status: state.status,
-      risk: current ? state.risk : null,
-      failure: state.status === "failed" ? state.failure : null,
-      sendWithoutAsking: current && state.sendWithoutAsking,
-      asksFirst: !toolRunsWithoutAsking(map, tool)
-    };
-  });
 }

@@ -1,6 +1,6 @@
 import type { CredentialPlacement, IntegrationDetail, IntegrationKind } from "@moss/shared";
 
-import { classifierPreparationView, classifierSortView } from "./classifier-settings.js";
+import { classifierSortView, type ClassifierSortViewOptions } from "./classifier-standing.js";
 import {
   effectiveEnabledTools,
   isGroupOptIn,
@@ -23,7 +23,11 @@ export async function discoverTools(
   return convertOpenApiSpec(await fetchOpenApiSpec(url, secret, placement));
 }
 
-export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): IntegrationDetail {
+export function toDetail(
+  row: ConnectionRow,
+  tools: readonly DiscoveredTool[],
+  viewOptions: ClassifierSortViewOptions = {}
+): IntegrationDetail {
   const state = {
     enabledGroups: row.enabledGroups,
     enabledTools: row.enabledTools,
@@ -32,16 +36,6 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
   const enabled = effectiveEnabledTools(tools, state);
   const withGroups = withDerivedGroups(tools);
   const isDerivedOther = willDeriveGroups(tools);
-  const classifierState = {
-    enabled: row.enabled,
-    classifierEnabled: row.classifierEnabled,
-    lastError: row.lastError,
-    discoveredTools: tools,
-    enabledGroups: row.enabledGroups,
-    enabledTools: row.enabledTools,
-    mutedTools: row.mutedTools,
-    classifierPreparation: row.classifierPreparation
-  };
   const groupNames = [...new Set(withGroups.map((t) => t.group))].sort((a, b) =>
     a === OTHER_GROUP ? 1 : b === OTHER_GROUP ? -1 : 0
   );
@@ -73,8 +67,19 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     groupOptIn: isGroupOptIn(tools),
     specPasted: row.specPasted,
     classifierEnabled: row.classifierEnabled,
-    classifierPreparation: classifierPreparationView(classifierState),
-    classifierTools: classifierSortView(row.classifierSort, tools)
+    classifierTools: classifierSortView(
+      {
+        classifierEnabled: row.classifierEnabled,
+        discoveredTools: tools,
+        enabledGroups: row.enabledGroups,
+        enabledTools: row.enabledTools,
+        mutedTools: row.mutedTools,
+        classifierPreparation: row.classifierPreparation,
+        classifierSort: row.classifierSort,
+        classifierKeptOutTools: row.classifierKeptOutTools
+      },
+      viewOptions
+    )
   };
 }
 

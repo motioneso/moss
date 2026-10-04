@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifierSortView,
+  emptyPreparationMap,
   emptySortMap,
   parseSortMap,
   toolRiskInputs,
@@ -52,6 +53,7 @@ function withEntry(tool: DiscoveredTool, entry: Partial<ClassifierSortEntry>): C
         status: "current",
         risk: "outbound",
         readableName: "Readable",
+        sortedBy: null,
         sortFingerprint: toolSortFingerprint(toolRiskInputs(tool)),
         sortedAt: "2026-10-04T00:00:00.000Z",
         failure: null,
@@ -160,7 +162,17 @@ describe("classifierSortView (#2984 R2.3)", () => {
     map = sorted(send, "outbound", map);
     map = sorted(sensitive, "destructive", map);
 
-    expect(classifierSortView(map, [read, send, sensitive, unsorted])).toEqual([
+    const view = classifierSortView({
+      classifierEnabled: false,
+      discoveredTools: [read, send, sensitive, unsorted],
+      enabledGroups: [],
+      enabledTools: [],
+      mutedTools: [],
+      classifierPreparation: emptyPreparationMap(),
+      classifierSort: map,
+      classifierKeptOutTools: []
+    });
+    expect(view).toMatchObject([
       {
         toolName: "listMovies",
         status: "current",

@@ -28,7 +28,9 @@ export function createClassifierPreparationPort(deps: {
         },
         // A provider kind the structured path cannot execute (e.g. choice-only System One) must
         // show a setup failure, so the pure module is told up front. No silent switch.
-        structured: isSortingProviderKind(model.provider_kind)
+        structured: isSortingProviderKind(model.provider_kind),
+        // Shown as who sorted a tool. The integrations module validates them before storing.
+        displayNames: { model: model.display_name, provider: model.provider_display_name }
       };
     },
 

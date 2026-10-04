@@ -1,237 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { generateStructured, modelActivityStructuredCode } from "@moss/ai";
-import type { DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
+import { modelActivityStructuredCode } from "@moss/ai";
 import { assertMetadataOnlyPayload } from "@moss/jobs";
 import {
+  classifierSortView,
   enqueueClassifierSort,
   INTEGRATION_CLASSIFIER_SORT_MAX_TOOLS_PER_CALL,
   INTEGRATION_CLASSIFIER_SORT_QUEUE,
   INTEGRATION_CLASSIFIER_SORT_SERVICE,
   integrationsModuleManifest,
   reduceSortingInputSchema,
-  runClassifierSortJob,
-  sortEntry,
+  emptySortMap,
+  toolRiskInputs,
+  toolSortFingerprint,
   toolSortState,
   withSortResult,
-  type ClassifierPreparationPort,
-  type ClassifierSortJobOp,
-  type ClassifierSortResult,
-  type ConnectionRow,
   type DiscoveredTool,
-  type IntegrationsRepository,
   type PreparationStructuredOutcome
 } from "@moss/integrations";
 import type { PgBoss } from "pg-boss";
 
-const ACTOR = { actorUserId: "00000000-0000-4000-8000-00000000000a", requestId: "test" };
-const CONNECTION_ID = "00000000-0000-4000-8000-0000000000c1";
+import {
+  ACTOR,
+  connection,
+  CONNECTION_ID,
+  CREDENTIAL,
+  entry,
+  harness,
+  promptIds,
+  sentSchemas,
+  throughRouter,
+  tool,
+  webTool
+} from "./helpers/integrations-classifier-sorting-harness.js";
 
-// Chosen so its plain, base64 and URL-encoded forms all differ.
-const CREDENTIAL = "tok/en+val=ue&x";
 const CREDENTIAL_FORMS = [
   CREDENTIAL,
   Buffer.from(CREDENTIAL).toString("base64"),
   Buffer.from(CREDENTIAL).toString("base64url"),
   encodeURIComponent(CREDENTIAL)
 ];
-
-function tool(name: string, overrides: Partial<DiscoveredTool> = {}): DiscoveredTool {
-  return {
-    name,
-    description: `Does ${name}`,
-    group: "Home",
-    inputSchema: { type: "object", properties: { id: { type: "string" } } },
-    ...overrides
-  };
-}
-
-function webTool(name: string, method: string, overrides: Partial<DiscoveredTool> = {}) {
-  return tool(name, {
-    invoke: { method, path: `/api/${name}`, params: [], hasBody: false },
-    ...overrides
-  });
-}
-
-function connection(
-  tools: DiscoveredTool[],
-  overrides: Partial<ConnectionRow> = {}
-): ConnectionRow {
-  return {
-    id: CONNECTION_ID,
-    ownerUserId: ACTOR.actorUserId,
-    name: "Home",
-    kind: "mcp",
-    transport: "http",
-    url: "https://owner:hunter2@home.internal.example/mcp?token=query-secret",
-    credentialPlacement: { kind: "header", name: "X-Home-Key" },
-    hasCredential: true,
-    enabled: true,
-    baseUrl: "https://home.internal.example",
-    specPasted: false,
-    enabledGroups: [],
-    enabledTools: [],
-    mutedTools: [],
-    unsuppressedTools: [],
-    classifierEnabled: false,
-    classifierPreparation: { version: 1, entries: {} },
-    classifierSort: { version: 1, entries: {} },
-    classifierKeptOutTools: [],
-    discoveredTools: tools,
-    lastDiscoveryAt: null,
-    lastError: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides
-  };
-}
-
-type RunInput = Parameters<ClassifierPreparationPort["runStructuredDraft"]>[1];
-
-/** The ids in one call's prompt. */
-function promptIds(prompt: string): string[] {
-  const data = prompt.slice(prompt.indexOf("UNTRUSTED DATA:\n") + 16);
-  return (JSON.parse(data) as { id: string }[]).map((entry) => entry.id);
-}
-
-/**
- * Runs the call through the real structured router, as the production port does: its prompt size
- * check and its answer check both apply. Only the provider's reply is scripted.
- */
-/** Every schema the scripted provider was sent. */
-const sentSchemas: Record<string, unknown>[] = [];
-
-async function throughRouter(
-  input: RunInput,
-  reply: (ids: string[]) => unknown
-): Promise<PreparationStructuredOutcome> {
-  const result = await generateStructured(
-    {} as DataContextDb,
-    {
-      service: input.service ?? "module.integrations",
-      schema: input.schema,
-      prompt: input.prompt,
-      explicitModel: {
-        id: "m1",
-        provider_config_id: "p1",
-        provider_kind: "anthropic",
-        provider_model_id: "opaque-model"
-      },
-      maxOutputTokens: input.maxOutputTokens,
-      singleAttempt: true,
-      servedByLabel: "main",
-      ...(input.replySchema ? { replySchema: input.replySchema } : {})
-    },
-    {
-      repository: {
-        selectProviderWithCredential: async () => ({
-          id: "p1",
-          auth_method: "api_key",
-          base_url: null,
-          encrypted_credential: {}
-        })
-      } as never,
-      cipher: { decryptJson: () => ({ apiKey: "sk-test" }) },
-      createAdapter: () => ({
-        generateStructured: async (request: { schema: Record<string, unknown> }) => {
-          sentSchemas.push(request.schema);
-          return {
-            rawObject: reply(promptIds(input.prompt)),
-            usage: { inputTokens: 1, outputTokens: 1 }
-          };
-        }
-      })
-    }
-  );
-  return result.ok
-    ? { ok: true, object: result.object, usage: result.usage }
-    : { ok: false, error: result.error };
-}
-
-/** Answers every tool in the call with `group`, unless `answer` overrides the reply. */
-function harness(
-  row: ConnectionRow,
-  config: {
-    group?: string;
-    answer?: (
-      ids: string[],
-      input: RunInput
-    ) => PreparationStructuredOutcome | Promise<PreparationStructuredOutcome>;
-    structured?: boolean | null;
-    credential?: string | null;
-  } = {}
-) {
-  const state = { row };
-  const runs: RunInput[] = [];
-  const port: ClassifierPreparationPort = {
-    selectDefaultChatModel: async () =>
-      config.structured === null
-        ? null
-        : {
-            model: {
-              id: "m1",
-              providerConfigId: "p1",
-              providerKind: "opaque-kind",
-              providerModelId: "opaque-model"
-            },
-            structured: config.structured ?? true
-          },
-    runStructuredDraft: async (_db, input) => {
-      runs.push(input);
-      const ids = promptIds(input.prompt);
-      if (config.answer) return config.answer(ids, input);
-      return {
-        ok: true,
-        object: {
-          tools: ids.map((id) => ({
-            id,
-            group: config.group ?? "changes_things",
-            name: `Name ${id}`
-          }))
-        },
-        usage: { inputTokens: 1, outputTokens: 1 }
-      };
-    }
-  };
-  const repository = {
-    getConnection: async () => state.row,
-    loadCredentialEnvelope: async () =>
-      config.credential === null ? null : { secret: config.credential ?? CREDENTIAL },
-    saveClassifierToolSorts: async (
-      _db: DataContextDb,
-      _id: string,
-      results: readonly { toolName: string; result: ClassifierSortResult }[]
-    ) => {
-      let sort = state.row.classifierSort;
-      for (const { toolName, result } of results) {
-        sort = withSortResult(sort, toolName, result) ?? sort;
-      }
-      state.row = { ...state.row, classifierSort: sort };
-      return state.row;
-    }
-  } as unknown as IntegrationsRepository;
-  const cipher = {
-    parseEnvelope: (envelope: unknown) => envelope,
-    decryptJson: (envelope: { secret: string }) => ({ secret: envelope.secret })
-  } as unknown as JsonSecretCipher;
-  const dataContext = {
-    withDataContext: (_ctx: unknown, fn: (db: DataContextDb) => Promise<unknown>) =>
-      fn({} as DataContextDb)
-  } as unknown as DataContextRunner;
-
-  const run = (op: ClassifierSortJobOp = "sort") =>
-    runClassifierSortJob(
-      { dataContext, port, repository, cipherSources: { cipher } },
-      ACTOR,
-      CONNECTION_ID,
-      op
-    );
-  return { state, runs, run };
-}
-
-function entry(state: { row: ConnectionRow }, name: string) {
-  return sortEntry(state.row.classifierSort, name);
-}
 
 describe("reduced input schema sent for sorting", () => {
   const FORBIDDEN = [
@@ -558,21 +366,88 @@ describe("what gets sent, and when", () => {
     expect(entry(h.state, "leaky")).toMatchObject({ status: "failed", failure: "unsafe" });
   });
 
-  it("writes nothing and calls nothing without a usable model", async () => {
+  it("records a failed sort on every target, without a call, when no model can sort", async () => {
     for (const structured of [null, false]) {
-      const h = harness(connection([tool("a")]), { structured });
+      const h = harness(connection([tool("a"), tool("b")]), { structured });
       expect(await h.run()).toEqual({ status: "no_model" });
       expect(h.runs).toHaveLength(0);
-      expect(entry(h.state, "a")).toBeUndefined();
+      expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "no_model" });
+      expect(entry(h.state, "b")).toMatchObject({ status: "failed", failure: "no_model" });
+
+      // Only Try again resends them.
+      expect(await h.run()).toEqual({ status: "nothing_to_sort" });
     }
   });
 
-  it("writes nothing when the model turns out not to be set up", async () => {
+  it("records which model sorted each tool it sent", async () => {
+    const h = harness(connection([tool("a"), tool("huge", { description: "x".repeat(9000) })]), {
+      displayNames: { model: "Fast model", provider: "Home lab" }
+    });
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({
+      status: "current",
+      sortMethod: "model",
+      sortedBy: { model: "Fast model", provider: "Home lab" }
+    });
+    // A tool settled without a call was sorted locally, by no model.
+    expect(entry(h.state, "huge")).toMatchObject({
+      status: "current",
+      sortMethod: "local",
+      sortedBy: null
+    });
+  });
+
+  it("explains the missing model on first setup, when no tool could be sorted", async () => {
+    const h = harness(connection([tool("a"), tool("b")], { classifierEnabled: true }), {
+      structured: null
+    });
+    expect(await h.run()).toEqual({ status: "no_model" });
+
+    const tools = classifierSortView(h.state.row);
+    expect(tools.map((sort) => sort.classifierState)).toEqual(["failed", "failed"]);
+    expect(tools[0]).toMatchObject({ preparationFailure: "no_model", failure: "no_model" });
+    expect(tools[0]!.failedAt).not.toBeNull();
+  });
+
+  it("resends only no-model failures once a model exists, and leaves them while none does", async () => {
+    const failedAt = "2026-10-03T00:00:00.000Z";
+    let sort = emptySortMap();
+    for (const [t, failure] of [
+      [tool("a"), "no_model"],
+      [tool("b"), "error"]
+    ] as const) {
+      sort = withSortResult(sort, t.name, {
+        status: "failed",
+        failure,
+        sortFingerprint: toolSortFingerprint(toolRiskInputs(t)),
+        sortedAt: failedAt
+      })!;
+    }
+    const row = connection([tool("a"), tool("b")], { classifierSort: sort });
+
+    const waiting = harness(row, { structured: null });
+    expect(await waiting.run("model_ready")).toEqual({ status: "no_model" });
+    expect(entry(waiting.state, "a")).toMatchObject({ failure: "no_model", sortedAt: failedAt });
+
+    const resumed = harness(row);
+    await resumed.run("model_ready");
+    expect(resumed.runs.map((run) => promptIds(run.prompt).length)).toEqual([1]);
+    expect(entry(resumed.state, "a")).toMatchObject({ status: "current" });
+    expect(entry(resumed.state, "b")).toMatchObject({ status: "failed", failure: "error" });
+  });
+
+  it("stores no sorter when the model has no readable names", async () => {
+    const h = harness(connection([tool("a")]));
+    await h.run();
+    expect(entry(h.state, "a")).toMatchObject({ status: "current", sortedBy: null });
+  });
+
+  it("leaves the started call for Try again when the model turns out not to be set up", async () => {
     const h = harness(connection([tool("a")]), {
       answer: () => ({ ok: false, error: "needs_config" })
     });
     expect(await h.run()).toMatchObject({ status: "stopped" });
-    expect(entry(h.state, "a")).toBeUndefined();
+    expect(entry(h.state, "a")).toMatchObject({ status: "failed", failure: "interrupted" });
   });
 
   it("batches large connections and bounds each call", async () => {

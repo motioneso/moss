@@ -1,6 +1,7 @@
 import type { DataContextDb } from "@moss/db";
 import type { IntegrationClassifierArgument, IntegrationToolDescriptor } from "@moss/shared";
 
+import { attemptLive } from "./classifier-attempt.js";
 import { toolDefinitionFingerprint } from "./classifier-fingerprint.js";
 import type { RiskInputSource } from "./classifier-risk-inputs.js";
 import {
@@ -17,6 +18,7 @@ import {
   type ClassifierSortMap,
   type ParseResult
 } from "./classifier-settings.js";
+import { schemaHasRootCombinator } from "./classifier-standing.js";
 import { payloadHoldsCredential, type CredentialMatcher } from "./classifier-sorting.js";
 import { effectiveEnabledTools, type CurationState } from "./curation.js";
 
@@ -40,7 +42,6 @@ export const INTEGRATION_CLASSIFIER_MAX_DEFINITION_CHARS = 8000;
 const REPLY_FIELDS = ["status", "action", "summary"] as const;
 const PLACEHOLDER = /\{([^{}]*)\}/g;
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
 
 /** The owner's current default chat model, described without naming a provider or model. */
 export interface PreparationChatModel {
@@ -54,6 +55,8 @@ export interface PreparationChatSelection {
   readonly model: PreparationChatModel;
   /** false when this model cannot produce the required structured draft. */
   readonly structured: boolean;
+  /** The model's and its provider's display names, shown as who sorted a tool. Unvalidated. */
+  readonly displayNames?: { readonly model: string; readonly provider: string };
 }
 
 export type PreparationStructuredOutcome =
@@ -323,15 +326,13 @@ export function derivePreparationArguments(
   return out;
 }
 
-function schemaHasRootCombinator(schema: Record<string, unknown> | null): boolean {
-  return schema !== null && ROOT_COMBINATORS.some((key) => key in schema);
-}
-
 /**
  * The tools a preparation job drafts, in discovered order: on for ordinary chat, not kept out,
  * sorted against their current risk inputs, with a schema the classifier can declare, and with no
  * preparation for their current definition. A tool whose last attempt failed against its current
  * definition waits for the owner's Try again (`retryFailed`), so no automatic retry repeats a cost.
+ * A `no_model` failure never reached a provider, so a model being added retries it (`retryNoModel`).
+ * A tool whose call may still be running is left to that call.
  */
 export interface PreparationJobTargetsInput {
   readonly discoveredTools: readonly RiskInputSource[];
@@ -340,6 +341,8 @@ export interface PreparationJobTargetsInput {
   readonly keptOut: readonly string[];
   readonly curation: CurationState;
   readonly retryFailed: boolean;
+  readonly retryNoModel?: boolean;
+  readonly now: Date;
 }
 
 export function preparationJobTargets(input: PreparationJobTargetsInput): RiskInputSource[] {
@@ -356,7 +359,9 @@ export function preparationJobTargets(input: PreparationJobTargetsInput): RiskIn
       return false;
     }
     const failure = preparationFailure(input.preparation, tool.name);
-    return input.retryFailed || failure?.definitionFingerprint !== fingerprint;
+    if (failure?.definitionFingerprint !== fingerprint) return true;
+    if (failure.reason === "interrupted" && attemptLive(failure.failedAt, input.now)) return false;
+    return input.retryFailed || (input.retryNoModel === true && failure.reason === "no_model");
   });
 }
 

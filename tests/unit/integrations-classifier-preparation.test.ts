@@ -9,6 +9,7 @@ import {
   derivePreparationArguments,
   emptySortMap,
   INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
+  INTEGRATION_CLASSIFIER_SORT_QUEUE,
   parsePreparationDraft,
   preparationJobTargets,
   registerIntegrationsRoutes,
@@ -286,7 +287,8 @@ function targetsInput(overrides: Partial<PreparationJobTargetsInput> = {}) {
     keptOut: [],
     curation: CURATION,
     retryFailed: false,
-    ...overrides
+    ...overrides,
+    now: overrides.now ?? new Date()
   } satisfies PreparationJobTargetsInput;
 }
 
@@ -434,6 +436,34 @@ describe("POST /api/integrations/:id/classifier/prepare", () => {
     expect(sent[0]!.queue).toBe(INTEGRATION_CLASSIFIER_PREPARE_QUEUE);
     expect(sent[0]!.payload).toEqual({ actorUserId: "user-a", resourceId: "conn-1", op: "retry" });
     expect(writes).toEqual([]);
+  });
+
+  it("re-sorts a tool whose sort failed before queueing the preparation retry", async () => {
+    const sent: SentJob[] = [];
+    const current = tool();
+    const classifierSort = withSortResult(emptySortMap(), current.name, {
+      status: "failed",
+      failure: "no_model",
+      sortFingerprint: toolSortFingerprint(toolRiskInputs(current)),
+      sortedAt: "2026-10-03T00:00:00.000Z"
+    })!;
+    const server = buildServer(connection({ classifierSort }), { sent });
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/integrations/conn-1/classifier/prepare",
+      payload: {}
+    });
+    expect(response.statusCode).toBe(202);
+    expect(sent.map((job) => [job.queue, job.payload])).toEqual([
+      [
+        INTEGRATION_CLASSIFIER_SORT_QUEUE,
+        { actorUserId: "user-a", resourceId: "conn-1", op: "retry" }
+      ],
+      [
+        INTEGRATION_CLASSIFIER_PREPARE_QUEUE,
+        { actorUserId: "user-a", resourceId: "conn-1", op: "retry" }
+      ]
+    ]);
   });
 
   it("rejects a non-boolean force and requires the connection switch", async () => {

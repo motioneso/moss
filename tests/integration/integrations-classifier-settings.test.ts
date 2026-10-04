@@ -5,7 +5,7 @@ import type { Kysely } from "kysely";
 
 import { createDatabase, DataContextRunner, type AccessContext, type MossDatabase } from "@moss/db";
 import {
-  classifierPreparationView,
+  classifierSortView,
   createIntegrationsCipher,
   createResolverCache,
   effectiveClassifierTools,
@@ -32,21 +32,6 @@ const TURN_ON: IntegrationToolDescriptor = {
 
 function context(actorUserId: string): AccessContext {
   return { actorUserId, requestId: `req:classifier-settings:${actorUserId}` };
-}
-
-function reviewFor(
-  tool: IntegrationToolDescriptor,
-  overrides: Record<string, unknown> = {}
-): Record<string, unknown> {
-  return {
-    optIn: true,
-    reviewedRisk: "write",
-    description: "Turn one light on",
-    arguments: {},
-    replyTemplate: "Turned it on.",
-    reviewedFingerprint: toolDefinitionFingerprint(tool),
-    ...overrides
-  };
 }
 
 describe("integrations classifier settings storage, opt-in and invalidation (#2884)", () => {
@@ -243,8 +228,13 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
       repository.saveDiscovery(scopedDb, conn.id, [drifted], null)
     );
 
+    // The new definition is sorted again, so only the stale preparation holds it back.
+    await sortAs(conn.id, "write", [drifted]);
+
     const row = (await load(ids.userA, conn.id))!;
-    expect(classifierPreparationView(row).map((entry) => entry.state)).toEqual(["stale"]);
+    expect(classifierSortView(row).map((entry) => entry.classifierState)).toEqual([
+      "preparing_again"
+    ]);
     expect(effectiveClassifierTools(row)).toEqual([]);
   });
 
@@ -313,16 +303,18 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
     expect(effectiveClassifierTools((await load(ids.userA, conn.id))!)).toHaveLength(1);
 
     const keptOut = await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
-      repository.setClassifierToolKeptOut(scopedDb, conn.id, "turn_on", true)
+      repository.setClassifierToolsKeptOut(scopedDb, conn.id, ["turn_on"], true)
     );
-    expect(keptOut?.classifierKeptOutTools).toEqual(["turn_on"]);
-    expect(effectiveClassifierTools(keptOut!)).toEqual([]);
+    if (keptOut.status !== "saved") throw new Error(`keep out failed: ${keptOut.status}`);
+    expect(keptOut.connection.classifierKeptOutTools).toEqual(["turn_on"]);
+    expect(effectiveClassifierTools(keptOut.connection)).toEqual([]);
 
     const letIn = await dataContext.withDataContext(context(ids.userA), (scopedDb) =>
-      repository.setClassifierToolKeptOut(scopedDb, conn.id, "turn_on", false)
+      repository.setClassifierToolsKeptOut(scopedDb, conn.id, ["turn_on"], false)
     );
-    expect(letIn?.classifierKeptOutTools).toEqual([]);
-    expect(effectiveClassifierTools(letIn!)).toHaveLength(1);
+    if (letIn.status !== "saved") throw new Error(`let in failed: ${letIn.status}`);
+    expect(letIn.connection.classifierKeptOutTools).toEqual([]);
+    expect(effectiveClassifierTools(letIn.connection)).toHaveLength(1);
   });
 
   it("keeps both reviews when two saves start at the same moment", async () => {
@@ -510,148 +502,111 @@ describe("integrations classifier settings storage, opt-in and invalidation (#28
       return app;
     }
 
-    it("saves, reads, removes a review and drops the resolver cache after each mutation", async () => {
+    function keptOut(
+      app: ReturnType<typeof buildApp>,
+      id: string,
+      payload: Record<string, unknown>
+    ) {
+      return app.inject({
+        method: "PUT",
+        url: `/api/integrations/${id}/classifier/kept-out`,
+        payload
+      });
+    }
+
+    it("keeps a tool out, lets it back in, and drops the resolver cache each time", async () => {
       const cache = createResolverCache();
       const app = buildApp(ids.userA, cache);
       try {
         const conn = await createConnection(ids.userA, "Owner A Routes");
         cache.set(ids.userA, []);
-        expect(cache.get(ids.userA)).toEqual([]);
 
-        const saved = await app.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON)
-        });
-        expect(saved.statusCode).toBe(200);
-        expect(saved.json().classifierPreparation).toHaveLength(1);
+        const out = await keptOut(app, conn.id, { toolNames: ["turn_on"], keptOut: true });
+        expect(out.statusCode).toBe(200);
         expect(cache.get(ids.userA)).toBeUndefined();
-
-        const detail = await app.inject({ method: "GET", url: `/api/integrations/${conn.id}` });
-        expect(detail.json().classifierPreparation[0].state).toBe("current");
-
-        cache.set(ids.userA, []);
-        const enabled = await app.inject({
-          method: "PATCH",
-          url: `/api/integrations/${conn.id}`,
-          payload: { classifierEnabled: true }
-        });
-        expect(enabled.statusCode).toBe(200);
-        expect(enabled.json().classifierEnabled).toBe(true);
-        expect(cache.get(ids.userA)).toBeUndefined();
-
-        cache.set(ids.userA, []);
-        const removed = await app.inject({
-          method: "DELETE",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`
-        });
-        expect(removed.statusCode).toBe(200);
-        expect(removed.json().classifierPreparation).toEqual([]);
-        expect(cache.get(ids.userA)).toBeUndefined();
-        // Removing a review keeps the tool out, so automatic preparation cannot bring it back.
         expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual(["turn_on"]);
-      } finally {
-        await app.close();
-      }
-    });
+        expect(
+          out
+            .json()
+            .classifierTools.map(
+              (tool: { toolName: string; keptOut: boolean }) => `${tool.toolName}:${tool.keptOut}`
+            )
+        ).toEqual(["turn_on:true"]);
 
-    it("keeps an opted-out tool out and lets an opted-in save bring it back", async () => {
-      const app = buildApp(ids.userA, createResolverCache());
-      try {
-        const conn = await createConnection(ids.userA, "Owner A Route Kept Out");
-        const optedIn = await app.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON)
-        });
-        expect(optedIn.statusCode).toBe(200);
-        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
-
-        const optedOut = await app.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON, { optIn: false })
-        });
-        expect(optedOut.statusCode).toBe(200);
+        // Keeping a tool out twice is a no-op, not a duplicate.
+        const again = await keptOut(app, conn.id, { toolNames: ["turn_on"], keptOut: true });
+        expect(again.statusCode).toBe(200);
         expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual(["turn_on"]);
 
-        const backIn = await app.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON)
-        });
+        cache.set(ids.userA, []);
+        const backIn = await keptOut(app, conn.id, { toolNames: ["turn_on"], keptOut: false });
         expect(backIn.statusCode).toBe(200);
+        expect(cache.get(ids.userA)).toBeUndefined();
         expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
-
-        // A name that is not discovered never joins the kept-out list.
-        const unknown = await app.inject({
-          method: "DELETE",
-          url: `/api/integrations/${conn.id}/classifier/tools/not_discovered`
-        });
-        expect(unknown.statusCode).toBe(200);
-        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
+        expect(backIn.json().classifierTools[0].keptOut).toBe(false);
       } finally {
         await app.close();
       }
     });
 
-    it("returns 409 for a stale save and 400 for a malformed body", async () => {
+    it("refuses an unknown tool name and a malformed body without changing the row", async () => {
       const app = buildApp(ids.userA, createResolverCache());
       try {
         const conn = await createConnection(ids.userA, "Owner A Route Errors");
-        const stale = await app.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON, { reviewedFingerprint: "sha256:superseded" })
-        });
-        expect(stale.statusCode).toBe(409);
 
-        const malformed = await app.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON, { reviewedRisk: "harmless" })
+        // All or nothing: one unknown name refuses the whole request.
+        const unknown = await keptOut(app, conn.id, {
+          toolNames: ["turn_on", "not_discovered"],
+          keptOut: true
         });
-        expect(malformed.statusCode).toBe(400);
+        expect(unknown.statusCode).toBe(400);
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
 
-        const otherOwner = buildApp(ids.userB, createResolverCache());
-        const forged = await otherOwner.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON)
-        });
-        expect(forged.statusCode).toBe(404);
-        await otherOwner.close();
+        for (const payload of [
+          { toolNames: ["turn_on"] },
+          { toolNames: [], keptOut: true },
+          { toolNames: "turn_on", keptOut: true },
+          { toolNames: [7], keptOut: true },
+          { toolNames: ["x".repeat(201)], keptOut: true },
+          { toolNames: ["turn_on"], keptOut: "yes" }
+        ]) {
+          const res = await keptOut(app, conn.id, payload);
+          expect(res.statusCode).toBe(400);
+        }
+        expect((await load(ids.userA, conn.id))?.classifierKeptOutTools).toEqual([]);
       } finally {
         await app.close();
       }
     });
 
-    it("does not let another user or an admin delete the owner's review", async () => {
+    it("does not let another user or an admin keep out or let back in the owner's tool", async () => {
       const owner = buildApp(ids.userA, createResolverCache());
       const other = buildApp(ids.userB, createResolverCache());
       const admin = buildApp(ids.adminUser, createResolverCache());
       try {
-        const conn = await createConnection(ids.userA, "Owner A Delete Route");
-        const saved = await owner.inject({
-          method: "PUT",
-          url: `/api/integrations/${conn.id}/classifier/tools/turn_on`,
-          payload: reviewFor(TURN_ON)
-        });
-        expect(saved.statusCode).toBe(200);
+        const kept = await createConnection(ids.userA, "Owner A Kept Out Route");
+        const open = await createConnection(ids.userA, "Owner A Open Route");
+        const ownerOut = await keptOut(owner, kept.id, { toolNames: ["turn_on"], keptOut: true });
+        expect(ownerOut.statusCode).toBe(200);
 
         for (const intruder of [other, admin]) {
-          const res = await intruder.inject({
-            method: "DELETE",
-            url: `/api/integrations/${conn.id}/classifier/tools/turn_on`
+          const letIn = await keptOut(intruder, kept.id, {
+            toolNames: ["turn_on"],
+            keptOut: false
           });
-          expect(res.statusCode).toBe(404);
+          expect(letIn.statusCode).toBe(404);
+          expect(letIn.json()).toEqual({ error: "Integration not found" });
+
+          const keepOut = await keptOut(intruder, open.id, {
+            toolNames: ["turn_on"],
+            keptOut: true
+          });
+          expect(keepOut.statusCode).toBe(404);
+          expect(keepOut.json()).toEqual({ error: "Integration not found" });
         }
 
-        const stillThere = await owner.inject({
-          method: "GET",
-          url: `/api/integrations/${conn.id}`
-        });
-        expect(stillThere.json().classifierPreparation).toHaveLength(1);
+        expect((await load(ids.userA, kept.id))?.classifierKeptOutTools).toEqual(["turn_on"]);
+        expect((await load(ids.userA, open.id))?.classifierKeptOutTools).toEqual([]);
       } finally {
         await owner.close();
         await other.close();

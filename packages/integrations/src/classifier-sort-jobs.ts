@@ -4,21 +4,26 @@ import type { PgBoss, WorkOptions } from "pg-boss";
 
 import type { AccessContext, DataContextRunner, MossDatabase } from "@moss/db";
 import { sendJob, toAccessContext, type QueueDefinition } from "@moss/jobs";
+import type { IntegrationClassifierSortedBy } from "@moss/shared";
 
+import { CLASSIFIER_ATTEMPT_LIVE_MS } from "./classifier-attempt.js";
 import { enqueueClassifierPreparation } from "./classifier-preparation-jobs.js";
 import type { ClassifierPreparationPort, PreparationChatModel } from "./classifier-preparation.js";
+import { toolRiskInputs, toolSortFingerprint } from "./classifier-risk-inputs.js";
 import {
   credentialMatcher,
+  failedSortResults,
   freeReadableNames,
   planSortingCalls,
   resultsWithoutCall,
   runSortingCall,
   sortingTargets,
+  withSortedBy,
   type SortingCallTool
 } from "./classifier-sorting.js";
 import { loadClassifierCheckCredential, type IntegrationsCipherSources } from "./credentials.js";
 import { INTEGRATION_CLASSIFIER_SORT_QUEUE } from "./manifest.js";
-import { IntegrationsRepository } from "./repository.js";
+import { IntegrationsRepository, type ConnectionRow } from "./repository.js";
 
 /**
  * The sorting job (spec 8.2, #2984 R2.2). It runs on connection add, on a discovery refresh, when
@@ -36,14 +41,17 @@ export const INTEGRATION_CLASSIFIER_SORT_QUEUE_DEFINITION: QueueDefinition = {
     policy: "stately",
     // A provider charge is never repeated automatically.
     retryLimit: 0,
-    expireInSeconds: 1800,
+    expireInSeconds: CLASSIFIER_ATTEMPT_LIVE_MS / 1000,
     deleteAfterSeconds: 300,
     retentionSeconds: 3600
   }
 };
 
-/** `sort` sorts never-tried and stale tools. `retry` also re-sends tools whose sort failed. */
-export type ClassifierSortJobOp = "sort" | "retry";
+/**
+ * `sort` sorts never-tried and stale tools. `retry` also re-sends tools whose sort failed.
+ * `model_ready` also re-sends only tools whose sort failed for want of a model.
+ */
+export type ClassifierSortJobOp = "sort" | "retry" | "model_ready";
 
 export interface ClassifierSortJobPayload {
   readonly actorUserId: string;
@@ -84,15 +92,29 @@ export type ClassifierSortJobOutcome =
 
 interface PreparedSort {
   readonly model: PreparationChatModel;
+  readonly sortedBy: IntegrationClassifierSortedBy | null;
   readonly calls: readonly (readonly SortingCallTool[])[];
   readonly freeNames: ReadonlyMap<string, string>;
   readonly written: number;
 }
 
+/** The tools this run should sort, read from the row as it is now. */
+function targetsFor(row: ConnectionRow, op: ClassifierSortJobOp, now: Date) {
+  return sortingTargets({
+    discoveredTools: row.discoveredTools,
+    sort: row.classifierSort,
+    retryFailed: op === "retry",
+    retryNoModel: op === "model_ready",
+    now
+  });
+}
+
 /**
  * Sort one connection's tools. The first transaction reads the row, checks the credential and
- * settles tools that need no call. Each model call then runs in its own transaction and writes
- * its own results, so one failed call never undoes another call's work.
+ * settles tools that need no call. Each model call then runs in two transactions. The first locks
+ * the row, keeps the call's tools that are still targets and marks them as a started call, so no
+ * other run sends them and a call that never saves leaves them for Try again. The second makes
+ * the call and writes its results, so one failed call never undoes another call's work.
  */
 export async function runClassifierSortJob(
   deps: ClassifierSortJobDeps,
@@ -110,15 +132,22 @@ export async function runClassifierSortJob(
     ): Promise<PreparedSort | Exclude<ClassifierSortJobOutcome, { calls: number }>> => {
       const row = await repository.getConnection(scopedDb, connectionId);
       if (!row?.discoveredTools) return { status: "nothing_to_sort" };
-      const targets = sortingTargets({
-        discoveredTools: row.discoveredTools,
-        sort: row.classifierSort,
-        retryFailed: op === "retry"
-      });
+      const targets = targetsFor(row, op, now());
       if (targets.length === 0) return { status: "nothing_to_sort" };
 
+      // Without a model that can sort, every target fails with reason `no_model`, so the page can
+      // say a model is missing. No provider was reached, so a `model_ready` run resends them once
+      // a model is chosen; a run that still finds none leaves those failures as they are.
       const selection = await deps.port.selectDefaultChatModel(scopedDb);
-      if (!selection?.structured) return { status: "no_model" };
+      if (!selection?.structured) {
+        if (op === "model_ready") return { status: "no_model" };
+        await repository.saveClassifierToolSorts(
+          scopedDb,
+          connectionId,
+          failedSortResults(targets, "no_model", now().toISOString())
+        );
+        return { status: "no_model" };
+      }
 
       const credential = await loadClassifierCheckCredential(
         scopedDb,
@@ -134,14 +163,48 @@ export async function runClassifierSortJob(
       if (settled.length > 0) {
         await repository.saveClassifierToolSorts(scopedDb, connectionId, settled);
       }
-      return { model: selection.model, calls: plan.calls, freeNames, written: settled.length };
+      return {
+        model: selection.model,
+        sortedBy: selection.displayNames ?? null,
+        calls: plan.calls,
+        freeNames,
+        written: settled.length
+      };
     }
   );
   if (!("model" in prepared)) return prepared;
 
   let written = prepared.written;
   let calls = 0;
-  for (const call of prepared.calls) {
+  for (const planned of prepared.calls) {
+    const call = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
+      const row = await repository.getConnectionForUpdate(scopedDb, connectionId);
+      if (!row) return [];
+      const fingerprints = new Map(
+        targetsFor(row, op, now()).map((tool) => [
+          tool.name,
+          toolSortFingerprint(toolRiskInputs(tool))
+        ])
+      );
+      const kept = planned.filter(
+        (entry) =>
+          fingerprints.get(entry.tool.name) === toolSortFingerprint(toolRiskInputs(entry.tool))
+      );
+      if (kept.length > 0) {
+        await repository.saveClassifierToolSorts(
+          scopedDb,
+          connectionId,
+          failedSortResults(
+            kept.map((entry) => entry.tool),
+            "interrupted",
+            now().toISOString()
+          )
+        );
+      }
+      return kept;
+    });
+    if (call.length === 0) continue;
+
     const results = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
       const callResults = await runSortingCall(
         scopedDb,
@@ -151,9 +214,10 @@ export async function runClassifierSortJob(
         prepared.freeNames,
         now
       );
-      if (callResults)
-        await repository.saveClassifierToolSorts(scopedDb, connectionId, callResults);
-      return callResults;
+      if (!callResults) return null;
+      const stamped = withSortedBy(callResults, prepared.sortedBy);
+      await repository.saveClassifierToolSorts(scopedDb, connectionId, stamped);
+      return stamped;
     });
     calls += 1;
     if (!results) return { status: "stopped", calls, written };
@@ -186,6 +250,10 @@ export interface RegisterClassifierSortWorkersDeps extends ClassifierSortJobDeps
   readonly workOptions?: WorkOptions;
 }
 
+function sortJobOp(op: unknown): ClassifierSortJobOp {
+  return op === "retry" || op === "model_ready" ? op : "sort";
+}
+
 export async function registerClassifierSortWorkers(
   boss: PgBoss,
   deps: RegisterClassifierSortWorkersDeps
@@ -195,7 +263,7 @@ export async function registerClassifierSortWorkers(
     deps.workOptions ?? { pollingIntervalSeconds: 2 },
     async ([job]) => {
       if (!job) throw new Error("pg-boss invoked tool sorting without a job");
-      const op: ClassifierSortJobOp = job.data.op === "retry" ? "retry" : "sort";
+      const op = sortJobOp(job.data.op);
       const outcome = await runClassifierSortJob(
         deps,
         toAccessContext(job),

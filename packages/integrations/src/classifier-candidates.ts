@@ -5,7 +5,7 @@ import {
   effectiveClassifierTools,
   type ClassifierConnectionState,
   type EligibleClassifierTool
-} from "./classifier-settings.js";
+} from "./classifier-standing.js";
 
 /**
  * Candidate lists for connected tools (plan 2b.5, #2905).

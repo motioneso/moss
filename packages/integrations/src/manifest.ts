@@ -27,8 +27,7 @@ export const integrationsModuleManifest = {
     { method: "PATCH", path: "/api/integrations/:id" },
     { method: "POST", path: "/api/integrations/:id/refresh" },
     { method: "DELETE", path: "/api/integrations/:id" },
-    { method: "PUT", path: "/api/integrations/:id/classifier/tools/:toolName" },
-    { method: "DELETE", path: "/api/integrations/:id/classifier/tools/:toolName" },
+    { method: "PUT", path: "/api/integrations/:id/classifier/kept-out" },
     { method: "POST", path: "/api/integrations/:id/classifier/prepare" },
     { method: "POST", path: "/api/integrations/:id/classifier/sort" },
     { method: "PUT", path: "/api/integrations/:id/classifier/send-without-asking" }
@@ -49,8 +48,8 @@ export const integrationsModuleManifest = {
       id: "integrations.connection_tool_sorting",
       description:
         "When a connection is added or refreshed, the owner's chat model sorts each tool by what " +
-        "it does and names it. A tool whose text holds the credential is not sent; delete is " +
-        "always sensitive; failed tools wait for Try again."
+        "it does and names it. A tool holding the credential is not sent; delete is always " +
+        "sensitive. Failures wait for Try again, unless no model was set up."
     },
     {
       id: "integrations.connection_tools_ask_first",
@@ -84,23 +83,37 @@ export const integrationsModuleManifest = {
         "is prepared again."
     },
     {
-      id: "integrations.connection_classifier_review",
+      id: "integrations.connection_classifier_panel",
       description:
-        "The classifier section shows what is sent to a model and what it costs. Prepared " +
-        "tools are saved without a review step, and every unusable tool names why."
+        "The Classifier panel shows Off, a one-time confirmation of what is sent and what it " +
+        "costs, Preparing with progress, Ready with how many tools answer and always ask, a " +
+        "tool changed, Couldn't prepare with Try again, No tools left, or Paused."
+    },
+    {
+      id: "integrations.connection_classifier_keep_out",
+      description:
+        "Each tool's menu has Keep out of the classifier, with an Undo. Ordinary chat can still " +
+        "use a kept-out tool. Let the classifier use it puts the tool back and prepares it."
+    },
+    {
+      id: "integrations.connection_sorting_line",
+      description:
+        "Tools show a readable name over the raw name. The Connection panel says when tools " +
+        "were sorted, which models read them, and how many Moss sorted without sending them " +
+        "(only the date if unrecorded). A failed sort gets Try again."
     },
     {
       id: "integrations.connection_classifier_preparation",
       description:
-        "With the classifier switch on, sorted chat tools are prepared in the background on " +
-        "the owner's model, again when changed or switched on. A tool whose text holds the " +
-        "credential is not sent. A failed tool waits for Try again.",
+        "With the classifier switch on, sorted chat tools are prepared on the owner's model, " +
+        "again when changed. A tool holding the credential is not sent. Failures wait for " +
+        "Try again, unless no model was set up; those resume once one is.",
       remediations: [
         {
           id: "integrations.connection_classifier_preparation.choose_chat_model",
           description:
             "Choose a chat model that supports structured output in Settings, Your assistant, " +
-            "then prepare again.",
+            "then open the connection again. Tools that waited for a model prepare by themselves.",
           path: "/settings?section=assistant"
         }
       ],

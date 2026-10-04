@@ -1,4 +1,5 @@
 export * from "./call-memory.js";
+export * from "./classifier-attempt.js";
 export * from "./classifier-candidates.js";
 export * from "./classifier-fingerprint.js";
 export * from "./classifier-preparation.js";
@@ -7,6 +8,7 @@ export * from "./classifier-readable-name.js";
 export * from "./classifier-reply.js";
 export * from "./classifier-risk-inputs.js";
 export * from "./classifier-settings.js";
+export * from "./classifier-standing.js";
 export * from "./classifier-sort-jobs.js";
 export * from "./classifier-sorting.js";
 export * from "./credentials.js";
