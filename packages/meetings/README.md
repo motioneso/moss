@@ -231,8 +231,8 @@ was corrected to 0280; backfill sidecars are excluded from Prettier and ESLint s
 changes cannot rewrite applied checksums. Applied main migrations are untouched. Do not reuse a
 disposable database carrying an earlier sidecar checksum or the old sequence, edit an applied
 ledger, or run these renames as a live database repair. Fresh exact-commit CI and UI proof remain
-required. The unpublished device-authorization candidate is still excluded and has no reserved
-migration number in this branch.
+required. The historical unpublished device-authorization candidate remains excluded. The new capture
+protocol described above uses migration 0284 for owner-bound links, grants and metadata receipts.
 
 ## Local verification
 
@@ -275,7 +275,8 @@ scripts/run-gate.sh wait --follow
 
 The underlying `test:uat:2981-meetings` command runs `tests/uat/run-meetings-uat.ts`, which includes
 `2981-meeting-drafts.uat.spec.ts`, `2981-meeting-chat.uat.spec.ts`,
-`2981-meeting-outputs.uat.spec.ts` and `2981-meeting-history.uat.spec.ts`.
+`2981-meeting-outputs.uat.spec.ts`, `2981-meeting-history.uat.spec.ts` and
+`2981-meeting-capture.uat.spec.ts`.
 The dedicated wrapper selects an absent host-login file in a fresh
 temporary directory; it never needs real provider credentials, host chat login, audio or a user's
 vault. The chat/summary tests disclose local third-party HTTP stand-ins while exercising Moss's
@@ -299,7 +300,7 @@ accepted-Task references and vault receipts. Vault assertions use public
 `VaultContext` operations. Real APIs clean up meeting/configuration fixtures; the provisioner
 removes the isolated DB and volumes, including deliberately surviving synthetic Task/note copies.
 This is the implemented acceptance path, not a claim of a passing live run. Exact-commit results
-and remaining blockers belong on [PR #2982](https://github.com/motioneso/moss/pull/2982).
+and remaining blockers for this capture slice belong on [PR #3056](https://github.com/motioneso/moss/pull/3056).
 
 ### Credential-free regression groups
 
@@ -309,7 +310,7 @@ before provisioning rather than falling back to all tests. Run these DB-backed g
 through the supported isolated gate.
 
 - `meetings`: draft/review/sign-out (3 tests), meeting chat (1), summary/Task/private and account
-  exports (1), History (1).
+  exports (1), History (1), generated-audio capture/ASR/transcript/control (1).
 - `chat`: private drawer #1089/#1090 (2), attachments #1133 (2 active, 1 fixme), runtime context
   (2 active, 2 fixmes), assistant naming (4).
 - `runtime`: module install/restart (1), vault ownership #1217 (1), install grant #1311
@@ -327,7 +328,7 @@ screenshot or video artifacts. The wrapper overrides any inherited host-auth loc
 absent temporary file and clears inherited real-chat readiness. No real provider login is used.
 Module installation may still download the public Finance module; that is not provider proof.
 
-The source groups define **26 active tests and 4 pre-existing fixmes**, not 30 passing assertions.
+The source groups define **27 active tests and 4 pre-existing fixmes**, not 31 passing assertions.
 The retired #2889 activity spec is replaced by #2956, preserving the one-test slot. The assembled
 main reconciliation and new migration numbering require a fresh run; older pass counts are historical.
 Attachments do not prove a model read the file; runtime-context does not prove the model's refusal

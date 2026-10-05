@@ -79,6 +79,9 @@ const ADAPTER_CONSTRUCTION_ALLOWLIST = new Set([
   "packages/ai/src/generate-text.ts",
   "packages/ai/src/structured/generate-structured.ts",
   "packages/ai/src/transcription-routes.ts",
+  // Meeting ASR uses HttpApiAdapter.transcribeAudio, which records the owner-bound
+  // transcribe.meeting action through the installed process-wide recorder.
+  "packages/ai/src/configured-transcription.ts",
   "packages/chat/src/jobs.ts",
   "packages/commitments/src/workers.ts",
   "packages/workshop/src/project-reply.ts",

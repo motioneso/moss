@@ -598,7 +598,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0280", name: "0280_meeting_history.sql" },
         { version: "0281", name: "0281_memory_screen_source_kind.sql" },
         { version: "0282", name: "0282_backtrack_segments.sql" },
-        { version: "0283", name: "0283_meeting_account_export.sql" }
+        { version: "0283", name: "0283_meeting_account_export.sql" },
+        { version: "0284", name: "0284_meeting_capture.sql" }
       ]);
     } finally {
       await client.end();
