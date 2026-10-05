@@ -189,9 +189,9 @@ export const chatModuleManifest = {
     {
       id: "chat.classifier_gate",
       description:
-        "Classifier gate switch: Off, Shadow or On, in the Classifier row. In Shadow each eligible " +
-        "message is also classified to record what the gate would have done; no tool runs and the " +
-        "main model answers. On needs a release.",
+        "Classifier switch: Off, Shadow or On. Shadow records what the gate would do and runs " +
+        "nothing. On needs a release; then a tool the classifier is sure of runs with no card, " +
+        "else the main model answers.",
       featureFlagId: "chat.module"
     },
     {

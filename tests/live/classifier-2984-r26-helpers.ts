@@ -97,6 +97,27 @@ export async function toolServerCalls(tool: string): Promise<readonly FixtureCal
   return state.calls.filter((call) => call.tool === tool);
 }
 
+/** Puts every stand-in device back to off, so a door shows unlocked only after the turn under test. */
+export async function switchAllDevicesOff(): Promise<void> {
+  const response = await fetch(`${R26.toolServer}/__control/devices`, {
+    method: "POST",
+    body: JSON.stringify([
+      { id: "light.kitchen", name: "Kitchen light", on: false },
+      { id: "light.porch", name: "Porch light", on: false },
+      { id: "lock.front", name: "Front door", on: false }
+    ])
+  });
+  expect(response.ok, "the tool server reset its devices").toBe(true);
+}
+
+/** Whether the stand-in tool server holds the named device switched on (a door counts as unlocked). */
+export async function deviceOn(name: string): Promise<boolean> {
+  const state = (await (await fetch(`${R26.toolServer}/__control/state`)).json()) as {
+    devices: readonly { name: string; on: boolean }[];
+  };
+  return state.devices.find((device) => device.name === name)?.on === true;
+}
+
 export async function connectionId(page: Page, name: string): Promise<string> {
   const list = (await (
     await page.request.get("/api/integrations")

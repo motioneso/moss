@@ -67,8 +67,8 @@ This is the `start` skill's plan+build stages adapted for coordination mode.
 - **Install only if needed:** `[ -d node_modules ] || pnpm install`. Worktrees share the pnpm
   store; if `node_modules` already exists (e.g. you're a relay successor), don't re-install.
   Confirm you are on your own branch, not `main`.
-- Run the agentmemory required recalls from CLAUDE.md for the work you're doing (state, plus the
-  row matching RLS / migrations / AccessContext / integration-test / frontend).
+- Search Hindsight memory (`hindsight_search_knowledge_pages`) for the work you're doing: project
+  state, plus RLS / migrations / AccessContext / integration-test / frontend as it applies.
 - Honor every CLAUDE.md **Hard Invariant**. Respect collision notes — **never assume a migration
   number**; the coordinator assigns landing order.
 

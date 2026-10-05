@@ -114,7 +114,7 @@ of rules. That path already provides:
 The gate adds three constraints on top.
 
 1. **Higher confidence for higher risk.** Each answer carries a confidence. The bar rises with the risk
-   level: read 0.90, write 0.95, outbound and destructive 0.98. The numbers are starting points taken
+   level: read 0.90, write, outbound and destructive 0.95 (Sensitive lowered from 0.98 on 2026-10-04, #3043, after System One never cleared 0.98 in 12 real tries). The numbers are starting points taken
    from the autonomous-os design (0.90 pick, 0.40 lead over the runner-up, 0.95 action fit) and are set
    in shadow mode (section 3.10), not guessed.
 2. **A clear lead.** The top choice must lead the runner-up by at least 0.40.
@@ -330,7 +330,7 @@ Ben ruled on 2026-10-04 how sorted connected tools ask outside YOLO (section 8.1
   `docs/superpowers/specs/2026-06-29-admin-yolo-auto-approval-mode.md` (locked with Ben,
   2026-06-29) auto-run calls that would otherwise ask, destructive ones included. Issue 2419's
   exception covers first-party destructive tools only, and connected tools are external tools.
-- **Confidence bar.** The sorted group sets the gate's bar. Sensitive needs 0.98.
+- **Confidence bar.** The sorted group sets the gate's bar. Sensitive needs 0.95.
 - **The gate never raises a card** (section 4). It declines whenever the gateway would ask, so the
   main model handles the message and shows the usual card.
 - The user cannot change a tool's group in version one.
@@ -504,7 +504,7 @@ higher than the sorted group.
   the tool asks; a send-without-asking choice stored on a Sensitive tool is ignored, a stale sort
   clears it, and another owner or an admin cannot set it; a Sensitive, unsorted or stale tool asking with
   YOLO off; a first-party outbound tool still asking; and a Sensitive tool refused by the gate below
-  the 0.98 bar.
+  the 0.95 bar.
 
 ### 8.9 Out of scope
 

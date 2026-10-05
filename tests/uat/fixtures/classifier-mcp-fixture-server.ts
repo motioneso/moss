@@ -152,7 +152,13 @@ export async function startClassifierMcpFixtureServer(options: {
         return textResult({ devices: devices.map(({ id, name }) => ({ id, name })) });
       }
       if (tool === FIXTURE_STATUS_TOOL) return textResult({ online: true });
-      const name = typeof args.name === "string" ? args.name : "";
+      // Door tools may name the door by display name or by a short choice such as "front".
+      const name =
+        typeof args.name === "string"
+          ? args.name
+          : typeof args.door === "string"
+            ? `${args.door.charAt(0).toUpperCase()}${args.door.slice(1)} door`
+            : "";
       const device = devices.find((entry) => entry.name === name);
       if (!device) return textResult({ error: `no device named ${name}` }, true);
       if (tool === FIXTURE_LIGHT_TOOL) {

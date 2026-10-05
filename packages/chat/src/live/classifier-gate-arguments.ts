@@ -82,6 +82,12 @@ export function gateEligibilityProblem(
   const declaration = checkClassifierEligibility(tool);
   if (!declaration.eligible) return "not_declared";
   const plan = planArguments(tool);
+  // A non-read tool with a property the gate will not fill would run on the server's default.
+  if (tool.risk !== "read") {
+    const planned = new Set(plan.map((arg) => arg.name));
+    const properties = isRecord(tool.inputSchema?.properties) ? tool.inputSchema.properties : {};
+    if (Object.keys(properties).some((name) => !planned.has(name))) return "unfilled_optional";
+  }
   const extracts = plan.some((arg) => arg.kind === "extract");
   if (extracts && capability === "choice_only") return "needs_typed_extraction";
   if (plan.filter((arg) => arg.kind === "candidates").length > 1) return "too_many_candidate_lists";
@@ -197,14 +203,14 @@ export function checkExtractedArguments(
 export const RISK_CONFIDENCE_BAR: Readonly<Record<GateToolRisk, number>> = {
   read: 0.9,
   write: 0.95,
-  outbound: 0.98,
-  destructive: 0.98
+  outbound: 0.95,
+  destructive: 0.95
 };
 
 /** The least lead the top choice must hold over the runner-up. */
 export const MIN_LEAD = 0.4;
 
-export const THRESHOLD_VERSION = "v1";
+export const THRESHOLD_VERSION = "v2";
 
 export function meetsConfidenceBar(confidence: number, risk: GateToolRisk): boolean {
   return confidence + SCORE_EPSILON >= RISK_CONFIDENCE_BAR[risk];

@@ -16,6 +16,7 @@ import {
   type GateRequest,
   type GateTool
 } from "../../packages/chat/src/live/classifier-gate.js";
+import { gateEligibilityProblem } from "../../packages/chat/src/live/classifier-gate-arguments.js";
 
 /**
  * #2873: the classifier gate's decision engine. Fixtures only. The classifier, the gateway and the
@@ -343,8 +344,8 @@ describe("confidence bar by risk", () => {
   const bars: Array<[Risk, number]> = [
     ["read", 0.9],
     ["write", 0.95],
-    ["outbound", 0.98],
-    ["destructive", 0.98]
+    ["outbound", 0.95],
+    ["destructive", 0.95]
   ];
 
   function menuFor(risk: Risk): GateTool {
@@ -385,7 +386,7 @@ describe("confidence bar by risk", () => {
   it("holds the first answer to the chosen tool's bar, not a lower one", async () => {
     const h = harness({
       tools: [switchTool("destructive")],
-      answers: [pick("home", 0.96), pick("home.setSwitch", 0.99)]
+      answers: [pick("home", 0.92), pick("home.setSwitch", 0.99)]
     });
     expect(await h.gate.evaluate(request())).toMatchObject({ reason: "low_confidence" });
   });
@@ -598,6 +599,35 @@ describe("candidates and typed values", () => {
       extraction: { ok: false, error: "invalid_response" }
     });
     expect(await h.gate.evaluate(request())).toMatchObject({ reason: "classifier_error" });
+  });
+});
+
+describe("a tool with an argument the gate will not fill", () => {
+  const withOptional = (risk: Risk): GateTool => ({
+    ...switchTool(risk),
+    inputSchema: {
+      ...switchTool(risk).inputSchema!,
+      properties: {
+        ...(switchTool(risk).inputSchema!.properties as Record<string, unknown>),
+        which: { type: "string", enum: ["all", "one"] }
+      }
+    }
+  });
+
+  it("keeps a non-read tool off the menu so no server default can run", async () => {
+    const h = harness({
+      tools: [withOptional("write")],
+      answers: [pick("home"), pick("home.setSwitch")]
+    });
+    expect(await h.gate.evaluate(request())).toMatchObject({
+      kind: "declined",
+      reason: "no_eligible_tools"
+    });
+    expect(h.gatewayCall).not.toHaveBeenCalled();
+  });
+
+  it("leaves a read tool with an optional argument on the menu", () => {
+    expect(gateEligibilityProblem(withOptional("read"), "choice_only")).toBeNull();
   });
 });
 

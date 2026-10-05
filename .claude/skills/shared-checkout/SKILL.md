@@ -29,4 +29,4 @@ form. For a co-edited file:
 2. Commit by explicit path.
 3. Afterwards, run `git show --name-only HEAD` and confirm the file list is exactly what you meant.
 
-Search agentmemory for the shared-index commit sweep before doing anything clever here.
+Search Hindsight memory for the shared-index commit sweep before doing anything clever here.

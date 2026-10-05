@@ -158,7 +158,7 @@ deleted, worktree reapable". Silence reads as done, and it usually isn't.
 
 ### 6. Durable memory (only if you discovered something non-obvious)
 
-If you hit a real trap or made a non-obvious decision, `memory_save` (`project: "jarv1s"`) now —
+If you hit a real trap or made a non-obvious decision, save a note with `hindsight_ingest_document` now —
 or tell the coordinator so it's captured. Don't store secrets.
 
 ## Red flags — STOP
