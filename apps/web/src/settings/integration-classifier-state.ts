@@ -101,10 +101,6 @@ function wouldPrepare(detail: ClassifierDetail, sort: IntegrationClassifierToolS
   );
 }
 
-function count(detail: ClassifierDetail, state: IntegrationClassifierToolState): number {
-  return detail.classifierTools.filter((tool) => tool.classifierState === state).length;
-}
-
 export function classifierBlockState(detail: ClassifierDetail): ClassifierBlockState {
   const alwaysAsk = alwaysAskCount(detail);
   const base = {
@@ -120,11 +116,15 @@ export function classifierBlockState(detail: ClassifierDetail): ClassifierBlockS
     return { ...base, kind: "off", total };
   }
 
+  // Every count below comes from the same answerable set, so a read tool that is still
+  // preparing, preparing again, or failed can never tilt the panel (#3062 review).
   const answerable = detail.classifierTools.filter(canAnswerQuickRequests);
-  const ready = answerable.filter((tool) => tool.classifierState === "ready").length;
-  const preparing = count(detail, "preparing");
-  const preparingAgain = count(detail, "preparing_again");
-  const failedTools = detail.classifierTools.filter((tool) => tool.classifierState === "failed");
+  const answerableCount = (state: IntegrationClassifierToolState) =>
+    answerable.filter((tool) => tool.classifierState === state).length;
+  const ready = answerableCount("ready");
+  const preparing = answerableCount("preparing");
+  const preparingAgain = answerableCount("preparing_again");
+  const failedTools = answerable.filter((tool) => tool.classifierState === "failed");
   const total = answerable.filter((tool) => PREPARED_STATES.has(tool.classifierState)).length;
   const reasons = new Set(failedTools.map((tool) => tool.preparationFailure));
   const failure = FAILURE_ORDER.find((reason) => reasons.has(reason)) ?? null;

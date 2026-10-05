@@ -223,6 +223,29 @@ describe("classifierBlockState", () => {
     expect(state).toMatchObject({ kind: "none", ready: 0, total: 0 });
   });
 
+  it("ignores a read tool that is still preparing — #3062 review", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", { GetState: { classifierState: "preparing" } })
+    );
+    expect(state).toMatchObject({ kind: "ready", ready: 3, total: 3 });
+  });
+
+  it("ignores a read tool that is preparing again — #3062 review", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", { GetState: { classifierState: "preparing_again" } })
+    );
+    expect(state).toMatchObject({ kind: "ready", ready: 3, total: 3, preparingAgain: 0 });
+  });
+
+  it("ignores a read tool whose preparation failed — #3062 review", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", {
+        GetState: { classifierState: "failed", preparationFailure: "provider_error" }
+      })
+    );
+    expect(state).toMatchObject({ kind: "ready", ready: 3, total: 3, failed: 0, failure: null });
+  });
+
   it("says a tool changed when ready tools wait only on preparing again", () => {
     const state = classifierBlockState(
       detail({}, "ready", { SetLight: { classifierState: "preparing_again" } })

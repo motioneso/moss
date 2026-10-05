@@ -182,7 +182,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "and shows one of eight states: Off; a one-time confirmation before anything is sent, " +
       "listing what is sent, who reads it, what it costs and what is not sent, with Turn on and " +
       "prepare and Cancel; Preparing, with how many tools are done and a progress bar; Ready, " +
-      "with how many tools can answer quick requests, how many always ask before they run, that " +
+      "with how many tools can answer quick requests (look-up tools are left out, since the " +
+      "classifier never offers them), how many always ask before they run, that " +
       "YOLO mode skips the asking, and when they were prepared; a tool changed, which says how " +
       "many are being prepared again; Couldn't prepare, saying why (for example the default chat " +
       "model did not answer) with Try again, which also sorts again any tool whose sort " +
