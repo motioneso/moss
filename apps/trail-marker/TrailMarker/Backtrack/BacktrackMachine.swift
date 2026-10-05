@@ -1,11 +1,10 @@
-#if DEBUG
 import CoreGraphics
 import Foundation
 
 // Backtrack (spec docs/superpowers/specs/2026-09-23-trail-marker-screen-history.md, plan
-// docs/superpowers/plans/2026-09-23-backtrack.md §4). Phase 1: every file in this folder is
-// compiled only into Debug builds. The machine decides; `BacktrackRuntime` only does. It never
-// reads the clock: every time arrives on an event.
+// docs/superpowers/plans/2026-09-23-backtrack.md §4; phase 2 plan 2026-10-03-backtrack-phase2.md).
+// The machine decides; `BacktrackRuntime` only does. It never reads the clock: every time arrives
+// on an event.
 
 /// How often a recognition may start. One global deadline (plan §4.2, round 2 B6): no
 /// recognition starts less than `minGap` after the previous one, from any trigger.
@@ -30,13 +29,15 @@ struct BacktrackInputs: Equatable {
     var linked = false
     var accessibilityGranted = false
     var screenRecordingGranted = false
+    /// The sink can take text now (phase 2: Moss stores Backtrack and it isn't paused there).
+    var sinkReady = true
     var budget: BacktrackBudget = .normal
     /// Backtrack reads whatever is in front, minus the Never watch list shared with Focus.
     var policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
 
     var permitsRecording: Bool {
         enabled && consentAccepted && menuSwitchOn && !pausedAll && !screenLocked && !sleeping && !idle && linked
-            && accessibilityGranted && screenRecordingGranted
+            && sinkReady && accessibilityGranted && screenRecordingGranted
     }
 }
 
@@ -351,4 +352,3 @@ struct BacktrackMachine {
         return [.capture(observation, generation: generation)]
     }
 }
-#endif

@@ -66,6 +66,8 @@ struct CompanionHeartbeatResponse: Decodable, Equatable {
     let account: CompanionAccountSummary
     let serverTime: String
     let expiresAt: String
+    /// Backtrack phase 2 (#2638): absent from a Moss that predates Backtrack storage.
+    var backtrack: BacktrackState? = nil
 }
 
 struct RenameCompanionDeviceRequest: Encodable {
@@ -134,6 +136,47 @@ private struct FocusCorrectRequest: Encodable {
     let verdict: FocusVerdict
 }
 
+// MARK: - Backtrack wire contracts (mirror packages/shared/src/companion-api.ts, phase 2 plan §4.4)
+
+/// Whether this Moss stores Backtrack day memory, and whether the person paused it from Moss.
+struct BacktrackState: Codable, Equatable {
+    enum Storage: String, Codable, Equatable {
+        case off
+        case on
+    }
+
+    let storage: Storage
+    let paused: Bool
+}
+
+/// One segment as Moss takes it. Every timestamp is this Mac's clock; Moss shifts it by the
+/// request's measured skew (`sentAt`). `address` is omitted, not null, when there is none.
+struct BacktrackSegmentUpload: Codable, Equatable {
+    let startedAt: String
+    let endedAt: String
+    let appName: String
+    let bundleId: String
+    let windowTitle: String
+    var address: String? = nil
+    let body: String
+}
+
+struct BacktrackUploadRequest: Codable, Equatable {
+    /// This Mac's clock when the request leaves, set fresh on every attempt.
+    let sentAt: String
+    let segments: [BacktrackSegmentUpload]
+}
+
+struct BacktrackUploadResponse: Decodable, Equatable {
+    let accepted: Int
+    let duplicates: Int
+    /// Overlapped something deleted in Moss; never stored.
+    let discarded: Int
+    /// Outside the time window Moss accepts once shifted to its clock.
+    let rejectedClock: Int
+    let state: BacktrackState
+}
+
 private struct CompanionErrorBody: Decodable {
     let error: String
     let code: String?
@@ -155,6 +198,12 @@ enum CompanionError: Error, Equatable {
     case focusNotReady
     /// The block named in an observation is not the person's current Moss block (409).
     case noBlock
+    /// This Moss doesn't store Backtrack (the instance switch is off) (409).
+    case backtrackUnavailable
+    /// The person paused Backtrack from Moss (409).
+    case backtrackPaused
+    /// This Mac's clock is more than an hour from Moss's (422).
+    case backtrackClock
 }
 
 // MARK: - Transport
@@ -297,6 +346,21 @@ struct CompanionClient {
         _ = try await sendChecked(request, okStatuses: [204])
     }
 
+    // MARK: Backtrack
+
+    func backtrackUpload(credential: String, _ body: BacktrackUploadRequest) async throws -> BacktrackUploadResponse {
+        try await backtrackUpload(credential: credential, encoded: JSONEncoder().encode(body))
+    }
+
+    /// The uploader measures its batches as encoded bytes, so it sends exactly the bytes it measured.
+    func backtrackUpload(credential: String, encoded body: Data) async throws -> BacktrackUploadResponse {
+        var request = plainRequest(path: "/api/companion/backtrack", method: "POST", credential: credential)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        let (data, _) = try await sendChecked(request)
+        return try decode(BacktrackUploadResponse.self, from: data)
+    }
+
     // MARK: Request building
 
     private func plainRequest(path: String, method: String, credential: String? = nil) -> URLRequest {
@@ -363,8 +427,13 @@ struct CompanionClient {
             switch body?.code {
             case "focus_not_ready": return .focusNotReady
             case "focus_no_block": return .noBlock
+            case "backtrack_unavailable": return .backtrackUnavailable
+            case "backtrack_paused": return .backtrackPaused
             default: return .server(status: status)
             }
+        case 422:
+            if body?.code == "backtrack_clock" { return .backtrackClock }
+            return .server(status: status)
         case 429:
             return .rateLimited
         default:

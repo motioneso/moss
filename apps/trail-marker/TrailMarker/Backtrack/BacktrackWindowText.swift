@@ -1,4 +1,3 @@
-#if DEBUG
 import ApplicationServices
 import CoreGraphics
 import Foundation
@@ -343,4 +342,3 @@ struct AXWindowTextReader: WindowTextReading {
 struct NoWindowText: WindowTextReading {
     func visibleText(pid: pid_t, window: WindowIdentity, budget: TimeInterval) async -> WindowTextResult? { nil }
 }
-#endif

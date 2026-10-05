@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import ApplicationServices
 import CoreGraphics
@@ -325,4 +324,3 @@ enum SecureFieldMask {
         return context.makeImage()
     }
 }
-#endif

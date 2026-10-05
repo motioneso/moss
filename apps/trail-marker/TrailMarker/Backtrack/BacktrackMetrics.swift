@@ -1,4 +1,3 @@
-#if DEBUG
 import CoreGraphics
 import Darwin
 import Foundation
@@ -32,7 +31,12 @@ struct BacktrackStopwatch {
 
 @MainActor
 final class BacktrackMetrics {
+    /// Debug builds only: a Release build keeps no record, even of app bundle ids.
+    #if DEBUG
     private let log = Logger(subsystem: "com.moss.trailmarker", category: "backtrack-metrics")
+    #else
+    private let log = Logger(.disabled)
+    #endif
     /// Measurement-only mean-difference baseline, updated on checks and captures. The real
     /// detector uses successful-recognition fingerprints and is not affected by these samples.
     private var seen: [DedupeKey: [UInt8]] = [:]
@@ -127,4 +131,3 @@ final class BacktrackMetrics {
         CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
     }
 }
-#endif

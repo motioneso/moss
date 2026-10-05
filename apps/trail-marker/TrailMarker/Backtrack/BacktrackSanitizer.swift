@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 /// Cleans every field of a Backtrack segment before it can exist (plan §4.3). It removes known
@@ -186,4 +185,3 @@ enum BacktrackSanitizer {
         expression.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
     }
 }
-#endif

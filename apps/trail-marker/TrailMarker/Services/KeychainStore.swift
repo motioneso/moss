@@ -106,3 +106,47 @@ extension KeychainStore {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 }
+
+extension KeychainStore: BacktrackBufferKeyStoring {
+    private static let backtrackBufferKeyAccount = "backtrack-buffer-key"
+
+    /// The key that encrypts Backtrack's offline buffer on this Mac (phase 2 plan §5.1). Never
+    /// leaves the Keychain except to open or seal the buffer, and is deleted with it.
+    func storeBacktrackBufferKey(_ key: Data) throws {
+        deleteBacktrackBufferKey()
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.backtrackBufferKeyAccount,
+            kSecValueData as String: key,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw KeychainError.osStatus(status) }
+    }
+
+    func readBacktrackBufferKey() -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.backtrackBufferKeyAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    @discardableResult
+    func deleteBacktrackBufferKey() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.backtrackBufferKeyAccount
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+}
