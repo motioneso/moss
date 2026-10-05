@@ -161,9 +161,13 @@ final class MeetingHostBoundaryTests: XCTestCase {
     }
 
     func testExplicitGapCapTerminatesImpossibleAcknowledgmentWaitAtFinalClose() {
-        let pending = (0..<32).map { index in
-            MeetingCaptureGap(id: "unsaved-\(index)", sourceId: "microphone", epoch: 1,
-                startMs: UInt64(index * 1000), endMs: UInt64((index + 1) * 1000), reason: "interrupted")
+        var pending: [MeetingCaptureGap] = []
+        for index in 0..<32 {
+            let start: UInt64 = UInt64(index) * 1000
+            let end: UInt64 = start + 1000
+            let gap = MeetingCaptureGap(id: "unsaved-\(index)", sourceId: "microphone", epoch: 1,
+                startMs: start, endMs: end, reason: "interrupted")
+            pending.append(gap)
         }
         XCTAssertEqual(MeetingGapDelivery.remaining(pending, acknowledgedIDs: [], limitReached: false).count, 32)
         let afterCap = MeetingGapDelivery.remaining(pending, acknowledgedIDs: [], limitReached: true)
