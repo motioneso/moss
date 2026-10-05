@@ -94,6 +94,12 @@ export function isSolidThemeColor(value: string): boolean {
   return isThemeColor(value) && parseThemeColor(value) !== null;
 }
 
+/** Whether light text reads best on a theme color; null when the color cannot be parsed. */
+export function isDarkThemeColor(value: string): boolean | null {
+  const color = parseThemeColor(value);
+  return color ? luminance(color) < 0.179 : null;
+}
+
 export function parsePalette(input: string): string[] {
   const matches = input.match(/#[0-9a-fA-F]{6}\b|rgba?\([^)]*\)/g) ?? [];
   return [...new Set(matches.map((value) => value.trim()).filter(isThemeColor))];
