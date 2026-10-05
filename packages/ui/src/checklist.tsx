@@ -52,7 +52,9 @@ export function Checklist(props: ChecklistProps) {
       {props.items.map((item) => (
         <label className="jds-checklist__item" key={item.id}>
           <input type="checkbox" checked={item.checked} onChange={() => props.onToggle(item.id)} />
-          {item.label}
+          <span className="jds-checklist__label" title={item.label}>
+            {item.label}
+          </span>
           <span className="jds-checklist__count">{item.count}</span>
         </label>
       ))}
