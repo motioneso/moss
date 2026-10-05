@@ -106,9 +106,10 @@ jobs:
           # GitHub holds the pull_request CI run for a bot-pushed commit, and only that
           # run satisfies the required check. The held run appears a few seconds after
           # the push, as conclusion action_required, so poll for it before approving (#3054).
-          head_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/$branch" --jq '.object.sha')
+          head_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/$branch" --jq '.object.sha' || true)
           held_runs=""
           for _ in $(seq 1 24); do
+            [ -n "$head_sha" ] || break
             held_runs=$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$head_sha&event=pull_request" \
               --jq '.workflow_runs[] | select(.status == "waiting" or .conclusion == "action_required") | .id' || true)
             [ -n "$held_runs" ] && break
