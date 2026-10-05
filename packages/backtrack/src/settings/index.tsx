@@ -153,7 +153,7 @@ export default function BacktrackSettings() {
         name="Delete recent history"
         desc="Removes what Backtrack kept in that time, for you only."
         control={
-          <>
+          <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Button
               variant="secondary"
               size="sm"
@@ -186,7 +186,7 @@ export default function BacktrackSettings() {
             >
               Everything…
             </Button>
-          </>
+          </span>
         }
       />
       {choosingDay ? (
@@ -194,7 +194,7 @@ export default function BacktrackSettings() {
           name="Delete one day"
           desc="The day runs from midnight to midnight in this browser's time zone."
           control={
-            <>
+            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 type="date"
                 className="jds-input"
@@ -214,7 +214,7 @@ export default function BacktrackSettings() {
               >
                 Delete that day
               </Button>
-            </>
+            </span>
           }
         />
       ) : null}
