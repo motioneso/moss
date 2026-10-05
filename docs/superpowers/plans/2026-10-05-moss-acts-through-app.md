@@ -95,25 +95,25 @@ test reports the exact figure.
 
 ### 1.4 Outside content: every admission path
 
-| #   | Path                                                     | Where                                                                      | Slice 7 action                                     |
-| --- | -------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
-| a   | Memory seed at launch                                    | `chat/src/live/chat-session-launch.ts:93-98,111`                           | admit, taints                                      |
-| b   | Replay of prior turns and summary at launch              | `chat-session-launch.ts:99-119,160-165`; `persistence.ts:213-243`          | no new taint; the thread row carries it            |
-| b3  | Native CLI resume                                        | `structured-claude-engine.ts:528-531`; `structured-gemini-engine.ts:91`    | as b                                               |
-| c   | Per-turn passive memory recall                           | `chat/src/live/engine-text.ts:84-101`                                      | admit, taints                                      |
-| d   | Per-turn cross-tool read (notes, email, calendar, tasks) | `engine-text.ts:102-110`; `cross-tool-reasoning.ts:6,86-114`               | admit, taints                                      |
-| e   | Per-turn notes retrieval                                 | `engine-text.ts:111-121`                                                   | admit, taints                                      |
-| f   | Combiner that prepends c, d, e to the user text          | `engine-text.ts:154-160`; `chat-context-blocks.ts:41`                      | accepts admitted blocks only                       |
-| g   | Attachment manifest (metadata only)                      | `chat-session-manager.ts:337-339`; `attachments-manifest.ts:12-27`         | no taint; file bytes come by tool                  |
-| h   | Module control context from the request body             | `chat-session-manager.ts:340-342`; `live-routes.ts:817,855`                | admit, taints                                      |
-| i   | Seed route                                               | `live-routes.ts:446-479`; `chat-session-launch.ts:193-205`                 | admit, taints                                      |
-| j   | Evening interview seed (briefing text)                   | `live-routes.ts:398-432,610-630`; `module-registry/src/index.ts:3713-3726` | admit, taints                                      |
-| k   | Persona and system prompt                                | `chat/src/live/runtime.ts:100-125,886-920`                                 | no taint                                           |
-| l   | Tool results                                             | `ai/src/gateway/run-tool-handler.ts:80-90`                                 | taint unless the effective tool is `user_authored` |
-| m   | Classifier-gate handled turn                             | `classifier-gate-lifecycle.ts:185`                                         | covered by l (gate calls go through the gateway)   |
-| n   | Meeting chat                                             | `meetings/src/meeting-chat-service.ts:58,96`                               | out of scope: separate tool-less generation        |
-| o   | Claude CLI native vault reads (`Read`, `Glob`, `Grep`)   | see 1.4.2                                                                  | hook reports first, taint recorded, then allow     |
-| p   | Outside-agent (ACP) built-in reads                       | `ai/src/gateway/acp-permission.ts:225-262`; `gateway.ts:564`               | taint recorded on every allowed read ask           |
+| #   | Path                                                        | Where                                                                      | Slice 7 action                                     |
+| --- | ----------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
+| a   | Memory seed at launch                                       | `chat/src/live/chat-session-launch.ts:93-98,111`                           | admit, taints                                      |
+| b   | Replay of prior turns and summary at launch                 | `chat-session-launch.ts:99-119,160-165`; `persistence.ts:213-243`          | no new taint; the thread row carries it            |
+| b3  | Native CLI resume                                           | `structured-claude-engine.ts:528-531`; `structured-gemini-engine.ts:91`    | as b                                               |
+| c   | Per-turn passive memory recall                              | `chat/src/live/engine-text.ts:84-101`                                      | admit, taints                                      |
+| d   | Per-turn cross-tool read (notes, email, calendar, tasks)    | `engine-text.ts:102-110`; `cross-tool-reasoning.ts:6,86-114`               | admit, taints                                      |
+| e   | Per-turn notes retrieval                                    | `engine-text.ts:111-121`                                                   | admit, taints                                      |
+| f   | Combiner that prepends c, d, e to the user text             | `engine-text.ts:154-160`; `chat-context-blocks.ts:41`                      | accepts admitted blocks only                       |
+| g   | Attachment manifest (metadata only)                         | `chat-session-manager.ts:337-339`; `attachments-manifest.ts:12-27`         | no taint; file bytes come by tool                  |
+| h   | Module control context from the request body                | `chat-session-manager.ts:340-342`; `live-routes.ts:817,855`                | admit, taints                                      |
+| i   | Seed route                                                  | `live-routes.ts:446-479`; `chat-session-launch.ts:193-205`                 | admit, taints                                      |
+| j   | Evening interview seed (briefing text)                      | `live-routes.ts:398-432,610-630`; `module-registry/src/index.ts:3713-3726` | admit, taints                                      |
+| k   | Persona and system prompt                                   | `chat/src/live/runtime.ts:100-125,886-920`                                 | no taint                                           |
+| l   | Tool results                                                | `ai/src/gateway/run-tool-handler.ts:80-90`                                 | taint unless the effective tool is `user_authored` |
+| m   | Classifier-gate handled turn                                | `classifier-gate-lifecycle.ts:185`                                         | covered by l (gate calls go through the gateway)   |
+| n   | Meeting chat                                                | `meetings/src/meeting-chat-service.ts:58,96`                               | out of scope: separate tool-less generation        |
+| o   | Claude CLI native vault reads (`Read`, `Glob`, `Grep`)      | see 1.4.2                                                                  | hook reports first, taint recorded, then allow     |
+| p   | Outside-agent (ACP) reads, web fetches, web searches, shell | `ai/src/gateway/acp-permission.ts:101,225,256-276,399`; `gateway.ts:564`   | taint on every allowed read, web or shell ask      |
 
 Rows c, d and e run on every turn. A block taints only when it is admitted non-empty: an empty
 recall, an empty notes block or an empty cross-tool read records nothing (decision 2.19).
@@ -154,12 +154,21 @@ starting checklist, not the mechanism.
 | Claude, tmux launch                             | yes, through the same persistent hook                                     | `module-build-launch-commands.ts:95,102-105`                                                                                                           |
 | Gemini, one-turn engine and tmux launch         | no; built-in tools list is empty                                          | `structured-gemini-engine.ts:170-179`; `module-build-launch-commands.ts:243-259`                                                                       |
 | Codex, persistent exec runtime and tmux launch  | no; shell and patch off, read-only sandbox, no notes folder passed        | `codex-persistent-runtime.ts:310-331`; `module-build-launch-commands.ts:129-163`                                                                       |
-| Outside agents over ACP (Codex, Claude, Google) | possibly; every ask reaches the gateway in-process with the token         | `acp/src/client.ts:325,606,647`; `chat/src/routes.ts:500-523`; `acp-permission.ts:4-5,225`                                                             |
+| Outside agents over ACP (Codex, Claude, Google) | possibly, and web fetches too; every ask reaches the gateway in-process   | `acp/src/client.ts:325,606,647`; `chat/src/routes.ts:500-523`; `acp-permission.ts:4-5,225`                                                             |
 
 Vault roots: `vault-allowlist.ts:18-33`; set in prod (`docs/operations/deploy.md:67`,
 `infra/docker-compose.prod.yml:205`). The native permission route is `POST /internal/permission`
 (`chat/src/mcp-transport.ts:358-383`, body parser `:441-457`, manifest `chat/src/manifest.ts:332`).
 It treats every body as a new permission ask, so a read report needs its own route (contract 4.6).
+
+Outside agents bring outside text in through more than file reads. Their policy allows in-folder
+reads, every web search and public web fetches with no card, and always asks for shell
+(`acp/src/permissions.ts:13-19`; `classifyWeb` at `:259-263`). `WebFetch` and `WebSearch` are the
+web family (`acp/src/tool-table.ts:48`). Moss's own tools pass through to the gateway
+(`permissions.ts:12,287-289`), so a fetched page can steer a later Moss write. Every permission
+request the agent raises, card or not, enters `requestAcpBuiltInPermission`, where the family is
+already known (`acp-permission.ts:101,248`). It allows at two exits: the YOLO early return
+(`:256-276`) and the final return (`:399`).
 Whether an ACP agent asks permission for plain in-folder reads is not verified (1.9).
 
 ### 1.5 Durable conversation, deletion, migrations
@@ -245,14 +254,14 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
 
 ### 1.9 Open questions
 
-| Question                                                                                                                                         | Owner           | Default if unanswered                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------------------- |
-| Fastify's default request log omits headers, so the grant header never reaches a log. Not verified past the serializer config at `server.ts:250` | slice 2 builder | a test captures logs from an injected call and asserts the grant value is absent                          |
-| Do Sports and News query keys start with the module id?                                                                                          | slice 5 builder | the module declares `chatDefaults.refresh` with its own tokens                                            |
-| Can the scripted fake model be extended to finish an approval?                                                                                   | slice 8 builder | approval cases run in the real-model browser test                                                         |
-| Does anything write files under `packages/*/src` or `apps/*/src` at runtime?                                                                     | slice 5 builder | grep for writes; any hit is excluded from source reading                                                  |
-| Does an outside agent over ACP ask permission for plain reads inside its folder, and can that folder include the notes?                          | slice 7 builder | record taint on every allowed ACP read ask; if no ask is raised, keep ACP agents out of the notes folders |
-| Reopen the July locked items one by one (persona, skills, memory settings)?                                                                      | Ben, later      | stay `blocked`                                                                                            |
+| Question                                                                                                                                         | Owner           | Default if unanswered                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Fastify's default request log omits headers, so the grant header never reaches a log. Not verified past the serializer config at `server.ts:250` | slice 2 builder | a test captures logs from an injected call and asserts the grant value is absent                                                        |
+| Do Sports and News query keys start with the module id?                                                                                          | slice 5 builder | the module declares `chatDefaults.refresh` with its own tokens                                                                          |
+| Can the scripted fake model be extended to finish an approval?                                                                                   | slice 8 builder | approval cases run in the real-model browser test                                                                                       |
+| Does anything write files under `packages/*/src` or `apps/*/src` at runtime?                                                                     | slice 5 builder | grep for writes; any hit is excluded from source reading                                                                                |
+| Can an outside agent over ACP read a file, fetch or search the web, or run a command without raising a permission request?                       | slice 7 builder | taint on every allowed read, web or shell ask; if any of them can run without an ask, every outside-agent thread is tainted from launch |
+| Reopen the July locked items one by one (persona, skills, memory settings)?                                                                      | Ben, later      | stay `blocked`                                                                                                                          |
 
 ## 2. Design decisions taken in planning
 
@@ -296,7 +305,10 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
 11. **The provenance row is not in the user data export.** It is derived metadata, not user content.
 12. **`content` governs every response, not only reads.** A write's response enters the model's
     context too, so a route's `content` class decides whether any response taints and gets wrapped.
-    Default `"outside"`.
+    Default `"outside"`. A write route or write tool whose response only echoes the user's own
+    record (theme, weather unit, a People entry, a preference) declares `"user_authored"`, so a
+    clean thread stays clean across a run of changes. Slices 3 to 5 make that call per route and
+    per tool.
 13. **Target names come from a module-owned resolver.** A route may declare `chat.target`, a
     function that reads the target's label under the user's own data context. Required on
     `destructive` routes with a path parameter (28 `DELETE` routes in 13 modules, plus any
@@ -325,12 +337,18 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
     hook sends a read report to the server, which records `tool_external_content` before the hook
     allows the read. If the report fails or the token is missing, the hook denies the read. Both
     hook copies change, and the one-shot hook gains the report URL and token. Gemini and Codex give
-    no native reads (1.4.2). Outside agents over ACP already ask the gateway, which records taint on
-    each allowed read ask.
+    no native reads (1.4.2). Outside agents over ACP ask the gateway in-process. It records taint on
+    every allowed ask in the read, web or shell family, at both allow exits, because a fetched page
+    or a `curl` brings outside text in as surely as a file read. Keeping the agent out of the notes
+    folders would not cover the web. If slice 7 finds an agent can read, fetch or run a command
+    without raising an ask, its threads are tainted from launch.
 22. **July families are blocked by two independent nets.** `CHAT_BLOCKED_PATH_RULES` gains path
-    patterns for action policy, persona, chat skills and the chat model override. Separately, a test
-    walks every July category and fails when a category matches no route in the catalog. A route
-    missing from the hand table is still caught by the path rule.
+    patterns for every family with routes (the list in 4.2), so a new route in a family is caught
+    without a table row. A pattern may block writes only where reading is harmless. Separately, a
+    test walks every July prefix, not every rule, across all modules. Each prefix maps to at least
+    one blocked route or sits in a named no-routes list with a reason. A route can live outside the
+    rule's module (task-agency auto-execution is a settings rule with a tasks route), so the walk
+    never limits itself to one module.
 23. **A `GET` that sends model-chosen text to a third party is `outbound`.** Routes may declare
     `chat.outbound: true`. A `GET` with it asks when the thread is tainted and runs without asking
     otherwise. Weather location search is the known case
@@ -378,7 +396,8 @@ export interface RouteChatPolicy {
   readonly outbound?: boolean; // GET only: sends model-chosen input to a third party
 }
 
-// ModuleAssistantTool gains (required when risk is "read"; boot assertion, decision 2.20):
+// ModuleAssistantTool gains (required when risk is "read", boot assertion, decision 2.20;
+// optional otherwise, default "outside"; decision 2.12):
 //   readonly content?: "user_authored" | "outside";
 
 export interface ModuleAiConsent {
@@ -440,16 +459,19 @@ export function createRouteCatalogHolder(): RouteCatalogHolder;
 export const CHAT_BLOCKED_PATH_RULES: readonly {
   readonly pattern: RegExp;
   readonly category: SelfOperationExclusionCategory;
+  readonly writesOnly?: boolean; // true: GET on the path stays classifiable
+  readonly julyPrefixes?: readonly string[]; // SELF_OPERATION_EXCLUSIONS prefixes this rule covers
 }[];
 
 export const JULY_EXCLUDED_ROUTES: readonly {
   readonly method: string;
   readonly path: string;
   readonly category: SelfOperationExclusionCategory;
+  readonly julyPrefixes: readonly string[];
 }[];
 
-export const JULY_RULES_WITHOUT_ROUTES: readonly {
-  readonly ruleId: string; // a SELF_OPERATION_EXCLUSIONS id
+export const JULY_PREFIXES_WITHOUT_ROUTES: readonly {
+  readonly prefix: string; // a toolNamePrefixes entry in SELF_OPERATION_EXCLUSIONS
   readonly reason: string;
 }[];
 
@@ -482,12 +504,27 @@ Assertion rules (each its own error message naming the route):
   - `/api/me/persona` and below (`settings/src/manifest.ts:242,252,257`): `prompt_shaping`
   - `/api/chat/skills` and below, every method (`chat/src/skills/routes.ts:47-157`):
     `prompt_shaping`
+  - `/api/me/modules/:id`, writes only (`settings/src/manifest.ts:374`): `self_authority`
+  - `/api/tasks/agency-auto-execute`, writes only (`tasks/src/manifest.ts:487`): `self_authority`
+  - `/api/chat/memory/settings`, `/api/chat/page-context`, writes only
+    (`chat/src/manifest.ts:293,298`): `prompt_shaping`
+  - `/api/me/source-behaviors` and below, `/api/me/priority-model`, `/api/me/notes-source` and
+    below, writes only (`settings/src/manifest.ts:212,267,277`): `prompt_shaping`
+  - `/api/ai/voice-endpoint`, every method (`ai/src/manifest.ts:498`): `secrets`
+  - `/api/ai/terminal/password`, `/api/ai/terminal/ticket` (`ai/src/manifest.ts:515,520`): `secrets`
+  - `/api/news/credentials`, `/api/news/sources/credentialed`, `/api/news/sources/:id/credential`,
+    every method (`news/src/manifest.ts:285-305`): `secrets`
+  - `/api/wellness/ai-consent`, writes only (`wellness/src/manifest.ts:127`): `data_scope_consent`.
+    The consent gate already refuses it while consent is off; the pattern blocks it outright.
 - Every route in `JULY_EXCLUDED_ROUTES` is `blocked` with that category. The July rules match
   tool names (`self-operation.ts:36-182`), not routes, so slices 3 and 4 add a row for each route
   that does what an excluded tool family does and that no path pattern already covers.
-- A separate test, not the assertion, walks every rule in `SELF_OPERATION_EXCLUSIONS`. Each rule
-  must match at least one catalog route blocked with its category in its module, or appear in
-  `JULY_RULES_WITHOUT_ROUTES` with a reason. A new July rule with no route fails the test.
+- A separate test, not the assertion, walks every `toolNamePrefixes` entry of every rule in
+  `SELF_OPERATION_EXCLUSIONS`, across all modules, not only the rule's own. Each prefix must be
+  named in the `julyPrefixes` of a path rule or a `JULY_EXCLUDED_ROUTES` row through which at least
+  one catalog route is blocked with the rule's category, or appear in
+  `JULY_PREFIXES_WITHOUT_ROUTES` with a reason. One blocked route no longer clears a whole rule, and
+  a new prefix with neither fails the test.
 - `outbound` is allowed only on `GET` routes with access `read`.
 - A `POST` whose path contains `clear`, `reset`, `purge`, `delete` or `remove` is `destructive` or
   `blocked`, unless it is in `DESTRUCTIVE_WORD_POST_ALLOWLIST`.
@@ -625,7 +662,10 @@ export type AdmissionPath =
   | "evening_seed"
   | "module_control_context"
   | "native_vault_read"
-  | "outside_agent_read";
+  | "outside_agent_read"
+  | "outside_agent_web"
+  | "outside_agent_shell"
+  | "outside_agent_launch"; // only if slice 7 finds an agent acting without an ask (1.9)
 
 export interface ConversationProvenancePort {
   // threadId undefined, no row, or a thread the actor does not own => true
@@ -756,6 +796,10 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
     `DESTRUCTIVE_WORD_POST_ALLOWLIST` passes. Fails if the word check is removed.
   - A synthetic route under `/api/me/persona` or `/api/chat/skills` classed `write` is forced
     `blocked` with `prompt_shaping`. Fails if the July path patterns are removed.
+  - A writes-only rule forces `PATCH` on its path `blocked` and leaves `GET` on the same path at
+    its declared class. Fails if `writesOnly` is ignored in either direction.
+  - The walk, over a synthetic rule with two prefixes where only one is mapped, fails naming the
+    other prefix. Fails if the walk goes per rule.
   - `assertReadToolContentDeclared`: a read tool with no `content` fails; `user_authored` with
     `externalContent: true` fails; an external module's tool needs no declaration.
   - The holder returns `null` before `set` and throws on a second `set`.
@@ -807,7 +851,9 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   no path pattern in 4.2 covers gets a row in `JULY_EXCLUDED_ROUTES`.
   `GET /api/me/weather-location/search` is `read` with `outbound: true`. Theme routes are
   `write` except `DELETE /api/me/themes/:id`, which is `destructive` with a target resolver reading
-  the theme name. `PUT /api/me/themes/mode` has `coveredBy: "settings.themeMode.set"`.
+  the theme name. `PUT /api/me/themes/mode` has `coveredBy: "settings.themeMode.set"`. Write
+  routes whose response only echoes the user's own record declare `content: "user_authored"`
+  (decision 2.12): theme, weather unit, preference and similar settings routes.
 - **Tests:** `tests/unit/route-chat-classification.test.ts` runs the assertion over these modules'
   real manifests; a snapshot of `(method, path, access, category)` for every route in these
   modules, reviewed in the PR. It also names these routes and expects each `blocked` with the
@@ -817,8 +863,15 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   - `/api/chat/skills`: `POST`, `PATCH /:id`, `PATCH /:id/enabled`, `DELETE /:id`,
     `POST /import`: `prompt_shaping`
   - `PUT /api/ai/chat-model-override`: `self_authority`
-- **July walk:** `tests/unit/july-rules-route-walk.test.ts` (4.2) runs over these modules' rules.
-  It is green for every rule whose module is classified here.
+  - `PATCH /api/me/modules/:id`: `self_authority`
+  - `PATCH /api/chat/memory/settings`, `PUT /api/chat/page-context`: `prompt_shaping`
+  - `PUT /api/me/source-behaviors/:id`, `PATCH /api/me/priority-model`, `PUT /api/me/notes-source`:
+    `prompt_shaping`
+  - `PUT /api/ai/voice-endpoint`, `POST /api/ai/terminal/password`, `POST /api/ai/terminal/ticket`:
+    `secrets`
+- **July walk:** `tests/unit/july-rules-route-walk.test.ts` (4.2) runs per prefix. It is green for
+  every prefix whose routes live in these modules; prefixes whose routes live in slice 4 modules
+  are listed in the test as pending until slice 4.
 - **Done:** every route in these modules classified; assertion green over them.
 
 ### Slice 4: classify content routes and wire the boot assertion
@@ -833,11 +886,18 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 - **Rules:** July-excluded routes get rows in `JULY_EXCLUDED_ROUTES`, as in slice 3. The seven
   Wellness routes in 1.6 are `blocked` / `data_scope_consent`.
   `PUT /api/scratchpad` is `blocked` / `module_promise`. Every Wellness route declares
-  `consent: "wellness.ai_consent_granted"`.
+  `consent: "wellness.ai_consent_granted"`. Write routes that only echo the user's own record
+  declare `content: "user_authored"`, People create and update among them; routes whose response
+  carries mail, feed or other outside text stay `"outside"`.
 - **Tests:**
   - The slice 3 snapshot test extends to all modules.
-  - The July walk test covers every rule; rules with no route are in `JULY_RULES_WITHOUT_ROUTES`
-    with a reason, reviewed in the PR.
+  - The slice 3 named-route test extends with these, each expected `blocked` with the stated
+    category and unreachable:
+    - `PATCH /api/tasks/agency-auto-execute`: `self_authority`
+    - `PUT /api/wellness/ai-consent`: `data_scope_consent`
+    - the news credential routes (`news/src/manifest.ts:285-305`), every method: `secrets`
+  - The July walk test covers every prefix across all modules and its pending list is empty;
+    prefixes with no route are in `JULY_PREFIXES_WITHOUT_ROUTES` with a reason, reviewed in the PR.
   - Server boot test: an injected unclassified route fails `onReady`. Observed failing with the
     wiring removed.
   - Wellness list test: the set of Wellness routes not `blocked` equals an explicit list in the
@@ -848,7 +908,8 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 
 - **Files:**
   - `packages/settings/src/manifest.ts`, `packages/settings/src/app-action-tools.ts` (new): three
-    tool declarations and handlers.
+    tool declarations and handlers. Existing dedicated write tools that only echo the user's own
+    record (theme mode and the like) declare `content: "user_authored"` (decision 2.12).
   - `packages/chat/src/app-actions.ts`: the per-call resolver for `app.callAction` (route resolve,
     blocked refusal, consent check, target lookup, card rows, `affectsModules`,
     `confirmWhenTainted` for `outbound` routes, `not_ready` while the holder is empty).
@@ -941,8 +1002,11 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
     report fails or the token is missing. The one-shot hook's settings writer (`:335-358`) and
     `structured-claude-engine.ts:542` pass it the report URL and token file.
   - `packages/chat/src/mcp-transport.ts` and `chat/src/manifest.ts`: the report route (4.6).
-  - `packages/ai/src/gateway/acp-permission.ts:225`: an allowed outside-agent read ask records
-    `outside_agent_read`.
+  - `packages/ai/src/gateway/acp-permission.ts:225`: every allowed ask records by family, at both
+    allow exits (YOLO `:256-276`, final `:399`): `read` records `outside_agent_read`, `web`
+    records `outside_agent_web`, `shell` records `outside_agent_shell`. A failed record denies the
+    ask. If the 1.9 question finds an agent acting without an ask, the ACP session launch records
+    `outside_agent_launch` instead.
   - `apps/web/src/chat/action-request-card.tsx`: one notice line when `outsideContentNotice`.
 - **Tests:**
   - `tests/integration/conversation-provenance.test.ts`:
@@ -955,6 +1019,10 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
       asks.
     - `chat.listTodaysTurns` in a clean thread, returning turns from another thread, taints it.
     - Switching from a tainted thread to a clean thread leaves the clean one clean.
+    - On a clean thread under YOLO, two writes in a row both run without asking: `app.callAction`
+      on a `user_authored` write route, then `settings.themeMode.set`. The thread is still clean
+      after both. Fails if a `user_authored` write response records an admission, or if the
+      routes and tools are left at the `"outside"` default.
     - Native vault read: the persistent hook script, run against a test server with a vault path,
       reports the read; the thread is then tainted; a following `write` asks. Fails if the hook
       allows before reporting.
@@ -962,6 +1030,9 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
       hook denies the read.
     - The same two cases for the one-shot hook.
     - An allowed outside-agent read ask taints the thread.
+    - An allowed outside-agent web fetch, then a Moss `write` on the same thread, asks. The same
+      holds for a web search and for an approved shell command, and for a shell command allowed
+      by YOLO. Fails if the record covers reads only or only the final exit.
   - `tests/unit/read-tool-content-declared.test.ts`: runs the assertion over every built-in
     manifest; a synthetic new read tool with no `content` fails it.
   - `tests/unit/context-admission-sources.test.ts`: greps `packages/chat/src/live` for engine
@@ -1055,8 +1126,8 @@ action-policy settings).
 - Wellness AI consent off: a medication write is refused and returns nothing.
 - Wellness AI consent on: reading therapy notes is refused.
 
-**Kill:** fewer than eight succeed in either run, or any safety item fails. Ben decides whether to continue or
-fall back to one tool per action. A failed safety item blocks merge regardless.
+**Kill:** fewer than eight succeed in either run, or any safety item fails. Ben decides whether to
+continue or fall back to one tool per action. A failed safety item blocks merge regardless.
 
 ## 8. Rulings ledger
 
@@ -1130,3 +1201,13 @@ coordinator's.
 | P-8  | Per-turn paths would taint every thread if an empty block counted                                   | 1.4 rows c, d, e                                                                                                             | Only non-empty admitted blocks taint. Decision 2.19; slice 7 test                                                |
 | P-9  | Kill gate silent on whether approving a card is hand-holding                                        | section 7                                                                                                                    | Approving is not hand-holding; asks counted separately; a second run on a clean thread. Section 7                |
 | P-10 | A destructive `POST` could be labelled `write` (optional)                                           | 4.2 assertion rules                                                                                                          | Taken: word check with a named allowlist. Decision 2.25; slice 1                                                 |
+
+### 8.5 Plan re-review on PR #3070
+
+Re-check of `febc962aa`. Nine of ten findings fixed. Three new items, all accepted as proposed.
+
+| ID  | Finding                                                                                                                  | Evidence                                                                                                                                                                                                                             | Ruling and where it landed                                                                                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q-1 | Outside agents fetch and search the web, and run approved shell, with nothing recorded; only read asks tainted           | `acp/src/permissions.ts:13-19,259-263`; `acp/src/tool-table.ts:48`; `acp-permission.ts:101,256-276,399`                                                                                                                              | Record by family on every allowed read, web or shell ask, at both allow exits; 1.9 widened, with taint from launch as the fallback. Decision 2.21; 1.4 row p; 4.6; slice 7                                                            |
+| Q-2 | The July walk passes a rule on one route in the rule's own module, so most families rest on the hand table               | `self-operation.ts:43-53`; `tasks/src/manifest.ts:487`; `settings/src/manifest.ts:212,267,277,374`; `chat/src/manifest.ts:293,298`; `ai/src/manifest.ts:498,515,520`; `news/src/manifest.ts:285-305`; `wellness/src/manifest.ts:127` | Walk per prefix across all modules; path patterns for each listed family, writes-only where reading is harmless; list renamed `JULY_PREFIXES_WITHOUT_ROUTES`; routes named in slice 3 and 4 tests. Decision 2.22; 4.2; slices 1, 3, 4 |
+| Q-3 | Write responses default to `outside`, so the first change on a clean thread taints it and Run B asks on every later task | decision 2.12; 4.1 route type; 1.4 row l; section 7 Run B                                                                                                                                                                            | Write routes and tools that only echo the user's own record declare `user_authored`; slice 7 test of two writes in a row on a clean thread. Decision 2.12; 4.1; slices 3, 4, 5, 7                                                     |
