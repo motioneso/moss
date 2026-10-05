@@ -200,11 +200,13 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
     await expect(panel.getByRole("status").filter({ hasText: /^Connected$/ })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Record", exact: true })).toBeDisabled();
     await panel.getByLabel("Microphone", { exact: true }).selectOption("synthetic-device");
-    const notice = panel.getByRole("checkbox", {
+    const notice = page.getByRole("checkbox", {
       name: "Participants have been notified and recording is permitted",
       exact: true
     });
+    // `has` is evaluated inside each label; keep its checkbox locator root-relative.
     await panel.locator("label.jds-switch").filter({ has: notice }).click();
+    await expect(notice).toBeChecked();
     await expect(panel.getByRole("button", { name: "Record", exact: true })).toBeEnabled();
     const recording = await controlFromUi(page, "Record", path);
     expect(recording.input).toMatchObject({

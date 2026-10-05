@@ -57,10 +57,10 @@ def verify_result(result, exit_code, control, negative):
     metrics = root.get("metrics", {})
     issues = root.get("issues", {})
     failures = issues.get("testFailureSummaries", [])
-    if int(metrics.get("testsCount", -1)) != 1:
-        raise RuntimeError("Expected exactly one executed XCTest; empty/partial runs are not proof")
     if issues.get("errorSummaries") or issues.get("analyzerWarningSummaries"):
         raise RuntimeError("Build/analyzer errors are not a meaningful negative control")
+    if int(metrics.get("testsCount", -1)) != 1:
+        raise RuntimeError("Expected exactly one executed XCTest; empty/partial runs are not proof")
     failed_count = int(metrics.get("testsFailedCount", 0))
     if not negative:
         if exit_code != 0 or failed_count != 0 or failures:
@@ -105,17 +105,34 @@ def stop_process_group(process):
         process.wait(timeout=10)
 
 
-def run_test(control, folder, label):
-    bundle = folder / f"{control['name']}-{label}.xcresult"
-    log = folder / f"{control['name']}-{label}.log"
-    args = [
-        "xcodebuild", "test", "-scheme", "TrailMarker", "-configuration", "Debug",
-        "-destination", "platform=macOS", "-parallel-testing-enabled", "NO",
-        "-test-iterations", "1", "-test-timeouts-enabled", "YES",
-        "-maximum-test-execution-time-allowance", "60",
+def xcodebuild_arguments(control, bundle):
+    # Match the workflow's proven positive invocation. Python bounds the whole run;
+    # XCTest timeout/repetition overrides can reject the scheme before any test executes
+    # (for example, an explicit maximum smaller than the plan's default allowance).
+    return [
+        "xcodebuild", "test", "-scheme", "TrailMarker",
+        "-destination", "platform=macOS",
         f"-only-testing:TrailMarkerTests/{TEST_CLASS}/{control['test']}",
         "-resultBundleVersion", "3", "-resultBundlePath", str(bundle),
     ]
+
+
+def print_diagnostics(folder, control, label, result=None, exit_code=None):
+    print(f"DIAGNOSTICS {control['name']} {label}: xcodebuild exit={exit_code}", flush=True)
+    if result is not None:
+        root = unwrap(result)
+        print(json.dumps({"metrics": root.get("metrics"), "issues": root.get("issues")},
+                         ensure_ascii=True)[:6000], flush=True)
+    log = folder / f"{control['name']}-{label}.log"
+    if log.is_file():
+        print("Inner xcodebuild log (last 60 lines):", flush=True)
+        print("\n".join(log.read_text(errors="replace").splitlines()[-60:])[-16000:], flush=True)
+
+
+def run_test(control, folder, label):
+    bundle = folder / f"{control['name']}-{label}.xcresult"
+    log = folder / f"{control['name']}-{label}.log"
+    args = xcodebuild_arguments(control, bundle)
     print(f"Running {label}: {TEST_CLASS}.{control['test']}", flush=True)
     with log.open("wb") as output:
         process = subprocess.Popen(args, cwd=APP, stdout=output, stderr=subprocess.STDOUT,
@@ -125,8 +142,9 @@ def run_test(control, folder, label):
         except BaseException:
             stop_process_group(process)
             raise
+    print(f"xcodebuild {label} exit: {code}", flush=True)
     if not bundle.is_dir():
-        print("\n".join(log.read_text(errors="replace").splitlines()[-60:]), flush=True)
+        print_diagnostics(folder, control, label, exit_code=code)
         raise RuntimeError(f"No XCResult bundle; inspect {log.name}. Exit: {code}")
     extracted = subprocess.run(
         ["xcrun", "xcresulttool", "get", "object", "--legacy", "--path", str(bundle), "--format", "json"],
@@ -134,6 +152,11 @@ def run_test(control, folder, label):
     )
     result = json.loads(extracted.stdout)
     (folder / f"{control['name']}-{label}.json").write_text(json.dumps(result, indent=2) + "\n")
+    try:
+        verify_result(result, code, control, negative=label == "mutated")
+    except Exception:
+        print_diagnostics(folder, control, label, result=result, exit_code=code)
+        raise
     return code, result
 
 
@@ -144,20 +167,24 @@ def run_control(control, original, folder):
         if SOURCE.read_bytes() != original:
             raise RuntimeError("Source changed since validation; do not mutate a shared working tree")
         SOURCE.write_bytes(mutated)
-        code, result = run_test(control, folder, "mutated")
-        verify_result(result, code, control, negative=True)
+        _, result = run_test(control, folder, "mutated")
         print(f"NEGATIVE VERIFIED: {control['name']} failed its named {control['assertion']}", flush=True)
         for failure in unwrap(result).get("issues", {}).get("testFailureSummaries", [])[:3]:
             print(f"  {failure['testCaseName']}: {failure['message'][:500]}", flush=True)
     except Exception as error:
         problem = error
+        print(f"MUTATED RUN REJECTED: {control['name']}: {error}", flush=True)
     finally:
         SOURCE.write_bytes(original)
         if SOURCE.read_bytes() != original:
             raise RuntimeError("Failed to restore original source bytes")
     # A failed mutation/build is never converted into success by this restored pass.
-    code, result = run_test(control, folder, "restored")
-    verify_result(result, code, control, negative=False)
+    try:
+        run_test(control, folder, "restored")
+    except Exception as error:
+        if problem is not None:
+            raise RuntimeError(f"Mutated run: {problem}; restored run: {error}") from error
+        raise
     print(f"RESTORED VERIFIED: {control['name']} passed", flush=True)
     if problem is not None:
         raise problem
@@ -191,6 +218,13 @@ def self_test():
                  {key: {"_value": value} for key, value in failure.items()}
              ]}}}
     verify_result(typed, 65, control, True)
+    args = xcodebuild_arguments(control, Path("fixture.xcresult"))
+    if args[:4] != ["xcodebuild", "test", "-scheme", "TrailMarker"]:
+        raise RuntimeError("Negative controls must use the same scheme/action as positive CI")
+    unsupported_overrides = {"-test-iterations", "-test-timeouts-enabled",
+                             "-maximum-test-execution-time-allowance"}
+    if unsupported_overrides.intersection(args):
+        raise RuntimeError("Do not reintroduce unvalidated timeout/repetition overrides")
     print("Portable harness self-test passed; this is not native XCTest evidence.")
 
 
