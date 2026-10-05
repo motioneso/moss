@@ -32,10 +32,13 @@ export function useChatControls(): ChatControls {
   return ctx;
 }
 
+const unavailableMeetingChatAction = () => {};
+
 setMeetingChatHook(() => {
   const controls = useChatControls();
   return {
-    openMeetingChat: (input) => controls.openMeetingChat?.(input),
-    clearMeetingChat: (meetingId) => controls.clearMeetingChat?.(meetingId)
+    // Denial effects depend on these handlers; new wrappers would retrigger their reads.
+    openMeetingChat: controls.openMeetingChat ?? unavailableMeetingChatAction,
+    clearMeetingChat: controls.clearMeetingChat ?? unavailableMeetingChatAction
   };
 });

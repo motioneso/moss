@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Request } from "@playwright/test";
 import type { MeetingHistoryPage, MeetingRecord } from "@moss/shared";
 import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 import { assertMeetingHistoryLayout } from "./meeting-history-layout.js";
@@ -34,6 +34,17 @@ test("History searches all retained current text, filters and reopens a selected
     throw new Error("Use the isolated UAT provisioner");
   await signInUatAdmin(page);
   const ids: string[] = [];
+  let observeDeletedSelection = false;
+  let deletedSelectionSearches = 0;
+  const countDeletedSelectionSearches = (request: Request) => {
+    if (
+      observeDeletedSelection &&
+      request.method() === "POST" &&
+      request.url().endsWith("/api/meetings/history/search")
+    )
+      deletedSelectionSearches += 1;
+  };
+  page.on("request", countDeletedSelectionSearches);
   const marker = `history${randomUUID().replaceAll("-", "")}`;
   const title = `History ${marker}`;
   async function create(title: string): Promise<MeetingRecord> {
@@ -218,6 +229,7 @@ test("History searches all retained current text, filters and reopens a selected
     await expect(rail).toContainText("2 final · 0 provisional");
     expect((await page.request.delete(`/api/meetings/records/${target.id}`)).status()).toBe(204);
     ids.splice(ids.indexOf(target.id), 1);
+    observeDeletedSelection = true;
     await page.reload();
     await expect(rail).toContainText("This meeting is unavailable");
     await expect(rail.getByRole("heading", { name: title, exact: true })).toHaveCount(0);
@@ -227,12 +239,32 @@ test("History searches all retained current text, filters and reopens a selected
     await expect(
       page.getByRole("searchbox", { name: "Search meetings", exact: true })
     ).toBeFocused();
+    // One initial search plus denial invalidation (and at most one host-handler change),
+    // never a render-driven refetch loop that consumes the principal's rate-limit bucket.
+    expect(deletedSelectionSearches).toBeLessThanOrEqual(3);
     console.log(
       "MEETINGS_HISTORY_UAT real UI/API; older-than-page search across title/notes/current turns; real correction; factual status metadata; independent selected read; retained search on back; real offline pause/reconnect; keyboard/mobile/light/dark/teal; deleted selection hidden. Synthetic text only, no audio or capture proof."
     );
   } finally {
-    await page.context().setOffline(false);
-    for (const id of ids)
-      expect.soft((await page.request.delete(`/api/meetings/records/${id}`)).status()).toBe(204);
+    try {
+      await page.context().setOffline(false);
+      let deletedFixtures = 0;
+      for (const id of ids) {
+        const status = (await page.request.delete(`/api/meetings/records/${id}`)).status();
+        expect.soft(status).toBe(204);
+        if (status === 204) deletedFixtures += 1;
+      }
+      if (observeDeletedSelection) {
+        // Keep observing during all cleanup requests, while the denied selection stays mounted.
+        expect(deletedSelectionSearches).toBeLessThanOrEqual(3);
+        expect(deletedFixtures).toBe(ids.length);
+        console.log("MEETINGS_HISTORY_CLEANUP_UAT deleted-selection searches bounded", {
+          searches: deletedSelectionSearches,
+          deletedFixtures
+        });
+      }
+    } finally {
+      page.off("request", countDeletedSelectionSearches);
+    }
   }
 });
