@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Meeting drafts, notes and data export.** Create meeting drafts, keep personal notes, find meetings in History and include retained meeting data in your account export; recording is not available yet. [PR #2982](https://github.com/motioneso/moss/pull/2982)
 
+#### Changed
+
+- **Loading screen matches your colours.** The loading screen now follows your light or dark setting and shows a gently animated Moss logo instead of a spinning circle. [PR #3052](https://github.com/motioneso/moss/pull/3052)
+
 ### 2026-10-04
 
 #### Fixed
