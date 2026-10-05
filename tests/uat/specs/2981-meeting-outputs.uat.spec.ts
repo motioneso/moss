@@ -257,11 +257,27 @@ test("reviewed summary versions create independent Tasks and private vault copie
             page.getByRole("heading", { name: "AI providers", exact: true })
           ).toBeVisible();
           expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+          const unavailableOnReturn = page.waitForResponse(
+            (response) =>
+              response.url().endsWith(`${path}/outputs`) && response.request().method() === "GET"
+          );
           await page.goBack();
           await expect(page).toHaveURL(reviewUrl);
           expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+          const unavailable = await unavailableOnReturn;
+          expect(unavailable.status()).toBe(200);
+          expect((await unavailable.json()).generationAvailability).toBe("model-unavailable");
+          await expect(
+            summary.getByText("Checking summary model availability…", { exact: true })
+          ).toHaveCount(0);
           await expect(summary).toContainText("CLI models aren’t supported for summaries.");
           await expect(page.getByLabel("Summary template", { exact: true })).toHaveValue("general");
+          await expect(
+            page.getByRole("button", { name: "Generate summary", exact: true })
+          ).toBeDisabled();
+          await expect(summary).toContainText(
+            "Refresh summaries after the configuration is updated, then generate again."
+          );
           return requestKey;
         } finally {
           expect(
@@ -273,8 +289,81 @@ test("reviewed summary versions create independent Tasks and private vault copie
           ).toBe(200);
         }
       });
+    await test.step("refreshes availability after a repair while the review stays open", async () => {
+      // The API-only repair above happens after returning to the focused review, so it
+      // creates no mount or visibility event. Follow the disabled-state recovery hint.
+      await expect(
+        page.getByRole("button", { name: "Generate summary", exact: true })
+      ).toBeDisabled();
+      await expect(summary).toContainText(
+        "Refresh summaries after the configuration is updated, then generate again."
+      );
+      const refreshed = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+      expect((await refreshed.json()).generationAvailability).toBe("available");
+      await expect(
+        page.getByRole("button", { name: "Generate summary", exact: true })
+      ).toBeEnabled();
+    });
+    await test.step("returning from repaired model settings rechecks availability without Refresh", async () => {
+      // Also prove the ordinary Settings → repair → return flow. Change the real
+      // synthetic model through its API; never replace an availability response.
+      try {
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { capabilities: ["summarization"] }
+            })
+          ).status()
+        ).toBe(200);
+        const unavailable = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+        expect((await unavailable.json()).generationAvailability).toBe("model-unavailable");
+        await expect(
+          page.getByRole("button", { name: "Generate summary", exact: true })
+        ).toBeDisabled();
+        const reviewUrl = page.url();
+        await summary.getByRole("link", { name: "Settings → AI providers", exact: true }).click();
+        await expect(page).toHaveURL(/\/settings\?section=aiproviders$/);
+        await expect(
+          page.getByRole("heading", { name: "AI providers", exact: true })
+        ).toBeVisible();
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { capabilities: ["summarization", "json"] }
+            })
+          ).status()
+        ).toBe(200);
+        const returning = page.waitForResponse(
+          (response) =>
+            response.url().endsWith(`${path}/outputs`) && response.request().method() === "GET"
+        );
+        await page.goBack();
+        await expect(page).toHaveURL(reviewUrl);
+        const rechecked = await returning;
+        expect(rechecked.status()).toBe(200);
+        expect((await rechecked.json()).generationAvailability).toBe("available");
+        await expect(
+          page.getByRole("button", { name: "Generate summary", exact: true })
+        ).toBeEnabled();
+        await expect(page.getByLabel("Summary template", { exact: true })).toHaveValue("general");
+        const selectedPin = await page.request.get(pinPath);
+        expect(selectedPin.status()).toBe(200);
+        expect((await selectedPin.json()).pin.pinnedModelId).toBe(modelId);
+      } finally {
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { capabilities: ["summarization", "json"] }
+            })
+          ).status()
+        ).toBe(200);
+      }
+    });
     const generated = await clickCommand(page, "Generate summary", `${path}/outputs`);
     expect(generated.request().postDataJSON().requestKey).not.toBe(failedRequestKey);
+    console.log(
+      "MEETINGS_SUMMARY_RECOVERY_UAT explicit disabled-state Refresh hint; focused-review repair → Refresh → enabled; Settings repair → return → automatic availability recheck → Generate POST, without an extra Refresh click."
+    );
     await expect(summary).toContainText(OUTPUT_FIXTURE_OVERVIEW);
     await expect(summary).toContainText(OUTPUT_FIXTURE_DECISION);
     await assertMeetingReviewLayout(page);
