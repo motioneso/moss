@@ -23,6 +23,8 @@ const createAiProvider = vi.fn(async (_input: unknown) => ({
   }
 }));
 
+const createAiModel = vi.fn(async (_input: unknown) => ({ model: { id: "m1" } }));
+
 vi.mock("../../apps/web/src/api/client.js", () => ({
   getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
   putChatSettings: vi.fn(),
@@ -43,6 +45,8 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
     persona: { assistantName: "Moss", personaText: "" }
   })),
   createAiProvider: (input: unknown) => createAiProvider(input as never),
+  createAiModel: (input: unknown) => createAiModel(input as never),
+  refreshAiProviderModels: vi.fn(async () => ({ models: [] })),
   revokeAiProvider: vi.fn(),
   updateAiProvider: vi.fn(),
   updateAiModel: vi.fn(),
@@ -367,7 +371,7 @@ describe("AiProvidersPane add provider examples (#2586)", () => {
     const renderer = await renderPane();
     clickButtonByText(renderer, "Add provider");
     await flush();
-    clickButtonByText(renderer, "System One (TypeSafe)");
+    clickButtonByText(renderer, "Jev (TypeSafe)");
     await flush();
 
     expect(renderer.root.findByProps({ "aria-label": "Base URL" }).props.placeholder).toBe(
@@ -392,6 +396,213 @@ describe("AiProvidersPane add provider examples (#2586)", () => {
     const base = renderer.root.findByProps({ "aria-label": "Base URL" }).props.placeholder;
     expect(base).not.toContain("anthropic");
     expect(base).toBe("https://api.openai.com");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+// #3057: the picker gains three decision-model presets. Adding Clef builds its address from an
+// account id; the compatible preset never locks out; Jev still recognises existing installs.
+describe("AiProvidersPane decision-model presets (#3057)", () => {
+  const ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
+  const CLOUDFLARE_BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai`;
+
+  const systemOneProvider = (overrides: Record<string, unknown> = {}) => ({
+    id: "p-dm",
+    providerKind: "system-one",
+    displayName: "Jev (TypeSafe)",
+    authMethod: "api_key",
+    executionMode: "interactive",
+    status: "active",
+    hasCredential: true,
+    isInstanceDefault: false,
+    baseUrl: null,
+    ...overrides
+  });
+
+  function catalogButton(renderer: ReactTestRenderer, label: string) {
+    const button = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes(label));
+    if (!button) throw new Error(`catalog button "${label}" not found`);
+    return button;
+  }
+
+  beforeEach(() => {
+    createAiProvider.mockClear();
+    createAiModel.mockClear();
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({ models: [] } as never);
+  });
+
+  afterEach(() => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({ models: [] } as never);
+  });
+
+  it("shows Account ID and token for Clef and submits the built address", async () => {
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+    clickButtonByText(renderer, "Clef (Cloudflare)");
+    await flush();
+
+    expect(renderer.root.findByProps({ "aria-label": "Account ID" })).toBeTruthy();
+    expect(renderer.root.findByProps({ "aria-label": "API token" })).toBeTruthy();
+
+    const account = renderer.root.findByProps({ "aria-label": "Account ID" });
+    await act(async () => {
+      account.props.onChange({ target: { value: ACCOUNT_ID } });
+    });
+    const token = renderer.root.findByProps({ "aria-label": "API token" });
+    await act(async () => {
+      token.props.onChange({ target: { value: "cf-token" } });
+    });
+
+    clickButtonByText(renderer, "Add");
+    await flush();
+
+    expect(createAiProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerKind: "system-one",
+        displayName: "Clef (Cloudflare)",
+        authMethod: "api_key",
+        baseUrl: CLOUDFLARE_BASE_URL,
+        credentialPayload: { apiKey: "cf-token" }
+      })
+    );
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("disables Add while the Clef account id is malformed", async () => {
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+    clickButtonByText(renderer, "Clef (Cloudflare)");
+    await flush();
+
+    const account = renderer.root.findByProps({ "aria-label": "Account ID" });
+    await act(async () => {
+      account.props.onChange({ target: { value: "not-a-real-id" } });
+    });
+    const token = renderer.root.findByProps({ "aria-label": "API token" });
+    await act(async () => {
+      token.props.onChange({ target: { value: "cf-token" } });
+    });
+
+    const add = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Add"));
+    if (!add) throw new Error('"Add" button not found');
+    expect(add.props.disabled).toBe(true);
+    expect(createAiProvider).not.toHaveBeenCalled();
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("keeps Any compatible service addable after a compatible provider exists", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        systemOneProvider({
+          displayName: "OpenRouter",
+          baseUrl: "https://openrouter.ai/api/v1"
+        })
+      ]
+    } as never);
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+
+    expect(catalogButton(renderer, "Any compatible service").props.disabled).toBe(false);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("marks Jev added for an existing TypeSafe provider with no address", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [systemOneProvider({ displayName: "System One (TypeSafe)", baseUrl: null })]
+    } as never);
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+
+    expect(catalogButton(renderer, "Jev (TypeSafe)").props.disabled).toBe(true);
+    expect(catalogButton(renderer, "Clef (Cloudflare)").props.disabled).toBe(false);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("defaults a hand-added model on a decision model to json / economy", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [systemOneProvider()]
+    } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({
+      models: [
+        {
+          id: "model1",
+          providerConfigId: "p-dm",
+          providerKind: "system-one",
+          providerDisplayName: "Jev (TypeSafe)",
+          providerModelId: "jev-latest",
+          displayName: "Jev",
+          status: "active",
+          providerStatus: "active",
+          capabilities: ["json"],
+          tier: "economy"
+        }
+      ]
+    } as never);
+    const renderer = await renderPane();
+
+    const modelsToggle = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.join("").includes("Models · 1"));
+    if (!modelsToggle) throw new Error("models toggle not found");
+    act(() => {
+      (modelsToggle.props.onClick as () => void)();
+    });
+    await flush();
+    clickButtonByText(renderer, "Add model");
+    await flush();
+
+    const idInput = renderer.root.findByProps({ "aria-label": "Model id" });
+    await act(async () => {
+      idInput.props.onChange({ target: { value: "clef" } });
+    });
+    const nameInput = renderer.root.findByProps({ "aria-label": "Display name" });
+    await act(async () => {
+      nameInput.props.onChange({ target: { value: "Clef" } });
+    });
+
+    const form = renderer.root
+      .findAllByType("form")
+      .find((candidate) => String(candidate.props.className ?? "").includes("ai-model-form"));
+    if (!form) throw new Error("add-model form not found");
+    await act(async () => {
+      form.props.onSubmit({ preventDefault: () => {} });
+    });
+    await flush();
+
+    expect(createAiModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerConfigId: "p-dm",
+        providerModelId: "clef",
+        displayName: "Clef",
+        tier: "economy",
+        capabilities: ["json"]
+      })
+    );
 
     await act(async () => {
       renderer.unmount();

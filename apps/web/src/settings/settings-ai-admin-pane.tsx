@@ -9,14 +9,12 @@ import {
   MoreHorizontal,
   Terminal,
   Trash2,
-  Unlink,
-  X
+  Unlink
 } from "lucide-react";
 import { useState } from "react";
 
 import { Button, IconButton, Menu } from "@moss/ui";
 import {
-  createAiProvider,
   getChatModelOverrideSettings,
   listAiModels,
   listAiProviders,
@@ -40,7 +38,8 @@ import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
 import { MODEL_TIERS, TIERS } from "./settings-ai-edit-model-form";
-import { OPENAI_COMPATIBLE_CLI_AGENTS, PROVIDER_CATALOG } from "./settings-ai-provider-catalog";
+import { CREDENTIAL_EXAMPLES, OPENAI_COMPATIBLE_CLI_AGENTS } from "./settings-ai-provider-catalog";
+import { ProviderAddPanel } from "./settings-ai-provider-picker";
 import { ProviderModels } from "./settings-ai-provider-models";
 import { TerminalModal } from "./terminal-modal";
 import {
@@ -59,25 +58,9 @@ import {
   type AiModelCapability,
   type AiModelTier,
   type AiProviderConfigDto,
-  type AiProviderKind,
   type AiServiceBinding,
   type AiServiceKey
 } from "@moss/shared";
-
-/**
- * The example shown in a provider's endpoint and key fields. Each kind shows its own: an example that
- * names another company's address or key style sends the person hunting for the wrong thing.
- */
-const CREDENTIAL_EXAMPLES: Readonly<
-  Record<AiProviderKind, { readonly baseUrl: string; readonly apiKey: string }>
-> = {
-  anthropic: { baseUrl: "https://api.anthropic.com", apiKey: "sk-ant-…" },
-  "openai-compatible": { baseUrl: "https://api.openai.com", apiKey: "sk-…" },
-  google: { baseUrl: "https://generativelanguage.googleapis.com", apiKey: "AIza…" },
-  ollama: { baseUrl: "http://localhost:11434", apiKey: "Any value" },
-  custom: { baseUrl: "https://your-endpoint.example.com", apiKey: "Your API key" },
-  "system-one": { baseUrl: "https://api.typesafe.ai", apiKey: "apikey_…" }
-};
 
 // Chat and the strict email-extraction background service share the existing binding control. Voice
 // stays on its dedicated endpoint; other worker capabilities remain automatic.
@@ -557,11 +540,6 @@ export function AiProvidersPane() {
   const { toast, confirm } = useFeedback();
   const assistantName = useAssistantName();
   const [pick, setPick] = useState(false);
-  const [credentialFor, setCredentialFor] = useState<(typeof PROVIDER_CATALOG)[number] | null>(
-    null
-  );
-  const [pickBaseUrl, setPickBaseUrl] = useState("");
-  const [pickApiKey, setPickApiKey] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [loginProvider, setLoginProvider] = useState<AutomatedLoginProvider | null>(null);
   const providersQuery = useQuery({
@@ -602,30 +580,6 @@ export function AiProvidersPane() {
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.capabilities })
     ]);
 
-  const createMutation = useMutation({
-    mutationFn: (input: {
-      option: (typeof PROVIDER_CATALOG)[number];
-      baseUrl: string;
-      apiKey: string;
-    }) =>
-      createAiProvider({
-        providerKind: input.option.kind,
-        displayName: input.option.label,
-        authMethod: input.option.authMethod,
-        ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
-        ...(input.option.acpAgentId ? { acpAgentId: input.option.acpAgentId } : {}),
-        ...(input.apiKey ? { credentialPayload: { apiKey: input.apiKey } } : {})
-      }),
-    onSuccess: (_data, input) => {
-      setPick(false);
-      setCredentialFor(null);
-      setPickBaseUrl("");
-      setPickApiKey("");
-      void invalidate();
-      toast(`Added ${input.option.label}`, { icon: <GitCommitHorizontal size={17} /> });
-    },
-    onError: (error) => toast(readError(error), { tone: "drift", icon: <X size={17} /> })
-  });
   const revokeMutation = useMutation({
     mutationFn: (id: string) => revokeAiProvider(id),
     onSuccess: () => {
@@ -832,94 +786,14 @@ export function AiProvidersPane() {
           </div>
         )}
         {pick ? (
-          <div className="provpick">
-            <div className="provpick__hd">
-              {credentialFor ? `${credentialFor.label} credentials` : "Add a provider"}
-            </div>
-            {credentialFor ? (
-              <>
-                <Field label="Base URL" hint="Leave blank to use the provider's default endpoint.">
-                  <input
-                    className="jds-input"
-                    value={pickBaseUrl}
-                    onChange={(e) => setPickBaseUrl(e.target.value)}
-                    placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].baseUrl}
-                    aria-label="Base URL"
-                  />
-                </Field>
-                <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
-                  <input
-                    className="jds-input"
-                    type="password"
-                    value={pickApiKey}
-                    onChange={(e) => setPickApiKey(e.target.value)}
-                    placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].apiKey}
-                    aria-label="API key"
-                  />
-                </Field>
-                <div className="provpick__cred-acts">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!pickApiKey.trim()}
-                    onClick={() =>
-                      createMutation.mutate({
-                        option: credentialFor,
-                        baseUrl: pickBaseUrl.trim(),
-                        apiKey: pickApiKey.trim()
-                      })
-                    }
-                  >
-                    Add
-                  </Button>
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    onClick={() => {
-                      setCredentialFor(null);
-                      setPickBaseUrl("");
-                      setPickApiKey("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="provpick__grid">
-                  {PROVIDER_CATALOG.map((option) => {
-                    const has = providers.some((provider) =>
-                      option.acpAgentId !== undefined
-                        ? provider.authMethod === "cli" && provider.acpAgentId === option.acpAgentId
-                        : provider.displayName === option.label
-                    );
-                    return (
-                      <button
-                        key={option.label}
-                        type="button"
-                        className="provpick__item"
-                        disabled={has}
-                        onClick={() =>
-                          option.authMethod === "cli"
-                            ? createMutation.mutate({ option, baseUrl: "", apiKey: "" })
-                            : setCredentialFor(option)
-                        }
-                      >
-                        <span className="provpick__dot" />
-                        {option.label}
-                        {has ? <span className="provpick__on">Added</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="provpick__foot">
-                  {assistantName} reads the available models from the provider automatically when it
-                  connects.
-                </div>
-              </>
-            )}
-          </div>
+          <ProviderAddPanel
+            providers={providers}
+            onAdded={(label) => {
+              setPick(false);
+              void invalidate();
+              toast(`Added ${label}`, { icon: <GitCommitHorizontal size={17} /> });
+            }}
+          />
         ) : null}
       </Group>
 

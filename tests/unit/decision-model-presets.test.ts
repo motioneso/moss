@@ -5,7 +5,8 @@ import {
   cloudflareDecisionBaseUrl,
   decisionModelDialect,
   isCloudflareAccountId,
-  isCloudflareDecisionBaseUrl
+  isCloudflareDecisionBaseUrl,
+  isTypesafeDecisionBaseUrl
 } from "../../packages/shared/src/decision-model-presets.js";
 
 const ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
@@ -83,5 +84,19 @@ describe("isCloudflareDecisionBaseUrl", () => {
 describe("CLOUDFLARE_DECISION_MODELS", () => {
   it("is the fixed Clef family", () => {
     expect(CLOUDFLARE_DECISION_MODELS).toEqual(["clef", "clef-flash"]);
+  });
+});
+
+describe("isTypesafeDecisionBaseUrl", () => {
+  it("is true for a blank address or TypeSafe's own host", () => {
+    expect(isTypesafeDecisionBaseUrl(null)).toBe(true);
+    expect(isTypesafeDecisionBaseUrl("")).toBe(true);
+    expect(isTypesafeDecisionBaseUrl("https://api.typesafe.ai")).toBe(true);
+  });
+
+  it("is false for Cloudflare and another compatible host", () => {
+    expect(isTypesafeDecisionBaseUrl(CLOUDFLARE_ADDRESS)).toBe(false);
+    expect(isTypesafeDecisionBaseUrl("https://openrouter.ai/api/v1")).toBe(false);
+    expect(isTypesafeDecisionBaseUrl("not a url")).toBe(false);
   });
 });

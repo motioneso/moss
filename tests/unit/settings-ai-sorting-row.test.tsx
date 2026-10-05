@@ -209,6 +209,26 @@ describe("SortingModelRow (Classifier)", () => {
     expect(rendered).not.toContain(SORTING_DISCLOSURE);
   });
 
+  it("names a Cloudflare decision model and never says TypeSafe for a Clef binding", async () => {
+    const clefProvider = [
+      {
+        ...provider("p-clef", "Clef (Cloudflare)", "system-one"),
+        baseUrl: `https://api.cloudflare.com/client/v4/accounts/${"0123456789abcdef0123456789abcdef"}/ai`
+      }
+    ];
+    const clefModel = [model("clef-flash", "p-clef", "system-one", "Clef (Cloudflare)", ["json"])];
+    const renderer = await render(
+      { kind: "model", modelId: "clef-flash" },
+      clefModel,
+      clefProvider
+    );
+    const rendered = text(renderer);
+    expect(rendered).not.toContain("TypeSafe");
+    expect(rendered).toContain("Clef (Cloudflare)");
+    expect(rendered).toContain("answers News, Sports and email sorting questions with a yes or no");
+    expect(rendered).not.toContain(SORTING_DISCLOSURE);
+  });
+
   it("offers a json model even when its provider has no stored credential", async () => {
     const noCredentialProvider = [
       { ...provider("p-nocred", "No cred", "openai-compatible"), hasCredential: false }

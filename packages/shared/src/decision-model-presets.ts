@@ -15,6 +15,7 @@ export const CLOUDFLARE_DECISION_MODELS = ["clef", "clef-flash"] as const;
 export type CloudflareDecisionModel = (typeof CLOUDFLARE_DECISION_MODELS)[number];
 
 const CLOUDFLARE_DECISION_HOST = "api.cloudflare.com";
+const TYPESAFE_DECISION_HOST = "api.typesafe.ai";
 const CLOUDFLARE_ACCOUNT_ID_PATTERN = /^[0-9a-f]{32}$/;
 const CLOUDFLARE_ACCOUNT_PATH_PATTERN = /^\/client\/v4\/accounts\/[0-9a-f]{32}\/ai$/;
 
@@ -34,6 +35,19 @@ export function decisionModelDialect(baseUrl: string | null | undefined): Decisi
 /** A Cloudflare account id is exactly 32 lowercase hex characters; it becomes a URL path segment. */
 export function isCloudflareAccountId(value: string): boolean {
   return CLOUDFLARE_ACCOUNT_ID_PATTERN.test(value);
+}
+
+/**
+ * Whether an address is TypeSafe's own decision-model address, or blank (the TypeSafe default).
+ * A compatible service on another host is not TypeSafe; the UI uses this to name the right vendor.
+ */
+export function isTypesafeDecisionBaseUrl(baseUrl: string | null | undefined): boolean {
+  if (!baseUrl) return true;
+  try {
+    return new URL(baseUrl).host === TYPESAFE_DECISION_HOST;
+  } catch {
+    return false;
+  }
 }
 
 /** Build the stored address for a Cloudflare decision model. Throws on a malformed account id. */
