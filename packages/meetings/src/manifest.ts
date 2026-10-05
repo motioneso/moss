@@ -154,7 +154,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.private_exports",
       description:
-        "Save each output version as a private vault file. Requires Meetings and the Notes module enabled. Unchanged repeats do nothing; manual edits cause a conflict. Saved and search-index queued/delayed statuses are separate.",
+        "Save each output version as a private vault file. Requires Meetings enabled and the required Notes module. Unchanged repeats do nothing; manual edits cause a conflict. Saved and search-index queued/delayed statuses are separate.",
       errors: [
         {
           code: "meeting_export_invalid_input",
@@ -166,7 +166,7 @@ export const meetingsModuleManifest = {
           class: "prerequisite",
           remediationRef: "meetings.enable_private_exports",
           description:
-            "Private export needs Meetings and Notes enabled and an available summary version. Check Modules in Settings, then refresh the meeting; contact an instance admin if a module is disabled for the instance."
+            "Private export needs Meetings enabled, the required Notes module and an available summary version. Check Meetings in Modules and refresh the summary; contact an instance admin if export remains unavailable."
         },
         {
           code: "meeting_export_content_conflict",
@@ -203,7 +203,7 @@ export const meetingsModuleManifest = {
         {
           id: "meetings.enable_private_exports",
           description:
-            "Enable Meetings and Notes in Modules, or contact an instance admin if either is disabled for the instance. Then reopen the retained summary version and save again.",
+            "Enable Meetings in Modules and reopen a retained summary version. Notes is required and cannot be switched off; contact an instance admin if private export remains unavailable.",
           path: "/settings?section=modules"
         }
       ]
@@ -324,7 +324,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.questions",
       description:
-        "Ask Moss uses current meeting evidence and exact citations in shared chat. API-key only, no actions or fallback. Unavailable selections require model review; transient refresh errors preserve open drafts. CLI unsupported."
+        "Ask Moss uses current meeting evidence and exact citations in shared chat. Admin pins/locked defaults apply; unavailable enabled overrides fail closed. API-key only, no actions. Transient refresh errors preserve open drafts."
     },
     {
       id: "meetings.transcript_storage",

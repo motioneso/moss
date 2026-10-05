@@ -356,8 +356,7 @@ describe("meeting selected-model HTTP boundary", () => {
     { name: "revoked provider", change: { provider_status: "revoked" } },
     { name: "incompatible model", change: { capabilities: ["json"] } },
     { name: "withdrawn override permission", change: { allow_user_override: false } },
-    { name: "removed model", removed: true },
-    { name: "disabled overrides", disabled: true }
+    { name: "removed model", removed: true }
   ])(
     "rejects an unavailable selected override ($name) before credentials or HTTP",
     async (test) => {
@@ -369,7 +368,6 @@ describe("meeting selected-model HTTP boundary", () => {
         ...test.change
       } as AiConfiguredModelSafeRow;
       h.overridePreference.mockResolvedValue(override.id);
-      h.overrideEnabled.mockResolvedValue(!test.disabled);
       h.models.mockResolvedValue(test.removed ? [model] : [model, override]);
       // Exercise the real override resolver and preserve ordinary chat's fallback behavior.
       expect(await new AiRepository().selectChatModelForUser(db)).toMatchObject({ id: model.id });
@@ -379,6 +377,40 @@ describe("meeting selected-model HTTP boundary", () => {
       expect(h.credential).not.toHaveBeenCalled();
       expect(h.fetch).not.toHaveBeenCalled();
       expect(h.saved).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["active", "disabled"] as const)(
+    "uses the configured default when admin-disabled overrides retain a preference for a model that is %s",
+    async (status) => {
+      const h = setup();
+      const override = {
+        ...model,
+        id: "retained-override",
+        provider_config_id: "override-provider",
+        provider_model_id: "override-provider-model",
+        status
+      };
+      h.overridePreference.mockResolvedValue(override.id);
+      h.overrideEnabled.mockResolvedValue(false);
+      h.models.mockResolvedValue([model, override]);
+      expect(
+        await new AiRepository().getChatModelOverrideSettings(db, {
+          rejectUnavailableOverride: true
+        })
+      ).toMatchObject({
+        overrideEnabled: false,
+        currentOverrideModelId: override.id,
+        effectiveOverrideModelId: null,
+        defaultModel: { id: model.id },
+        selectedModel: { id: model.id }
+      });
+      await expect(
+        h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
+      ).resolves.toMatchObject({ reply: "Answer [[S1]]" });
+      expect(h.fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String(h.fetch.mock.calls[0]?.[1]?.body)).model).toBe("chosen-model");
+      for (const args of h.credential.mock.calls) expect(args).toEqual([db, "selected-provider"]);
+      expect(h.saved).toHaveBeenCalledTimes(1);
     }
   );
   it("rejects an unavailable override added at credential lookup even when fallback matches the prepared model", async () => {

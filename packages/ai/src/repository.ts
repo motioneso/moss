@@ -1774,10 +1774,11 @@ export class AiRepository {
       currentOverrideModelId: requestedModelId,
       effectiveOverrideModelId: resolved.effectiveOverrideModelId,
       defaultModel: defaultModel ?? null,
-      // Privacy-sensitive callers may reject substitution for an unavailable override.
-      // An explicit admin pin above remains authoritative over any stored user preference.
+      // Privacy-sensitive callers may reject substitution for an enabled but unavailable override.
+      // Admin-disabled overrides are inert; an explicit admin pin above also stays authoritative.
       selectedModel:
         options.rejectUnavailableOverride &&
+        overrideEnabled &&
         requestedModelId !== null &&
         resolved.effectiveOverrideModelId !== requestedModelId
           ? null

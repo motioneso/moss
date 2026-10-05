@@ -116,7 +116,7 @@ export const chatModuleManifest = {
     {
       id: "chat.meeting_questions",
       description:
-        "Independent questions use one meeting’s current transcript in shared chat, with cutoff and exact-revision citations. The API-key model and pins apply. No tools, unrelated memory or automatic export; subscription models are unsupported.",
+        "Meeting questions use current transcript and exact citations. API-key models only, no tools. Enabled user choices fail closed; admin pins or locked instance defaults apply. No unrelated memory or automatic export.",
       featureFlagId: "chat.module",
       errors: [
         {
@@ -124,7 +124,7 @@ export const chatModuleManifest = {
           class: "prerequisite",
           remediationRef: "chat.meeting_questions.configure",
           description:
-            "The selected model or requested override is unavailable or uses unsupported subscription authentication. Choose an available model, or contact an admin when pinned. No fallback model is selected."
+            "The required model or enabled override is unavailable or uses unsupported subscription authentication. Choose an available model, or contact an admin when locked. No fallback replaces an unavailable enabled override."
         },
         {
           code: "meeting_context_unavailable",

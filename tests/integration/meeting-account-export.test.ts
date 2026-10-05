@@ -431,7 +431,7 @@ describe("Meetings export worker grants and owner RLS", () => {
     it(`owner assertion fails when ${table} worker policy is weakened, then rollback restores it`, async () => {
       const policy = `${table}_export_worker`;
       const before = await sql<{ qual: string; roles: string[]; cmd: string }>`
-        SELECT qual, roles, cmd FROM pg_policies
+        SELECT qual, roles::text[] AS roles, cmd FROM pg_policies
         WHERE schemaname = 'app' AND tablename = ${table} AND policyname = ${policy}
       `.execute(bootstrapDb);
       expect(before.rows).toHaveLength(1);
@@ -455,7 +455,7 @@ describe("Meetings export worker grants and owner RLS", () => {
         })
       ).rejects.toBeInstanceOf(OwnerIsolationFailure);
       const after = await sql<{ qual: string; roles: string[]; cmd: string }>`
-        SELECT qual, roles, cmd FROM pg_policies
+        SELECT qual, roles::text[] AS roles, cmd FROM pg_policies
         WHERE schemaname = 'app' AND tablename = ${table} AND policyname = ${policy}
       `.execute(bootstrapDb);
       expect(after.rows).toEqual(before.rows);

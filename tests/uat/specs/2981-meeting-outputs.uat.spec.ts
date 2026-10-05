@@ -356,31 +356,14 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(replay.status()).toBe(200);
       expect((await replay.json()).acceptedTaskId).toBe(accepted.acceptedTaskId);
     }
-    await test.step("disabled Notes gives an actionable private-export explanation", async () => {
-      // Change real owner module state; never replace a Moss API response.
-      try {
-        expect(
-          (await page.request.patch("/api/me/modules/notes", { data: { disabled: true } })).status()
-        ).toBe(200);
-        const rejected = page.waitForResponse(
-          (response) =>
-            response.url().endsWith(`${path}/exports`) && response.request().method() === "POST"
-        );
-        await page.getByRole("button", { name: "Save new private version", exact: true }).click();
-        const response = await rejected;
-        expect(response.status()).toBe(409);
-        expect(await response.json()).toMatchObject({ code: "meeting_export_unavailable" });
-        const exports = page.getByRole("region", { name: "Save to vault", exact: true });
-        await expect(exports).toContainText("Meetings and Notes modules");
-        await expect(exports).toContainText("Settings → Modules");
-        await expect(exports).not.toContainText("saved note was changed");
-      } finally {
-        expect(
-          (
-            await page.request.patch("/api/me/modules/notes", { data: { disabled: false } })
-          ).status()
-        ).toBe(200);
-      }
+    await test.step("required Notes cannot be disabled before a private export", async () => {
+      // Notes is required, so the review's disabled-Notes scenario cannot be reached
+      // through real settings. Keep that product rule and never fake a missing module.
+      const rejected = await page.request.patch("/api/me/modules/notes", {
+        data: { disabled: true }
+      });
+      expect(rejected.status()).toBe(409);
+      expect(await rejected.json()).toMatchObject({ error: "Required modules cannot be disabled" });
     });
     const firstSave = await clickCommand(page, "Save new private version", `${path}/exports`);
     const firstReceipt = (await firstSave.json()).receipt as MeetingExportReceipt;

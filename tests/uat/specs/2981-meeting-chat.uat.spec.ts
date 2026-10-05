@@ -63,6 +63,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
   const project = requireUatProjectName();
   if (!project.startsWith("uat-")) throw new Error("Use the isolated UAT provisioner");
   const fixtureName = `${project}-meeting-chat-fixture`;
+  const fallbackProviderModelId = "meeting-uat-admin-default";
   const ids: string[] = [];
   let providerId: string | undefined;
   let modelId: string | undefined;
@@ -358,7 +359,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
       const fallbackModel = await page.request.post("/api/ai/models", {
         data: {
           providerConfigId: fallbackProviderId,
-          providerModelId: "meeting-uat-default-must-not-receive-evidence",
+          providerModelId: fallbackProviderModelId,
           displayName: "Synthetic meeting UAT fallback model",
           capabilities: ["chat"],
           status: "active",
@@ -408,6 +409,58 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
       ).toBeVisible();
       expect(await fixtureEvidence(fixtureName)).toHaveLength(2);
     });
+    await test.step("Admin-disabled overrides recover through the locked default-model pill", async () => {
+      const disabled = await page.request.put("/api/admin/ai/chat-model-override", {
+        data: { enabled: false }
+      });
+      expect(disabled.status()).toBe(200);
+      try {
+        expect(
+          ((await disabled.json()) as GetChatModelOverrideSettingsResponse).settings
+        ).toMatchObject({
+          overrideEnabled: false,
+          currentOverrideModelId: modelId,
+          effectiveOverrideModelId: null,
+          defaultModel: { id: fallbackModelId, providerConfigId: fallbackProviderId },
+          selectedModel: { id: fallbackModelId, providerConfigId: fallbackProviderId }
+        });
+        // Load the selected meeting afresh so the pill reads current admin policy.
+        await page.goto(`/meetings?id=${selected.id}`);
+        await page.getByRole("button", { name: "Ask Moss", exact: true }).click();
+        await expect(
+          page.getByRole("button", { name: "Clear meeting selection", exact: true })
+        ).toBeVisible();
+        await expect(page.locator(".chatd-model--locked")).toHaveText(
+          "Synthetic meeting UAT fallback model"
+        );
+        await expect(page.getByRole("button", { name: /^Chat model:/ })).toHaveCount(0);
+        const recovered = await sendQuestion(page);
+        expect(recovered.meetingContext.meetingId).toBe(selected.id);
+        expect(recovered.meetingContext.transcriptRevision).toBe(updatedVersion);
+        expect(recovered.answerProvenanceCitedIds).toEqual(["S1"]);
+        await expect(
+          page.locator(".chatd-bubble").filter({ hasText: "The synthetic decision is recorded" })
+        ).toHaveCount(3);
+        const recoveredEvidence = await fixtureEvidence(fixtureName);
+        expect(recoveredEvidence).toHaveLength(3);
+        expect(recoveredEvidence[2]).toEqual({
+          path: "/v1/chat/completions",
+          model: fallbackProviderModelId,
+          hasTools: false,
+          hasNativeSearch: false,
+          hasOld: false,
+          hasNew: true,
+          hasUnrelated: false,
+          hasExternalSource: true
+        });
+      } finally {
+        expect(
+          (
+            await page.request.put("/api/admin/ai/chat-model-override", { data: { enabled: true } })
+          ).status()
+        ).toBe(200);
+      }
+    });
     expect(
       (
         await page.request.patch(`/api/ai/models/${modelId}`, { data: { status: "active" } })
@@ -438,7 +491,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     expect(url.searchParams.get("startCharacter")).toBe("0");
     expect(url.searchParams.get("endCharacter")).toBe(String(MEETING_FIXTURE_OLD.length));
     console.log(
-      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 2 observed requests; same model; no tools/search; selected latest text only; disabled pinned model and unpinned override rejected with an active default and no further provider calls; immutable revision-1 citation opened"
+      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 3 observed requests; selected model for 2 requests, configured default only after admin disabled overrides; no tools/search; selected latest text only; disabled pinned model and enabled unpinned override rejected with no provider calls; locked default-model pill recovery with retained preference; immutable revision-1 citation opened"
     );
   } finally {
     // The provisioner destroys the isolated DB too; restoring settings makes failures diagnosable.

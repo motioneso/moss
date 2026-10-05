@@ -22,6 +22,8 @@ The current checkpoint contains:
 - Authenticated text-only transcript ingestion, immutable revisions, bounded snapshots and evidence.
 - Read-only transcript review with source labels, provisional status and revision navigation.
 - Meeting questions in the existing chat drawer using the selected API-key model and exact evidence.
+  Enabled user overrides fail closed when unavailable; admin pins and locked instance defaults
+  remain authoritative when personal overrides are disabled.
 - Explicit generated/manual summary versions, source-grounded decisions and owner-reviewed Tasks.
 - Explicit versioned, create-only copies in Moss private vault with separate write/index receipts.
 - Owner-only account export through Settings → Account & preferences → Your data, including
@@ -265,7 +267,9 @@ off; evidence uses executable assertions and bounded text.
 The output UAT covers Review → Generate → exact source evidence → explicit Task review and
 acceptance, retry/regeneration deduplication, independent Task edits, immutable manual summary
 versions, explicit create-only private saves, separate write/index receipts, repeated-save
-stability, actionable disabled-Notes recovery, and independent copies surviving meeting deletion.
+stability, the required-Notes boundary, and independent copies surviving meeting deletion.
+Notes cannot be disabled through module settings. The defensive `meeting_export_unavailable`
+copy is component-tested; this UAT does not claim to trigger a missing required Notes service.
 Settings → Prepare export → Download verifies the real worker-built archive contains all eight
 Meetings collections, retained note revisions, transcript text, generated/manual versions,
 accepted-Task references and vault receipts. Vault assertions use public

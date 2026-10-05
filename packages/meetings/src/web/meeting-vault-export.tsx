@@ -88,7 +88,7 @@ export function MeetingVaultExport({
           ? {
               status: "failed" as const,
               message:
-                "Private export is unavailable. Check that the Meetings and Notes modules are enabled in Settings → Modules, or contact an instance admin. Then reopen the summary version and try again."
+                "Private export is unavailable. Check Meetings in Settings → Modules, then reopen the summary version. Notes is a required built-in module; contact an instance admin if export is still unavailable."
             }
           : error instanceof ApiError && error.status === 409
             ? {

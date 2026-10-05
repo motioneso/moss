@@ -388,7 +388,7 @@ describe("meeting summary owner review", () => {
     await mount();
     await click("Save new private version");
     const rendered = JSON.stringify(renderer.toJSON());
-    expect(rendered).toContain("Meetings and Notes modules");
+    expect(rendered).toContain("Notes is a required built-in module");
     expect(rendered).toContain("Settings → Modules");
     expect(rendered).not.toContain("saved note was changed");
     expect(rendered).not.toContain("Private module configuration");
