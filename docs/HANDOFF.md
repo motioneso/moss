@@ -8,7 +8,7 @@
 > - **Roadmap + milestones:** GitHub Milestones + epic issues #2–#10 on `motioneso/Jarv1s`
 > - **Open work:** GitHub Issues #2–#10 (epic issues, one per milestone)
 > - **Architectural decisions:** `docs/architecture/decisions/`
-> - **Durable lessons:** agentmemory (`project: "jarv1s"`)
+> - **Durable lessons:** Hindsight agent memory (see `CLAUDE.md` → _Memory_)
 
 Date: 2026-06-07
 
@@ -375,9 +375,9 @@ Goal for the next agent:
 - `StubEmbeddingProvider` is the test-time embedding implementation (deterministic SHA-256 vectors).
   A real `LocalEmbeddingProvider` (e.g. `nomic-embed-text` via ollama or a local HTTP endpoint) is
   the next embedding work, but scope it in a spec first.
-- Use CodeGraph and agentmemory as normal agent knowledge tools per
+- Use CodeGraph and Hindsight as normal agent knowledge tools per
   `docs/DEVELOPMENT_STANDARDS.md#agent-knowledge-tools`; keep CodeGraph synced and save durable
-  decisions to agentmemory without secrets or private data.
+  decisions to Hindsight without secrets or private data.
 - Preserve `AccessContext -> withDataContext() -> RLS`; no admin RLS bypass; no `BYPASSRLS` on
   runtime roles; repositories accept only `DataContextDb`; `VaultContext` for all vault I/O.
 

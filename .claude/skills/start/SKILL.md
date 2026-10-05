@@ -62,9 +62,9 @@ as done. "Approved" = the user has signed off, not merely that a file exists.
 
 - Get current status + the milestone/exit criteria from GitHub (project board + epic issues #2–#10;
   STATUS.md/ROADMAP.md were retired). Read `docs/DEVELOPMENT_STANDARDS.md`.
-- Run the agentmemory required recalls from CLAUDE.md (at minimum `memory_smart_search "jarv1s
-current project state"`; add the row matching the work — RLS, migrations, AccessContext,
-  integration-test, frontend).
+- Search Hindsight memory with `hindsight_search_knowledge_pages` (at minimum "current project
+  state"; add the topic matching the work — RLS, migrations, AccessContext, integration-test,
+  frontend).
 - Honor every **Hard Invariant** in CLAUDE.md. Do not restate them here; obey them.
 
 **1. Resolve the issue + move the board.** Resolve per _Input_. Move the item to **In Progress** on
@@ -115,7 +115,8 @@ signal — not a doc edit.
 - GitHub bookkeeping (source of truth): check off the epic's exit-criteria boxes, **close the
   issue**, **close the milestone** if all criteria are met, move the board item to **Done**.
 - Status lives in GitHub only (board + milestones); there are no status docs to update.
-- Save a durable agentmemory lesson for any non-obvious decision or discovered invariant.
+- Save a durable Hindsight note (`hindsight_ingest_document`) for any non-obvious decision or
+  discovered invariant.
 
 ## Build-engine heuristic
 
@@ -168,7 +169,7 @@ gh api -X PATCH repos/motioneso/Jarv1s/milestones/<M> -f state=closed
 - About to mark an issue/milestone done from an **agent's self-report** → verify with
   `scripts/run-gate.sh` (both gates) yourself first.
 - About to update only the doc and not the board → GitHub is the source of truth; move the board.
-- Skipped the agentmemory recalls → locked decisions and traps may be missed.
+- Skipped the Hindsight memory search → locked decisions and traps may be missed.
 
 ## Common mistakes
 

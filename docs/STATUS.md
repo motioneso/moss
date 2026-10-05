@@ -9,7 +9,7 @@
 > - **Milestones + exit criteria:** GitHub Milestones and epic issues #2–#10 on `motioneso/Jarv1s`.
 > - **Hard invariants:** `CLAUDE.md` → _Hard Invariants_.
 > - **Local/LAN dev run + infrastructure notes:** `docs/operations/dev-environment.md`.
-> - **Durable lessons / project state:** agentmemory (`project: "jarv1s"`).
+> - **Durable lessons / project state:** Hindsight agent memory (see `CLAUDE.md` → _Memory_).
 
 ## M-A3 Complete — 2026-06-07
 

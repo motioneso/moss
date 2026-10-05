@@ -235,15 +235,17 @@ Prefer CodeGraph MCP queries for:
 - checking impact before changing shared helpers, contracts, manifests, or data-context code
 - answering architecture questions that depend on current source code
 
-Use agentmemory for durable session knowledge that should survive beyond one chat:
+Use Hindsight for durable session knowledge that should survive beyond one chat. Turns are saved
+automatically; save deliberate notes with `hindsight_ingest_document`:
 
 - save decisions that affect future implementation choices
 - save architectural invariants that were clarified during the session
 - save lessons from debugging, verification failures, or release-hardening work
-- recall prior sessions before continuing old work, reviewing why code exists, or resuming a plan
+- search memory (`hindsight_search_knowledge_pages`, then `hindsight_reflect`) before continuing old
+  work, reviewing why code exists, or resuming a plan
 
 Do not save secrets, tokens, private user data, raw connector payloads, prompts containing private
-content, or environment-specific credentials into agentmemory. Keep memory entries concise and tied
+content, or environment-specific credentials into Hindsight. Keep memory entries concise and tied
 to stable project concepts or file paths.
 
 ## Prompt-Cache Discipline
