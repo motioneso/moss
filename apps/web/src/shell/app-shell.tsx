@@ -28,7 +28,7 @@ import {
 import { useChatStream } from "../chat/use-chat-stream";
 import { usePageContextSync } from "../chat/use-page-context-sync";
 import { ChatControlsProvider } from "./chat-controls-context";
-import { applyThemeTokens, isDarkThemeColor } from "../theme/theme-runtime";
+import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import {
   PageTrailProvider,
@@ -38,14 +38,8 @@ import {
   useRequestPageTrailEdit
 } from "./page-trail";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
-import {
-  loadShellColorMode,
-  loadShellTheme,
-  saveShellColorMode,
-  saveShellTheme,
-  saveShellPageTone,
-  type ShellTheme
-} from "./theme-storage";
+import { saveShellColorMode, saveShellTheme, saveShellPageTone } from "./theme-storage";
+import { resolveShellAppearance } from "./shell-appearance";
 import { syncThemeColorMeta } from "./theme-color-meta";
 import { loadShellNav, saveShellNav, type ShellNavMode } from "./nav-storage";
 import { ShellNav } from "./shell-nav";
@@ -111,8 +105,6 @@ export function AppShell(props: AppShellProps) {
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
   const [focusActionRequestId, setFocusActionRequestId] = useState<string | null>(null);
   const embeddedComposerRef = useRef<((draft: string) => void) | null>(null);
-  const [theme] = useState<ShellTheme>(() => loadShellTheme());
-  const [colorMode] = useState(() => loadShellColorMode());
   const openChatWith = useCallback((prompt: string) => {
     setChatOpen(true);
     void sendChatTurn(prompt);
@@ -277,18 +269,14 @@ export function AppShell(props: AppShellProps) {
     queryKey: queryKeys.settings.themes,
     queryFn: () => listThemes()
   });
-  const activeThemeId = themesQuery.data?.activeId ?? theme;
   useEffect(() => {
-    const customTheme =
-      themesQuery.data?.custom.find((custom) => custom.id === activeThemeId) ?? null;
-    const isCustomTheme = Boolean(customTheme);
-    const mode = isCustomTheme ? "light" : (themesQuery.data?.mode ?? colorMode);
-    document.documentElement.setAttribute(
-      "data-theme",
-      isCustomTheme ? activeThemeId : activeThemeId === "dark" ? "light" : activeThemeId
-    );
-    document.documentElement.setAttribute("data-color-mode", mode);
-    applyThemeTokens(document.documentElement.style, customTheme?.tokens ?? null);
+    // Until the theme list loads, keep what the boot script applied from the same saved values.
+    // Re-applying from storage here would flash a dark custom theme light and save that tone.
+    if (!themesQuery.data) return;
+    const appearance = resolveShellAppearance(themesQuery.data);
+    document.documentElement.setAttribute("data-theme", appearance.dataTheme);
+    document.documentElement.setAttribute("data-color-mode", appearance.colorMode);
+    applyThemeTokens(document.documentElement.style, appearance.tokens);
     document.documentElement.toggleAttribute(
       "data-nav-color",
       document.documentElement.style.getPropertyValue("--nav-bg") !== ""
@@ -298,11 +286,10 @@ export function AppShell(props: AppShellProps) {
       document.documentElement.style.getPropertyValue("--header-bg") !== ""
     );
     syncThemeColorMeta();
-    saveShellTheme(activeThemeId);
-    saveShellColorMode(mode);
-    const customDark = customTheme ? isDarkThemeColor(customTheme.tokens.paper) : null;
-    saveShellPageTone(customDark === null ? mode : customDark ? "dark" : "light");
-  }, [activeThemeId, colorMode, themesQuery.data?.custom, themesQuery.data?.mode]);
+    saveShellTheme(appearance.themeId);
+    saveShellColorMode(appearance.colorMode);
+    saveShellPageTone(appearance.pageTone);
+  }, [themesQuery.data]);
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
   // #1285: per-module breakdown of the same unread count, for the nav badge. Defaults to `{}`
   // while loading or if an older cached response lacks the field — never renders a badge in

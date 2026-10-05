@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CustomThemeDto, ListThemesResponse } from "@moss/shared";
 
 import { BrandMark } from "../../packages/ui/src/brand-mark.js";
 import { LoadingScreen } from "../../apps/web/src/loading-screen.js";
 import { isDarkThemeColor } from "../../apps/web/src/theme/theme-runtime.js";
+import { resolveShellAppearance } from "../../apps/web/src/shell/shell-appearance.js";
 import {
   SHELL_COLOR_MODE_STORAGE_KEY,
   SHELL_PAGE_TONE_STORAGE_KEY,
@@ -154,5 +156,53 @@ describe("loading screen logo mark", () => {
     expect(bootCss).toMatch(
       /prefers-reduced-motion: reduce[\s\S]*\.loading-mark rect \{\s*animation: none/
     );
+  });
+});
+
+describe("shell appearance once the theme list loads", () => {
+  const customTheme = (id: string, paper: string) =>
+    ({ id, name: id, builtIn: false, tokens: { paper } }) as unknown as CustomThemeDto;
+  const themes = (overrides: Partial<ListThemesResponse>): ListThemesResponse => ({
+    builtIn: [],
+    custom: [],
+    activeId: "light",
+    mode: "light",
+    ...overrides
+  });
+
+  it("saves a dark page tone for a dark custom theme, which renders on the light base", () => {
+    const appearance = resolveShellAppearance(
+      themes({ activeId: "my-night", custom: [customTheme("my-night", "#14161a")] })
+    );
+    expect(appearance).toMatchObject({
+      dataTheme: "my-night",
+      colorMode: "light",
+      pageTone: "dark"
+    });
+    expect(appearance.tokens).not.toBeNull();
+  });
+
+  it("saves a light page tone for a light custom theme even in dark mode", () => {
+    const appearance = resolveShellAppearance(
+      themes({ activeId: "my-day", mode: "dark", custom: [customTheme("my-day", "#faf8f0")] })
+    );
+    expect(appearance).toMatchObject({ colorMode: "light", pageTone: "light" });
+  });
+
+  it("follows the chosen mode for built-in palettes", () => {
+    expect(resolveShellAppearance(themes({ activeId: "sage", mode: "dark" }))).toMatchObject({
+      dataTheme: "sage",
+      colorMode: "dark",
+      pageTone: "dark",
+      tokens: null
+    });
+  });
+
+  it("maps the legacy Dark theme to the light palette", () => {
+    expect(resolveShellAppearance(themes({ activeId: "dark", mode: "dark" }))).toMatchObject({
+      themeId: "dark",
+      dataTheme: "light",
+      pageTone: "dark"
+    });
   });
 });
