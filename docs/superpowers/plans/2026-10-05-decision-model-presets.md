@@ -208,7 +208,7 @@ The full gate comes last, through `verify-gate`, and should finish with EXIT=0.
 
 ## Review
 
-The build is Claude, so cross-model review goes to a Codex reviewer (gpt-6-astra medium) before merge. Security focus:
+The build is DeepSeek through OpenCode, so cross-model review goes to a Claude reviewer (the side-pr-reviewer agent) before merge. Security focus:
 
 - The token never reaches logs, payloads or the browser after save.
 - The account id and model id cannot steer the request to another host or path.
