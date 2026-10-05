@@ -211,16 +211,16 @@ retrieval run on each turn and are prepended to the user's text (`engine-text.ts
 `154-160`), and launch seeds memory into a new engine (`chat-session-launch.ts:92-119`). So every
 path that adds content to a prompt goes through one function that records its provenance:
 
-| Admission path                                                 | Taints                       |
-| -------------------------------------------------------------- | ---------------------------- |
-| Tool result marked `externalContent`                           | yes                          |
-| `app.callAction` read of an `outside` route                    | yes                          |
-| Connected-service tool result                                  | yes                          |
-| Attachment read                                                | yes                          |
-| Automatic recall: cross-tool email or calendar read            | yes                          |
-| Automatic recall: notes and memory, per turn or at launch      | per Ben's scope ruling below |
-| The user's own typed message                                   | no                           |
-| `app.findAction`, `app.readSource`, app map, settings readouts | no                           |
+| Admission path                                                 | Taints                   |
+| -------------------------------------------------------------- | ------------------------ |
+| Tool result marked `externalContent`                           | yes                      |
+| `app.callAction` read of an `outside` route                    | yes                      |
+| Connected-service tool result                                  | yes                      |
+| Attachment read                                                | yes                      |
+| Automatic recall: cross-tool email or calendar read            | yes                      |
+| Automatic recall: notes and memory, per turn or at launch      | yes (Ben's ruling below) |
+| The user's own typed message                                   | no                       |
+| `app.findAction`, `app.readSource`, app map, settings readouts | no                       |
 
 The plan's seams step lists every current admission path with `file:line`. A path that is not
 routed through the recording function is a blocker. A test confirms this by grepping for prompt
@@ -248,15 +248,12 @@ send-without-asking path.
 
 **Unmarked tools.** Five tools carry outside content but lack the mark: `email.listVisibleMessages`,
 `calendar.listVisibleEvents`, `chat.readAttachment`, `memory.recall` and `people.getContext`. They
-gain `externalContent: true`, subject to the scope ruling for memory and people.
+gain `externalContent: true`.
 
-**Scope ruling (Ben).** Automatic notes and memory recall runs on most turns, so treating it as
-outside content makes most changes ask. Ben chooses one:
-
-1. Strict. Notes and memory taint like mail. Safest, noisiest. Default until Ben rules.
-2. The user's own notes and memory are theirs. Only mail, web, connected services, attachments,
-   files and cross-tool email or calendar reads taint.
-3. Strict, plus an "allow changes for this chat" choice on the first approval.
+**Scope ruling (Ben, 2026-10-05): strict.** The user's own notes and memory taint like mail,
+because a note can hold clipped or forwarded text the user did not write. Automatic recall runs on
+most turns, so most changes in a chat will ask. Ben chose this as the starting point; loosening it
+(own notes exempt, or an "allow changes for this chat" choice) is a later change if it proves noisy.
 
 Cost: "read my mail and make a task for each" asks once per task. That is accepted for now. Batching
 approvals is a later change if it proves noisy.
@@ -407,7 +404,6 @@ If fewer than eight succeed, Ben decides whether to keep going or fall back to t
 | ------------------------------------------------------------------------------------------------- | ---------- |
 | Does `fastify.inject` pass better-auth's trusted-origin and CSRF checks without an Origin header? | plan seams |
 | Exact module-level refresh mechanism in the web app                                               | plan seams |
-| Do the user's own notes and memory count as outside content? (scope ruling above)                 | Ben        |
 | Where the durable conversation id and private purge live, with `file:line`                        | plan seams |
 | Should the July locked items be reopened one by one (persona, skills, memory settings)?           | Ben, later |
 
