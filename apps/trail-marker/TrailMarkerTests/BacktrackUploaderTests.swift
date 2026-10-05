@@ -367,6 +367,21 @@ final class BacktrackUploaderTests: XCTestCase {
         XCTAssertEqual(reopened.bufferedEntries.count, kept.count, "the file matches what is held")
     }
 
+    #if DEBUG
+    func testTheDebugTeeKeepsItsRingButReportsWhatMossSaid() {
+        environment.backtrackState = BacktrackState(storage: .on, paused: true)
+        let ring = BacktrackDebugRing()
+        let uploader = uploader()
+        let tee = BacktrackDebugTee(ring: ring, uploader: uploader)
+        XCTAssertEqual(tee.availability, .ready, "Show text keeps working")
+        XCTAssertEqual(tee.storageAvailability, .paused, "and the pane says Paused from Moss")
+        tee.accept(segment("Quarterly plan"))
+        XCTAssertEqual(ring.segments.count, 1)
+        XCTAssertTrue(uploader.bufferedEntries.isEmpty, "nothing is kept for Moss while paused")
+        XCTAssertEqual(tee.requiredConsentVersion, 2)
+    }
+    #endif
+
     // MARK: - The heartbeat
 
     final class HeartbeatTransport: CompanionTransport, @unchecked Sendable {

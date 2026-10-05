@@ -21,6 +21,9 @@ protocol BacktrackSink: AnyObject {
     /// for the Debug preview never authorises sending.
     var requiredConsentVersion: Int { get }
     var availability: BacktrackSinkAvailability { get }
+    /// What the person is told about storage in Moss. The same as `availability`, except for a
+    /// Debug sink that keeps recording into memory while Moss is paused or not storing.
+    var storageAvailability: BacktrackSinkAvailability { get }
     func accept(_ segment: BacktrackSegment)
     /// Log out, revoke, consent withdrawn or Backtrack turned off: forget everything held.
     func discardAll()
@@ -28,4 +31,5 @@ protocol BacktrackSink: AnyObject {
 
 extension BacktrackSink {
     var availability: BacktrackSinkAvailability { .ready }
+    var storageAvailability: BacktrackSinkAvailability { availability }
 }

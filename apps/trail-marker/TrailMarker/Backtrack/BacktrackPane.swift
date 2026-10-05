@@ -132,7 +132,7 @@ struct BacktrackPane: View {
     private var statusLine: String {
         if !backtrack.enabled { return "Off" }
         if backtrack.needsConsent { return "Off until you agree to sending text to Moss" }
-        switch backtrack.availability {
+        switch backtrack.storageAvailability {
         case .paused: return "Paused from Moss"
         case .unavailable: return "Moss isn't storing Backtrack, so nothing is recorded"
         case .ready: break

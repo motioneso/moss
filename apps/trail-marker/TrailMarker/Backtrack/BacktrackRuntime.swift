@@ -114,6 +114,8 @@ final class BacktrackRuntime: ObservableObject {
     @Published private(set) var menuSwitchOn: Bool
     /// The sink's state, for showing Backtrack at all (Release) and "Paused from Moss".
     @Published private(set) var availability: BacktrackSinkAvailability = .unavailable
+    /// What Moss last said, for "Paused from Moss" (in Debug the sink itself stays ready).
+    @Published private(set) var storageAvailability: BacktrackSinkAvailability = .unavailable
     /// The menu card's Backtrack row and the menu-bar dot, shared with non-Backtrack views.
     let menuState = FeatureSwitchState()
 
@@ -164,6 +166,7 @@ final class BacktrackRuntime: ObservableObject {
         menuSwitchOn = !preferences.backtrackSwitchedOff
         menuState.onToggle = { [weak self] on in self?.setMenuSwitch(on: on) }
         availability = sink.availability
+        storageAvailability = sink.storageAvailability
     }
 
     /// The consent the sink requires; a stored older one shows the sheet again.
@@ -316,7 +319,7 @@ final class BacktrackRuntime: ObservableObject {
 
     func inputsMayHaveChanged() {
         guard didStart else { return }
-        if availability != sink.availability { publish() }
+        if availability != sink.availability || storageAvailability != sink.storageAvailability { publish() }
         let next = currentInputs()
         guard next != inputs else { return }
         inputs = next
@@ -395,6 +398,7 @@ final class BacktrackRuntime: ObservableObject {
         isRecording = machine.isRecording
         menuState.showsRecordingDot = machine.isRecording
         availability = sink.availability
+        storageAvailability = sink.storageAvailability
         menuState.row = enabled && consentGiven >= sink.requiredConsentVersion
             && BacktrackVisibility.shows(isDebugBuild: Self.isDebugBuild, availability: availability)
             ? FeatureSwitchState.Row(title: "Backtrack", isOn: menuSwitchOn)

@@ -38,6 +38,7 @@ final class BacktrackDebugTee: BacktrackSink {
 
     var requiredConsentVersion: Int { max(ring.requiredConsentVersion, uploader.requiredConsentVersion) }
     var availability: BacktrackSinkAvailability { .ready }
+    var storageAvailability: BacktrackSinkAvailability { uploader.availability }
 
     func accept(_ segment: BacktrackSegment) {
         ring.accept(segment)
