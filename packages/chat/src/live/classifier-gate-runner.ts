@@ -9,6 +9,33 @@ import {
 } from "./classifier-gate.js";
 
 /**
+ * The tool list of each open gate pass, keyed by attempt. The first `permit` fills the list with
+ * that tool's name; every later name is refused.
+ */
+export class GatePasses {
+  private readonly passes = new Map<string, Set<string>>();
+
+  open(correlationId: string, allowed: Set<string>): void {
+    this.passes.set(correlationId, allowed);
+  }
+
+  permit(correlationId: string, toolName: string): boolean {
+    const allowed = this.passes.get(correlationId);
+    if (!allowed) return false;
+    if (allowed.size === 0) allowed.add(toolName);
+    return allowed.has(toolName);
+  }
+
+  close(correlationId: string): void {
+    this.passes.delete(correlationId);
+  }
+
+  has(correlationId: string): boolean {
+    return this.passes.has(correlationId);
+  }
+}
+
+/**
  * Task 4.1 (#2901) — the lifecycle seam between one chat turn and the already-merged decision
  * engine. It owns exactly two things the manager must not know about: reading the admin gate mode,
  * and the short-lived gate token.
@@ -93,35 +120,34 @@ export function classifierGateSessionId(correlationId: string): string {
  * lists released tools.
  */
 export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): ClassifierGateRunner {
-  const passes = new Map<string, Set<string>>();
+  const passes = new GatePasses();
   return createClassifierGateRunner({
     readMode: deps.readMode,
     ...(deps.createPorts ? { createPorts: deps.createPorts } : {}),
     tokens: {
-      mint: (actorUserId, correlationId, options) =>
-        deps.tokens.mint(
+      mint: (actorUserId, correlationId, options) => {
+        // Tool limit: the gate token always carries an allowlist, never unrestricted. It starts
+        // empty and `permit` adds the one dispatched tool.
+        const allowed = new Set<string>();
+        const token = deps.tokens.mint(
           {
             actorUserId,
             chatSessionId: classifierGateSessionId(correlationId),
-            // Tool limit: the gate token always carries an allowlist, never unrestricted. It starts
-            // empty and `permit` adds the one dispatched tool.
-            allowedToolNames: passes.set(correlationId, new Set<string>()).get(correlationId)!
+            allowedToolNames: allowed
           },
           options
-        ),
-      permit: (correlationId, toolName) => {
-        const allowed = passes.get(correlationId);
-        if (!allowed) return false;
-        if (allowed.size === 0) allowed.add(toolName);
-        return allowed.has(toolName);
+        );
+        passes.open(correlationId, allowed);
+        return token;
       },
+      permit: (correlationId, toolName) => passes.permit(correlationId, toolName),
       // #2956: files the attempt's tool rows under the chat turn, under the
       // same gate session id the mint above uses. Revoke clears it.
       noteTurn: (correlationId, turnId) => {
         if (turnId) deps.tokens.setCurrentTurnId(classifierGateSessionId(correlationId), turnId);
       },
       revoke: (correlationId) => {
-        passes.delete(correlationId);
+        passes.close(correlationId);
         deps.tokens.clearCurrentTurnId(classifierGateSessionId(correlationId));
         deps.tokens.revokeBySessionId(classifierGateSessionId(correlationId));
       },

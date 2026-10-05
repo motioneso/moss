@@ -155,7 +155,8 @@ test("setup 2: the stand-in door takes a choice of door, re-sorted and prepared"
                   enum: ["front", "back", "garage"],
                   description: "Which door."
                 }
-              }
+              },
+              required: ["door"]
             }
           }
         : tool

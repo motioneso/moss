@@ -204,7 +204,7 @@ export const RISK_CONFIDENCE_BAR: Readonly<Record<GateToolRisk, number>> = {
 /** The least lead the top choice must hold over the runner-up. */
 export const MIN_LEAD = 0.4;
 
-export const THRESHOLD_VERSION = "v1";
+export const THRESHOLD_VERSION = "v2";
 
 export function meetsConfidenceBar(confidence: number, risk: GateToolRisk): boolean {
   return confidence + SCORE_EPSILON >= RISK_CONFIDENCE_BAR[risk];
