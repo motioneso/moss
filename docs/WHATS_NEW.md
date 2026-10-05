@@ -29,11 +29,46 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-05
+
+#### Added
+
+- **Meeting drafts, notes and data export.** Create meeting drafts, keep personal notes, find meetings in History and include retained meeting data in your account export; recording is not available yet. [PR #2982](https://github.com/motioneso/moss/pull/2982)
+
+#### Changed
+
+- **Loading screen matches your colours.** The loading screen now follows your light or dark setting and shows a gently animated Moss logo instead of a spinning circle. [PR #3052](https://github.com/motioneso/moss/pull/3052)
+
 ### 2026-10-04
 
 #### Fixed
 
+- **Classifier trial counts connected tools correctly.** The classifier trial report now counts a correct pick of a connected tool as a match instead of a miss. [PR #3050](https://github.com/motioneso/moss/pull/3050)
+- **Model filter list on Activity looks right again.** The list of models you can filter by on the Activity page now shows tidy single-line rows with normal-size checkboxes. [PR #3048](https://github.com/motioneso/moss/pull/3048)
+- **Kept-out tools left out of trial comparisons.** Trial comparisons no longer identify kept-out tools as the tool chat used; the original message text is still saved. [PR #3037](https://github.com/motioneso/moss/pull/3037)
+- **Moss no longer stalls for minutes on some requests.** Moss stays responsive while it indexes your notes and memory in the background, and checking your email no longer hangs for minutes. [PR #3030](https://github.com/motioneso/moss/pull/3030)
+- **Top bar readable in custom themes.** The top bar stays readable when you make a custom theme while dark mode is on. [PR #3018](https://github.com/motioneso/moss/pull/3018)
+- **Task window close button back in the corner.** The close button on the task details window now sits in the top-right corner, and the title lines up with the rest of the form. [PR #3007](https://github.com/motioneso/moss/pull/3007)
 - **Clearer notice about what is shared when preparing tools.** The notice shown before preparing a connection's tools now says plainly that text from the service, such as tool descriptions, is sent as written and is not checked for secrets. [PR #2996](https://github.com/motioneso/moss/pull/2996)
+
+#### Changed
+
+- **Moss now runs tools it is sure about by itself.** With the Classifier switched on, Moss can now run a tool it is confident about without asking, and the confidence needed for tools that send things out or delete things is slightly lower. [PR #3045](https://github.com/motioneso/moss/pull/3045)
+- **Clearer classifier controls on each connection.** Each connection now shows whether its safety check is off, getting ready, ready or needs attention, lets you keep a single tool out of it with an undo, and shows tools by a readable name. [PR #3033](https://github.com/motioneso/moss/pull/3033)
+- **Your assistant's name now shows everywhere.** The name you give your assistant now appears throughout the app, including the loading screen, menu and settings, instead of the word Moss. [PR #3032](https://github.com/motioneso/moss/pull/3032)
+- **Catch-up shows the emails worth your attention.** The catch-up section on Today now lists each email worth knowing about, who it is from and what it says, with buttons to open it, reply, turn it into a task, or dismiss it. [PR #3031](https://github.com/motioneso/moss/pull/3031)
+- **A clearer page for each connection.** Opening a connection now uses the full width, groups its tools by what they do, marks the ones that ask before running, and lets you allow sending tools to send without asking. [PR #3014](https://github.com/motioneso/moss/pull/3014)
+- **Today header contour lines are back.** The faint contour lines behind the Today header are back. [PR #3017](https://github.com/motioneso/moss/pull/3017)
+- **Connection tools get ready for the classifier on their own.** When you turn on the classifier for a connection, Moss now prepares that connection's tools in the background, and again whenever you switch a tool back on, so you no longer review each tool by hand before it can be used. [PR #3009](https://github.com/motioneso/moss/pull/3009)
+- **Safe connected tools run without asking.** When a connected service's tool is sorted as only looking things up or changing things, Moss now uses it in chat without asking you first, while sensitive tools, tools that send things out and tools not yet sorted still ask. [PR #3011](https://github.com/motioneso/moss/pull/3011)
+- **Same date line on every page.** Every page now shows today's date under its title, the way Wellness does. [PR #3008](https://github.com/motioneso/moss/pull/3008)
+- **Connected tools are sorted by what they do.** When you add or refresh a connection, Moss now asks your chat model to sort each of its tools by what it does, which uses some of your model allowance and shows up in your activity history. [PR #3006](https://github.com/motioneso/moss/pull/3006)
+- **One activity history for everything Moss does.** Your Activity page now shows every kind of work Moss did for you, with what happened, how long it took, and the details of each step. Filter by time, module, or model; your choices are remembered. [PR #2976](https://github.com/motioneso/moss/pull/2976)
+
+#### Added
+
+- **Choose your page header colour.** Custom themes can now set the colour of the header at the top of every page. [PR #3021](https://github.com/motioneso/moss/pull/3021)
+- **A redesigned theme editor with a nav bar color.** Your own color themes can now set the color of the navigation bar, pick from a pasted palette in every color box, and change a color by clicking that part of the preview. [PR #3004](https://github.com/motioneso/moss/pull/3004)
 
 ### 2026-10-03
 
