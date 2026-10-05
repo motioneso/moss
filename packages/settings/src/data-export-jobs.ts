@@ -116,6 +116,7 @@ export async function handleExportBuildJob(
         // the news module's collector, never re-read here.
         newsPersonalization: userExport.tables.newsPersonalization,
         sportsSources: userExport.tables.sportsSources,
+        meetings: userExport.tables.meetings,
         connector_metadata: userExport.tables.connectorAccounts,
         calendar_cache: userExport.tables.calendarEvents,
         email_cache: userExport.tables.emailMessages,

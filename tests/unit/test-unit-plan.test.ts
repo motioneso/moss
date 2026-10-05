@@ -13,7 +13,9 @@ describe("resolveVitestArgs", () => {
       "--maxWorkers=2",
       "tests/unit",
       "packages/scratchpad/src/__tests__",
-      "packages/acp/src"
+      "packages/acp/src",
+      "tests/uat/fixtures/meeting-chat-fixture-server.test.ts",
+      "tests/uat/provisioner.test.ts"
     ]);
   });
 

@@ -31,6 +31,34 @@ jobs:
         working-directory: apps/trail-marker
         run: xcodegen generate
 
+      - name: Verify tap UID ownership in the installed Apple SDK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          sdk = Path(subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip())
+          header = sdk / "System/Library/Frameworks/CoreAudio.framework/Headers/AudioHardware.h"
+          match = re.search(r"@constant\s+kAudioTapPropertyUID\b(.*?)(?=@constant|\*/)", header.read_text(), re.S)
+          if match is None:
+              raise SystemExit("Installed Apple SDK has no tap UID ownership contract")
+          contract = " ".join(match.group(1).split())
+          print("Installed Apple SDK kAudioTapPropertyUID:", contract)
+          if "caller is responsible for releasing the returned CFObject" not in contract:
+              raise SystemExit("Recheck the native tap UID ownership transfer against this SDK")
+          PY
+
+      - name: Compile Release without signing
+        working-directory: apps/trail-marker
+        run: |
+          xcodebuild build \
+            -scheme TrailMarker \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
       # The UI tests (TrailMarkerUITests) need macOS UI automation, which otherwise waits for a
       # password prompt nobody can answer on a runner.
       - name: Enable UI automation

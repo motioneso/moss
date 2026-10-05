@@ -28,6 +28,8 @@ export function safeUrl(url: string): string {
  * injection, #360), so these guarantees must stay intact.
  */
 interface MarkdownMessageProps {
+  readonly disableRemoteImages?: boolean;
+  readonly messageId?: string;
   readonly text: string;
   readonly answerProvenance?: readonly AnswerSourceSupportCard[];
   readonly answerProvenanceCitedIds?: readonly string[];
@@ -46,6 +48,13 @@ export function MarkdownMessage(props: MarkdownMessageProps) {
         remarkPlugins={[remarkGfm]}
         urlTransform={safeUrl}
         components={{
+          ...(props.disableRemoteImages
+            ? {
+                img: ({ alt }: ComponentPropsWithoutRef<"img">) => (
+                  <span>{alt ?? "Image omitted"}</span>
+                )
+              }
+            : {}),
           a: ({ node: _node, ...rest }: ComponentPropsWithoutRef<"a"> & { node?: unknown }) => (
             <a {...rest} rel="noopener noreferrer" target="_blank" />
           )
@@ -54,7 +63,11 @@ export function MarkdownMessage(props: MarkdownMessageProps) {
         {displayText}
       </ReactMarkdown>
       {answerProvenance && answerProvenance.length > 0 && (
-        <SourceChips cards={answerProvenance} citedIds={answerProvenanceCitedIds} />
+        <SourceChips
+          messageId={props.messageId}
+          cards={answerProvenance}
+          citedIds={answerProvenanceCitedIds}
+        />
       )}
     </div>
   );

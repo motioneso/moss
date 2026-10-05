@@ -102,12 +102,14 @@ export function buildCatalogueItem(fileName: string, sourceText: string): Catalo
   );
 
   const componentName = fileName.replace(/\.tsx$/, "");
+  const componentFunctionName = pascalCaseFromKebab(componentName);
   const unionAliases = new Map<string, readonly string[]>();
   const relativeImportedTypeNames = new Set<string>();
   const exportedFunctionNames: string[] = [];
   const exportedFunctions = new Map<string, ts.FunctionDeclaration>();
   const dependencies = new Set<string>();
   let propsInterface: ts.InterfaceDeclaration | null = null;
+  let componentPropsInterface: ts.InterfaceDeclaration | null = null;
 
   for (const statement of source.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
@@ -136,6 +138,9 @@ export function buildCatalogueItem(fileName: string, sourceText: string): Catalo
       statement.name.text.endsWith("Props")
     ) {
       propsInterface = statement;
+      if (statement.name.text === `${componentFunctionName}Props`) {
+        componentPropsInterface = statement;
+      }
     }
 
     if (ts.isFunctionDeclaration(statement) && hasExportModifier(statement) && statement.name) {
@@ -144,14 +149,15 @@ export function buildCatalogueItem(fileName: string, sourceText: string): Catalo
     }
   }
 
-  const componentFunctionName = pascalCaseFromKebab(fileName.replace(/\.tsx$/, ""));
   const componentFunction = exportedFunctions.get(componentFunctionName);
   const scopedText = componentFunction ? componentFunction.getText(source) : sourceText;
 
   const options: EnumOption[] = [];
   const flags: BooleanFlag[] = [];
 
-  for (const member of propsInterface?.members ?? []) {
+  // A sibling such as RowIndexItem must not hide RowIndex's options. Keep the last-interface
+  // fallback for collection files whose exports do not match their filename.
+  for (const member of (componentPropsInterface ?? propsInterface)?.members ?? []) {
     if (!ts.isPropertySignature(member) || !member.type) continue;
     const name = propertyName(member.name);
     if (!name) continue;

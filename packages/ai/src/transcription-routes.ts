@@ -39,9 +39,9 @@ const AUDIO_CONTENT_TYPE = /^audio\//;
  *     (a single instance-wide OpenAI-compatible STT provider), never via cross-provider worker
  *     routing and never via a service binding.
  * No model resolved -> 422 (pin-blocked, or no voice endpoint configured). The decoded audio
- * buffer lives only in this function's local scope: it is never logged, never written to a
- * table, and never placed on a pg-boss job payload. Only the resulting transcript text is
- * returned.
+ * is sent to the resolved provider for processing. This route does not log or persist it,
+ * or place it on a pg-boss job payload. The response contains text and optionally ASR
+ * timestamps; provider retention and processing are governed separately.
  */
 export function registerAiTranscriptionRoutes(
   server: FastifyInstance,
@@ -57,10 +57,20 @@ export function registerAiTranscriptionRoutes(
     done(null, body);
   });
 
-  server.post(
+  server.post<{ Querystring: { timestamps?: "segment" } }>(
     "/api/ai/transcriptions",
     { schema: transcribeAudioRouteSchema, bodyLimit: MAX_AUDIO_BYTES },
     async (request, reply) => {
+      const controller = new AbortController();
+      const onDisconnect = () => controller.abort();
+      const onResponseClose = () => {
+        if (!reply.raw.writableEnded) onDisconnect();
+      };
+      request.raw.once("aborted", onDisconnect);
+      reply.raw.once("close", onResponseClose);
+      if (request.raw.aborted || reply.raw.destroyed) onDisconnect();
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
       try {
         const audio = requireAudioBody(request);
         const accessContext = await dependencies.resolveAccessContext(request);
@@ -92,35 +102,40 @@ export function registerAiTranscriptionRoutes(
           provider.base_url ? { baseUrl: provider.base_url } : {}
         );
 
-        let text: string;
         try {
-          // Raw audio bytes never leave this scope — not logged, not persisted, not put on
-          // any pg-boss job payload. Only the transcript text crosses back to the caller.
-          const result = await withTimeout(
+          controller.signal.throwIfAborted();
+          timeout = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, TIMEOUT_MS);
+          // Audio is transmitted to the selected provider. Aborting cancels this fetch;
+          // it does not establish provider-side deletion or cancellation of processing.
+          return await withCancellation(
             adapter.transcribeAudio({
               model: { provider_model_id: model.provider_model_id },
-              // Copy into a plain Uint8Array<ArrayBuffer> — Buffer's underlying ArrayBufferLike
-              // can type as SharedArrayBuffer, which BlobPart rejects.
+              // Copy Buffer's ArrayBufferLike into a Blob-compatible ArrayBuffer.
               audio: new Blob([Uint8Array.from(audio)]),
+              signal: controller.signal,
+              ...(request.query.timestamps ? { timestamps: request.query.timestamps } : {}),
               // #2956: the transcription line is owned by the requesting user.
               ownerUserId: accessContext.actorUserId
             }),
-            TIMEOUT_MS
+            controller.signal
           );
-          text = result.text;
-        } catch (error) {
-          if (error instanceof TranscriptionTimeoutError) {
-            throw new HttpError(504, "Transcription request timed out");
-          }
-          // Scrub the upstream error (may embed provider host/error detail) before it
-          // reaches the client; the real error is still visible server-side via the log.
-          request.log.error({ err: error }, "Transcription provider request failed");
+        } catch {
+          if (timedOut) throw new HttpError(504, "Transcription request timed out");
+          if (controller.signal.aborted) return reply;
+          // Provider errors can contain private audio-derived text or credential details.
+          request.log.error("Transcription provider request failed");
           throw new HttpError(502, "Transcription provider request failed");
         }
-
-        return { text };
       } catch (error) {
+        if (controller.signal.aborted && !timedOut) return reply;
         return handleRouteError(error, reply);
+      } finally {
+        clearTimeout(timeout);
+        request.raw.removeListener("aborted", onDisconnect);
+        reply.raw.removeListener("close", onResponseClose);
       }
     }
   );
@@ -134,17 +149,18 @@ function requireAudioBody(request: FastifyRequest): Buffer {
   return body;
 }
 
-class TranscriptionTimeoutError extends Error {}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new TranscriptionTimeoutError("transcription-timeout")), ms);
+/** Also settle promptly if an adapter ignores cancellation, without accepting late output. */
+async function withCancellation<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  let onAbort: () => void = () => undefined;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(new Error("Transcription request cancelled"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
   });
   try {
-    return await Promise.race([promise, timeout]);
+    return await Promise.race([promise, cancelled]);
   } finally {
-    clearTimeout(timer!);
+    signal.removeEventListener("abort", onAbort);
   }
 }
 

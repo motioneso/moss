@@ -17,6 +17,7 @@
     "@moss/settings": "workspace:*",
     "@moss/shared": "workspace:*",
     "@moss/structured-state": "workspace:*",
+    "@moss/vault": "workspace:*",
     "fastify": "^5.6.2",
     "pg-boss": "^12.18.2"
   }

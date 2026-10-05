@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.JARVIS_UAT_BASE_URL;
+const captureOff = process.env.MOSS_UAT_CAPTURE_OFF === "1";
 const browserName = process.env.MOSS_UAT_BROWSER ?? "chromium";
 if (browserName !== "chromium" && browserName !== "firefox") {
   throw new Error(`Unsupported MOSS_UAT_BROWSER: ${browserName}`);
@@ -25,7 +26,8 @@ export default defineConfig({
   use: {
     baseURL,
     actionTimeout: 30_000,
-    trace: "retain-on-failure",
+    trace: captureOff ? "off" : "retain-on-failure",
+    ...(captureOff ? { screenshot: "off" as const, video: "off" as const } : {}),
     serviceWorkers: "block"
   },
   projects: [

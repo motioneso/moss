@@ -23,4 +23,16 @@ describe("RowIndex", () => {
     expect(excerptIndex).toBeGreaterThan(titleIndex);
     expect(metaIndex).toBeGreaterThan(excerptIndex);
   });
+  it.each([
+    [{}, 'class="jds-index"'],
+    [{ variant: "facts" }, 'class="jds-index jds-index--facts"'],
+    [{ density: "compact" }, 'class="jds-index jds-index--compact"'],
+    [
+      { variant: "facts", density: "compact" },
+      'class="jds-index jds-index--facts jds-index--compact"'
+    ]
+  ] as const)("preserves variant and density options: %j", (options, expectedClass) => {
+    const html = renderToString(createElement(RowIndex, { ...options, children: "Row" }));
+    expect(html).toContain(expectedClass);
+  });
 });

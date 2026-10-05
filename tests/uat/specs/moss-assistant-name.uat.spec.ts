@@ -1,17 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
-// #1441 (Moss rename, PR1 phase 2 — docs/superpowers/plans/2026-08-06-moss-1441-display-strings.md
-// §5 Phase 2, §6 exit criterion 3): proves BOTH halves of the rename together, in one live run,
-// against the real running server — not mocks:
-//   1. The assistant name is a per-user, runtime-configured value (Settings -> Your assistant ->
-//      Persona -> "Assistant name", apps/web/src/settings/settings-ai-pane.tsx) that threads
-//      through every surface that names the assistant: the chat composer, the chat drawer, the
-//      shell's chat-affordance button and calendar hold copy.
-//   2. The PRODUCT name is a fixed literal, "Moss", independent of that per-user value — it must
-//      NOT drift when the assistant name changes (a "swept rename" regression) and no surface may
-//      still read "Jarvis" (a "missed rename" regression) — the two failure modes #1441 exists to
-//      prevent, per the task brief handed down for this spec.
+// #1441's assistant-name live path, updated for #3020/#3032: the per-user name from Settings ->
+// Your assistant -> Persona now also names the sidebar wordmark and browser tab. Prove the real
+// save reaches these surfaces without reloading, then persists in a fresh signed-in context.
+// A fresh signed-out context has no saved name and uses "Moss". Signing out in a context that
+// loaded the persona intentionally retains its cached name on the auth screen, including reload.
+// Cross-account binding and late persona-response isolation are covered separately by
+// tests/unit/assistant-name-everywhere.test.tsx; this solo-admin live path uses one account.
 //
 // Deliberately NOT covered here (per the same brief): getting a chat model to actually reply.
 // Chat turns need a live, chat-capable AI provider, which sibling specs (runtime-context,
@@ -58,7 +54,7 @@ async function gotoAssistantSettings(page: Page) {
 }
 
 // Sets the assistant name via the real Persona form and waits for the real save round-trip to
-// resolve, asserted against the form's own persistent save-state text (settings-ai-pane.tsx:258),
+// resolve, asserted against the form's own persistent save-state text,
 // not a transient toast — avoids a race against a toast's own dismiss timer.
 async function setAssistantName(page: Page, name: string) {
   const input = page.getByRole("textbox", { name: "Assistant name" });
@@ -75,7 +71,7 @@ async function expectNoJarvis(page: Page) {
 }
 
 test.describe
-  .serial("assistant name renders per-user while product name stays fixed (#1441)", () => {
+  .serial("assistant name personalizes the UI and stays scoped to its browser/user", () => {
   let originalAssistantName = "";
 
   test("Settings -> Your assistant accepts and persists a custom assistant name", async ({
@@ -84,45 +80,59 @@ test.describe
     await signIn(page);
     await gotoAssistantSettings(page);
 
-    // Capture the pre-test value so the last test in this file can restore it — the UAT DB is
-    // shared with other live sessions, this spec must leave the signed-in user's preference as it
-    // found it.
+    // The serial tests share the isolated stack's saved persona, but each page fixture has a
+    // fresh browser context. Capture the initial value so afterAll can restore the preference.
     originalAssistantName = await page
       .getByRole("textbox", { name: "Assistant name" })
       .inputValue();
 
     await setAssistantName(page, ASSISTANT_NAME);
+    await expect(page.locator(".brand-wordmark")).toHaveText(ASSISTANT_NAME);
+    await expect(page).toHaveTitle(ASSISTANT_NAME);
     await expectNoJarvis(page);
   });
 
-  test("chat composer and drawer read the configured assistant name, not the product name", async ({
+  test("chat, sidebar and tab read the saved assistant name after signing in again", async ({
     page
   }) => {
     await signIn(page);
 
-    // Shell chat-affordance button: apps/web/src/shell/app-shell.tsx:382-388 — a single button
+    // Shell chat-affordance button: a single button
     // carrying both the aria-label ("Chat with {name}") and title ("Ask {name}") attributes.
     const chatButton = page.getByRole("button", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(chatButton).toBeVisible();
     await expect(chatButton).toHaveAttribute("title", `Ask ${ASSISTANT_NAME}`);
     await chatButton.click();
 
-    // Drawer root: role="dialog" aria-label="Chat with {name}" (chat-drawer.tsx:400), plus its
-    // own displayed name element (chat-drawer.tsx:406, .chatd__name).
+    // Drawer root: role="dialog" aria-label="Chat with {name}", plus its displayed name.
     const drawer = page.getByRole("dialog", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(drawer).toBeVisible();
     await expect(drawer.locator(".chatd__name")).toHaveText(ASSISTANT_NAME);
 
-    // Composer placeholder + aria-label (composer.tsx:416,428-433).
+    // Composer placeholder + aria-label.
     const composer = drawer.getByRole("textbox", { name: `Message ${ASSISTANT_NAME}` });
     await expect(composer).toBeVisible();
     await expect(composer).toHaveAttribute("placeholder", `Message ${ASSISTANT_NAME}…`);
 
-    // Product identity on the SAME screen as the assistant identity above: the brand wordmark
-    // (app-shell.tsx:316) must read the fixed product name, never the assistant name.
-    await expect(page.locator(".brand-wordmark")).toHaveText("Moss");
-    expect(await page.locator(".brand-wordmark").innerText()).not.toBe(ASSISTANT_NAME);
+    // #3032 deliberately gives the sidebar wordmark and tab the same configured name.
+    await expect(page.locator(".brand-wordmark")).toHaveText(ASSISTANT_NAME);
+    await expect(page).toHaveTitle(ASSISTANT_NAME);
 
+    await expectNoJarvis(page);
+
+    // Use the real sign-out path, which clears the query cache and reloads the app while
+    // preserving the browser's saved name. No localStorage writes or response interception.
+    await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
+    await page.getByRole("button", { name: /^Account menu/ }).click();
+    await page.getByRole("button", { name: "Log out", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.locator(".eyebrow")).toHaveText(ASSISTANT_NAME);
+    await expect(page).toHaveTitle(ASSISTANT_NAME);
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.locator(".eyebrow")).toHaveText(ASSISTANT_NAME);
+    await expect(page).toHaveTitle(ASSISTANT_NAME);
     await expectNoJarvis(page);
   });
 
@@ -149,26 +159,23 @@ test.describe
     await expectNoJarvis(page);
   });
 
-  test("product name reads Moss on the auth/product chrome, independent of the assistant name", async ({
+  test("a fresh signed-out context uses the default name without another context's preference", async ({
     page
   }) => {
-    // Signed-out auth screen eyebrow (auth-screen.tsx:46) — proves the product literal never
-    // reads the per-user assistant name even before any user is authenticated.
+    // Each test gets a fresh context with no persona cache. The account's saved preference must
+    // not appear here before this context signs in and loads that account's persona.
     await page.goto(requireBaseURL());
 
-    // Asserted after the navigation, not before: each test gets a fresh page fixture even inside
-    // a serial describe, so a title assertion above the goto reads "" off about:blank and fails
-    // no matter what the product is called.
+    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page).toHaveTitle("Moss");
     await expect(page.locator(".eyebrow")).toHaveText("Moss");
-    expect(await page.locator(".eyebrow").innerText()).not.toBe(ASSISTANT_NAME);
 
     await expectNoJarvis(page);
   });
 
   test.afterAll(async ({ browser }) => {
-    // Restore the signed-in user's assistant name so this spec leaves no residue on the shared
-    // UAT DB. Runs even if an earlier test in this file failed, as long as the capture step ran.
+    // Restore the signed-in user's assistant name in the isolated UAT stack. Runs even if an
+    // earlier test in this file failed, as long as the capture step ran.
     if (!originalAssistantName) return;
     const page = await browser.newPage();
     try {

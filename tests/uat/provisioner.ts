@@ -795,6 +795,14 @@ export async function provisionForUat(
       }
       await mcpFixture.removeClassifierMcpFixtureContainer(projectName, runCommand);
       if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
+      // The meeting-chat spec starts this third-party stand-in itself. Remove its exact
+      // project-scoped container even if Playwright was interrupted before its finally block.
+      await runCommand("docker", ["rm", "--force", `${projectName}-meeting-chat-fixture`]).catch(
+        () => {}
+      );
+      await runCommand("docker", ["rm", "--force", `${projectName}-meeting-outputs-fixture`]).catch(
+        () => {}
+      );
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
           console.error(`teardown failed for ${projectName}:`, error);

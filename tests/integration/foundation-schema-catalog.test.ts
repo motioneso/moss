@@ -587,8 +587,18 @@ describe("MVP foundation schema catalog", () => {
           version: "0272",
           name: "0272_integration_classifier_prepare_worker.sql"
         },
+        // #2981 — unapplied Meetings branch sequence, kept in original dependency order.
+        { version: "0273", name: "0273_meeting_records.sql" },
+        { version: "0274", name: "0274_meeting_draft_delete.sql" },
+        { version: "0275", name: "0275_meeting_transcript_batches.sql" },
+        { version: "0276", name: "0276_meeting_chat_cleanup.sql" },
+        { version: "0277", name: "0277_chat_surface_immutable.sql" },
+        { version: "0278", name: "0278_meeting_outputs.sql" },
+        { version: "0279", name: "0279_meeting_exports.sql" },
+        { version: "0280", name: "0280_meeting_history.sql" },
         { version: "0281", name: "0281_memory_screen_source_kind.sql" },
-        { version: "0282", name: "0282_backtrack_segments.sql" }
+        { version: "0282", name: "0282_backtrack_segments.sql" },
+        { version: "0283", name: "0283_meeting_account_export.sql" }
       ]);
     } finally {
       await client.end();

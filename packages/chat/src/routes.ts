@@ -81,6 +81,16 @@ import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import {
+  registerMeetingChatBoundary,
+  dereferenceMeetingCitation,
+  isMeetingEvidenceAvailable
+} from "./meeting-chat-boundary.js";
+import {
+  createMeetingChatRuntime,
+  readMeetingChatContext,
+  type MeetingChatData
+} from "./live/meeting-chat-runtime.js";
+import {
   asRecord,
   readShadowReportDays,
   serializeMessage,
@@ -100,6 +110,9 @@ import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.
 import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
 import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
+import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
+
+export { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
 
 export {
   buildChatGatewayDependencies,
@@ -109,40 +122,8 @@ export {
 
 const STALE_ACTION_GRACE_MS = 5 * 60_000;
 
-export interface CheckTokenMinter {
-  readonly mint: (
-    actorUserId: string,
-    chatSessionId: string,
-    toolNames: readonly string[]
-  ) => { readonly token: string; readonly mcpServerUrl: string };
-  readonly revoke: (chatSessionId: string) => void;
-}
-
-/**
- * Builds the minter for check sessions. A token it mints carries an allowlist of exactly the
- * named tools, and the gateway refuses a call to any other tool at call time.
- */
-export function buildCheckTokenMinter(
-  tokens: {
-    mint: (identity: {
-      actorUserId: string;
-      chatSessionId: string;
-      allowedToolNames: Set<string>;
-    }) => string;
-    revokeBySessionId: (chatSessionId: string) => void;
-  },
-  mcpServerUrl: string
-): CheckTokenMinter {
-  return {
-    mint: (actorUserId, chatSessionId, toolNames) => ({
-      token: tokens.mint({ actorUserId, chatSessionId, allowedToolNames: new Set(toolNames) }),
-      mcpServerUrl
-    }),
-    revoke: (chatSessionId) => tokens.revokeBySessionId(chatSessionId)
-  };
-}
-
 export interface ChatRoutesDependencies {
+  readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
@@ -282,6 +263,17 @@ export function registerChatRoutes(
     : undefined;
 
   const repository = dependencies.repository ?? new ChatRepository();
+  const meetingChat = dependencies.meetingChat
+    ? createMeetingChatRuntime({
+        ...dependencies.meetingChat,
+        dataContext: dependencies.dataContext,
+        repository
+      })
+    : undefined;
+  registerMeetingChatBoundary(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    runtime: meetingChat
+  });
   const skillsRepository = dependencies.skillsRepository ?? new ChatSkillsRepository();
   // #1133 — attachment bytes live in the actor's vault, so the service needs only the
   // vault base dir; shared by the upload route, turn wiring, and chat.readAttachment.
@@ -911,6 +903,9 @@ export function registerChatRoutes(
           return reply.code(404).send({ error: "Message not found" });
         }
         const toolMetadata = asRecord(message.tool_metadata);
+        const meetingBinding = readMeetingChatContext(toolMetadata);
+        if (!(await isMeetingEvidenceAvailable(meetingChat, access, meetingBinding)))
+          return reply.code(404).send({ error: "Meeting evidence unavailable" });
         const stored = readStoredProvenance(toolMetadata);
         const cards: AnswerSourceSupportCard[] = stored != null ? provenanceCards(stored) : [];
         return { cards };
@@ -932,6 +927,9 @@ export function registerChatRoutes(
           return reply.code(404).send({ error: "Message not found" });
         }
         const toolMetadata = asRecord(message.tool_metadata);
+        const meetingBinding = readMeetingChatContext(toolMetadata);
+        if (!(await isMeetingEvidenceAvailable(meetingChat, access, meetingBinding)))
+          return reply.code(404).send({ error: "Meeting evidence unavailable" });
         const stored = readStoredProvenance(toolMetadata);
         if (!stored) return reply.code(404).send({ error: "No provenance for this message" });
 
@@ -940,7 +938,14 @@ export function registerChatRoutes(
         );
         if (!supportItem) return reply.code(404).send({ error: "Support item not found" });
 
-        // V1: no providers registered yet — return unavailable
+        if (meetingBinding && meetingChat)
+          return dereferenceMeetingCitation(
+            meetingChat,
+            access,
+            meetingBinding,
+            request.params.supportId
+          );
+        // Other source providers are not registered yet.
         return {
           unavailableReason: "source_unavailable" as const,
           sourceLabel: supportItem.sourceLabel,

@@ -22,3 +22,5 @@
 @import "./styles/components-command-palette.css";
 @import "./styles/components-keyline.css";
 @import "./styles/components-web.css";
+
+@import "./styles/components-tabs.css";

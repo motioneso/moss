@@ -1,4 +1,15 @@
-import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+  chmod,
+  link,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type { VaultContext } from "./vault-context.js";
@@ -59,6 +70,41 @@ export async function writeVaultFile(
   // owner-only perms even when overwriting a note that predates this hardening.
   await writeFile(fullPath, content, { encoding: "utf8", mode: VAULT_FILE_MODE });
   await chmod(fullPath, VAULT_FILE_MODE);
+}
+
+/**
+ * Publish a complete new file without replacing an existing directory entry. A temporary
+ * sibling is linked atomically: readers cannot see a half-written final file. Existing
+ * files (including externally edited files) are never overwritten. This is not update CAS.
+ * Uses the same ancestor containment checks as other Vault operations; it does not claim
+ * protection from a hostile process concurrently replacing ancestor directories.
+ */
+export async function createVaultFile(
+  ctx: VaultContext,
+  relativePath: string,
+  content: string
+): Promise<"created" | "exists"> {
+  assertVaultContext(ctx);
+  const fullPath = resolveVaultPath(ctx.vaultRoot, relativePath);
+  await assertNoSymlinkEscape(fullPath, ctx.vaultRoot);
+  await mkdir(dirname(fullPath), { recursive: true, mode: VAULT_DIR_MODE });
+  const temporaryPath = `${fullPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, content, {
+      encoding: "utf8",
+      mode: VAULT_FILE_MODE,
+      flag: "wx"
+    });
+    try {
+      await link(temporaryPath, fullPath);
+      return "created";
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "EEXIST") return "exists";
+      throw error;
+    }
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
 }
 
 // #1133 — byte variants for chat attachments (images/PDFs). Same containment discipline as

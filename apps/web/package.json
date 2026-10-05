@@ -15,6 +15,7 @@
     "@moss/calendar": "workspace:*",
     "@moss/email": "workspace:*",
     "@moss/goals": "workspace:*",
+    "@moss/meetings": "workspace:*",
     "@moss/module-css-confine": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/module-web-sdk": "workspace:*",

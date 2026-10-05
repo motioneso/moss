@@ -880,13 +880,19 @@ cmd_wait() {
     rc=0
     verdict "$log" 1 || rc=$?
     if [ "$rc" -ne 3 ]; then
-      verdict "$log" || true
-      return "$rc"
+      # The runner can finish between the quiet verdict's sentinel read and
+      # PID probe. Return the verdict we actually print, not a stale DEAD rc.
+      rc=0
+      verdict "$log" || rc=$?
+      [ "$rc" -eq 3 ] || return "$rc"
     fi
     if [ "$follow" -eq 0 ] && [ "$(date +%s)" -ge "$deadline" ]; then
-      verdict "$log" || true
-      echo "(timeout after ${timeout}s — not a failure; call wait again)"
-      return 3
+      rc=0
+      verdict "$log" || rc=$?
+      if [ "$rc" -eq 3 ]; then
+        echo "(timeout after ${timeout}s — not a failure; call wait again)"
+      fi
+      return "$rc"
     fi
     sleep 15
   done

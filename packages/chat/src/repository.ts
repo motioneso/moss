@@ -18,6 +18,7 @@ import type {
   ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
+import type { StoredMeetingChatContext } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
 import { toIsoString } from "./memory-serializers.js";
 
@@ -29,6 +30,7 @@ export interface CreateChatThreadInput {
 
 /** Options shared by the model-origin and gate-origin completed-turn writers. */
 export interface CompletedTurnOptions {
+  readonly meetingContext?: StoredMeetingChatContext;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   readonly answerProvenance?: AnswerProvenanceMetadataV1;
   /** #1133 — attachment display metadata (id/name/mime/size) — never bytes. */
@@ -309,6 +311,7 @@ export class ChatRepository {
       modelMetadata: {},
       toolMetadata: {
         selectedTools: [],
+        ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
         // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
         ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
       },
@@ -322,6 +325,7 @@ export class ChatRepository {
       modelMetadata: assistantModelMetadata,
       toolMetadata: {
         selectedTools: [],
+        ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
         ...(opts?.sourceFreshness ? { sourceFreshness: opts.sourceFreshness } : {}),
         ...(opts?.answerProvenance !== undefined
           ? { answerProvenanceV1: opts.answerProvenance }
@@ -423,6 +427,8 @@ export class ChatRepository {
         "m.created_at as createdAt"
       ])
       .where("t.incognito", "=", false)
+      // Meeting-derived text is scoped evidence, not input to general chat archives or memory.
+      .where("t.surface", "not like", "mtg-%")
       .where("m.owner_user_id", "=", actorUserId)
       .where("m.status", "=", "stored")
       .where("m.role", "in", ["user", "assistant"])

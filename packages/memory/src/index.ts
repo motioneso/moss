@@ -43,9 +43,12 @@ export {
   runVaultIngestSweep,
   applyVaultIngestNudge,
   scheduleVaultIngestNudge,
+  enqueueVaultIngestNudge,
   registerVaultIngestWorkers
 } from "./vault-ingest-jobs.js";
 export type {
+  VaultIngestEnqueueResult,
+  VaultIngestEnqueueOptions,
   VaultIngestSweepPayload,
   VaultIngestNudgePayload,
   VaultIngestSweepStats,

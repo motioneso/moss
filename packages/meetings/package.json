@@ -1,0 +1,29 @@
+{
+  "name": "@moss/meetings",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./web": "./src/web/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moss/db": "workspace:*",
+    "@moss/module-sdk": "workspace:*",
+    "@moss/module-web-sdk": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "@moss/structured-state": "workspace:*",
+    "@moss/ui": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "fastify": "^5.6.2",
+    "kysely": "^0.29.2",
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0"
+  }
+}

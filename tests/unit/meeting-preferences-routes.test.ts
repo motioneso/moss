@@ -1,0 +1,100 @@
+import Fastify from "fastify";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AccessContext, DataContextDb } from "@moss/db";
+import { HttpError } from "@moss/module-sdk";
+import {
+  registerMeetingPreferenceRoutes,
+  MEETING_CAPTURE_DEFAULT_KEY
+} from "../../packages/meetings/src/preferences-routes.js";
+
+const apps: ReturnType<typeof Fastify>[] = [];
+afterEach(async () => {
+  await Promise.all(apps.splice(0).map((app) => app.close()));
+});
+function setup(stored: unknown = null, authError?: Error) {
+  const app = Fastify();
+  apps.push(app);
+  const scoped = {} as DataContextDb;
+  const actors: AccessContext[] = [];
+  const preferences = { get: vi.fn(async () => stored), upsert: vi.fn(async () => undefined) };
+  registerMeetingPreferenceRoutes(app, {
+    resolveAccessContext: async () => {
+      if (authError) throw authError;
+      return { actorUserId: "owner", requestId: "preferences" };
+    },
+    dataContext: {
+      withDataContext: async <T>(actor: AccessContext, work: (db: DataContextDb) => Promise<T>) => {
+        actors.push(actor);
+        return work(scoped);
+      }
+    },
+    preferences
+  });
+  return { app, scoped, preferences, actors };
+}
+describe("meeting capture defaults", () => {
+  it.each([null, undefined, "unknown-mode", { mode: "computer-audio" }])(
+    "does not invent a default from %s",
+    async (value) => {
+      const { app, preferences } = setup(value);
+      expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
+        defaultCaptureMode: null
+      });
+      expect(preferences.upsert).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["microphone-only", "selected-app", "computer-audio"])(
+    "reads explicit %s without modifying it",
+    async (mode) => {
+      const { app, preferences, scoped } = setup(mode);
+      expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
+        defaultCaptureMode: mode
+      });
+      expect(preferences.get).toHaveBeenCalledExactlyOnceWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
+    }
+  );
+  it.each([null, "microphone-only", "selected-app", "computer-audio"])(
+    "saves only the explicit chosen mode %s",
+    async (defaultCaptureMode) => {
+      const { app, preferences, scoped, actors } = setup();
+      const response = await app.inject({
+        method: "PUT",
+        url: "/api/meetings/preferences",
+        payload: { defaultCaptureMode, ownerUserId: "other" }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ defaultCaptureMode });
+      expect(preferences.upsert).toHaveBeenCalledExactlyOnceWith(
+        scoped,
+        MEETING_CAPTURE_DEFAULT_KEY,
+        defaultCaptureMode
+      );
+      expect(actors).toEqual([{ actorUserId: "owner", requestId: "preferences" }]);
+    }
+  );
+  it.each(["all", "", {}, [], false, 0])(
+    "rejects unsupported mode %s",
+    async (defaultCaptureMode) => {
+      const { app, preferences } = setup();
+      const response = await app.inject({
+        method: "PUT",
+        url: "/api/meetings/preferences",
+        payload: { defaultCaptureMode }
+      });
+      expect(response.statusCode).toBe(400);
+      expect(preferences.upsert).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["GET", "PUT"] as const)("requires authentication for %s", async (method) => {
+    const { app, preferences, actors } = setup(null, new HttpError(401, "Authentication required"));
+    const response = await app.inject({
+      method,
+      url: "/api/meetings/preferences",
+      payload: method === "PUT" ? { defaultCaptureMode: "microphone-only" } : undefined
+    });
+    expect(response.statusCode).toBe(401);
+    expect(actors).toEqual([]);
+    expect(preferences.get).not.toHaveBeenCalled();
+    expect(preferences.upsert).not.toHaveBeenCalled();
+  });
+});

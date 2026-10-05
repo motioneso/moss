@@ -144,6 +144,34 @@ describe("selectUatSubnet", () => {
 });
 
 describe("listLiveDockerSubnets", () => {
+  it("accepts real Docker host/none records with null IPAM configuration", async () => {
+    const capture = async (_command: string, args: readonly string[]) =>
+      args[1] === "ls"
+        ? "host-id\nnone-id\nbridge-id\n"
+        : JSON.stringify([
+            { Name: "host", Driver: "host", IPAM: { Config: null }, Labels: null },
+            { Name: "none", Driver: "null", IPAM: { Config: null }, Labels: null },
+            {
+              Name: "bridge",
+              Driver: "bridge",
+              IPAM: { Config: [{ Subnet: "10.254.0.0/24" }] },
+              Labels: null
+            }
+          ]);
+    const live = await listLiveDockerSubnets(capture);
+    expect(live).toEqual([{ networkName: "bridge", subnet: "10.254.0.0/24" }]);
+    expect(selectUatSubnet({ requested: undefined, live }).subnet).toBe("10.255.0.0/24");
+  });
+  it("does not exempt a malformed bridge merely named host", async () => {
+    const capture = async (_command: string, args: readonly string[]) =>
+      args[1] === "ls"
+        ? "bad-id\n"
+        : JSON.stringify([
+            { Name: "host", Driver: "bridge", IPAM: { Config: null }, Labels: null }
+          ]);
+    await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
+  });
+
   it("enumerates IPv4 IPAM while skipping IPv6 and networks without IPAM", async () => {
     const capture = async (_command: string, args: readonly string[]) => {
       if (args[1] === "ls") return "bridge-id\napp-id\n";
@@ -195,7 +223,7 @@ describe("listLiveDockerSubnets", () => {
     ["non-string subnet", { Name: "bad", IPAM: { Config: [{ Subnet: 42 }] }, Labels: {} }],
     [
       "non-object labels",
-      { Name: "bad", IPAM: { Config: [{ Subnet: "10.1.0.0/24" }] }, Labels: null }
+      { Name: "bad", IPAM: { Config: [{ Subnet: "10.1.0.0/24" }] }, Labels: 42 }
     ]
   ])("fails closed on malformed Docker inspect structure: %s", async (_name, record) => {
     const capture = async (_command: string, args: readonly string[]) =>

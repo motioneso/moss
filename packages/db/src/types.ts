@@ -181,6 +181,115 @@ export interface ExternalModulesTable {
   updated_at: TimestampColumn;
 }
 
+/** Meeting draft records; capture and transcript persistence are separate later contracts. */
+export interface MeetingRecordsTable {
+  history_search_terms: ColumnType<string[], never, never>;
+  id: ColumnType<string, string | undefined, never>;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: ColumnType<string, string, never>;
+  title: ColumnType<string, string, never>;
+  personal_notes: ColumnType<string, string | undefined, string>;
+  notes_revision: ColumnType<number, number | undefined, number>;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface MeetingHistorySegmentsTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  segment_key: string;
+  revision: number;
+  start_ms: number;
+  end_ms: number;
+  finality: "provisional" | "final";
+  search_terms: string[];
+}
+
+export interface MeetingNoteWritesTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  expected_revision: number;
+  personal_notes: string;
+  saved_at: TimestampColumn;
+}
+
+export interface MeetingTranscriptBatchesTable {
+  history_sources_json: ColumnType<string, string | undefined, string>;
+  history_omitted_sources: ColumnType<number, number | undefined, number>;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  version: number;
+  input_json: string;
+  transcript_revision: number;
+  cursor: number;
+  stop_cutoff_ms: number | null;
+  created_at: TimestampColumn;
+}
+
+export interface MeetingExportReceiptsTable {
+  history_write_status: ColumnType<string | null, string | null | undefined, string | null>;
+  history_index_status: ColumnType<string | null, string | null | undefined, string | null>;
+  history_updated_at: ColumnType<string | null, string | null | undefined, string | null>;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  artifact_version: number;
+  content_hash: string;
+  receipt_json: string;
+}
+export interface MeetingExportRequestsTable {
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  artifact_version: number;
+  result_json: string | null;
+}
+
+export interface MeetingOutputRequestsTable {
+  history_kind: ColumnType<string | null, string | null | undefined, string | null>;
+  history_result_status: ColumnType<string | null, string | null | undefined, string | null>;
+  history_result_code: ColumnType<string | null, string | null | undefined, string | null>;
+  expires_at: TimestampColumn;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  input_json: string;
+  result_json: string | null;
+}
+export interface MeetingOutputArtifactsTable {
+  history_origin: ColumnType<
+    "generated" | "manual" | null,
+    "generated" | "manual" | null | undefined,
+    never
+  >;
+  history_notes_revision: ColumnType<number | null, number | null | undefined, never>;
+  history_transcript_revision: ColumnType<number | null, number | null | undefined, never>;
+  history_stale: ColumnType<boolean | null, boolean | null | undefined, never>;
+  id: ColumnType<string, string | undefined, never>;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  version: number;
+  artifact_json: string;
+  inactive: boolean;
+  created_at: TimestampColumn;
+}
+export interface MeetingActionCandidatesTable {
+  id: ColumnType<string, string | undefined, never>;
+  meeting_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  identity_key: string;
+  artifact_version: number;
+  proposal_json: string;
+  possible_match_ids: ColumnType<string[], string[], never>;
+  review_state: ColumnType<
+    "pending" | "accepted" | "dismissed",
+    "pending" | undefined,
+    "pending" | "accepted" | "dismissed"
+  >;
+  accepted_task_id: string | null;
+}
+
 export interface WorkshopProjectsTable {
   feed_sequence: ColumnType<string, string | undefined, string>;
   id: ColumnType<string, string | undefined, never>;
@@ -1770,6 +1879,15 @@ export interface MossDatabase {
   "app.module_enablement": ModuleEnablementTable;
   "app.external_modules": ExternalModulesTable;
   "app.module_builds": ModuleBuildsTable;
+  "app.meeting_export_receipts": MeetingExportReceiptsTable;
+  "app.meeting_export_requests": MeetingExportRequestsTable;
+  "app.meeting_output_requests": MeetingOutputRequestsTable;
+  "app.meeting_output_artifacts": MeetingOutputArtifactsTable;
+  "app.meeting_action_candidates": MeetingActionCandidatesTable;
+  "app.meeting_records": MeetingRecordsTable;
+  "app.meeting_note_writes": MeetingNoteWritesTable;
+  "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;
+  "app.meeting_history_segments": MeetingHistorySegmentsTable;
   "app.workshop_projects": WorkshopProjectsTable;
   "app.workshop_project_feed": WorkshopProjectFeedTable;
   "app.module_credentials": ModuleCredentialsTable;

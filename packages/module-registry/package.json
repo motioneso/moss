@@ -27,6 +27,7 @@
     "@moss/host-fetch": "workspace:*",
     "@moss/integrations": "workspace:*",
     "@moss/jobs": "workspace:*",
+    "@moss/meetings": "workspace:*",
     "@moss/memory": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/news": "workspace:*",

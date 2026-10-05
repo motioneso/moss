@@ -1,5 +1,17 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { buildUatComposeArgs } from "../provisioner.js";
+import {
+  requireShadowReportProject,
+  SHADOW_REPORT_MODEL_IDENTITY
+} from "../fixtures/shadow-report-connection.js";
+import {
+  classifierMcpFixtureContainerName,
+  CLASSIFIER_MCP_FIXTURE_CONTAINER_PORT,
+  FIXTURE_LIGHT_TOOL
+} from "../fixtures/classifier-mcp-fixture-server.js";
 
 // Temporary shadow report (#2957). Drives real chat turns through the production shadow wiring
 // (same harness as the #2907 live proof: scripted chat backend plus the fixture classifier
@@ -12,8 +24,30 @@ export const uatLevel = {
   without: [],
   withoutNewsJsonBinding: true,
   chatScript: "classifier-shadow",
-  withClassifierFixture: true
+  withClassifierFixture: true,
+  withClassifierMcpFixture: true
 } as const;
+
+const exec = promisify(execFile);
+
+async function fixtureLightEvidence(project: string): Promise<unknown> {
+  // Reduce inside the fixture container: no tool arguments, device names or full state enter
+  // the test log. These counts prove an actual gateway request, not just the scripted reply.
+  const script =
+    `fetch('http://127.0.0.1:${CLASSIFIER_MCP_FIXTURE_CONTAINER_PORT}/__control/state')` +
+    `.then(r=>r.json()).then(s=>console.log(JSON.stringify({` +
+    `calls:s.calls.filter(c=>c.tool===${JSON.stringify(FIXTURE_LIGHT_TOOL)}&&` +
+    `c.args.name==='Kitchen light'&&c.args.on===true).length,` +
+    `totalCalls:s.calls.length,kitchenOn:s.devices.find(d=>d.id==='light.kitchen')?.on===true})))`;
+  const result = await exec("docker", [
+    "exec",
+    classifierMcpFixtureContainerName(requireShadowReportProject(project)),
+    "node",
+    "-e",
+    script
+  ]);
+  return JSON.parse(result.stdout);
+}
 
 function requireBaseURL(): string {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -113,6 +147,18 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   page
 }) => {
   test.setTimeout(420_000);
+  const project = requireShadowReportProject(process.env.JARVIS_UAT_PROJECT_NAME);
+  await exec(
+    "docker",
+    buildUatComposeArgs(project, [
+      "exec",
+      "-T",
+      "jarv1s",
+      "node_modules/.bin/tsx",
+      "tests/uat/fixtures/shadow-report-connection-cli.ts",
+      project
+    ])
+  );
   await signIn(page);
 
   // Fixture classifier plus Shadow gate through the real settings row.
@@ -131,11 +177,21 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   });
 
   // 2. Genuine mismatch: the fixture still picks calendar.listVisibleEvents while the model
-  // calls tasks.list. Both sides are real production observations of this turn.
+  // calls the seeded in-memory MCP light tool. Both are classifier-declared: undeclared tasks.list
+  // is intentionally unobserved after #3037, so it cannot prove a genuine disagreement.
   await page.goto(requireBaseURL());
   drawer = await openChat(page);
-  expect(await sendMessage(page, drawer, "uatmiss show me my tasks")).toBe(200);
-  await expect(drawer.getByText("Here are your tasks.").last()).toBeVisible({ timeout: 60_000 });
+  expect(await sendMessage(page, drawer, "uatmiss turn on the fixture Kitchen light")).toBe(200);
+  await expect(drawer.getByText("The fixture light is on.").last()).toBeVisible({
+    timeout: 60_000
+  });
+  await expect
+    .poll(() => fixtureLightEvidence(project))
+    .toEqual({
+      calls: 1,
+      totalCalls: 1,
+      kitchenOn: true
+    });
 
   // 3. Missed tool: the unreachable classifier fails, but the model still uses a tool.
   await openAssistantAndAiSettings(page);
@@ -147,23 +203,51 @@ test("the shadow report counts real shadow records and lists the disagreement (#
     timeout: 60_000
   });
 
-  // The report API reflects all three turns once the async shadow writes land.
-  await expect
-    .poll(async () => (await reportCounts(page, 30)).report.checked as number, {
-      timeout: 30_000
-    })
-    .toBe(3);
-  const api = await reportCounts(page, 30);
-  expect(api.status).toBe(200);
-  expect(api.report).toMatchObject({
+  // Opening a row precedes its decision and model observation. Poll the complete exact
+  // numeric tuple, not just checked=3, so the last async writes cannot race the assertions.
+  const expectedCounts = {
+    status: 200,
     days: 30,
     checked: 3,
     pickedTool: 2,
     agreed: 1,
     comparable: 2,
-    missedTool: 1
-  });
+    missedTool: 1,
+    disagreements: 1
+  };
+  let lastCounts: Record<string, number | null> = {};
+  try {
+    await expect
+      .poll(
+        async () => {
+          const { status, report } = await reportCounts(page, 30);
+          lastCounts = { status };
+          for (const key of ["days", "checked", "pickedTool", "agreed", "comparable", "missedTool"])
+            lastCounts[key] = typeof report[key] === "number" ? report[key] : null;
+          lastCounts.disagreements = Array.isArray(report.disagreements)
+            ? report.disagreements.length
+            : null;
+          return lastCounts;
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual(expectedCounts);
+  } catch {
+    // Numeric-only, single-line evidence survives CI's bounded Error: filter. Never emit
+    // report rows, message text, identifiers, provider responses or credentials.
+    throw new Error(
+      `Shadow report counts: expected=${JSON.stringify(expectedCounts)} received=${JSON.stringify(lastCounts)}`
+    );
+  }
+  const api = await reportCounts(page, 30);
   expect((api.report.disagreements as unknown[]).length).toBe(1);
+  const disagreement = (api.report.disagreements as Record<string, unknown>[])[0]!;
+  expect(disagreement.classifierTool).toBe("calendar.listvisibleevents");
+  // The older base normalized transport underscores into dots; current main resolves the
+  // exact declared module/tool identity. Both name this same actually-invoked fixture tool.
+  expect([SHADOW_REPORT_MODEL_IDENTITY, "uat-shadow-report.set.light.state"]).toContain(
+    disagreement.modelTool
+  );
 
   // Open the report from the Shadow note link and prove the numbers and the row on screen.
   await openAssistantAndAiSettings(page);
@@ -171,8 +255,11 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   await expect(page).toHaveURL(/section=shadowreport/);
   await expect(page.getByRole("heading", { name: "Shadow report" })).toBeVisible();
   await expect(page.getByText("Messages checked")).toBeVisible();
-  await expect(page.getByText("calendar.listvisibleevents led to tasks.list")).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("shadow-report-live.png") });
+  await expect(
+    page.getByText(`calendar.listvisibleevents led to ${String(disagreement.modelTool)}`)
+  ).toBeVisible();
+  if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+    await page.screenshot({ path: test.info().outputPath("shadow-report-live.png") });
 
   // The 7 and 90-day views carry the same three turns.
   for (const days of [7, 90]) {

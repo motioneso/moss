@@ -14,6 +14,9 @@ final class ConnectionRuntime: ObservableObject {
     /// Bumped every time a link ends (log out, revoked). Focus resets itself on each change, so a
     /// relink in the same run, possibly as another account, starts from nothing (#2643).
     @Published private(set) var linkEndCount = 0
+    /// What Moss last said about Backtrack storage, from the heartbeat or an upload's answer.
+    /// Nil until a Moss that stores Backtrack has answered (and after the link ends).
+    @Published private(set) var backtrackState: BacktrackState?
 
     private var machine = ConnectionMachine()
     private let keychain: KeychainStore
@@ -42,6 +45,7 @@ final class ConnectionRuntime: ObservableObject {
         self.appVersion = appVersion
         self.osVersion = osVersion
         self.transportFactory = transportFactory
+        backtrackState = preferences.backtrackServerState
     }
 
     deinit {
@@ -108,6 +112,7 @@ final class ConnectionRuntime: ObservableObject {
                 } else {
                     preferences.clearAll()
                 }
+                backtrackState = nil
                 linkEndCount += 1
             case .showLogoutUnconfirmed:
                 lastDiagnostic = "Server-side revocation couldn't be confirmed while offline. "
@@ -137,6 +142,7 @@ final class ConnectionRuntime: ObservableObject {
             do {
                 let response = try await client.heartbeat(credential: credential, app: appVersion, os: osVersion)
                 self?.recordDisplayName(response.device.displayName)
+                self?.noteBacktrackState(response.backtrack)
                 let contactTime = ServerTime.parse(response.serverTime) ?? Date()
                 await self?.handle(.heartbeatSucceeded(at: contactTime, generation: generation))
             } catch let error as CompanionError {
@@ -184,6 +190,25 @@ final class ConnectionRuntime: ObservableObject {
 
     private func recordDisplayName(_ displayName: String) {
         preferences.displayName = displayName
+    }
+
+    /// Moss's answer about Backtrack storage. A heartbeat from a Moss without Backtrack has none,
+    /// which means it isn't stored there.
+    func noteBacktrackState(_ state: BacktrackState?) {
+        guard identity != nil, state != backtrackState else { return }
+        backtrackState = state
+        preferences.backtrackServerState = state
+    }
+
+    /// A client and the credential for a request made outside the heartbeat (Backtrack uploads).
+    /// Nil while not linked, paused, or when the Keychain can't give the credential.
+    func requestClient() -> (CompanionClient, String)? {
+        switch state {
+        case .connected, .reconnecting: break
+        case .disconnected, .notLinked, .signInRequired: return nil
+        }
+        guard let identity, let credential = keychain.read(for: identity) else { return nil }
+        return (CompanionClient(instance: identity.instance, transport: transportFactory(identity.instance)), credential)
     }
 
     // MARK: - Settings-pane actions
@@ -243,6 +268,8 @@ final class ConnectionRuntime: ObservableObject {
     }
 }
 
+extension ConnectionRuntime: BacktrackUploadEnvironment {}
+
 // MARK: - Diagnostics
 
 /// Text for the "View Details" affordance the design guide asks every failure state to offer.
@@ -274,6 +301,12 @@ enum Diagnostics {
             return "Focus judgment isn't set up on your Moss."
         case .noBlock:
             return "There is no Moss calendar block right now."
+        case .backtrackUnavailable:
+            return "This Moss isn't storing Backtrack history."
+        case .backtrackPaused:
+            return "Backtrack is paused from Moss."
+        case .backtrackClock:
+            return "This Mac's clock looks wrong."
         }
     }
 
