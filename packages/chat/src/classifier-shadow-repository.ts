@@ -139,6 +139,29 @@ export function normalizeToolIdentity(moduleId: string, toolName: string): strin
 }
 
 /**
+ * Reduces either side's tool name to one comparable form. A connected tool's gate identity doubles
+ * its connection slug (`integration-hub.hub.turn_on`), and records written before that was settled
+ * hold the model side as `hub.turn_on` or with dots where the transport sent underscores. Dropping
+ * the doubled slug and folding dots to underscores makes a real match read as a match.
+ */
+export function comparableToolIdentity(identity: string): string {
+  return identity
+    .toLowerCase()
+    .replace(/^integration-([^.]+)\.\1\./, "$1.")
+    .replaceAll(".", "_");
+}
+
+/** The same reduction in SQL, so the report repairs records stored under the old names. */
+// Raw text, because a template literal would read the regex back-reference as an octal escape.
+const doubledSlug = String.raw`'^integration-([^.]+)[.]\1[.]', '\1.'`;
+const COMPARABLE_CLASSIFIER_TOOL = sql.raw(
+  `replace(regexp_replace(lower(module_id || '.' || tool_name), ${doubledSlug}), '.', '_')`
+);
+const COMPARABLE_MODEL_TOOL = sql.raw(
+  `replace(regexp_replace(lower(model_tool_id), ${doubledSlug}), '.', '_')`
+);
+
+/**
  * Only a hypothetical handled decision can agree or disagree with the model. A pending decision
  * waits, and every other decision is not comparable, so none/failed/cancelled never read as a
  * mismatch.
@@ -299,6 +322,7 @@ export class ClassifierShadowRepository {
   ): Promise<ShadowReport> {
     assertDataContextDb(scopedDb);
     const days = options.days;
+    const agreedWhere = sql`comparison_status = 'mismatch' AND ${COMPARABLE_CLASSIFIER_TOOL} = ${COMPARABLE_MODEL_TOOL}`;
     const counts = await sql<{
       checked: string;
       picked_tool: string;
@@ -308,8 +332,12 @@ export class ClassifierShadowRepository {
     }>`
       SELECT count(*)::text AS checked,
         count(*) FILTER (WHERE decision = 'would_handle')::text AS picked_tool,
-        count(*) FILTER (WHERE comparison_status = 'match')::text AS agreed,
-        count(*) FILTER (WHERE comparison_status IN ('match', 'mismatch'))::text AS comparable,
+        count(*) FILTER (
+          WHERE comparison_status = 'match' OR (${agreedWhere})
+        )::text AS agreed,
+        count(*) FILTER (
+          WHERE comparison_status IN ('match', 'mismatch')
+        )::text AS comparable,
         count(*) FILTER (
           WHERE decision <> 'would_handle' AND model_tool_id IS NOT NULL
         )::text AS missed_tool
@@ -331,6 +359,7 @@ export class ClassifierShadowRepository {
         model_tool_id, confidence
       FROM app.chat_classifier_shadow_records
       WHERE comparison_status = 'mismatch'
+        AND NOT (${agreedWhere})
         AND created_at >= now() - (${days} || ' days')::interval
       ORDER BY created_at DESC, id DESC
       LIMIT ${SHADOW_REPORT_DISAGREEMENT_LIMIT}
@@ -428,9 +457,25 @@ function mapRow(row: StoredRow): ShadowRecordRow {
     margin: row.margin,
     connectionId: row.connection_id,
     latencyMs: row.latency_ms,
-    comparisonStatus: row.comparison_status as ShadowComparisonStatus,
+    comparisonStatus: readComparison(row),
     modelToolId: row.model_tool_id,
     argumentAgreement: row.argument_agreement as ShadowArgumentAgreement | null,
     createdAt: row.created_at
   };
+}
+
+/** A stored mismatch whose two names reduce to the same tool is a match. */
+function readComparison(row: StoredRow): ShadowComparisonStatus {
+  const stored = row.comparison_status as ShadowComparisonStatus;
+  if (
+    stored === "mismatch" &&
+    row.module_id !== null &&
+    row.tool_name !== null &&
+    row.model_tool_id !== null &&
+    comparableToolIdentity(`${row.module_id}.${row.tool_name}`) ===
+      comparableToolIdentity(row.model_tool_id)
+  ) {
+    return "match";
+  }
+  return stored;
 }
