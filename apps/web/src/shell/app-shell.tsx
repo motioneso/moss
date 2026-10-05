@@ -28,7 +28,7 @@ import {
 import { useChatStream } from "../chat/use-chat-stream";
 import { usePageContextSync } from "../chat/use-page-context-sync";
 import { ChatControlsProvider } from "./chat-controls-context";
-import { applyThemeTokens } from "../theme/theme-runtime";
+import { applyThemeTokens, isDarkThemeColor } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import {
   PageTrailProvider,
@@ -43,8 +43,10 @@ import {
   loadShellTheme,
   saveShellColorMode,
   saveShellTheme,
+  saveShellPageTone,
   type ShellTheme
 } from "./theme-storage";
+import { syncThemeColorMeta } from "./theme-color-meta";
 import { loadShellNav, saveShellNav, type ShellNavMode } from "./nav-storage";
 import { ShellNav } from "./shell-nav";
 import {
@@ -295,8 +297,11 @@ export function AppShell(props: AppShellProps) {
       "data-header-color",
       document.documentElement.style.getPropertyValue("--header-bg") !== ""
     );
+    syncThemeColorMeta();
     saveShellTheme(activeThemeId);
     saveShellColorMode(mode);
+    const customDark = customTheme ? isDarkThemeColor(customTheme.tokens.paper) : null;
+    saveShellPageTone(customDark === null ? mode : customDark ? "dark" : "light");
   }, [activeThemeId, colorMode, themesQuery.data?.custom, themesQuery.data?.mode]);
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
   // #1285: per-module breakdown of the same unread count, for the nav badge. Defaults to `{}`
