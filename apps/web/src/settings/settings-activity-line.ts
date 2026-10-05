@@ -100,12 +100,9 @@ export function activitySubline(line: ActivityLineDto): string {
     const confidence = num(facts.confidence);
     const agreed = bool(facts.jev_agreed);
     const sure = confidence === null ? "" : `, ${Math.round(confidence * 100)}% sure`;
-    const verdict =
-      agreed === true
-        ? " The classifier agreed."
-        : agreed === false
-          ? " The classifier disagreed."
-          : "";
+    // On the classifier's own line, `jev_agreed` records whether the chat model agreed with the
+    // guess, so the verdict is "Chat agreed", not the classifier agreeing with itself.
+    const verdict = agreed === true ? " Chat agreed." : agreed === false ? " Chat disagreed." : "";
     return `Picked a tool${sure}.${verdict}`;
   }
   return "Finished.";

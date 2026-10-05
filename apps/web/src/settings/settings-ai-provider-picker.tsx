@@ -50,6 +50,20 @@ function catalogEntryIsAdded(
 }
 
 /**
+ * A compatible service has no vendor label, so name it by its address host. The Classifier and
+ * privacy notes can then say where data goes, and two compatible services stay distinguishable.
+ */
+function providerDisplayName(option: (typeof PROVIDER_CATALOG)[number], baseUrl: string): string {
+  if (option.preset !== "compatible") return option.label;
+  try {
+    const host = new URL(baseUrl).host;
+    return host ? `Decision model (${host})` : option.label;
+  } catch {
+    return option.label;
+  }
+}
+
+/**
  * The "Add provider" panel: a catalog grid, then the credential form for the chosen entry. It owns
  * the field state and the create request; the caller owns the open/closed toggle and refresh.
  */
@@ -74,7 +88,7 @@ export function ProviderAddPanel(props: {
     }) =>
       createAiProvider({
         providerKind: input.option.kind,
-        displayName: input.option.label,
+        displayName: providerDisplayName(input.option, input.baseUrl),
         authMethod: input.option.authMethod,
         ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
         ...(input.option.acpAgentId ? { acpAgentId: input.option.acpAgentId } : {}),
@@ -137,7 +151,7 @@ export function ProviderAddPanel(props: {
                   className="jds-input"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://openrouter.ai/api/v1"
+                  placeholder="https://openrouter.ai/api"
                   aria-label="Address"
                 />
               </Field>

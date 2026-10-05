@@ -229,6 +229,28 @@ describe("SortingModelRow (Classifier)", () => {
     expect(rendered).not.toContain(SORTING_DISCLOSURE);
   });
 
+  it("names a compatible service by its host in the note", async () => {
+    const compatibleProvider = [
+      {
+        ...provider("p-comp", "Decision model (openrouter.ai)", "system-one"),
+        baseUrl: "https://openrouter.ai/api"
+      }
+    ];
+    const compatibleModel = [
+      model("some-model", "p-comp", "system-one", "Decision model (openrouter.ai)", ["json"])
+    ];
+    const renderer = await render(
+      { kind: "model", modelId: "some-model" },
+      compatibleModel,
+      compatibleProvider
+    );
+    const rendered = text(renderer);
+    expect(rendered).not.toContain("TypeSafe");
+    expect(rendered).not.toContain("Any compatible service");
+    expect(rendered).toContain("Decision model (openrouter.ai)");
+    expect(rendered).toContain("answers News, Sports and email sorting questions with a yes or no");
+  });
+
   it("offers a json model even when its provider has no stored credential", async () => {
     const noCredentialProvider = [
       { ...provider("p-nocred", "No cred", "openai-compatible"), hasCredential: false }

@@ -110,7 +110,7 @@ describe("activity sub-lines (#2956 slice C)", () => {
       })
     );
     expect(sub).not.toContain("Jev");
-    expect(sub).toContain("The classifier disagreed.");
+    expect(sub).toContain("Chat disagreed.");
     expect(activityBadges(line({ factCounts: { jev_agreed: false } }))).toEqual([
       { text: "Classifier disagreed", tone: "amber" }
     ]);

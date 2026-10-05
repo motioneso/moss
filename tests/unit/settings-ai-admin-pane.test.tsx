@@ -543,6 +543,40 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
     });
   });
 
+  it("pins the OpenRouter example address and names a compatible service by its host", async () => {
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+    clickButtonByText(renderer, "Any compatible service");
+    await flush();
+
+    const address = renderer.root.findByProps({ "aria-label": "Address" });
+    expect(address.props.placeholder).toBe("https://openrouter.ai/api");
+    await act(async () => {
+      address.props.onChange({ target: { value: "https://openrouter.ai/api" } });
+    });
+    const key = renderer.root.findByProps({ "aria-label": "API key" });
+    await act(async () => {
+      key.props.onChange({ target: { value: "sk-or" } });
+    });
+
+    clickButtonByText(renderer, "Add");
+    await flush();
+
+    expect(createAiProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerKind: "system-one",
+        displayName: "Decision model (openrouter.ai)",
+        baseUrl: "https://openrouter.ai/api",
+        credentialPayload: { apiKey: "sk-or" }
+      })
+    );
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
   it("defaults a hand-added model on a decision model to json / economy", async () => {
     vi.mocked(apiClient.listAiProviders).mockResolvedValue({
       providers: [systemOneProvider()]

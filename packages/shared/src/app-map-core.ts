@@ -257,7 +257,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "System One provider kind) is offered as three presets: Jev (TypeSafe), Clef (Cloudflare) and " +
       "Any compatible service. Jev asks for an optional address and an API key; Clef asks for a " +
       "Cloudflare account ID and API token and builds the address from them; Any compatible " +
-      "service asks for an address and an API key and stays addable more than once. A decision " +
+      "service asks for an address and an API key, stays addable more than once, and is named for " +
+      "its address host (for example Decision model (openrouter.ai)). A decision " +
       "model answers fixed named questions and is used only for the Trail Marker focus judgment " +
       "and the story and email sorting questions, not chat: its models are offered only in the " +
       "Classifier row and its card has no Set as default button. A model added by hand on a " +
