@@ -15,6 +15,7 @@ import type {
   StructuredTelemetryEvent
 } from "@moss/ai";
 import {
+  abortErrorFor,
   dedupeStructuredSources,
   modelActivityAction,
   modelActivityStructuredCode,
@@ -183,9 +184,9 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         abort = () => {
           cancelled = true;
           void activeEngine.interrupt().catch(() => undefined);
-          const error = new Error("aborted");
-          error.name = "AbortError";
-          reject(error);
+          // #3064: carry the abort reason so the recorder can tell a gate timeout
+          // (owned by the gate's single line) from a user stop.
+          reject(abortErrorFor(input.signal));
         };
         input.signal?.addEventListener("abort", abort, { once: true });
       });
@@ -193,9 +194,8 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       try {
         const { rawText, sources } = await Promise.race([generated, stopped]);
         if (cancelled) {
-          const error = new Error("aborted");
-          error.name = "AbortError";
-          throw error;
+          // #3064: carry the abort reason (see above).
+          throw abortErrorFor(input.signal);
         }
         exit = "complete";
         return withSources({ rawText, usage: { inputTokens: 0, outputTokens: 0 } }, sources);

@@ -11,11 +11,7 @@ import {
   recordModelActivity,
   type ModelActivityFailureCode
 } from "../model-activity.js";
-import type {
-  AiConfiguredModelSafeRow,
-  AiProviderWithSealedCredential,
-  AiRepository
-} from "../repository.js";
+import type { AiRepository } from "../repository.js";
 
 export type ChoiceQuestionInput = {
   readonly instructions: string;
@@ -260,65 +256,42 @@ async function postSystemOne(
   deps: GenerateChoicesDeps,
   logPrefix: string
 ): Promise<SystemOnePost> {
-  // #3040: resolve the line's identity before any await the gate deadline can cut short,
-  // so an abort here still files its line instead of vanishing.
-  const activity = await systemOneActivity(scopedDb, input);
-  const startedAt = Date.now();
-  let model:
-    | NonNullable<GenerateChoicesInput["explicitModel"]>
-    | AiConfiguredModelSafeRow
-    | null
-    | undefined;
-  let provider: AiProviderWithSealedCredential | undefined;
+  const model =
+    input.explicitModel ??
+    (
+      await deps.repository.resolveModelForService(scopedDb, input.service, {
+        capability: "json",
+        requireExplicitBinding: input.requireExplicitBinding
+      })
+    ).model;
+  if (!model) return { ok: false, error: "needs_config" };
+
+  const provider = await deps.repository.selectProviderWithCredential(
+    scopedDb,
+    model.provider_config_id
+  );
+  if (!provider) return { ok: false, error: "needs_config" };
+
+  if (model.provider_kind !== SYSTEM_ONE_PROVIDER_KIND) {
+    return { ok: false, error: "not_supported" };
+  }
+
+  if (provider.auth_method === "cli") return { ok: false, error: "needs_config" };
+
   let apiKey: string;
   try {
-    model =
-      input.explicitModel ??
-      (
-        await deps.repository.resolveModelForService(scopedDb, input.service, {
-          capability: "json",
-          requireExplicitBinding: input.requireExplicitBinding
-        })
-      ).model;
-    if (!model) return { ok: false, error: "needs_config" };
-
-    provider = await deps.repository.selectProviderWithCredential(
-      scopedDb,
-      model.provider_config_id
+    const credential = parseAiApiKeyCredential(
+      deps.cipher.decryptJson(provider.encrypted_credential)
     );
-    if (!provider) return { ok: false, error: "needs_config" };
-
-    if (model.provider_kind !== SYSTEM_ONE_PROVIDER_KIND) {
-      return { ok: false, error: "not_supported" };
-    }
-
-    if (provider.auth_method === "cli") return { ok: false, error: "needs_config" };
-
-    try {
-      const credential = parseAiApiKeyCredential(
-        deps.cipher.decryptJson(provider.encrypted_credential)
-      );
-      if (!credential) return { ok: false, error: "needs_config" };
-      apiKey = credential.apiKey;
-    } catch {
-      // Never log the ciphertext, credential material, or raw AES-GCM errors.
-      deps.logger?.warn(
-        { service: input.service, code: "credential_decrypt_failed" },
-        `${logPrefix} credential could not be decrypted`
-      );
-      return { ok: false, error: "needs_config" };
-    }
-  } catch (error) {
-    // The gate's own deadline aborts these awaits when its time runs out; anything else
-    // rethrows exactly as before, with no line, as today.
-    if (isGateTimeoutAbort(input.signal)) {
-      recordSystemOneActivity(model?.provider_model_id ?? "none", "error", {
-        ...activity,
-        durationMs: Date.now() - startedAt,
-        failureCode: "timeout"
-      });
-    }
-    throw error;
+    if (!credential) return { ok: false, error: "needs_config" };
+    apiKey = credential.apiKey;
+  } catch {
+    // Never log the ciphertext, credential material, or raw AES-GCM errors.
+    deps.logger?.warn(
+      { service: input.service, code: "credential_decrypt_failed" },
+      `${logPrefix} credential could not be decrypted`
+    );
+    return { ok: false, error: "needs_config" };
   }
 
   const body = { model: model.provider_model_id, state: input.state, questions };
@@ -341,6 +314,8 @@ async function postSystemOne(
   // The outcome reflects the whole call: an unusable body is a failed call, like the adapters.
   // #2956: the row carries the line code, owner, turn and duration. Confidence lands
   // with the success record in the caller, which is the only place that knows it.
+  const activity = await systemOneActivity(scopedDb, input);
+  const startedAt = Date.now();
   let posted: Awaited<ReturnType<typeof postSystemOneRequest>>;
   try {
     posted = await postSystemOneRequest(
@@ -364,19 +339,20 @@ async function postSystemOne(
   }
 
   if (!posted.ok) {
-    // #3040: an abort carrying the gate's own deadline reason is the gate's time running
-    // out, not the user stopping anything. It files as a timeout failure so the log names
-    // the skip; every other abort keeps today's cancelled line.
-    const gateTimedOut = posted.error === "aborted" && isGateTimeoutAbort(input.signal);
-    recordSystemOneActivity(
-      model.provider_model_id,
-      gateTimedOut ? "error" : posted.error === "aborted" ? "aborted" : "error",
-      {
-        ...activity,
-        durationMs: Date.now() - startedAt,
-        failureCode: gateTimedOut ? "timeout" : posted.error === "aborted" ? "cancelled" : "unknown"
-      }
-    );
+    // #3064: one owner for the timeout line — the gate. An abort carrying the gate's own
+    // deadline reason files nothing here; the gate files the single line. Every other
+    // outcome records exactly as before.
+    if (posted.error !== "aborted" || !isGateTimeoutAbort(input.signal)) {
+      recordSystemOneActivity(
+        model.provider_model_id,
+        posted.error === "aborted" ? "aborted" : "error",
+        {
+          ...activity,
+          durationMs: Date.now() - startedAt,
+          failureCode: posted.error === "aborted" ? "cancelled" : "unknown"
+        }
+      );
+    }
     return posted;
   }
 

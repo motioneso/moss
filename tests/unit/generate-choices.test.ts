@@ -499,7 +499,7 @@ describe("generateChoices", () => {
       }
     });
 
-    it("records exactly one timeout failure when the gate deadline aborts the post — #3040", async () => {
+    it("files nothing when the gate deadline aborts the post — the gate owns the line — #3064", async () => {
       const entries: ModelActivityEntry[] = [];
       installModelActivityRecorder((entry) => entries.push(entry));
       try {
@@ -524,24 +524,13 @@ describe("generateChoices", () => {
             deps
           )
         ).toEqual({ ok: false, error: "aborted" });
-        expect(entries).toHaveLength(1);
-        expect(entries[0]).toMatchObject({
-          kind: "structured",
-          action: "choices",
-          outcome: "error",
-          result: "failed",
-          modelName: "jev-latest",
-          actionCode: "chat.tool_check",
-          ownerUserId: "user-1",
-          turnId: "turn-1",
-          failureCode: "timeout"
-        });
+        expect(entries).toHaveLength(0);
       } finally {
         installModelActivityRecorder(null);
       }
     });
 
-    it("records one timeout line when the gate deadline aborts model resolution — #3040", async () => {
+    it("files nothing when the gate deadline aborts model resolution — #3064", async () => {
       const entries: ModelActivityEntry[] = [];
       installModelActivityRecorder((entry) => entries.push(entry));
       try {
@@ -568,14 +557,7 @@ describe("generateChoices", () => {
             deps
           )
         ).rejects.toThrow("db wedged");
-        expect(entries).toHaveLength(1);
-        expect(entries[0]).toMatchObject({
-          outcome: "error",
-          result: "failed",
-          modelName: "none",
-          actionCode: "chat.tool_check",
-          failureCode: "timeout"
-        });
+        expect(entries).toHaveLength(0);
       } finally {
         installModelActivityRecorder(null);
       }
