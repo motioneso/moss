@@ -80,7 +80,14 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
     // Ranker returns them REVERSED: Beta=critical, Alpha=high. The keys ride along, so
     // each result still reaches its own signal whatever the order.
     vi.mocked(rankPriorityCandidates).mockReturnValue([
-      { source: "calendar", title: "Signal Beta", score: 100, band: "critical", reasons: [], key: "1" },
+      {
+        source: "calendar",
+        title: "Signal Beta",
+        score: 100,
+        band: "critical",
+        reasons: [],
+        key: "1"
+      },
       { source: "calendar", title: "Signal Alpha", score: 80, band: "high", reasons: [], key: "0" }
     ]);
 
