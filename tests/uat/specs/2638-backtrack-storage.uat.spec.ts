@@ -366,17 +366,19 @@ test("A Mac's uploads are indexed, deleted from Settings, and stay deleted on re
   // Anchor the samples just after the browser-local midnight instead of minutes before
   // now: the "Today" delete below covers midnight-to-now, so a run in the first minutes
   // after midnight would otherwise place both samples yesterday and delete nothing.
-  // 00:01 is always inside today and inside the 26-hour upload age window; the poll covers
-  // the seconds before the samples have ended on a just-past-midnight run.
+  // 00:01 is always inside today and inside the 26-hour upload age window. The samples
+  // use the same spacing as the later ones below (second starts 1.5 s after the first, so
+  // it ends at +2.5 s), and the wait runs past +3 s, so both have ended before the upload
+  // arrives even on a run that reaches this step just past midnight.
   const morningBase = await page.evaluate(() => {
     const midnight = new Date();
     midnight.setHours(0, 1, 0, 0);
     return midnight.getTime();
   });
-  await expect.poll(() => Date.now(), { timeout: 180_000 }).toBeGreaterThan(morningBase + 2_000);
+  await expect.poll(() => Date.now(), { timeout: 180_000 }).toBeGreaterThan(morningBase + 3_000);
   const morning: UploadSegment[] = [
     { startedAt: new Date(morningBase), body: "uat morning page one" },
-    { startedAt: new Date(morningBase + 30_000), body: "uat morning page two" }
+    { startedAt: new Date(morningBase + 1_500), body: "uat morning page two" }
   ];
 
   await test.step("upload two segments; the worker indexes them into screen chunks", async () => {
