@@ -49,24 +49,41 @@ export const backtrackModuleManifest: MossModuleManifest = {
           code: "backtrack_unavailable",
           class: "transient",
           description:
-            "Backtrack storage is not turned on for this Moss yet; Settings > Modules > " +
-            "Backtrack says so, and an admin turns it on (the backtrack.storage instance switch)."
+            "Backtrack storage is not turned on for this Moss yet; Settings > Modules > Backtrack " +
+            "says so, and an admin turns it on (the backtrack.storage instance switch). Trail Marker " +
+            "then hides its Backtrack tab."
         },
         {
           code: "backtrack_paused",
           class: "validation",
           description:
-            "Recording is paused from Moss, so nothing new is stored; turn Recording back on in " +
-            "Settings > Modules > Backtrack."
+            "Recording is paused from Moss, so nothing new is stored; Trail Marker says Paused from " +
+            "Moss and stops reading. Turn Recording back on in Settings > Modules > Backtrack."
         },
         {
           code: "backtrack_clock",
           class: "validation",
           description:
-            "A Mac's clock is more than an hour off, so its upload is refused and kept on the " +
-            "Mac; correct the Mac's date and time."
+            "A Mac's clock is more than an hour off, so its upload is refused and kept on the Mac, " +
+            "whose Backtrack tab says the clock looks wrong; correct the Mac's date and time."
         }
       ]
+    },
+    {
+      id: "backtrack.mac_sending",
+      description:
+        "Trail Marker's Backtrack tab appears once this Moss stores it and asks consent to send " +
+        "text here. It sends about once a minute; text Moss can't take yet waits on the Mac, " +
+        "encrypted, up to a day.",
+      errors: []
+    },
+    {
+      id: "backtrack.mac_status",
+      description:
+        "The Mac's Backtrack tab shows the last sent time and Paused from Moss; Open in Moss opens " +
+        "Settings > Modules > Backtrack. Pause All, its menu switch, lock or sleep stop reading " +
+        "and sending; log out deletes unsent text.",
+      errors: []
     },
     {
       id: "backtrack.delete_history",

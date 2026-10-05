@@ -34,12 +34,15 @@ final class PreferencesStore {
         static let focusVisionSource = "focusVisionSource"
         static let focusVisionBaseURL = "focusVisionBaseURL"
         static let focusVisionModel = "focusVisionModel"
-        // Backtrack (plan §4.1). Read only by Debug builds in Phase 1; cleared with the account.
+        // Backtrack (plan §4.1); cleared with the account.
         static let backtrackEnabled = "backtrackEnabled"
         /// The consent version the person accepted: 1 is the Debug in-memory preview, 2 (Phase 2b)
         /// storage in Moss. An upload requires 2, so a Debug opt-in never authorises sending.
         static let backtrackConsentVersion = "backtrackConsentVersion"
         static let backtrackSwitchedOff = "backtrackSwitchedOff"
+        /// What Moss last said about Backtrack storage (phase 2 plan §5.1): a Release build shows
+        /// Backtrack only while this says storage is on.
+        static let backtrackServerState = "backtrackServerState"
     }
 
     var linkedIdentity: LinkedIdentity? {
@@ -160,6 +163,20 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.backtrackSwitchedOff) }
     }
 
+    var backtrackServerState: BacktrackState? {
+        get {
+            guard let data = defaults.data(forKey: Key.backtrackServerState) else { return nil }
+            return try? JSONDecoder().decode(BacktrackState.self, from: data)
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: Key.backtrackServerState)
+                return
+            }
+            defaults.set(try? JSONEncoder().encode(newValue), forKey: Key.backtrackServerState)
+        }
+    }
+
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
@@ -180,7 +197,7 @@ final class PreferencesStore {
             Key.focusConsent, Key.focusSwitchedOff, Key.focusAllowedBundleIds, Key.focusExcludedBundleIds,
             Key.focusWatchEntireDesktop,
             Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel,
-            Key.backtrackEnabled, Key.backtrackConsentVersion, Key.backtrackSwitchedOff
+            Key.backtrackEnabled, Key.backtrackConsentVersion, Key.backtrackSwitchedOff, Key.backtrackServerState
         ] {
             defaults.removeObject(forKey: key)
         }

@@ -4,10 +4,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case connection = "Connection"
     case thisMac = "This Mac"
     case focus = "Focus"
-    #if DEBUG
-    /// Backtrack's Phase 1 preview, Debug builds only (plan §4.4).
+    /// Shown in Release only once Moss has said it stores Backtrack (phase 2 plan §5.1).
     case backtrack = "Backtrack"
-    #endif
     case permissions = "Permissions"
     case updates = "Updates"
 
@@ -18,9 +16,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "network"
         case .thisMac: return "laptopcomputer"
         case .focus: return "scope"
-        #if DEBUG
         case .backtrack: return "clock.arrow.circlepath"
-        #endif
         case .permissions: return "hand.raised"
         case .updates: return "arrow.triangle.2.circlepath"
         }
@@ -35,17 +31,24 @@ struct SettingsWindow: View {
     @ObservedObject var updater: UpdaterService
     let loginItem: LoginItemService
     let onSetUp: () -> Void
-    #if DEBUG
     var backtrack: BacktrackRuntime?
+    var uploader: BacktrackUploader?
+    var onOpenBacktrackInMoss: (() -> Void)?
     var onShowBacktrackText: (() -> Void)?
-    #endif
 
     @State private var selection: SettingsSection? = .connection
     @State private var autoCheckUpdates = PreferencesStore().autoCheckUpdates
 
+    private var sections: [SettingsSection] {
+        let showsBacktrack = backtrack != nil && BacktrackVisibility.shows(
+            isDebugBuild: BacktrackRuntime.isDebugBuild, availability: BacktrackSinkAvailability(connection.backtrackState)
+        )
+        return SettingsSection.allCases.filter { $0 != .backtrack || showsBacktrack }
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(SettingsSection.allCases, selection: $selection) { section in
+            List(sections, selection: $selection) { section in
                 Label(section.rawValue, systemImage: section.symbol).tag(section)
             }
             .navigationSplitViewColumnWidth(
@@ -60,17 +63,16 @@ struct SettingsWindow: View {
                 ThisMacPane(connection: connection, loginItem: loginItem)
             case .focus:
                 FocusPane(focus: focus, permissions: permissions)
-            #if DEBUG
             case .backtrack:
-                if let backtrack {
+                if let backtrack, sections.contains(.backtrack) {
                     BacktrackPane(
-                        backtrack: backtrack, permissions: permissions, onEditNeverWatch: { selection = .focus },
+                        backtrack: backtrack, permissions: permissions, uploader: uploader,
+                        onEditNeverWatch: { selection = .focus }, onOpenInMoss: onOpenBacktrackInMoss,
                         onShowText: onShowBacktrackText
                     )
                 } else {
-                    Text("Not available in this build.").foregroundStyle(.secondary)
+                    Text("Backtrack isn't available on this Moss.").foregroundStyle(.secondary)
                 }
-            #endif
             case .permissions:
                 PermissionsPane(permissions: permissions)
             case .updates:

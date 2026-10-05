@@ -107,12 +107,19 @@ final class BacktrackBoundaryTests: XCTestCase {
 
     /// Answers the heartbeat like a healthy Moss, so the link stays up for the whole test.
     final class HealthyTransport: CompanionTransport, @unchecked Sendable {
+        /// The heartbeat's `backtrack` field, as JSON; nil answers like a Moss without Backtrack.
+        var heartbeatBacktrack: String?
+        init(heartbeatBacktrack: String? = nil) { self.heartbeatBacktrack = heartbeatBacktrack }
+
         func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
             let path = request.url?.path ?? ""
             let json: String
             switch path {
             case "/api/companion/heartbeat":
-                json = #"{"device":{"id":"device-1","displayName":"Test Mac"},"account":{"name":"Test","email":"ben@example.com"},"serverTime":"2026-01-01T00:00:00.000Z","expiresAt":"2099-01-01T00:00:00.000Z"}"#
+                let backtrack = heartbeatBacktrack.map { #","backtrack":"# + $0 } ?? ""
+                json = #"{"device":{"id":"device-1","displayName":"Test Mac"},"account":{"name":"Test","email":"ben@example.com"},"serverTime":"2026-01-01T00:00:00.000Z","expiresAt":"2099-01-01T00:00:00.000Z""# + backtrack + "}"
+            case "/api/companion/backtrack":
+                json = BacktrackUploaderTests.okJSON(accepted: 1)
             case "/api/companion/focus/context":
                 json = #"{"block":null,"judgmentReady":true}"#
             default:
@@ -166,6 +173,7 @@ final class BacktrackBoundaryTests: XCTestCase {
         let recognizer: SpyRecognizer
         let sink: SpySink
         let activity: Activity
+        let uploader: BacktrackUploader?
     }
 
     final class Activity {
@@ -182,14 +190,15 @@ final class BacktrackBoundaryTests: XCTestCase {
 
     private func harness(
         observation: Observation = BacktrackBoundaryTests.docs, consentVersion: Int = 1, address: String? = nil,
-        windowText: WindowTextReading = NoWindowText()
+        windowText: WindowTextReading = NoWindowText(), heartbeatBacktrack: String? = nil,
+        uploaderKeys: BacktrackBufferKeyStoring? = nil, uploaderFile: URL? = nil
     ) async -> Harness {
         let suiteName = "BacktrackBoundaryTests.\(UUID().uuidString)"
         suiteNames.append(suiteName)
         let preferences = PreferencesStore(defaults: UserDefaults(suiteName: suiteName)!)
         preferences.backtrackEnabled = true
         preferences.backtrackConsentVersion = consentVersion
-        let transport = HealthyTransport()
+        let transport = HealthyTransport(heartbeatBacktrack: heartbeatBacktrack)
         let connection = ConnectionRuntime(keychain: keychain, preferences: preferences, transportFactory: { _ in transport })
         let permissions = PermissionsService(adaptor: PrivacyFixesTests.AllPermissions())
         permissions.refresh()
@@ -211,16 +220,27 @@ final class BacktrackBoundaryTests: XCTestCase {
             thumbnails: ThumbnailChangeDetector(), freshWindowIdentity: { [weak source] _ in source?.current?.window },
             clock: { activity.now }, scheduler: scheduler, idleSeconds: { activity.idleSeconds }, windowText: windowText
         )
+        var uploader: BacktrackUploader?
+        if let uploaderKeys, let uploaderFile {
+            uploader = BacktrackUploader(
+                environment: connection, keys: uploaderKeys, fileURL: uploaderFile, clock: { activity.now },
+                scheduler: ManualScheduler()
+            )
+        }
         let runtime = BacktrackRuntime(
             connection: connection, permissions: permissions, focus: focus, preferences: preferences,
-            observer: FrontmostObserver(source: source), sink: sink, services: services
+            observer: FrontmostObserver(source: source), sink: uploader ?? sink, services: services
         )
+        uploader?.sendingAllowed = { [weak runtime] in runtime?.allowsSending ?? false }
         connection.send(.linkCompleted(PrivacyFixesTests.identity(), credential: "tm1_test", generation: connection.currentGeneration))
+        // The first heartbeat comes a minute after linking; hand the connection Moss's answer now.
+        connection.noteBacktrackState(heartbeatBacktrack.flatMap { try? JSONDecoder().decode(BacktrackState.self, from: Data($0.utf8)) })
         await settle()
         runtime.start()
         return Harness(
             runtime: runtime, connection: connection, focus: focus, preferences: preferences, source: source,
-            scheduler: scheduler, capture: capture, secure: secure, recognizer: recognizer, sink: sink, activity: activity
+            scheduler: scheduler, capture: capture, secure: secure, recognizer: recognizer, sink: sink, activity: activity,
+            uploader: uploader
         )
     }
 
@@ -493,6 +513,83 @@ final class BacktrackBoundaryTests: XCTestCase {
             await settle()
             XCTAssertEqual(h.sink.accepted, [], name)
         }
+    }
+    // MARK: - Phase 2b: the uploader as the sink
+
+    private static let storageOn = #"{"storage":"on","paused":false}"#
+
+    private func uploaderFile() -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("BacktrackBoundary-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return directory.appendingPathComponent("buffer.bin")
+    }
+
+    func testAConsentFromTheDebugPreviewNeverLetsTheUploaderTakeText() async {
+        let keys = BacktrackUploaderTests.MemoryKeys()
+        let h = await harness(
+            consentVersion: 1, heartbeatBacktrack: Self.storageOn, uploaderKeys: keys, uploaderFile: uploaderFile()
+        )
+        let uploader = h.uploader!
+        XCTAssertEqual(uploader.availability, .ready, "Moss said it stores Backtrack")
+        XCTAssertTrue(h.runtime.needsConsent)
+        XCTAssertFalse(h.runtime.isRecording)
+        await runChain(h)
+        XCTAssertEqual(h.capture.calls, [])
+        XCTAssertTrue(uploader.bufferedEntries.isEmpty)
+        XCTAssertFalse(h.runtime.allowsSending)
+        XCTAssertNil(keys.key, "no buffer was ever started")
+    }
+
+    func testWithConsentTwoTextReachesTheBufferAndEveryStopHoldsSending() async {
+        let stops: [(String, (Harness) -> Void)] = [
+            ("menu switch off", { $0.runtime.setMenuSwitch(on: false) }),
+            ("Pause All", { $0.connection.send(.userDisconnect) }),
+            ("screen locked", { $0.runtime.noteScreenLocked(true) }),
+            ("asleep", { $0.runtime.noteSleeping(true) })
+        ]
+        for (name, stop) in stops {
+            let h = await harness(
+                consentVersion: 2, heartbeatBacktrack: Self.storageOn,
+                uploaderKeys: BacktrackUploaderTests.MemoryKeys(), uploaderFile: uploaderFile()
+            )
+            await runChain(h)
+            XCTAssertEqual(h.uploader?.bufferedEntries.count, 1, name)
+            XCTAssertTrue(h.runtime.allowsSending, name)
+            stop(h)
+            await settle()
+            XCTAssertFalse(h.runtime.allowsSending, name)
+            await h.uploader?.sendNow()
+            XCTAssertEqual(h.uploader?.bufferedEntries.count, 1, "\(name): nothing left")
+        }
+    }
+
+    func testWhileMossDoesNotStoreBacktrackNothingIsRead() async {
+        for backtrack in [nil, #"{"storage":"off","paused":false}"#, #"{"storage":"on","paused":true}"#] {
+            let h = await harness(
+                consentVersion: 2, heartbeatBacktrack: backtrack,
+                uploaderKeys: BacktrackUploaderTests.MemoryKeys(), uploaderFile: uploaderFile()
+            )
+            XCTAssertFalse(h.runtime.isRecording, backtrack ?? "no answer")
+            await runChain(h)
+            XCTAssertEqual(h.capture.calls, [], backtrack ?? "no answer")
+            XCTAssertTrue(h.uploader?.bufferedEntries.isEmpty ?? false)
+        }
+    }
+
+    func testAfterLogOutTheBufferFileAndKeyAreGoneAndNothingIsSent() async {
+        let keys = BacktrackUploaderTests.MemoryKeys()
+        let file = uploaderFile()
+        let h = await harness(consentVersion: 2, heartbeatBacktrack: Self.storageOn, uploaderKeys: keys, uploaderFile: file)
+        await runChain(h)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertNotNil(keys.key)
+        h.connection.send(.userLogout)
+        await settle()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertNil(keys.key)
+        XCTAssertNil(h.connection.backtrackState, "what Moss said goes with the account")
+        await h.uploader?.sendNow()
+        XCTAssertTrue(h.uploader?.bufferedEntries.isEmpty ?? false)
     }
 }
 #endif

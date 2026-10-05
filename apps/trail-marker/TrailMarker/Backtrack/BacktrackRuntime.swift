@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import Combine
 import Foundation
@@ -93,11 +92,12 @@ struct BacktrackServices {
 
 /// Executes what `BacktrackMachine` returns. The machine decides; this only does. Its only
 /// outputs are `sink` and `isRecording` (plan §4.5): nothing here talks to the network or the
-/// disk, and a source check enforces that for every file in this folder.
+/// disk, and a source check enforces that for every file in this folder but the uploader and
+/// its buffer.
 @MainActor
 final class BacktrackRuntime: ObservableObject {
-    /// The version this build's consent sheet records. Phase 1: in memory on this Mac.
-    static let consentVersion = 1
+    /// The version this build's consent sheet records. 2: sent to Moss and kept there (phase 2b).
+    static let consentVersion = 2
     /// Secure fields must be found within this, or the capture is skipped (plan §4.3).
     static let secureFieldBudget: TimeInterval = 0.05
     /// One Accessibility text walk, off the main actor (plan §7, retry 2, task 3).
@@ -112,6 +112,8 @@ final class BacktrackRuntime: ObservableObject {
     @Published private(set) var enabled: Bool
     @Published private(set) var consentGiven: Int
     @Published private(set) var menuSwitchOn: Bool
+    /// The sink's state, for showing Backtrack at all (Release) and "Paused from Moss".
+    @Published private(set) var availability: BacktrackSinkAvailability = .unavailable
     /// The menu card's Backtrack row and the menu-bar dot, shared with non-Backtrack views.
     let menuState = FeatureSwitchState()
 
@@ -161,6 +163,20 @@ final class BacktrackRuntime: ObservableObject {
         consentGiven = preferences.backtrackConsentVersion
         menuSwitchOn = !preferences.backtrackSwitchedOff
         menuState.onToggle = { [weak self] on in self?.setMenuSwitch(on: on) }
+        availability = sink.availability
+    }
+
+    /// The consent the sink requires; a stored older one shows the sheet again.
+    var requiredConsentVersion: Int { sink.requiredConsentVersion }
+    var needsConsent: Bool { enabled && consentGiven < sink.requiredConsentVersion }
+
+    /// Whether held text may be sent now: Backtrack on and agreed to, its menu switch on, not
+    /// Pause All, linked, the screen neither locked nor asleep. Idle doesn't stop sending.
+    var allowsSending: Bool {
+        guard didStart else { return false }
+        let now = currentInputs()
+        return now.enabled && now.consentAccepted && now.menuSwitchOn && !now.pausedAll && !now.screenLocked
+            && !now.sleeping && now.linked
     }
 
     // MARK: - Lifecycle
@@ -192,6 +208,13 @@ final class BacktrackRuntime: ObservableObject {
         focus.$excludedBundleIds
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.inputsMayHaveChanged() }
+            .store(in: &cancellables)
+        connection.$backtrackState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.inputsMayHaveChanged()
+                self?.publish()
+            }
             .store(in: &cancellables)
         connection.$linkEndCount
             .dropFirst()
@@ -284,6 +307,7 @@ final class BacktrackRuntime: ObservableObject {
             linked: connection.identity != nil,
             accessibilityGranted: permissions.accessibility == .granted,
             screenRecordingGranted: permissions.screenRecording == .granted,
+            sinkReady: sink.availability == .ready,
             budget: thermal == .serious || thermal == .critical || ProcessInfo.processInfo.isLowPowerModeEnabled
                 ? .reduced : .normal,
             policy: policy
@@ -292,6 +316,7 @@ final class BacktrackRuntime: ObservableObject {
 
     func inputsMayHaveChanged() {
         guard didStart else { return }
+        if availability != sink.availability { publish() }
         let next = currentInputs()
         guard next != inputs else { return }
         inputs = next
@@ -369,9 +394,19 @@ final class BacktrackRuntime: ObservableObject {
     private func publish() {
         isRecording = machine.isRecording
         menuState.showsRecordingDot = machine.isRecording
+        availability = sink.availability
         menuState.row = enabled && consentGiven >= sink.requiredConsentVersion
+            && BacktrackVisibility.shows(isDebugBuild: Self.isDebugBuild, availability: availability)
             ? FeatureSwitchState.Row(title: "Backtrack", isOn: menuSwitchOn)
             : nil
+    }
+
+    static var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
     }
 
     /// The window as it is now, re-checked against the policy on its current title.
@@ -541,4 +576,3 @@ final class BacktrackRuntime: ObservableObject {
         }
     }
 }
-#endif

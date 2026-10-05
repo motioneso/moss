@@ -16,16 +16,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: NSWindowController?
     private var lastJudgmentWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
+    /// Backtrack phase 2b: segments go to Moss through the encrypted buffer.
+    private lazy var backtrackUploader = BacktrackUploader(environment: connection, keys: KeychainStore())
     #if DEBUG
     private let focusDebugOverlay = FocusDebugOverlay()
     private var focusDebugBanner: FocusDebugBanner?
     private var cardHarness: CardHarness?
-    /// Backtrack's Phase 1 preview (plan §4): Debug builds only; its one sink is in memory.
+    /// Debug builds also keep the last 200 segments in memory for Show text….
     private let backtrackRing = BacktrackDebugRing()
     private lazy var backtrack = BacktrackRuntime(
-        connection: connection, permissions: permissions, focus: focus, sink: backtrackRing
+        connection: connection, permissions: permissions, focus: focus,
+        sink: BacktrackDebugTee(ring: backtrackRing, uploader: backtrackUploader)
     )
     private var backtrackTextWindowController: NSWindowController?
+    #else
+    private lazy var backtrack = BacktrackRuntime(
+        connection: connection, permissions: permissions, focus: focus, sink: backtrackUploader
+    )
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -48,9 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissions.refresh()
         connection.start()
         focus.start()
-        #if DEBUG
         backtrack.start()
-        #endif
+        backtrackUploader.sendingAllowed = { [weak self] in self?.backtrack.allowsSending ?? false }
+        backtrackUploader.start()
 
         connection.$state
             .receive(on: DispatchQueue.main)
@@ -73,11 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        #if DEBUG
         let feature = backtrack.menuState
-        #else
-        let feature = FeatureSwitchState()
-        #endif
         menuBarController = MenuBarController(
             connection: connection,
             focus: focus,
@@ -141,17 +144,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if DEBUG
-        let view = SettingsWindow(
-            connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
-            onSetUp: { [weak self] in self?.showOnboarding() }, backtrack: backtrack,
-            onShowBacktrackText: { [weak self] in self?.showBacktrackText() }
-        )
+        let showText: (() -> Void)? = { [weak self] in self?.showBacktrackText() }
         #else
+        let showText: (() -> Void)? = nil
+        #endif
         let view = SettingsWindow(
             connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
-            onSetUp: { [weak self] in self?.showOnboarding() }
+            onSetUp: { [weak self] in self?.showOnboarding() }, backtrack: backtrack, uploader: backtrackUploader,
+            onOpenBacktrackInMoss: { [weak self] in self?.openBacktrackInMoss() }, onShowBacktrackText: showText
         )
-        #endif
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Trail Marker Settings"
@@ -178,6 +179,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.origin.x = visible.midX - frame.width / 2
         frame.origin.y = visible.midY - frame.height / 2
         window.setFrame(frame, display: false)
+    }
+
+    /// Moss → Settings → Modules → Backtrack, where history is paused, shown and deleted.
+    private func openBacktrackInMoss() {
+        guard let identity = connection.identity,
+              var components = URLComponents(url: identity.instance.endpoint("/settings"), resolvingAgainstBaseURL: false)
+        else { return }
+        components.queryItems = [URLQueryItem(name: "section", value: "modules"), URLQueryItem(name: "module", value: "backtrack")]
+        if let url = components.url { NSWorkspace.shared.open(url) }
     }
 
     #if DEBUG

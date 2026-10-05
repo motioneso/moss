@@ -33,15 +33,30 @@ warning. There is no public release yet — this is a local developer build only
 
 ## Clearing local state between test runs
 
-Trail Marker keeps two things outside the app bundle, so quitting or reinstalling the app does not
+Trail Marker keeps these outside the app bundle, so quitting or reinstalling the app does not
 reset them:
 
-- **Keychain**: a generic-password item, service `com.moss.trailmarker`. Remove it with Keychain
-  Access (search "trailmarker") or `security delete-generic-password -s com.moss.trailmarker`.
+- **Keychain**: generic-password items under service `com.moss.trailmarker` (the link credential,
+  and Backtrack's buffer key). Remove them with Keychain Access (search "trailmarker") or
+  `security delete-generic-password -s com.moss.trailmarker` (once per item).
 - **Preferences**: `UserDefaults` under the app's bundle identifier. Reset with
   `defaults delete com.moss.trailmarker`.
+- **Backtrack's offline buffer**: `~/Library/Application Support/com.moss.trailmarker/Backtrack/buffer.bin`,
+  text not yet accepted by Moss, encrypted with the Keychain key above. Logging out deletes both.
 
-Run both before re-testing first-run linking from a clean state.
+Run all three before re-testing first-run linking from a clean state.
+
+## Backtrack in Release builds
+
+Backtrack is in Release builds from phase 2b. It appears in Settings only once the linked Moss says
+it stores Backtrack (an admin turns on the `backtrack.storage` instance switch); Debug builds always
+show it and also keep the last 200 segments in memory for Show text…. Text goes to Moss about once
+a minute and waits in the encrypted buffer while Moss can't be reached, for up to a day. To check a
+Release build contains the uploader and none of the Debug preview:
+
+```sh
+scripts/check-release-backtrack.sh "<DerivedData>/Build/Products/Release/Trail Marker.app/Contents/MacOS/Trail Marker"
+```
 
 ## Stable signing on your own Mac (optional, avoids repeated password prompts)
 
@@ -63,8 +78,8 @@ are signed with a different identity.
 
 ## Backtrack performance trial (Debug only)
 
-Build and test from `~/Jarv1s/apps/trail-marker`. Backtrack's preview remembers text only in memory;
-quitting or restarting the app clears that text. Run the new build only after finishing with any
+Build and test from `~/Jarv1s/apps/trail-marker`. The Show text… preview remembers text only in
+memory; quitting or restarting the app clears that text. Run the new build only after finishing with any
 history you want to consult in the current instance.
 
 The retry checks recent screen fingerprints after switches as well as periodically, refreshes
