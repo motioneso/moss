@@ -82,6 +82,12 @@ export function gateEligibilityProblem(
   const declaration = checkClassifierEligibility(tool);
   if (!declaration.eligible) return "not_declared";
   const plan = planArguments(tool);
+  // A non-read tool with a property the gate will not fill would run on the server's default.
+  if (tool.risk !== "read") {
+    const planned = new Set(plan.map((arg) => arg.name));
+    const properties = isRecord(tool.inputSchema?.properties) ? tool.inputSchema.properties : {};
+    if (Object.keys(properties).some((name) => !planned.has(name))) return "unfilled_optional";
+  }
   const extracts = plan.some((arg) => arg.kind === "extract");
   if (extracts && capability === "choice_only") return "needs_typed_extraction";
   if (plan.filter((arg) => arg.kind === "candidates").length > 1) return "too_many_candidate_lists";
