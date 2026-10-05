@@ -168,7 +168,7 @@ English, not jargon.** Ben flagged this directly (2026-08-16): a dense paragraph
 identifiers, commit hashes, and internal vocabulary makes him decode a sentence to get a fact he
 could've been told directly. Say what happened in normal words first; keep exact identifiers (PR
 numbers, commit hashes, file paths) available for when he needs to act on one, but don't lead with
-them or stack them. Full guidance: agentmemory `feedback-plain-english.md`.
+them or stack them. Full guidance: search Hindsight memory for the plain-English feedback.
 
 **Every agent-to-agent message — your escalations, verdicts, reports, relay/reap requests — signs
 off with the sender's own pane id** (`$HERDR_PANE_ID`, or `herdr pane list` matched on the
@@ -226,9 +226,9 @@ Nothing spawns until the run is ready and Ben approves the manifest.
    loss is now being rebuilt as issues #1270/#1271. Archived is not triaged.
 3. **Build the dependency + collision map — as a one-shot Opus subagent** (pointer-style prompt:
    spec paths + the migration-ordering rule). Two specs collide on a shared module, shared-table
-   schema change, or migration ordering (numbers are global, assigned by landing order). Run the
-   CLAUDE.md agentmemory recalls (`jarv1s current project state`, plus migration/RLS/AccessContext
-   rows as relevant).
+   schema change, or migration ordering (numbers are global, assigned by landing order). Search
+   Hindsight memory (`hindsight_search_knowledge_pages`) for current project state, plus
+   migrations, RLS or AccessContext as relevant.
 4. **Write the run manifest** from the template → `docs/coordination/<run-id>.md`: queue, tiers,
    parallel groups, serialized chains, explicit merge order. Commit it.
 5. **Present the manifest to Ben. PAUSE** until he OKs it.
@@ -564,7 +564,7 @@ When an agent reports **done** (PR open + its own green evidence — which you d
   3. In flight; blocked (and where tracked).
   Terse and result-first: no recaps, no option surveys, no restating what he just read. Anything
   merged without its live-path proof is reported as **code-complete, unverified** — never "done".
-- **Save durable memory** for any non-obvious decision/trap (`memory_save`, `project: "jarv1s"`).
+- **Save durable memory** for any non-obvious decision/trap (`hindsight_ingest_document`; see CLAUDE.md → _Memory_).
 
 **When the whole run is done — the queue is empty, nothing is left building, and you are not
 about to relay** — use `end-coordination` to close the run out fully, including turning the idle

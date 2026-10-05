@@ -112,8 +112,13 @@ path-scoped commit is unsafe on a co-edited file, and the skill has the only saf
 Use the `codebase-memory` skill for code structure questions (graph search, call traces, impact
 analysis) before making architectural claims.
 
-Nothing in a task will prompt you to write memory down, so treat these as save triggers — call
-`memory_save` when they happen, not at end of session:
+Agent memory is Hindsight, shared by Claude Code and Codex. Memory is kept per project folder, and
+worktrees share the main checkout's memory. Each turn is saved automatically, and relevant memories
+are injected at session start. Look things up with `hindsight_search_knowledge_pages` first, and use
+`hindsight_reflect` when you need the reasoning behind a past decision.
+
+Nothing in a task will prompt you to write a durable note, so treat these as save triggers — call
+`hindsight_ingest_document` when they happen, not at end of session:
 
 - a non-obvious architectural decision, with why X over Y
 - a confirmed invariant or ordering constraint
@@ -121,5 +126,6 @@ Nothing in a task will prompt you to write memory down, so treat these as save t
 - an RLS classification (owner-only / owner-or-share / recipient-only)
 - a shift in project state (milestone reached, known-good migration or test counts)
 
-Use `project: "jarv1s"` and type `architecture` | `bug` | `fact` | `pattern`. Never store secrets or
-private data.
+Give each note a specific title that starts with its kind (`architecture`, `bug`, `fact` or
+`pattern`). The title is the note's id, so reusing a title replaces the earlier note. Never store
+secrets or private data.
