@@ -15,9 +15,9 @@ for (const viewport of [
     await page.goto("/");
 
     await page.evaluate(
-      async ({ modulePath, long }) => {
-        const reactMod = await import(/* @vite-ignore */ "/@id/react");
-        const clientMod = await import(/* @vite-ignore */ "/@id/react-dom/client");
+      async ({ modulePath, long, specifiers }) => {
+        const reactMod = await import(/* @vite-ignore */ specifiers.react);
+        const clientMod = await import(/* @vite-ignore */ specifiers.client);
         const react = reactMod.default ?? reactMod;
         const client = clientMod.default ?? clientMod;
         const { Checklist } = await import(/* @vite-ignore */ modulePath);
@@ -39,7 +39,11 @@ for (const viewport of [
           })
         );
       },
-      { modulePath: CHECKLIST_MODULE, long: LONG }
+      {
+        modulePath: CHECKLIST_MODULE,
+        long: LONG,
+        specifiers: { react: "/@id/react", client: "/@id/react-dom/client" }
+      }
     );
 
     const rows = page.locator(".jds-checklist__item");
