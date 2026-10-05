@@ -41,7 +41,10 @@ export interface ClassifierBlockState {
 
   /**
    * Tools the classifier prepares: on for chat, not kept out, and not left out for a failed sort
-   * or inputs it cannot fill. Every count below is out of this one.
+   * or inputs it cannot fill. Every count below is out of this one. Read (look-up) tools are out
+   * once the switch is on: they are still prepared, but the gate never offers them, so they
+   * cannot answer quick requests. The off state's total still counts the preparation work, which
+   * does include them.
    */
   readonly total: number;
   readonly ready: number;
@@ -73,6 +76,16 @@ const FAILURE_ORDER: readonly IntegrationClassifierPreparationFailure[] = [
   "definition_too_large",
   "unsupported_shape"
 ];
+
+/**
+ * A connected read (look-up) tool is sorted and prepared like any other, but the gate never
+ * offers it: a read reply is only the fixed envelope summary, so it cannot count as handled
+ * and the synthetic manifest keeps it off the menu. The on-state counts below are about
+ * answering quick requests, so read tools stay out of them (#3038).
+ */
+function canAnswerQuickRequests(tool: IntegrationClassifierToolSort): boolean {
+  return tool.risk !== "read";
+}
 
 /**
  * True when the tool would be prepared if the switch were on. A sort that failed for want of a
@@ -107,17 +120,16 @@ export function classifierBlockState(detail: ClassifierDetail): ClassifierBlockS
     return { ...base, kind: "off", total };
   }
 
-  const ready = count(detail, "ready");
+  const answerable = detail.classifierTools.filter(canAnswerQuickRequests);
+  const ready = answerable.filter((tool) => tool.classifierState === "ready").length;
   const preparing = count(detail, "preparing");
   const preparingAgain = count(detail, "preparing_again");
   const failedTools = detail.classifierTools.filter((tool) => tool.classifierState === "failed");
-  const total = detail.classifierTools.filter((tool) =>
-    PREPARED_STATES.has(tool.classifierState)
-  ).length;
+  const total = answerable.filter((tool) => PREPARED_STATES.has(tool.classifierState)).length;
   const reasons = new Set(failedTools.map((tool) => tool.preparationFailure));
   const failure = FAILURE_ORDER.find((reason) => reasons.has(reason)) ?? null;
   const preparedAt =
-    detail.classifierTools
+    answerable
       .filter((tool) => tool.classifierState === "ready" && tool.preparedAt)
       .map((tool) => tool.preparedAt as string)
       .sort()

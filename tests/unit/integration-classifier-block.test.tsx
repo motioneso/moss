@@ -179,7 +179,7 @@ describe("classifierBlockState", () => {
     const state = classifierBlockState(
       detail({}, "ready", { Notify: { classifierState: "preparing" } })
     );
-    expect(state).toMatchObject({ kind: "preparing", ready: 3, total: 4 });
+    expect(state).toMatchObject({ kind: "preparing", ready: 2, total: 3 });
   });
 
   it("is ready with the always-ask count and the newest preparation date", () => {
@@ -188,8 +188,8 @@ describe("classifierBlockState", () => {
     );
     expect(state).toMatchObject({
       kind: "ready",
-      ready: 4,
-      total: 4,
+      ready: 3,
+      total: 3,
       alwaysAsk: 2,
       preparedAt: "2026-10-03T08:00:00.000Z"
     });
@@ -202,14 +202,32 @@ describe("classifierBlockState", () => {
         Unlock: { classifierState: "not_used" }
       })
     );
-    expect(state).toMatchObject({ kind: "ready", ready: 2, total: 2 });
+    expect(state).toMatchObject({ kind: "ready", ready: 1, total: 1 });
+  });
+
+  it("leaves read look-up tools out of the answering count — #3038 regression", () => {
+    // GetState is a read (look-up) tool: prepared like the rest, but the gate never offers
+    // it, so the panel must not count it as answering quick requests.
+    const state = classifierBlockState(detail({}, "ready"));
+    expect(state).toMatchObject({ kind: "ready", ready: 3, total: 3 });
+  });
+
+  it("says no tool is left when only read tools are on — #3038 regression", () => {
+    const state = classifierBlockState(
+      detail({}, "ready", {
+        SetLight: { classifierState: "not_used" },
+        Notify: { classifierState: "not_used" },
+        Unlock: { classifierState: "not_used" }
+      })
+    );
+    expect(state).toMatchObject({ kind: "none", ready: 0, total: 0 });
   });
 
   it("says a tool changed when ready tools wait only on preparing again", () => {
     const state = classifierBlockState(
       detail({}, "ready", { SetLight: { classifierState: "preparing_again" } })
     );
-    expect(state).toMatchObject({ kind: "changed", ready: 3, preparingAgain: 1, total: 4 });
+    expect(state).toMatchObject({ kind: "changed", ready: 2, preparingAgain: 1, total: 3 });
   });
 
   it("couldn't prepare once nothing is still preparing, naming model trouble first", () => {
@@ -219,7 +237,7 @@ describe("classifierBlockState", () => {
         Unlock: { classifierState: "failed", preparationFailure: "provider_error" }
       })
     );
-    expect(state).toMatchObject({ kind: "failed", ready: 2, failed: 2, failure: "provider_error" });
+    expect(state).toMatchObject({ kind: "failed", ready: 1, failed: 2, failure: "provider_error" });
   });
 
   it("is paused when the connection is off or can't be reached", () => {
@@ -305,9 +323,9 @@ describe("IntegrationClassifierBlock", () => {
   it("3. preparing: shows progress and that the page can be left", () => {
     render(detail({}, "ready", { Notify: { classifierState: "preparing" } }));
     expect(words()).toContain("Preparing");
-    expect(words()).toContain("3 of 4 tools");
+    expect(words()).toContain("2 of 3 tools");
     const bar = renderer!.root.find((node) => node.props.role === "progressbar");
-    expect(bar.props["aria-valuenow"]).toBe(3);
+    expect(bar.props["aria-valuenow"]).toBe(2);
     expect(words()).toContain("You can leave this page.");
   });
 
@@ -315,7 +333,7 @@ describe("IntegrationClassifierBlock", () => {
     render(detail({}, "ready"));
     expect(words()).toContain("Ready");
     expect(words()).toContain(
-      "4 of 4 tools can answer quick requests. 2 always ask you before they run."
+      "3 of 3 tools can answer quick requests. 2 always ask you before they run."
     );
     expect(words()).toContain("YOLO mode skips the asking.");
     expect(words()).toMatch(/Prepared on (2 October|October 2) by your default chat model\./);
