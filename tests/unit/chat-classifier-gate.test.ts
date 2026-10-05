@@ -493,6 +493,53 @@ describe("classifier failure, deadline and cooldown", () => {
     expect(h.choose).toHaveBeenCalledTimes(2);
   });
 
+  it("files no second line when a started check times out — #3040 regression", async () => {
+    // The hanging choose call files its own abort line on the way out; the gate stays quiet.
+    vi.useFakeTimers();
+    const h = harness();
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.choose.mockImplementationOnce(() => new Promise(() => undefined));
+    const pending = h.gate.evaluate(request({ turnId: "turn-1", parentId: "line-9" }));
+    await vi.advanceTimersByTimeAsync(GATE_LIMITS.deadlineMs);
+    expect(await pending).toMatchObject({ kind: "declined", reason: "timeout" });
+    expect(noteTimeout).not.toHaveBeenCalled();
+  });
+
+  it("files the skipped check when the timeout lands before any model resolved — #3040 regression", async () => {
+    // Nothing downstream could have recorded a line: no model, no call.
+    vi.useFakeTimers();
+    const h = harness();
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.ports.classifier.resolve = () => new Promise(() => undefined);
+    const pending = h.gate.evaluate(request({ turnId: "turn-1" }));
+    await vi.advanceTimersByTimeAsync(GATE_LIMITS.deadlineMs);
+    expect(await pending).toMatchObject({ kind: "declined", reason: "timeout" });
+    expect(noteTimeout).toHaveBeenCalledTimes(1);
+    expect(noteTimeout).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      modelName: "none",
+      turnId: "turn-1",
+      latencyMs: expect.any(Number)
+    });
+  });
+
+  it("records nothing when the turn is cancelled", async () => {
+    const controller = new AbortController();
+    const h = harness();
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.choose.mockImplementationOnce(async () => {
+      controller.abort();
+      return pick("calendar");
+    });
+    expect(await h.gate.evaluate(request({ signal: controller.signal }))).toMatchObject({
+      kind: "cancelled"
+    });
+    expect(noteTimeout).not.toHaveBeenCalled();
+  });
+
   it("stops without a fallback when the turn is cancelled", async () => {
     const controller = new AbortController();
     const h = harness();

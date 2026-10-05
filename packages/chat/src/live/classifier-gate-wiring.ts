@@ -1,6 +1,7 @@
 import {
   askClassifierChoice,
   extractClassifierValues,
+  recordSystemOneActivity,
   resolveClassifier,
   type ActiveModulesResolver,
   type AssistantToolGateway,
@@ -29,6 +30,12 @@ export type ClassifierGateAttemptPorts = {
   readonly loadCandidates: ClassifierGatePorts["loadCandidates"];
   readonly isReleased: ClassifierGatePorts["isReleased"];
   readonly gateway: ClassifierGatePorts["gateway"];
+  /**
+   * #3040: the production factory always wires this — a timed-out check files its
+   * skipped-check line here. Optional, mirroring the engine port, so doubles that only
+   * build the menu and gateway keep compiling.
+   */
+  readonly noteTimeout?: ClassifierGatePorts["noteTimeout"];
 };
 
 export type ClassifierGatePortsFactory = (
@@ -189,6 +196,19 @@ export function createClassifierGatePortsFactory(
       // its author's classifier declaration, a connected tool by the declaration its synthetic
       // manifest carries only while the tool is eligible (spec 8.5).
       isReleased: (tool) => listedIds.has(`${tool.moduleId}.${tool.name}`),
+      // #3040: the gate ran past its deadline after reaching a model, so the classifier call
+      // never recorded its check line. File it here with the turn, so the activity log shows
+      // the check was skipped instead of showing nothing.
+      noteTimeout: (activity) => {
+        recordSystemOneActivity(activity.modelName, "error", {
+          actionCode: "chat.tool_check",
+          ownerUserId: actorUserId,
+          ...(activity.turnId ? { turnId: activity.turnId } : {}),
+          ...(activity.parentId ? { parentId: activity.parentId } : {}),
+          durationMs: activity.latencyMs,
+          failureCode: "timeout"
+        });
+      },
       gateway: {
         call: (toolName: string, input: Record<string, unknown>, mode: "execute" | "dry-run") =>
           deps.gateway.callToolForGate(token, toolName, input, mode)

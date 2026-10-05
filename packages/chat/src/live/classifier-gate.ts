@@ -1,4 +1,5 @@
 import {
+  GATE_TIMEOUT_ABORT_REASON,
   validateToolInput,
   type ClassifierChoiceQuestion,
   type ClassifierChoiceResult,
@@ -140,6 +141,19 @@ export interface ClassifierGatePorts {
   };
   /** Whether this tool is released for live use. Only consulted in `on` mode. */
   isReleased(tool: GateTool): boolean;
+  /**
+   * #3040: the attempt ran past the deadline before any classifier call started, so no
+   * check line was recorded anywhere. The gate calls this once per such attempt (never
+   * on a user-cancelled turn) so the activity log shows the check was skipped. A call
+   * that started files its own line on the way out. Optional so test doubles keep working.
+   */
+  noteTimeout?(activity: {
+    readonly actorUserId: string;
+    readonly modelName: string;
+    readonly turnId?: string;
+    readonly parentId?: string;
+    readonly latencyMs: number;
+  }): void;
   now(): number;
 }
 
@@ -200,6 +214,11 @@ class Stop {
 
 export class ClassifierGate {
   private readonly coolingUntil = new Map<string, number>();
+  /**
+   * #3040: whether this attempt invoked a classifier call. A fresh gate serves one attempt
+   * (the runner builds one per attempt), so resetting per evaluate is safe.
+   */
+  private classifierCalled = false;
 
   constructor(private readonly ports: ClassifierGatePorts) {}
 
@@ -225,13 +244,26 @@ export class ClassifierGate {
     const onCancel = () => deadline.abort();
     request.signal?.addEventListener("abort", onCancel, { once: true });
     if (request.signal?.aborted) deadline.abort();
-    const timer = setTimeout(() => deadline.abort(), GATE_LIMITS.deadlineMs);
+    const timer = setTimeout(
+      () => deadline.abort(GATE_TIMEOUT_ABORT_REASON),
+      GATE_LIMITS.deadlineMs
+    );
     let coolKey: string | null = null;
+    let checkModel: string | undefined;
+    this.classifierCalled = false;
 
     try {
-      const picked = await this.classify(request, deadline.signal, trace, (key) => {
-        coolKey = key;
-      });
+      const picked = await this.classify(
+        request,
+        deadline.signal,
+        trace,
+        (key) => {
+          coolKey = key;
+        },
+        (modelName) => {
+          checkModel = modelName;
+        }
+      );
       clearTimeout(timer);
       if (picked instanceof Stop) return decline(picked.reason, picked.detail);
       return await this.dispatch(request, picked, trace, finish, decline);
@@ -239,6 +271,19 @@ export class ClassifierGate {
       if (error instanceof AbortedError) {
         if (request.signal?.aborted) return finish({ kind: "cancelled", trace });
         if (coolKey) this.startCooldown(coolKey);
+        // #3040: exactly one line per timeout. A classifier call that started files its
+        // own line on the way out, so the gate files one only when no call started —
+        // otherwise the log shows the same skipped check twice. Before any model was
+        // resolved there is no model to name, so the line says so.
+        if (!this.classifierCalled) {
+          this.ports.noteTimeout?.({
+            actorUserId: request.actorUserId,
+            modelName: checkModel ?? "none",
+            ...(request.turnId ? { turnId: request.turnId } : {}),
+            ...(request.parentId ? { parentId: request.parentId } : {}),
+            latencyMs: Math.max(0, this.ports.now() - startedAt)
+          });
+        }
         return decline("timeout");
       }
       if (error instanceof FailedError) {
@@ -271,7 +316,8 @@ export class ClassifierGate {
     request: GateRequest,
     signal: AbortSignal,
     trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
-    setCoolKey: (key: string) => void
+    setCoolKey: (key: string) => void,
+    noteModel?: (modelName: string) => void
   ): Promise<Pick | Stop> {
     const listed = await this.run(this.ports.listTools(), signal);
     const declared = listed.filter(
@@ -283,6 +329,7 @@ export class ClassifierGate {
 
     const handle = await this.run(this.ports.classifier.resolve(), signal);
     if (!handle) return new Stop("no_classifier");
+    noteModel?.(handle.model.provider_model_id);
     const coolKey = `${request.actorUserId}|${handle.model.id}`;
     if ((this.coolingUntil.get(coolKey) ?? 0) > this.ports.now()) return new Stop("cooling_off");
     setCoolKey(coolKey);
@@ -347,6 +394,7 @@ export class ClassifierGate {
     trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
     activity: GenerateChoicesActivity
   ): Promise<Answer | Stop> {
+    this.classifierCalled = true;
     const result = await this.run(
       this.ports.classifier.choose(handle, { state, question, signal, activity }),
       signal
@@ -458,6 +506,7 @@ export class ClassifierGate {
 
     let input: Record<string, unknown>;
     if (plan.some((arg) => arg.kind === "extract")) {
+      this.classifierCalled = true;
       const extracted = await this.run(
         this.ports.classifier.extract(handle, {
           instructions: `Extract the argument values for the tool described as: ${tool.classifier!.description}`,

@@ -16,6 +16,19 @@ import type { ActivityDetailStep, ActivityFactCounts } from "@moss/db";
 
 export type ModelActivityOutcome = "ok" | "error" | "aborted";
 
+/**
+ * #3040: the abort reason the classifier gate sets on its own deadline. A layer that sees
+ * its caller signal abort with this reason knows the gate's time ran out — as opposed to
+ * the user stopping the turn — and records a timeout instead of a cancellation. A plain
+ * string (not an Error instance) so the check survives any module boundary.
+ */
+export const GATE_TIMEOUT_ABORT_REASON = "classifier_gate_timeout";
+
+/** True when the signal was aborted by the classifier gate's deadline. */
+export function isGateTimeoutAbort(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true && signal.reason === GATE_TIMEOUT_ABORT_REASON;
+}
+
 /** Allow-listed failure vocabulary (spec section 5.4). Raw provider text is never stored. */
 export type ModelActivityFailureCode =
   | "timeout"
