@@ -7,6 +7,7 @@ import type {
   ModelToolObservation
 } from "../classifier-shadow-repository.js";
 import { ClassifierGate, GATE_LIMITS, type GateMode, type GateOutcome } from "./classifier-gate.js";
+import { gateEligibilityProblem, type GateTool } from "./classifier-gate-arguments.js";
 import type { ClassifierGatePortsFactory } from "./classifier-gate-wiring.js";
 import type { ChatSurface } from "./chat-surface.js";
 
@@ -81,6 +82,13 @@ interface PendingTurn {
   settled: boolean;
   /** The chat turn ended; the pending entry may be reclaimed once the attempt settles too. */
   ended: boolean;
+  /** The model's first tool call was seen; later calls are never compared. */
+  sawTool: boolean;
+  /**
+   * The tools that take part in the classifier, listed before the record opens. A model tool
+   * outside this set is stored with no name, so a kept-out tool never reaches a record.
+   */
+  classifierToolIds?: ReadonlySet<string>;
   observation?: ModelToolObservation;
 }
 
@@ -131,10 +139,16 @@ export function createClassifierGateShadowRunner(
   const writeObservation = (
     actorUserId: string,
     turnId: string,
+    turn: PendingTurn,
     observation: ModelToolObservation
   ): void => {
+    const stored =
+      observation.kind === "tool" &&
+      !turn.classifierToolIds?.has(observedToolKey(observation.toolId))
+        ? ({ kind: "unobserved" } as const)
+        : observation;
     void withActor(actorUserId, `classifier_shadow_observe_${turnId}`, (db) =>
-      deps.repository.observeModelTool(db, turnId, observation)
+      deps.repository.observeModelTool(db, turnId, stored)
     ).catch(() => fail("observe"));
   };
 
@@ -161,8 +175,12 @@ export function createClassifierGateShadowRunner(
   ): void => {
     const turn = pending.get(turnId);
     if (!turn) return;
+    if (observation.kind === "tool") {
+      if (turn.sawTool) return;
+      turn.sawTool = true;
+    }
     if (turn.opened) {
-      writeObservation(actorUserId, turnId, observation);
+      writeObservation(actorUserId, turnId, turn, observation);
       return;
     }
     if (turn.settled) return;
@@ -204,6 +222,13 @@ export function createClassifierGateShadowRunner(
         const coolKey = `${actorUserId}|${handle?.model.id ?? "none"}`;
         const cooling = (coolingUntil.get(coolKey) ?? 0) > deps.now();
 
+        // Listed once and shared with the gate. A failed listing leaves the set empty, so no model
+        // tool name is stored, and the gate still sees the same failure.
+        const listing = ports.listTools();
+        const listed = await listing.catch(() => []);
+        const tracked = pending.get(turnId);
+        if (tracked) tracked.classifierToolIds = classifierToolIds(listed);
+
         const opened = await withActor(actorUserId, `classifier_shadow_open_${turnId}`, (db) =>
           deps.repository.open(db, {
             turnId,
@@ -222,7 +247,7 @@ export function createClassifierGateShadowRunner(
         if (turn) {
           turn.opened = true;
           if (turn.observation) {
-            writeObservation(actorUserId, turnId, turn.observation);
+            writeObservation(actorUserId, turnId, turn, turn.observation);
             turn.observation = undefined;
           }
           maybeReclaim(turnId);
@@ -238,7 +263,7 @@ export function createClassifierGateShadowRunner(
 
         const gate = new ClassifierGate({
           classifier,
-          listTools: ports.listTools,
+          listTools: () => listing,
           loadCandidates: ports.loadCandidates,
           gateway: ports.gateway,
           isReleased: ports.isReleased,
@@ -288,7 +313,8 @@ export function createClassifierGateShadowRunner(
         actorUserId: input.actorUserId,
         opened: false,
         settled: false,
-        ended: false
+        ended: false,
+        sawTool: false
       });
       if (pending.size > SHADOW_OBSERVATION_BUFFER_LIMIT) {
         const oldest = pending.keys().next().value;
@@ -337,6 +363,24 @@ function toCompletion(outcome: GateOutcome): CompletionInput {
       // decline: shadow never executes.
       return withTrace("declined", outcome);
   }
+}
+
+/**
+ * Compares tool names the way the transport renders them, where a dot arrives as an underscore.
+ * Each tool is keyed by its own name and by its `module.tool` identity.
+ */
+function observedToolKey(toolId: string): string {
+  return toolId.toLowerCase().replaceAll("_", ".");
+}
+
+function classifierToolIds(tools: readonly GateTool[]): Set<string> {
+  const ids = new Set<string>();
+  for (const tool of tools) {
+    if (gateEligibilityProblem(tool, null) === "not_declared") continue;
+    ids.add(observedToolKey(tool.name));
+    ids.add(observedToolKey(`${tool.moduleId}.${toBareToolName(tool.moduleId, tool.name)}`));
+  }
+  return ids;
 }
 
 /**
