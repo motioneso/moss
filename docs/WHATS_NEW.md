@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-05
+
+#### Added
+
+- **Meeting drafts, notes and data export.** Create meeting drafts, keep personal notes, find meetings in History and include retained meeting data in your account export; recording is not available yet. [PR #2982](https://github.com/motioneso/moss/pull/2982)
+
 ### 2026-10-04
 
 #### Fixed
