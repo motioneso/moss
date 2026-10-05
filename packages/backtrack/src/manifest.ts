@@ -89,7 +89,8 @@ export const backtrackModuleManifest: MossModuleManifest = {
       id: "backtrack.delete_history",
       description:
         "Settings > Modules > Backtrack deletes stored history for the last hour, today, a chosen " +
-        "day or everything. It is permanent and works with no Mac linked, even if storage is off.",
+        "day or everything, each after asking first. It is permanent and works with no Mac " +
+        "linked, even if storage is off.",
       errors: []
     }
   ],

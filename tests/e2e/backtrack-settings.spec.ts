@@ -108,16 +108,40 @@ test("turning Recording off pauses every Mac", async ({ page }) => {
   await expect.poll(() => sent.puts).toEqual([{ paused: true }]);
 });
 
-test("Today sends the browser-local day as a range", async ({ page }) => {
+test("Today asks first, then sends the browser-local day as a range", async ({ page }) => {
   const sent = await setup(page, { macs: 1 });
   await page.clock.setFixedTime(new Date("2026-10-04T20:00:00.000Z"));
   await page.goto(URL_PATH);
   await page.getByRole("button", { name: "Today" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete today?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(sent.deletes).toEqual([]);
+  await page.getByRole("button", { name: "Today" }).click();
+  await page
+    .getByRole("dialog", { name: "Delete today?" })
+    .getByRole("button", { name: "Delete today" })
+    .click();
   // 13:00 on 4 October in Los Angeles (PDT): midnight to midnight is 07:00Z to 07:00Z.
   await expect
     .poll(() => sent.deletes)
     .toEqual([{ from: "2026-10-04T07:00:00.000Z", to: "2026-10-05T07:00:00.000Z" }]);
   await expect(page.getByText("Deleted 3 stored segments.")).toBeVisible();
+});
+
+test("Last hour asks first, then sends the hour before the confirmation", async ({ page }) => {
+  const sent = await setup(page, { macs: 1 });
+  await page.clock.setFixedTime(new Date("2026-10-04T20:00:00.000Z"));
+  await page.goto(URL_PATH);
+  await page.getByRole("button", { name: "Last hour" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete the last hour?" });
+  await expect(dialog).toBeVisible();
+  expect(sent.deletes).toEqual([]);
+  await dialog.getByRole("button", { name: "Delete the last hour" }).click();
+  await expect
+    .poll(() => sent.deletes)
+    .toEqual([{ from: "2026-10-04T19:00:00.000Z", to: "2026-10-04T20:00:00.000Z" }]);
 });
 
 test("Everything asks first, then sends no range", async ({ page }) => {

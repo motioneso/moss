@@ -69,6 +69,22 @@ export function chosenDayRange(value: string): Required<BacktrackDeleteRequest> 
   return localDayRange(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
+interface DeleteConfirmation {
+  readonly title: string;
+  readonly description: string;
+  readonly action: string;
+  readonly range: () => BacktrackDeleteRequest;
+}
+
+/** A chosen day for the confirmation title, e.g. "Saturday, October 4". */
+function formatDay(fromIso: string): string {
+  return new Date(fromIso).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric"
+  });
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -102,7 +118,9 @@ export default function BacktrackSettings() {
       requestJson<BacktrackDeleteResponse>("/api/backtrack/segments", { method: "DELETE", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: STATUS_KEY })
   });
-  const [confirmingAll, setConfirmingAll] = useState(false);
+  // Every delete asks first (Ben, 2026-10-04 live proof). The range is worked out when the
+  // person confirms, so "Last hour" means the hour before they pressed Delete.
+  const [confirming, setConfirming] = useState<DeleteConfirmation | null>(null);
   const [choosingDay, setChoosingDay] = useState(false);
   const [day, setDay] = useState("");
 
@@ -158,7 +176,15 @@ export default function BacktrackSettings() {
               variant="secondary"
               size="sm"
               disabled={remove.isPending}
-              onClick={() => deleteRange(lastHourRange(new Date()))}
+              onClick={() =>
+                setConfirming({
+                  title: "Delete the last hour?",
+                  description:
+                    "This removes what Backtrack kept from the last hour. It can't be undone.",
+                  action: "Delete the last hour",
+                  range: () => lastHourRange(new Date())
+                })
+              }
             >
               Last hour
             </Button>
@@ -166,7 +192,15 @@ export default function BacktrackSettings() {
               variant="secondary"
               size="sm"
               disabled={remove.isPending}
-              onClick={() => deleteRange(todayRange(new Date()))}
+              onClick={() =>
+                setConfirming({
+                  title: "Delete today?",
+                  description:
+                    "This removes what Backtrack kept since midnight today. It can't be undone.",
+                  action: "Delete today",
+                  range: () => todayRange(new Date())
+                })
+              }
             >
               Today
             </Button>
@@ -182,7 +216,14 @@ export default function BacktrackSettings() {
               variant="danger"
               size="sm"
               disabled={remove.isPending}
-              onClick={() => setConfirmingAll(true)}
+              onClick={() =>
+                setConfirming({
+                  title: "Delete all of Backtrack?",
+                  description: `This removes the ${plural(data.days, "day", "days")} of text Moss has kept. It can't be undone. Backtrack keeps recording from now on unless you turn it off.`,
+                  action: "Delete everything",
+                  range: () => ({})
+                })
+              }
             >
               Everything…
             </Button>
@@ -209,7 +250,14 @@ export default function BacktrackSettings() {
                 disabled={remove.isPending || chosenDayRange(day) === undefined}
                 onClick={() => {
                   const range = chosenDayRange(day);
-                  if (range) deleteRange(range);
+                  if (!range) return;
+                  setConfirming({
+                    title: `Delete ${formatDay(range.from)}?`,
+                    description:
+                      "This removes what Backtrack kept on that day, midnight to midnight. It can't be undone.",
+                    action: "Delete the day",
+                    range: () => range
+                  });
                 }}
               >
                 Delete that day
@@ -229,25 +277,26 @@ export default function BacktrackSettings() {
     </Group>
   );
 
-  const everythingDialog = confirmingAll ? (
+  const confirmDialog = confirming ? (
     <Dialog
-      title={<span id="backtrack-delete-all-title">Delete all of Backtrack?</span>}
-      aria-labelledby="backtrack-delete-all-title"
-      description={`This removes the ${plural(data.days, "day", "days")} of text Moss has kept. It can't be undone. Backtrack keeps recording from now on unless you turn it off.`}
-      onClose={() => setConfirmingAll(false)}
+      title={<span id="backtrack-delete-confirm-title">{confirming.title}</span>}
+      aria-labelledby="backtrack-delete-confirm-title"
+      description={confirming.description}
+      onClose={() => setConfirming(null)}
       footer={
         <>
-          <Button variant="secondary" onClick={() => setConfirmingAll(false)}>
+          <Button variant="secondary" onClick={() => setConfirming(null)}>
             Cancel
           </Button>
           <Button
             variant="danger"
             onClick={() => {
-              setConfirmingAll(false);
-              deleteRange({});
+              const range = confirming.range();
+              setConfirming(null);
+              deleteRange(range);
             }}
           >
-            Delete everything
+            {confirming.action}
           </Button>
         </>
       }
@@ -267,7 +316,7 @@ export default function BacktrackSettings() {
             {deleteGroup}
           </>
         ) : null}
-        {everythingDialog}
+        {confirmDialog}
       </>
     );
   }
@@ -331,7 +380,7 @@ export default function BacktrackSettings() {
         ) : null}
       </Group>
       {deleteGroup}
-      {everythingDialog}
+      {confirmDialog}
     </>
   );
 }
