@@ -1,6 +1,11 @@
 import type { FastifyBaseLogger } from "fastify";
 
 import { readScopedActorUserId, type ActivityFactCounts, type DataContextDb } from "@moss/db";
+import {
+  CLOUDFLARE_DECISION_MODELS,
+  decisionModelDialect,
+  type DecisionModelDialect
+} from "@moss/shared";
 import type { ModuleServiceKey } from "@moss/shared";
 
 import { parseAiApiKeyCredential } from "../credentials.js";
@@ -304,6 +309,16 @@ async function postSystemOne(
   }
 
   const baseUrl = (provider.base_url ?? SYSTEM_ONE_DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const dialect = decisionModelDialect(baseUrl);
+  // The Cloudflare model id becomes a URL path segment, so it is checked against the fixed list
+  // before any request. Anything else is refused locally and never sent.
+  if (dialect === "cloudflare" && !isCloudflareDecisionModel(model.provider_model_id)) {
+    deps.logger?.warn(
+      { service: input.service, code: "model_not_allowed" },
+      `${logPrefix} request rejected`
+    );
+    return { ok: false, error: "provider_error" };
+  }
   const timeoutSignal = AbortSignal.timeout(input.timeoutMs ?? GENERATE_CHOICES_DEFAULT_TIMEOUT_MS);
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
 
@@ -319,7 +334,9 @@ async function postSystemOne(
   try {
     posted = await postSystemOneRequest(
       fetchImpl,
+      dialect,
       baseUrl,
+      model.provider_model_id,
       apiKey,
       serializedBody,
       signal,
@@ -411,7 +428,9 @@ export function recordSystemOneActivity(
 /** The raw System One round: post the serialized body and read the JSON payload. */
 async function postSystemOneRequest(
   fetchImpl: typeof fetch,
+  dialect: DecisionModelDialect,
   baseUrl: string,
+  modelId: string,
   apiKey: string,
   serializedBody: string,
   signal: AbortSignal,
@@ -423,9 +442,15 @@ async function postSystemOneRequest(
   | { readonly ok: true; readonly payload: unknown }
   | { readonly ok: false; readonly error: GenerateChoicesFailure }
 > {
+  // The two dialects differ only in address and envelope. Cloudflare puts the model id in the
+  // path; the standard dialect posts to the fixed `/v1/systemone`.
+  const requestUrl =
+    dialect === "cloudflare"
+      ? `${baseUrl}/run/@cf/cloudflare/${modelId}`
+      : `${baseUrl}/v1/systemone`;
   let response: Response;
   try {
-    response = await fetchImpl(`${baseUrl}/v1/systemone`, {
+    response = await fetchImpl(requestUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -457,7 +482,33 @@ async function postSystemOneRequest(
     deps.logger?.warn({ service, code: "invalid_response_body" }, `${logPrefix} invalid response`);
     return { ok: false, error: "invalid_response" };
   }
+
+  if (dialect === "cloudflare") {
+    // Cloudflare wraps every answer in `{ success, result }`. A refusal is a provider error, never
+    // an `invalid_response` the caller could mistake for a malformed (but valid) answer.
+    const unwrapped = unwrapCloudflareReply(payload);
+    if (!unwrapped) {
+      deps.logger?.warn({ service, code: "cloudflare_error" }, `${logPrefix} provider error`);
+      return { ok: false, error: "provider_error" };
+    }
+    return { ok: true, payload: unwrapped };
+  }
+
   return { ok: true, payload };
+}
+
+/**
+ * Cloudflare answers `{ success, result }`. Only `success === true` with a record `result` is a
+ * usable answer; the result then flows through the same answer checks as the standard dialect.
+ */
+function unwrapCloudflareReply(payload: unknown): Record<string, unknown> | null {
+  if (!isRecord(payload) || payload["success"] !== true) return null;
+  const result = payload["result"];
+  return isRecord(result) ? result : null;
+}
+
+function isCloudflareDecisionModel(modelId: string): boolean {
+  return (CLOUDFLARE_DECISION_MODELS as readonly string[]).includes(modelId);
 }
 
 /** Every asked id answered as a noul with a probability inside 0 to 1; anything else fails. */
