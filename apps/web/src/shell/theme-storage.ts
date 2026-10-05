@@ -43,3 +43,17 @@ export function saveShellColorMode(
     // Storage can be disabled, full, or unavailable in private browsing.
   }
 }
+
+/** Whether the page last rendered dark or light, custom themes included. */
+export const SHELL_PAGE_TONE_STORAGE_KEY = "jarvis.page-tone:v1";
+
+export function saveShellPageTone(
+  tone: ShellColorMode,
+  storage: ThemeStorage = localStorage
+): void {
+  try {
+    storage.setItem(SHELL_PAGE_TONE_STORAGE_KEY, tone);
+  } catch {
+    // Storage can be disabled, full, or unavailable in private browsing.
+  }
+}

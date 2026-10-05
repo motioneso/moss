@@ -1,7 +1,9 @@
 /*
  * Startup screen. index.html links this file directly so the loading screen
  * is styled before the app script runs, in development and in production.
- * It owns .center-screen, .loading-mark and the spin keyframes.
+ * It owns .center-screen, .loading-mark (the animated logo mark every loading
+ * screen shows) and the spin keyframes. public/boot-theme.js sets the theme
+ * attributes before this paints.
  */
 @import "./tokens.css";
 
@@ -33,14 +35,67 @@ body {
 }
 
 .loading-mark {
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 4px solid var(--border-default);
-  border-top-color: var(--accent-fg);
-  border-radius: 999px;
-  animation: spin 900ms linear infinite;
+  display: block;
+  color: var(--text);
 }
 
+.loading-mark svg {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+}
+
+/* The strata draw in from the left one after another, then ease back. */
+.loading-mark rect {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: loading-mark-bar 1.8s var(--ease-quiet) infinite;
+}
+
+.loading-mark rect:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.loading-mark rect:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes loading-mark-bar {
+  0%,
+  100% {
+    transform: scaleX(0.35);
+    opacity: 0.35;
+  }
+
+  45%,
+  65% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: the whole mark fades gently, nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  .loading-mark rect {
+    animation: none;
+  }
+
+  .loading-mark svg {
+    animation: loading-mark-fade 2.4s var(--ease-in-out) infinite alternate;
+  }
+}
+
+@keyframes loading-mark-fade {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
+}
+
+/* Inline spinners elsewhere in the app (.spin in styles.css) use this. */
 @keyframes spin {
   to {
     transform: rotate(360deg);

@@ -3,18 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f766e" />
+    <meta name="theme-color" content="#f2eee4" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/src/styles/boot.css" />
+    <script src="/boot-theme.js"></script>
     <title>Moss</title>
   </head>
   <body>
     <noscript>JavaScript is required to run Moss.</noscript>
     <div id="root">
       <main class="center-screen">
-        <div class="loading-mark" aria-hidden="true"></div>
-        <p id="boot-loading">Loading Moss</p>
+        <!-- Same mark as BrandMark in packages/ui/src/brand-mark.tsx; a unit test keeps them equal. -->
+        <span class="loading-mark">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+            <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+            <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+            <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" />
+          </svg>
+        </span>
+        <p id="boot-loading" role="status">Loading Moss</p>
       </main>
     </div>
     <script src="/boot-name.js"></script>

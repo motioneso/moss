@@ -27,6 +27,7 @@ import { assistantName, bindAssistantUser, loadPersonaSettings } from "./api/use
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";
+import { LoadingScreen } from "./loading-screen";
 import { createAssistantSurfaceHandle, useAssistantSurfaceHost } from "./chat/assistant-surface";
 import { DraftBanner } from "./chat/draft-banner";
 import { ThrowAwayDraftDialog } from "./chat/throw-away-draft-dialog";
@@ -554,15 +555,6 @@ function ModuleCssScope(props: {
     };
   }, [moduleId, css]);
   return <div data-module={moduleId}>{props.children}</div>;
-}
-
-function LoadingScreen() {
-  return (
-    <main className="center-screen">
-      <div className="loading-mark" aria-hidden="true" />
-      <p>Loading {assistantName()}</p>
-    </main>
-  );
 }
 
 function FatalState(props: { readonly message: string; readonly onRetry: () => void }) {
