@@ -132,13 +132,14 @@ Steps, all inside the gateway:
 
 1. Resolve the route against the catalog. Unknown or `blocked` returns a plain refusal naming the
    reason category.
-2. Decide run or ask (below).
-3. Mint a single-use act-as grant: random 256-bit value, held in process memory, bound to actor
+2. Check AI consent (below), whatever the route class. When consent is off, refuse here. Nothing
+   is sent and nothing comes back.
+3. Decide run or ask (below).
+4. Mint a single-use act-as grant: random 256-bit value, held in process memory, bound to actor
    user id, chat session id and turn id, expiring in 30 s.
-4. `fastify.inject` the request with the grant in a dedicated header. The request then passes the
+5. `fastify.inject` the request with the grant in a dedicated header. The request then passes the
    same route guard, module-enablement check, row-level security and validation as a browser
    request.
-5. Apply the AI-consent check to the response (below), whatever the route class.
 6. Return status and body to Moss, capped at 32 KB with a truncation note. A read whose route is
    `content: "outside"` returns inside the existing external-content wrapper.
 
@@ -162,10 +163,24 @@ So the consent rule keys on the module, not the route class:
 
 - Every route in a module gated on AI consent declares `chat.consent: "<consent key>"`, enforced by
   the boot assertion.
-- When that consent is off, `app.callAction` refuses the call before inject. Nothing is sent and
-  nothing comes back.
+- When that consent is off, `app.callAction` refuses the call at step 2, before inject.
 - Approving a change never grants consent. The approval card cannot switch it on, and the consent
   toggle itself is `blocked`.
+
+**Consent on does not widen what a module already promised.** Wellness consent defaults on for
+enabled users (`wellness/ai-consent.ts:17-19`), and it covers a narrow scope:
+
+- Medication counts only, never a medication list (`wellness/settings/index.tsx:52-56`, and the
+  approved consent spec `2026-06-25-wellness-ai-consent.md:193-197`).
+- The assistant never reads therapy notes (`wellness/manifest.ts:296-300`).
+
+So every Wellness route whose response carries a therapy-note body or raw medication details is
+`blocked`, read or write, with consent on or off. That covers `GET /api/wellness/therapy-notes`
+(`wellness/routes.ts:381-390` returns full bodies) and the medication routes that return the
+stored row. Existing Wellness tools keep serving the promised counts. Projecting these routes to a
+safe shape, or reaching more Wellness data at all, needs its own consent decision and is out of
+scope here. The same rule binds any other module that has made an assistant-facing data promise;
+the plan's seams step lists them with `file:line`.
 
 ### Run or ask
 
@@ -279,7 +294,7 @@ today. A later improvement extracts more schemas into the catalog so source read
 
 ### Screen refresh
 
-After a successful write, the web app refetches that module's queries, the same way existing tools
+Phase 1. After a successful write, the web app refetches that module's queries, the same way existing tools
 refresh their screens. The plan cites the current mechanism (`tests/unit/settings-affects-query-keys.test.ts`)
 and extends it by module.
 
@@ -321,13 +336,13 @@ everything else.
   admission path and stored on the conversation.
 - Mark the five unmarked tools.
 - Existing approval card showing the route title, the server-read target and the exact fields.
+- Screen refresh by module, so a change shows on screen without a manual reload.
 
 Nothing reaches live user data until every item above lands. Phase 1 ships as one unit.
 
-### Phase 2: the card and refresh
+### Phase 2: the card
 
 - New approval card per the agreed mockup.
-- Screen refresh by module.
 
 ### Kill gate after phase 1
 
@@ -346,7 +361,8 @@ On the live dev instance, Moss gets ten tasks it has no dedicated tool for, draw
 9. Rename a Workshop project
 10. Change task preferences
 
-Pass: at least eight succeed with no hand-holding, and every change lands in the real screen.
+Pass: at least eight succeed with no hand-holding, and every change shows on the real screen
+without a manual reload.
 
 Safety proof in the same session:
 
@@ -357,6 +373,7 @@ Safety proof in the same session:
 - A delete asks, and its card names the theme being deleted.
 - A blocked route (for example run-without-asking) is refused.
 - With Wellness AI consent off, a medication write is refused and returns nothing.
+- With Wellness AI consent on, asking Moss to read therapy notes is refused.
 
 If fewer than eight succeed, Ben decides whether to keep going or fall back to tools per action.
 
@@ -371,6 +388,8 @@ If fewer than eight succeed, Ben decides whether to keep going or fall back to t
 - Row-level security: a call cannot read or change another user's row.
 - AI consent: with consent off, a write route in a consent-gated module is refused and no row data
   returns. Observed failing with the check removed.
+- Wellness promises with consent on: therapy-note bodies and raw medication details never reach
+  model output, through any read or write route. Observed failing with the block removed.
 - Taint at admission: automatic notes recall followed by a write asks, with no notes tool called.
   Launch-time memory seeding taints the same way.
 - Taint on dedicated tools: after an outside read, an auto-run tool such as the theme mode tool asks,
