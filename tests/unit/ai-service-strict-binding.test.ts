@@ -79,7 +79,9 @@ describe("service routing with unavailable fixed-binding rejection", () => {
       expect((await h.ai.resolveModelForService(h.db, "module.meetings", strict)).model?.id).toBe(
         "pinned-model"
       );
-      expect(h.capability).toHaveBeenCalledExactlyOnceWith(h.db, "summarization", "economy");
+      expect(h.capability).toHaveBeenCalledExactlyOnceWith(h.db, "summarization", "economy", {
+        logNeedsConfig: undefined
+      });
       expect(h.selectFrom).not.toHaveBeenCalled();
     }
   );
@@ -152,6 +154,8 @@ describe("service routing with unavailable fixed-binding rejection", () => {
   it("uses normal capability routing only when no module binding or pin exists", async () => {
     const h = setup({});
     await h.ai.resolveModelForService(h.db, "module.meetings", strict);
-    expect(h.capability).toHaveBeenCalledExactlyOnceWith(h.db, "summarization", "economy");
+    expect(h.capability).toHaveBeenCalledExactlyOnceWith(h.db, "summarization", "economy", {
+      logNeedsConfig: undefined
+    });
   });
 });

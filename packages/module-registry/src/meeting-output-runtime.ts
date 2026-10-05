@@ -5,6 +5,8 @@ import {
   createAiSecretCipher,
   prepareStructuredApiGeneration,
   STRUCTURED_PROMPT_MAX_BYTES,
+  type AiConfiguredModelSafeRow,
+  type AiProviderConfigSafeRow,
   type ActiveModulesResolver
 } from "@moss/ai";
 import {
@@ -15,6 +17,7 @@ import {
   type MeetingTaskCreator
 } from "@moss/meetings";
 import { TasksRepository } from "@moss/tasks";
+import type { MeetingOutputGenerationAvailability } from "@moss/shared";
 
 const string = (maxLength: number) => ({ type: "string", minLength: 1, maxLength });
 const integer = (minimum = 0) => ({ type: "integer", minimum });
@@ -68,6 +71,22 @@ export const MEETING_OUTPUT_SCHEMA = object({
 });
 
 const HTTP_KINDS = new Set(["anthropic", "openai-compatible", "google"]);
+const unavailableRoute = (changed = false) =>
+  new MeetingOutputError(
+    changed ? "meeting_output_route_changed" : "meeting_output_route_unavailable"
+  );
+const usableProvider = (
+  model: AiConfiguredModelSafeRow,
+  provider: AiProviderConfigSafeRow | undefined
+) =>
+  !!provider &&
+  provider.id === model.provider_config_id &&
+  provider.provider_kind === model.provider_kind &&
+  provider.status === "active" &&
+  provider.auth_method === "api_key" &&
+  provider.purpose === "assistant" &&
+  !provider.revoked_at &&
+  provider.has_credential;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
 /** Composition only. No CLI adapter, sorting route, search or executable tools are supplied. */
@@ -84,11 +103,7 @@ export function createMeetingOutputRuntime(deps: {
     if (includeTasks && !active.some((module) => module.id === "tasks"))
       throw new MeetingOutputError("meeting_action_tasks_unavailable");
   };
-  const resolve = async (db: DataContextDb, changed = false) => {
-    const unavailable = () =>
-      new MeetingOutputError(
-        changed ? "meeting_output_route_changed" : "meeting_output_route_unavailable"
-      );
+  const resolveModel = async (db: DataContextDb, changed = false, logNeedsConfig?: false) => {
     // Honor admin pins, then Meetings / generic-worker settings using the existing resolver.
     // Broken fixed bindings and unavailable hard-pinned models must not send meeting
     // evidence to a replacement model. Provider-only pins retain capability selection.
@@ -96,7 +111,8 @@ export function createMeetingOutputRuntime(deps: {
     const route = await ai.resolveModelForService(db, "module.meetings", {
       capability: "summarization",
       rejectUnavailableFixedBinding: true,
-      rejectUnavailablePinnedModel: true
+      rejectUnavailablePinnedModel: true,
+      logNeedsConfig
     });
     const model = route.model;
     if (
@@ -109,20 +125,14 @@ export function createMeetingOutputRuntime(deps: {
       !model.capabilities.includes("json") ||
       !HTTP_KINDS.has(model.provider_kind)
     )
-      throw unavailable();
+      throw unavailableRoute(changed);
+    return { model, reason: route.reason };
+  };
+  const resolve = async (db: DataContextDb, changed = false) => {
+    const { model, reason } = await resolveModel(db, changed);
     const provider = await ai.selectProviderWithCredential(db, model.provider_config_id);
-    if (
-      !provider ||
-      provider.id !== model.provider_config_id ||
-      provider.provider_kind !== model.provider_kind ||
-      provider.status !== "active" ||
-      provider.auth_method !== "api_key" ||
-      provider.purpose !== "assistant" ||
-      provider.revoked_at ||
-      !provider.has_credential ||
-      !provider.encrypted_credential
-    )
-      throw unavailable();
+    if (!provider || !usableProvider(model, provider) || !provider.encrypted_credential)
+      throw unavailableRoute(changed);
     // Hash sealed credential bytes as well as timestamps: a key rotation with a coarse or
     // unchanged updated_at must invalidate the prepared request. Never persist this digest.
     const fingerprint = hash([
@@ -131,7 +141,7 @@ export function createMeetingOutputRuntime(deps: {
       model.provider_model_id,
       model.provider_kind,
       model.updated_at,
-      route.reason,
+      reason,
       provider.updated_at,
       provider.base_url,
       provider.encrypted_credential
@@ -143,8 +153,28 @@ export function createMeetingOutputRuntime(deps: {
       providerId: model.provider_config_id,
       providerKind: model.provider_kind
     });
-    if (modelRoute.length > 1024) throw unavailable();
+    if (modelRoute.length > 1024) throw unavailableRoute(changed);
     return { model, provider, fingerprint, modelRoute };
+  };
+  const generationAvailability = async (
+    actor: AccessContext
+  ): Promise<MeetingOutputGenerationAvailability> => {
+    try {
+      return await deps.dataContext.withDataContext(actor, async (db) => {
+        const { model } = await resolveModel(db, false, false);
+        // Safe metadata only: this advisory read never loads or decrypts credentials.
+        const provider = (await ai.listProviders(db)).find(
+          (item) => item.id === model.provider_config_id
+        );
+        return usableProvider(model, provider) ? "available" : "model-unavailable";
+      });
+    } catch (error) {
+      // Keep retained summaries readable when configuration checks are temporarily unavailable.
+      return error instanceof MeetingOutputError &&
+        error.code === "meeting_output_route_unavailable"
+        ? "model-unavailable"
+        : "check-failed";
+    }
   };
   const generator: MeetingOutputGenerator = async (actor, input) => {
     try {
@@ -229,5 +259,5 @@ export function createMeetingOutputRuntime(deps: {
     });
   };
   const assertTaskAvailable = (actor: AccessContext) => requireModules(actor.actorUserId, true);
-  return { generator, createTask, assertTaskAvailable };
+  return { generator, generationAvailability, createTask, assertTaskAvailable };
 }

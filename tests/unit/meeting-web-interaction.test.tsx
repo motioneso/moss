@@ -1,9 +1,9 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { QueryClient, QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
+import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
-import type { MeetingRecord } from "@moss/shared";
+import type { MeetingHistoryPage, MeetingRecord } from "@moss/shared";
 import { historyItem } from "./fixtures/meeting-history.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
@@ -39,6 +39,13 @@ const meeting: MeetingRecord = {
 };
 let renderer: ReactTestRenderer;
 let client: QueryClient;
+let location: string;
+let navigate: NavigateFunction;
+function Location() {
+  location = useLocation().search;
+  navigate = useNavigate();
+  return null;
+}
 async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -75,7 +82,10 @@ async function mount(path = `/meetings?id=${meeting.id}`) {
     renderer = create(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[path]}>
-          <MeetingsPage />
+          <main>
+            <MeetingsPage />
+          </main>
+          <Location />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -142,10 +152,27 @@ afterEach(async () => {
 });
 
 describe("meeting UI interactions (unit transport stubs, not live proof)", () => {
+  it.each(["/meetings", "/meetings?view=history", `/meetings?id=${meeting.id}`])(
+    "keeps the shell as the only main landmark at %s",
+    async (path) => {
+      await mount(path);
+      expect(renderer.root.findAllByType("main")).toHaveLength(1);
+    }
+  );
+  it("does not count a single personal-notes editor as note records", async () => {
+    await mount();
+    for (const text of ["", "One line", "One line\nTwo lines\nThree lines"]) {
+      await typeNotes(text);
+      expect(renderer.root.findByProps({ id: "meeting-review-tab-notes" }).children).toEqual([
+        "My notes"
+      ]);
+    }
+  });
   it("keeps typed notes through masthead history navigation and reopening", async () => {
     await mount();
     await typeNotes("Unsaved note");
     await click("View meeting history");
+    expect(new URLSearchParams(location).get("selected")).toBe(meeting.id);
     await click("Design review");
     await click("Open review");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
@@ -210,6 +237,148 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     expect(api.deleteMeeting).toHaveBeenCalledWith(meeting.id);
     expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toBeUndefined();
   });
+  it("clears a deleted selection and cached row while retaining history search and state", async () => {
+    const remaining = historyItem({ ...meeting, id: "22334455-1122-4122-8122-112233445566" });
+    const listKey = historyApi.historyKeys.search("private words", "notes-only");
+    client.setQueryData(historyApi.historyKeys.view, { query: "private words" });
+    client.setQueryData<InfiniteData<MeetingHistoryPage>>(listKey, {
+      pages: [{ meetings: [historyItem(meeting), remaining], nextCursor: null }],
+      pageParams: [undefined]
+    });
+    // The refresh is intentionally unresolved: navigation must not reselect the cached deletion.
+    vi.mocked(historyApi.searchMeetingHistory).mockReturnValue(new Promise(() => {}));
+    vi.mocked(historyApi.getMeetingHistoryItem).mockResolvedValue({ meeting: remaining });
+    vi.mocked(api.deleteMeeting).mockResolvedValue(undefined);
+    await mount(`/meetings?id=${meeting.id}&selected=${meeting.id}&state=notes-only`);
+    await click("Delete draft");
+    await click("Permanently delete draft");
+    expect(new URLSearchParams(location)).toEqual(
+      new URLSearchParams("view=history&state=notes-only")
+    );
+    expect(client.getQueryData(historyApi.historyKeys.view)).toEqual({ query: "private words" });
+    expect(
+      client.getQueryData<InfiniteData<MeetingHistoryPage>>(listKey)?.pages[0]?.meetings
+    ).toEqual([remaining]);
+    expect(historyApi.getMeetingHistoryItem).not.toHaveBeenCalledWith(
+      meeting.id,
+      expect.anything()
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Retry selected meeting");
+  });
+  it.each([false, true])(
+    "cancels pre-deletion history reads before pruning (prior error: %s)",
+    async (priorError) => {
+      const listKey = historyApi.historyKeys.search("old query", "all");
+      client.setQueryData<InfiniteData<MeetingHistoryPage>>(listKey, {
+        pages: [{ meetings: [historyItem(meeting)], nextCursor: null }],
+        pageParams: [undefined]
+      });
+      if (priorError) {
+        await client
+          .fetchInfiniteQuery({
+            queryKey: listKey,
+            initialPageParam: undefined,
+            staleTime: 0,
+            queryFn: async () => {
+              throw new ApiError(503, "Unavailable");
+            }
+          })
+          .catch(() => undefined);
+      }
+      let finishList!: (page: MeetingHistoryPage) => void;
+      let listSignal!: AbortSignal;
+      const oldList = client
+        .fetchInfiniteQuery({
+          queryKey: listKey,
+          initialPageParam: undefined,
+          staleTime: 0,
+          queryFn: ({ signal }) => {
+            listSignal = signal;
+            return new Promise<MeetingHistoryPage>((resolve) => {
+              finishList = resolve;
+            });
+          }
+        })
+        .catch(() => undefined);
+      let finishDetail!: (value: { meeting: ReturnType<typeof historyItem> }) => void;
+      let detailSignal!: AbortSignal;
+      const oldDetail = client
+        .fetchQuery({
+          queryKey: historyApi.historyKeys.item(meeting.id),
+          queryFn: ({ signal }) => {
+            detailSignal = signal;
+            return new Promise<{ meeting: ReturnType<typeof historyItem> }>((resolve) => {
+              finishDetail = resolve;
+            });
+          }
+        })
+        .catch(() => undefined);
+      vi.mocked(historyApi.searchMeetingHistory).mockResolvedValue({
+        meetings: [],
+        nextCursor: null
+      });
+      vi.mocked(api.deleteMeeting).mockResolvedValue(undefined);
+      await mount();
+      await click("Delete draft");
+      await click("Permanently delete draft");
+      expect(listSignal.aborted).toBe(true);
+      expect(detailSignal.aborted).toBe(true);
+      await act(async () => {
+        finishList({ meetings: [historyItem(meeting)], nextCursor: null });
+        finishDetail({ meeting: historyItem(meeting) });
+        await Promise.all([oldList, oldDetail]);
+      });
+      expect(
+        client.getQueryData<InfiniteData<MeetingHistoryPage>>(listKey)?.pages[0]?.meetings
+      ).toEqual([]);
+      expect(client.getQueryData(historyApi.historyKeys.item(meeting.id))).toBeUndefined();
+      expect(client.getQueryState(listKey)?.status).toBe(priorError ? "error" : "success");
+    }
+  );
+  it("keeps the current review and selection when deletion is not confirmed", async () => {
+    vi.mocked(api.deleteMeeting).mockRejectedValue(new Error("offline"));
+    await mount(`/meetings?id=${meeting.id}&selected=${meeting.id}`);
+    await click("Delete draft");
+    await click("Permanently delete draft");
+    expect(new URLSearchParams(location).get("id")).toBe(meeting.id);
+    expect(new URLSearchParams(location).get("selected")).toBe(meeting.id);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Couldn’t confirm deletion");
+  });
+  it.each(["history", "review"])(
+    "a delayed delete preserves a newer %s navigation and its selection",
+    async (view) => {
+      const other = { ...meeting, id: "22334455-1122-4122-8122-112233445566" };
+      let finish!: () => void;
+      vi.mocked(api.deleteMeeting).mockReturnValue(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      );
+      vi.mocked(historyApi.searchMeetingHistory).mockResolvedValue({
+        meetings: [historyItem(other)],
+        nextCursor: null
+      });
+      vi.mocked(historyApi.getMeetingHistoryItem).mockResolvedValue({
+        meeting: historyItem(other)
+      });
+      vi.mocked(api.getMeeting).mockImplementation(async (id) => ({
+        meeting: id === other.id ? other : meeting
+      }));
+      await mount();
+      await click("Delete draft");
+      await click("Permanently delete draft");
+      const destination =
+        view === "history"
+          ? `?view=history&selected=${other.id}`
+          : `?id=${other.id}&selected=${other.id}`;
+      await act(async () => navigate(`/meetings${destination}`));
+      await flush();
+      await act(async () => finish());
+      await flush();
+      expect(location).toBe(destination);
+      expect(new URLSearchParams(location).get("selected")).toBe(other.id);
+    }
+  );
   it("retries uncertain draft creation with one key", async () => {
     vi.mocked(api.createMeeting)
       .mockRejectedValueOnce(new Error("offline"))

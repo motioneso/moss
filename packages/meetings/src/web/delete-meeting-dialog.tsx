@@ -4,6 +4,7 @@ import { useMeetingChat, clearSessionUnsavedChanges } from "@moss/module-web-sdk
 import { Button, Dialog } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { deleteMeeting, meetingKeys } from "./client.js";
+import { forgetHistoryItem, historyKeys } from "./history-client.js";
 
 export function DeleteMeetingDialog({
   meeting,
@@ -26,7 +27,11 @@ export function DeleteMeetingDialog({
   const cancel = useRef<HTMLButtonElement>(null);
   const mutation = useMutation({
     mutationFn: () => deleteMeeting(meeting.id),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Stop older result pages before pruning, so a delayed read cannot restore the row.
+      await client.cancelQueries({ queryKey: historyKeys.lists });
+      forgetHistoryItem(client, meeting.id);
+      client.removeQueries({ queryKey: historyKeys.item(meeting.id), exact: true });
       clearMeetingChat(meeting.id);
       clearSessionUnsavedChanges(client, `meetings:${meeting.id}:`);
       client.removeQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });

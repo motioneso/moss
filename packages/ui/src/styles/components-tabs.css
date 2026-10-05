@@ -1,4 +1,6 @@
-.jds-tabs {
+/* The legacy .jds-tabs navigation remains in use by Job Search. */
+.jds-tabs__root {
+  display: block;
   min-width: 0;
 }
 .jds-tabs__list {

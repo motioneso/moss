@@ -84,3 +84,21 @@ export type MeetingOutputResult =
       readonly artifact: MeetingOutputArtifact;
       readonly replayed: boolean;
     };
+
+/** Advisory configuration check; generation revalidates its exact route at dispatch. */
+export type MeetingOutputGenerationAvailability =
+  | "available"
+  | "model-unavailable"
+  | "check-failed";
+export interface MeetingOutputsResponse {
+  readonly artifacts: readonly MeetingOutputArtifact[];
+  readonly candidates: readonly MeetingActionCandidate[];
+  readonly headVersion: number;
+  readonly omittedArtifactCount?: number;
+  readonly generationAvailability: MeetingOutputGenerationAvailability;
+  readonly templates: readonly {
+    id: GenerateMeetingOutputInput["templateId"];
+    version: number;
+    name: string;
+  }[];
+}

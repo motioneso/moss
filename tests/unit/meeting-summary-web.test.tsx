@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Link, MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
@@ -108,6 +108,14 @@ async function click(label: string) {
   });
   await flush();
 }
+async function chooseTemplate() {
+  await act(async () =>
+    renderer.root
+      .findByProps({ id: "meeting-template" })
+      .props.onChange({ target: { value: "general" } })
+  );
+  await flush();
+}
 async function mount() {
   await act(async () => {
     renderer = create(
@@ -142,6 +150,7 @@ beforeEach(() => {
     artifacts: [artifact],
     candidates: [candidate],
     headVersion: 1,
+    generationAvailability: "available" as const,
     templates: [{ id: "general", version: 1, name: "General meeting" }]
   });
   vi.mocked(api.getMeetingExports).mockResolvedValue({ receipts: [] });
@@ -162,9 +171,131 @@ beforeEach(() => {
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
   client.clear();
+  onlineManager.setOnline(true);
   vi.unstubAllGlobals();
 });
 describe("meeting summary owner review", () => {
+  it.each([true, false])(
+    "blocks generation with no supported model and offers role-aware recovery: admin=%s",
+    async (admin) => {
+      vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+        artifacts: [],
+        candidates: [],
+        headVersion: 0,
+        templates: [{ id: "general", version: 1, name: "General meeting" }],
+        generationAvailability: "model-unavailable"
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(new Response(JSON.stringify({ user: { isInstanceAdmin: admin } })))
+      );
+      await mount();
+      await chooseTemplate();
+      expect(button("Generate summary").props.disabled).toBe(true);
+      // Also guard stale/programmatic handlers instead of relying only on the HTML attribute.
+      await click("Generate summary");
+      expect(api.generateMeetingOutput).not.toHaveBeenCalled();
+      const rendered = JSON.stringify(renderer.toJSON());
+      expect(rendered).toContain("No supported summary model is available.");
+      expect(rendered).toContain("API-key model with summarization and structured-output support");
+      expect(rendered).toContain(admin ? "Settings → AI providers" : "Contact an instance admin");
+    }
+  );
+
+  it("enables notes-only generation after refreshing repaired model configuration", async () => {
+    const response = {
+      artifacts: [],
+      candidates: [],
+      headVersion: 0,
+      templates: [{ id: "general" as const, version: 1, name: "General meeting" }]
+    };
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      ...response,
+      generationAvailability: "model-unavailable"
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
+    );
+    await mount();
+    await chooseTemplate();
+    expect(button("Generate summary").props.disabled).toBe(true);
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      ...response,
+      generationAvailability: "available"
+    });
+    await click("Refresh summaries");
+    expect(button("Generate summary").props.disabled).toBe(false);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain(
+      "No supported summary model is available."
+    );
+    await click("Generate summary");
+    expect(api.generateMeetingOutput).toHaveBeenCalledWith(
+      meeting.id,
+      expect.objectContaining({ expectedTranscriptRevision: 0, expectedNotesRevision: 1 })
+    );
+  });
+
+  it.each(["pending", "offline", "error", "check-failed"] as const)(
+    "fails closed on %s availability refresh without hiding saved summaries",
+    async (refresh) => {
+      await mount();
+      await chooseTemplate();
+      expect(button("Generate new version").props.disabled).toBe(false);
+      if (refresh === "offline") onlineManager.setOnline(false);
+      else if (refresh === "pending")
+        vi.mocked(api.getMeetingOutputs).mockImplementationOnce(() => new Promise(() => {}));
+      else if (refresh === "error")
+        vi.mocked(api.getMeetingOutputs).mockRejectedValueOnce(new Error("offline"));
+      else
+        vi.mocked(api.getMeetingOutputs).mockResolvedValueOnce({
+          artifacts: [artifact],
+          candidates: [candidate],
+          headVersion: 1,
+          templates: [],
+          generationAvailability: "check-failed"
+        });
+      await click("Refresh summaries");
+      expect(button("Generate new version").props.disabled).toBe(true);
+      await click("Generate new version");
+      expect(api.generateMeetingOutput).not.toHaveBeenCalled();
+      expect(button("Edit this version")).toBeDefined();
+      expect(JSON.stringify(renderer.toJSON())).toContain(
+        refresh === "pending" || refresh === "offline"
+          ? "Checking summary model availability"
+          : "Couldn’t check summary model availability"
+      );
+    }
+  );
+
+  it("keeps an existing request check available when model configuration becomes unavailable", async () => {
+    vi.mocked(api.generateMeetingOutput).mockResolvedValueOnce({
+      status: "pending",
+      requestKey: "pending-request"
+    });
+    await mount();
+    await chooseTemplate();
+    await click("Generate new version");
+    const first = vi.mocked(api.generateMeetingOutput).mock.calls[0]![1];
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [artifact],
+      candidates: [candidate],
+      headVersion: 1,
+      templates: [],
+      generationAvailability: "model-unavailable"
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
+    );
+    await click("Refresh summaries");
+    expect(button("Check or retry generation").props.disabled).toBe(false);
+    await click("Check or retry generation");
+    expect(vi.mocked(api.generateMeetingOutput).mock.calls[1]![1]).toEqual(first);
+  });
+
   it.each(["response", "http-error"] as const)(
     "explains an unsupported summary model from a %s without offering blind retries",
     async (transport) => {
@@ -184,12 +315,7 @@ describe("meeting summary owner review", () => {
         vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
       );
       await mount();
-      await act(async () =>
-        renderer.root
-          .findByProps({ id: "meeting-template" })
-          .props.onChange({ target: { value: "general" } })
-      );
-      await flush();
+      await chooseTemplate();
       await click("Generate new version");
       await flush();
       const rendered = JSON.stringify(renderer.toJSON());
@@ -228,12 +354,7 @@ describe("meeting summary owner review", () => {
           )
       );
       await mount();
-      await act(async () =>
-        renderer.root
-          .findByProps({ id: "meeting-template" })
-          .props.onChange({ target: { value: "general" } })
-      );
-      await flush();
+      await chooseTemplate();
       await click("Generate new version");
       await flush();
       const links = renderer.root
@@ -264,12 +385,7 @@ describe("meeting summary owner review", () => {
       const fetch = vi.fn();
       vi.stubGlobal("fetch", fetch);
       await mount();
-      await act(async () =>
-        renderer.root
-          .findByProps({ id: "meeting-template" })
-          .props.onChange({ target: { value: "general" } })
-      );
-      await flush();
+      await chooseTemplate();
       await click("Generate new version");
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).not.toContain(code);
@@ -288,12 +404,7 @@ describe("meeting summary owner review", () => {
       vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
     );
     await mount();
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-template" })
-        .props.onChange({ target: { value: "general" } })
-    );
-    await flush();
+    await chooseTemplate();
     await click("Generate new version");
     await flush();
     expect(JSON.stringify(renderer.toJSON())).toContain(
@@ -312,12 +423,7 @@ describe("meeting summary owner review", () => {
     expect(button("Generate new version").props.disabled).toBe(true);
     expect(renderer.root.findAllByType("img")).toHaveLength(0);
     expect(JSON.stringify(renderer.toJSON())).toContain("next Friday");
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-template" })
-        .props.onChange({ target: { value: "general" } })
-    );
-    await flush();
+    await chooseTemplate();
     await click("Generate new version");
     expect(api.generateMeetingOutput).toHaveBeenCalledWith(
       meeting.id,
@@ -462,12 +568,7 @@ describe("meeting summary owner review", () => {
       .mockRejectedValueOnce(new Error("offline"))
       .mockRejectedValueOnce(new ApiError(422, "Failed"));
     await mount();
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-template" })
-        .props.onChange({ target: { value: "general" } })
-    );
-    await flush();
+    await chooseTemplate();
     await click("Generate new version");
     await click("Check or retry generation");
     const calls = vi.mocked(api.generateMeetingOutput).mock.calls;
@@ -496,6 +597,7 @@ describe("meeting summary owner review", () => {
           }
         ],
         headVersion: 102,
+        generationAvailability: "available" as const,
         templates: [{ id: "general", version: 1, name: "General meeting" }]
       });
       await mount();
@@ -537,6 +639,7 @@ describe("meeting summary owner review", () => {
       ],
       candidates: [candidate],
       headVersion: 1,
+      generationAvailability: "available" as const,
       templates: [{ id: "general", version: 1, name: "General meeting" }]
     });
     await mount();
@@ -550,6 +653,7 @@ describe("meeting summary owner review", () => {
       artifacts: [artifact],
       candidates: [candidate],
       headVersion: 1,
+      generationAvailability: "available" as const,
       templates: [{ id: "general" as const, version: 1, name: "General meeting" }]
     };
     let finish!: (value: typeof authorized) => void;
@@ -599,6 +703,7 @@ describe("meeting summary owner review", () => {
       artifacts: [{ ...artifact, version: 102 }],
       candidates: [candidate],
       headVersion: 102,
+      generationAvailability: "available" as const,
       templates: []
     });
     vi.mocked(api.getMeetingOutputArtifact).mockRejectedValue(
@@ -637,6 +742,7 @@ describe("meeting summary owner review", () => {
         artifacts: [artifact],
         candidates: [candidate],
         headVersion: 1,
+        generationAvailability: "available" as const,
         templates: [{ id: "general", version: 1, name: "General meeting" }]
       })
     );
@@ -662,6 +768,7 @@ describe("meeting summary owner review", () => {
       ],
       candidates: [candidate],
       headVersion: 2,
+      generationAvailability: "available" as const,
       templates: []
     });
     await act(async () => {
@@ -678,6 +785,7 @@ describe("meeting summary owner review", () => {
       artifacts: [{ ...artifact, version: 102 }],
       candidates: [candidate],
       headVersion: 102,
+      generationAvailability: "available" as const,
       templates: [],
       omittedArtifactCount: 101
     });
@@ -699,6 +807,7 @@ describe("meeting summary owner review", () => {
       artifacts: [{ ...artifact, version: 102 }],
       candidates: [candidate],
       headVersion: 102,
+      generationAvailability: "available" as const,
       templates: []
     });
     await mount();
@@ -739,12 +848,7 @@ describe("meeting summary owner review", () => {
     await mount();
     await click("Edit this version");
     await click("Close editor");
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-template" })
-        .props.onChange({ target: { value: "general" } })
-    );
-    await flush();
+    await chooseTemplate();
     const generated = { ...artifact, id: "generated-2", version: 2 };
     vi.mocked(api.generateMeetingOutput).mockResolvedValueOnce({
       status: "saved",
@@ -755,6 +859,7 @@ describe("meeting summary owner review", () => {
       artifacts: [generated, artifact],
       candidates: [candidate],
       headVersion: 2,
+      generationAvailability: "available" as const,
       templates: [{ id: "general", version: 1, name: "General meeting" }]
     });
     await click("Generate new version");
@@ -779,6 +884,7 @@ describe("meeting summary owner review", () => {
       artifacts: [manual, generated, artifact],
       candidates: [candidate],
       headVersion: 3,
+      generationAvailability: "available" as const,
       templates: [{ id: "general", version: 1, name: "General meeting" }]
     });
     await click("Save edits as new version");
@@ -790,12 +896,7 @@ describe("meeting summary owner review", () => {
 
   it("preserves edits made during generation and offers the completed version without rebasing", async () => {
     await mount();
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-template" })
-        .props.onChange({ target: { value: "general" } })
-    );
-    await flush();
+    await chooseTemplate();
     let finish!: (result: Awaited<ReturnType<typeof api.generateMeetingOutput>>) => void;
     vi.mocked(api.generateMeetingOutput).mockImplementationOnce(
       () =>
@@ -817,6 +918,7 @@ describe("meeting summary owner review", () => {
       artifacts: [generated, artifact],
       candidates: [candidate],
       headVersion: 2,
+      generationAvailability: "available" as const,
       templates: [{ id: "general", version: 1, name: "General meeting" }]
     });
     await act(async () => finish({ status: "saved", artifact: generated, replayed: false }));

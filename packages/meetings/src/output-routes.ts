@@ -4,6 +4,8 @@ import { handleRouteError } from "@moss/module-sdk";
 import type {
   EditMeetingOutputInput,
   GenerateMeetingOutputInput,
+  MeetingOutputGenerationAvailability,
+  MeetingOutputsResponse,
   ReviewMeetingActionInput
 } from "@moss/shared";
 import {
@@ -25,6 +27,7 @@ export interface MeetingOutputRoutesDependencies {
   resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   dataContext: Pick<DataContextRunner, "withDataContext">;
   generator: MeetingOutputGenerator;
+  generationAvailability: (actor: AccessContext) => Promise<MeetingOutputGenerationAvailability>;
   createTask: MeetingTaskCreator;
   assertTaskAvailable: (actor: AccessContext) => Promise<void>;
 }
@@ -44,10 +47,15 @@ export function registerMeetingOutputRoutes(
     async (request, reply) => {
       try {
         const actor = await dependencies.resolveAccessContext(request);
-        return await dependencies.dataContext.withDataContext(actor, async (db) => ({
-          ...(await repository.list(db, request.params.id)),
-          templates: MEETING_OUTPUT_TEMPLATES
-        }));
+        // Read the owner-scoped record before looking up advisory model configuration.
+        const outputs = await dependencies.dataContext.withDataContext(actor, (db) =>
+          repository.list(db, request.params.id)
+        );
+        return {
+          ...outputs,
+          templates: MEETING_OUTPUT_TEMPLATES,
+          generationAvailability: await dependencies.generationAvailability(actor)
+        } satisfies MeetingOutputsResponse;
       } catch (error) {
         return routeError(error, reply);
       }

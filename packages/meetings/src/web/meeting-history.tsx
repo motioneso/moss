@@ -277,7 +277,7 @@ export function MeetingHistory(props: MeetingHistoryProps) {
           </Button>
         ) : null}
         {meetings.length > 0 ? (
-          <section className="meetings-section">
+          <section className="meetings-section meetings-history-followup">
             <SectionHead number="02" title="Pick up the conversation" rule />
             <p className="jds-hint">
               Select a meeting to open its review or ask Moss about its retained transcript.

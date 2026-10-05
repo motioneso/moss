@@ -211,7 +211,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.grounded_outputs",
       description:
-        "Generate summaries and evidence-checked decisions/actions with four templates. Compare recent versions and load exact candidate sources; edits create new versions. Requires an API-key summarization route; CLI unavailable.",
+        "Generate evidence-checked summaries, decisions and actions with four templates. Compare versions and review exact sources. Generate requires a supported API-key route; CLI unavailable. Refresh summaries rechecks model configuration.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -223,13 +223,13 @@ export const meetingsModuleManifest = {
           code: "meeting_output_route_unavailable",
           class: "validation",
           description:
-            "Summaries need an API-key model with summarization and structured-output support; CLI is unsupported. Admins review Settings → AI providers; other owners contact an instance admin. Generate again after configuration is updated."
+            "Summaries need an API-key model with summarization and structured-output support; CLI is unsupported. Admins check Settings → AI providers; other owners contact an admin. Refresh summaries after updating configuration, then generate."
         },
         {
           code: "meeting_output_route_changed",
           class: "transient",
           description:
-            "The summary model configuration changed during generation. Admins can review Settings → AI providers; other owners should contact an instance admin. Generate again after configuration is updated."
+            "The summary model configuration changed during generation. Admins review Settings → AI providers; other owners contact an admin. Refresh summaries after updating configuration, then generate again."
         },
         {
           code: "meeting_output_input_too_large",

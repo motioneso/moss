@@ -40,21 +40,20 @@ export function discardDeniedHistory(client: QueryClient, currentKey: readonly u
   });
 }
 
-/** A denied detail read must also remove that identity from cached result pages. */
+/** Remove an unavailable identity without treating cached lists as freshly authorized reads. */
 export function forgetHistoryItem(client: QueryClient, id: string): void {
-  client.setQueriesData<InfiniteData<MeetingHistoryPage>>(
-    {
-      queryKey: historyKeys.lists,
-      // Writing cache data marks a query successful. Preserve existing denial/error states.
-      predicate: (query) => query.state.status === "success"
-    },
-    (current) =>
-      current && {
+  for (const query of client.getQueryCache().findAll({ queryKey: historyKeys.lists })) {
+    const current = client.getQueryData<InfiniteData<MeetingHistoryPage>>(query.queryKey);
+    if (!current) continue;
+    // setQueryData would clear a list's existing denial/error. Prune its data only.
+    query.setState({
+      data: {
         ...current,
         pages: current.pages.map((page) => ({
           ...page,
           meetings: page.meetings.filter((meeting) => meeting.id !== id)
         }))
       }
-  );
+    });
+  }
 }

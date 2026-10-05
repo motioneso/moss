@@ -15,7 +15,7 @@ export interface TabsProps<T extends string> {
 /** Panels stay mounted so switching sections preserves unsaved forms and focus state. */
 export function Tabs<T extends string>({ id, ariaLabel, value, items, onChange }: TabsProps<T>) {
   return (
-    <div className="jds-tabs">
+    <div className="jds-tabs__root">
       <div className="jds-tabs__list" role="tablist" aria-label={ariaLabel}>
         {items.map((item, index) => (
           <button

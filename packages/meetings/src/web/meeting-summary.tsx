@@ -122,8 +122,15 @@ export function MeetingSummary({
   const latest = data?.artifacts.find((item) => item.version === data.headVersion);
   const busy = state.operation?.status === "running";
   const retry = state.operation?.status === "retry" || state.operation?.status === "pending";
+  const generationAvailability =
+    outputs.isFetching || outputs.isPaused
+      ? "checking"
+      : outputs.isError
+        ? "check-failed"
+        : (data?.generationAvailability ?? "check-failed");
+  const generationBlocked = generationAvailability !== "available";
   async function generate() {
-    if (busy || !session.authorized() || !data) return;
+    if (busy || !session.authorized() || !data || (!retry && generationBlocked)) return;
     const template = data.templates.find((item) => item.id === state.templateId);
     if (!retry && !template) return;
     const input = retry
@@ -246,7 +253,11 @@ export function MeetingSummary({
               </Select>
             </Field>
             <Button
-              disabled={busy || (!retry && (!state.templateId || sourceLoading || unsavedNotes))}
+              disabled={
+                busy ||
+                (!retry &&
+                  (generationBlocked || !state.templateId || sourceLoading || unsavedNotes))
+              }
               onClick={() => void generate()}
             >
               {retry
@@ -259,6 +270,15 @@ export function MeetingSummary({
               Refresh summaries
             </Button>
           </div>
+          {generationBlocked ? (
+            <p role="status" className="jds-hint">
+              {generationAvailability === "checking"
+                ? "Checking summary model availability…"
+                : generationAvailability === "model-unavailable"
+                  ? summaryGenerationFailure("meeting_output_route_unavailable").message
+                  : "Couldn’t check summary model availability. Refresh summaries to try again."}
+            </p>
+          ) : null}
           {unsavedNotes ? (
             <Note variant="practical">
               Generation uses saved personal notes. Save your edits first.
@@ -269,7 +289,10 @@ export function MeetingSummary({
               {state.operation.message}
             </p>
           ) : null}
-          {state.operation?.remediation === "ai-providers" ? <SummaryModelRecovery /> : null}
+          {generationAvailability === "model-unavailable" ||
+          state.operation?.remediation === "ai-providers" ? (
+            <SummaryModelRecovery />
+          ) : null}
           {state.generatedVersion && artifact?.version !== state.generatedVersion ? (
             <div className="meetings-actions">
               <p className="jds-hint">

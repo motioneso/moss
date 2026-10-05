@@ -14,7 +14,7 @@ export function summaryGenerationFailure(code?: string): {
       return {
         status: "failed",
         message:
-          "The selected model is unavailable for summaries. Summaries need an available API-key model with summarization and structured-output support. CLI models aren’t supported for summaries.",
+          "No supported summary model is available. Summaries need an available API-key model with summarization and structured-output support. CLI models aren’t supported for summaries.",
         remediation: "ai-providers"
       };
     case "meeting_output_route_changed":
@@ -46,13 +46,13 @@ export function SummaryModelRecovery() {
     <p className="jds-hint">
       {admin ? (
         <>
-          Review the selected summary model in{" "}
+          Configure an available summary model in{" "}
           <Link to="/settings?section=aiproviders">Settings → AI providers</Link>.
         </>
       ) : (
-        "Contact an instance admin to review the selected summary model."
+        "Contact an instance admin to configure an available summary model."
       )}{" "}
-      Generate again after the configuration is updated.
+      Refresh summaries after the configuration is updated, then generate again.
     </p>
   );
 }

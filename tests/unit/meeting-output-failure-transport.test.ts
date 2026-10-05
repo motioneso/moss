@@ -67,6 +67,7 @@ describe("meeting summary failure transport", () => {
         withDataContext: async <T>(_actor: AccessContext, run: (db: DataContextDb) => Promise<T>) =>
           run({} as DataContextDb)
       },
+      generationAvailability: async () => "available",
       generator,
       createTask: vi.fn(),
       assertTaskAvailable: vi.fn()

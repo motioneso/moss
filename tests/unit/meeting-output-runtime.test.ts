@@ -128,6 +128,75 @@ afterEach(() => {
   installModelActivityRecorder(null);
 });
 
+describe("meeting summary generation availability", () => {
+  it("uses the same strict selected route and safe provider metadata without reading credentials or dispatching", async () => {
+    const h = setup();
+    const { encrypted_credential: _credential, ...safe } = provider;
+    const providers = vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([safe]);
+    await expect(h.generationAvailability(actor)).resolves.toBe("available");
+    expect(h.route).toHaveBeenCalledWith(db, "module.meetings", {
+      capability: "summarization",
+      rejectUnavailableFixedBinding: true,
+      rejectUnavailablePinnedModel: true,
+      logNeedsConfig: false
+    });
+    expect(providers).toHaveBeenCalledWith(db);
+    expect(h.credential).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it.each([
+    null,
+    { ...model, provider_auth_method: "cli" },
+    { ...model, capabilities: ["summarization"] }
+  ])("disables unavailable and unsupported selected models (case %#)", async (selected) => {
+    const h = setup();
+    h.route.mockResolvedValue({
+      model: selected as AiConfiguredModelSafeRow | null,
+      reason: "needs-config"
+    });
+    await expect(h.generationAvailability(actor)).resolves.toBe("model-unavailable");
+    expect(h.credential).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.serviceRoute).not.toHaveBeenCalled();
+  });
+  it.each([
+    { has_credential: false },
+    { revoked_at: new Date("2026-01-02") },
+    { status: "disabled" as const }
+  ])("disables unusable provider metadata %j without reading credentials", async (change) => {
+    const h = setup();
+    vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
+      { ...provider, ...change }
+    ]);
+    await expect(h.generationAvailability(actor)).resolves.toBe("model-unavailable");
+    expect(h.credential).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("reports unknown availability safely instead of claiming a model is absent", async () => {
+    const h = setup();
+    h.route.mockRejectedValue(new Error("Private configuration failure"));
+    await expect(h.generationAvailability(actor)).resolves.toBe("check-failed");
+    expect(h.credential).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("rejects hard-model-pin substitution through the real resolver before metadata lookup", async () => {
+    const h = setup();
+    h.route.mockRestore();
+    vi.spyOn(AiRepository.prototype, "listModuleServiceBindings").mockResolvedValue({});
+    vi.spyOn(AiRepository.prototype, "getAdminPinnedModelId").mockResolvedValue(model.id);
+    vi.spyOn(AiRepository.prototype, "getAdminPinnedProviderId").mockResolvedValue(null);
+    h.serviceRoute.mockResolvedValue({
+      model: { ...model, id: "replacement" },
+      reason: "admin-pin"
+    });
+    const providers = vi.spyOn(AiRepository.prototype, "listProviders");
+    await expect(h.generationAvailability(actor)).resolves.toBe("model-unavailable");
+    expect(providers).not.toHaveBeenCalled();
+    expect(h.credential).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe("meeting output composition HTTP boundary", () => {
   it("has zero open actor transactions at HTTP dispatch", async () => {
     const h = setup();

@@ -10,6 +10,78 @@ const meetingId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const candidateId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const requestKey = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 afterEach(() => vi.restoreAllMocks());
+describe("Meeting output generation availability", () => {
+  it.each(["available", "model-unavailable", "check-failed"] as const)(
+    "returns %s alongside retained output without generating",
+    async (availability) => {
+      const server = Fastify();
+      const actor = { actorUserId: meetingId };
+      const list = vi.spyOn(MeetingOutputsRepository.prototype, "list").mockResolvedValue({
+        artifacts: [],
+        candidates: [],
+        headVersion: 0,
+        omittedArtifactCount: 0
+      });
+      const generationAvailability = vi.fn(async () => {
+        expect(list).toHaveBeenCalledOnce();
+        return availability;
+      });
+      const generator = vi.fn();
+      registerMeetingOutputRoutes(server, {
+        resolveAccessContext: async () => actor,
+        dataContext: {
+          withDataContext: async (_actor, run) => run({} as Parameters<typeof run>[0])
+        },
+        generator,
+        generationAvailability,
+        createTask: vi.fn(),
+        assertTaskAvailable: vi.fn()
+      });
+      try {
+        const result = await server.inject({
+          method: "GET",
+          url: `/api/meetings/records/${meetingId}/outputs`
+        });
+        expect(result.statusCode).toBe(200);
+        expect(result.json()).toMatchObject({
+          artifacts: [],
+          headVersion: 0,
+          generationAvailability: availability
+        });
+        expect(result.json().templates).toHaveLength(4);
+        expect(generationAvailability).toHaveBeenCalledWith(actor);
+        expect(generator).not.toHaveBeenCalled();
+      } finally {
+        await server.close();
+      }
+    }
+  );
+  it("does not read model availability before owner-scoped access succeeds", async () => {
+    const server = Fastify();
+    vi.spyOn(MeetingOutputsRepository.prototype, "list").mockRejectedValue(
+      new MeetingOutputError("meeting_output_unavailable", 404)
+    );
+    const generationAvailability = vi.fn(async () => "available" as const);
+    registerMeetingOutputRoutes(server, {
+      resolveAccessContext: async () => ({ actorUserId: meetingId }),
+      dataContext: { withDataContext: async (_actor, run) => run({} as Parameters<typeof run>[0]) },
+      generator: vi.fn(),
+      generationAvailability,
+      createTask: vi.fn(),
+      assertTaskAvailable: vi.fn()
+    });
+    try {
+      const result = await server.inject({
+        method: "GET",
+        url: `/api/meetings/records/${meetingId}/outputs`
+      });
+      expect(result.statusCode).toBe(404);
+      expect(generationAvailability).not.toHaveBeenCalled();
+    } finally {
+      await server.close();
+    }
+  });
+});
 describe("Meeting output exact versions", () => {
   it("loads a candidate source outside the history page through its exact version", async () => {
     const server = Fastify();
@@ -49,6 +121,7 @@ describe("Meeting output exact versions", () => {
         DataContextRunner,
         "withDataContext"
       >,
+      generationAvailability: async () => "available",
       generator: vi.fn(),
       createTask: vi.fn(),
       assertTaskAvailable: preflight
@@ -100,6 +173,7 @@ describe("Meeting output action preflight", () => {
     registerMeetingOutputRoutes(server, {
       resolveAccessContext: async () => ({ actorUserId: meetingId }),
       dataContext,
+      generationAvailability: async () => "available",
       generator: vi.fn(),
       createTask: vi.fn(),
       assertTaskAvailable: async () => {
@@ -121,6 +195,7 @@ describe("Meeting output action preflight", () => {
     registerMeetingOutputRoutes(server, {
       resolveAccessContext: async () => ({ actorUserId: meetingId }),
       dataContext: { withDataContext: transaction },
+      generationAvailability: async () => "available",
       generator: vi.fn(),
       createTask: vi.fn(),
       assertTaskAvailable: async () => {
@@ -158,6 +233,7 @@ describe("Meeting output action preflight", () => {
         DataContextRunner,
         "withDataContext"
       >,
+      generationAvailability: async () => "available",
       generator: vi.fn(),
       createTask: vi.fn(),
       assertTaskAvailable: preflight

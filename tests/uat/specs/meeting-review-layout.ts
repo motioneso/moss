@@ -11,9 +11,18 @@ export async function assertMeetingReviewLayout(page: Page): Promise<void> {
     const notes = page.getByRole("tab", { name: /^My notes/ });
     await expect(notes).toBeFocused();
     await expect(notes).toHaveAttribute("aria-selected", "true");
+    await assertPanelGeometry(page);
+    const notesWidths = await page
+      .getByLabel("Personal notes", { exact: true })
+      .evaluate((input) => ({
+        input: input.getBoundingClientRect().width,
+        panel: input.closest('[role="tabpanel"]')!.getBoundingClientRect().width
+      }));
+    expect(notesWidths.input).toBeGreaterThanOrEqual(notesWidths.panel - 2);
     await notes.press("Home");
     await expect(summary).toBeFocused();
     await expect(summary).toHaveAttribute("aria-selected", "true");
+    await assertPanelGeometry(page);
     await expect
       .poll(async () =>
         page.evaluate(() => ({
@@ -58,6 +67,25 @@ export async function assertMeetingReviewLayout(page: Page): Promise<void> {
     delete document.documentElement.dataset.theme;
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
+}
+
+/** Catch a horizontal tab-root collision even when the page itself does not overflow. */
+async function assertPanelGeometry(page: Page): Promise<void> {
+  const panel = page.getByRole("tabpanel");
+  await expect(panel).toBeVisible();
+  const geometry = await panel.evaluate((element) => {
+    const panel = element.getBoundingClientRect();
+    const tabs = element.parentElement!.querySelector('[role="tablist"]')!.getBoundingClientRect();
+    const body = element.closest(".meetings-body")!.getBoundingClientRect();
+    return {
+      tabBottom: tabs.bottom,
+      panelTop: panel.top,
+      panelWidth: panel.width,
+      bodyWidth: body.width
+    };
+  });
+  expect(geometry.panelTop).toBeGreaterThanOrEqual(geometry.tabBottom - 1);
+  expect(geometry.panelWidth).toBeGreaterThanOrEqual(geometry.bodyWidth - 2);
 }
 
 export async function assertProvisionalContrast(page: Page): Promise<void> {

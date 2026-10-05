@@ -7,6 +7,7 @@ import type {
   MeetingExportReceipt,
   MeetingOutputArtifact,
   MeetingOutputResult,
+  MeetingOutputsResponse,
   ReviewMeetingActionInput
 } from "@moss/shared";
 
@@ -14,17 +15,7 @@ export const outputKeys = {
   list: (id: string) => ["meetings", "outputs", id] as const,
   session: (id: string) => ["meetings", "output-session", id] as const
 };
-export interface MeetingOutputsResponse {
-  readonly artifacts: readonly MeetingOutputArtifact[];
-  readonly candidates: readonly MeetingActionCandidate[];
-  readonly headVersion: number;
-  readonly omittedArtifactCount?: number;
-  readonly templates: readonly {
-    id: GenerateMeetingOutputInput["templateId"];
-    version: number;
-    name: string;
-  }[];
-}
+export type { MeetingOutputsResponse } from "@moss/shared";
 const path = (id: string) => `/api/meetings/records/${encodeURIComponent(id)}`;
 export function getMeetingOutputs(
   id: string,

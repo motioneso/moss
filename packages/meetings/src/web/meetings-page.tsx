@@ -37,9 +37,8 @@ export function MeetingsPage() {
   }, [client, id, hasReference, navigation]);
   const history = params.get("view") === "history";
   const record = useQuery(meetingRecordQueryOptions(id ?? ""));
-  const showHistory = () => {
+  const showHistory = (selected: string | null) => {
     const next = new URLSearchParams({ view: "history" });
-    const selected = id ?? params.get("selected");
     if (selected) next.set("selected", selected);
     if (params.has("state")) next.set("state", historyFilter(params.get("state")));
     setParams(next);
@@ -75,14 +74,22 @@ export function MeetingsPage() {
               : "Create a draft, keep your personal notes, and find them again."
         }
         aside={
-          <Button variant={id ? "secondary" : "field"} onClick={history ? showSetup : showHistory}>
+          <Button
+            variant={id ? "secondary" : "field"}
+            onClick={history ? showSetup : () => showHistory(id ?? params.get("selected"))}
+          >
             {history ? "New meeting draft" : "View meeting history"}
           </Button>
         }
       />
-      <main className="meetings-body">
+      <div className="meetings-body">
         {id ? (
-          <MeetingRecord key={id} id={id} onBack={showHistory} />
+          <MeetingRecord
+            key={id}
+            id={id}
+            onBack={() => showHistory(id)}
+            onDeleted={() => showHistory(null)}
+          />
         ) : history ? (
           <MeetingHistory
             search={historyView.data?.query ?? ""}
@@ -129,7 +136,7 @@ export function MeetingsPage() {
         ) : (
           <MeetingSetup onCreated={open} />
         )}
-      </main>
+      </div>
     </div>
   );
 }

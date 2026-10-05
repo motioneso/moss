@@ -27,9 +27,11 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
   const original = (await originalResponse.json()) as MeetingCapturePreferences;
   let fixtureId: string | null = null;
   const title = `UAT meeting draft ${randomUUID()}`;
+  const notesText = "Unsent notes retained through navigation.\nSecond line.\nThird line.";
   try {
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Set up your meeting" })).toBeVisible();
+    await expect(page.getByRole("main")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
     await expect(
       page.getByText("Recording isn’t available in this version of Moss.", { exact: false })
@@ -80,27 +82,29 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     const { meeting } = (await created.json()) as { meeting: MeetingRecord };
     fixtureId = meeting.id;
     await expect(page).toHaveURL(new RegExp(`id=${fixtureId}`));
+    await expect(page.getByRole("main")).toHaveCount(1);
     await assertMeetingReviewLayout(page);
     await expect(page.getByRole("button", { name: "Ask Moss", exact: true })).toBeDisabled();
     await page.getByRole("tab", { name: /^My notes/ }).click();
     const notes = page.getByLabel("Personal notes", { exact: true });
-    await notes.fill("Unsent notes retained through navigation.");
+    await notes.fill(notesText);
+    await expect(page.getByRole("tab", { name: "My notes", exact: true })).toHaveText("My notes");
     await page.locator(".jds-usermenu__trigger").click();
     await page.getByRole("button", { name: "Log out", exact: true }).click();
     await expect(
       page.getByRole("dialog", { name: "Sign out with unsaved changes?" })
     ).toBeVisible();
     await page.getByRole("button", { name: "Keep editing", exact: true }).click();
-    await expect(notes).toHaveValue("Unsent notes retained through navigation.");
+    await expect(notes).toHaveValue(notesText);
     await page.getByRole("button", { name: "View meeting history", exact: true }).click();
     await page.goBack();
     await page.getByRole("tab", { name: /^My notes/ }).click();
-    await expect(notes).toHaveValue("Unsent notes retained through navigation.");
+    await expect(notes).toHaveValue(notesText);
     await page.goForward();
     await page.getByRole("button", { name: title, exact: true }).click();
     await page.getByRole("button", { name: "Open review", exact: true }).click();
     await page.getByRole("tab", { name: /^My notes/ }).click();
-    await expect(notes).toHaveValue("Unsent notes retained through navigation.");
+    await expect(notes).toHaveValue(notesText);
     const saveResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/api/meetings/records/${fixtureId}/notes`) &&
@@ -111,11 +115,32 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     await page.reload();
     await page.getByRole("tab", { name: /^My notes/ }).click();
-    await expect(notes).toHaveValue("Unsent notes retained through navigation.");
+    await expect(notes).toHaveValue(notesText);
+    await expect(page.getByRole("tab", { name: "My notes", exact: true })).toHaveText("My notes");
     const persisted = await page.request.get(`/api/meetings/records/${fixtureId}`);
-    expect((await persisted.json()).meeting.personalNotes).toBe(
-      "Unsent notes retained through navigation."
-    );
+    expect((await persisted.json()).meeting.personalNotes).toBe(notesText);
+
+    // The solo-admin fixture has no configured summary model. Check the real server's
+    // availability result and the real button after choosing an otherwise valid template.
+    const outputsResponse = await page.request.get(`/api/meetings/records/${fixtureId}/outputs`);
+    expect(outputsResponse.status()).toBe(200);
+    const outputs = (await outputsResponse.json()) as {
+      generationAvailability: string;
+      templates: { id: string }[];
+    };
+    expect(outputs.generationAvailability).toBe("model-unavailable");
+    expect(outputs.templates.length).toBeGreaterThan(0);
+    await page.getByRole("tab", { name: "Summary and actions", exact: true }).click();
+    await page
+      .getByLabel("Summary template", { exact: true })
+      .selectOption(outputs.templates[0]!.id);
+    await expect(
+      page.getByRole("button", { name: "Generate summary", exact: true })
+    ).toBeDisabled();
+    await expect(
+      page.getByText("No supported summary model is available.", { exact: false })
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "My notes", exact: true }).click();
 
     await notes.fill("Keep these edits when canceling.");
     await page.getByRole("button", { name: "Delete draft", exact: true }).click();
@@ -132,9 +157,26 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     await page.getByRole("button", { name: "Permanently delete draft", exact: true }).click();
     expect((await deletion).status()).toBe(204);
     await expect(page.getByRole("heading", { name: "Meeting history", exact: true })).toBeVisible();
+    await expect(page.getByRole("main")).toHaveCount(1);
+    await expect(page).toHaveURL(
+      (url) =>
+        url.searchParams.get("view") === "history" &&
+        !url.searchParams.has("id") &&
+        !url.searchParams.has("selected") &&
+        !url.searchParams.has("panel")
+    );
+    await expect(
+      page.getByRole("button", { name: "Retry selected meeting", exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("This meeting is unavailable. Choose another meeting.", { exact: true })
+    ).toHaveCount(0);
     await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(0);
     expect((await page.request.get(`/api/meetings/records/${fixtureId}`)).status()).toBe(404);
     fixtureId = null;
+    console.log(
+      "MEETINGS_DRAFT_REVIEW_UAT tab panels below tab list at full content width; one main landmark; multiline notes without record count; no-model summary disabled; successful delete clears selected URL and unavailable retry."
+    );
   } finally {
     if (fixtureId)
       expect

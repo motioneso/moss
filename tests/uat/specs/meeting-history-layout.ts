@@ -13,12 +13,14 @@ export async function assertMeetingHistoryLayout(page: Page, title: string): Pro
         rail: document.querySelector(".meetings-history-rail")!.getBoundingClientRect().left
       }));
       expect(positions.rail).toBeGreaterThan(positions.table);
+      await assertHistorySectionSpacing(page);
     } else {
       await expect(page.getByRole("table", { name: "Your meetings", exact: true })).toBeHidden();
       await rail.getByRole("button", { name: "Back to results", exact: true }).click();
       const row = page.getByRole("button", { name: title, exact: true });
       await expect(row).toBeFocused();
       await expect(rail).toBeHidden();
+      await assertHistorySectionSpacing(page);
       await row.press("Enter");
       await expect(rail).toBeVisible();
       await expect
@@ -52,6 +54,24 @@ export async function assertMeetingHistoryLayout(page: Page, title: string): Pro
   await assertMeetingTextContrast(page, rail.locator(".jds-hint").first());
   await page.setViewportSize({ width: 1440, height: 1000 });
   await assertMeetingHistoryKeyboardFocus(page, title);
+}
+
+async function assertHistorySectionSpacing(page: Page): Promise<void> {
+  const spacing = await page
+    .getByRole("table", { name: "Your meetings", exact: true })
+    .evaluate((table) => {
+      const section = table
+        .closest(".meetings-history-results")!
+        .querySelector(".meetings-history-followup")!;
+      const minimum = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--space-7")
+      );
+      return {
+        gap: section.getBoundingClientRect().top - table.getBoundingClientRect().bottom,
+        minimum
+      };
+    });
+  expect(spacing.gap).toBeGreaterThanOrEqual(spacing.minimum - 1);
 }
 
 export async function assertMeetingHistoryKeyboardFocus(page: Page, title: string): Promise<void> {

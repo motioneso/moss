@@ -30,10 +30,12 @@ import { DeleteMeetingDialog } from "./delete-meeting-dialog.js";
 
 export function MeetingRecord({
   id,
-  onBack
+  onBack,
+  onDeleted
 }: {
   readonly id: string;
   readonly onBack: () => void;
+  readonly onDeleted: () => void;
 }) {
   const [transcriptRevision, setTranscriptRevision] = useState<number>();
   const record = useQuery(meetingRecordQueryOptions(id));
@@ -84,7 +86,7 @@ export function MeetingRecord({
       ) : null}
       <MeetingNotes
         meeting={record.data.meeting}
-        onDeleted={onBack}
+        onDeleted={onDeleted}
         transcriptRevision={transcriptRevision}
         onTranscriptRevisionChange={setTranscriptRevision}
       />
@@ -284,7 +286,6 @@ export function MeetingNotes({
           {
             value: "notes",
             label: "My notes",
-            count: state.text.trim() ? "1 note" : "0 notes",
             content: (
               <section className="meetings-section">
                 <SectionHead number="01" title="My notes" rule />

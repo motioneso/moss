@@ -163,7 +163,10 @@ cannot operate on that reserved surface. `GET /api/chat/meeting-context?surface=
 ## Summary, Task review and private export checkpoint
 
 Review offers explicit template selection and Generate; merely opening a meeting does not run a
-model. Generation resolves the configured active API-key model with both `summarization` and
+model. Generate stays disabled while the configured summary route is unavailable or its
+availability cannot be checked. Refresh summaries rechecks safe configuration metadata without
+reading credentials or contacting a provider; existing saved summaries remain readable.
+Generation resolves the configured active API-key model with both `summarization` and
 `json` capabilities, respecting the routing/pin contract. It makes one structured HTTP attempt,
 without executable tools, native search, CLI engines or repair/fallback attempts. The model's
 claims must bind to the retained input's exact meeting, revision and UTF-16 evidence ranges.
@@ -263,6 +266,11 @@ temporary directory; it never needs real provider credentials, host chat login, 
 vault. The chat/summary tests disclose local third-party HTTP stand-ins while exercising Moss's
 real UI, APIs and services without intercepting Moss responses. Trace, screenshots and video are
 off; evidence uses executable assertions and bounded text.
+
+Draft/review checks measure tab-list and panel geometry at desktop and phone widths, confirm
+the shell is the sole main landmark, retain multiline notes without a misleading record count,
+disable summary generation with no configured model, and clear a successfully deleted History
+selection. History checks also measure the gap before the next numbered section.
 
 The output UAT covers Review → Generate → exact source evidence → explicit Task review and
 acceptance, retry/regeneration deduplication, independent Task edits, immutable manual summary

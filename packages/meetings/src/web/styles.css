@@ -104,6 +104,10 @@
 .meetings-history-results {
   grid-column: 1;
 }
+.meetings-history-followup {
+  /* Add to the parent section's space-5 gap for the space-7 section minimum. */
+  margin-block-start: var(--space-3);
+}
 .meetings-history--single {
   grid-template-columns: minmax(0, 1fr);
 }
