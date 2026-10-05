@@ -1,6 +1,8 @@
 # Decision models: Clef and any Jev-compatible service
 
-**Status:** Approach approved by Ben in chat on October 5, 2026 ("generic type with presets is ideal"). Perplexity deferred to a follow-up.
+**Status:** Approach approved by Ben in chat on October 5, 2026 ("generic type with presets is ideal"); written spec approved the same day. Perplexity deferred to a follow-up.
+
+**Plan:** [Implementation plan](../plans/2026-10-05-decision-model-presets.md).
 
 **Tracking:** [Task #3057](https://github.com/motioneso/moss/issues/3057). Follow-up: [#3058 Perplexity preset](https://github.com/motioneso/moss/issues/3058).
 
@@ -65,7 +67,7 @@ Live probe of Cloudflare on October 5, 2026:
 
 - **Adding a model by hand** on a decision-model provider defaults to capability `json`, tier `economy`. Today it defaults to `chat`, which makes the model silently unusable for sorting.
 - **No model list.** When a compatible service answers 404 to the model list, the Test button says the service does not list its models and points to adding one by hand. It does not say the key failed.
-- **Activity history** names the model that answered (for example "Clef-flash") instead of always "Jev". The classifier trial's "Jev disagreed" badge is a separate comparison and is unchanged.
+- **Activity history** names the model that answered (for example "Clef-flash guessed which tool to use") instead of always "Jev". The tool check runs on whichever model is bound to the Classifier row, so its agreement wording becomes "The classifier agreed" / "The classifier disagreed". The stored fact key `jev_agreed` keeps its name; only the wording changes.
 - **Help text** stops saying "go to TypeSafe" unless the provider is TypeSafe.
 
 ## Add-provider form (Clef preset)
