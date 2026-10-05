@@ -1226,7 +1226,8 @@ export class AiRepository {
   async resolveModelForCapability(
     scopedDb: DataContextDb,
     capability: AiModelCapability,
-    tier: AiModelTier = "interactive"
+    tier: AiModelTier = "interactive",
+    options: { readonly logNeedsConfig?: false } = {}
   ): Promise<AiCapabilityRouteResolution> {
     assertDataContextDb(scopedDb);
 
@@ -1271,7 +1272,7 @@ export class AiRepository {
       // gets mic-unavailable, NOT a needs-config log entry (avoids spam on every composer mount) and
       // NOT the instance voice endpoint (audio must not escape the pinned backend).
       if (isTranscription) return { model: null, reason: "admin-pin-unavailable" };
-      await this.logNeedsConfig(scopedDb, capability);
+      if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
       return { model: null, reason: "needs-config" };
     }
 
@@ -1294,7 +1295,7 @@ export class AiRepository {
       // #874 HIGH-3: same rule for the mic — pinned user, provider can't serve voice → unavailable,
       // not a log entry, and audio never reaches the instance voice endpoint.
       if (isTranscription) return { model: null, reason: "admin-pin-unavailable" };
-      await this.logNeedsConfig(scopedDb, capability);
+      if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
       return { model: null, reason: "needs-config" };
     }
 
@@ -1312,7 +1313,7 @@ export class AiRepository {
     if (!isUserFacing) {
       const automatic = await this.selectAutomaticModelForCapability(scopedDb, capability, tier);
       if (automatic) return { model: automatic, reason: "matched-active-model" };
-      await this.logNeedsConfig(scopedDb, capability);
+      if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
       return { model: null, reason: "no-active-model" };
     }
 
@@ -1359,6 +1360,12 @@ export class AiRepository {
       capability: AiModelCapability;
       tierHint?: AiModelTier;
       requireExplicitBinding?: boolean;
+      /** Advisory reads can suppress routing-miss logs without changing model selection. */
+      logNeedsConfig?: false;
+      /** Privacy-sensitive calls must not degrade a missing fixed binding to another model. */
+      rejectUnavailableFixedBinding?: true;
+      /** Require the exact hard-pinned model, rather than another model in its provider. */
+      rejectUnavailablePinnedModel?: true;
     }
   ): Promise<AiCapabilityRouteResolution> {
     assertDataContextDb(scopedDb);
@@ -1366,7 +1373,7 @@ export class AiRepository {
 
     const bindings = await this.listModuleServiceBindings(scopedDb);
     if (requireExplicitBinding && !bindings[service]) {
-      await this.logNeedsConfig(scopedDb, capability);
+      if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
       return { model: null, reason: "needs-config" };
     }
 
@@ -1375,7 +1382,19 @@ export class AiRepository {
       this.getAdminPinnedProviderId(scopedDb)
     ]);
     if (!requireExplicitBinding && (pinnedModelId !== null || pinnedProviderId !== null)) {
-      return this.resolveModelForCapability(scopedDb, capability, tierHint);
+      const pinned = await this.resolveModelForCapability(scopedDb, capability, tierHint, {
+        logNeedsConfig: options.logNeedsConfig
+      });
+      // Worker capability routing normally permits a replacement within the pinned model's
+      // provider. Privacy-sensitive callers can require that exact model before credentials
+      // are loaded; a provider-only pin still permits capability selection inside its provider.
+      if (
+        options.rejectUnavailablePinnedModel &&
+        pinnedModelId !== null &&
+        pinned.model?.id !== pinnedModelId
+      )
+        return { model: null, reason: "admin-pin-unavailable" };
+      return pinned;
     }
 
     const keys: ModuleServiceKey[] =
@@ -1399,10 +1418,12 @@ export class AiRepository {
 
         // #1083 F2: service bindings store row UUIDs without an FK. A legitimate catalog removal
         // can leave one dangling, so degrade inside the configured default provider instead of
-        // breaking structured module work or silently jumping to another provider.
-        const defaultProviderId = requireExplicitBinding
-          ? null
-          : await this.resolveDefaultProviderId(scopedDb);
+        // breaking structured module work or silently jumping to another provider. Privacy-sensitive
+        // callers may forbid that replacement while preserving the normal hard-pin precedence.
+        const defaultProviderId =
+          requireExplicitBinding || options.rejectUnavailableFixedBinding
+            ? null
+            : await this.resolveDefaultProviderId(scopedDb);
         if (defaultProviderId) {
           const fallback = await this.selectModelInProviderForCapability(
             scopedDb,
@@ -1412,7 +1433,7 @@ export class AiRepository {
           );
           if (fallback) return { model: fallback, reason: "matched-active-model" };
         }
-        await this.logNeedsConfig(scopedDb, capability);
+        if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
         return { model: null, reason: "needs-config" };
       }
 
@@ -1422,15 +1443,17 @@ export class AiRepository {
         binding.tier
       );
       if (model) return { model, reason: "matched-active-model" };
-      await this.logNeedsConfig(scopedDb, capability);
+      if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
       return { model: null, reason: "needs-config" };
     }
 
     if (requireExplicitBinding) {
-      await this.logNeedsConfig(scopedDb, capability);
+      if (options.logNeedsConfig !== false) await this.logNeedsConfig(scopedDb, capability);
       return { model: null, reason: "needs-config" };
     }
-    return this.resolveModelForCapability(scopedDb, capability, tierHint);
+    return this.resolveModelForCapability(scopedDb, capability, tierHint, {
+      logNeedsConfig: options.logNeedsConfig
+    });
   }
 
   /**
@@ -1702,12 +1725,18 @@ export class AiRepository {
    * (not the full override settings) should use this rather than
    * `getChatModelOverrideSettings(...).selectedModel` directly.
    */
-  async selectChatModelForUser(scopedDb: DataContextDb): Promise<AiConfiguredModelSafeRow | null> {
-    const settings = await this.getChatModelOverrideSettings(scopedDb);
+  async selectChatModelForUser(
+    scopedDb: DataContextDb,
+    options: { readonly rejectUnavailableOverride?: true } = {}
+  ): Promise<AiConfiguredModelSafeRow | null> {
+    const settings = await this.getChatModelOverrideSettings(scopedDb, options);
     return settings.selectedModel;
   }
 
-  async getChatModelOverrideSettings(scopedDb: DataContextDb): Promise<ChatModelOverrideSettings> {
+  async getChatModelOverrideSettings(
+    scopedDb: DataContextDb,
+    options: { readonly rejectUnavailableOverride?: true } = {}
+  ): Promise<ChatModelOverrideSettings> {
     assertDataContextDb(scopedDb);
 
     const [
@@ -1752,7 +1781,15 @@ export class AiRepository {
       currentOverrideModelId: requestedModelId,
       effectiveOverrideModelId: resolved.effectiveOverrideModelId,
       defaultModel: defaultModel ?? null,
-      selectedModel: resolved.selectedModel,
+      // Privacy-sensitive callers may reject substitution for an enabled but unavailable override.
+      // Admin-disabled overrides are inert; an explicit admin pin above also stays authoritative.
+      selectedModel:
+        options.rejectUnavailableOverride &&
+        overrideEnabled &&
+        requestedModelId !== null &&
+        resolved.effectiveOverrideModelId !== requestedModelId
+          ? null
+          : resolved.selectedModel,
       allowedModels: resolved.allowedModels,
       selectableOverrideModels: resolved.selectableOverrideModels
     };

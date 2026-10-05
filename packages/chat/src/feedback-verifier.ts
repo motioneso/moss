@@ -11,6 +11,12 @@ export function createChatFeedbackTargetVerifier(
     if (input.targetKind !== "chat_message" || input.surface !== "chat") return null;
     const message = await repository.getMessageById(scopedDb, input.targetRef);
     if (!message || message.owner_user_id !== input.actorUserId) return null;
+    if (
+      message.tool_metadata &&
+      typeof message.tool_metadata === "object" &&
+      "meetingChatV1" in message.tool_metadata
+    )
+      return null;
     const thread = await repository.getThreadById(scopedDb, message.thread_id);
     if (!thread || thread.owner_user_id !== input.actorUserId) return null;
 

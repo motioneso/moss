@@ -1,3 +1,8 @@
+import { useSignOutGuard } from "./use-sign-out-guard";
+import { hasSessionUnsavedChanges } from "@moss/module-web-sdk";
+import { SignOutConfirmation } from "./sign-out-confirmation";
+import { randomUuid, validMeetingChatInput, type OpenMeetingChatInput } from "@moss/module-web-sdk";
+import { MeetingChatDrawer } from "../chat/meeting-chat-drawer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu, MessageSquare } from "lucide-react";
 import {
@@ -104,6 +109,23 @@ export function AppShell(props: AppShellProps) {
       return next;
     });
   };
+  const [meetingSelection, setMeetingSelection] = useState<
+    (OpenMeetingChatInput & { selectionId: string }) | null
+  >(null);
+  const openMeetingChat = useCallback((input: OpenMeetingChatInput) => {
+    if (!validMeetingChatInput(input)) return;
+    setMeetingSelection({ ...input, selectionId: randomUuid() });
+    setChatOpen(true);
+    setModuleDraft(undefined);
+  }, []);
+  const clearMeetingChat = useCallback(
+    (meetingId: string) => {
+      if (meetingSelection?.meetingId !== meetingId) return;
+      setMeetingSelection(null);
+      setChatOpen(false);
+    },
+    [meetingSelection]
+  );
   const [chatOpen, setChatOpen] = useState(false);
   // #916 — a module-authored starter draft handed up via ChatControls.openAssistantWithDraft.
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
@@ -112,14 +134,19 @@ export function AppShell(props: AppShellProps) {
   const [theme] = useState<ShellTheme>(() => loadShellTheme());
   const [colorMode] = useState(() => loadShellColorMode());
   const openChatWith = useCallback((prompt: string) => {
+    setMeetingSelection(null);
     setChatOpen(true);
     void sendChatTurn(prompt);
   }, []);
-  const openChat = useCallback(() => setChatOpen(true), []);
+  const openChat = useCallback(() => {
+    setMeetingSelection(null);
+    setChatOpen(true);
+  }, []);
   // #916 — open the drawer with a module-authored draft the user edits + submits (NEVER auto-sent;
   // contrast openChatWith, which sends). Direct setState in an event handler is correct here — this
   // is NOT a render-phase updater, so it is not the StrictMode double-fire trap #368 warned about.
   const openAssistantWithDraft = useCallback((draft: string) => {
+    setMeetingSelection(null);
     const embeddedComposer = embeddedComposerRef.current;
     if (embeddedComposer) {
       embeddedComposer(draft);
@@ -148,7 +175,10 @@ export function AppShell(props: AppShellProps) {
   // the user navigates between pages — the chat follows the user. Always pass the defaulted
   // `activeSurface`, never the raw `activeModuleSurfaceBranded ?? undefined` — the latter left
   // useChatStream's rehydration effect permanently gated off for the default drawer (#1449).
-  const { records, clearRecords, streamErrorCount } = useChatStream(activeSurface);
+  const { records, clearRecords, streamErrorCount } = useChatStream(
+    activeSurface,
+    meetingSelection === null
+  );
   const assistantRecordListeners = useRef(
     new Set<(records: readonly AssistantRecordV1[]) => void>()
   );
@@ -252,6 +282,7 @@ export function AppShell(props: AppShellProps) {
     }
   }, [records, queryClient]);
   const openActionRequest = useCallback((actionRequestId: string) => {
+    setMeetingSelection(null);
     setFocusActionRequestId(actionRequestId);
     setChatOpen(true);
   }, []);
@@ -311,6 +342,21 @@ export function AppShell(props: AppShellProps) {
     }
   });
 
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent) => {
+      if (!hasSessionUnsavedChanges(queryClient)) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [queryClient]);
+  const signOutGuard = useSignOutGuard(queryClient, () => {
+    setMeetingSelection(null);
+    setChatOpen(false);
+    signOutMutation.mutate();
+  });
+
   // Chat sits beside the page when the window is wide enough for both, on every screen. A
   // running draft module keeps the docked layout down to the mobile breakpoint. Below that the
   // drawer is the ordinary floating overlay.
@@ -364,37 +410,55 @@ export function AppShell(props: AppShellProps) {
   useEffect(() => {
     setChatExpanded(false);
   }, [location.pathname]);
-  const chatDrawer = (
-    <ChatDrawer
-      open={chatOpen}
-      docked={dockChat}
-      expanded={expanded}
-      onToggleExpanded={dockChat && !phoneWindow ? () => setChatExpanded((v) => !v) : undefined}
-      onClose={() => {
-        setChatOpen(false);
-        setChatExpanded(false);
-        setFocusActionRequestId(null);
-        // #916: starters are one-shot — a later manual open starts from a blank composer.
-        setModuleDraft(undefined);
-      }}
-      // #1332 — the drawer renders whichever surface is LIVE, which is what makes opening the
-      // header control inside a profile give you that profile's thread (job-search spec §7)
-      // instead of an empty panel. Outside a module `activeSurface` is DEFAULT_CHAT_SURFACE, so
-      // this is the ordinary drawer thread; no module content can survive the exit, because the
-      // surface key is also the history lookup key all the way down to the repository.
-      records={recordsForSurface(activeSurface)}
-      clearRecords={clearRecords}
-      streamErrorCount={streamErrorCount}
-      isFounder={props.me.user.isBootstrapOwner}
-      initialText={moduleDraft}
-      focusActionRequestId={focusActionRequestId}
-      onActionRequestFocused={() => setFocusActionRequestId(null)}
-      surface={activeSurface}
-    />
-  );
+  const chatDrawer =
+    meetingSelection && chatOpen ? (
+      <MeetingChatDrawer
+        key={meetingSelection.selectionId}
+        selection={meetingSelection}
+        docked={dockChat}
+        expanded={expanded}
+        onToggleExpanded={dockChat && !phoneWindow ? () => setChatExpanded((v) => !v) : undefined}
+        isFounder={props.me.user.isBootstrapOwner}
+        onClose={() => {
+          setMeetingSelection(null);
+          setChatOpen(false);
+          setChatExpanded(false);
+        }}
+      />
+    ) : (
+      <ChatDrawer
+        open={chatOpen}
+        docked={dockChat}
+        expanded={expanded}
+        onToggleExpanded={dockChat && !phoneWindow ? () => setChatExpanded((v) => !v) : undefined}
+        onClose={() => {
+          setChatOpen(false);
+          setChatExpanded(false);
+          setFocusActionRequestId(null);
+          // #916: starters are one-shot — a later manual open starts from a blank composer.
+          setModuleDraft(undefined);
+        }}
+        // #1332 — the drawer renders whichever surface is LIVE, which is what makes opening the
+        // header control inside a profile give you that profile's thread (job-search spec §7)
+        // instead of an empty panel. Outside a module `activeSurface` is DEFAULT_CHAT_SURFACE, so
+        // this is the ordinary drawer thread; no module content can survive the exit, because the
+        // surface key is also the history lookup key all the way down to the repository.
+        records={recordsForSurface(activeSurface)}
+        clearRecords={clearRecords}
+        streamErrorCount={streamErrorCount}
+        isFounder={props.me.user.isBootstrapOwner}
+        initialText={moduleDraft}
+        focusActionRequestId={focusActionRequestId}
+        onActionRequestFocused={() => setFocusActionRequestId(null)}
+        surface={activeSurface}
+      />
+    );
 
   return (
     <div className="app-frame" data-nav={navMode} data-chat-expanded={expanded || undefined}>
+      {signOutGuard.confirming ? (
+        <SignOutConfirmation onCancel={signOutGuard.cancel} onConfirm={signOutGuard.confirm} />
+      ) : null}
       <PageTrailProvider>
         <ShellNav
           navMode={navMode}
@@ -408,7 +472,7 @@ export function AppShell(props: AppShellProps) {
           unreadByModule={unreadByModule}
           unreadCount={unreadCount}
           signOutPending={signOutMutation.isPending}
-          onSignOut={() => signOutMutation.mutate()}
+          onSignOut={signOutGuard.request}
           onNavigate={(to) => {
             closeMobileNav();
             navigate(to);
@@ -443,7 +507,10 @@ export function AppShell(props: AppShellProps) {
                 className={`icon-button ${chatOpen ? "active" : ""}`}
                 title={assistantName ? `Ask ${assistantName}` : "Open chat"}
                 type="button"
-                onClick={() => setChatOpen((open) => !open)}
+                onClick={() => {
+                  setMeetingSelection(null);
+                  setChatOpen((open) => !open);
+                }}
               >
                 <MessageSquare size={19} aria-hidden="true" />
               </button>
@@ -459,6 +526,8 @@ export function AppShell(props: AppShellProps) {
                   value={{
                     openChat,
                     openChatWith,
+                    openMeetingChat,
+                    clearMeetingChat,
                     openAssistantWithDraft,
                     pendingNotesDelete: pendingNotesDelete
                       ? {

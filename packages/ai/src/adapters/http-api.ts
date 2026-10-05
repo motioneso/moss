@@ -18,6 +18,12 @@ import {
   type GenerateStructuredProviderInput,
   type StructuredProviderResult
 } from "./http-api-structured.js";
+import {
+  readTimestampedTranscription,
+  rejectAbortedTranscription,
+  type TranscribeAudioInput,
+  type TranscribeAudioResult
+} from "./http-api-transcription.js";
 import type { ProviderKind } from "./transcript-reader.js";
 
 // ---------------------------------------------------------------------------
@@ -138,13 +144,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
    * transcription REST surface behind this adapter, so both throw a clear error instead of
    * silently no-op'ing.
    */
-  async transcribeAudio(input: {
-    readonly model: { readonly provider_model_id: string };
-    readonly audio: Blob;
-    readonly ownerUserId?: string;
-    readonly turnId?: string;
-    readonly parentId?: string;
-  }): Promise<{ readonly text: string }> {
+  async transcribeAudio(input: TranscribeAudioInput): Promise<TranscribeAudioResult> {
     return withModelActivityRecording(
       this.recorder(),
       {
@@ -161,23 +161,35 @@ export class HttpApiAdapter implements ChatProviderAdapter {
           throw new Error(`Transcription is not supported for provider kind: ${this.providerKind}`);
         }
 
+        input.signal?.throwIfAborted();
         const base = this._baseUrl ?? "https://api.openai.com";
         const form = new FormData();
         form.set("model", input.model.provider_model_id);
         form.set("file", input.audio, "audio");
+        if (input.timestamps === "segment") {
+          form.set("response_format", "verbose_json");
+          form.append("timestamp_granularities[]", "segment");
+        }
 
         const response = await this._fetch(`${base}/v1/audio/transcriptions`, {
           method: "POST",
           headers: { authorization: `Bearer ${this.apiKey}` },
-          body: form
+          body: form,
+          ...(input.signal ? { signal: input.signal } : {})
         });
 
+        rejectAbortedTranscription(response, input.signal);
         if (!response.ok) {
+          void response.body?.cancel().catch(() => undefined);
           // Never include the API key in error messages (security invariant)
           throw new Error(`HTTP ${response.status}`);
         }
 
+        if (input.timestamps === "segment") {
+          return readTimestampedTranscription(response, input.signal);
+        }
         const json = (await response.json()) as { text?: unknown };
+        input.signal?.throwIfAborted();
         if (typeof json.text !== "string") {
           throw new Error("No text field in transcription response");
         }

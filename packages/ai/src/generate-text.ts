@@ -71,10 +71,59 @@ export async function generateText(
   input: GenerateTextInput,
   deps: GenerateTextDeps
 ): Promise<GenerateTextResult> {
-  if (input.signal?.aborted) return { ok: false, error: "aborted" };
+  return (await prepareTextGeneration(scopedDb, input, deps))();
+}
+
+/**
+ * Prepare a tool-free API-key request in a short actor transaction, then invoke the returned
+ * one-shot closure only after the transaction completes. The caller supplies a freshly checked
+ * configured model and guarded credential lookup, and rechecks authorization before release.
+ * This seam never supplies a CLI adapter, another route, or native search.
+ */
+export async function prepareTextApiGeneration(
+  scopedDb: DataContextDb,
+  input: Pick<
+    GenerateTextInput,
+    "model" | "messages" | "maxOutputTokens" | "signal" | "actionCode"
+  >,
+  deps: Pick<GenerateTextDeps, "repository" | "cipher">
+): Promise<() => Promise<GenerateTextResult>> {
+  const run = await prepareTextGeneration(
+    scopedDb,
+    {
+      model: input.model,
+      messages: input.messages,
+      maxOutputTokens: input.maxOutputTokens,
+      signal: input.signal,
+      actionCode: input.actionCode
+    },
+    {
+      cipher: deps.cipher,
+      repository: {
+        async selectProviderWithCredential(db, id) {
+          const provider = await deps.repository.selectProviderWithCredential(db, id);
+          return provider?.auth_method === "api_key" ? provider : undefined;
+        }
+      }
+    }
+  );
+  let attempt: (() => Promise<GenerateTextResult>) | undefined = run;
+  return () => {
+    const execute = attempt;
+    attempt = undefined;
+    return execute ? execute() : Promise.resolve({ ok: false, error: "provider_error" });
+  };
+}
+
+async function prepareTextGeneration(
+  scopedDb: DataContextDb,
+  input: GenerateTextInput,
+  deps: GenerateTextDeps
+): Promise<() => Promise<GenerateTextResult>> {
+  if (input.signal?.aborted) return async () => ({ ok: false, error: "aborted" });
   const requested = input.model.provider_kind;
   if (requested !== "anthropic" && requested !== "openai-compatible" && requested !== "google") {
-    return { ok: false, error: "provider_error" };
+    return async () => ({ ok: false, error: "provider_error" });
   }
   const kind: ProviderKind = requested;
   const model = { provider_kind: kind, provider_model_id: input.model.provider_model_id };
@@ -83,7 +132,7 @@ export async function generateText(
     scopedDb,
     input.model.provider_config_id
   );
-  if (!provider) return { ok: false, error: "needs_config" };
+  if (!provider) return async () => ({ ok: false, error: "needs_config" });
 
   // #2956: the owner is the scoped actor on both transports; the line carries
   // the service's structured code unless the caller names its own.
@@ -97,7 +146,7 @@ export async function generateText(
   if (provider.auth_method === "cli") {
     // A login provider stores a sealed marker, not a key. Route before decrypt.
     const createCli = deps.createCliStructuredAdapter;
-    if (!createCli) return { ok: false, error: "needs_config" };
+    if (!createCli) return async () => ({ ok: false, error: "needs_config" });
     // #2674: the CLI runs in this user's per-user slot.
     run = async () =>
       readText(
@@ -120,11 +169,11 @@ export async function generateText(
       const credential = parseAiApiKeyCredential(
         deps.cipher.decryptJson(provider.encrypted_credential)
       );
-      if (!credential) return { ok: false, error: "needs_config" };
+      if (!credential) return async () => ({ ok: false, error: "needs_config" });
       apiKey = credential.apiKey;
     } catch {
       // Never surface the raw error: it can carry credential material.
-      return { ok: false, error: "needs_config" };
+      return async () => ({ ok: false, error: "needs_config" });
     }
     const adapter = (deps.createAdapter ?? defaultCreateAdapter)(
       kind,
@@ -145,11 +194,20 @@ export async function generateText(
       ).text;
   }
 
+  const signal = input.signal;
+  return () => runPreparedText(run, signal);
+}
+
+async function runPreparedText(
+  run: () => Promise<string>,
+  signal: AbortSignal | undefined
+): Promise<GenerateTextResult> {
+  if (signal?.aborted) return { ok: false, error: "aborted" };
   try {
-    const text = await raceAbort(run(), input.signal);
-    return input.signal?.aborted ? { ok: false, error: "aborted" } : { ok: true, text };
+    const text = await raceAbort(run(), signal);
+    return signal?.aborted ? { ok: false, error: "aborted" } : { ok: true, text };
   } catch {
-    return input.signal?.aborted
+    return signal?.aborted
       ? { ok: false, error: "aborted" }
       : { ok: false, error: "provider_error" };
   }

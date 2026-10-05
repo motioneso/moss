@@ -61,6 +61,7 @@ import {
  * mechanism every other AI feature uses to know a provider is configured+healthy).
  */
 export function Composer(props: {
+  readonly textOnly?: boolean;
   readonly modelSelector?: React.ReactNode;
   readonly readOnly: boolean;
   readonly isFounder: boolean;
@@ -127,14 +128,14 @@ export function Composer(props: {
   // up); drop any staged chips the moment the user flips to private so the composer can't
   // submit ids the server would refuse.
   useEffect(() => {
-    if (props.privateMode) {
+    if (props.privateMode || props.textOnly) {
       setPending([]);
       setAttachError(null);
     }
-  }, [props.privateMode]);
+  }, [props.privateMode, props.textOnly]);
 
   const attachFiles = (files: readonly File[]) => {
-    if (props.privateMode || files.length === 0) return;
+    if (props.privateMode || props.textOnly || files.length === 0) return;
     setAttachError(null);
     let current = pending;
     for (const file of files) {
@@ -199,9 +200,10 @@ export function Composer(props: {
 
   const skillsQuery = useQuery({
     queryKey: queryKeys.chat.skills,
-    queryFn: listChatSkills
+    queryFn: listChatSkills,
+    enabled: !props.textOnly
   });
-  const skills = skillsQuery.data?.skills ?? [];
+  const skills = props.textOnly ? [] : (skillsQuery.data?.skills ?? []);
   const slashQuery = activeSlashQuery(text);
   const skillMatches = slashQuery === null ? [] : filterEnabledSkills(skills, slashQuery);
   const skillMenuOpen =
@@ -495,7 +497,7 @@ export function Composer(props: {
             rows={1}
             value={text}
           />
-          {!props.privateMode ? (
+          {!props.privateMode && !props.textOnly ? (
             <>
               <input
                 ref={fileInputRef}
@@ -520,8 +522,8 @@ export function Composer(props: {
           <IconButton
             aria-label={recording ? "Stop recording" : "Record voice message"}
             active={recording}
-            disabled={micDisabled}
-            title={micTitle}
+            disabled={micDisabled || props.textOnly}
+            title={props.textOnly ? "Type your meeting question" : micTitle}
             onClick={recording ? stopRecording : () => void startRecording()}
           >
             {recording ? (

@@ -39,3 +39,14 @@ export {
   type ChatArchiveSession,
   type WriteDailyChatArchiveResult
 } from "./daily-archive-writer.js";
+export {
+  PrivateNoteExportService,
+  isPrivateNoteExportReference,
+  notesPrivateExportIngestProvider,
+  type PrivateNoteExportPort,
+  type PrivateNoteExportIdentity,
+  type PrivateNoteExportObservation,
+  type PrivateNoteExportWriteResult,
+  type PrivateNoteIndexPort,
+  type PrivateNoteIndexResult
+} from "./private-note-export.js";

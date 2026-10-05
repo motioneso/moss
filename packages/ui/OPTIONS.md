@@ -137,7 +137,8 @@ _No enum or boolean props._
 
 ## masthead
 
-- **pm** (optional boolean flag)
+- **tone** (optional, default `default`): `default`, `field`
+- **compact** (optional boolean flag)
 
 ## menu
 
@@ -149,7 +150,7 @@ _No enum or boolean props._
 
 ## nav-index
 
-- **selected** (optional boolean flag)
+_No enum or boolean props._
 
 ## note
 
@@ -167,13 +168,18 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## radio-card-group
+
+_No enum or boolean props._
+
 ## row-button
 
 _No enum or boolean props._
 
 ## row-index
 
-_No enum or boolean props._
+- **variant** (optional): `default`, `facts`
+- **density** (optional): `default`, `compact`
 
 ## section-head
 
@@ -196,6 +202,10 @@ _No enum or boolean props._
 
 - **checked** (required boolean flag)
 - **disabled** (optional boolean flag)
+
+## tabs
+
+_No enum or boolean props._
 
 ## today-pill
 

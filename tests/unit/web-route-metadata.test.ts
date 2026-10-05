@@ -100,6 +100,7 @@ describe("web route metadata", () => {
       "/wellness",
       "/news",
       "/sports",
+      "/meetings",
       "/workshop",
       "/settings",
       "/link/trail-marker"

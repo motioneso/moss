@@ -55,6 +55,7 @@ const INCLUDED: readonly { readonly icon: LucideIcon; readonly name: string }[] 
   { icon: CalendarDays, name: "Calendar cache" },
   { icon: FileText, name: "Notes & vault index" },
   { icon: MessagesSquare, name: "Conversations" },
+  { icon: FileText, name: "Meetings — notes, transcripts & summaries" },
   { icon: SlidersHorizontal, name: "Settings & persona" }
 ];
 

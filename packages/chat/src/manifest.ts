@@ -58,7 +58,9 @@ export const chatModuleManifest = {
       "sql/0251_chat_classifier_shadow_records.sql",
       "sql/0252_chat_classifier_release_eligibility.sql",
       "sql/0255_chat_classifier_shadow_retention.sql",
-      "sql/0271_chat_classifier_shadow_reviews.sql"
+      "sql/0271_chat_classifier_shadow_reviews.sql",
+      "sql/0276_meeting_chat_cleanup.sql",
+      "sql/0277_chat_surface_immutable.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -107,8 +109,50 @@ export const chatModuleManifest = {
   features: [
     {
       id: "chat.acp_answers",
-      description: "Chat answers through the agent protocol for every conversation.",
+      description:
+        "General chat answers through the agent protocol. Selected-meeting questions use the configured API-key chat model without tools.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.meeting_questions",
+      description:
+        "Meeting questions use current transcript and exact citations. API-key models only, no tools. Enabled user choices fail closed; admin pins or locked instance defaults apply. No unrelated memory or automatic export.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "meeting_chat_unsupported",
+          class: "prerequisite",
+          remediationRef: "chat.meeting_questions.configure",
+          description:
+            "The required model or enabled override is unavailable or uses unsupported subscription authentication. Choose an available model, or contact an admin when locked. No fallback replaces an unavailable enabled override."
+        },
+        {
+          code: "meeting_context_unavailable",
+          class: "permission",
+          description:
+            "The selected meeting was deleted, disabled or is unavailable to this person. Its answer and evidence are withheld."
+        },
+        {
+          code: "meeting_chat_changed",
+          class: "transient",
+          description:
+            "The meeting question was stopped or its selected model or conversation changed. Ask again in the selected meeting."
+        },
+        {
+          code: "meeting_chat_failed",
+          class: "transient",
+          description:
+            "The selected model failed or no transcript evidence fits the current answer-size limit. No ungrounded fallback answer is generated."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.meeting_questions.configure",
+          description:
+            "Choose an allowed active API-key chat model in AI providers. Administrator pins are enforced; subscription meeting chat requires a future supported adapter.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
     },
     {
       id: "chat.acp_sign_in_expired",
@@ -222,6 +266,7 @@ export const chatModuleManifest = {
       responseSchema: listChatThreadMessagesResponseSchema,
       permissionId: "chat.view"
     },
+    { method: "GET", path: "/api/chat/meeting-context", permissionId: "chat.view" },
     { method: "POST", path: "/api/chat/turn", permissionId: "chat.message" },
     // #1133 — file/image upload staged for the next turn; sending is what needs the
     // message permission, so the upload shares it.

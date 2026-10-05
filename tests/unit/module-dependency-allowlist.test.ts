@@ -76,6 +76,7 @@ const FEATURE_PACKAGES = new Set([
   "@moss/connectors",
   "@moss/email",
   "@moss/goals",
+  "@moss/meetings",
   "@moss/news",
   "@moss/notes",
   "@moss/notifications",

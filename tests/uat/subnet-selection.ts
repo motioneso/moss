@@ -123,6 +123,16 @@ export async function listLiveDockerSubnets(capture: Capture = captureCommand): 
       throw new UatSubnetSelectionError("Docker network inspect record has an invalid name");
     }
     const networkName = record.Name;
+    // Docker's built-in host/none drivers allocate no network subnet. Their inspect
+    // records can legitimately carry null IPAM/labels, unlike an unknown bridge record.
+    // https://docs.docker.com/engine/network/drivers/host/
+    // https://docs.docker.com/engine/network/drivers/none/
+    if (
+      (networkName === "host" && record.Driver === "host") ||
+      (networkName === "none" && record.Driver === "null")
+    )
+      continue;
+
     if (typeof record.IPAM !== "object" || record.IPAM === null || Array.isArray(record.IPAM)) {
       throw new UatSubnetSelectionError(`Docker network ${networkName} has malformed IPAM`);
     }
@@ -131,13 +141,16 @@ export async function listLiveDockerSubnets(capture: Capture = captureCommand): 
       throw new UatSubnetSelectionError(`Docker network ${networkName} has malformed IPAM config`);
     }
     if (
-      typeof record.Labels !== "object" ||
-      record.Labels === null ||
-      Array.isArray(record.Labels)
+      record.Labels !== null &&
+      (typeof record.Labels !== "object" || Array.isArray(record.Labels))
     ) {
       throw new UatSubnetSelectionError(`Docker network ${networkName} has malformed labels`);
     }
-    const composeProject = (record.Labels as Record<string, unknown>)["com.docker.compose.project"];
+    // Docker serializes an absent label map as null. It conveys no Compose ownership.
+    const composeProject =
+      record.Labels === null
+        ? undefined
+        : (record.Labels as Record<string, unknown>)["com.docker.compose.project"];
     if (
       composeProject !== undefined &&
       (typeof composeProject !== "string" || composeProject.length === 0)

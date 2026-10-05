@@ -18,8 +18,13 @@
     },
     {
       "expectIncludes": ["uatmiss"],
-      "calls": [{ "tool": "tasks.list", "arguments": {} }],
-      "reply": "Here are your tasks."
+      "calls": [
+        {
+          "tool": "uat-shadow-report.set_light_state",
+          "arguments": { "name": "Kitchen light", "on": true }
+        }
+      ],
+      "reply": "The fixture light is on."
     }
   ]
 }

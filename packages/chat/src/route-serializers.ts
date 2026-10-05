@@ -11,6 +11,7 @@ import type {
   SourceFreshnessV1
 } from "@moss/shared";
 
+import { readMeetingChatContext } from "./live/meeting-chat-runtime.js";
 import { readAttachments } from "./attachments-routes.js";
 import type { ShadowReport, ShadowReportRange } from "./classifier-shadow-repository.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
@@ -104,6 +105,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
   const usage = (toolMetadata.usage ?? modelMetadata.usage) as ChatTurnUsageDto | undefined;
   const origin = readOrigin(modelMetadata.origin);
   return {
+    meetingContext: readMeetingChatContext(toolMetadata)?.coverage,
     id: message.id,
     threadId: message.thread_id,
     ownerUserId: message.owner_user_id,
