@@ -193,4 +193,56 @@ describe("classifier shadow report (#2957)", () => {
     expect(seenByAdmin.checked).toBe(0);
     expect(seenByAdmin.disagreements).toEqual([]);
   });
+
+  it("counts a connected tool stored under the old model-side name as a match (#3039)", async () => {
+    const old = tag("old-name");
+    const stale = tag("stale-dots");
+    const real = tag("real-miss");
+    // Old form: the model side lacks the doubled slug and has dots where the transport had underscores.
+    await seed(ids.userA, {
+      turnId: old,
+      decision: "would_handle",
+      moduleId: "integration-hub",
+      toolName: "hub.list_devices",
+      confidence: 0.91,
+      comparisonStatus: "mismatch",
+      modelToolId: "hub.list_devices",
+      daysAgo: 1
+    });
+    await seed(ids.userA, {
+      turnId: stale,
+      decision: "would_handle",
+      moduleId: "integration-hub",
+      toolName: "hub.list_devices",
+      confidence: 0.92,
+      comparisonStatus: "mismatch",
+      modelToolId: "hub.list.devices",
+      daysAgo: 1
+    });
+    await seed(ids.userA, {
+      turnId: real,
+      decision: "would_handle",
+      moduleId: "integration-hub",
+      toolName: "hub.list_devices",
+      confidence: 0.93,
+      comparisonStatus: "mismatch",
+      modelToolId: "hub.turn_on",
+      daysAgo: 1
+    });
+
+    const seen = await reportAs(ids.userA, 7);
+    const confidences = seen.disagreements.map((d) => d.confidence);
+    expect(confidences).not.toContain(0.91);
+    expect(confidences).not.toContain(0.92);
+    expect(confidences).toContain(0.93);
+    expect(seen.agreed).toBeGreaterThanOrEqual(2);
+
+    const rows = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "shadow-report-test" },
+      (db) => repository.listForOwner(db)
+    );
+    const byTurn = new Map(rows.map((r) => [r.turnId, r.comparisonStatus]));
+    expect(byTurn.get(old)).toBe("match");
+    expect(byTurn.get(real)).toBe("mismatch");
+  });
 });
