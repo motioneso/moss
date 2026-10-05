@@ -10,6 +10,7 @@ import {
   type AiProviderWithSealedCredential
 } from "@moss/ai";
 import { getMeetingOutputTemplate, meetingsModuleManifest } from "@moss/meetings";
+import * as meetings from "@moss/meetings";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 import {
   createMeetingOutputRuntime,
@@ -81,6 +82,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 function setup() {
+  const coverage = vi
+    .spyOn(meetings, "readMeetingCaptureCompleteness")
+    .mockResolvedValue({ hasGaps: false, gapLimitReached: false });
   const route = vi
     .spyOn(AiRepository.prototype, "resolveModelForService")
     .mockResolvedValue({ model, reason: "admin-pin" });
@@ -113,6 +117,7 @@ function setup() {
   });
   return {
     ...runtime,
+    coverage,
     route,
     credential,
     serviceRoute,
@@ -126,6 +131,21 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   installModelActivityRecorder(null);
+});
+
+describe("recorded capture gaps in meeting summaries", () => {
+  it("adds deterministic coverage warnings independently of model output", async () => {
+    const h = setup();
+    h.coverage.mockResolvedValue({ hasGaps: true, gapLimitReached: true });
+    const generated = await h.generator(actor, input());
+    expect(generated.content).toMatchObject({
+      warnings: [
+        "Recorded capture gaps mean this summary may omit part of the meeting.",
+        "Additional gap details could not be retained after the capture limit."
+      ]
+    });
+    expect(String(h.fetch.mock.calls[0]?.[1]?.body)).toContain("Capture has recorded gaps");
+  });
 });
 
 describe("meeting summary generation availability", () => {

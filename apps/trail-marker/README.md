@@ -5,7 +5,7 @@ The native macOS companion for Moss. Menu-bar only app; see
 `docs/superpowers/specs/2026-09-20-trail-marker-mac-companion.md` for the spec.
 
 This app lives outside the pnpm workspace (`apps/trail-marker/` has no `package.json`), because its
-tests need a Mac and its CI job is a separate `macos-14` GitHub Actions runner.
+tests need a Mac and its CI job is a separate `macos-15` GitHub Actions runner.
 
 ## Requirements
 
@@ -112,3 +112,26 @@ measurement. The metrics report estimates OCR, capture and thumbnail costs, spli
 process CPU deltas that can overlap other work. A short or idle-only run cannot pass the working-day
 gate. Record the sample and whether the text answers three real "what did I see?" questions on the
 PR; Phase 2 stays gated until both CPU and usefulness pass.
+
+## Meeting recorder development path
+
+Meeting output capture requires macOS 14.2 or later. Build locally with the Xcode instructions
+above; this branch does not provide a signed distribution or Windows recorder.
+
+Use the same Moss origin in the browser and Trail Marker, including the development port. In
+Moss, create or reopen a meeting and choose Open recorder. In Trail Marker, explicitly prepare
+this Mac's microphone. Approve the named device in that meeting's browser panel, select the
+microphone and capture mode, acknowledge the notice, then press Record. Preparing or approving
+alone does not start recording. Transcription is configured only through AI providers in Moss.
+
+The separate meeting menu-bar indicator opens Pause/Stop controls. It remains visible when the
+browser changes pages. Pause All, logout and quit close meeting capture; a failed device cleanup
+blocks continuation and keeps a visible cleanup state. Reconnect and app restart never resume
+recording automatically. Capture approval is ephemeral and must be renewed after restart.
+
+This is an unverified native development checkpoint. Use generated, non-sensitive test audio only
+until provider use and recording have been separately authorized. Actual microphone/system-audio
+consent, selected-app exclusion, computer-mode process identity, device release, Teams/Zoom,
+latency and CPU need testing on real hardware. Computer mode conservatively pauses on process
+changes; inability to resolve this host's audio-process identity disables that mode. Source labels
+are not speaker attribution. See `packages/meetings/README.md` for server and proof boundaries.

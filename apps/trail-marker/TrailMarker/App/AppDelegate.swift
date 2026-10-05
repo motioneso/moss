@@ -10,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var focus = FocusRuntime(connection: connection, permissions: permissions, nudges: nudges)
     private let loginItem = LoginItemService()
     private let updater = UpdaterService()
+    private lazy var meetings = MeetingCaptureHost(connection: connection)
+    private var meetingStatusItem: MeetingCaptureStatusItem?
+    private var meetingWindowController: NSWindowController?
 
     private var menuBarController: MenuBarController?
     private var onboardingWindowController: NSWindowController?
@@ -52,6 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         focusDebugOverlay.show()
         focusDebugBanner = FocusDebugBanner(focus: focus)
         #endif
+        connection.beforeLifecycleChange = { [weak self] event in
+            self?.meetings.beforeConnectionEvent(event) ?? true
+        }
+        meetingStatusItem = MeetingCaptureStatusItem(host: meetings, showControls: { [weak self] in self?.showMeetingControls() })
         permissions.refresh()
         connection.start()
         focus.start()
@@ -93,6 +100,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .notLinked = connection.state {
             showOnboarding()
         }
+    }
+
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        for url in urls where url.scheme == "moss-meeting" { meetings.open(url) }
+        showMeetingControls()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard meetings.terminate(reason: "Meeting capture ended.") else {
+            showMeetingControls()
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
+    private func showMeetingControls() {
+        if let meetingWindowController {
+            meetingWindowController.showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let hosting = NSHostingController(rootView: MeetingCaptureView(host: meetings))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Moss meeting capture"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        place(window, hosting: hosting)
+        let controller = NSWindowController(window: window)
+        meetingWindowController = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func showOnboarding() {
@@ -151,7 +191,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = SettingsWindow(
             connection: connection, permissions: permissions, focus: focus, updater: updater, loginItem: loginItem,
             onSetUp: { [weak self] in self?.showOnboarding() }, backtrack: backtrack, uploader: backtrackUploader,
-            onOpenBacktrackInMoss: { [weak self] in self?.openBacktrackInMoss() }, onShowBacktrackText: showText
+            onOpenBacktrackInMoss: { [weak self] in self?.openBacktrackInMoss() }, onShowBacktrackText: showText,
+            onOpenMeetingControls: { [weak self] in self?.showMeetingControls() }
         )
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)

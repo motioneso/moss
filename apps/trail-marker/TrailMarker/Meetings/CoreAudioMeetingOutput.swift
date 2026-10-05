@@ -13,7 +13,7 @@ protocol MeetingOutputHardware {
     func createTap(scope: MeetingOutputScope) throws -> AudioObjectID
     func tapFormat(_ tap: AudioObjectID) throws -> AudioStreamBasicDescription
     func createAggregate(tap: AudioObjectID) throws -> AudioObjectID
-    func createIO(device: AudioObjectID, tap: AudioObjectID, format: AudioStreamBasicDescription,
+    func createIO(device: AudioObjectID, tap: AudioObjectID, scope: MeetingOutputScope, format: AudioStreamBasicDescription,
                   receiver: MeetingAudioReceiving) throws -> MeetingOutputIO
     func destroyAggregate(_ device: AudioObjectID) throws
     func destroyTap(_ tap: AudioObjectID) throws
@@ -47,10 +47,11 @@ final class CoreAudioMeetingOutput: MeetingAudioCapturing {
                   format.mFormatFlags & kAudioFormatFlagIsBigEndian == 0,
                   format.mBitsPerChannel == 32, format.mChannelsPerFrame == 1,
                   format.mBytesPerFrame == 4, format.mSampleRate.isFinite,
-                  (8000...192000).contains(format.mSampleRate) else { throw MeetingAudioFailure.invalidFormat }
+                  (8000...192000).contains(format.mSampleRate),
+                  format.mSampleRate.rounded() == format.mSampleRate else { throw MeetingAudioFailure.invalidFormat }
             let device = try hardware.createAggregate(tap: newTap)
             aggregate = device
-            let installed = try hardware.createIO(device: device, tap: newTap, format: format, receiver: receiver)
+            let installed = try hardware.createIO(device: device, tap: newTap, scope: scope, format: format, receiver: receiver)
             io = installed
             try installed.start()
         } catch {
@@ -143,9 +144,9 @@ struct SystemMeetingOutputHardware: MeetingOutputHardware {
         return value.takeRetainedValue()
     }
 
-    func createIO(device: AudioObjectID, tap: AudioObjectID, format: AudioStreamBasicDescription,
+    func createIO(device: AudioObjectID, tap: AudioObjectID, scope: MeetingOutputScope, format: AudioStreamBasicDescription,
                   receiver: MeetingAudioReceiving) throws -> MeetingOutputIO {
-        SystemMeetingOutputIO(device: device, tap: tap, format: format, receiver: receiver)
+        SystemMeetingOutputIO(device: device, tap: tap, scope: scope, format: format, receiver: receiver)
     }
 
     func destroyAggregate(_ device: AudioObjectID) throws {
@@ -169,18 +170,20 @@ struct SystemMeetingOutputHardware: MeetingOutputHardware {
 @available(macOS 14.2, *)
 private final class SystemMeetingOutputIO: MeetingOutputIO {
     private let device: AudioObjectID
-    private let queue = DispatchQueue(label: "com.moss.meeting.output-io")
+    private let queue = DispatchQueue(label: "com.moss.meeting.output-properties")
     private var token: AudioDeviceIOProcID?
     private var started = false
     private let tap: AudioObjectID
+    private let scope: MeetingOutputScope
     private let format: AudioStreamBasicDescription
     private let receiver: MeetingOutputReceiverGate
     private var listeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
 
-    init(device: AudioObjectID, tap: AudioObjectID, format: AudioStreamBasicDescription,
+    init(device: AudioObjectID, tap: AudioObjectID, scope: MeetingOutputScope, format: AudioStreamBasicDescription,
          receiver: MeetingAudioReceiving) {
         self.device = device
         self.tap = tap
+        self.scope = scope
         self.format = format
         self.receiver = MeetingOutputReceiverGate(receiver)
     }
@@ -189,7 +192,11 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
         guard token == nil else { throw MeetingAudioFailure.invalidTransition }
         let receiver = self.receiver
         let format = self.format
-        let status = AudioDeviceCreateIOProcIDWithBlock(&token, device, queue) { _, input, timestamp, _, _ in
+        let scope = self.scope
+        let processIdentity = try Self.processIdentity(scope: scope)
+        // Apple dispatches IO blocks synchronously. A nil queue avoids waiting behind
+        // control-plane process/property reads on the listener queue.
+        let status = AudioDeviceCreateIOProcIDWithBlock(&token, device, nil) { _, input, timestamp, _, _ in
             guard timestamp.pointee.mFlags.contains(.hostTimeValid) else {
                 receiver.fail(.invalidTimestamp); return
             }
@@ -206,10 +213,27 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
         try check(status, "install-output-io")
         // The adapter owns this object before acquisition. Failed setup retains every handle
         // so its normal stop path can release them or report a cleanup failure for retry.
-        try observe(tap, selector: kAudioTapPropertyFormat, receiver: receiver)
-        try observe(device, selector: kAudioDevicePropertyDeviceIsAlive, receiver: receiver)
-        try observe(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyProcessObjectList,
-                    receiver: receiver)
+        try observe(tap, selector: kAudioTapPropertyFormat) { receiver.fail(.invalidFormat) }
+        try observe(device, selector: kAudioDevicePropertyDeviceIsAlive) { receiver.fail(.invalidSelection) }
+        for selector in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice,
+                         kAudioHardwarePropertyDevices] {
+            try observeRoute(AudioObjectID(kAudioObjectSystemObject), selector: selector, receiver: receiver)
+        }
+        if case .selectedProcesses(let objects) = scope {
+            for object in objects {
+                try observeRoute(object, selector: kAudioProcessPropertyDevices, receiver: receiver)
+            }
+        }
+        try observe(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyProcessObjectList) {
+            // A global exclusion tap cannot prove whether a newly appearing process is a
+            // Moss helper before it renders. Pause conservatively; the host must resolve a
+            // fresh exclusion set on explicit Resume. Selected-app taps remain narrow.
+            if MeetingOutputProcessIdentity.invalidates(scope: scope, original: processIdentity,
+                readCurrent: { try Self.processIdentity(scope: scope) }) { receiver.fail(.invalidSelection) }
+        }
+        guard try Self.processIdentity(scope: scope) == processIdentity else {
+            throw MeetingAudioFailure.invalidSelection
+        }
         guard let token else { throw MeetingAudioFailure.invalidTransition }
         // Permission may be requested by macOS here. No caller invokes this in preflight/tests.
         try receiver.open()
@@ -218,12 +242,62 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
     }
 
     private func observe(_ object: AudioObjectID, selector: AudioObjectPropertySelector,
-                         receiver: MeetingAudioReceiving) throws {
+                         changed: @escaping () -> Void) throws {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
                                                 mElement: kAudioObjectPropertyElementMain)
-        let listener: AudioObjectPropertyListenerBlock = { _, _ in receiver.fail(.invalidSelection) }
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in changed() }
         try check(AudioObjectAddPropertyListenerBlock(object, &address, queue, listener), "observe-output-source")
         listeners.append((object, address, listener))
+    }
+
+    private func observeRoute(_ object: AudioObjectID, selector: AudioObjectPropertySelector,
+                              receiver: MeetingAudioReceiving) throws {
+        let original = try Self.routeObjects(object, selector: selector)
+        try observe(object, selector: selector) {
+            guard let current = try? Self.routeObjects(object, selector: selector), current == original else {
+                receiver.fail(.invalidSelection); return
+            }
+        }
+        // Ignore a coalesced notification caused by our own already-created aggregate, but
+        // reject a route that changed across listener installation even when its format did not.
+        guard try Self.routeObjects(object, selector: selector) == original else {
+            throw MeetingAudioFailure.invalidSelection
+        }
+    }
+
+    private static func routeObjects(_ object: AudioObjectID,
+                                     selector: AudioObjectPropertySelector) throws -> Set<AudioObjectID> {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
+                                                mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(object, &address, 0, nil, &size) == noErr,
+              size <= 65_536, size % UInt32(MemoryLayout<AudioObjectID>.size) == 0 else {
+            throw MeetingAudioFailure.invalidSelection
+        }
+        guard size > 0 else { return [] }
+        let capacity = size
+        var values = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        let status = values.withUnsafeMutableBytes {
+            AudioObjectGetPropertyData(object, &address, 0, nil, &size, $0.baseAddress!)
+        }
+        guard status == noErr, size <= capacity, size % UInt32(MemoryLayout<AudioObjectID>.size) == 0 else {
+            throw MeetingAudioFailure.invalidSelection
+        }
+        return Set(values.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
+    }
+
+    private static func processIdentity(scope: MeetingOutputScope) throws -> [AudioObjectID: Int32] {
+        try MeetingOutputProcessIdentity.snapshot(scope: scope) { object in
+            var pid: Int32 = 0
+            var size = UInt32(MemoryLayout<Int32>.size)
+            var address = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyPID,
+                mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            let status = AudioObjectGetPropertyData(object, &address, 0, nil, &size, &pid)
+            guard status == noErr, size == UInt32(MemoryLayout<Int32>.size), pid > 0 else {
+                throw MeetingAudioFailure.invalidSelection
+            }
+            return pid
+        }
     }
 
     func stop() throws {
@@ -237,7 +311,10 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
         try stop()
         while let (object, storedAddress, listener) = listeners.last {
             var address = storedAddress
-            try check(AudioObjectRemovePropertyListenerBlock(object, &address, queue, listener), "remove-output-listener")
+            let status = AudioObjectRemovePropertyListenerBlock(object, &address, queue, listener)
+            // A selected process can be destroyed before cleanup. There is no live object to
+            // unregister from in that case; queued blocks retain their closed receiver gate.
+            if status != kAudioHardwareBadObjectError { try check(status, "remove-output-listener") }
             listeners.removeLast()
         }
         if let token {
@@ -253,33 +330,56 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
     deinit { receiver.close(); try? destroy() }
 }
 
+/// Read only identities in the original scope. App/helper membership is resolved by the host;
+/// selected-app validation ignores unrelated processes and never edits the original object list.
+enum MeetingOutputProcessIdentity {
+    static func invalidates(scope: MeetingOutputScope, original: [UInt32: Int32],
+                            readCurrent: () throws -> [UInt32: Int32]) -> Bool {
+        if case .excludingProcesses = scope { return true }
+        guard let current = try? readCurrent() else { return true }
+        return current != original
+    }
+
+    static func snapshot(scope: MeetingOutputScope, readPID: (UInt32) throws -> Int32) throws -> [UInt32: Int32] {
+        try scope.validate()
+        let ids: [UInt32]
+        switch scope {
+        case .selectedProcesses(let values), .excludingProcesses(let values): ids = values
+        }
+        var identity: [UInt32: Int32] = [:]
+        for id in ids {
+            let pid = try readPID(id)
+            guard pid > 0 else { throw MeetingAudioFailure.invalidSelection }
+            identity[id] = pid
+        }
+        return identity
+    }
+}
+
 /// Gates even callbacks already queued by Core Audio before Stop returned.
 final class MeetingOutputReceiverGate: MeetingAudioReceiving {
     private let downstream: MeetingAudioReceiving
-    private let lock = NSLock()
-    private var accepting = false
-    private var invalidated = false
+    private let copyLock = NSLock()
+    // Bits: 1 = opened, 2 = invalidated, 4 = closed permanently. Only value 1 admits audio.
+    private let admission = MeetingAudioAtomicState()
     init(_ downstream: MeetingAudioReceiving) { self.downstream = downstream }
     func open() throws {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !invalidated else { throw MeetingAudioFailure.invalidSelection }
-        accepting = true
+        guard admission.replace(0, with: 1) else { throw MeetingAudioFailure.invalidSelection }
     }
-    func close() { lock.lock(); accepting = false; lock.unlock() }
+    func close() {
+        admission.insert(4)
+        copyLock.lock()
+        copyLock.unlock()
+    }
     func receive(hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int, sampleAt: (Int) -> Float) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard accepting else { return }
+        guard copyLock.try() else { fail(.bufferFull); return }
+        defer { copyLock.unlock() }
+        guard admission.value == 1 else { return }
         downstream.receive(hostTimeNanoseconds: hostTimeNanoseconds, sampleRate: sampleRate,
                            frameCount: frameCount, sampleAt: sampleAt)
     }
     func fail(_ failure: MeetingAudioFailure) {
-        lock.lock()
-        let report = accepting
-        accepting = false
-        invalidated = true
-        lock.unlock()
-        if report { downstream.fail(failure) }
+        let previous = admission.insert(2)
+        if previous == 1 || (previous == 3 && failure == .invalidSelection) { downstream.fail(failure) }
     }
 }

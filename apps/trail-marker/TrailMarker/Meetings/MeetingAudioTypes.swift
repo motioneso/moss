@@ -11,7 +11,8 @@ enum MeetingAudioFailure: Error, Equatable {
     case cleanupFailed
 }
 
-/// Calls are synchronous. Implementations must copy samples before returning, never retain pointers.
+/// Calls are synchronous and must not wait on a contended lock. Implementations must copy
+/// samples before returning, never retain pointers; failure reporting must also be nonblocking.
 protocol MeetingAudioReceiving: AnyObject {
     func receive(hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int, sampleAt: (Int) -> Float)
     func fail(_ failure: MeetingAudioFailure)
@@ -72,6 +73,8 @@ enum MeetingAudioGapReason: Equatable {
     case paused
     case expired
     case bufferFull
+    case retentionDeclined
+    case cutoffChanged
     case captureFailure(MeetingAudioFailure)
 }
 
@@ -81,4 +84,23 @@ struct MeetingAudioGap: Equatable {
     let startNanoseconds: UInt64
     let endNanoseconds: UInt64
     let reason: MeetingAudioGapReason
+}
+
+/// Allocated on the control plane. Every subsequent operation is lock-free C11 atomic access.
+/// The C shim asserts lock freedom at build time, including on the macOS 14 deployment floor.
+final class MeetingAudioAtomicState {
+    private let word: OpaquePointer
+
+    init(_ value: UInt32 = 0) {
+        guard let word = MeetingAudioAtomicCreate(value) else { preconditionFailure("Audio atomic allocation failed") }
+        self.word = word
+    }
+
+    var value: UInt32 { MeetingAudioAtomicLoad(word) }
+    @discardableResult func insert(_ bits: UInt32) -> UInt32 { MeetingAudioAtomicOr(word, bits) }
+    @discardableResult func exchange(_ value: UInt32) -> UInt32 { MeetingAudioAtomicExchange(word, value) }
+    func replace(_ expected: UInt32, with desired: UInt32) -> Bool {
+        MeetingAudioAtomicCompareExchange(word, expected, desired)
+    }
+    deinit { MeetingAudioAtomicDestroy(word) }
 }

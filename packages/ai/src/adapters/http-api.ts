@@ -151,7 +151,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         kind: "transcription",
         action: "transcription",
         modelName: input.model.provider_model_id,
-        actionCode: "transcribe.voice_note",
+        actionCode: input.actionCode ?? "transcribe.voice_note",
         ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
         ...(input.turnId ? { turnId: input.turnId } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {})

@@ -51,7 +51,8 @@ import {
  *   - the signed-in browser, deciding an attempt it was handed the code for;
  *   - the linked Mac, holding a companion credential, acting on its own device row.
  *
- * A companion credential is accepted here and nowhere else. The reverse also holds by
+ * A companion credential is accepted here and by identity-only meeting approval bootstrap;
+ * it never authorizes meeting capture or transcript data. The reverse also holds by
  * construction: the general resolver passes every bearer token to the legacy UUID
  * session lookup, which rejects a `tm1_` value, so this credential authenticates no
  * other route in the product.

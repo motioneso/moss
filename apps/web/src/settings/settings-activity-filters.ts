@@ -121,6 +121,7 @@ export function lineActivityModule(actionCode: string | null): string | null {
   if (!actionCode) return null;
   if (actionCode === "chat.answer" || actionCode === "chat.tool_check") return "ai";
   if (actionCode.startsWith("embed.")) return "memory";
+  if (actionCode === "transcribe.meeting") return "meetings";
   if (actionCode === "transcribe.voice_note") return "ai";
   if (actionCode === "module.build") return "workshop";
   if (actionCode === "probe.reachable") return null;

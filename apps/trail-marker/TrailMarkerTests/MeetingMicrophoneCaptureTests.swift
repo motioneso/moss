@@ -27,7 +27,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
     private final class FakeUnit: MeetingMicrophoneUnit {
         static let startup = [
             "create", "input", "output", "device", "format", "mono", "capacity", "callback",
-            "initialize", "listener", "verifyFormat", "verifyCapacity", "start",
+            "initialize", "listener", "deviceListener", "verifyFormat", "verifyCapacity", "start",
         ]
         var events: [String] = []
         var failAt: Set<String> = []
@@ -92,6 +92,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             try step("listener")
             onListener?()
         }
+        func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws { try step("deviceListener") }
         func start() throws { try step("start") }
         func stop() throws { try step("stop") }
         func uninitialize() throws { try step("uninitialize") }
@@ -426,4 +427,43 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         XCTAssertEqual(unit.renderCount, 1)
         try capture.stop()
     }
+    func testUnplugDuringRenderRejectsInFlightAudioAndDoesNotSwitchDevices() throws {
+        let unit = FakeUnit()
+        unit.onRender = { [weak unit] in unit?.context?.deviceDidDisappear() }
+        let capture = unit.capture(device: 71)
+        let receiver = Receiver()
+        try capture.start(into: receiver)
+        unit.emit()
+        unit.emit(at: 200)
+        XCTAssertEqual(receiver.failures, [.invalidSelection])
+        XCTAssertTrue(receiver.batches.isEmpty)
+        XCTAssertEqual(unit.renderCount, 1)
+        XCTAssertEqual(unit.selectedDevice, 71)
+        try capture.stop()
+    }
+
+    func testDeviceNotificationAfterStopCannotAffectNewReceiver() throws {
+        let unit = FakeUnit()
+        let capture = unit.capture()
+        let receiver = Receiver()
+        try capture.start(into: receiver)
+        let old = try XCTUnwrap(unit.context)
+        try capture.stop()
+        old.deviceDidDisappear()
+        old.formatDidChange()
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertEqual(unit.emit(to: old), noErr)
+        XCTAssertTrue(receiver.batches.isEmpty)
+    }
+
+    func testHardwareRateOutsideWireRangeFailsBeforeCallbackInstallation() {
+        for rate in [7999.0, 192001.0] {
+            let unit = FakeUnit()
+            unit.format.mSampleRate = rate
+            let capture = unit.capture()
+            XCTAssertThrowsError(try capture.start(into: Receiver()))
+            XCTAssertFalse(unit.events.contains("callback"))
+        }
+    }
+
 }

@@ -6,6 +6,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case focus = "Focus"
     /// Shown in Release only once Moss has said it stores Backtrack (phase 2 plan §5.1).
     case backtrack = "Backtrack"
+    case meetings = "Meetings"
     case permissions = "Permissions"
     case updates = "Updates"
 
@@ -17,6 +18,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .thisMac: return "laptopcomputer"
         case .focus: return "scope"
         case .backtrack: return "clock.arrow.circlepath"
+        case .meetings: return "waveform"
         case .permissions: return "hand.raised"
         case .updates: return "arrow.triangle.2.circlepath"
         }
@@ -35,6 +37,7 @@ struct SettingsWindow: View {
     var uploader: BacktrackUploader?
     var onOpenBacktrackInMoss: (() -> Void)?
     var onShowBacktrackText: (() -> Void)?
+    var onOpenMeetingControls: (() -> Void)?
 
     @State private var selection: SettingsSection? = .connection
     @State private var autoCheckUpdates = PreferencesStore().autoCheckUpdates
@@ -73,6 +76,15 @@ struct SettingsWindow: View {
                 } else {
                     Text("Backtrack isn't available on this Moss.").foregroundStyle(.secondary)
                 }
+            case .meetings:
+                VStack(alignment: .leading, spacing: TrailMarkerTokens.Spacing.group) {
+                    Text("Meeting capture").font(.title2.weight(.semibold))
+                    Text("Open a meeting in Moss to prepare this Mac. Every meeting requires its own approval and explicit Record. Pause All, Log Out and Quit end capture; Resume All never restarts it.")
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Button("Open meeting controls") { onOpenMeetingControls?() }
+                    Text("Microphone-only, selected-app and computer audio are separate choices. System audio requires macOS 14.2 or later. No screen or Backtrack permission enables meeting recording.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }.padding(TrailMarkerTokens.Spacing.section)
             case .permissions:
                 PermissionsPane(permissions: permissions)
             case .updates:

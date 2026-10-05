@@ -1,6 +1,8 @@
 import Foundation
 
 struct MeetingNativeReadiness {
+    /// Microphone grant and explicit user authorization for a possible system-audio prompt.
+    /// macOS has no public read-only system-audio preflight; output Start must still succeed.
     let permissionsGranted: Bool
     let processingReady: Bool
     let noticeAcknowledged: Bool
@@ -37,12 +39,12 @@ struct MeetingCaptureMachine {
         lastTransitionNanoseconds = at
     }
 
-    mutating func start(readiness: MeetingNativeReadiness, at: UInt64) throws {
-        guard state == .ready, selection != nil else { throw MeetingAudioFailure.invalidTransition }
+    mutating func start(readiness: MeetingNativeReadiness, at: UInt64, initialEpoch: UInt64 = 1) throws {
+        guard state == .ready, selection != nil, initialEpoch > 0 else { throw MeetingAudioFailure.invalidTransition }
         try chronology(at)
         try readiness.validate()
         state = .recording
-        epoch = 1
+        epoch = initialEpoch
         originNanoseconds = at
         lastTransitionNanoseconds = at
     }
@@ -68,7 +70,7 @@ struct MeetingCaptureMachine {
         lastTransitionNanoseconds = at
     }
 
-    mutating func stop(at: UInt64, finalizationNanoseconds: UInt64) throws {
+    mutating func stop(at: UInt64, finalizationNanoseconds: UInt64, captureCutoffNanoseconds: UInt64? = nil) throws {
         if stopCutoffNanoseconds != nil { return }
         guard state == .recording || state == .paused || state == .failed else {
             throw MeetingAudioFailure.invalidTransition
@@ -77,10 +79,15 @@ struct MeetingCaptureMachine {
         guard finalizationNanoseconds <= 60_000_000_000, at <= UInt64.max - finalizationNanoseconds else {
             throw MeetingAudioFailure.invalidTimestamp
         }
-        stopCutoffNanoseconds = at
+        stopCutoffNanoseconds = min(at, captureCutoffNanoseconds ?? at)
         finalizationDeadlineNanoseconds = at + finalizationNanoseconds
         lastTransitionNanoseconds = at
         state = .stopping
+    }
+
+    mutating func tightenStopCutoff(to cutoff: UInt64) throws {
+        guard let existing = stopCutoffNanoseconds else { throw MeetingAudioFailure.invalidTransition }
+        stopCutoffNanoseconds = min(existing, cutoff)
     }
 
     mutating func finish(at: UInt64, drained: Bool, expiredAudio: Bool = false) throws {
@@ -93,6 +100,13 @@ struct MeetingCaptureMachine {
     }
 
     mutating func fail() { state = .failed; retainedAudioPermitted = false }
+
+    mutating func terminate(at: UInt64) {
+        // Privacy teardown must still close admission if a caller supplies a stale clock.
+        lastTransitionNanoseconds = max(at, lastTransitionNanoseconds)
+        retainedAudioPermitted = false
+        state = .finished
+    }
 
     func permitsSend(epoch: UInt64, endNanoseconds: UInt64, now: UInt64) -> Bool {
         guard epoch > 0, epoch <= self.epoch, now >= lastTransitionNanoseconds, now >= endNanoseconds else { return false }

@@ -10,21 +10,9 @@ import {
   putMeetingPreferences,
   meetingKeys
 } from "./client.js";
-
-const MODES = [
-  {
-    value: "computer-audio",
-    label: "Microphone and computer audio",
-    description: "Audio from a selected output device."
-  },
-  {
-    value: "selected-app",
-    label: "Microphone and selected app",
-    description: "Only the selected app’s output."
-  },
-  { value: "microphone-only", label: "Microphone only", description: "Your voice or the room." }
-] as const;
-type CaptureMode = (typeof MODES)[number]["value"];
+import { CAPTURE_MODES, type CaptureMode } from "./capture-modes.js";
+import { captureKeys } from "./capture-client.js";
+import { newCaptureSession, type CaptureSession } from "./capture-session.js";
 
 interface SetupDraft {
   readonly title: string;
@@ -90,6 +78,17 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
     },
     onSuccess: ({ meeting, created }) => {
       if (!sameSession()) return;
+      const selectedMode =
+        client.getQueryData<SetupDraft>(setupKey)?.mode ??
+        preferences.data?.defaultCaptureMode ??
+        null;
+      if (!client.getQueryData(captureKeys.session(meeting.id))) {
+        const captureSession = newCaptureSession();
+        client.setQueryData<CaptureSession>(captureKeys.session(meeting.id), {
+          ...captureSession,
+          choice: { ...captureSession.choice, mode: selectedMode }
+        });
+      }
       updateForm({ request: null, title: "", mode: null });
       if (created) client.setQueryData(meetingKeys.record(meeting.id), { meeting });
       else void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
@@ -132,7 +131,7 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
           name="meeting-capture-mode"
           ariaLabel="Capture mode"
           value={mode}
-          options={MODES}
+          options={CAPTURE_MODES}
           onChange={(mode) => updateForm({ mode })}
         />
         <div className="meetings-actions">
@@ -177,7 +176,7 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
         ) : null}
         {mode === "computer-audio" ? (
           <Note variant="practical">
-            Computer audio can include other apps, media, and notifications on the selected output.
+            Computer audio can include other apps, media, and notifications.
           </Note>
         ) : null}
       </section>
@@ -185,8 +184,8 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
         <SectionHead number="02" title="Check the sources" rule />
         <Note variant="practical">
           <p id="meeting-capture-unavailable">
-            Recording isn’t available in this version of Moss. Create a draft to keep your notes, or
-            review an existing transcript.
+            Create a draft, then connect Trail Marker on your Mac to choose sources and record. You
+            can also keep notes without recording.
           </p>
           <p>
             Manage transcription and summaries in{" "}

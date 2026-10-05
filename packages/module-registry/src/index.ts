@@ -1,3 +1,7 @@
+import {
+  createMeetingCaptureRuntime,
+  type MeetingCaptureAuthorization
+} from "./meeting-capture-runtime.js";
 import { createMeetingOutputRuntime } from "./meeting-output-runtime.js";
 import {
   createMeetingNoteIndexPort,
@@ -17,6 +21,7 @@ import type { PgBoss } from "pg-boss";
 import {
   meetingsModuleManifest,
   meetingsModuleSqlMigrationDirectory,
+  registerMeetingCaptureRoutes,
   registerMeetingRecordRoutes,
   registerMeetingOutputRoutes,
   registerMeetingExportRoutes,
@@ -565,6 +570,8 @@ function findWorkspaceRoot(startDir: string): string {
 const APP_MAP_ARTIFACT_PATH = join(findWorkspaceRoot(MODULE_DIR), "dist", "app-map.json");
 
 export interface BuiltInRouteDependencies {
+  /** Dedicated session/device identity for explicit meeting recorder approval. */
+  readonly meetingCaptureAuthorization?: MeetingCaptureAuthorization;
   // Raw root handle forwarded to settings' BootstrapHelper (pre-session bootstrap status).
   // Documented Kysely< exemption — see packages/settings/src/bootstrap.ts. This is the
   // ONLY root-handle escape hatch in the route layer; module admin checks run through
@@ -2837,6 +2844,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
     queueDefinitions: [],
     registerRoutes: (server, deps) => {
+      registerMeetingCaptureRoutes(server, createMeetingCaptureRuntime(deps));
       registerMeetingRecordRoutes(server, {
         beforeRemove: deleteMeetingChatThreads,
         dataContext: deps.dataContext,

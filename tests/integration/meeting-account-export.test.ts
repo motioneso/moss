@@ -343,7 +343,7 @@ describe("Meetings export worker grants and owner RLS", () => {
   });
 
   it.each(actors)(
-    "direct worker reads succeed with no owner WHERE and isolate $label on all eight tables",
+    "direct worker reads succeed with no owner WHERE and isolate $label on all nine tables",
     async (actor) => {
       await workerContext.withDataContext(actor, async (db) => {
         for (const { key, table, columns } of meetingExportTables) {

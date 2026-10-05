@@ -570,6 +570,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // because the /api/modules provider closes over it. registerBuiltInApiRoutes reuses
     // the same holder for the settings module's external-module deps below.
     registerBuiltInApiRoutes(server, {
+      meetingCaptureAuthorization: {
+        resolveBrowser: (input) => authRuntime.sessionBindings.resolveBrowser(input),
+        resolveCompanion: (input) => authRuntime.companionDevices.resolve(input),
+        assertBinding: (input) => authRuntime.sessionBindings.assertLive(input),
+        device: (input) => authRuntime.sessionBindings.device(input),
+        trustedOrigins: authRuntime.trustedOrigins
+      },
       rootDb: appDb,
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,

@@ -46,6 +46,8 @@ export function meetingRecordQueryOptions(id: string) {
         // A later success from an earlier save must not restore inaccessible content.
         if (!signal?.aborted && isMeetingAccessDenied(error)) {
           invalidateOutputAccess(client, id);
+          client.removeQueries({ queryKey: ["meetings", "capture-session", id], exact: true });
+          client.removeQueries({ queryKey: ["meetings", "capture", id], exact: true });
           clearSessionUnsavedChanges(client, `meetings:${id}:`);
           client.removeQueries({ queryKey: meetingKeys.editor(id), exact: true });
           client.removeQueries({ queryKey: ["meetings", "output-session", id] });

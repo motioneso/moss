@@ -27,7 +27,7 @@ final class MeetingOutputCaptureTests: XCTestCase {
         func createTap(scope: MeetingOutputScope) throws -> AudioObjectID { self.scope = scope; try step("tap"); return 1 }
         func tapFormat(_ tap: AudioObjectID) throws -> AudioStreamBasicDescription { try step("format"); return format }
         func createAggregate(tap: AudioObjectID) throws -> AudioObjectID { try step("aggregate"); return 2 }
-        func createIO(device: AudioObjectID, tap: AudioObjectID, format: AudioStreamBasicDescription,
+        func createIO(device: AudioObjectID, tap: AudioObjectID, scope: MeetingOutputScope, format: AudioStreamBasicDescription,
                       receiver: MeetingAudioReceiving) throws -> MeetingOutputIO {
             try step("io"); return IO(self)
         }
@@ -185,4 +185,93 @@ final class MeetingOutputCaptureTests: XCTestCase {
             XCTAssertEqual($0 as? MeetingAudioFailure, .deviceFailure(operation: "read-tap-uid", status: -77))
         }
     }
+    func testProcessIdentityIgnoresUnrelatedLaunchesAndExitsWithoutBroadeningScope() throws {
+        for scope in [MeetingOutputScope.selectedProcesses([7, 8]), .excludingProcesses([7, 8])] {
+            var processes: [UInt32: Int32] = [7: 101, 8: 102, 9: 103]
+            func snapshot() throws -> [UInt32: Int32] {
+                try MeetingOutputProcessIdentity.snapshot(scope: scope) { object in
+                    guard let pid = processes[object] else { throw MeetingAudioFailure.invalidSelection }
+                    return pid
+                }
+            }
+            let original = try snapshot()
+            processes.removeValue(forKey: 9)
+            processes[10] = 104
+            XCTAssertEqual(try snapshot(), original)
+            XCTAssertEqual(Set(original.keys), Set([UInt32(7), 8]))
+            processes[8] = 999
+            XCTAssertNotEqual(try snapshot(), original, "A reused object cannot retain its old process identity")
+            processes.removeValue(forKey: 7)
+            XCTAssertThrowsError(try snapshot())
+        }
+    }
+
+    func testInvalidProcessIdentityFailsClosed() {
+        for pid in [Int32(0), -1] {
+            XCTAssertThrowsError(try MeetingOutputProcessIdentity.snapshot(scope: .selectedProcesses([7])) { _ in pid })
+        }
+    }
+
+    func testClosedGateLateFailureCannotReachOldReceiver() throws {
+        let receiver = Receiver()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.close()
+        gate.fail(.invalidSelection)
+        gate.fail(.invalidSelection)
+        gate.fail(.invalidFormat)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertThrowsError(try gate.open())
+    }
+
+    func testEverySuccessfulRollbackAllowsFreshExplicitStart() throws {
+        for stage in ["tap", "format", "aggregate", "io", "start"] {
+            let hardware = Hardware()
+            hardware.failure = stage
+            let capture = CoreAudioMeetingOutput(scope: .selectedProcesses([7]), hardware: hardware)
+            XCTAssertThrowsError(try capture.start(into: Receiver()))
+            hardware.failure = nil
+            try capture.start(into: Receiver())
+            try capture.stop()
+            XCTAssertEqual(Array(hardware.events.suffix(4)), ["stop", "destroyIO", "destroyAggregate", "destroyTap"])
+        }
+    }
+
+    func testGlobalExclusionInvalidatesOnAnyProcessEventButSelectedAppChecksIdentity() {
+        let original: [UInt32: Int32] = [7: 101]
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .excludingProcesses([7]),
+            original: original, readCurrent: { original }))
+        XCTAssertFalse(MeetingOutputProcessIdentity.invalidates(scope: .selectedProcesses([7]),
+            original: original, readCurrent: { original }))
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .selectedProcesses([7]),
+            original: original, readCurrent: { [7: 102] }))
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .selectedProcesses([7]),
+            original: original, readCurrent: { throw MeetingAudioFailure.invalidSelection }))
+    }
+
+    func testOutputRouteEventClosesGateEvenWhenSampleFormatIsUnchanged() throws {
+        let receiver = Receiver()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.receive(hostTimeNanoseconds: 0, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
+        // This is the same failure emitted by default-output/device/per-app route listeners.
+        gate.fail(.invalidSelection)
+        gate.receive(hostTimeNanoseconds: 20_834, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
+        XCTAssertEqual(receiver.received, 1)
+        XCTAssertEqual(receiver.failures, [.invalidSelection])
+        XCTAssertThrowsError(try gate.open())
+    }
+
+    func testScopeFaultStillReachesReceiverAfterAnEarlierFormatFault() throws {
+        let receiver = Receiver()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.fail(.invalidFormat)
+        gate.fail(.invalidSelection)
+        gate.close()
+        gate.fail(.invalidSelection)
+        gate.fail(.invalidSelection)
+        XCTAssertEqual(receiver.failures, [.invalidFormat, .invalidSelection])
+    }
+
 }

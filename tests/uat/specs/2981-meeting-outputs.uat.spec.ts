@@ -602,11 +602,13 @@ test("reviewed summary versions create independent Tasks and private vault copie
           "output_artifacts",
           "action_candidates",
           "export_receipts",
-          "export_requests"
+          "export_requests",
+          "capture_grants"
         ].sort()
       );
-      for (const rows of Object.values(exported)) {
-        expect(rows.length).toBeGreaterThan(0);
+      expect(exported.capture_grants).toEqual([]); // This notes-only UAT does not create recorder grants.
+      for (const [name, rows] of Object.entries(exported)) {
+        if (name !== "capture_grants") expect(rows.length).toBeGreaterThan(0);
         for (const row of rows) expect(row.ownerUserId).toBe(UAT_ADMIN_ID);
       }
       expect(exported.records).toEqual([
@@ -632,7 +634,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(exported.export_receipts).toHaveLength(2);
       await page.getByRole("button", { name: "Prepare a new export", exact: true }).click();
       console.log(
-        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 8 collections; retained note revisions, transcript, generated/manual outputs, accepted Task reference and vault receipts"
+        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 9 collections (capture grants empty in notes-only path); retained note revisions, transcript, generated/manual outputs, accepted Task reference and vault receipts"
       );
     });
     // Meeting deletion removes provenance, never independently accepted Tasks/private copies.

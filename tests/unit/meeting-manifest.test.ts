@@ -31,7 +31,7 @@ describe("meetings composition", () => {
     ).toContainEqual(expect.objectContaining({ code: "meeting_history_access_denied" }));
   });
 
-  it("boots the real registry with a compatible optional draft module", () => {
+  it("boots the real registry with a compatible optional meeting module", () => {
     const meeting = getBuiltInModuleManifests().find((manifest) => manifest.id === "meetings");
     expect(meeting?.availability).toEqual({
       defaultEnabled: true,
@@ -47,7 +47,10 @@ describe("meetings composition", () => {
       "app.meeting_output_artifacts",
       "app.meeting_action_candidates",
       "app.meeting_export_receipts",
-      "app.meeting_export_requests"
+      "app.meeting_export_requests",
+      "app.meeting_capture_links",
+      "app.meeting_capture_grants",
+      "app.meeting_capture_receipts"
     ]);
     const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
     expect(chat?.database?.migrations).toEqual(
@@ -65,6 +68,14 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "POST /api/meetings/capture/link",
+      "POST /api/meetings/capture/redeem",
+      "POST /api/meetings/capture/status",
+      "POST /api/meetings/capture/control",
+      "POST /api/meetings/capture/audio",
+      "GET /api/meetings/records/:id/capture",
+      "POST /api/meetings/records/:id/capture/approve",
+      "POST /api/meetings/records/:id/capture/control",
       "POST /api/meetings/history/search",
       "GET /api/meetings/history/:id",
       "GET /api/meetings/records/:id/exports",
@@ -86,6 +97,8 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "transcribe.meeting",
+      "meetings.native_capture",
       "meetings.account_export",
       "meetings.history",
       "meetings.unsaved_changes",

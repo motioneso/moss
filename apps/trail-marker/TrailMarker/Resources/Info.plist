@@ -24,6 +24,12 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>A Moss companion.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record your selected microphone only when you explicitly start a Moss meeting.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Record the meeting app or computer audio you select when you explicitly start a Moss meeting.</string>
+	<key>CFBundleURLTypes</key>
+	<array><dict><key>CFBundleURLName</key><string>com.moss.meeting</string><key>CFBundleURLSchemes</key><array><string>moss-meeting</string></array></dict></array>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>

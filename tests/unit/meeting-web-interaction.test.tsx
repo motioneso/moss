@@ -9,6 +9,8 @@ import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { MeetingNotes } from "../../packages/meetings/src/web/meeting-record.js";
 import * as api from "../../packages/meetings/src/web/client.js";
+import { captureKeys } from "../../packages/meetings/src/web/capture-client.js";
+import type { CaptureSession } from "../../packages/meetings/src/web/capture-session.js";
 import { useSignOutGuard } from "../../apps/web/src/shell/use-sign-out-guard.js";
 
 vi.mock("../../packages/meetings/src/web/client.js", async (original) => {
@@ -107,6 +109,10 @@ beforeEach(() => {
         );
       if (!path.startsWith("/api/meetings/records/"))
         throw new Error(`Unexpected unit request: ${path}`);
+      if (path.endsWith("/capture"))
+        return new Response(
+          JSON.stringify({ pendingLinks: [], capture: null, processingReady: false })
+        );
       if (path.endsWith("/outputs"))
         return new Response(
           JSON.stringify({ artifacts: [], candidates: [], headVersion: 0, templates: [] })
@@ -395,6 +401,31 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       vi.mocked(api.createMeeting).mock.calls[0]?.[0]
     );
   });
+  it.each([false, true])(
+    "carries the explicit setup mode into capture (override: %s)",
+    async (override) => {
+      vi.mocked(api.getMeetingPreferences).mockResolvedValue({
+        defaultCaptureMode: "selected-app"
+      });
+      vi.mocked(api.createMeeting).mockResolvedValue({ meeting, created: true });
+      await mount("/meetings");
+      await act(async () => {
+        renderer.root
+          .findByProps({ id: "meeting-title" })
+          .props.onChange({ target: { value: "Design review" } });
+        if (override)
+          renderer.root.findByProps({ type: "radio", value: "microphone-only" }).props.onChange();
+      });
+      await click("Create draft");
+      expect(client.getQueryData<CaptureSession>(captureKeys.session(meeting.id))?.choice).toEqual({
+        mode: override ? "microphone-only" : "selected-app",
+        microphoneId: "",
+        applicationId: "",
+        notice: false
+      });
+      expect(api.putMeetingPreferences).not.toHaveBeenCalled();
+    }
+  );
   it("never saves a default just by choosing a mode; explicit switch saves it", async () => {
     vi.mocked(api.putMeetingPreferences).mockResolvedValue({ defaultCaptureMode: "selected-app" });
     await mount("/meetings");

@@ -12,6 +12,7 @@ export interface TranscribeAudioInput {
   readonly timestamps?: "segment";
   /** Activity attribution; never sent as provider request content. */
   readonly ownerUserId?: string;
+  readonly actionCode?: "transcribe.voice_note" | "transcribe.meeting";
   readonly turnId?: string;
   readonly parentId?: string;
 }

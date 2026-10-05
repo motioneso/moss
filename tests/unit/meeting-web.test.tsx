@@ -47,7 +47,7 @@ describe("Meetings draft screen", () => {
     );
     expect(found.contributions.meetings).toContain("@moss/meetings/web");
   });
-  it("offers three explicit capture choices, with recording and source checks unavailable", () => {
+  it("offers three explicit capture choices before creating a draft and connecting a Mac", () => {
     const html = render("/meetings", (client) =>
       client.setQueryData(meetingKeys.preferences, { defaultCaptureMode: null })
     );
@@ -58,7 +58,7 @@ describe("Meetings draft screen", () => {
     expect(html).toMatch(
       /disabled=""[^>]*aria-describedby="meeting-capture-unavailable"[^>]*>Start meeting/
     );
-    expect(html).toContain("Recording isn’t available in this version of Moss");
+    expect(html).toContain("connect Trail Marker on your Mac");
     expect(html).toContain("/settings?section=aiproviders");
     expect(html).not.toContain("Ready to start");
   });

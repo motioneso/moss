@@ -33,7 +33,8 @@ const collections = [
   "output_artifacts",
   "action_candidates",
   "export_receipts",
-  "export_requests"
+  "export_requests",
+  "capture_grants"
 ] as const;
 
 function harness(rows: Record<string, readonly Record<string, unknown>[]> = {}) {
@@ -109,7 +110,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly eight source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly nine source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -127,6 +128,7 @@ describe("Meetings account-export collector", () => {
       expect(queries[2]?.sql).toMatch(/ORDER BY meeting_id, version/);
       expect(queries[4]?.sql).toMatch(/ORDER BY meeting_id, version/);
       // An account export includes inactive, older and manual artifacts with no status filter.
+      expect(queries[8]?.sql).not.toMatch(/credential_hash|verifier_hash|session_id/);
       expect(queries[4]?.sql).toMatch(/WHERE owner_user_id = \$1::uuid\s+ORDER BY/);
     } finally {
       await db.destroy();
@@ -178,7 +180,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(8);
+      expect(queries).toHaveLength(9);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -186,10 +188,16 @@ describe("Meetings account-export collector", () => {
   });
 
   it("keeps migration column grants in step with the collector's SELECT lists", async () => {
-    const migration = await readFile(
+    const originalMigration = await readFile(
       new URL("../../packages/meetings/sql/0283_meeting_account_export.sql", import.meta.url),
       "utf8"
     );
+    const captureMigration = await readFile(
+      new URL("../../packages/meetings/sql/0284_meeting_capture.sql", import.meta.url),
+      "utf8"
+    );
+    const migration =
+      originalMigration + (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "");
     const { db, queries, scopedDb } = harness();
     try {
       await collectMeetingsExportSection(scopedDb, ctx);

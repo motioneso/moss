@@ -373,6 +373,15 @@ export class AiRepository {
     return result.rows[0];
   }
 
+  /** Safe metadata for the already-resolved capability provider, including its voice endpoint. */
+  async selectProviderConfiguration(
+    scopedDb: DataContextDb,
+    providerId: string
+  ): Promise<AiProviderConfigSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return this.safeProviderQuery(scopedDb).where("id", "=", providerId).executeTakeFirst();
+  }
+
   async listProviders(scopedDb: DataContextDb): Promise<AiProviderConfigSafeRow[]> {
     assertDataContextDb(scopedDb);
 

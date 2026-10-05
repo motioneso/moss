@@ -1,0 +1,65 @@
+import XCTest
+@testable import TrailMarker
+
+final class MeetingControlOutboxTests: XCTestCase {
+    func testLateStatusCannotOverwriteSuccessfulPauseBeforeStop() throws {
+        var outbox = MeetingControlOutbox()
+        XCTAssertTrue(outbox.accepts(generation: 1))
+        outbox.stage(command: "pause", meetingId: "meeting", grantId: "grant", generation: 1)
+        let pause = try XCTUnwrap(outbox.pending)
+        outbox.received(requestKey: pause.requestKey, desired: "paused")
+        XCTAssertTrue(outbox.accepts(generation: 2))
+        XCTAssertFalse(outbox.accepts(generation: 1))
+        outbox.stage(command: "stop", meetingId: "meeting", grantId: "grant", generation: outbox.latestGeneration)
+        XCTAssertEqual(outbox.pending?.expectedGeneration, 2)
+        XCTAssertEqual(outbox.pending?.command, "stop")
+    }
+
+    func testLostStopRequestRetainsUUIDUntilDeliveryConfirmed() throws {
+        var outbox = MeetingControlOutbox()
+        outbox.stage(command: "stop", meetingId: "meeting", grantId: "grant", generation: 1)
+        let original = try XCTUnwrap(outbox.pending)
+        // Transport failed before receipt; status still reports the same recording generation.
+        outbox.reconcile(generation: 1, desired: "recording")
+        XCTAssertEqual(outbox.pending?.requestKey, original.requestKey)
+        XCTAssertEqual(outbox.pending?.expectedGeneration, original.expectedGeneration)
+        outbox.received(requestKey: original.requestKey, desired: "stopped")
+        XCTAssertNil(outbox.pending)
+    }
+
+    func testLostSuccessfulStopResponseReconcilesFromStatusWithoutNewRequest() throws {
+        var outbox = MeetingControlOutbox()
+        outbox.stage(command: "stop", meetingId: "meeting", grantId: "grant", generation: 1)
+        XCTAssertNotNil(outbox.pending)
+        XCTAssertTrue(outbox.accepts(generation: 2))
+        outbox.reconcile(generation: 2, desired: "stopped")
+        XCTAssertNil(outbox.pending)
+    }
+
+    func testConflictRebasesStopWithoutTurningItIntoRecord() throws {
+        var outbox = MeetingControlOutbox()
+        outbox.stage(command: "stop", meetingId: "meeting", grantId: "grant", generation: 1)
+        let oldKey = try XCTUnwrap(outbox.pending?.requestKey)
+        // An independent Pause won first; retry Stop against its known revision.
+        outbox.reconcile(generation: 2, desired: "paused")
+        XCTAssertEqual(outbox.pending?.command, "stop")
+        XCTAssertEqual(outbox.pending?.expectedGeneration, 2)
+        XCTAssertNotEqual(outbox.pending?.requestKey, oldKey)
+        let retryKey = outbox.pending?.requestKey
+        outbox.reconcile(generation: 2, desired: "paused")
+        XCTAssertEqual(outbox.pending?.requestKey, retryKey)
+    }
+
+    func testStopSupersedesInFlightPauseAndLatePauseCannotClearStop() throws {
+        var outbox = MeetingControlOutbox()
+        outbox.stage(command: "pause", meetingId: "meeting", grantId: "grant", generation: 1)
+        let pauseKey = try XCTUnwrap(outbox.pending?.requestKey)
+        outbox.stage(command: "stop", meetingId: "meeting", grantId: "grant", generation: 1)
+        outbox.received(requestKey: pauseKey, desired: "paused")
+        XCTAssertEqual(outbox.pending?.command, "stop")
+        outbox.reconcile(generation: 2, desired: "paused")
+        XCTAssertEqual(outbox.pending?.expectedGeneration, 2)
+        outbox.stage(command: "pause", meetingId: "meeting", grantId: "grant", generation: 2)
+        XCTAssertEqual(outbox.pending?.command, "stop")
+    }
+}

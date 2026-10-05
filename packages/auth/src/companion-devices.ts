@@ -15,13 +15,15 @@ import { sha256Base64url } from "./companion-crypto.js";
  * The authenticated half of the Trail Marker companion (#2560).
  *
  * `resolve` is a separate resolver from `resolveAccessContext` and is wired only to
- * `/api/companion/*`. It reads a bearer credential and never a cookie, so a signed-in
+ * `/api/companion/*` and identity-only meeting approval bootstrap. It reads a bearer
+ * credential and never a cookie, so a signed-in
  * browser cannot reach these operations, and a companion credential cannot reach any
- * other route: the general resolver hands every bearer token to the legacy UUID
+ * meeting data/control route: the general resolver hands every bearer token to the legacy UUID
  * session lookup, which rejects a `tm1_` value outright.
  *
  * Everything here is scoped to the caller's own device row. There is no operation that
- * names another device, another account, or any user content.
+ * names another device, another account, or any user content. Meeting bootstrap only
+ * proposes an opaque meeting ID; separate cookie approval and an mm1 grant authorize capture.
  */
 
 const CREDENTIAL_INACTIVITY_DAYS = 90;

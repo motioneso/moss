@@ -115,6 +115,21 @@ export const meetingExportTables = [
     table: "meeting_export_requests",
     columns: ["meeting_id", "owner_user_id", "request_key", "artifact_version", "result_json"],
     derived: []
+  },
+  {
+    key: "capture_grants",
+    table: "meeting_capture_grants",
+    columns: [
+      "id",
+      "meeting_id",
+      "owner_user_id",
+      "device_name",
+      "status",
+      "state_json",
+      "created_at",
+      "expires_at"
+    ],
+    derived: ["credential_hash", "verifier_hash", "session_id", "device_id"]
   }
 ] as const;
 
@@ -403,6 +418,11 @@ export async function seedMeetingAccountExport(
       updatedAt: "2026-10-04T12:00:00.123Z"
     });
   }
+  await sql`INSERT INTO app.meeting_capture_grants
+    (meeting_id,device_id,device_name,verifier_hash,status,state_json,expires_at)
+    VALUES (${meeting.id}::uuid,${randomUUID()}::uuid,${marker + " synthetic Mac"},${"0".repeat(64)},'revoked',
+      ${JSON.stringify({ gaps: [{ id: randomUUID(), sourceId: "microphone", epoch: 1, startMs: 0, endMs: 1000, reason: "interrupted" }] })},
+      ${new Date("2026-01-01T00:00:00Z")})`.execute(db.db);
   return {
     marker,
     meetingId: meeting.id,

@@ -34,7 +34,7 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     await expect(page.getByRole("main")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
     await expect(
-      page.getByText("Recording isn’t available in this version of Moss.", { exact: false })
+      page.getByText("connect Trail Marker on your Mac", { exact: false })
     ).toBeVisible();
     await page.getByRole("radio", { name: /^Microphone and selected app/ }).click();
     const defaultControl = page.getByRole("checkbox", {

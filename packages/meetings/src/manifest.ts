@@ -6,7 +6,7 @@ export const meetingsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
 );
 
-/** Draft records and personal notes. Native recording is not available yet. */
+/** Owner-private meetings with an explicitly approved native recorder. */
 export const meetingsModuleManifest = {
   id: "meetings",
   name: "Meetings",
@@ -23,7 +23,8 @@ export const meetingsModuleManifest = {
       "sql/0278_meeting_outputs.sql",
       "sql/0279_meeting_exports.sql",
       "sql/0280_meeting_history.sql",
-      "sql/0283_meeting_account_export.sql"
+      "sql/0283_meeting_account_export.sql",
+      "sql/0284_meeting_capture.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -35,7 +36,10 @@ export const meetingsModuleManifest = {
       "app.meeting_output_artifacts",
       "app.meeting_action_candidates",
       "app.meeting_export_receipts",
-      "app.meeting_export_requests"
+      "app.meeting_export_requests",
+      "app.meeting_capture_links",
+      "app.meeting_capture_grants",
+      "app.meeting_capture_receipts"
     ]
   },
   permissions: [
@@ -64,11 +68,27 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Create meeting drafts, find their history, and edit personal notes. Recording is unavailable.",
+        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a prepared Mac recorder and configured transcription.",
       permissionId: "meetings.read"
     }
   ],
   routes: [
+    { method: "POST", path: "/api/meetings/capture/link", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/redeem", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/status", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/control", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/audio", permissionId: "meetings.write" },
+    { method: "GET", path: "/api/meetings/records/:id/capture", permissionId: "meetings.read" },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/capture/approve",
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/capture/control",
+      permissionId: "meetings.write"
+    },
     { method: "POST", path: "/api/meetings/history/search", permissionId: "meetings.read" },
     { method: "GET", path: "/api/meetings/history/:id", permissionId: "meetings.read" },
     { method: "GET", path: "/api/meetings/records/:id/exports", permissionId: "meetings.read" },
@@ -107,6 +127,70 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "transcribe.meeting",
+      description:
+        "Activity records each meeting clip transcription with the fixed title Transcribed a meeting clip, model, duration and outcome. It does not include recorded audio or transcript text."
+    },
+    {
+      id: "meetings.native_capture",
+      description:
+        "Record on a prepared, explicitly approved Mac with a microphone and optional selected-app or computer audio. Pause closes inputs; Stop finalizes pre-cutoff audio. Source labels only. Windows is unavailable.",
+      errors: [
+        {
+          code: "meeting_capture_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.prepare_recorder",
+          description:
+            "The meeting recorder is unavailable, expired or revoked. Open the recorder and approve this device again for the meeting."
+        },
+        {
+          code: "meeting_capture_processing_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.configure_transcription",
+          description:
+            "The configured transcription route is unavailable. An admin must check AI providers; no substitute provider is selected."
+        },
+        {
+          code: "meeting_capture_interrupted",
+          class: "transient",
+          description:
+            "The recorder or its connection was interrupted. Check the native recorder, review any gap, and explicitly resume with the intended sources."
+        },
+        {
+          code: "meeting_capture_conflict",
+          class: "validation",
+          description:
+            "Capture state changed. Refresh the meeting and review its current status before trying again."
+        },
+        {
+          code: "meeting_capture_limit",
+          class: "validation",
+          description:
+            "This recording reached a bounded session, source or receipt limit. Stop and review the meeting before starting another."
+        },
+        {
+          code: "meeting_capture_busy",
+          class: "transient",
+          description:
+            "A previous clip is still processing. The native recorder retains only bounded transient audio and pauses when its buffer fills."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.prepare_recorder",
+          path: "/meetings",
+          description:
+            "Open the meeting, prepare Trail Marker on the linked Mac, and approve that named device for the meeting. Choose sources before recording."
+        },
+        {
+          id: "meetings.configure_transcription",
+          path: "/settings?section=aiproviders",
+          description:
+            "An admin configures the transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
+        }
+      ]
+    },
+    {
       id: "meetings.account_export",
       description:
         "Your data in Settings exports your meeting records, retained notes/transcripts, summaries, action reviews and export receipts. Owner-only, including disabled-module data. Derived search indexes are excluded; no model request runs."
@@ -114,7 +198,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.history",
       description:
-        "Search current titles, notes and transcripts across your history; filter review and export receipts. Select metadata, open Review or Ask Moss. Capture is unavailable; receipt states do not verify current Tasks or vault files.",
+        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs an approved Mac recorder. Receipts do not verify current Tasks or vault files.",
       errors: [
         {
           code: "meeting_history_access_denied",
@@ -366,12 +450,12 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read retained transcripts with source labels, timestamps, revision and provisional status, and omitted counts. Refresh manually or inspect previous/latest revisions. Recording remains unavailable."
+        "Read retained transcripts with source labels, timestamps, revision and provisional status, and omitted counts. Refresh manually or inspect previous/latest revisions. Recording requires an explicitly approved native Mac recorder."
     },
     {
       id: "meetings.capture_default",
       description:
-        "Explicitly save or clear a personal capture-mode default in meeting Setup. Choosing another mode does not change the saved default. Native recording remains unavailable."
+        "Explicitly save or clear a personal capture-mode default in meeting Setup. Choosing another mode does not change the saved default. Native Mac recording requires explicit device approval and source selection."
     },
     {
       id: "meetings.notes_recovery",
@@ -386,7 +470,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.draft_records",
       description:
-        "Review Summary and actions, Transcript and My notes at /meetings. Search current titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native recording remains unavailable.",
+        "Review Summary and actions, Transcript and My notes. Search titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native Mac recording needs device approval and explicit sources.",
       errors: [
         {
           code: "meeting_request_conflict",
@@ -429,7 +513,10 @@ export const meetingsModuleManifest = {
         { table: "app.meeting_output_artifacts", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_action_candidates", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_export_receipts", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_export_requests", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_export_requests", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_links", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_grants", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_receipts", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

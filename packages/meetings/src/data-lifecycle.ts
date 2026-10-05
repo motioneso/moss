@@ -15,13 +15,15 @@ export interface MeetingsExportSection {
   readonly action_candidates: readonly ExportRow[];
   readonly export_receipts: readonly ExportRow[];
   readonly export_requests: readonly ExportRow[];
+  readonly capture_grants: readonly ExportRow[];
 }
 
 /**
  * Export retained source rows, including superseded notes, transcripts and outputs. TEXT JSON
  * stays byte-for-byte intact: it can contain evidence and provenance no longer in the current
  * view. Derived history/search projections are omitted. Chat, preferences and accepted Tasks
- * are included elsewhere in account export; this collector reads only Meetings-owned tables.
+ * are included elsewhere in account export; this collector reads only Meetings-owned tables. Capture exports include retained state/gaps,
+ * never grant verifiers, credential hashes, browser-session IDs, or transient audio.
  */
 export async function collectMeetingsExportSection(
   scopedDb: unknown,
@@ -120,6 +122,17 @@ export async function collectMeetingsExportSection(
       FROM app.meeting_export_requests
       WHERE owner_user_id = ${ownerUserId}::uuid
       ORDER BY meeting_id, request_key
+    `
+    ),
+    capture_grants: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT id::text AS id, meeting_id::text AS "meetingId", owner_user_id::text AS "ownerUserId",
+        device_name AS "deviceName", status, state_json AS "stateJson",
+        created_at AS "createdAt", expires_at AS "expiresAt"
+      FROM app.meeting_capture_grants
+      WHERE owner_user_id = ${ownerUserId}::uuid
+      ORDER BY created_at, id
     `
     )
   };

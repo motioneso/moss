@@ -14,6 +14,7 @@ protocol MeetingMicrophoneUnit: AnyObject {
     func installInputCallback(_ context: MeetingMicrophoneRenderContext) throws
     func initialize() throws
     func installFormatListener(_ context: MeetingMicrophoneRenderContext) throws
+    func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws
     func start() throws
     func stop() throws
     func uninitialize() throws
@@ -29,7 +30,7 @@ protocol MeetingMicrophoneUnit: AnyObject {
 /// Inert until start. Its owner serializes lifecycle calls and never calls them from a receiver.
 /// The selected ID belongs to this AUHAL only; no system-default device property is changed.
 final class MeetingMicrophoneCapture: MeetingAudioCapturing {
-    static let maximumBufferedFrames: UInt32 = 16_384
+    static let maximumBufferedFrames = UInt32(MeetingAudioBuffer.maximumCallbackFrames)
 
     private let selectedDeviceID: AudioDeviceID
     private let makeUnit: () throws -> MeetingMicrophoneUnit
@@ -76,6 +77,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             // Install after initialization's own format notifications, then re-read to close
             // the gap between the original format query and listener installation.
             try acquired.installFormatListener(renderContext)
+            try acquired.installDeviceListener(renderContext)
             let verifiedFormat = try acquired.inputFormat()
             guard Self.matches(verifiedFormat, format) else {
                 throw MeetingAudioFailure.invalidFormat
@@ -116,7 +118,8 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
 
     private static func isUsable(_ format: AudioStreamBasicDescription) -> Bool {
         format.mFormatID == kAudioFormatLinearPCM && format.mSampleRate.isFinite &&
-            format.mSampleRate > 0 && format.mChannelsPerFrame > 0
+            (8000...192000).contains(format.mSampleRate) && format.mSampleRate.rounded() == format.mSampleRate &&
+            format.mChannelsPerFrame > 0
     }
 
     private static func matches(_ lhs: AudioStreamBasicDescription, _ rhs: AudioStreamBasicDescription) -> Bool {
@@ -144,9 +147,8 @@ final class MeetingMicrophoneRenderContext {
     private let samples: UnsafeMutablePointer<Float>
     private let buffers: UnsafeMutablePointer<AudioBufferList>
     private let renderLock = NSLock()
-    private let admissionLock = NSLock()
-    private var accepting = false
-    private var invalidated = false
+    // Bits: 1 = opened, 2 = invalidated, 4 = closed permanently. Only value 1 admits audio.
+    private let admission = MeetingAudioAtomicState()
     private var lastHostTime: UInt64?
 
     init(
@@ -168,33 +170,19 @@ final class MeetingMicrophoneRenderContext {
     }
 
     func open() throws {
-        admissionLock.lock()
-        defer { admissionLock.unlock() }
-        guard !invalidated else { throw MeetingAudioFailure.invalidFormat }
-        accepting = true
+        guard admission.replace(0, with: 1) else { throw MeetingAudioFailure.invalidFormat }
     }
 
-    func close() {
-        admissionLock.lock()
-        accepting = false
-        admissionLock.unlock()
-    }
+    func close() { admission.insert(4) }
 
     func waitForRenderToFinish() {
         renderLock.lock()
         renderLock.unlock()
     }
 
-    /// Property callbacks run separately from the render callback. The receiver's failure
-    /// entrypoint must also be bounded/thread-safe. A new format always needs a new epoch.
-    func formatDidChange() {
-        admissionLock.lock()
-        let shouldReport = accepting
-        accepting = false
-        invalidated = true
-        admissionLock.unlock()
-        if shouldReport { receiver.fail(.invalidFormat) }
-    }
+    /// Both property and render paths atomically close admission before reporting a fault.
+    func formatDidChange() { failFromRender(.invalidFormat) }
+    func deviceDidDisappear() { failFromRender(.invalidSelection) }
 
     func render(
         flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
@@ -207,13 +195,7 @@ final class MeetingMicrophoneRenderContext {
             return kAudioUnitErr_TooManyFramesToProcess
         }
         defer { renderLock.unlock() }
-        guard admissionLock.try() else {
-            receiver.fail(.bufferFull)
-            return kAudioUnitErr_TooManyFramesToProcess
-        }
-        let admitted = accepting
-        admissionLock.unlock()
-        guard admitted else { return noErr }
+        guard admission.value == 1 else { return noErr }
         guard frameCount > 0, frameCount <= capacity else {
             failFromRender(.bufferFull)
             return kAudioUnitErr_TooManyFramesToProcess
@@ -245,12 +227,7 @@ final class MeetingMicrophoneRenderContext {
             return kAudio_ParamError
         }
         // Stop/format changes may arrive during AudioUnitRender. Recheck at the copy boundary.
-        guard admissionLock.try() else {
-            receiver.fail(.bufferFull)
-            return kAudioUnitErr_TooManyFramesToProcess
-        }
-        defer { admissionLock.unlock() }
-        guard accepting else { return noErr }
+        guard admission.value == 1 else { return noErr }
         lastHostTime = hostTime
         receiver.receive(
             hostTimeNanoseconds: hostTime, sampleRate: sampleRate, frameCount: Int(frameCount),
@@ -260,13 +237,7 @@ final class MeetingMicrophoneRenderContext {
     }
 
     private func failFromRender(_ failure: MeetingAudioFailure) {
-        // Contention means a control/property operation is already closing admission.
-        if admissionLock.try() {
-            accepting = false
-            invalidated = true
-            admissionLock.unlock()
-        }
-        receiver.fail(failure)
+        if admission.insert(2) == 1 { receiver.fail(failure) }
     }
 
     deinit {
@@ -284,6 +255,9 @@ final class MeetingMicrophoneRenderContext {
 final class MeetingAUHALUnit: MeetingMicrophoneUnit {
     private var unit: AudioUnit?
     private var callbackContext: Unmanaged<MeetingMicrophoneRenderContext>?
+    private var selectedDevice: AudioDeviceID?
+    private let deviceQueue = DispatchQueue(label: "com.moss.meeting.microphone-device")
+    private var deviceListener: AudioObjectPropertyListenerBlock?
 
     init() throws {
         var description = AudioComponentDescription(
@@ -315,6 +289,7 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
         var value = deviceID
         try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
             kAudioUnitScope_Global, 0, &value, UInt32(MemoryLayout<AudioDeviceID>.size)), "select AUHAL device")
+        selectedDevice = deviceID
     }
 
     func inputFormat() throws -> AudioStreamBasicDescription {
@@ -387,12 +362,46 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
         ), "AudioUnitAddPropertyListener")
     }
 
+    func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws {
+        guard let selectedDevice, deviceListener == nil else { throw MeetingAudioFailure.invalidTransition }
+        var address = Self.devicesAddress()
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in
+            // Listen on the stable system object so unplug cannot leave an unremovable
+            // listener registered on a now-destroyed device. Unrelated device changes are inert.
+            if !Self.deviceIsAlive(selectedDevice) { context.deviceDidDisappear() }
+        }
+        try check(AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+            &address, deviceQueue, listener), "observe microphone devices")
+        deviceListener = listener
+        guard Self.deviceIsAlive(selectedDevice) else { throw MeetingAudioFailure.invalidSelection }
+    }
+
+    private static func devicesAddress() -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    }
+
+    private static func deviceIsAlive(_ device: AudioDeviceID) -> Bool {
+        var alive: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive) == noErr &&
+            size == UInt32(MemoryLayout<UInt32>.size) && alive == 1
+    }
+
     func start() throws { try check(AudioOutputUnitStart(try liveUnit()), "AudioOutputUnitStart") }
     func stop() throws { try check(AudioOutputUnitStop(try liveUnit()), "AudioOutputUnitStop") }
     func uninitialize() throws { try check(AudioUnitUninitialize(try liveUnit()), "AudioUnitUninitialize") }
 
     func dispose() throws {
         guard let unit else { return }
+        if let deviceListener {
+            var address = Self.devicesAddress()
+            try check(AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                &address, deviceQueue, deviceListener), "remove microphone device listener")
+            self.deviceListener = nil
+        }
         try check(AudioComponentInstanceDispose(unit), "AudioComponentInstanceDispose")
         self.unit = nil
         // The render and property callbacks share this retain. Keep it on EVERY failed

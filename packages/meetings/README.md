@@ -4,36 +4,51 @@ Issue [#2981](https://github.com/motioneso/moss/issues/2981), approved
 [design](../../docs/superpowers/specs/2026-10-03-meeting-companion.md) and
 [plan](../../docs/superpowers/plans/2026-10-03-2981-meeting-companion.md).
 
-This package is not yet a meeting recorder. The ordinary UI supports creating/reopening drafts,
-personal notes, searchable History and deletion. Saved personal notes can also supply evidence
-for summaries, reviewed Tasks and private exports when an active API-key model with the required
-summary capabilities is configured. Transcript review and Ask Moss require transcript text
-supplied through the authenticated API: there is no user-facing recording or transcript-import
-path yet. Meetings is default-enabled, but recording remains unavailable.
+## Native capture development checkpoint (5 October 2026)
 
-The current checkpoint contains:
+This branch adds the first browser-to-native Mac capture path. It is **code in development,
+not verified native recording** until the exact published commit passes hosted checks and
+owner-run OS/device acceptance. Windows has a shared protocol but no native host yet.
 
-- A package-owned `/meetings` screen for Setup, searchable History and personal notes.
-- Current-text server search, state filters and a selected-meeting rail with factual receipts.
-- Explicit capture-mode defaults; Start remains unavailable until native capture exists.
-- Real draft creation, reopening, version-checked notes, conflict review and confirmed deletion.
-- In-memory unsaved-note recovery across signed-in navigation; save before closing/signing out.
-- Pure capture/lifecycle/send-eligibility rules for later native wiring.
-- Authenticated text-only transcript ingestion, immutable revisions, bounded snapshots and evidence.
-- Read-only transcript review with source labels, provisional status and revision navigation.
-- Meeting questions in the existing chat drawer using the selected API-key model and exact evidence.
-  Enabled user overrides fail closed when unavailable; admin pins and locked instance defaults
-  remain authoritative when personal overrides are disabled.
-- Explicit generated/manual summary versions, source-grounded decisions and owner-reviewed Tasks.
-- Explicit versioned, create-only copies in Moss private vault with separate write/index receipts.
-- Owner-only account export through Settings → Account & preferences → Your data, including
-  retained notes/transcripts, output versions, action reviews and export receipts.
+Create or reopen a draft, open Trail Marker from its capture panel, explicitly prepare the
+microphone, then approve the named Mac for that meeting in Moss. Select a microphone and one
+of the three capture modes, acknowledge the recording notice, and press Record. Provider
+configuration stays in Settings → AI providers. Opening a page, launching the app, reconnecting,
+or granting microphone permission alone never requests a recording start.
 
-The AI-owned clip transcription API separately supports an explicit timestamp request and
-cancellation. That adapter is not yet wired to meeting capture or a persisted meeting transcript.
-There is no claimed streaming, speaker separation or native recording implementation in this
-checkpoint. Meeting questions and summaries are bounded API-key-only stages below. Setup links to
-existing AI providers configuration and does not present an unvalidated meeting profile as ready.
+The native host uses AUHAL microphone capture and macOS 14.2+ Core Audio process taps for
+selected-app or computer output. Tracks stay separate on a shared monotonic timeline and are
+sent as bounded native-rate mono PCM chunks. The server wraps each clip as WAV, requests ASR
+segment timestamps from the configured transcription route, and writes ordinary retained
+transcript revisions. This is chunked transcription with source labels only, not streaming or
+speaker diarization. A configured endpoint still needs real timestamp/latency acceptance.
+
+Pause closes inputs and admits no new audio sends. Stop closes inputs and allows a bounded
+pre-cutoff final flush. UI statuses distinguish a requested command from its native
+acknowledgement. The native menu-bar indicator remains visible across browser navigation.
+Source changes, failed cleanup, connection loss, expired approval, logout and application quit
+have explicit teardown paths. Retained gap metadata is shown when the meeting is reopened;
+raw audio remains bounded transient memory with no crash-recovery archive.
+
+Authorization uses a separate, two-hour-maximum meeting/device grant bound to the approving
+browser session and existing device. The existing Trail Marker credential can only bootstrap
+an identity challenge; it cannot upload audio, read capture state or control a meeting. The
+browser approves an exact device/meeting. Native exchange returns the separate credential only
+to that device, in memory. Credentials never go in the activation URL. The implementation and
+its negative controls must be reviewed together before these boundaries are release claims.
+
+Computer-audio capture uses global process exclusion, not a selected output endpoint. Native
+Moss bundles are excluded; this does not promise that a future Moss web player inside a shared
+browser is excluded. Computer mode fails closed when the host's Core Audio process identity
+cannot be resolved, and process-list changes conservatively interrupt that mode. Selected-app
+mode uses a fixed verified process membership and requires explicit resume when that membership
+changes. These limitations need actual Teams/Zoom and device-change testing.
+
+The existing draft/notes, searchable History, transcript evidence, Ask Moss, reviewed Tasks,
+summaries and private export flows remain available independently of recording. Account export
+adds recorder state and retained gaps, excluding credentials, verifiers and browser-session IDs.
+Summary generation warns about recorded capture gaps. No provider or device permission was
+activated by development work; synthetic CI fixtures do not replace actual recording proof.
 
 ## Draft API
 

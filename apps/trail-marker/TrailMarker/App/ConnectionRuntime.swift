@@ -18,6 +18,9 @@ final class ConnectionRuntime: ObservableObject {
     /// Nil until a Moss that stores Backtrack has answered (and after the link ends).
     @Published private(set) var backtrackState: BacktrackState?
 
+    /// Synchronous admission/teardown barrier installed by the app host, before identity effects.
+    var beforeLifecycleChange: ((ConnectionEvent) -> Bool)?
+
     private var machine = ConnectionMachine()
     private let keychain: KeychainStore
     private let preferences: PreferencesStore
@@ -67,6 +70,7 @@ final class ConnectionRuntime: ObservableObject {
     }
 
     func send(_ event: ConnectionEvent) {
+        guard beforeLifecycleChange?(event) ?? true else { return }
         apply(machine.handle(event, now: Date()))
     }
 
@@ -185,6 +189,7 @@ final class ConnectionRuntime: ObservableObject {
     }
 
     private func handle(_ event: ConnectionEvent) async {
+        guard beforeLifecycleChange?(event) ?? true else { return }
         apply(machine.handle(event, now: Date()))
     }
 

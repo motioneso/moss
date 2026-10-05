@@ -36,6 +36,9 @@ import { readBearerToken, toWebHeaders } from "./headers.js";
 import { resolveAuthOriginConfig } from "./runtime-config.js";
 import { createMeSessionsService, type MeSessionsRuntimeService } from "./session-service.js";
 
+import { createSessionBindingsService, type SessionBindingsService } from "./session-bindings.js";
+export { createSessionBindingsService, type SessionBindingsService } from "./session-bindings.js";
+
 const { Pool } = pg;
 
 // Re-exported so root-level callers (e.g. tests/uat/seed) can hash a credential
@@ -126,6 +129,8 @@ export interface MossAuthRuntime {
   readonly companionPairing: CompanionPairingService;
   /** Companion credential resolution and own-device operations (#2560). */
   readonly companionDevices: CompanionDevicesService;
+  /** Fresh cookie-session/device binding checks for separately approved capabilities. */
+  readonly sessionBindings: SessionBindingsService;
   readonly close: () => Promise<void>;
 }
 
@@ -230,6 +235,7 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     // companion tables to jarvis_auth_runtime alone.
     companionPairing: createCompanionPairingService({ pool }),
     companionDevices: createCompanionDevicesService({ pool }),
+    sessionBindings: createSessionBindingsService({ pool, auth }),
     verifySelfPassword: async ({ actorUserId, password }) => {
       // Scope strictly to the actor's own credential row. provider_id='credential'
       // AND a non-null password define "this account owns a password credential"

@@ -146,6 +146,10 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
+      if (path.endsWith("/capture"))
+        return new Response(
+          JSON.stringify({ pendingLinks: [], capture: null, processingReady: false })
+        );
       if (path.endsWith("/outputs"))
         return new Response(
           JSON.stringify({ artifacts: [], candidates: [], headVersion: 0, templates: [] })

@@ -27,6 +27,7 @@ import { TranscriptEvidence } from "./transcript-evidence.js";
 import { MeetingTranscript, useMeetingTranscript } from "./meeting-transcript.js";
 import { MeetingSummary } from "./meeting-summary.js";
 import { DeleteMeetingDialog } from "./delete-meeting-dialog.js";
+import { CapturePanel } from "./capture-panel.js";
 
 export function MeetingRecord({
   id,
@@ -38,6 +39,7 @@ export function MeetingRecord({
   readonly onDeleted: () => void;
 }) {
   const [transcriptRevision, setTranscriptRevision] = useState<number>();
+  const [captureActive, setCaptureActive] = useState(false);
   const record = useQuery(meetingRecordQueryOptions(id));
   const { clearMeetingChat } = useMeetingChat();
   const accessDenied = isMeetingAccessDenied(record.error);
@@ -84,7 +86,9 @@ export function MeetingRecord({
           </Button>
         </p>
       ) : null}
+      <CapturePanel meeting={record.data.meeting} onLiveChange={setCaptureActive} />
       <MeetingNotes
+        captureActive={captureActive}
         meeting={record.data.meeting}
         onDeleted={onDeleted}
         transcriptRevision={transcriptRevision}
@@ -96,16 +100,21 @@ export function MeetingRecord({
 
 export function MeetingNotes({
   meeting,
+  captureActive = false,
   onDeleted,
   transcriptRevision,
   onTranscriptRevisionChange
 }: {
   readonly meeting: MeetingRecordDto;
+  readonly captureActive?: boolean;
   readonly onDeleted: () => void;
   readonly transcriptRevision: number | undefined;
   readonly onTranscriptRevisionChange: (revision: number | undefined) => void;
 }) {
   const [tab, setTab] = useState<"summary" | "transcript" | "notes">("summary");
+  useEffect(() => {
+    if (captureActive) setTab("transcript");
+  }, [captureActive]);
   const { openMeetingChat } = useMeetingChat();
   const transcript = useMeetingTranscript(meeting.id);
   const snapshot = transcript.isError ? undefined : transcript.data?.snapshot;
@@ -209,14 +218,20 @@ export function MeetingNotes({
     <div className="meetings-section">
       <div className="meetings-actions meetings-review-status">
         <Badge tone={snapshot?.containsProvisional ? "amber" : "neutral"}>
-          {snapshot?.segments.length ? "Ready to review" : "Draft"}
+          {captureActive
+            ? "Live transcript"
+            : snapshot?.segments.length
+              ? "Ready to review"
+              : "Draft"}
         </Badge>
         <span className="jds-hint">
           {snapshot?.containsProvisional
             ? "Some transcript text is still provisional"
             : snapshot?.segments.length
               ? "Retained transcript available"
-              : "No recording attached"}
+              : captureActive
+                ? "Waiting for transcript text"
+                : "No retained transcript"}
         </span>
         <Button variant="link" onClick={() => setTab("transcript")}>
           View transcript
@@ -231,7 +246,7 @@ export function MeetingNotes({
         </Button>
         <Button
           variant="quiet"
-          disabled={state.phase === "saving"}
+          disabled={state.phase === "saving" || captureActive}
           onClick={() => setShowDelete(true)}
         >
           Delete draft
