@@ -45,7 +45,10 @@ import {
   registerBuiltInApiRoutes,
   registerRouteEnablementGuard,
   assertRouteCoverage,
+  buildRouteCatalog,
+  createRouteCatalogHolder,
   PLATFORM_UNGUARDED_ROUTES,
+  type CapturedRouteSchema,
   type ChatEngineFactory,
   type MossModuleManifest,
   type ReconciledExternalModule
@@ -342,6 +345,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   // can read the final route tree. printRoutes parsing is brittle; an onRoute hook is
   // exact. Add it BEFORE after() so it observes routes registered inside after().
   const registeredRoutes: { method: string; url: string }[] = [];
+  // #3065: request schemas for the chat route catalog, which onReady builds into the holder.
+  const capturedRouteSchemas: CapturedRouteSchema[] = [];
+  const routeCatalog = createRouteCatalogHolder();
   server.addHook("onRoute", (routeOptions) => {
     const methods = Array.isArray(routeOptions.method)
       ? routeOptions.method
@@ -352,6 +358,14 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       // "HEAD ..." key the index never holds. OPTIONS (CORS/preflight) is not module-gated.
       if (method === "HEAD" || method === "OPTIONS") continue;
       registeredRoutes.push({ method, url: routeOptions.url });
+      const schema = routeOptions.schema;
+      capturedRouteSchemas.push({
+        method,
+        url: routeOptions.url,
+        body: schema?.body,
+        querystring: schema?.querystring,
+        params: schema?.params
+      });
     }
   });
 
@@ -574,6 +588,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
+      routeCatalog,
       resolveActiveModules: resolveActiveModulesWithIntegrations,
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {
@@ -747,6 +762,11 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // packages/ai/src/gateway/policy.ts:40 confirms every external write unconditionally.
     // Never pass external manifests here.
     assertBuiltInSelfOperationManifests(getBuiltInModuleManifests());
+  });
+
+  server.addHook("onReady", async () => {
+    // #3065: built-in manifests only; external modules cannot declare routes.
+    routeCatalog.set(buildRouteCatalog(getBuiltInModuleManifests(), capturedRouteSchemas));
   });
 
   server.addHook("onReady", async () => {

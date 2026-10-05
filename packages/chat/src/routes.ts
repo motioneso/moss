@@ -46,7 +46,8 @@ import {
 } from "@moss/memory";
 import {
   handleRouteError as handleModuleRouteError,
-  type MossModuleManifest
+  type MossModuleManifest,
+  type RouteCatalogHolder
 } from "@moss/module-sdk";
 import { ChatGatewayNotifier } from "./gateway-notifier.js";
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
@@ -225,6 +226,8 @@ export interface ChatRoutesDependencies {
    * The version check uses it so its throwaway session is refused any call to another tool.
    */
   readonly adoptCheckTokenMinter?: (minter: CheckTokenMinter) => void;
+  /** #3065: the built-in route catalog; null until the server's onReady fills it. */
+  readonly routeCatalog?: RouteCatalogHolder;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string

@@ -250,7 +250,8 @@ import type {
   JsonMossModuleManifest,
   RegisteredFocusSignal,
   RegisteredModuleDiagnosticProvider,
-  RegisteredProactiveMonitorProvider
+  RegisteredProactiveMonitorProvider,
+  RouteCatalogHolder
 } from "@moss/module-sdk";
 import {
   NotificationsRepository,
@@ -548,6 +549,28 @@ export {
   type RouteKey,
   type RouteModuleIndex
 } from "./route-guard.js";
+export {
+  CHAT_BLOCKED_PATH_RULES,
+  DESTRUCTIVE_WORD_POST_ALLOWLIST,
+  JULY_EXCLUDED_ROUTES,
+  JULY_PREFIXES_WITHOUT_ROUTES,
+  assertReadToolContentDeclared,
+  assertRouteChatClassification,
+  buildRouteCatalog,
+  createRouteCatalogHolder,
+  findUnmappedJulyPrefixes,
+  matchChatBlockedPathRule,
+  type CapturedRouteSchema,
+  type CatalogRoute,
+  type ChatBlockedPathRule,
+  type DestructiveWordPostAllowed,
+  type JulyExcludedRoute,
+  type JulyPrefixWithoutRoutes,
+  type JulyRuleForWalk,
+  type RouteCatalog,
+  type RouteChatAssertionOptions,
+  type RouteChatRuleTables
+} from "./route-catalog.js";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -575,6 +598,8 @@ export interface BuiltInRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** #3065: filled by the server's onReady once every route is registered; forwarded to chat. */
+  readonly routeCatalog?: RouteCatalogHolder;
   /**
    * Async, actor-filtered resolver (the enablement SEAM). Used by the tool surfaces
    * (MCP gateway + AI REST tools) and the route guard. Distinct from
@@ -2230,6 +2255,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
         adoptCheckTokenMinter: deps.adoptCheckTokenMinter,
         resolveActiveModules: deps.resolveActiveModules,
+        routeCatalog: deps.routeCatalog,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
         personaPreferences: new PreferencesRepository(),

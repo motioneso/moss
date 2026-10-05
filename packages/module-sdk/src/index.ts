@@ -47,6 +47,7 @@ export {
   type RegisteredModuleDiagnosticProvider
 } from "./diagnostics.js";
 export * from "./module-params.js";
+export * from "./route-chat.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
 import type {
@@ -55,6 +56,7 @@ import type {
 } from "./external-module.js";
 
 import type { ModuleWorkflowDefinition } from "./workflow.js";
+import type { ChatContentClass, ModuleAiConsent, RouteChatPolicy } from "./route-chat.js";
 
 import type { ModuleDiagnosticProvider } from "./diagnostics.js";
 
@@ -454,6 +456,8 @@ export interface ModuleRouteManifest {
   readonly responseSchema?: JsonSchema;
   readonly permissionId?: string;
   readonly featureFlagId?: string;
+  /** #3065: whether and how Moss may call this route from chat. Built-in modules only. */
+  readonly chat?: RouteChatPolicy;
 }
 
 export interface ModuleJobManifest {
@@ -645,6 +649,12 @@ export interface ModuleAssistantToolManifest {
    */
   readonly externalContent?: boolean;
   /**
+   * #3065: whether the result carries only the user's own record or may carry outside text.
+   * Required on built-in read tools (`assertReadToolContentDeclared`); default "outside". External
+   * tools never carry it, because the registry copies their fields one by one.
+   */
+  readonly content?: ChatContentClass;
+  /**
    * When true, this tool's own HttpError text is shown to the user and assistant. Opt in only
    * when its messages never include a path, a file name, anything the user typed, or user data.
    */
@@ -717,6 +727,12 @@ export interface MossModuleManifest {
    * so `JsonMossModuleManifest` deliberately has no equivalent field.
    */
   readonly workflows?: readonly ModuleWorkflowDefinition[];
+  /** #3065: route `chat` fields every route inherits unless it declares its own. */
+  readonly chatDefaults?: Partial<RouteChatPolicy>;
+  /** #3065: the module's AI consent switch; every route must name its key in `consent`. */
+  readonly aiConsent?: ModuleAiConsent;
+  /** #3065: refresh tokens for a module whose query keys do not start with its id. */
+  readonly chatRefreshTokens?: readonly string[];
 }
 
 /** Declarative, untrusted module guidance embedded only inside core-owned onboarding framing. */

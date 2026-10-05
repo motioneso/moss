@@ -1,20 +1,15 @@
 import type {
   MossActionPermissionTier,
   ModuleAssistantActionFamilyManifest,
-  ModuleAssistantToolManifest
+  ModuleAssistantToolManifest,
+  SelfOperationExclusionCategory
 } from "@moss/module-sdk";
 import type { DataContextDb } from "@moss/db";
 
 import type { AiRepository } from "../repository.js";
 
-export type SelfOperationExclusionCategory =
-  | "self_authority"
-  | "prompt_shaping"
-  | "secrets"
-  | "identity_auth_registration"
-  | "data_scope_consent"
-  | "assistant_brain"
-  | "external_effect";
+// #3065: the category type lives in module-sdk so route chat policies can name it.
+export type { SelfOperationExclusionCategory };
 
 interface SelfOperationExclusionRule {
   readonly id: string;
