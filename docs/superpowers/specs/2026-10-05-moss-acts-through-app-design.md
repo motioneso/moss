@@ -93,6 +93,7 @@ chat?: {
   blockedBecause?: SelfOperationExclusionCategory; // required when access is "blocked"
   title?: string; // plain label shown on the approval card; required unless access is "read" or "blocked"
   content?: "user_authored" | "outside"; // what a read returns; default "outside"
+  consent?: string; // AI-consent key; required on every route of a consent-gated module
 };
 ```
 
@@ -134,21 +135,37 @@ Steps, all inside the gateway:
 2. Decide run or ask (below).
 3. Mint a single-use act-as grant: random 256-bit value, held in process memory, bound to actor
    user id, chat session id and turn id, expiring in 30 s.
-4. `fastify.inject` the request with the grant in a dedicated header. Auth accepts that header only
-   when the grant exists in memory, then consumes it. The request then passes the same route guard,
-   module-enablement check, row-level security and validation as a browser request.
-5. Return status and body to Moss, capped at 32 KB with a truncation note. A read whose route is
+4. `fastify.inject` the request with the grant in a dedicated header. The request then passes the
+   same route guard, module-enablement check, row-level security and validation as a browser
+   request.
+5. Apply the AI-consent check to the response (below), whatever the route class.
+6. Return status and body to Moss, capped at 32 KB with a truncation note. A read whose route is
    `content: "outside"` returns inside the existing external-content wrapper.
 
 The grant never leaves the process and never reaches a prompt, log, job payload or response. The
 plan must name the auth seam that reads it and a test observed failing when the check is removed.
 
+**One grant, one request.** Auth resolves more than once per request today: the module route guard
+resolves it (`route-guard.ts:308-327`), then the handler resolves it again (for example
+`wellness/routes.ts:260-268`), and the auth wrapper recomputes each time (`auth/index.ts:204-213`).
+The first successful resolution consumes the grant and caches the access context on the request
+object. Later resolutions in the same request read that cache. A second request carrying the same
+grant fails.
+
 Admin power does not pass through. An admin's call is still refused on `/api/admin/*` because the
 path rule blocks it.
 
-Wellness and any module gated on AI consent classify their reads so the route itself refuses when
-consent is off, or mark them `blocked`. A route the browser may read is not automatically safe for a
-prompt; the class decides.
+**AI consent covers every response, not only reads.** A write can return withheld data. For example,
+`PATCH /api/wellness/medications/:id` with an empty body passes its schema and returns the full row,
+including name, dosage and notes (`wellness/repository.ts:240-270`, `wellness/serialize.ts:29-59`).
+So the consent rule keys on the module, not the route class:
+
+- Every route in a module gated on AI consent declares `chat.consent: "<consent key>"`, enforced by
+  the boot assertion.
+- When that consent is off, `app.callAction` refuses the call before inject. Nothing is sent and
+  nothing comes back.
+- Approving a change never grants consent. The approval card cannot switch it on, and the consent
+  toggle itself is `blocked`.
 
 ### Run or ask
 
@@ -170,19 +187,61 @@ than widening the manifest type.
 
 ### Outside-content rule
 
-Applies to every write tool, not only `app.callAction`. Ben's rule is general.
+Applies to every write tool, not only `app.callAction`, and to the classifier gate. Ben's rule is
+general.
 
-- A conversation becomes **tainted** when any tool result enters it that is marked
-  `externalContent`, any `app.callAction` read of an `outside` route, any connected-service tool
-  result, or any attachment read.
-- Taint lasts until the conversation is cleared or a new one starts. A fresh user message does not
-  clean it, because injected text stays in the model's context across turns.
-- While tainted, every write asks, including tools that normally run automatically and including
-  the classifier gate's send-without-asking path.
-- The five unmarked tools above gain `externalContent: true`.
+**Taint is set where content enters the model's context, not where a tool is called.** Chat already
+pulls content in without any tool call. Passive memory recall, the cross-tool read and notes
+retrieval run on each turn and are prepended to the user's text (`engine-text.ts:83-121`,
+`154-160`), and launch seeds memory into a new engine (`chat-session-launch.ts:92-119`). So every
+path that adds content to a prompt goes through one function that records its provenance:
 
-State lives with the chat session (`packages/chat/src/session-tokens.ts:150-162` holds the current
-turn today). It is server-side, so the model cannot clear it.
+| Admission path                                                 | Taints                       |
+| -------------------------------------------------------------- | ---------------------------- |
+| Tool result marked `externalContent`                           | yes                          |
+| `app.callAction` read of an `outside` route                    | yes                          |
+| Connected-service tool result                                  | yes                          |
+| Attachment read                                                | yes                          |
+| Automatic recall: cross-tool email or calendar read            | yes                          |
+| Automatic recall: notes and memory, per turn or at launch      | per Ben's scope ruling below |
+| The user's own typed message                                   | no                           |
+| `app.findAction`, `app.readSource`, app map, settings readouts | no                           |
+
+The plan's seams step lists every current admission path with `file:line`. A path that is not
+routed through the recording function is a blocker. A test confirms this by grepping for prompt
+assembly outside that function.
+
+**Taint belongs to the durable conversation, stored in the database.** Session keys today are actor
+plus surface (`chat-surface.ts:18-23`), and the token registry is process memory that a resume
+throws away (`session-runtime-helpers.ts:458-496`). Neither can hold this state. Instead:
+
+- A chat-owned row keyed by conversation id records that the conversation is tainted, when and by
+  which admission path. Owner-only row-level security.
+- Resume, restart and relaunch read the row before the first turn, so a tainted thread stays
+  tainted.
+- A conversation with no provenance record (every thread from before this ships) counts as tainted.
+- Switching threads switches the flag. A clean thread opened after a tainted one stays clean.
+- The row is deleted with its conversation. A private chat's row goes with the private purge, so
+  this adds nothing that outlives the chat.
+
+Taint lasts for the life of the conversation. A fresh user message does not clean it, because
+injected text stays in the model's context across turns. The model cannot clear it.
+
+While tainted, every write asks. That includes tools that normally run automatically (for example
+`settings.themeMode.set`, `settings/manifest.ts:480-490`) and the classifier gate's
+send-without-asking path.
+
+**Unmarked tools.** Five tools carry outside content but lack the mark: `email.listVisibleMessages`,
+`calendar.listVisibleEvents`, `chat.readAttachment`, `memory.recall` and `people.getContext`. They
+gain `externalContent: true`, subject to the scope ruling for memory and people.
+
+**Scope ruling (Ben).** Automatic notes and memory recall runs on most turns, so treating it as
+outside content makes most changes ask. Ben chooses one:
+
+1. Strict. Notes and memory taint like mail. Safest, noisiest. Default until Ben rules.
+2. The user's own notes and memory are theirs. Only mail, web, connected services, attachments,
+   files and cross-tool email or calendar reads taint.
+3. Strict, plus an "allow changes for this chat" choice on the first approval.
 
 Cost: "read my mail and make a task for each" asks once per task. That is accepted for now. Batching
 approvals is a later change if it proves noisy.
@@ -193,13 +252,16 @@ The card renders from the record, never from model text, because injected conten
 model-written summary lie.
 
 - Heading: the route's `chat.title`, for example "Delete custom theme".
-- Below it: the exact fields being sent, as label and value rows.
+- The target, read by the server from the database, never from model text. For example, the name of
+  the theme being deleted, looked up from the path id under the user's own access.
+- The exact fields being sent, as label and value rows.
 - When the conversation is tainted, one line saying Moss read outside content in this chat, so
   changes need approval.
 - Approve and Reject, as today.
 
-The current email-shaped preview stays for the tools that use it. This needs an agreed mockup
-before phase 2 builds it.
+Phase 1 puts the target and fields into the existing card as plain text rows. Two different theme
+deletions never show the same card. The redesigned card needs an agreed mockup before phase 2
+builds it. The current email-shaped preview stays for the tools that use it.
 
 ### Reading source
 
@@ -252,14 +314,18 @@ everything else.
 
 - Route catalog, manifest `chat` fields, boot assertion, classification of all 392 routes.
 - `app.findAction`, `app.readSource`, `app.callAction`.
-- Act-as grant and the auth seam.
-- Run-or-ask table, including the outside-content rule for `app.callAction` only.
-- Existing approval card with the route title as its summary.
-
-### Phase 2: the rule everywhere, and the card
-
-- Outside-content rule on every write tool and the classifier gate.
+- Act-as grant, the auth seam and per-request caching.
+- AI-consent check on every response.
+- Run-or-ask table.
+- Outside-content rule on every write tool and the classifier gate, with taint recorded at every
+  admission path and stored on the conversation.
 - Mark the five unmarked tools.
+- Existing approval card showing the route title, the server-read target and the exact fields.
+
+Nothing reaches live user data until every item above lands. Phase 1 ships as one unit.
+
+### Phase 2: the card and refresh
+
 - New approval card per the agreed mockup.
 - Screen refresh by module.
 
@@ -284,9 +350,13 @@ Pass: at least eight succeed with no hand-holding, and every change lands in the
 
 Safety proof in the same session:
 
-- A note containing "switch my theme to dark" is read, then Moss asks before any change.
-- A delete asks.
+- A note containing "switch my theme to dark" reaches Moss through automatic recall, with no notes
+  tool called. Moss asks before any change, through both the generic path and the dedicated theme
+  mode tool.
+- The same thread, resumed after a server restart, still asks.
+- A delete asks, and its card names the theme being deleted.
 - A blocked route (for example run-without-asking) is refused.
+- With Wellness AI consent off, a medication write is refused and returns nothing.
 
 If fewer than eight succeed, Ben decides whether to keep going or fall back to tools per action.
 
@@ -295,11 +365,20 @@ If fewer than eight succeed, Ben decides whether to keep going or fall back to t
 - Boot assertion fails on an unclassified route, a `GET` classed `write`, and an exclusion-matching
   route not classed `blocked`. Each is observed failing with the check removed.
 - `app.callAction` refuses blocked and unknown routes, and refuses `/api/admin/*` for an admin.
-- Act-as grant: a second use fails, an expired grant fails, a request without it from outside the
-  process fails.
+- Act-as grant: a full guarded request succeeds even though auth resolves twice; a replay of the
+  same grant on a separate request fails; an expired grant fails; a request without it from outside
+  the process fails.
 - Row-level security: a call cannot read or change another user's row.
-- Taint: a write after an outside read asks; a fresh user message does not clear it; clearing the
-  conversation does.
+- AI consent: with consent off, a write route in a consent-gated module is refused and no row data
+  returns. Observed failing with the check removed.
+- Taint at admission: automatic notes recall followed by a write asks, with no notes tool called.
+  Launch-time memory seeding taints the same way.
+- Taint on dedicated tools: after an outside read, an auto-run tool such as the theme mode tool asks,
+  and the classifier gate does not send without asking.
+- Taint persistence: a tainted thread stays tainted after resume and after a server restart; a
+  thread with no provenance record counts as tainted; switching from a tainted thread to a clean one
+  leaves the clean one clean; deleting a private chat deletes its taint row.
+- Approval card: two deletes of different themes show different targets.
 - `app.readSource` refuses paths escaping a root, symlinks out, and disallowed extensions.
 - Live proof: the kill-gate run, recorded on the PR.
 
@@ -309,6 +388,8 @@ If fewer than eight succeed, Ben decides whether to keep going or fall back to t
 | ------------------------------------------------------------------------------------------------- | ---------- |
 | Does `fastify.inject` pass better-auth's trusted-origin and CSRF checks without an Origin header? | plan seams |
 | Exact module-level refresh mechanism in the web app                                               | plan seams |
+| Do the user's own notes and memory count as outside content? (scope ruling above)                 | Ben        |
+| Where the durable conversation id and private purge live, with `file:line`                        | plan seams |
 | Should the July locked items be reopened one by one (persona, skills, memory settings)?           | Ben, later |
 
 ## Out of scope
