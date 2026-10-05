@@ -81,11 +81,19 @@ export function classifierGateSessionId(correlationId: string): string {
 
 /**
  * Task 4.1 (#2901) — the real gate runner wiring. Mints one short-lived token per attempt through
- * the composition root's registry, scoped to a fresh correlation id, with an empty allowlist (never
- * unrestricted) and a one-minute FIXED expiry (use never extends it), and revokes it by the exact
- * same session id. The ports factory is left unset (that is 3.5), so every attempt declines.
+ * the composition root's registry, scoped to a fresh correlation id, with an allowlist that starts
+ * empty (never unrestricted) and a one-minute FIXED expiry (use never extends it), and revokes it by
+ * the exact same session id.
+ *
+ * The allowlist grows to exactly one name: the tool the gate dispatches. `permit` adds that name
+ * just before the call and refuses any different name afterwards, so one pass can only ever run one
+ * tool. The gateway checks the same Set on every call (`prepareCall` in `gateway.ts`) and only
+ * after the tool is found among the actor's own active tools, so a name outside those is refused
+ * whatever the pass says. Kept-out tools never reach `permit`: the menu the gate picks from only
+ * lists released tools.
  */
 export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): ClassifierGateRunner {
+  const passes = new Map<string, Set<string>>();
   return createClassifierGateRunner({
     readMode: deps.readMode,
     ...(deps.createPorts ? { createPorts: deps.createPorts } : {}),
@@ -95,19 +103,25 @@ export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): Class
           {
             actorUserId,
             chatSessionId: classifierGateSessionId(correlationId),
-            // Tool limit: the gate token always carries an allowlist, never unrestricted. It is empty
-            // until the 3.5 ports factory supplies the turn's menu — every tool this token may call
-            // must be in the release-approved menu, and no release writer exists yet.
-            allowedToolNames: new Set<string>()
+            // Tool limit: the gate token always carries an allowlist, never unrestricted. It starts
+            // empty and `permit` adds the one dispatched tool.
+            allowedToolNames: passes.set(correlationId, new Set<string>()).get(correlationId)!
           },
           options
         ),
+      permit: (correlationId, toolName) => {
+        const allowed = passes.get(correlationId);
+        if (!allowed) return false;
+        if (allowed.size === 0) allowed.add(toolName);
+        return allowed.has(toolName);
+      },
       // #2956: files the attempt's tool rows under the chat turn, under the
       // same gate session id the mint above uses. Revoke clears it.
       noteTurn: (correlationId, turnId) => {
         if (turnId) deps.tokens.setCurrentTurnId(classifierGateSessionId(correlationId), turnId);
       },
       revoke: (correlationId) => {
+        passes.delete(correlationId);
         deps.tokens.clearCurrentTurnId(classifierGateSessionId(correlationId));
         deps.tokens.revokeBySessionId(classifierGateSessionId(correlationId));
       },
@@ -135,6 +149,11 @@ export interface GateTokenCallbacks {
    * clears it. Optional so test doubles keep working.
    */
   noteTurn?(correlationId: string, turnId: string | undefined): void;
+  /**
+   * Adds `toolName` to the attempt token's allowlist when the list is still empty, and reports
+   * whether the token now allows it. A second, different name is refused.
+   */
+  permit?(correlationId: string, toolName: string): boolean;
   /** Revokes that token alone. Never revokes an existing model session's tokens. */
   revoke(correlationId: string): void;
   /**
@@ -189,7 +208,19 @@ export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): Clas
       try {
         if (!deps.createPorts) return declineWithoutPorts();
         const attempt = deps.createPorts(request.actorUserId, token);
-        const gate = new ClassifierGate({ ...attempt, now: deps.now });
+        const permit = deps.tokens.permit;
+        const gate = new ClassifierGate({
+          ...attempt,
+          gateway: permit
+            ? {
+                call: (toolName, input, mode) =>
+                  permit(correlationId, toolName)
+                    ? attempt.gateway.call(toolName, input, mode)
+                    : Promise.resolve({ kind: "declined" as const, reason: "not_in_allowlist" })
+              }
+            : attempt.gateway,
+          now: deps.now
+        });
         return await gate.evaluate(request);
       } finally {
         deps.tokens.revoke(correlationId);

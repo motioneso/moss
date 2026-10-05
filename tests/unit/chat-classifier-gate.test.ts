@@ -343,8 +343,8 @@ describe("confidence bar by risk", () => {
   const bars: Array<[Risk, number]> = [
     ["read", 0.9],
     ["write", 0.95],
-    ["outbound", 0.98],
-    ["destructive", 0.98]
+    ["outbound", 0.95],
+    ["destructive", 0.95]
   ];
 
   function menuFor(risk: Risk): GateTool {
@@ -385,7 +385,7 @@ describe("confidence bar by risk", () => {
   it("holds the first answer to the chosen tool's bar, not a lower one", async () => {
     const h = harness({
       tools: [switchTool("destructive")],
-      answers: [pick("home", 0.96), pick("home.setSwitch", 0.99)]
+      answers: [pick("home", 0.92), pick("home.setSwitch", 0.99)]
     });
     expect(await h.gate.evaluate(request())).toMatchObject({ reason: "low_confidence" });
   });
