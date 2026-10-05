@@ -41,6 +41,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Moss now runs tools it is sure about by itself.** With the Classifier switched on, Moss can now run a tool it is confident about without asking, and the confidence needed for tools that send things out or delete things is slightly lower. [PR #3045](https://github.com/motioneso/moss/pull/3045)
 - **Clearer classifier controls on each connection.** Each connection now shows whether its safety check is off, getting ready, ready or needs attention, lets you keep a single tool out of it with an undo, and shows tools by a readable name. [PR #3033](https://github.com/motioneso/moss/pull/3033)
 - **Your assistant's name now shows everywhere.** The name you give your assistant now appears throughout the app, including the loading screen, menu and settings, instead of the word Moss. [PR #3032](https://github.com/motioneso/moss/pull/3032)
 - **Catch-up shows the emails worth your attention.** The catch-up section on Today now lists each email worth knowing about, who it is from and what it says, with buttons to open it, reply, turn it into a task, or dismiss it. [PR #3031](https://github.com/motioneso/moss/pull/3031)
