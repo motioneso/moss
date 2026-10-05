@@ -1,6 +1,6 @@
 # Trail Marker: judge the screenshot directly
 
-**Status:** Draft for Ben's review. Ben agreed the direction in chat on October 5, 2026 ("yea lets do it").
+**Status:** Approved by Ben in chat on October 5, 2026 ("approve, please proceed"), after agreeing the direction the same day ("yea lets do it").
 
 **Amends:** [Rung 3 vision spec](2026-09-21-trail-marker-rung3-vision.md) §3, §5 and §6. Everything else there stands.
 
