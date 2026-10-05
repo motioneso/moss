@@ -211,7 +211,7 @@ test("9. a Sends things out tool asks, runs once allowed from the group, asks ag
   await chatPictures(page, "r26-15-sending-asks-again");
 });
 
-test("10. a kept-out tool still works in chat and never reaches shadow records; released tools do", async ({
+test("10. a kept-out tool still works in chat and is never named in shadow records; released tools are", async ({
   page
 }) => {
   test.setTimeout(1_200_000);
@@ -240,8 +240,10 @@ test("10. a kept-out tool still works in chat and never reaches shadow records; 
   // succeeded), so the released tool here is the light, a Changes things tool.
   await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");
 
-  // Every column that can name a tool, plus the outcome. The 3-second gate limit is fixed in
-  // code; the Codex sign-in answers slower than that, so released tools are recorded as found.
+  // Every tool-name column, plus the outcome. The record keeps the message text by design, and this
+  // prompt names the kept-out tool, so the text column is left out. The 3-second gate limit is
+  // fixed in code; the Codex sign-in answers slower than that, so released tools are recorded as
+  // found.
   const rows = () =>
     sql(
       "select concat_ws('|', coalesce(module_id,'-'), coalesce(tool_name,'-'), " +
@@ -263,7 +265,9 @@ test("10. a kept-out tool still works in chat and never reaches shadow records; 
   );
 });
 
-test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) => {
+// Unfinished: blocked by #3036. The gate's 3-second limit is shorter than the Codex sign-in's
+// answer time, so no classifier decision is ever made and these checks fail.
+test.fixme("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) => {
   test.setTimeout(1_200_000);
   await signIn(page);
   const ownerId = sql(`select id from app.users where email = '${R26.ownerEmail}'`);
@@ -311,21 +315,25 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
           (await toolServerCalls(DOOR)).length > before || (await card.isVisible()) || false,
         { timeout: 180_000, intervals: [3_000] }
       )
-      .toBe(true)
-      .catch(() => undefined);
+      .toBe(true);
     await page.waitForTimeout(5_000);
     const ran = (await toolServerCalls(DOOR)).length > before;
     const asked = await card.isVisible();
     const lines = checks(since);
     console.log(`R2.6 YOLO ${label}:`, JSON.stringify({ ran, asked, checks: lines }));
     await chatPictures(page, `r26-19-yolo-${label}`);
-    // Recorded, not asserted. The gate's 3-second limit is shorter than the Codex sign-in's
-    // answer time, so the checks may time out and the default model answers instead.
     const confidences = lines.flatMap((line) => {
       const match = /"confidence":\s*([0-9.]+)/.exec(line);
       return match ? [Number(match[1])] : [];
     });
     console.log(`R2.6 YOLO ${label} confidences:`, JSON.stringify(confidences));
+    expect(confidences.length, `the classifier decided the ${label} request`).toBeGreaterThan(0);
+    if (label === "clear") {
+      expect(ran, "a clear Sensitive request above the bar runs").toBe(true);
+      expect(asked, "and shows no card").toBe(false);
+    } else {
+      expect(ran, "a vague request below the bar does not run").toBe(false);
+    }
   }
 
   const off = await page.request.put("/api/me/yolo", { data: { enabled: false } });

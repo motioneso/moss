@@ -85,12 +85,18 @@ interface PendingTurn {
   /** The model's first tool call was seen; later calls are never compared. */
   sawTool: boolean;
   /**
-   * The tools that take part in the classifier, listed before the record opens. A model tool
-   * outside this set is stored with no name, so a kept-out tool never reaches a record.
+   * Transport key to `module.tool` identity, built before the record opens. Only a key that one
+   * executable tool alone can produce, and whose tool takes part in the classifier, has an entry.
+   * Any other model tool is stored with no name.
    */
-  classifierToolIds?: ReadonlySet<string>;
-  observation?: ModelToolObservation;
+  toolIdentities?: ReadonlyMap<string, string>;
+  observation?: TurnObservation;
 }
+
+/** A model tool stays as the transport named it until the record is written. */
+type TurnObservation =
+  | Exclude<ModelToolObservation, { readonly kind: "tool" }>
+  | { readonly kind: "tool"; readonly rawToolName: string };
 
 const OBSERVATION_PRIORITY: Readonly<Record<ModelToolObservation["kind"], number>> = {
   tool: 3,
@@ -102,16 +108,13 @@ const OBSERVATION_PRIORITY: Readonly<Record<ModelToolObservation["kind"], number
 const TRANSPORT_PREFIXES = ["mcp__jarvis__", "mcp__moss__"] as const;
 
 /**
- * Turns a transport tool name into the gate's `module.tool` identity. The CLI renders
- * `calendar.listVisibleEvents` as `mcp__jarvis__calendar_listVisibleEvents`; the dots are encoded
- * as underscores and only the transport prefix is stripped. Anything unrecognized is passed through
- * lowercased by the repository, which then reads as a mismatch rather than a false match.
+ * The CLI renders `calendar.listVisibleEvents` as `mcp__jarvis__calendar_listVisibleEvents`. It
+ * encodes every dot as an underscore, so `hub.turn_on` and `hub.turn.on` arrive the same. Names
+ * are compared in that encoded form, exactly as written.
  */
-export function normalizeObservedToolName(raw: string): string {
-  for (const prefix of TRANSPORT_PREFIXES) {
-    if (raw.startsWith(prefix)) return raw.slice(prefix.length).replaceAll("_", ".");
-  }
-  return raw;
+function transportKey(name: string): string {
+  const prefix = TRANSPORT_PREFIXES.find((candidate) => name.startsWith(candidate));
+  return (prefix ? name.slice(prefix.length) : name).replaceAll(".", "_");
 }
 
 export function createClassifierGateShadowRunner(
@@ -140,13 +143,18 @@ export function createClassifierGateShadowRunner(
     actorUserId: string,
     turnId: string,
     turn: PendingTurn,
-    observation: ModelToolObservation
+    observation: TurnObservation
   ): void => {
-    const stored =
-      observation.kind === "tool" &&
-      !turn.classifierToolIds?.has(observedToolKey(observation.toolId))
-        ? ({ kind: "unobserved" } as const)
-        : observation;
+    const identity =
+      observation.kind === "tool"
+        ? turn.toolIdentities?.get(transportKey(observation.rawToolName))
+        : undefined;
+    const stored: ModelToolObservation =
+      observation.kind !== "tool"
+        ? observation
+        : identity
+          ? { kind: "tool", toolId: identity }
+          : { kind: "unobserved" };
     void withActor(actorUserId, `classifier_shadow_observe_${turnId}`, (db) =>
       deps.repository.observeModelTool(db, turnId, stored)
     ).catch(() => fail("observe"));
@@ -171,7 +179,7 @@ export function createClassifierGateShadowRunner(
   const recordObservation = (
     actorUserId: string,
     turnId: string,
-    observation: ModelToolObservation
+    observation: TurnObservation
   ): void => {
     const turn = pending.get(turnId);
     if (!turn) return;
@@ -222,12 +230,12 @@ export function createClassifierGateShadowRunner(
         const coolKey = `${actorUserId}|${handle?.model.id ?? "none"}`;
         const cooling = (coolingUntil.get(coolKey) ?? 0) > deps.now();
 
-        // Listed once and shared with the gate. A failed listing leaves the set empty, so no model
+        // Listed once and shared with the gate. A failed listing leaves no identities, so no model
         // tool name is stored, and the gate still sees the same failure.
         const listing = ports.listTools();
         const listed = await listing.catch(() => []);
         const tracked = pending.get(turnId);
-        if (tracked) tracked.classifierToolIds = classifierToolIds(listed);
+        if (tracked) tracked.toolIdentities = modelToolIdentities(allowedToolNames, listed);
 
         const opened = await withActor(actorUserId, `classifier_shadow_open_${turnId}`, (db) =>
           deps.repository.open(db, {
@@ -323,10 +331,7 @@ export function createClassifierGateShadowRunner(
       void runAttempt(input);
     },
     observeModelTool(actorUserId, turnId, rawToolName) {
-      recordObservation(actorUserId, turnId, {
-        kind: "tool",
-        toolId: normalizeObservedToolName(rawToolName)
-      });
+      recordObservation(actorUserId, turnId, { kind: "tool", rawToolName });
     },
     noModelTool(actorUserId, turnId) {
       markEnded(turnId);
@@ -366,21 +371,34 @@ function toCompletion(outcome: GateOutcome): CompletionInput {
 }
 
 /**
- * Compares tool names the way the transport renders them, where a dot arrives as an underscore.
- * Each tool is keyed by its own name and by its `module.tool` identity.
+ * Maps each transport key to the identity the gate records for the same tool. A key that more than
+ * one executable tool can produce is left out, so a kept-out tool can never pass as a classifier
+ * tool whose name encodes the same way.
  */
-function observedToolKey(toolId: string): string {
-  return toolId.toLowerCase().replaceAll("_", ".");
-}
-
-function classifierToolIds(tools: readonly GateTool[]): Set<string> {
-  const ids = new Set<string>();
-  for (const tool of tools) {
-    if (gateEligibilityProblem(tool, null) === "not_declared") continue;
-    ids.add(observedToolKey(tool.name));
-    ids.add(observedToolKey(`${tool.moduleId}.${toBareToolName(tool.moduleId, tool.name)}`));
+function modelToolIdentities(
+  executableNames: ReadonlySet<string>,
+  classifierTools: readonly GateTool[]
+): Map<string, string> {
+  const namesByKey = new Map<string, Set<string>>();
+  for (const name of [...executableNames, ...classifierTools.map((tool) => tool.name)]) {
+    const key = transportKey(name);
+    namesByKey.set(key, (namesByKey.get(key) ?? new Set()).add(name));
   }
-  return ids;
+
+  const eligible = new Map<string, GateTool | null>();
+  for (const tool of classifierTools) {
+    if (gateEligibilityProblem(tool, null) === "not_declared") continue;
+    eligible.set(tool.name, eligible.has(tool.name) ? null : tool);
+  }
+
+  const identities = new Map<string, string>();
+  for (const [key, names] of namesByKey) {
+    if (names.size !== 1) continue;
+    const [name] = names;
+    const tool = name === undefined ? undefined : eligible.get(name);
+    if (tool) identities.set(key, `${tool.moduleId}.${toBareToolName(tool.moduleId, tool.name)}`);
+  }
+  return identities;
 }
 
 /**
