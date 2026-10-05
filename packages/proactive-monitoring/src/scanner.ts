@@ -124,12 +124,12 @@ export class ProactiveScanner {
 
     // Filter to allowed signal types, map to priority candidates, rank.
     const allowedSignals = signals.filter((s) => isAllowedSignalType(source, s.signalType));
-    // Build title→signal map BEFORE ranking. rankPriorityCandidates sorts results internally
-    // and returns PriorityResult[] with no candidate back-references (scoring.ts drops them at
-    // the final .map step). PriorityResult.title === candidate.title === signal.title, so
-    // title is the stable bridge — look up by result.title after ranking, not by index.
-    const signalByTitle = new Map(allowedSignals.map((s) => [s.title, s]));
-    const candidates: PriorityCandidate[] = allowedSignals.map((s) => {
+    // Match each ranked result back to its exact signal by the candidate key (#2609). Titles
+    // are not unique — recurring events and repeated subjects share them — so matching by
+    // title can put one signal's card on another's details once ranking reorders them.
+    // The key is the signal's position here, which no ranking order can disturb.
+    const signalByKey = new Map(allowedSignals.map((s, index) => [String(index), s]));
+    const candidates: PriorityCandidate[] = allowedSignals.map((s, index) => {
       const pc = s.priorityCandidate as Record<string, unknown>;
       return {
         source: source as PrioritySource,
@@ -138,7 +138,8 @@ export class ProactiveScanner {
         signalType: mapSignalType(s.signalType),
         occurredAt: s.occurredAt,
         textForAnchorMatch: [s.title, s.summary],
-        ...(pc ?? {})
+        ...(pc ?? {}),
+        key: String(index)
       } as PriorityCandidate;
     });
 
@@ -161,12 +162,12 @@ export class ProactiveScanner {
       return skip(source, "scorer_error");
     }
 
-    // ranked is already sorted by score descending (not in input order). Look up each
-    // result's originating signal by title — not by position.
+    // ranked is already sorted by score descending (not in input order). Each result
+    // carries its candidate's key, so same-title results still reach their own signal.
     for (const result of ranked) {
       if (result.band !== "critical" && result.band !== "high") continue;
 
-      const signal = signalByTitle.get(result.title);
+      const signal = result.key === undefined ? undefined : signalByKey.get(result.key);
       if (!signal) continue;
 
       const verdict = await this.deps.antiSpamPolicy.check(

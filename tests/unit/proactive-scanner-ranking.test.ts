@@ -77,12 +77,11 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
       })
     };
 
-    // Ranker returns them REVERSED: Beta=critical, Alpha=high.
-    // Index-based lookup would assign critical to Alpha (position 0 = first ranked result)
-    // and high to Beta — wrong. Title-based lookup must give critical to Beta, high to Alpha.
+    // Ranker returns them REVERSED: Beta=critical, Alpha=high. The keys ride along, so
+    // each result still reaches its own signal whatever the order.
     vi.mocked(rankPriorityCandidates).mockReturnValue([
-      { source: "calendar", title: "Signal Beta", score: 100, band: "critical", reasons: [] },
-      { source: "calendar", title: "Signal Alpha", score: 80, band: "high", reasons: [] }
+      { source: "calendar", title: "Signal Beta", score: 100, band: "critical", reasons: [], key: "1" },
+      { source: "calendar", title: "Signal Alpha", score: 80, band: "high", reasons: [], key: "0" }
     ]);
 
     const mockPrefsRepo = {
@@ -141,5 +140,103 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
     expect(upsertCalls[0]?.[1]).toMatchObject({ title: "Signal Beta", priorityBand: "critical" });
     // Second ranked result (Alpha=high) must produce a card for "Signal Alpha" with band "high".
     expect(upsertCalls[1]?.[1]).toMatchObject({ title: "Signal Alpha", priorityBand: "high" });
+  });
+
+  it("gives the card to the right same-title signal when only one scores high enough — #2609 regression", async () => {
+    // Two allowed signals from one source share a title (recurring Standup events).
+    const signalMon = {
+      source: "calendar" as const,
+      stableKey: "mon",
+      sourceRefHash: "hash-mon",
+      signalType: "event_changed_soon", // allowed for calendar
+      title: "Standup",
+      summary: "Monday standup moved an hour later",
+      occurredAt: "2026-09-28T09:00:00.000Z",
+      priorityCandidate: {}
+    };
+    const signalTue = {
+      source: "calendar" as const,
+      stableKey: "tue",
+      sourceRefHash: "hash-tue",
+      signalType: "event_changed_soon", // allowed for calendar
+      title: "Standup",
+      summary: "Tuesday standup has a new video link",
+      occurredAt: "2026-09-29T09:00:00.000Z",
+      priorityCandidate: {}
+    };
+
+    const provider: ProactiveMonitorProvider = {
+      source: "calendar",
+      moduleId: "calendar",
+      collectSignals: vi.fn().mockResolvedValue({
+        signals: [signalMon, signalTue],
+        nextCursor: {}
+      })
+    };
+
+    // Tuesday scores high, Monday scores normal and never reaches a card. The results
+    // arrive Tuesday-first; matching by title would hand Tuesday's card to Monday.
+    vi.mocked(rankPriorityCandidates).mockReturnValue([
+      { source: "calendar", title: "Standup", score: 80, band: "high", reasons: [], key: "1" },
+      { source: "calendar", title: "Standup", score: 30, band: "normal", reasons: [], key: "0" }
+    ]);
+
+    const mockPrefsRepo = {
+      get: vi.fn().mockResolvedValue(enabledCalendarPref)
+    } as unknown as ProactiveMonitoringPreferencesRepository;
+
+    const mockPriorityPrefsRepo = {
+      get: vi.fn().mockReturnValue({ anchors: [] })
+    } as unknown as PriorityPreferencesRepository;
+
+    const mockStateRepo = {
+      get: vi.fn().mockResolvedValue(null),
+      advanceCursor: vi.fn().mockResolvedValue(undefined),
+      recordFailure: vi.fn().mockResolvedValue(undefined)
+    } as unknown as MonitorStateRepository;
+
+    const mockCardRepo = {
+      findByStableKey: vi.fn().mockResolvedValue(null),
+      upsertCard: vi.fn().mockResolvedValue(undefined),
+      getActiveCounts: vi.fn().mockResolvedValue({
+        dailyGlobal: 0,
+        dailySource: 0,
+        hourlySource: 0
+      })
+    } as unknown as CardRepository;
+
+    const mockAntiSpam = {
+      check: vi.fn().mockResolvedValue({ allow: true, deferredUntil: null })
+    } as unknown as AntiSpamPolicy;
+
+    const scanner = new ProactiveScanner({
+      preferencesRepository: mockPrefsRepo,
+      priorityPreferencesRepository: mockPriorityPrefsRepo,
+      monitorStateRepository: mockStateRepo,
+      cardRepository: mockCardRepo,
+      antiSpamPolicy: mockAntiSpam,
+      getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" })
+    });
+
+    const result = await scanner.scan(
+      fakeScopedDb,
+      "00000000-0000-4000-8000-000000000001",
+      "calendar",
+      provider,
+      "source-sync",
+      new Date("2026-09-29T12:00:00.000Z")
+    );
+
+    expect(result.skipped).toBe(false);
+    expect(result.cardsCreated).toBe(1);
+
+    const upsertCalls = vi.mocked(mockCardRepo.upsertCard).mock.calls;
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0]?.[1]).toMatchObject({
+      stableKey: "tue",
+      title: "Standup",
+      summary: "Tuesday standup has a new video link",
+      priorityBand: "high"
+    });
   });
 });
