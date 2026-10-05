@@ -161,6 +161,10 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.meeting_action_candidates",
         "app.meeting_export_receipts",
         "app.meeting_export_requests",
+        // #2981 capture links, grants and receipts retain the same owner-deletion chain.
+        "app.meeting_capture_links",
+        "app.meeting_capture_grants",
+        "app.meeting_capture_receipts",
         // Workshop projects own their durable feed; both cascade with their owner.
         "app.workshop_projects",
         "app.workshop_project_feed",
