@@ -1,6 +1,6 @@
 # Moss acts through its own app
 
-- **Status:** draft, awaiting Ben's approval
+- **Status:** approved by Ben, 2026-10-05
 - **Issue:** #3065
 - **Related:** #2998 (self-knowledge by construction), #3023 (custom themes), #3022, #3024, #3025,
   #3026, July self-operation specs (`2026-07-26-module-self-operation-settings-commands.md`,
