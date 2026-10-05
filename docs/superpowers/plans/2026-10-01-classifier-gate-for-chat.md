@@ -129,7 +129,7 @@ changes with the classifier off.
   never marks a tool safe; a tool whose method changed from `PUT` to `DELETE` after its safe sort
   asks at the next call; a Sends things out tool asks until allowed and runs after; the flag on a
   Sensitive tool is ignored; another owner or an admin cannot set the flag.
-- Also proves: each group gets its bar, and a Sensitive tool below 0.98 is refused; the gate runs a
+- Also proves: each group gets its bar, and a Sensitive tool below 0.95 is refused; the gate runs a
   safe connected tool outside YOLO and declines a Sensitive one with zero handler calls; YOLO
   routing is byte-identical before and after.
 
@@ -307,7 +307,7 @@ policy-negative tests, not accept this document as proof of implementation.
   schemas. Never send the raw message as tool input.
 - Apply the eventual tool's risk bar (reviewed classifier risk for integrations,
   subject to Ben's 2b ruling) to both stages and argument answers: initially
-  read 0.90, write 0.95, outbound/destructive 0.98, with a top-minus-runner-up lead of
+  read 0.90, write/outbound/destructive 0.95, with a top-minus-runner-up lead of
   at least 0.40 for each choice. These are provisional shadow thresholds, not proven
   accuracy. Missing runner-up evidence means decline, not invented certainty.
 - Distinguish `declined-before-execution`, `executed-success`, and

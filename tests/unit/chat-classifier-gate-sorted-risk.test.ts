@@ -80,14 +80,15 @@ describe("gate risk for a sorted connected tool", () => {
     });
   });
 
-  it("gives a Changes things tool the 0.95 bar and refuses a Sensitive one below 0.98", async () => {
+  it("gives a Changes things tool and a Sensitive tool the 0.95 bar and refuses either below it", async () => {
     const risks = await gateRisks([
       connectedTool("home.change", "write"),
       connectedTool("home.sensitive", "destructive")
     ]);
     expect(meetsConfidenceBar(0.95, risks["home.change"]!)).toBe(true);
-    expect(meetsConfidenceBar(0.97, risks["home.sensitive"]!)).toBe(false);
-    expect(meetsConfidenceBar(0.98, risks["home.sensitive"]!)).toBe(true);
+    expect(meetsConfidenceBar(0.94, risks["home.sensitive"]!)).toBe(false);
+    expect(meetsConfidenceBar(0.95, risks["home.sensitive"]!)).toBe(true);
+    expect(meetsConfidenceBar(0.94, risks["home.change"]!)).toBe(false);
   });
 
   it("never lowers a tool to the read bar", async () => {
