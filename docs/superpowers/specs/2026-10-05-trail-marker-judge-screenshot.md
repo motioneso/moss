@@ -6,6 +6,8 @@
 
 **Depends on:** [Decision-model presets](2026-10-05-decision-model-presets-design.md) (#3057), which adds Clef and the Cloudflare dialect for text only.
 
+**Plan:** [Implementation plan](../plans/2026-10-05-trail-marker-judge-screenshot.md).
+
 **Tracking:** [Task #3067](https://github.com/motioneso/moss/issues/3067).
 
 ## 1. Goal
