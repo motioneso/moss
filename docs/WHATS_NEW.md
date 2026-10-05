@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Classifier trial counts connected tools correctly.** The classifier trial report now counts a correct pick of a connected tool as a match instead of a miss. [PR #3050](https://github.com/motioneso/moss/pull/3050)
 - **Model filter list on Activity looks right again.** The list of models you can filter by on the Activity page now shows tidy single-line rows with normal-size checkboxes. [PR #3048](https://github.com/motioneso/moss/pull/3048)
 - **Kept-out tools left out of trial comparisons.** Trial comparisons no longer identify kept-out tools as the tool chat used; the original message text is still saved. [PR #3037](https://github.com/motioneso/moss/pull/3037)
 - **Moss no longer stalls for minutes on some requests.** Moss stays responsive while it indexes your notes and memory in the background, and checking your email no longer hangs for minutes. [PR #3030](https://github.com/motioneso/moss/pull/3030)
