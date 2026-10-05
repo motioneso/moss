@@ -197,9 +197,9 @@ export const chatModuleManifest = {
     {
       id: "chat.classifier_shadow_records",
       description:
-        "Shadow records for the classifier gate: private, only you can read. In Shadow the gate's " +
-        "hypothetical decision is compared with the main model's first tool call; private chats " +
-        "are never sent. Kept until you ask Moss in chat to delete them.",
+        "Private shadow records compare the gate's guess with the main model's first tool call " +
+        "and keep message text. A first tool outside the classifier stays unnamed; later calls " +
+        "never replace it. Private chats never sent. Ask Moss to delete them.",
       featureFlagId: "chat.module"
     },
     {

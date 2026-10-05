@@ -7,7 +7,6 @@ import type { ClassifierShadowRepository } from "../../packages/chat/src/classif
 import { GATE_LIMITS } from "../../packages/chat/src/live/classifier-gate.js";
 import {
   createClassifierGateShadowRunner,
-  normalizeObservedToolName,
   type ClassifierGateShadowRunnerDeps
 } from "../../packages/chat/src/live/classifier-gate-shadow.js";
 import type {
@@ -105,6 +104,8 @@ function harness(
     complete?: ReturnType<typeof vi.fn>;
     now?: () => number;
     gateway?: GatewayGateOutcome;
+    listTools?: ClassifierGateAttemptPorts["listTools"];
+    listToolNames?: readonly string[];
   } = {}
 ): Harness {
   const choose = overrides.chooseImpl ?? vi.fn();
@@ -116,7 +117,7 @@ function harness(
       choose: choose as never,
       extract: vi.fn()
     },
-    listTools: vi.fn(async () => [calendarTool]),
+    listTools: overrides.listTools ?? vi.fn(async () => [calendarTool]),
     loadCandidates: vi.fn(),
     isReleased: vi.fn(() => true),
     gateway: {
@@ -142,7 +143,7 @@ function harness(
     repository,
     dataContext,
     tokens: { mint, revoke },
-    listToolNames: vi.fn(async () => ["calendar.listVisibleEvents"]),
+    listToolNames: vi.fn(async () => overrides.listToolNames ?? ["calendar.listVisibleEvents"]),
     thresholdVersion: "v1",
     onFailure,
     now: overrides.now ?? (() => 1_000_000)
@@ -183,16 +184,6 @@ async function settle(): Promise<void> {
 
 afterEach(() => {
   vi.useRealTimers();
-});
-
-describe("normalizeObservedToolName", () => {
-  it.each([
-    ["mcp__jarvis__calendar_listVisibleEvents", "calendar.listVisibleEvents"],
-    ["mcp__moss__calendar_listVisibleEvents", "calendar.listVisibleEvents"],
-    ["calendar.listVisibleEvents", "calendar.listVisibleEvents"]
-  ])("%s -> %s", (raw, expected) => {
-    expect(normalizeObservedToolName(raw)).toBe(expected);
-  });
 });
 
 describe("no-shadow cases make no classifier request", () => {
@@ -315,6 +306,97 @@ describe("correlation buffering", () => {
     expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", {
       kind: "tool",
       toolId: "calendar.listVisibleEvents"
+    });
+  });
+
+  it.each([
+    "mcp__jarvis__calendar_listVisibleEvents",
+    "mcp__moss__calendar_listVisibleEvents",
+    "calendar.listVisibleEvents"
+  ])("names the classifier tool the transport called %s", async (raw) => {
+    const h = harness();
+    h.runner.start(input());
+    h.runner.observeModelTool("user-1", "turn-1", raw);
+    await vi.waitFor(() => expect(h.observeModelTool).toHaveBeenCalled());
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", {
+      kind: "tool",
+      toolId: "calendar.listVisibleEvents"
+    });
+  });
+
+  it("names a tool reported after the record has opened", async () => {
+    const h = harness();
+    h.runner.start(input());
+    await vi.waitFor(() => expect(h.open).toHaveBeenCalled());
+    await settle();
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__moss__calendar_listVisibleEvents");
+    await vi.waitFor(() => expect(h.observeModelTool).toHaveBeenCalled());
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", {
+      kind: "tool",
+      toolId: "calendar.listVisibleEvents"
+    });
+  });
+
+  it("stores no name when the model's tool is outside the classifier (a kept-out tool)", async () => {
+    const h = harness({
+      listToolNames: ["calendar.listVisibleEvents", "new-smart-hub.list_devices"]
+    });
+    h.runner.start(input());
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__jarvis__new-smart-hub_list_devices");
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__jarvis__calendar_listVisibleEvents");
+    await vi.waitFor(() => expect(h.complete).toHaveBeenCalled());
+    await settle();
+    expect(h.observeModelTool).toHaveBeenCalledTimes(1);
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", { kind: "unobserved" });
+    expect(JSON.stringify(h.observeModelTool.mock.calls)).not.toContain("devices");
+  });
+
+  it("stores no name when the tool list could not be read", async () => {
+    const h = harness({ listTools: vi.fn(async () => Promise.reject(new Error("down"))) });
+    h.runner.start(input());
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__jarvis__calendar_listVisibleEvents");
+    await vi.waitFor(() => expect(h.observeModelTool).toHaveBeenCalled());
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", { kind: "unobserved" });
+  });
+
+  it("stores no name for a tool that no longer declares itself to the classifier", async () => {
+    const { classifier: _dropped, ...undeclared } = calendarTool;
+    const h = harness({ listTools: vi.fn(async () => [undeclared]) });
+    h.runner.start(input());
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__moss__calendar_listVisibleEvents");
+    await vi.waitFor(() => expect(h.observeModelTool).toHaveBeenCalled());
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", { kind: "unobserved" });
+  });
+
+  it("stores no name when a kept-out tool's name encodes the same as a classifier tool", async () => {
+    const turnOn: GateTool = { ...calendarTool, moduleId: "hub", name: "hub.turn_on" };
+    const h = harness({
+      listTools: vi.fn(async () => [turnOn]),
+      listToolNames: ["hub.turn_on", "hub.turn.on"]
+    });
+    h.runner.start(input());
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__moss__hub_turn_on");
+    await vi.waitFor(() => expect(h.observeModelTool).toHaveBeenCalled());
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", { kind: "unobserved" });
+    expect(JSON.stringify(h.observeModelTool.mock.calls)).not.toContain("hub");
+  });
+
+  it("keeps a connected tool's real name and connection", async () => {
+    const hubTool: GateTool = {
+      ...calendarTool,
+      moduleId: "integration-new-smart-hub",
+      name: "new-smart-hub.list_devices"
+    };
+    const h = harness({
+      listTools: vi.fn(async () => [calendarTool, hubTool]),
+      listToolNames: ["calendar.listVisibleEvents", "new-smart-hub.list_devices"]
+    });
+    h.runner.start(input());
+    h.runner.observeModelTool("user-1", "turn-1", "mcp__moss__new-smart-hub_list_devices");
+    await vi.waitFor(() => expect(h.observeModelTool).toHaveBeenCalled());
+    expect(h.observeModelTool).toHaveBeenCalledWith(fakeDb, "turn-1", {
+      kind: "tool",
+      toolId: "integration-new-smart-hub.new-smart-hub.list_devices"
     });
   });
 

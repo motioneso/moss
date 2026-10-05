@@ -175,7 +175,8 @@ stand-in tool server is allowed for the claim about what Moss sends, disclosed o
   on prepares with no further clicks; with YOLO off a safe tool runs with no card and a Sensitive
   tool shows "Asks first" and asks; a Sends things out tool asks, runs once allowed from the group
   header, and asks again after "Ask first for all"; YOLO handles a Sensitive tool only above its bar; a kept-out
-  tool stays usable in ordinary chat and never appears in shadow records; shadow records appear for released tools.
+  tool stays usable in ordinary chat and is never named in a shadow record's tool fields (the record
+  still keeps the message text, by design); shadow records appear for released tools.
 
 After R2.6, 4.2 is Ben's one shadow review per classifier selection, then 4.3 as written.
 

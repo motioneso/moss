@@ -373,6 +373,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "did, reached from the Classifier row while the gate is in Shadow. Counts over 7, 30 " +
       "or 90 days: messages checked, times it picked a tool, times the main model agreed " +
       "(x of y), and times it missed a tool the chat used, plus the disagreement rows. " +
+      "A chat tool the classifier cannot use is left unnamed and is not counted as missed. " +
       "Shows only the viewing admin's own records.",
     path: "/settings?section=shadowreport",
     scope: "admin"
