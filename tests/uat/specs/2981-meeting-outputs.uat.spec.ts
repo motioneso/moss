@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
+import type { MeetingsExportSection } from "@moss/meetings";
 import type {
   MeetingActionCandidate,
   MeetingExportReceipt,
@@ -355,6 +356,32 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(replay.status()).toBe(200);
       expect((await replay.json()).acceptedTaskId).toBe(accepted.acceptedTaskId);
     }
+    await test.step("disabled Notes gives an actionable private-export explanation", async () => {
+      // Change real owner module state; never replace a Moss API response.
+      try {
+        expect(
+          (await page.request.patch("/api/me/modules/notes", { data: { disabled: true } })).status()
+        ).toBe(200);
+        const rejected = page.waitForResponse(
+          (response) =>
+            response.url().endsWith(`${path}/exports`) && response.request().method() === "POST"
+        );
+        await page.getByRole("button", { name: "Save new private version", exact: true }).click();
+        const response = await rejected;
+        expect(response.status()).toBe(409);
+        expect(await response.json()).toMatchObject({ code: "meeting_export_unavailable" });
+        const exports = page.getByRole("region", { name: "Save to vault", exact: true });
+        await expect(exports).toContainText("Meetings and Notes modules");
+        await expect(exports).toContainText("Settings → Modules");
+        await expect(exports).not.toContainText("saved note was changed");
+      } finally {
+        expect(
+          (
+            await page.request.patch("/api/me/modules/notes", { data: { disabled: false } })
+          ).status()
+        ).toBe(200);
+      }
+    });
     const firstSave = await clickCommand(page, "Save new private version", `${path}/exports`);
     const firstReceipt = (await firstSave.json()).receipt as MeetingExportReceipt;
     await assertReceipt(page, firstReceipt, 1);
@@ -460,6 +487,82 @@ test("reviewed summary versions create independent Tasks and private vault copie
       0
     );
     await expect(selectedHistory).not.toContainText("Indexed");
+    await test.step("Settings downloads retained meeting data through the real export worker", async () => {
+      // Retained revisions are seeded through real owner writes, not archive/response rewriting.
+      for (const [expectedRevision, personalNotes] of [
+        [0, "Synthetic retained meeting note"],
+        [1, "Synthetic current meeting note"]
+      ] as const) {
+        expect(
+          (
+            await page.request.put(`${path}/notes`, {
+              data: { requestKey: randomUUID(), expectedRevision, personalNotes }
+            })
+          ).status()
+        ).toBe(200);
+      }
+      await page.goto(new URL("/settings?section=profile", page.url()).toString());
+      await expect(page.getByText("Meetings — notes, transcripts & summaries")).toBeVisible();
+      await page.getByRole("button", { name: "Prepare export", exact: true }).click();
+      const downloadLink = page.getByRole("link", { name: "Download", exact: true });
+      await expect(downloadLink).toBeVisible({ timeout: 60_000 });
+      const downloaded = page.waitForEvent("download");
+      await downloadLink.click();
+      const download = await downloaded;
+      expect(await download.failure()).toBeNull();
+      const stream = await download.createReadStream();
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      const archive = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+        format: string;
+        userId: string;
+        sections: { meetings: MeetingsExportSection };
+      };
+      expect(archive.format).toBe("jarvis-archive/v1");
+      expect(archive.userId).toBe(UAT_ADMIN_ID);
+      const exported = archive.sections.meetings;
+      expect(Object.keys(exported).sort()).toEqual(
+        [
+          "records",
+          "note_writes",
+          "transcript_batches",
+          "output_requests",
+          "output_artifacts",
+          "action_candidates",
+          "export_receipts",
+          "export_requests"
+        ].sort()
+      );
+      for (const rows of Object.values(exported)) {
+        expect(rows.length).toBeGreaterThan(0);
+        for (const row of rows) expect(row.ownerUserId).toBe(UAT_ADMIN_ID);
+      }
+      expect(exported.records).toEqual([
+        expect.objectContaining({
+          id: meetingId,
+          title,
+          personalNotes: "Synthetic current meeting note"
+        })
+      ]);
+      expect(exported.note_writes.map((row) => row.personalNotes)).toEqual([
+        "Synthetic retained meeting note",
+        "Synthetic current meeting note"
+      ]);
+      expect(exported.transcript_batches[0]?.inputJson).toContain(OUTPUT_FIXTURE_TEXT);
+      expect(exported.output_artifacts.map((row) => row.version)).toEqual([1, 2, 3]);
+      expect(exported.output_artifacts[2]?.artifactJson).toContain(OUTPUT_FIXTURE_MANUAL);
+      expect(exported.action_candidates).toContainEqual(
+        expect.objectContaining({
+          reviewState: "accepted",
+          acceptedTaskId: accepted.acceptedTaskId
+        })
+      );
+      expect(exported.export_receipts).toHaveLength(2);
+      await page.getByRole("button", { name: "Prepare a new export", exact: true }).click();
+      console.log(
+        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 8 collections; retained note revisions, transcript, generated/manual outputs, accepted Task reference and vault receipts"
+      );
+    });
     // Meeting deletion removes provenance, never independently accepted Tasks/private copies.
     expect((await page.request.delete(path)).status()).toBe(204);
     expect((await page.request.get(`${path}/outputs`)).status()).toBe(404);

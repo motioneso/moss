@@ -24,6 +24,8 @@ The current checkpoint contains:
 - Meeting questions in the existing chat drawer using the selected API-key model and exact evidence.
 - Explicit generated/manual summary versions, source-grounded decisions and owner-reviewed Tasks.
 - Explicit versioned, create-only copies in Moss private vault with separate write/index receipts.
+- Owner-only account export through Settings → Account & preferences → Your data, including
+  retained notes/transcripts, output versions, action reviews and export receipts.
 
 The AI-owned clip transcription API separately supports an explicit timestamp request and
 cancellation. That adapter is not yet wired to meeting capture or a persisted meeting transcript.
@@ -189,6 +191,13 @@ write. Independent saved copies and accepted Tasks survive meeting deletion.
 
 ## Migration numbering
 
+Account-export migration 0283 adds only owner-scoped worker SELECT access to the eight exported
+Meetings tables. It grants no writes or cross-owner access. The account archive retains the
+original transcript/output JSON text and all stored revisions, including inactive output versions;
+it excludes derived History search projections. Disabled-module data remains exportable. Chat,
+capture preferences and accepted Tasks continue through their existing export sections. Building
+an archive does not invoke a model or regenerate content.
+
 The unmerged Meetings sequence was renumbered from 0260–0267 to 0273–0280 in original order
 before deployment, avoiding current main and the now-merged migrations at 0271/0272.
 The owner confirmed that the reachable persistent development and production databases had no
@@ -197,8 +206,10 @@ runs, not persistent deployment. Historical checkpoint results keep their origin
 numbering; they are not verification of this newly numbered tree.
 
 The SQL bytes are unchanged except for History's required adjacent sidecar declaration, now
-`0280_meeting_history.backfill.mjs`; the sidecar bytes remain unchanged. Applied main migrations
-are untouched. Do not reuse a disposable database carrying the old sequence, edit an applied
+`0280_meeting_history.backfill.mjs`. Before persistent deployment, the sidecar's frozen header
+was corrected to 0280; backfill sidecars are excluded from Prettier and ESLint so future formatter
+changes cannot rewrite applied checksums. Applied main migrations are untouched. Do not reuse a
+disposable database carrying an earlier sidecar checksum or the old sequence, edit an applied
 ledger, or run these renames as a live database repair. Fresh exact-commit CI and UI proof remain
 required. The unpublished device-authorization candidate is still excluded and has no reserved
 migration number in this branch.
@@ -254,7 +265,10 @@ off; evidence uses executable assertions and bounded text.
 The output UAT covers Review → Generate → exact source evidence → explicit Task review and
 acceptance, retry/regeneration deduplication, independent Task edits, immutable manual summary
 versions, explicit create-only private saves, separate write/index receipts, repeated-save
-stability and independent copies surviving meeting deletion. Vault assertions use public
+stability, actionable disabled-Notes recovery, and independent copies surviving meeting deletion.
+Settings → Prepare export → Download verifies the real worker-built archive contains all eight
+Meetings collections, retained note revisions, transcript text, generated/manual versions,
+accepted-Task references and vault receipts. Vault assertions use public
 `VaultContext` operations. Real APIs clean up meeting/configuration fixtures; the provisioner
 removes the isolated DB and volumes, including deliberately surviving synthetic Task/note copies.
 This is the implemented acceptance path, not a claim of a passing live run. Exact-commit results
@@ -267,7 +281,8 @@ The same supported `test:uat:2981-meetings` gate entry accepts the closed
 before provisioning rather than falling back to all tests. Run these DB-backed groups only
 through the supported isolated gate.
 
-- `meetings`: draft/review (2 tests), meeting chat (1), summary/Task/private exports (1), History (1).
+- `meetings`: draft/review/sign-out (3 tests), meeting chat (1), summary/Task/private and account
+  exports (1), History (1).
 - `chat`: private drawer #1089/#1090 (2), attachments #1133 (2 active, 1 fixme), runtime context
   (2 active, 2 fixmes), assistant naming (4).
 - `runtime`: module install/restart (1), vault ownership #1217 (1), install grant #1311
@@ -285,7 +300,7 @@ screenshot or video artifacts. The wrapper overrides any inherited host-auth loc
 absent temporary file and clears inherited real-chat readiness. No real provider login is used.
 Module installation may still download the public Finance module; that is not provider proof.
 
-The source groups define **25 active tests and 4 pre-existing fixmes**, not 29 passing assertions.
+The source groups define **26 active tests and 4 pre-existing fixmes**, not 30 passing assertions.
 The retired #2889 activity spec is replaced by #2956, preserving the one-test slot. The assembled
 main reconciliation and new migration numbering require a fresh run; older pass counts are historical.
 Attachments do not prove a model read the file; runtime-context does not prove the model's refusal

@@ -68,6 +68,18 @@ export interface SportsSourcesExportSection {
   readonly sources: readonly ExportRow[];
 }
 
+/** Collected through the Meetings manifest; Settings does not read module-owned tables. */
+export interface MeetingsExportSection {
+  readonly records: readonly ExportRow[];
+  readonly note_writes: readonly ExportRow[];
+  readonly transcript_batches: readonly ExportRow[];
+  readonly output_requests: readonly ExportRow[];
+  readonly output_artifacts: readonly ExportRow[];
+  readonly action_candidates: readonly ExportRow[];
+  readonly export_receipts: readonly ExportRow[];
+  readonly export_requests: readonly ExportRow[];
+}
+
 export interface ExportUserDataOptions {
   readonly scopedDb: DataContextDb;
   readonly authDb: Kysely<MossDatabase>;
@@ -111,6 +123,7 @@ export interface UserDataExportTables {
   readonly focusJudgments: readonly ExportRow[];
   readonly medicationLogs: readonly ExportRow[];
   readonly medications: readonly ExportRow[];
+  readonly meetings: MeetingsExportSection;
   readonly memoryChunks: readonly ExportRow[];
   readonly memoryAliases: readonly ExportRow[];
   readonly memoryCandidates: readonly ExportRow[];
@@ -251,6 +264,14 @@ async function readExportTables(
     { actorUserId: userId, requestId }
   );
 
+  const meetingsSection = await collectModuleExportSection<MeetingsExportSection>(
+    listModuleManifests,
+    "meetings",
+    "meetings",
+    scopedDb,
+    { actorUserId: userId, requestId }
+  );
+
   // #2638 Backtrack phase 2a: a flat row array, like focusJudgments, not a grouped section —
   // backtrack has only one row-set to export (see collectBacktrackSegmentsExportSection).
   const backtrackSegments = await collectModuleExportSection<readonly ExportRow[]>(
@@ -302,6 +323,7 @@ async function readExportTables(
     entities: await readRows(scopedDb.db, entitiesQuery(userId)),
     preferences: await readRows(scopedDb.db, preferencesQuery(userId)),
     sportsSources: sportsSourcesSection,
+    meetings: meetingsSection,
     usefulnessFeedbackSignals: await readRows(scopedDb.db, usefulnessFeedbackSignalsQuery(userId)),
     usefulnessFeedbackTargets: await readRows(scopedDb.db, usefulnessFeedbackTargetsQuery(userId)),
     focusJudgments: await readRows(scopedDb.db, focusJudgmentsQuery(userId)),

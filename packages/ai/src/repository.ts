@@ -1718,12 +1718,18 @@ export class AiRepository {
    * (not the full override settings) should use this rather than
    * `getChatModelOverrideSettings(...).selectedModel` directly.
    */
-  async selectChatModelForUser(scopedDb: DataContextDb): Promise<AiConfiguredModelSafeRow | null> {
-    const settings = await this.getChatModelOverrideSettings(scopedDb);
+  async selectChatModelForUser(
+    scopedDb: DataContextDb,
+    options: { readonly rejectUnavailableOverride?: true } = {}
+  ): Promise<AiConfiguredModelSafeRow | null> {
+    const settings = await this.getChatModelOverrideSettings(scopedDb, options);
     return settings.selectedModel;
   }
 
-  async getChatModelOverrideSettings(scopedDb: DataContextDb): Promise<ChatModelOverrideSettings> {
+  async getChatModelOverrideSettings(
+    scopedDb: DataContextDb,
+    options: { readonly rejectUnavailableOverride?: true } = {}
+  ): Promise<ChatModelOverrideSettings> {
     assertDataContextDb(scopedDb);
 
     const [
@@ -1768,7 +1774,14 @@ export class AiRepository {
       currentOverrideModelId: requestedModelId,
       effectiveOverrideModelId: resolved.effectiveOverrideModelId,
       defaultModel: defaultModel ?? null,
-      selectedModel: resolved.selectedModel,
+      // Privacy-sensitive callers may reject substitution for an unavailable override.
+      // An explicit admin pin above remains authoritative over any stored user preference.
+      selectedModel:
+        options.rejectUnavailableOverride &&
+        requestedModelId !== null &&
+        resolved.effectiveOverrideModelId !== requestedModelId
+          ? null
+          : resolved.selectedModel,
       allowedModels: resolved.allowedModels,
       selectableOverrideModels: resolved.selectableOverrideModels
     };

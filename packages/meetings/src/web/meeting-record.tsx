@@ -129,9 +129,13 @@ export function MeetingNotes({
   const notesValid =
     !state.text.includes("\0") && new TextEncoder().encode(state.text).length <= 64000;
   function update(change: (current: MeetingEditorState) => MeetingEditorState) {
-    client.setQueryData<MeetingEditorState>(key, (current) =>
+    const next = client.setQueryData<MeetingEditorState>(key, (current) =>
       current ? change(current) : undefined
     );
+    // A pending save can finish after navigation unmounts this editor. Keep the shell's
+    // marker aligned with the cached edits without depending on a mounted-view effect.
+    if (next)
+      setSessionUnsavedChanges(client, `meetings:${meeting.id}:notes`, hasUnsavedNotes(next));
   }
   useEffect(() => {
     client.setQueryData<MeetingEditorState>(key, (current) =>
@@ -143,15 +147,6 @@ export function MeetingNotes({
         : current
     );
   }, [client, meeting, key]);
-  useEffect(() => {
-    if (!dirty) return;
-    const prevent = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", prevent);
-    return () => window.removeEventListener("beforeunload", prevent);
-  }, [dirty]);
   async function loadCurrent() {
     const pendingKey = client.getQueryData<MeetingEditorState>(key)?.pending?.requestKey;
     setConflictLoading(true);
@@ -179,7 +174,7 @@ export function MeetingNotes({
       !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(meeting.id))?.error) &&
       client.getQueryData<MeetingEditorState>(key)?.pending?.requestKey ===
         next.pending?.requestKey;
-    client.setQueryData(key, next);
+    update(() => next);
     try {
       const result = await saveMeetingNotes(next.pending!);
       if (!stillCurrent()) return;

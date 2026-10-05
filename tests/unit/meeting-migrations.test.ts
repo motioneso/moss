@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { getFileInfo } from "prettier";
+import { ESLint } from "eslint";
 
 import {
   assertUniqueMigrationVersions,
@@ -26,11 +28,21 @@ const expectedSequence = [
   "0277_chat_surface_immutable.sql",
   "0278_meeting_outputs.sql",
   "0279_meeting_exports.sql",
-  "0280_meeting_history.sql"
+  "0280_meeting_history.sql",
+  "0283_meeting_account_export.sql"
 ];
 
 describe("unapplied Meetings migration sequence", () => {
-  it("keeps the eight migrations in dependency order without colliding with other modules", async () => {
+  it("keeps the checksum-bearing backfill outside automatic formatters", async () => {
+    const path = join(meetingsModuleSqlMigrationDirectory, "0280_meeting_history.backfill.mjs");
+    expect((await getFileInfo(path, { ignorePath: join(root, ".prettierignore") })).ignored).toBe(
+      true
+    );
+    expect(await new ESLint({ cwd: root }).isPathIgnored(path)).toBe(true);
+    expect((await readFile(path, "utf8")).startsWith("/** Frozen 0280 migration.")).toBe(true);
+  });
+
+  it("keeps the migrations in dependency order without colliding with other modules", async () => {
     const files = await findLocalMigrationFiles(root);
     expect(checkLocalDuplicates(files)).toEqual([]);
     expect(

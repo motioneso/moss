@@ -1,10 +1,13 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { meetingChatSurface } from "@moss/shared";
-import { registerChatLiveRoutes, type ChatLiveRoutesDependencies } from "./live-routes.js";
-import { PageContextStore } from "./live/page-context-store.js";
-import type { MeetingChatRuntime } from "./live/meeting-chat-runtime.js";
-import { registerMeetingChatBoundary } from "./meeting-chat-boundary.js";
+import {
+  registerChatLiveRoutes,
+  type ChatLiveRoutesDependencies
+} from "../../packages/chat/src/live-routes.js";
+import { PageContextStore } from "../../packages/chat/src/live/page-context-store.js";
+import type { MeetingChatRuntime } from "../../packages/chat/src/live/meeting-chat-runtime.js";
+import { registerMeetingChatBoundary } from "../../packages/chat/src/meeting-chat-boundary.js";
 
 const meetingId = "12345678-1234-4234-9234-123456789abc";
 const surface = meetingChatSurface(meetingId);

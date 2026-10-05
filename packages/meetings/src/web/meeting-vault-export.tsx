@@ -84,13 +84,19 @@ export function MeetingVaultExport({
     } catch (error) {
       if (session.deny(error) || !session.authorized()) return;
       const failure =
-        error instanceof ApiError && error.status === 409
+        error instanceof ApiError && error.code === "meeting_export_unavailable"
           ? {
               status: "failed" as const,
               message:
-                "The saved note was changed or removed. It has not been overwritten. Save a new summary version instead."
+                "Private export is unavailable. Check that the Meetings and Notes modules are enabled in Settings → Modules, or contact an instance admin. Then reopen the summary version and try again."
             }
-          : operationError(error);
+          : error instanceof ApiError && error.status === 409
+            ? {
+                status: "failed" as const,
+                message:
+                  "The saved note was changed or removed. It has not been overwritten. Save a new summary version instead."
+              }
+            : operationError(error);
       update((current) =>
         current.operation?.input.requestKey !== input.requestKey
           ? current

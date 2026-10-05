@@ -1,13 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Chip } from "@moss/ui";
-import { requestJson } from "@moss/module-web-sdk";
+import { useEffect, useState } from "react";
+import { Button, Chip } from "@moss/ui";
+import { ApiError as ModuleApiError, requestJson } from "@moss/module-web-sdk";
 import { meetingChatSurface, type MeetingChatSelection } from "@moss/shared";
-import { listChatThreads, listChatThreadMessages } from "../api/client";
+import { ApiError, listChatThreads, listChatThreadMessages } from "../api/client";
 import { ChatDrawer } from "./chat-drawer";
 import { recordsFromMessages } from "./use-chat-stream";
 
-/** Access is checked before history is mounted; no stale title or snippets on failure. */
+function isAccessDenied(error: unknown): boolean {
+  return (
+    (error instanceof ModuleApiError || error instanceof ApiError) &&
+    [401, 403, 404].includes(error.status)
+  );
+}
+
+/** Check access before mounting history; transient refresh failures keep the open chat. */
 export function MeetingChatDrawer(props: {
   readonly selection: MeetingChatSelection & { readonly title: string };
   readonly onClose: () => void;
@@ -24,6 +31,7 @@ export function MeetingChatDrawer(props: {
     queryKey: ["meeting-chat-access", selection.selectionId],
     queryFn: ({ signal }) =>
       requestJson<{ available: true }>(`/api/chat/meeting-context?surface=${surface}`, { signal }),
+    enabled: !unavailable,
     gcTime: 0,
     retry: false,
     refetchInterval: 5000,
@@ -35,11 +43,18 @@ export function MeetingChatDrawer(props: {
       const { threads } = await listChatThreads(surface);
       return threads[0] ? (await listChatThreadMessages(threads[0].id, surface)).messages : [];
     },
-    enabled: access.isSuccess && access.data.available === true && !unavailable,
+    enabled: access.data?.available === true && !isAccessDenied(access.error) && !unavailable,
     gcTime: 0,
     retry: false
   });
-  if (!access.isSuccess || access.data.available !== true || history.isError || unavailable) {
+  const accessDenied = isAccessDenied(access.error) || isAccessDenied(history.error);
+  useEffect(() => {
+    // Once denied, another failed poll must not reveal previously cached history again.
+    if (accessDenied) setUnavailable(true);
+  }, [accessDenied]);
+  const denied = accessDenied || unavailable;
+  if (denied || access.data?.available !== true || history.data === undefined) {
+    const loadFailed = access.isError || history.isError;
     return (
       <aside
         className={`chatd${props.docked ? " chatd--docked" : ""}`}
@@ -48,16 +63,32 @@ export function MeetingChatDrawer(props: {
       >
         <div className="chatd__head">
           <Chip onRemove={props.onClose}>
-            {access.isError || history.isError || unavailable
+            {denied
               ? "Meeting unavailable"
-              : "Loading meeting…"}
+              : loadFailed
+                ? "Couldn’t load meeting chat"
+                : "Loading meeting…"}
           </Chip>
         </div>
         <p role="status" className="jds-hint">
-          {access.isError || history.isError || unavailable
+          {denied
             ? "This meeting is no longer available to this account. Close this conversation and choose an available meeting."
-            : "Checking access to this meeting…"}
+            : loadFailed
+              ? "Couldn’t check access or load this conversation. Try again."
+              : "Checking access and loading this conversation…"}
         </p>
+        {!denied && loadFailed ? (
+          <Button
+            variant="link"
+            disabled={access.isFetching || history.isFetching}
+            onClick={() => {
+              if (access.data?.available !== true) void access.refetch();
+              else void history.refetch();
+            }}
+          >
+            Retry loading meeting chat
+          </Button>
+        ) : null}
       </aside>
     );
   }

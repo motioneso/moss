@@ -124,7 +124,7 @@ export const chatModuleManifest = {
           class: "prerequisite",
           remediationRef: "chat.meeting_questions.configure",
           description:
-            "The selected model is missing, inactive, revoked or uses unsupported subscription authentication. No fallback model is selected."
+            "The selected model or requested override is unavailable or uses unsupported subscription authentication. Choose an available model, or contact an admin when pinned. No fallback model is selected."
         },
         {
           code: "meeting_context_unavailable",

@@ -17,7 +17,10 @@ const UNIT_VITEST_ARGS: readonly string[] = ["--fileParallelism", "--maxWorkers=
 const DEFAULT_VITEST_ARGS: readonly string[] = [
   "tests/unit",
   "packages/scratchpad/src/__tests__",
-  "packages/acp/src"
+  "packages/acp/src",
+  // Pure harness regressions live beside UAT code but do not provision Docker or providers.
+  "tests/uat/fixtures/meeting-chat-fixture-server.test.ts",
+  "tests/uat/provisioner.test.ts"
 ];
 
 export function resolveVitestArgs(cliArgs: readonly string[]): string[] {

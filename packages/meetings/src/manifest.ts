@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { collectMeetingsExportSection } from "./data-lifecycle.js";
 
 export const meetingsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
@@ -21,7 +22,8 @@ export const meetingsModuleManifest = {
       "sql/0275_meeting_transcript_batches.sql",
       "sql/0278_meeting_outputs.sql",
       "sql/0279_meeting_exports.sql",
-      "sql/0280_meeting_history.sql"
+      "sql/0280_meeting_history.sql",
+      "sql/0283_meeting_account_export.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -105,10 +107,21 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.account_export",
+      description:
+        "Your data in Settings exports your meeting records, retained notes/transcripts, summaries, action reviews and export receipts. Owner-only, including disabled-module data. Derived search indexes are excluded; no model request runs."
+    },
+    {
       id: "meetings.history",
       description:
         "Search current titles, notes and transcripts across your history; filter review and export receipts. Select metadata, open Review or Ask Moss. Capture is unavailable; receipt states do not verify current Tasks or vault files.",
       errors: [
+        {
+          code: "meeting_history_access_denied",
+          class: "permission",
+          description:
+            "History is unavailable to this signed-in account. Sign in again and check that Meetings is enabled. Other people's private meetings are never included."
+        },
         {
           code: "meeting_history_rate_limited",
           class: "transient",
@@ -141,8 +154,32 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.private_exports",
       description:
-        "Explicitly save an immutable output version into the Moss private vault. Each version has its own file. Unchanged repeats are a no-op; manual edits cause a conflict. Saved and search-index queued/delayed statuses are separate.",
+        "Save each output version as a private vault file. Requires Meetings and the Notes module enabled. Unchanged repeats do nothing; manual edits cause a conflict. Saved and search-index queued/delayed statuses are separate.",
       errors: [
+        {
+          code: "meeting_export_invalid_input",
+          class: "validation",
+          description: "Choose a retained summary version and use a valid export request key."
+        },
+        {
+          code: "meeting_export_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.enable_private_exports",
+          description:
+            "Private export needs Meetings and Notes enabled and an available summary version. Check Modules in Settings, then refresh the meeting; contact an instance admin if a module is disabled for the instance."
+        },
+        {
+          code: "meeting_export_content_conflict",
+          class: "validation",
+          description:
+            "The summary content no longer matches this version's export receipt. Keep the existing copy and save a new summary version."
+        },
+        {
+          code: "meeting_export_request_conflict",
+          class: "validation",
+          description:
+            "This export request key was used for a different version. Use a new request key for the intended summary version."
+        },
         {
           code: "meeting_vault_write_failed",
           class: "transient",
@@ -160,6 +197,14 @@ export const meetingsModuleManifest = {
           class: "transient",
           description:
             "The file was saved but search indexing could not be queued. Retry to reconcile the saved file and queue only the missing stage."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.enable_private_exports",
+          description:
+            "Enable Meetings and Notes in Modules, or contact an instance admin if either is disabled for the instance. Then reopen the retained summary version and save again.",
+          path: "/settings?section=modules"
         }
       ]
     },
@@ -279,7 +324,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.questions",
       description:
-        "Ask Moss uses current meeting evidence and exact citations in shared chat. API-key requests have a two-minute deadline; no actions or model fallback. Inaccessible meetings explain how to close and choose another. CLI unsupported."
+        "Ask Moss uses current meeting evidence and exact citations in shared chat. API-key only, no actions or fallback. Unavailable selections require model review; transient refresh errors preserve open drafts. CLI unsupported."
     },
     {
       id: "meetings.transcript_storage",
@@ -370,7 +415,9 @@ export const meetingsModuleManifest = {
     }
   ],
   dataLifecycle: {
-    exportSections: [],
+    exportSections: [
+      { key: "meetings", displayName: "Meetings", collect: collectMeetingsExportSection }
+    ],
     deletion: {
       strategy: "cascade",
       tables: [

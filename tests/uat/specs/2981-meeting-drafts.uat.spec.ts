@@ -1,6 +1,6 @@
 import { assertMeetingReviewLayout, assertProvisionalContrast } from "./meeting-review-layout.js";
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Dialog } from "@playwright/test";
 import type { MeetingCapturePreferences, MeetingRecord } from "@moss/shared";
 import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
@@ -143,6 +143,67 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     expect((await page.request.put("/api/meetings/preferences", { data: original })).status()).toBe(
       200
     );
+  }
+});
+
+test("Confirmed sign-out discards meeting notes without a second native warning (#2981)", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  if (!requireUatProjectName().startsWith("uat-"))
+    throw new Error("Use the isolated UAT provisioner");
+  await signInUatAdmin(page);
+  let fixtureId: string | undefined;
+  const title = `UAT notes sign-out ${randomUUID()}`;
+  const nativeDialogs: string[] = [];
+  const onDialog = async (dialog: Dialog) => {
+    nativeDialogs.push(dialog.type());
+    // Accept an unexpected native prompt so the regression reports the duplicate instead of hanging.
+    await dialog.accept();
+  };
+  page.on("dialog", onDialog);
+  try {
+    const created = await page.request.post("/api/meetings/records", {
+      data: { requestKey: randomUUID(), title }
+    });
+    expect(created.status()).toBe(201);
+    fixtureId = (await created.json()).meeting.id as string;
+    await page.getByRole("link", { name: "Meetings", exact: true }).click();
+    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
+    await page.getByRole("button", { name: title, exact: true }).click();
+    await page.getByRole("button", { name: "Open review", exact: true }).click();
+    await page.getByRole("tab", { name: /^My notes/ }).click();
+    await page
+      .getByLabel("Personal notes", { exact: true })
+      .fill("Discard only after confirmation.");
+    await page.locator(".jds-usermenu__trigger").click();
+    await page.getByRole("button", { name: "Log out", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Sign out with unsaved changes?" });
+    await expect(confirmation).toBeVisible();
+    await confirmation
+      .getByRole("button", { name: "Discard changes and sign out", exact: true })
+      .click();
+    await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+    expect(nativeDialogs).toEqual([]);
+    expect((await page.request.get("/api/me")).status()).toBe(401);
+    await signInUatAdmin(page);
+    const saved = await page.request.get(`/api/meetings/records/${fixtureId}`);
+    expect(saved.status()).toBe(200);
+    expect((await saved.json()).meeting.personalNotes).toBe("");
+    console.log(
+      "MEETINGS_SIGNOUT_UAT real dirty notes → shared confirmation → signed out; zero native dialogs; discarded notes not saved"
+    );
+  } finally {
+    try {
+      if (fixtureId) {
+        if ((await page.request.get("/api/me")).status() === 401) await signInUatAdmin(page);
+        expect
+          .soft((await page.request.delete(`/api/meetings/records/${fixtureId}`)).status())
+          .toBe(204);
+      }
+    } finally {
+      page.off("dialog", onDialog);
+    }
   }
 });
 

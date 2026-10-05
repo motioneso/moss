@@ -49,7 +49,7 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   putChatModelFavorites: vi.fn(async (input: { modelIds: string[] }) => input)
 }));
 
-import { sendChatTurn } from "../../apps/web/src/api/client.js";
+import { ApiError, listChatThreads, sendChatTurn } from "../../apps/web/src/api/client.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
 
 import { Composer } from "../../apps/web/src/chat/composer.js";
@@ -174,20 +174,179 @@ it("does not restore a late answer after New chat clears the meeting turn", asyn
   await act(async () => finish(json(response)));
   expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
 });
-it("hides title and history when an access refresh fails", async () => {
+it.each([401, 403, 404])(
+  "hides title and history after an authoritative %s access denial",
+  async (status) => {
+    fetchMock.mockImplementation(async () => json({ available: true }));
+    const view = await mount(true);
+    expect(JSON.stringify(view.toJSON())).toContain("Private review");
+    fetchMock.mockImplementation(async () => json({ error: "Meeting unavailable" }, status));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+    expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
+  }
+);
+it.each([401, 403, 404])(
+  "keeps a %s denial closed through later refreshes until a new selection",
+  async (status) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      json(url === "/api/chat/turn" ? response : { available: true })
+    );
+    const view = await mount(true);
+    await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+    fetchMock.mockImplementation(async () => json({ error: "Meeting unavailable" }, status));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(view.root.findAllByType(Composer)).toHaveLength(0);
+    const access = client
+      .getQueryCache()
+      .find({ queryKey: ["meeting-chat-access", selection.selectionId] })!;
+    fetchMock.mockImplementation(async () => json({ error: "Temporary failure" }, 503));
+    // Force a late read even though this denied selection has disabled automatic polling.
+    await act(async () => {
+      await expect(access.fetch()).rejects.toMatchObject({ status: 503 });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(view.root.findAllByType(Composer)).toHaveLength(0);
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+    expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
+    await act(async () => {
+      client.setQueryData(["meeting-chat-access", selection.selectionId], { available: true });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(view.root.findAllByType(Composer)).toHaveLength(0);
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+    expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
+    expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
+    fetchMock.mockImplementation(async () => json({ available: true }));
+    await act(async () => {
+      view.update(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <MeetingChatDrawer
+              key="reopened-selection"
+              selection={{ ...selection, selectionId: "reopened-selection" }}
+              onClose={() => {}}
+              isFounder={false}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    });
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(1));
+    expect(JSON.stringify(view.toJSON())).toContain("Private review");
+  }
+);
+it.each(["offline", 429, 500] as const)(
+  "preserves the composer and completed turns through a transient %s access refresh failure",
+  async (failure) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      json(url === "/api/chat/turn" ? response : { available: true })
+    );
+    const view = await mount(true);
+    await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+    const input = view.root.findByType("textarea");
+    await act(async () => input.props.onChange({ target: { value: "My unsent follow-up" } }));
+    fetchMock.mockImplementation(async () => {
+      if (failure === "offline") throw new TypeError("Failed to fetch");
+      return json({ error: "Try again" }, failure);
+    });
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(view.root.findByType("textarea")).toBe(input);
+    expect(input.props.value).toBe("My unsent follow-up");
+    expect(JSON.stringify(view.toJSON())).toContain("A selected meeting answer");
+    expect(JSON.stringify(view.toJSON())).toContain("Private review");
+    expect(JSON.stringify(view.toJSON())).not.toContain("Meeting unavailable");
+    fetchMock.mockImplementation(async () => json({ available: true }));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    });
+    expect(view.root.findByType("textarea")).toBe(input);
+    expect(input.props.value).toBe("My unsent follow-up");
+  }
+);
+it.each([
+  new TypeError("Failed to fetch"),
+  new ApiError(429, "Busy"),
+  new ApiError(503, "Unavailable")
+])("preserves unsent text through a transient history refresh failure: %s", async (error) => {
   fetchMock.mockImplementation(async () => json({ available: true }));
   const view = await mount(true);
-  expect(JSON.stringify(view.toJSON())).toContain("Private review");
-  fetchMock.mockImplementation(async () => json({ error: "Meeting unavailable" }, 404));
+  const input = view.root.findByType("textarea");
+  await act(async () => input.props.onChange({ target: { value: "Keep my question" } }));
+  vi.mocked(listChatThreads).mockRejectedValueOnce(error);
   await act(async () => {
-    await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    await client.refetchQueries({ queryKey: ["meeting-chat-history", selection.selectionId] });
   });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
-  expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
-  expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
+  expect(view.root.findByType("textarea")).toBe(input);
+  expect(input.props.value).toBe("Keep my question");
+  expect(JSON.stringify(view.toJSON())).not.toContain("Meeting unavailable");
 });
+it.each([401, 403, 404])(
+  "hides the drawer after an authoritative %s history denial",
+  async (status) => {
+    fetchMock.mockImplementation(async () => json({ available: true }));
+    const view = await mount(true);
+    vi.mocked(listChatThreads).mockRejectedValueOnce(new ApiError(status, "Denied"));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-history", selection.selectionId] });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(view.root.findAllByType(Composer)).toHaveLength(0);
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+    expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
+  }
+);
+it.each(["access", "history"])(
+  "offers retry for an initial %s failure without claiming access was denied",
+  async (source) => {
+    fetchMock.mockImplementation(async () => {
+      if (source === "access") throw new TypeError("Failed to fetch");
+      return json({ available: true });
+    });
+    if (source === "history")
+      vi.mocked(listChatThreads).mockRejectedValueOnce(new ApiError(503, "Unavailable"));
+    const view = await mount(true);
+    await vi.waitFor(() =>
+      expect(JSON.stringify(view.toJSON())).toContain("Couldn’t load meeting chat")
+    );
+    expect(view.root.findAllByType(Composer)).toHaveLength(0);
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
+    expect(JSON.stringify(view.toJSON())).not.toContain("Meeting unavailable");
+    fetchMock.mockImplementation(async () => json({ available: true }));
+    await act(async () => {
+      view.root
+        .findAllByType("button")
+        .find((node) => node.children.join("") === "Retry loading meeting chat")!
+        .props.onClick();
+    });
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(1));
+    expect(JSON.stringify(view.toJSON())).toContain("Private review");
+  }
+);
 it("retains coverage and only accepts exact local evidence ranges", () => {
   expect(meetingCoverageLabel(coverage)).toBe(
     "Cutoff 12:34 · Latest included 12:30 · Revision 4 · Includes provisional text · Partial context"

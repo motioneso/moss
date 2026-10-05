@@ -381,6 +381,21 @@ describe("meeting summary owner review", () => {
       })
     );
   });
+  it("explains unavailable private export without claiming the saved note was changed", async () => {
+    vi.mocked(api.exportMeetingOutput).mockRejectedValueOnce(
+      new ApiError(409, "Private module configuration", "meeting_export_unavailable")
+    );
+    await mount();
+    await click("Save new private version");
+    const rendered = JSON.stringify(renderer.toJSON());
+    expect(rendered).toContain("Meetings and Notes modules");
+    expect(rendered).toContain("Settings → Modules");
+    expect(rendered).not.toContain("saved note was changed");
+    expect(rendered).not.toContain("Private module configuration");
+    await click("Save new private version");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Search indexing queued");
+  });
+
   it("requires explicit private save, restores receipt, and never invents an open-note URL", async () => {
     vi.mocked(api.getMeetingExports).mockResolvedValue({ receipts: [receipt] });
     await mount();

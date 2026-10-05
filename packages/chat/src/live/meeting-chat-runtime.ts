@@ -58,7 +58,7 @@ export function createMeetingChatRuntime(
   const ai = new AiRepository();
   const resolve = async (access: AccessContext) =>
     deps.dataContext.withDataContext(access, async (db) => {
-      const model = await ai.selectChatModelForUser(db);
+      const model = await ai.selectChatModelForUser(db, { rejectUnavailableOverride: true });
       if (!model || model.status !== "active" || model.provider_status !== "active")
         throw new MeetingChatError(
           "meeting_chat_unsupported",
@@ -131,8 +131,9 @@ export function createMeetingChatRuntime(
               {
                 repository: {
                   async selectProviderWithCredential(scopedDb, id) {
-                    const current = await ai.selectChatModelForUser(scopedDb);
-                    const provider = await ai.selectProviderWithCredential(scopedDb, id);
+                    const current = await ai.selectChatModelForUser(scopedDb, {
+                      rejectUnavailableOverride: true
+                    });
                     if (
                       !current ||
                       current.id !== selected.model.id ||
@@ -140,7 +141,14 @@ export function createMeetingChatRuntime(
                       current.provider_model_id !== selected.model.provider_model_id ||
                       current.status !== "active" ||
                       current.provider_status !== "active" ||
-                      current.provider_auth_method !== "api_key" ||
+                      current.provider_auth_method !== "api_key"
+                    )
+                      throw new MeetingChatError(
+                        "meeting_chat_changed",
+                        "The selected chat model changed. Ask again."
+                      );
+                    const provider = await ai.selectProviderWithCredential(scopedDb, id);
+                    if (
                       !provider ||
                       provider.status !== "active" ||
                       provider.revoked_at ||

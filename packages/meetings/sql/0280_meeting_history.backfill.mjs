@@ -1,4 +1,4 @@
-/** Frozen 0267 migration. Keep self-contained: these exact bytes are hash-checked with SQL. */
+/** Frozen 0280 migration. Keep self-contained: these exact bytes are hash-checked with SQL. */
 export async function backfill(client) {
   const searchText = (value) =>
     value.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (part) =>

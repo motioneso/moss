@@ -11,6 +11,26 @@ import {
 // Importing the actual composition root runs its compatibility gate. A default-disabled
 // built-in prevents API/worker startup because this repository has deny-only enablement.
 describe("meetings composition", () => {
+  it("explains export and history failures, including the Notes prerequisite", () => {
+    const meeting = getBuiltInModuleManifests().find((manifest) => manifest.id === "meetings")!;
+    const exports = meeting.features!.find((feature) => feature.id === "meetings.private_exports")!;
+    expect(exports.description).toContain("Notes module");
+    expect(exports.errors?.map((error) => error.code)).toEqual(
+      expect.arrayContaining([
+        "meeting_export_invalid_input",
+        "meeting_export_unavailable",
+        "meeting_export_content_conflict",
+        "meeting_export_request_conflict"
+      ])
+    );
+    expect(exports.remediations).toContainEqual(
+      expect.objectContaining({ path: "/settings?section=modules" })
+    );
+    expect(
+      meeting.features!.find((feature) => feature.id === "meetings.history")?.errors
+    ).toContainEqual(expect.objectContaining({ code: "meeting_history_access_denied" }));
+  });
+
   it("boots the real registry with a compatible optional draft module", () => {
     const meeting = getBuiltInModuleManifests().find((manifest) => manifest.id === "meetings");
     expect(meeting?.availability).toEqual({
@@ -66,6 +86,7 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.account_export",
       "meetings.history",
       "meetings.unsaved_changes",
       "meetings.referenced_evidence",

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AccessContext, DataContextDb } from "@moss/db";
+import { dataContextBrand, type AccessContext, type DataContextDb } from "@moss/db";
 import {
   AiRepository,
   createAiSecretCipher,
@@ -14,7 +14,7 @@ import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
 const meetingId = "12345678-1234-4234-9234-123456789abc";
 const access = { actorUserId: "owner", requestId: "test" };
 const selection = { meetingId, selectionId: "one" };
-const db = {} as DataContextDb;
+const db = { [dataContextBrand]: true } as DataContextDb;
 const model = {
   id: "selected-model",
   provider_config_id: "selected-provider",
@@ -22,6 +22,8 @@ const model = {
   provider_model_id: "chosen-model",
   provider_auth_method: "api_key",
   provider_status: "active",
+  capabilities: ["chat"],
+  allow_user_override: true,
   status: "active",
   updated_at: new Date("2026-01-01")
 } as AiConfiguredModelSafeRow;
@@ -73,9 +75,27 @@ function deferred<T>() {
   return { promise, resolve };
 }
 function setup() {
+  // Keep the public selector and override resolver real; stub only their data reads.
+  const overrideReads = AiRepository.prototype as unknown as {
+    getChatModelOverrideEnabled(db: DataContextDb): Promise<boolean>;
+    getChatModelOverridePreference(db: DataContextDb): Promise<string | null>;
+  };
   const selected = vi
-    .spyOn(AiRepository.prototype, "selectChatModelForUser")
+    .spyOn(AiRepository.prototype, "selectModelForCapability")
     .mockResolvedValue(model);
+  const models = vi.spyOn(AiRepository.prototype, "listModels").mockResolvedValue([model]);
+  const overrideEnabled = vi
+    .spyOn(overrideReads, "getChatModelOverrideEnabled")
+    .mockResolvedValue(true);
+  const overridePreference = vi
+    .spyOn(overrideReads, "getChatModelOverridePreference")
+    .mockResolvedValue(null);
+  const pinnedModel = vi
+    .spyOn(AiRepository.prototype, "getAdminPinnedModelId")
+    .mockResolvedValue(null);
+  const pinnedProvider = vi
+    .spyOn(AiRepository.prototype, "getAdminPinnedProviderId")
+    .mockResolvedValue(null);
   const credential = vi
     .spyOn(AiRepository.prototype, "selectProviderWithCredential")
     .mockResolvedValue(provider);
@@ -136,6 +156,11 @@ function setup() {
   return {
     ...runtime,
     selected,
+    models,
+    overrideEnabled,
+    overridePreference,
+    pinnedModel,
+    pinnedProvider,
     credential,
     saved,
     fetch,
@@ -278,6 +303,35 @@ describe("meeting selected-model HTTP boundary", () => {
     expect(body.messages[0].content).toContain("external_source");
     expect(h.saved).toHaveBeenCalledTimes(1);
   });
+  it("uses an available selected override instead of the default model and provider", async () => {
+    const h = setup();
+    h.selected.mockResolvedValue({
+      ...model,
+      id: "default-model",
+      provider_config_id: "default-provider",
+      provider_model_id: "default-provider-model"
+    });
+    h.overridePreference.mockResolvedValue(model.id);
+    await h.service.submit(access, meetingChatSurface(meetingId), selection, "Question");
+    expect(h.fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(h.fetch.mock.calls[0]?.[1]?.body)).model).toBe("chosen-model");
+    for (const args of h.credential.mock.calls) expect(args).toEqual([db, "selected-provider"]);
+    expect(h.saved).toHaveBeenCalledTimes(1);
+  });
+  it.each(["model", "provider"])(
+    "keeps an admin %s pin authoritative over a stale override",
+    async (pin) => {
+      const h = setup();
+      h.overridePreference.mockResolvedValue("stale-user-override");
+      if (pin === "model") h.pinnedModel.mockResolvedValue(model.id);
+      else h.pinnedProvider.mockResolvedValue(model.provider_config_id);
+      await expect(
+        h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
+      ).resolves.toMatchObject({ reply: "Answer [[S1]]" });
+      expect(h.fetch).toHaveBeenCalledTimes(1);
+      for (const args of h.credential.mock.calls) expect(args).toEqual([db, "selected-provider"]);
+    }
+  );
   it("rejects CLI-auth selected model instead of selecting a fallback or contacting a provider", async () => {
     const h = setup();
     h.selected.mockResolvedValue({ ...model, provider_auth_method: "cli" });
@@ -289,10 +343,56 @@ describe("meeting selected-model HTTP boundary", () => {
   });
   it("fails closed when the selected model cannot be resolved", async () => {
     const h = setup();
-    h.selected.mockResolvedValue(null);
+    h.selected.mockResolvedValue(undefined);
     await expect(
       h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
     ).rejects.toMatchObject({ code: "meeting_chat_unsupported" });
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.saved).not.toHaveBeenCalled();
+  });
+  it.each([
+    { name: "disabled model", change: { status: "disabled" } },
+    { name: "disabled provider", change: { provider_status: "disabled" } },
+    { name: "revoked provider", change: { provider_status: "revoked" } },
+    { name: "incompatible model", change: { capabilities: ["json"] } },
+    { name: "withdrawn override permission", change: { allow_user_override: false } },
+    { name: "removed model", removed: true },
+    { name: "disabled overrides", disabled: true }
+  ])(
+    "rejects an unavailable selected override ($name) before credentials or HTTP",
+    async (test) => {
+      const h = setup();
+      const override = {
+        ...model,
+        id: "unavailable-override",
+        provider_config_id: "override-provider",
+        ...test.change
+      } as AiConfiguredModelSafeRow;
+      h.overridePreference.mockResolvedValue(override.id);
+      h.overrideEnabled.mockResolvedValue(!test.disabled);
+      h.models.mockResolvedValue(test.removed ? [model] : [model, override]);
+      // Exercise the real override resolver and preserve ordinary chat's fallback behavior.
+      expect(await new AiRepository().selectChatModelForUser(db)).toMatchObject({ id: model.id });
+      await expect(
+        h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
+      ).rejects.toMatchObject({ code: "meeting_chat_unsupported" });
+      expect(h.credential).not.toHaveBeenCalled();
+      expect(h.fetch).not.toHaveBeenCalled();
+      expect(h.saved).not.toHaveBeenCalled();
+    }
+  );
+  it("rejects an unavailable override added at credential lookup even when fallback matches the prepared model", async () => {
+    const h = setup();
+    h.overridePreference
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue("unavailable-override");
+    await expect(
+      h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
+    ).rejects.toMatchObject({ code: "meeting_chat_changed" });
+    expect(h.overridePreference).toHaveBeenCalledTimes(4);
+    expect(h.credential).toHaveBeenCalledTimes(3);
     expect(h.fetch).not.toHaveBeenCalled();
     expect(h.saved).not.toHaveBeenCalled();
   });

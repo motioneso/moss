@@ -17,3 +17,4 @@ export type { MeetingPrivateExportPort } from "./export-port.js";
 
 export * from "./history-repository.js";
 export * from "./history-routes.js";
+export { collectMeetingsExportSection, type MeetingsExportSection } from "./data-lifecycle.js";

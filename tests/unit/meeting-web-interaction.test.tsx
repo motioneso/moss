@@ -9,6 +9,7 @@ import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { MeetingNotes } from "../../packages/meetings/src/web/meeting-record.js";
 import * as api from "../../packages/meetings/src/web/client.js";
+import { useSignOutGuard } from "../../apps/web/src/shell/use-sign-out-guard.js";
 
 vi.mock("../../packages/meetings/src/web/client.js", async (original) => {
   const actual = await original<typeof api>();
@@ -380,6 +381,81 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     await click("Save notes");
     expect(hasSessionUnsavedChanges(client)).toBe(false);
   });
+  it("uses the shared sign-out confirmation without a second notes beforeunload guard", async () => {
+    const signOut = vi.fn(() => {
+      // The shell clears the authenticated cache immediately before location.assign.
+      client.clear();
+      expect(hasSessionUnsavedChanges(client)).toBe(false);
+      expect(
+        vi.mocked(window.addEventListener).mock.calls.filter(([type]) => type === "beforeunload")
+      ).toHaveLength(0);
+    });
+    let guard!: ReturnType<typeof useSignOutGuard>;
+    function Review() {
+      guard = useSignOutGuard(client, signOut);
+      return (
+        <MeetingNotes
+          meeting={meeting}
+          onDeleted={() => {}}
+          transcriptRevision={undefined}
+          onTranscriptRevisionChange={() => {}}
+        />
+      );
+    }
+    await act(async () => {
+      renderer = create(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <Review />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    });
+    await typeNotes("Keep unless I confirm");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    await act(async () => guard.request());
+    expect(guard.confirming).toBe(true);
+    expect(signOut).not.toHaveBeenCalled();
+    await act(async () => guard.cancel());
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+      "Keep unless I confirm"
+    );
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+    await act(async () => guard.request());
+    await act(async () => guard.confirm());
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+  it.each([false, true])(
+    "updates the shared marker when a note save finishes after navigation (newer edits: %s)",
+    async (newerEdits) => {
+      let resolveSave!: (value: Awaited<ReturnType<typeof api.saveMeetingNotes>>) => void;
+      vi.mocked(api.saveMeetingNotes).mockReturnValue(
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        })
+      );
+      await mount();
+      await typeNotes("Submitted notes");
+      await click("Save notes");
+      if (newerEdits) await typeNotes("Newer unsaved notes");
+      await click("View meeting history");
+      expect(renderer.root.findAllByType(MeetingNotes)).toHaveLength(0);
+      expect(hasSessionUnsavedChanges(client)).toBe(true);
+      await act(async () =>
+        resolveSave({
+          status: "saved",
+          replayed: false,
+          meeting: { ...meeting, personalNotes: "Submitted notes", notesRevision: 2 }
+        })
+      );
+      expect(hasSessionUnsavedChanges(client)).toBe(newerEdits);
+      expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+        text: newerEdits ? "Newer unsaved notes" : "Submitted notes",
+        base: { personalNotes: "Submitted notes" },
+        phase: "idle"
+      });
+    }
+  );
   it("retains unsaved recovery through an ordinary transient read failure", async () => {
     await mount();
     await typeNotes("Recover my edit");

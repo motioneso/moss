@@ -14,6 +14,9 @@ pnpm-lock.yaml
 .claude/workflows/
 .claude/skills/
 
+# Frozen migration sidecars are checksum-bearing, just like their SQL files.
+**/*.backfill.mjs
+
 # Point-in-time security-audit records — preserved verbatim, not style-gated
 docs/audit/
 docs/audits/

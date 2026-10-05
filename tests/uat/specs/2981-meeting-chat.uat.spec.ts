@@ -2,7 +2,13 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
-import { meetingChatSurface, type MeetingChatTurnResponse } from "@moss/shared";
+import {
+  meetingChatSurface,
+  type GetChatModelOverrideSettingsResponse,
+  type ListAiProviderConfigsResponse,
+  type ListAiServiceBindingsResponse,
+  type MeetingChatTurnResponse
+} from "@moss/shared";
 import {
   MEETING_FIXTURE_MODEL,
   MEETING_FIXTURE_QUESTION,
@@ -60,6 +66,10 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
   const ids: string[] = [];
   let providerId: string | undefined;
   let modelId: string | undefined;
+  let fallbackProviderId: string | undefined;
+  let fallbackModelId: string | undefined;
+  let defaultProviderChanged = false;
+  let chatBindingChanged = false;
   await signInUatAdmin(page);
   const settingsResponse = await page.request.get("/api/ai/chat-model-override");
   expect(settingsResponse.status()).toBe(200);
@@ -72,6 +82,15 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
   const { pin } = (await originalPin.json()) as {
     pin: { pinnedModelId: string | null; pinnedProviderId: string | null };
   };
+  const providersResponse = await page.request.get("/api/ai/providers");
+  expect(providersResponse.status()).toBe(200);
+  const originalDefault = (
+    (await providersResponse.json()) as ListAiProviderConfigsResponse
+  ).providers.find((provider) => provider.isInstanceDefault);
+  const bindingsResponse = await page.request.get("/api/ai/service-bindings");
+  expect(bindingsResponse.status()).toBe(200);
+  const originalChatBinding = ((await bindingsResponse.json()) as ListAiServiceBindingsResponse)
+    .bindings.chat;
   try {
     await exec("docker", [
       "run",
@@ -224,6 +243,41 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
       }
     ]);
 
+    await test.step("Offline and reconnect preserve the open meeting answer and unsent question", async () => {
+      const composer = page.getByRole("textbox", { name: /^Message/ });
+      const draft = "Keep this unsent meeting follow-up through reconnect.";
+      await composer.fill(draft);
+      try {
+        await page.context().setOffline(true);
+        // Span an access-poll interval. React Query may pause offline requests; explicit
+        // failed-poll status handling is covered separately by the component regressions.
+        await page.waitForTimeout(5500);
+        await expect(composer).toHaveValue(draft);
+        await expect(
+          page.getByRole("button", { name: "Clear meeting selection", exact: true })
+        ).toBeVisible();
+        await expect(
+          page.locator(".chatd-bubble").filter({ hasText: "The synthetic decision is recorded" })
+        ).toHaveCount(1);
+        await expect(page.getByText("Meeting unavailable", { exact: true })).toHaveCount(0);
+      } finally {
+        await page.context().setOffline(false);
+      }
+      const access = await page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/chat/meeting-context" &&
+          response.status() === 200,
+        { timeout: 15_000 }
+      );
+      expect((await access.json()).available).toBe(true);
+      await expect(composer).toHaveValue(draft);
+      await expect(
+        page.locator(".chatd-bubble").filter({ hasText: "The synthetic decision is recorded" })
+      ).toHaveCount(1);
+      await composer.fill("");
+      expect(await fixtureEvidence(fixtureName)).toHaveLength(1);
+    });
+
     // Correct the same retained segment through the production ingest route while chat stays open.
     const update = await page.request.post(`/api/meetings/records/${selected.id}/transcript`, {
       data: {
@@ -288,6 +342,72 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
       page.getByText("Choose an active chat model in AI providers.", { exact: true })
     ).toBeVisible();
     expect(await fixtureEvidence(fixtureName)).toHaveLength(2);
+
+    await test.step("A disabled unpinned override cannot send meeting evidence to an active default", async () => {
+      const fallbackProvider = await page.request.post("/api/ai/providers", {
+        data: {
+          providerKind: "openai-compatible",
+          displayName: "Synthetic meeting UAT fallback provider",
+          baseUrl: `http://${fixtureName}:${MEETING_FIXTURE_PORT}`,
+          authMethod: "api_key",
+          credentialPayload: { apiKey: "synthetic-uat-not-a-provider-credential" }
+        }
+      });
+      expect(fallbackProvider.status()).toBe(201);
+      fallbackProviderId = (await fallbackProvider.json()).provider.id as string;
+      const fallbackModel = await page.request.post("/api/ai/models", {
+        data: {
+          providerConfigId: fallbackProviderId,
+          providerModelId: "meeting-uat-default-must-not-receive-evidence",
+          displayName: "Synthetic meeting UAT fallback model",
+          capabilities: ["chat"],
+          status: "active",
+          tier: "interactive",
+          allowUserOverride: true
+        }
+      });
+      expect(fallbackModel.status()).toBe(201);
+      fallbackModelId = (await fallbackModel.json()).model.id as string;
+      expect(
+        (await page.request.put(`/api/ai/providers/${fallbackProviderId}/default`)).status()
+      ).toBe(200);
+      defaultProviderChanged = true;
+      // A fixed service binding takes precedence over the default provider. Preserve and
+      // replace it only when present; an absent chat binding has no public delete route.
+      if (originalChatBinding?.kind === "model") {
+        expect(
+          (
+            await page.request.put("/api/ai/services/chat/binding", {
+              data: { binding: { kind: "model", modelId: fallbackModelId } }
+            })
+          ).status()
+        ).toBe(200);
+        chatBindingChanged = true;
+      }
+      expect((await page.request.put(pinPath, { data: { modelId: null } })).status()).toBe(200);
+      const fallbackSettings = await page.request.get("/api/ai/chat-model-override");
+      expect(fallbackSettings.status()).toBe(200);
+      expect(
+        ((await fallbackSettings.json()) as GetChatModelOverrideSettingsResponse).settings
+      ).toMatchObject({
+        currentOverrideModelId: modelId,
+        effectiveOverrideModelId: null,
+        defaultModel: { id: fallbackModelId, providerConfigId: fallbackProviderId },
+        selectedModel: { id: fallbackModelId, providerConfigId: fallbackProviderId }
+      });
+      const fallbackTurn = page.waitForResponse(
+        (r) => r.url().endsWith("/api/chat/turn") && r.request().method() === "POST"
+      );
+      await composer.fill(MEETING_FIXTURE_QUESTION);
+      await composer.press("Enter");
+      const fallbackRejected = await fallbackTurn;
+      expect(fallbackRejected.status()).toBe(422);
+      expect((await fallbackRejected.json()).code).toBe("meeting_chat_unsupported");
+      await expect(
+        page.getByText("Choose an active chat model in AI providers.", { exact: true })
+      ).toBeVisible();
+      expect(await fixtureEvidence(fixtureName)).toHaveLength(2);
+    });
     expect(
       (
         await page.request.patch(`/api/ai/models/${modelId}`, { data: { status: "active" } })
@@ -318,7 +438,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     expect(url.searchParams.get("startCharacter")).toBe("0");
     expect(url.searchParams.get("endCharacter")).toBe(String(MEETING_FIXTURE_OLD.length));
     console.log(
-      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 2 observed requests; same model; no tools/search; selected latest text only; disabled pinned model rejected without another provider call; immutable revision-1 citation opened"
+      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 2 observed requests; same model; no tools/search; selected latest text only; disabled pinned model and unpinned override rejected with an active default and no further provider calls; immutable revision-1 citation opened"
     );
   } finally {
     // The provisioner destroys the isolated DB too; restoring settings makes failures diagnosable.
@@ -348,6 +468,24 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
               data: { modelId: pin.pinnedModelId, providerId: pin.pinnedProviderId }
             })
           ).status()
+        ).toBe(200);
+      if (chatBindingChanged)
+        expect(
+          (
+            await page.request.put("/api/ai/services/chat/binding", {
+              data: { binding: originalChatBinding }
+            })
+          ).status()
+        ).toBe(200);
+      if (defaultProviderChanged && originalDefault)
+        expect(
+          (await page.request.put(`/api/ai/providers/${originalDefault.id}/default`)).status()
+        ).toBe(200);
+      if (fallbackModelId)
+        expect((await page.request.delete(`/api/ai/models/${fallbackModelId}`)).status()).toBe(200);
+      if (fallbackProviderId)
+        expect(
+          (await page.request.post(`/api/ai/providers/${fallbackProviderId}/revoke`)).status()
         ).toBe(200);
       if (modelId)
         expect((await page.request.delete(`/api/ai/models/${modelId}`)).status()).toBe(200);
