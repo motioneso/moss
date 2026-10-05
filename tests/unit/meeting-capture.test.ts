@@ -430,6 +430,62 @@ describe("capture service authorization and dispatch", () => {
       expect(f.deps.transcribe).not.toHaveBeenCalled();
     }
   );
+  it.each(["approved link", "approved grant"] as const)(
+    "rejects another device of the same owner at the %s even with the correct verifier",
+    async (boundary) => {
+      const f = fixture();
+      const otherDeviceId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+      const verifier = "v".repeat(43);
+      f.grant.status = "approved";
+      f.grant.verifier_hash = createHash("sha256").update(verifier).digest("hex");
+      const link = {
+        id: grantId,
+        meeting_id: meetingId,
+        owner_user_id: owner,
+        device_id: boundary === "approved link" ? deviceId : otherDeviceId,
+        device_name: "Synthetic approved Mac",
+        verifier_hash: f.grant.verifier_hash,
+        status: "approved" as const,
+        created_at: origin,
+        expires_at: at(600000)
+      };
+      vi.spyOn(f.repository, "link").mockImplementation(async () => link);
+      vi.spyOn(f.repository, "grants").mockResolvedValue([]);
+      vi.spyOn(f.repository, "revokeExpired").mockResolvedValue();
+      const activate = vi.spyOn(f.repository, "activate").mockResolvedValue();
+      vi.mocked(f.deps.resolveCompanion).mockResolvedValue({
+        actorUserId: owner,
+        deviceId: otherDeviceId,
+        requestId: "wrong-device"
+      });
+      const input = { meetingId, challengeId: grantId, verifier };
+      await expect(
+        f.service.redeem(
+          { authorization: "Bearer tm1_synthetic_other_device" },
+          "wrong-device",
+          input
+        )
+      ).rejects.toMatchObject({ code: "meeting_capture_unavailable" });
+      expect(activate).not.toHaveBeenCalled();
+      expect(f.deps.assertBinding).not.toHaveBeenCalled();
+      expect(f.repository.grant).toHaveBeenCalledTimes(boundary === "approved link" ? 0 : 1);
+      // Positive control: the same owner/verifier can redeem when both stored device scopes match.
+      link.device_id = deviceId;
+      vi.mocked(f.deps.resolveCompanion).mockResolvedValue({
+        actorUserId: owner,
+        deviceId,
+        requestId: "approved-device"
+      });
+      expect(
+        await f.service.redeem(
+          { authorization: "Bearer tm1_synthetic_approved_device" },
+          "approved-device",
+          input
+        )
+      ).toMatchObject({ status: "issued", grantId });
+      expect(activate).toHaveBeenCalledOnce();
+    }
+  );
   it.each(["pause", "revoke"] as const)(
     "blocks provider initiation after %s wins while adapter prepares",
     async (operation) => {

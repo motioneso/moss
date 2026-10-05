@@ -200,6 +200,44 @@ describe("explicit meeting capture UI (synthetic transport, not live Mac proof)"
     expect(button("Record")).toBeUndefined();
     expect(api.controlCapture).not.toHaveBeenCalled();
   });
+  it("keeps a fresh remote browser explicit when an approved recorder is on another device", async () => {
+    vi.stubGlobal("window", {
+      location: { origin: "https://remote-moss.example" },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    });
+    const getUserMedia = vi.fn();
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    status = {
+      ...status,
+      capture: {
+        ...captureFixture(),
+        deviceId: "other-device-recorder",
+        deviceName: "Conference room Mac"
+      }
+    };
+    await mount();
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(renderer!.root.findAllByType(RadioCardGroup)).toHaveLength(1);
+    });
+    expect(label()).toBe("Connected");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Conference room Mac");
+    expect(renderer!.root.findByType(RadioCardGroup).props.value).toBeNull();
+    expect(renderer!.root.findByProps({ id: "meeting-capture-microphone" }).props.value).toBe("");
+    expect(
+      renderer!.root.findByProps({
+        "aria-label": "Participants have been notified and recording is permitted"
+      }).props.checked
+    ).toBe(false);
+    expect(client.getQueryData(api.captureKeys.session(meeting.id))).toMatchObject({
+      choice: { mode: null, microphoneId: "", applicationId: "", notice: false }
+    });
+    expect(button("Record").props.disabled).toBe(true);
+    expect(api.controlCapture).not.toHaveBeenCalled();
+    expect(api.approveCaptureDevice).not.toHaveBeenCalled();
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
   it("requires a separate approval naming the exact meeting and device", async () => {
     status = {
       ...status,

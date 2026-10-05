@@ -10,6 +10,25 @@ This branch adds the first browser-to-native Mac capture path. It is **code in d
 not verified native recording** until the exact published commit passes hosted checks and
 owner-run OS/device acceptance. Windows has a shared protocol but no native host yet.
 
+Moss may run on a remote, headless server without a microphone or audio devices. The native
+companion runs on the computer whose microphone/apps you explicitly choose to record; device
+inventory and OS capture stay on that computer. Both the browser and companion connect to the
+same public HTTPS Moss origin (including its port), which need not be localhost. Use the final
+canonical origin: capture handoff rejects deployment subpaths, and the transport never follows
+HTTP redirects. The server
+authorizes and processes uploaded clips; it never opens its own microphone or system output.
+
+The supported static-web nginx proxy gives only `/api/meetings/capture/audio` a 5,200,000-byte
+request limit and unbuffered HTTP/1.1 forwarding. A custom reverse proxy must preserve that bound
+and stream audio without request-body spooling or body logging. The dedicated proxy workflow
+checks fixed-length/chunked synthetic uploads and temporary-file negative controls; it does not
+validate an operator’s deployed proxy or grant recording permission.
+
+The browser panel names the approved recorder. A second browser signed in as the same owner can
+explicitly control that recorder, but opening a meeting never chooses a different computer or
+starts capture. Check the named recorder before choosing sources and Record. This slice requires
+the Mac companion on the recording computer; browser-only capture is not implemented.
+
 Create or reopen a draft, open Trail Marker from its capture panel, explicitly prepare the
 microphone, then approve the named Mac for that meeting in Moss. Select a microphone and one
 of the three capture modes, acknowledge the recording notice, and press Record. Provider

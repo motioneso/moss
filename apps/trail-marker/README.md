@@ -118,11 +118,26 @@ PR; Phase 2 stays gated until both CPU and usefulness pass.
 Meeting output capture requires macOS 14.2 or later. Build locally with the Xcode instructions
 above; this branch does not provide a signed distribution or Windows recorder.
 
-Use the same Moss origin in the browser and Trail Marker, including the development port. In
-Moss, create or reopen a meeting and choose Open recorder. In Trail Marker, explicitly prepare
+Moss can run on a remote or headless server. Run Trail Marker on the **recording client Mac**:
+the computer whose microphone and meeting-app/computer audio you want to capture. Moss does not
+need to be installed on that Mac, and recording does not use microphones or audio devices attached
+to the Moss server. The prepared companion sends captured audio to Moss for the configured
+processing route.
+
+On the recording Mac, open Moss at its public HTTPS address and link Trail Marker to the same
+origin, including its port. “Same origin” means the same remote Moss server, not the same computer.
+Unencrypted HTTP is accepted only for loopback development addresses (`localhost`, `127.0.0.1`,
+or `::1`). A TLS reverse proxy must expose the final canonical origin directly: the native capture
+client does not follow redirects, and the meeting handoff currently expects Moss at the origin
+root rather than a path-prefix deployment.
+
+In Moss, create or reopen a meeting and choose Open recorder. In Trail Marker, explicitly prepare
 this Mac's microphone. Approve the named device in that meeting's browser panel, select the
-microphone and capture mode, acknowledge the notice, then press Record. Preparing or approving
-alone does not start recording. Transcription is configured only through AI providers in Moss.
+microphone and capture mode, acknowledge the notice, then press Record. The listed audio sources
+belong to that named companion. Viewing or controlling the meeting from a browser on another
+computer does not switch capture to that browser's machine or to the server. Browser-only capture
+is not implemented. Preparing or approving alone does not start recording. Transcription is
+configured only through AI providers in Moss.
 
 The separate meeting menu-bar indicator opens Pause/Stop controls. It remains visible when the
 browser changes pages. Pause All, logout and quit close meeting capture; a failed device cleanup

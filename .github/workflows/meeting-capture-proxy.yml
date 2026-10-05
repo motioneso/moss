@@ -1,0 +1,33 @@
+name: Meeting audio proxy transport
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/meeting-capture-proxy.yml"
+      - "infra/nginx/jarv1s-web.conf"
+      - "apps/web/Dockerfile"
+      - "packages/meetings/src/capture-routes.ts"
+      - "packages/shared/src/meeting-capture-api.ts"
+      - "scripts/test-meeting-capture-proxy.py"
+      - "tests/unit/meeting-capture-proxy.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meeting-capture-proxy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nginx-audio:
+    name: Verify nginx audio streaming and limits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Exercise production proxy with synthetic bodies and negative controls
+        run: python3 scripts/test-meeting-capture-proxy.py
