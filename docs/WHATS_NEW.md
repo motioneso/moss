@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Kept-out tools left out of trial comparisons.** Trial comparisons no longer identify kept-out tools as the tool chat used; the original message text is still saved. [PR #3037](https://github.com/motioneso/moss/pull/3037)
 - **Moss no longer stalls for minutes on some requests.** Moss stays responsive while it indexes your notes and memory in the background, and checking your email no longer hangs for minutes. [PR #3030](https://github.com/motioneso/moss/pull/3030)
 - **Top bar readable in custom themes.** The top bar stays readable when you make a custom theme while dark mode is on. [PR #3018](https://github.com/motioneso/moss/pull/3018)
 - **Task window close button back in the corner.** The close button on the task details window now sits in the top-right corner, and the title lines up with the rest of the form. [PR #3007](https://github.com/motioneso/moss/pull/3007)
