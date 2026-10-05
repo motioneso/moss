@@ -492,6 +492,48 @@ describe("capture service authorization and dispatch", () => {
     expect(initiate).not.toHaveBeenCalled();
     expect(f.ingest).not.toHaveBeenCalled();
   });
+  it.each(["saved", "failed"] as const)(
+    "rechecks auth binding after the final %s result lock wait",
+    async (outcome) => {
+      const f = fixture();
+      let release!: () => void;
+      let blocked!: () => void;
+      let locks = 0;
+      let revoked = false;
+      const waiting = new Promise<void>((resolve) => {
+        blocked = resolve;
+      });
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.mocked(f.repository.lockMeeting).mockImplementation(async () => {
+        locks += 1;
+        if (locks === 3) {
+          blocked();
+          await gate;
+        }
+      });
+      vi.mocked(f.deps.assertBinding).mockImplementation(async () => {
+        if (revoked) throw Error("deleted during final result lock wait");
+      });
+      vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, input) =>
+        input.dispatch(async () => {
+          if (outcome === "failed") throw Error("synthetic provider failure");
+          return {
+            segments: [{ startMs: 0, endMs: 900, text: "private synthetic result" }],
+            modelRoute: "route"
+          };
+        })
+      );
+      const pending = f.service.audio(f.headers, "request", audio());
+      await waiting;
+      revoked = true;
+      release();
+      await expect(pending).rejects.toThrow();
+      expect(f.ingest).not.toHaveBeenCalled();
+      expect(f.repository.finish).not.toHaveBeenCalled();
+    }
+  );
   it("rechecks session authorization after the asynchronous provider finishes", async () => {
     const f = fixture();
     vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, input) =>

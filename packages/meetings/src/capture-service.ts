@@ -125,7 +125,8 @@ export class MeetingCaptureService {
     await this.deps.assertModuleAvailable(actor);
     return actor;
   }
-  private async preflight(grant: CaptureGrant, actor: AccessContext) {
+  /** Uses the independent auth pool; safe while the capture transaction holds its lock. */
+  private async liveBinding(grant: CaptureGrant, actor: AccessContext) {
     if (!grant.session_id) throw new MeetingCaptureError();
     try {
       await this.deps.assertBinding({
@@ -136,6 +137,9 @@ export class MeetingCaptureService {
     } catch {
       throw new MeetingCaptureError();
     }
+  }
+  private async preflight(grant: CaptureGrant, actor: AccessContext) {
+    await this.liveBinding(grant, actor);
     await this.deps.assertModuleAvailable(actor);
   }
   private valid(grant: CaptureGrant | null, meetingId: string, deviceId?: string) {
@@ -522,11 +526,7 @@ export class MeetingCaptureService {
           assertCaptureAudioAdmission(captureState(grant), input, this.now());
           if (validate) await validate(db);
           // This port uses the independent auth pool, never module availability/app connections.
-          await this.deps.assertBinding({
-            actorUserId: proof.actor.actorUserId,
-            sessionId: grant.session_id!,
-            deviceId: grant.device_id
-          });
+          await this.liveBinding(grant, proof.actor);
           this.valid(grant, input.meetingId, grant.device_id);
           assertCaptureAudioAdmission(captureState(grant), input, this.now());
           if (signal.aborted) throw new MeetingCaptureError("meeting_capture_interrupted", 409);
@@ -572,6 +572,8 @@ export class MeetingCaptureService {
       await this.preflight(proof.grant, proof.actor);
       return await this.deps.dataContext.withDataContext(proof.actor, async (db) => {
         const grant = await this.locked(db, proof);
+        await this.liveBinding(grant, proof.actor);
+        this.valid(grant, input.meetingId, grant.device_id);
         const state = captureState(grant);
         await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
         const epoch = state.epochs.find(
@@ -657,6 +659,8 @@ export class MeetingCaptureService {
       await this.preflight(proof.grant, proof.actor);
       return this.deps.dataContext.withDataContext(proof.actor, async (db) => {
         const grant = await this.locked(db, proof);
+        await this.liveBinding(grant, proof.actor);
+        this.valid(grant, input.meetingId, grant.device_id);
         const previous = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
         if (previous?.result_json)
           return JSON.parse(previous.result_json) as MeetingCaptureAudioReceipt;

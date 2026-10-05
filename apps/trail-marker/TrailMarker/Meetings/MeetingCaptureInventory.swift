@@ -99,7 +99,7 @@ struct MeetingInventorySnapshot {
 @MainActor
 final class MeetingCaptureInventoryReader {
     func read() throws -> MeetingInventorySnapshot {
-        let devices = try objectList(kAudioObjectSystemObject, selector: kAudioHardwarePropertyDevices)
+        let devices = try objectList(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyDevices)
         var microphones: [String: AudioObjectID] = [:]
         var wireMicrophones: [MeetingCaptureInventory.Microphone] = []
         for device in devices {
@@ -130,7 +130,7 @@ final class MeetingCaptureInventoryReader {
         var audioObjects: [Int32: AudioObjectID] = [:]
         var audioRoutes: [Int32: [AudioObjectID]] = [:]
         if #available(macOS 14.2, *) {
-            for object in try objectList(kAudioObjectSystemObject, selector: kAudioHardwarePropertyProcessObjectList) {
+            for object in try objectList(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyProcessObjectList) {
                 let pid = Int32(bitPattern: try integer(object, selector: kAudioProcessPropertyPID))
                 guard pid > 0 else { continue }
                 // Ambiguous mappings are rejected rather than selecting an arbitrary process object.
@@ -165,7 +165,7 @@ final class MeetingCaptureInventoryReader {
         var pid = pid
         var object: AudioObjectID = kAudioObjectUnknown
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        guard AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, UInt32(MemoryLayout<Int32>.size),
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, UInt32(MemoryLayout<Int32>.size),
             &pid, &size, &object) == noErr else { throw MeetingHostError.unavailable }
         return object
     }
