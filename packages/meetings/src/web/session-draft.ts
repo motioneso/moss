@@ -19,16 +19,22 @@ export function useSessionDraft<T>(key: QueryKey, create: () => T) {
   );
   useEffect(() => {
     // Read the current cache, not the deferred observer payload: a notification may predate typing.
-    if (currentSession()) setData(client.getQueryData<T>(key)!);
-  }, [client, key, recovery.data, currentSession]);
+    if (currentSession()) {
+      const cached = client.getQueryData<T>(key);
+      // An equal write still leaves React work queued during rapid discrete input.
+      // Do not echo each keystroke back through a passive effect.
+      if (cached !== undefined && cached !== data) setData(cached);
+    }
+  }, [client, key, recovery.data, currentSession, data]);
   const update = useCallback(
     (change: (current: T) => T) => {
       if (!currentSession()) return;
       const current = client.getQueryData<T>(key);
       if (current === undefined) return;
-      const next = change(current);
+      // Query structural sharing may return a different object from change(current).
+      // Use that canonical snapshot so the recovery effect has nothing to echo.
+      const next = client.setQueryData<T>(key, change(current))!;
       setData(next);
-      client.setQueryData<T>(key, next);
       return next;
     },
     [client, key, currentSession]

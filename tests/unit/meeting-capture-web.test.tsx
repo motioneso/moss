@@ -11,6 +11,7 @@ import type {
   MeetingCapturePreferences,
   MeetingRecord
 } from "@moss/shared";
+import { registerDraftInputRegressions } from "./meeting-draft-input-cases.js";
 import { registerCaptureNoticeRegressions } from "./meeting-capture-notice-web-cases.js";
 import { MeetingSetup } from "../../packages/meetings/src/web/meeting-setup.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
@@ -271,6 +272,15 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
     expect(client.getQueryData(["meetings", "setup-draft"])).toMatchObject({ title: input.value });
     await settle();
     expect(input.value).toBe("A fast meeting title");
+  });
+  registerDraftInputRegressions({
+    mount: () => mount(<Shell />),
+    host: () => host,
+    client: () => client,
+    transport: () => transport,
+    calls: () => calls,
+    settle,
+    click
   });
   it("keeps rapid notes and search edits through list navigation", async () => {
     await mount(<Shell />, `/meetings?id=${meeting.id}`);
