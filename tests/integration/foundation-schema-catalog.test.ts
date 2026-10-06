@@ -601,7 +601,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0283", name: "0283_meeting_account_export.sql" },
         { version: "0284", name: "0284_meeting_capture.sql" },
         { version: "0287", name: "0287_companion_recording_capabilities.sql" },
-        { version: "0288", name: "0288_meeting_recording_connections.sql" }
+        { version: "0288", name: "0288_meeting_recording_connections.sql" },
+        { version: "0290", name: "0290_meeting_recording_notice.sql" }
       ]);
     } finally {
       await client.end();
