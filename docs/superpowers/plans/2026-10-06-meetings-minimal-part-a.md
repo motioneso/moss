@@ -114,3 +114,43 @@ The browser cannot launch in this executor because Chromium's socket operation i
 There is no assembled visual, live Mac/device/permission/audio or real-provider proof here.
 This remains code-complete, unverified until hosted checks and the owner-controlled live-path
 acceptance are recorded. Both existing Today e2e specs are unchanged. Part B has not started.
+
+## Review and CI repair on published `bef8e89f` (2026-10-06)
+
+The [owner review on PR #3079](https://github.com/motioneso/moss/pull/3079#issuecomment-6021129354)
+identified obsolete app-map controls, an early-enqueue failure that cancelled the already queued
+delayed summary, overly broad input styling, phone navigation stacking, missing automatic-title
+copy and retries after meeting deletion. The repair updates the map, preserves the delayed attempt
+when its optional early enqueue fails, and treats only the exact missing-meeting result as a
+completed no-op. The CSS exception now covers only radio-card radios in Meetings settings; the
+other screens retain their original input selector matching and declarations. Phone capture
+controls sit below both the navigation scrim and drawer.
+
+Hosted CI also exposed three fixture/precondition problems:
+
+- The queue-definition and lifecycle-cascade inventories omitted the new summary queue/table.
+  Their expected lists are corrected; no applied migration changed.
+- The real-service Stop-summary integration fixture submitted audio after claim without first
+  reporting the recorder's recording acknowledgement. An offline service regression reproduced
+  the exact interrupted response. The fixture now reports that status before audio; the
+  production admission guard is unchanged.
+- The sign-out UAT timed out finding Notes after it switched offline immediately after a row
+  click. No hosted DOM artifact was retained. Controlled component tests confirm that navigation
+  can precede the initial record response, leaving no editor if that request fails. The UAT now
+  awaits the matching route and visible, editable Notes before going offline. Both failed-save
+  checks, cancel preservation, successful retry, confirmed discard and no-second-warning
+  assertions remain intact. This diagnosis is corroborated by source and component behavior,
+  not by an unavailable hosted screenshot or trace.
+
+Repair validation: eight UI/capture/chat suites passed 133 tests and seven server/queue suites
+passed 130 tests. The CSS boundaries had four observed failures before correction; early queue,
+deleted-job, queue-inventory and audio-admission regressions also ran red before their fixes.
+Root, tests, web and all three external-module TypeScript configurations passed, as did full
+ESLint/Prettier, file-size, design-token/UI-class, migrated-section, catalogue, persisted-locale,
+working-file password, package-dependency, migration-number and app-map checks. Independent
+source review found no remaining high-confidence blocker in the repair.
+
+The earlier 901-test build validation above is historical. Hosted UAT and isolated database
+integration reruns are still required for this repair. Neither ran locally; the Docker and browser
+restrictions remain. Structural CSS checks are not live visual proof. No Mac/device/audio or
+real-provider acceptance occurred, and Part B remains paused until this correction is published.
