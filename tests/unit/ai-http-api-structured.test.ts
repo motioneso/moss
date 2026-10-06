@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
 import {
+  GATE_TIMEOUT_ABORT_REASON,
+  type ModelActivityEntry
+} from "../../packages/ai/src/model-activity.js";
+import {
   STRUCTURED_TOOL_NAME,
   StructuredOutputParseError,
   buildStructuredRequest,
@@ -162,5 +166,34 @@ describe("HttpApiAdapter.generateStructured", () => {
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe("AI provider request failed: HTTP 500");
     expect((error as Error).message).not.toContain("sk-secret");
+  });
+
+  it("files no activity line when the gate deadline aborts the fetch mid-request (#3064)", async () => {
+    // Real fetch rejects with a bare abort error that drops the signal's reason. The
+    // adapter re-wraps it with the gate's reason so the recorder (which skips
+    // gate-timeout aborts, leaving the single line to the gate) files nothing.
+    const entries: ModelActivityEntry[] = [];
+    const controller = new AbortController();
+    const fakeFetch = ((url: string, init: RequestInit) => {
+      void url;
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          const error = new Error("The operation was aborted.");
+          error.name = "AbortError";
+          reject(error);
+        });
+      });
+    }) as unknown as typeof globalThis.fetch;
+    const adapter = new HttpApiAdapter("anthropic", "sk-secret", {
+      fetch: fakeFetch,
+      onModelCall: (entry) => entries.push(entry)
+    });
+
+    const pending = adapter.generateStructured(makeInput({ signal: controller.signal }));
+    await new Promise((r) => setTimeout(r, 5));
+    controller.abort(GATE_TIMEOUT_ABORT_REASON);
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(entries).toEqual([]);
   });
 });

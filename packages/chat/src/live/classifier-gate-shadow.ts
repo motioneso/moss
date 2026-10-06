@@ -9,6 +9,7 @@ import type {
 import { ClassifierGate, GATE_LIMITS, type GateMode, type GateOutcome } from "./classifier-gate.js";
 import { gateEligibilityProblem, type GateTool } from "./classifier-gate-arguments.js";
 import type { ClassifierGatePortsFactory } from "./classifier-gate-wiring.js";
+import { fileClassifierTimeoutLine } from "./classifier-gate-wiring.js";
 import type { ChatSurface } from "./chat-surface.js";
 
 /**
@@ -275,6 +276,9 @@ export function createClassifierGateShadowRunner(
           loadCandidates: ports.loadCandidates,
           gateway: ports.gateway,
           isReleased: ports.isReleased,
+          // #3064: prod runs the classifier in shadow, so a shadow timeout files the
+          // same single line as the engine path.
+          noteTimeout: (activity) => fileClassifierTimeoutLine(activity),
           now: deps.now
         });
         const outcome = await gate.evaluate({

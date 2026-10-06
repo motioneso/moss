@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 
 import {
+  GATE_TIMEOUT_ABORT_REASON,
   installModelActivityRecorder,
   type ModelActivityEntry
 } from "../../packages/ai/src/model-activity.js";
@@ -493,6 +494,70 @@ describe("generateChoices", () => {
         ).toBeDefined();
         expect(entries).toHaveLength(1);
         expect(entries[0]).toMatchObject({ outcome: "aborted", result: "stopped" });
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
+    it("files nothing when the gate deadline aborts the post — the gate owns the line — #3064", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const controller = new AbortController();
+        controller.abort(GATE_TIMEOUT_ABORT_REASON);
+        const abortError = new Error("aborted");
+        abortError.name = "AbortError";
+        const deps = makeDeps({
+          fetch: vi.fn().mockRejectedValue(abortError) as unknown as typeof fetch
+        });
+        expect(
+          await generateChoices(
+            scopedDb,
+            makeInput({
+              signal: controller.signal,
+              activity: {
+                actionCode: "chat.tool_check",
+                ownerUserId: "user-1",
+                turnId: "turn-1"
+              }
+            }),
+            deps
+          )
+        ).toEqual({ ok: false, error: "aborted" });
+        expect(entries).toHaveLength(0);
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
+    it("files nothing when the gate deadline aborts model resolution — #3064", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const controller = new AbortController();
+        const deps = makeDeps({
+          repository: {
+            resolveModelForService: vi.fn(async () => {
+              controller.abort(GATE_TIMEOUT_ABORT_REASON);
+              throw new Error("db wedged");
+            })
+          }
+        });
+        await expect(
+          generateChoices(
+            scopedDb,
+            makeInput({
+              signal: controller.signal,
+              activity: {
+                actionCode: "chat.tool_check",
+                ownerUserId: "user-1",
+                turnId: "turn-1"
+              }
+            }),
+            deps
+          )
+        ).rejects.toThrow("db wedged");
+        expect(entries).toHaveLength(0);
       } finally {
         installModelActivityRecorder(null);
       }
