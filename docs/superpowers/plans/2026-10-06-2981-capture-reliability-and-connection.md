@@ -3,16 +3,18 @@
 Approved product direction: 6 October 2026. Implementation issue: [#2981](https://github.com/motioneso/moss/issues/2981).
 Continue draft [PR #3056](https://github.com/motioneso/moss/pull/3056) from
 `28a5a6beb4bfb728566682fb59885ddc1686528e`; do not merge or deploy.
-The [specification](../specs/2026-10-03-meeting-companion.md) version 0.4 governs this repair.
+The [specification](../specs/2026-10-03-meeting-companion.md) governs this repair.
+The [6 October review](https://github.com/motioneso/moss/pull/3056#issuecomment-6014073490)
+clarifies that account-scoped versioned notice belongs in #3056, before the minimal-screen redesign.
 
 ## Outcome and scope
 
 Connect the companion once, shared by its connection UI, Backtrack and Meetings. Thereafter:
 New meeting → remembered named device/microphone/source → Start meeting. Change is available,
-but Prepare and per-meeting device approval are removed. Standalone #3056 retains an explicit
-recording-notice acknowledgement before Start and requires it on record/Resume requests; the
-browser retains it only for this meeting and signed-in session. The earlier checkbox removal
-was premature because server-stored version-bound notice was not implemented. An optional
+but Prepare and per-meeting device approval are removed. The recording notice is shown once per
+account, stored on the server against its text-policy version, and checked before Start and record/Resume, including command replays. New meetings
+and browsers reuse it; only a notice-version change asks again. The recording grant binds that
+version. Pause, Stop and cancellation never depend on notice acknowledgement. An optional
 title must not delay Start or lose typing. Connection completes in the existing browser tab.
 
 Keep recording through ordinary jitter, unchanged format notifications, brief network gaps and

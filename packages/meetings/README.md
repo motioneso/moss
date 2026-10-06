@@ -30,10 +30,11 @@ recording in that approval; already paired clients require one clear capability 
 authorizes future explicit Starts, and does not start capture. In Meetings, choose the named
 recorder and microphone with microphone-only, microphone + selected app, or microphone + computer
 audio. Sources are remembered by device/microphone/app identity. Use Change when needed, then
-acknowledge that participants have been notified and recording is permitted, then Start meeting.
-There is no per-meeting Prepare or device approval. Notice acknowledgement belongs to this
-browser and meeting; a new browser must acknowledge before Resume. Pause and Stop never need
-notice acknowledgement. Server-stored version-bound notice is later work. First use
+acknowledge the recording notice once, then Start meeting. There is no per-meeting Prepare or
+device approval. The server stores the account’s acknowledgement against the notice text-policy
+version and requires the current version before Start or Resume, including a retried command.
+Each grant binds that version. Another meeting or browser does not ask again; only a changed
+notice version does. Pause, Stop and cancellation never need notice acknowledgement. First use
 may prompt for the relevant OS permission. Granting permission alone cannot start a cancelled or
 expired command. The browser stays where the person started; Trail Marker does not choose their
 default browser for each meeting.

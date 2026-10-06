@@ -25,7 +25,8 @@ export const meetingsModuleManifest = {
       "sql/0280_meeting_history.sql",
       "sql/0283_meeting_account_export.sql",
       "sql/0284_meeting_capture.sql",
-      "sql/0288_meeting_recording_connections.sql"
+      "sql/0288_meeting_recording_connections.sql",
+      "sql/0290_meeting_recording_notice.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -42,7 +43,8 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_grants",
       "app.meeting_capture_receipts",
       "app.meeting_capture_connections",
-      "app.meeting_capture_start_cancellations"
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_recording_notices"
     ]
   },
   permissions: [
@@ -76,6 +78,8 @@ export const meetingsModuleManifest = {
     }
   ],
   routes: [
+    { method: "GET", path: "/api/meetings/recording-notice", permissionId: "meetings.read" },
+    { method: "PUT", path: "/api/meetings/recording-notice", permissionId: "meetings.write" },
     { method: "POST", path: "/api/meetings/capture/connection", permissionId: "meetings.write" },
     { method: "POST", path: "/api/meetings/capture/commands", permissionId: "meetings.write" },
     { method: "POST", path: "/api/meetings/capture/claim", permissionId: "meetings.write" },
@@ -137,6 +141,28 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.recording_notice",
+      description:
+        "Acknowledge the recording notice once per account. Start and Resume check the server-stored current version and bind it to the grant. Only a version change asks again; Pause, Stop and cancellation stay available.",
+      errors: [
+        {
+          code: "meeting_capture_notice_required",
+          class: "prerequisite",
+          remediationRef: "meetings.review_recording_notice",
+          description:
+            "The account has not acknowledged the current notice version. Review it on the meeting page before Start or Resume. Another meeting or browser reuses the same acknowledgement."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.review_recording_notice",
+          path: "/meetings",
+          description:
+            "Open the meeting page, read the current recording notice and explicitly acknowledge it. The server saves that version for the account; then retry Start or Resume."
+        }
+      ]
+    },
+    {
       id: "transcribe.meeting",
       description:
         "Capture duration uses native acknowledgement. Transcription delay is separate; transient clips retry within bounded memory. Activity records clip model, duration and outcome without audio or transcript text."
@@ -144,7 +170,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Connect Mac once, remember exact sources, acknowledge this meeting’s recording notice, then Start. A new browser acknowledges before Resume. No broader fallback. Persistent Pause/Stop; Stop finalizes within 60 seconds. Windows unavailable.",
+        "Connect Mac once, remember exact sources, acknowledge the notice once per account, then Start. No broader fallback. Persistent Pause/Stop; Stop finalizes within 60 seconds. Windows unavailable.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
@@ -550,7 +576,8 @@ export const meetingsModuleManifest = {
         {
           table: "app.meeting_capture_start_cancellations",
           countPredicate: "owner_user_id = $1::uuid"
-        }
+        },
+        { table: "app.meeting_recording_notices", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

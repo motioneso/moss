@@ -24,10 +24,10 @@ The product direction and revised mockups were approved on 3 October 2026; imple
 Owner testing of PR #3056 found unreliable capture and too much setup friction. The revised
 product direction is: connect the companion once, then use one Start meeting action in Moss.
 Remember the explicitly chosen recording device, microphone and app/mode; keep an optional Change
-control. Remove per-meeting Prepare and browser device approval. Standalone #3056 must retain
-explicit per-meeting recording-notice acknowledgement until server-stored version-bound notice
-is implemented; initial Start and record/Resume reject missing acknowledgement. Complete connection
-in the current Moss tab rather than opening the OS default browser. List navigation remains
+control. Remove per-meeting Prepare and browser device approval. The recording notice is
+acknowledged once per account and stored on the server against its text-policy version. Initial Start and record/Resume require that current version; a new meeting
+or browser does not ask again. Only a notice-version change requires acknowledgement again.
+Complete connection in the current Moss tab rather than opening the OS default browser. List navigation remains
 available while a persistent recording control shows the actual capture state.
 
 Connection, capture and transcription are independent. Ordinary timestamp jitter, unchanged
@@ -59,7 +59,7 @@ Defaults and targets below are proposed. Current-code observations are sourced; 
 
 ### Three explicit capture modes
 
-CAP 1. Require an initial explicit mode/source choice, then remember the device, microphone UID and stable selected-app identity after a successful explicit Start. Show a concise source summary with Change before each Start. Re-resolve the chosen app instance and device; if either is missing, ask for that source or an explicit change, never a broader fallback. A mode change during a meeting requires Pause, explicit selection and Resume with a new source epoch. Standalone #3056 requires explicit recording-notice acknowledgement in this browser and meeting before Start or Resume; server-stored version-bound notice is later work. Pause and Stop remain available without acknowledgement.
+CAP 1. Require an initial explicit mode/source choice, then remember the device, microphone UID and stable selected-app identity after a successful explicit Start. Show a concise source summary with Change before each Start. Re-resolve the chosen app instance and device; if either is missing, ask for that source or an explicit change, never a broader fallback. A mode change during a meeting requires Pause, explicit selection and Resume with a new source epoch. Require the account’s server-stored acknowledgement of the current recording-notice version before Start or Resume. Ask once per account, including across meetings and browsers, and again only when the notice version changes. Pause and Stop remain available without acknowledgement.
 
 | Mode | Audio captured |
 | Microphone and computer audio | Selected microphone plus the declared computer-output scope. Warn that unrelated apps, notifications, and media can be included. |
@@ -126,7 +126,7 @@ The four screens share one meeting identity. Follow the new Moss design system a
 
 Show an optional title, the remembered device/microphone/source summary, Change and one Start meeting action. Change exposes the three capture modes, microphone, relevant app or output scope, and source health. The first use requires an explicit source choice; an omitted title receives a deterministic editable meeting title. In microphone-only mode, output reads “Not captured.” Computer mode has one short warning about unrelated app audio. Processing configuration is in Settings → AI providers. Disabled Start gives a specific remedy, such as “Transcription unavailable” with an “AI providers” link.
 
-Start requires compatibility, permissions, authentication and configured processing. Readiness checks and short-lived session authorization happen behind that one action. Local preflight does not send audio. The shared companion connection approval grants the recording capability and retains its policy version. Standalone #3056 separately requires the per-meeting notice acknowledgement; one-time server-stored notice and its policy-version binding remain deferred. The first explicit Start may request the OS microphone permission; permission approval by itself does not start an expired or cancelled command. Never add a separate Prepare/Approve sequence per meeting.
+Start requires compatibility, permissions, authentication and configured processing. Readiness checks and short-lived session authorization happen behind that one action. Local preflight does not send audio. The shared companion connection approval grants the recording capability and retains its policy version. The recording notice is a separate, once-per-account acknowledgement stored on the server against the current text-policy version. Bind that version to each recording grant; only a changed notice version asks again. A request boolean and recording capability approval do not replace that stored acknowledgement. The first explicit Start may request the OS microphone permission; permission approval by itself does not start an expired or cancelled command. Never add a separate Prepare/Approve sequence per meeting.
 
 ### Live meeting
 
@@ -188,7 +188,7 @@ Mockups cover Setup modes, capture failures, live and completed Ask Moss, provis
 
 The conceptual lifecycle is Draft, Ready, Recording, Paused, Stopping, Processing, and Reviewable. Failed and Interrupted carry a reason and recoverable artifacts. Capture, transcription, summary, and export each have their own status; a failure in one must not falsely mark every part failed. Stop and close are idempotent.
 
-Ready requires preflight. Each explicit Start binds owner, device, current connection generation, mode, precise output scope, sources, profile and the approved recording-capability revision. Standalone #3056 also requires an explicit notice acknowledgement on Start and record/Resume; server-stored notice-policy binding remains deferred. Connecting or reconnecting never creates a Start. A command must be claimed within its bounded lifetime; a stale command cannot start capture after restart. Pause immediately stops capture and every new outbound audio send, including queued chunks. Already submitted audio may still return results, labeled as pre-pause processing. Freeze queues within their expiry limits. Resume rechecks policy and permissions, explicitly permits sending retained pre-pause audio, and starts a new epoch with a visible gap. Mode or scope changes require review before Resume. Stop releases devices and fixes an immutable cutoff; its disclosed finalization may flush the final partial chunk and retry retained pre-cutoff audio, never post-cutoff samples.
+Ready requires preflight. Each explicit Start binds owner, device, current connection generation, mode, precise output scope, sources, profile and the approved recording-capability revision. Start and record/Resume verify the account’s stored current notice-policy acknowledgement before accepting a new command or replaying a previous result. Each recording grant records the bound notice version; subsequent meetings and browsers reuse the same account acknowledgement until the policy version changes. Pause, Stop and cancellation remain available without it. Connecting or reconnecting never creates a Start. A command must be claimed within its bounded lifetime; a stale command cannot start capture after restart. Pause immediately stops capture and every new outbound audio send, including queued chunks. Already submitted audio may still return results, labeled as pre-pause processing. Freeze queues within their expiry limits. Resume rechecks policy and permissions, explicitly permits sending retained pre-pause audio, and starts a new epoch with a visible gap. Mode or scope changes require review before Resume. Stop releases devices and fixes an immutable cutoff; its disclosed finalization may flush the final partial chunk and retry retained pre-cutoff audio, never post-cutoff samples.
 
 ### Ordering and revisions
 
@@ -283,7 +283,7 @@ Set separate retention policies for transient audio, any recovery buffer, transc
 
 ### Workplace and provider requirements
 
-Before deployment, confirm employer policy, participant notice and consent requirements, approved providers, data region, training use, and vendor retention. Cloud acceptance in product planning is not permission to send actual workplace recordings. A concise first-use disclosure and explicit Start help users follow policy; they are not a legal compliance guarantee. Standalone #3056 retains the per-meeting notice checkbox until a server-stored, version-bound acknowledgement replaces it. Recording capability approval alone does not satisfy the notice requirement or participant notice obligations.
+Before deployment, confirm employer policy, participant notice and consent requirements, approved providers, data region, training use, and vendor retention. Cloud acceptance in product planning is not permission to send actual workplace recordings. A concise first-use disclosure and explicit Start help users follow policy; they are not a legal compliance guarantee. Show the recording notice once per account and store the acknowledged text-policy version on the server. Ask again only after that version changes, never merely for another meeting or browser. Recording capability approval alone does not satisfy the notice requirement or participant notice obligations.
 
 Disclose processing destinations and policy in AI providers and applicable first-use notice, not repeated Setup details. Computer mode retains its short unrelated-audio warning. Capture choice is separate from provider permission. Prevent undisclosed fallback, exclude content and secrets from telemetry, and verify deletion across storage, chat caches, providers, and backups.
 
