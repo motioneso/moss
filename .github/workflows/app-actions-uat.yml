@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/app-actions-uat.yml"
       - "packages/chat/**"
-      - "packages/ai/src/gateway/**"
+      - "packages/ai/**"
       - "packages/auth/**"
       - "packages/module-registry/**"
       - "packages/module-sdk/**"

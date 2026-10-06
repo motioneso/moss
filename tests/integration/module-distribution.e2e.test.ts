@@ -52,6 +52,7 @@ let appDb: Kysely<MossDatabase>;
 let boss: PgBoss;
 let server: ReturnType<typeof createApiServer>;
 let adminCookie: string;
+let adminUserId: string;
 let memberCookie: string;
 // #1319 D6: the mock registry signs every index.json it serves with this ephemeral
 // test key, so the e2e proves the verified-listing path end to end. The test-only key
@@ -281,6 +282,7 @@ beforeAll(async () => {
 
   const admin = await signUp(server, "owner@moddist.test", "Owner");
   adminCookie = admin.cookie;
+  adminUserId = admin.userId;
   const member = await signUp(server, "member@moddist.test", "Member");
   memberCookie = member.cookie;
 
@@ -433,8 +435,15 @@ describe("module distribution e2e (#964)", () => {
     const ledger = await client.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = '${FIXTURE_MODULE_ID}'`
     );
-    const baseline = await client.query<{ manifest_hash: string; package_hash: string }>(
-      `SELECT manifest_hash, package_hash FROM app.external_modules WHERE id = '${FIXTURE_MODULE_ID}'`
+    const baseline = await client.query<{
+      manifest_hash: string;
+      package_hash: string;
+      descriptor_approved_by: string | null;
+      enabled_by: string | null;
+      staged_by: string | null;
+    }>(
+      `SELECT manifest_hash, package_hash, descriptor_approved_by, enabled_by, staged_by
+         FROM app.external_modules WHERE id = '${FIXTURE_MODULE_ID}'`
     );
     await client.end();
     expect(table.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`);
@@ -444,7 +453,10 @@ describe("module distribution e2e (#964)", () => {
     const discovery = getExternalModuleRegistrations({ modulesDir }).discoveries[0]!;
     expect(baseline.rows[0]).toEqual({
       manifest_hash: discovery.manifestHash,
-      package_hash: discovery.packageHash
+      package_hash: discovery.packageHash,
+      descriptor_approved_by: adminUserId,
+      enabled_by: adminUserId,
+      staged_by: null
     });
 
     // Boot discovery is a startup-only snapshot (#917) — restart to pick up the module
@@ -545,6 +557,11 @@ describe("module distribution e2e (#964)", () => {
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     const table = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
+    const owner = await client.query(
+      `SELECT descriptor_approved_by FROM app.external_modules WHERE id = $1`,
+      [FIXTURE_MODULE_ID]
+    );
+    expect(owner.rows[0]?.descriptor_approved_by).toBeNull();
     await client.end();
     expect(table.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`);
   });
@@ -563,6 +580,25 @@ describe("module distribution e2e (#964)", () => {
   });
 
   it("published 0.3.0 → update-available → download → boot applies ONLY new migrations", async () => {
+    // A accepts the current installation; B later installs the next package. The accepted
+    // descriptor owner must move to B, not remain the earlier enabled_by pointer to A.
+    const acceptedByA = await server.inject({
+      method: "POST",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}`,
+      headers: { cookie: adminCookie, "content-type": "application/json" },
+      payload: { enabled: true }
+    });
+    expect(acceptedByA.statusCode).toBe(200);
+    const second = await signUp(server, "second-admin@moddist.test", "Second admin");
+    const promotion = new Client({ connectionString: connectionStrings.bootstrap });
+    await promotion.connect();
+    try {
+      await promotion.query("UPDATE app.users SET is_instance_admin = true WHERE id = $1", [
+        second.userId
+      ]);
+    } finally {
+      await promotion.end();
+    }
     latestVersion = "0.3.0";
     // ?refresh=1 busts the server's 10-minute index cache (Task 6).
     const list = await server.inject({
@@ -581,7 +617,7 @@ describe("module distribution e2e (#964)", () => {
     const download = await server.inject({
       method: "POST",
       url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
-      headers: { cookie: adminCookie, "content-type": "application/json" },
+      headers: { cookie: second.cookie, "content-type": "application/json" },
       payload: {}
     });
     expect(download.statusCode).toBe(200);
@@ -601,6 +637,15 @@ describe("module distribution e2e (#964)", () => {
     const column = await client.query(
       `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = '${FIXTURE_TABLE_SLUG}_items' AND column_name = 'label'`
     );
+    const approval = await client.query(
+      "SELECT descriptor_approved_by, enabled_by, staged_by FROM app.external_modules WHERE id = $1",
+      [FIXTURE_MODULE_ID]
+    );
+    expect(approval.rows[0]).toEqual({
+      descriptor_approved_by: second.userId,
+      enabled_by: second.userId,
+      staged_by: null
+    });
     await client.end();
     // 0001 was applied before the update and is NOT re-run; only 0002 is added.
     expect(ledger.rows[0]!.n).toBe(2);
@@ -656,6 +701,17 @@ describe("module distribution e2e (#964)", () => {
     writeFileSync(join(modulesDir, FIXTURE_MODULE_ID, "dist", "worker.js"), "// tampered\n");
     const report = await reconcileModules({ modulesDir });
     expect(report.drifted).toEqual([FIXTURE_MODULE_ID]);
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      const owner = await client.query(
+        "SELECT descriptor_approved_by FROM app.external_modules WHERE id = $1",
+        [FIXTURE_MODULE_ID]
+      );
+      expect(owner.rows[0]?.descriptor_approved_by).toBeNull();
+    } finally {
+      await client.end();
+    }
 
     const list = await server.inject({
       method: "GET",

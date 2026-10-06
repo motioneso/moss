@@ -143,6 +143,12 @@ export function InstanceModulesPane() {
         Disabling a module hides it for everyone and stops it collecting new data. Existing data is
         kept.
       </Note>
+      <Note>
+        Enabling, installing or upgrading an external module approves its current tool descriptions
+        for your chats. Other users still treat those descriptions as outside content. Older
+        installs need a new instance-level approval; turning a module on in your personal module
+        list does not count. Tool results and forwarded errors still make later changes ask.
+      </Note>
       {/* #1187 decision 5: the trust warning is only true when the inventory actually
           contains a module from outside the pinned registry — `external?.enabled` alone
           (always true, #917/#996) doesn't mean one exists. Compute once so the gate and the

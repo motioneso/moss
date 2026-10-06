@@ -1,8 +1,9 @@
 # Moss acts through its own app
 
 - **Status:** design approved by Ben, 2026-10-05. Slice 7 passed hosted verification at
-  `a77aa4744`; Slice 8 browser/owner-proof tooling is implemented with hosted browser verification
-  pending. Owner-run live proof remains outstanding.
+  `a77aa4744`; Slice 8 scripted browser proof passed hosted verification at `aff106749`.
+  Owner-run live proof and Ben's ruling on clean Run B/no-ask browser acceptance remain outstanding.
+  The later owner-descriptor trust ruling below supersedes blanket descriptor admission.
 - **Issue:** #3065
 - **Related:** #2998 (self-knowledge by construction), #3023 (custom themes), #3022, #3024, #3025,
   #3026, July self-operation specs (`2026-07-26-module-self-operation-settings-commands.md`,
@@ -217,22 +218,23 @@ path that adds outside content to a prompt goes through an admission boundary th
 metadata before exposure. Prompt blocks use `admitToContext`; gateway surfaces use the shared
 content-admission helpers:
 
-| Admission path                                                 | Taints             |
-| -------------------------------------------------------------- | ------------------ |
-| Outside/unmarked tool result or `externalContent` result       | yes                |
-| `app.callAction` response from an `outside` route              | yes                |
-| Connected-service tool result                                  | yes                |
-| Attachment read                                                | yes                |
-| Automatic recall: cross-tool email or calendar read            | yes                |
-| Automatic recall: notes and memory, per turn or at launch      | yes, when nonempty |
-| Outside tool descriptors or exposed remote schema errors       | yes                |
-| Valid, nonempty classifier candidate IDs/labels                | yes                |
-| Forwarded safe handler errors and nonempty outside progress    | yes                |
-| Module-control text and ordinary/evening seeds                 | yes, when nonempty |
-| Native vault-read reports and nontrivial native permissions    | yes, before allow  |
-| Outside-agent launch and observed allowed read/web/shell asks  | yes                |
-| The user's own typed message                                   | no                 |
-| `app.findAction`, `app.readSource`, app map, settings readouts | no                 |
+| Admission path                                                                  | Taints             |
+| ------------------------------------------------------------------------------- | ------------------ |
+| Outside/unmarked tool result or `externalContent` result                        | yes                |
+| `app.callAction` response from an `outside` route                               | yes                |
+| Connected-service tool result                                                   | yes                |
+| Attachment read                                                                 | yes                |
+| Automatic recall: cross-tool email or calendar read                             | yes                |
+| Automatic recall: notes and memory, per turn or at launch                       | yes, when nonempty |
+| Unknown/other-owner tool descriptors or exposed remote schema errors            | yes                |
+| Listed descriptors from the chat owner's own connection/current approved add-on | no                 |
+| Valid, nonempty classifier candidate IDs/labels                                 | yes                |
+| Forwarded safe handler errors and nonempty outside progress                     | yes                |
+| Module-control text and ordinary/evening seeds                                  | yes, when nonempty |
+| Native vault-read reports and nontrivial native permissions                     | yes, before allow  |
+| Outside-agent launch and observed allowed read/web/shell asks                   | yes                |
+| The user's own typed message                                                    | no                 |
+| `app.findAction`, `app.readSource`, app map, settings readouts                  | no                 |
 
 The plan's seams step lists every current admission path with `file:line`. A path that is not
 routed through its recording boundary or explicitly classified as no-taint is a blocker. Source
@@ -319,9 +321,11 @@ text, candidate labels, native paths or result content.
 
 **Admission covers inputs before a tool runs as well as its outputs.**
 
-- MCP tool listing and live/shadow classifier menus await `tool_external_descriptors` admission
-  for external or unstamped tools. Classification checks the manifest's trust stamp before the
-  menu projection drops it. Remote module labels, classifier descriptions and schemas are covered.
+- MCP tool listing and live/shadow classifier menus verify the token's actor before exposing
+  descriptors. Only host-stamped, exact-owner connected integrations/current approved add-ons
+  bypass descriptor admission; unknown or other-owner tools await `tool_external_descriptors`.
+  Remote module labels, classifier descriptions and schemas are covered. Public projections omit
+  the ownership stamp; external JSON cannot grant it. Outside results and forwarded errors still require admission.
 - Candidate hooks first release their actor-scoped connection. SDK normalization rejects malformed
   or oversize data; valid nonempty ID/label snapshots await `classifier_candidates` admission before
   choice/extraction sees them. Empty/malformed lists create no candidate admission and are not sent
@@ -345,6 +349,21 @@ text, candidate labels, native paths or result content.
   permission ask. This conservative fallback is active. Server-side native/ACP reservations cover
   the observed permission/audit callback, not unobservable external-process completion.
 
+**Later owner-descriptor ruling (2026-10-06).** Integration trust uses the immutable connection
+owner under owner-only RLS. There is no separately accepted connect-time descriptor baseline:
+discovery replaces the current tool snapshot; classifier fingerprints serve review/sort freshness,
+not connect-time descriptor acceptance. A baseline/change-detection system is an
+explicit follow-up, not part of this change. An owner's refreshed integration descriptors remain
+trusted until that follow-up.
+
+Add-ons reuse existing accepted manifest/package hashes and add current approval attribution in 0294. Explicit instance-admin current-hash approval, draft ship or accepted staged installation
+establishes the actor; personal enablement, unknown history and an old `enabled_by` do not. The
+runtime checks the accepted snapshot and current synthesized descriptors for that exact chat owner.
+An add-on approved by an admin remains outside for another user's chat. Legacy installations need
+fresh approval; no inferred ownership or historical backfill grants trust. No result, progress,
+candidate, forwarded-error or schema-error admission is exempted. ACP launch fallback is unchanged.
+See plan section 8.14 for implementation and verification details.
+
 These behaviors have focused unit and guard-removal coverage. At `a77aa4744`, all four integration
 shards and all acceptance groups passed; all 25 tracked target suites ran 344/344 with zero skips.
 The two unrelated integration skips and existing acceptance fixmes are not passing proof. Docker
@@ -355,7 +374,9 @@ exactly-once theme change and immediate screen refresh. ACP starts tainted, so t
 does not establish clean automatic execution, and a real Codex/ACP read followed by approval does
 not establish a clean-to-tainted transition. Those boundaries are explicit in plan section 8.13 and
 `docs/3065-app-actions-live-proof.md`. The owner confirmed no sandbox dev access; the
-fallback is hosted browser verification plus that checklist, never fabricated live proof. Real
+fallback is hosted browser verification plus that checklist, never fabricated live proof. Replacing
+the original no-ask browser case is proposed and awaiting Ben; the current ACP-only live runtime
+cannot establish clean Run B. The kill gate awaits his ruling, rather than being failed or passed. Real
 provider/live-dev results are still outstanding, and Phase 1 remains unverified for completion or
 merge.
 

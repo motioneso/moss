@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
   ActionRequestPreview,
+  ModuleAssistantToolManifest,
   MossModuleManifest,
   ToolContext,
   ToolResult,
@@ -26,6 +27,7 @@ import {
   recordContextAdmission,
   runAutomaticAction,
   toolHasOutsideContent,
+  toolHasOutsideDescriptors,
   CONTEXT_ADMISSION_UNAVAILABLE
 } from "./content-admission.js";
 import { recordGatewayAudit } from "./gateway-audit.js";
@@ -158,10 +160,34 @@ export class AssistantToolGateway {
   async listToolsForSession(token: string): Promise<AiAssistantToolDto[]> {
     const identity = this.deps.tokens.verify(token);
     const tools = await this.executableTools(identity.actorUserId);
-    if (tools.some(({ tool }) => tool.isExternal !== false)) {
-      await this.recordContextForSession(token, "tool_external_descriptors");
-    }
+    await this.admitToolDescriptorsForSession(
+      token,
+      identity.actorUserId,
+      tools.map(({ tool }) => tool)
+    );
     return tools.map(({ dto }) => dto);
+  }
+
+  async admitToolDescriptorsForSession(
+    token: string,
+    expectedActorUserId: string,
+    tools: readonly ModuleAssistantToolManifest[]
+  ): Promise<void> {
+    // Reverify after descriptor resolution; a classifier's actor argument cannot bless a
+    // different token owner's descriptors, even when no provenance write would be needed.
+    const identity = this.deps.tokens.verify(token);
+    if (identity.actorUserId !== expectedActorUserId)
+      throw new Error(CONTEXT_ADMISSION_UNAVAILABLE);
+    if (tools.some((tool) => toolHasOutsideDescriptors(tool, identity.actorUserId))) {
+      await recordContextAdmission(
+        this.deps.provenance,
+        {
+          actorUserId: identity.actorUserId,
+          threadId: identity.threadId ?? undefined
+        },
+        "tool_external_descriptors"
+      );
+    }
   }
 
   async recordContextForSession(token: string, path: AdmissionPath): Promise<void> {

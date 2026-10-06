@@ -12,6 +12,15 @@ export function toolHasOutsideContent(tool: ModuleAssistantToolManifest): boolea
   );
 }
 
+/** Descriptor trust is separate from result trust and never inferred from enabled membership. */
+export function toolHasOutsideDescriptors(
+  tool: ModuleAssistantToolManifest,
+  actorUserId: string
+): boolean {
+  if (tool.isExternal === false) return false;
+  return tool.isExternal !== true || !actorUserId || tool.descriptorOwnerUserId !== actorUserId;
+}
+
 /** No content, path, token or provider error is passed to the persistence port or caller. */
 export async function recordContextAdmission(
   provenance: ConversationProvenancePort | undefined,

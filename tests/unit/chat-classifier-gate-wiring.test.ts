@@ -90,7 +90,11 @@ function makeFactory(
   const factory = createClassifierGatePortsFactory({
     resolveActiveModules: async () => overrides.manifests?.() ?? [manifest],
     dataContext,
-    gateway: { callToolForGate, recordContextForSession: vi.fn(async () => {}) } as never,
+    gateway: {
+      callToolForGate,
+      recordContextForSession: vi.fn(async () => {}),
+      admitToolDescriptorsForSession: vi.fn(async () => {})
+    } as never,
     classifierDeps: {
       repository: {
         resolveSortingModel: vi.fn(async () => null),

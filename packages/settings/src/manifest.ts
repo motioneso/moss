@@ -627,7 +627,17 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.outsideContentApproval",
       description:
-        "Outside tool descriptions and results, recalled notes or memory, attachments and outside-agent content make later writes ask. Public app source, app-map reads and simple saved-setting acknowledgements do not add outside content."
+        "Outside results, forwarded errors, recall, attachments and outside-agent launch make writes ask, even in YOLO. Public app source, app-map reads and simple saved-setting acknowledgements do not add outside content."
+    },
+    {
+      id: "app.ownerToolDescriptors",
+      description:
+        "Listing tools from integrations you connected or current add-on installations you explicitly approved does not add outside content. Unknown or other-owner descriptions still do. Outside results and forwarded errors still taint."
+    },
+    {
+      id: "app.addonDescriptorApproval",
+      description:
+        "Instance-level enable/reapprove, draft ship or an accepted install/upgrade approves the current add-on hashes for your chats. Older installs need fresh approval; a personal module toggle does not count."
     },
     {
       id: "app.callAction",

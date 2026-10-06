@@ -163,6 +163,8 @@ export interface ExternalModulesTable {
   package_hash: string;
   disabled_reason: string | null;
   enabled_by: string | null;
+  // Approval of the current accepted hashes; legacy rows deliberately remain unattributed.
+  descriptor_approved_by: string | null;
   enabled_at: NullableTimestampColumn;
   // #1753: NULL for every enabled/disabled row, NOT NULL for every draft row (DB CHECK
   // enforces the pairing). The one admin-author a draft runs for alone.

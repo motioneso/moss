@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AssistantToolGateway, ClassifierChoiceResult, ClassifierHandle } from "@moss/ai";
+import type { ClassifierChoiceResult, ClassifierHandle } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import { CLASSIFIER_LIMITS, type ModuleAssistantToolManifest } from "@moss/module-sdk";
 
@@ -10,13 +10,16 @@ import {
   type GateMode
 } from "../../packages/chat/src/live/classifier-gate.js";
 import { createClassifierGatePortsFactory } from "../../packages/chat/src/live/classifier-gate-wiring.js";
-import { admissionModule, deferred } from "./helpers/gateway-admission-fixture.js";
+import {
+  admissionFixture,
+  admissionModule,
+  deferred
+} from "./helpers/gateway-admission-fixture.js";
 
 const STORED_ID = "stored-resource-id";
 const STORED_LABEL = "Stored candidate label";
 const OUTSIDE_AREA = "Remote area label";
 const OUTSIDE_DESCRIPTION = "Remote classifier description";
-const TOKEN = "session-token";
 const candidates = [{ id: STORED_ID, label: STORED_LABEL }];
 
 function pick(choice: string): ClassifierChoiceResult {
@@ -36,6 +39,8 @@ function harness(
     raw?: unknown;
     isExternal?: boolean;
     unstamped?: boolean;
+    descriptorOwnerUserId?: string;
+    factoryActorUserId?: string;
     extract?: boolean;
     tools?: (tool: ModuleAssistantToolManifest) => readonly ModuleAssistantToolManifest[];
   } = {}
@@ -52,6 +57,9 @@ function harness(
     permissionId: "example.use",
     risk: "write",
     ...(options.unstamped ? {} : { isExternal: options.isExternal ?? false }),
+    ...(options.descriptorOwnerUserId === undefined
+      ? {}
+      : { descriptorOwnerUserId: options.descriptorOwnerUserId }),
     inputSchema: {
       type: "object",
       properties: {
@@ -85,13 +93,19 @@ function harness(
       }
     }
   } as unknown as DataContextRunner;
-  const recordContextForSession = vi.fn<AssistantToolGateway["recordContextForSession"]>(
-    async (_token, path) => {
+  const gatewayFixture = admissionFixture([]);
+  const token = gatewayFixture.token;
+  const gateway = gatewayFixture.gateway;
+  const record = gateway.recordContextForSession.bind(gateway);
+  const recordContextForSession = vi
+    .spyOn(gateway, "recordContextForSession")
+    .mockImplementation(async (token, path) => {
       expect(connectionHeld).toBe(false);
       events.push(`admit:${path}`);
-    }
-  );
-  const callToolForGate = vi.fn<AssistantToolGateway["callToolForGate"]>(async () => ({
+      await record(token, path);
+    });
+  const admitToolDescriptorsForSession = vi.spyOn(gateway, "admitToolDescriptorsForSession");
+  const callToolForGate = vi.spyOn(gateway, "callToolForGate").mockImplementation(async () => ({
     kind: "would_run",
     approvalMode: "auto"
   }));
@@ -101,8 +115,8 @@ function harness(
       { ...admissionModule(options.tools?.(tool) ?? [tool]), name: OUTSIDE_AREA }
     ],
     classifierDeps: {} as never,
-    gateway: { recordContextForSession, callToolForGate }
-  })("actor-a", TOKEN, "non-secret-correlation");
+    gateway
+  })(options.factoryActorUserId ?? "actor-a", token, "non-secret-correlation");
   const handle = { model: { id: "fixture" }, capability: "typed_extraction" } as ClassifierHandle;
   const choose = vi.fn<ClassifierGatePorts["classifier"]["choose"]>(async (_handle, input) => {
     const criteria = input.question.criteria;
@@ -120,7 +134,7 @@ function harness(
   });
   const evaluate = (mode: GateMode = "on") =>
     gate.evaluate({
-      actorUserId: "actor-a",
+      actorUserId: options.factoryActorUserId ?? "actor-a",
       threadId: "thread-a",
       message: "Change the requested device",
       hasAttachment: false,
@@ -128,7 +142,10 @@ function harness(
       mode
     });
   return {
+    ...gatewayFixture,
+    token,
     ports,
+    admitToolDescriptorsForSession,
     tool,
     events,
     candidateHook,
@@ -146,16 +163,17 @@ describe("classifier descriptor admission", () => {
     async (stamp) => {
       const h = harness({ isExternal: stamp, unstamped: stamp === undefined });
       const admission = deferred();
-      h.recordContextForSession.mockImplementation(async () => admission.promise);
+      h.recordAdmission.mockImplementation(async () => admission.promise);
       let exposed = false;
       const pending = h.ports.listTools().then((tools) => {
         exposed = true;
         return tools;
       });
-      await vi.waitFor(() => expect(h.recordContextForSession).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(h.recordAdmission).toHaveBeenCalledOnce());
       expect(exposed).toBe(false);
-      expect(h.recordContextForSession).toHaveBeenCalledExactlyOnceWith(
-        TOKEN,
+      expect(h.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        "actor-a",
+        "thread-a",
         "tool_external_descriptors"
       );
       admission.resolve();
@@ -166,6 +184,76 @@ describe("classifier descriptor admission", () => {
       });
       expect(listed?.inputSchema).toEqual(h.tool.inputSchema);
       expect(listed).not.toHaveProperty("isExternal");
+      expect(listed).not.toHaveProperty("descriptorOwnerUserId");
+      expect(h.admitToolDescriptorsForSession).toHaveBeenCalledExactlyOnceWith(h.token, "actor-a", [
+        h.tool
+      ]);
+    }
+  );
+
+  it("keeps exact-owner classifier descriptions clean and omits host ownership from the menu", async () => {
+    const h = harness({ isExternal: true, descriptorOwnerUserId: "actor-a" });
+    const [listed] = await h.ports.listTools();
+    expect(listed).toMatchObject({
+      moduleDescription: OUTSIDE_AREA,
+      classifier: { description: OUTSIDE_DESCRIPTION }
+    });
+    expect(listed).not.toHaveProperty("descriptorOwnerUserId");
+    expect(listed).not.toHaveProperty("isExternal");
+    expect(h.admitToolDescriptorsForSession).toHaveBeenCalledExactlyOnceWith(h.token, "actor-a", [
+      h.tool
+    ]);
+    expect(h.recordAdmission).not.toHaveBeenCalled();
+    expect(h.state.tainted).toBe(false);
+  });
+
+  it.each([
+    ["foreign owner", { isExternal: true, descriptorOwnerUserId: "actor-b" }],
+    ["unknown origin", { unstamped: true, descriptorOwnerUserId: "actor-a" }]
+  ] as const)("taints classifier menus with %s", async (_label, options) => {
+    const h = harness(options);
+    expect(await h.ports.listTools()).toHaveLength(1);
+    expect(h.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      "actor-a",
+      "thread-a",
+      "tool_external_descriptors"
+    );
+    expect(h.state.tainted).toBe(true);
+  });
+
+  it("taints a mixed classifier menu containing an owned and unowned descriptor", async () => {
+    const h = harness({
+      isExternal: true,
+      descriptorOwnerUserId: "actor-a",
+      tools: (tool) => [
+        tool,
+        { ...tool, name: "example.foreign", descriptorOwnerUserId: "actor-b" }
+      ]
+    });
+    expect(await h.ports.listTools()).toHaveLength(2);
+    expect(h.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      "actor-a",
+      "thread-a",
+      "tool_external_descriptors"
+    );
+    expect(h.state.tainted).toBe(true);
+  });
+
+  it.each(["owner", "built-in", "empty"] as const)(
+    "refuses a mismatched factory actor before exposing a clean %s menu",
+    async (kind) => {
+      const h = harness({
+        isExternal: kind === "owner",
+        descriptorOwnerUserId: "actor-a",
+        factoryActorUserId: "actor-b",
+        ...(kind === "empty" ? { tools: () => [] } : {})
+      });
+      await expect(h.ports.listTools()).rejects.toThrow("context_admission_unavailable");
+      expect(await h.evaluate()).toMatchObject({ kind: "declined", reason: "classifier_error" });
+      expect(h.choose).not.toHaveBeenCalled();
+      expect(h.extract).not.toHaveBeenCalled();
+      expect(h.candidateHook).not.toHaveBeenCalled();
+      expect(h.recordAdmission).not.toHaveBeenCalled();
     }
   );
 
@@ -178,17 +266,17 @@ describe("classifier descriptor admission", () => {
       ]
     });
     expect(await h.ports.listTools()).toHaveLength(1);
-    expect(h.recordContextForSession).not.toHaveBeenCalled();
+    expect(h.recordAdmission).not.toHaveBeenCalled();
     const empty = harness({ tools: () => [] });
     expect(await empty.ports.listTools()).toEqual([]);
-    expect(empty.recordContextForSession).not.toHaveBeenCalled();
+    expect(empty.recordAdmission).not.toHaveBeenCalled();
   });
 
   it.each(["on", "shadow"] as const)(
     "failed descriptor admission prevents every classifier call (%s)",
     async (mode) => {
       const h = harness({ isExternal: true });
-      h.recordContextForSession.mockRejectedValue(new Error("private storage failure"));
+      h.recordAdmission.mockRejectedValue(new Error("private storage failure"));
       const result = await h.evaluate(mode);
       expect(result).toMatchObject({ kind: "declined", reason: "classifier_error" });
       expect(h.choose).not.toHaveBeenCalled();
@@ -201,6 +289,20 @@ describe("classifier descriptor admission", () => {
 });
 
 describe("classifier candidate admission", () => {
+  it("taints candidates from an owner-stamped tool even after its descriptors stayed clean", async () => {
+    const h = harness({ isExternal: true, descriptorOwnerUserId: "actor-a" });
+    const [tool] = await h.ports.listTools();
+    expect(h.recordAdmission).not.toHaveBeenCalled();
+    expect(h.state.tainted).toBe(false);
+    expect(await h.ports.loadCandidates(tool!, new AbortController().signal)).toEqual(candidates);
+    expect(h.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      "actor-a",
+      "thread-a",
+      "classifier_candidates"
+    );
+    expect(h.state.tainted).toBe(true);
+  });
+
   it("releases the candidate hook connection before admission and returns only a normalized snapshot", async () => {
     const raw = [{ ...candidates[0]!, untrustedExtra: "Do not retain this field" }];
     const h = harness({ raw });
@@ -223,7 +325,7 @@ describe("classifier candidate admission", () => {
     admission.resolve();
     expect(await pending).toEqual(candidates);
     expect(h.recordContextForSession).toHaveBeenCalledExactlyOnceWith(
-      TOKEN,
+      h.token,
       "classifier_candidates"
     );
     expect(JSON.stringify(h.recordContextForSession.mock.calls)).not.toContain(STORED_ID);
@@ -277,7 +379,7 @@ describe("classifier candidate admission", () => {
         admission.resolve();
         expect(await pending).toMatchObject({ kind: "would_handle" });
         expect(h.callToolForGate).toHaveBeenCalledWith(
-          TOKEN,
+          h.token,
           h.tool.name,
           expect.objectContaining({ device: STORED_ID }),
           mode === "on" ? "execute" : "dry-run"

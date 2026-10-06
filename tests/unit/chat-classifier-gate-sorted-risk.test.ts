@@ -50,7 +50,8 @@ async function gateRisks(tools: ReturnType<typeof connectedTool>[]) {
     dataContext,
     gateway: {
       callToolForGate: vi.fn(),
-      recordContextForSession: vi.fn(async () => {})
+      recordContextForSession: vi.fn(async () => {}),
+      admitToolDescriptorsForSession: vi.fn(async () => {})
     } as never,
     classifierDeps: {
       repository: {

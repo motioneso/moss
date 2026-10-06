@@ -45,7 +45,15 @@ afterAll(async () => {
 });
 
 async function harness(
-  options: { isExternal?: boolean; raw?: unknown; foreignThread?: boolean } = {}
+  options: {
+    isExternal?: boolean;
+    unstamped?: boolean;
+    descriptorOwnerUserId?: string;
+    mixedOwners?: boolean;
+    raw?: unknown;
+    foreignThread?: boolean;
+    factoryActorUserId?: string;
+  } = {}
 ) {
   const bound = await createThread();
   const source = await createThread(); // Current selection differs from the token-bound thread.
@@ -55,7 +63,10 @@ async function harness(
     description: "Outside tool description",
     permissionId: "example.use",
     risk: "read",
-    isExternal: options.isExternal ?? false,
+    ...(options.unstamped ? {} : { isExternal: options.isExternal ?? false }),
+    ...(options.descriptorOwnerUserId === undefined
+      ? {}
+      : { descriptorOwnerUserId: options.descriptorOwnerUserId }),
     inputSchema: {
       type: "object",
       properties: { thread: { type: "string", description: "Outside schema description" } },
@@ -84,7 +95,12 @@ async function harness(
     publisher: "Moss",
     lifecycle: "optional",
     compatibility: { jarv1s: "*" },
-    assistantTools: [tool]
+    assistantTools: [
+      tool,
+      ...(options.mixedOwners
+        ? [{ ...tool, name: "example.foreign", descriptorOwnerUserId: ids.userB }]
+        : [])
+    ]
   };
   const tokens = new SessionTokenRegistry();
   const token = tokens.mint({
@@ -118,7 +134,7 @@ async function harness(
     dataContext: runner,
     gateway,
     classifierDeps: {} as never
-  })(ids.userA, token);
+  })(options.factoryActorUserId ?? ids.userA, token);
   return { ports, gateway, token, bound, source, foreign, records };
 }
 
@@ -150,6 +166,43 @@ async function expectCleanThemeAuto(h: Awaited<ReturnType<typeof harness>>) {
 }
 
 describe("classifier context admission through the token-bound gateway", () => {
+  it("keeps owned classifier descriptors durably clean and preserves the existing automatic policy", async () => {
+    const h = await harness({ isExternal: true, descriptorOwnerUserId: ids.userA });
+    const [tool] = await h.ports.listTools();
+    expect(tool).not.toHaveProperty("descriptorOwnerUserId");
+    expect(await store.isTainted(ids.userA, h.bound.id)).toBe(false);
+    expect((await provenance(h.bound.id)).first_admission_path).toBeNull();
+    await expectCleanThemeAuto(h);
+    // Stored candidates remain outside, even though the same tool's descriptors are trusted.
+    expect(await h.ports.loadCandidates(tool!, new AbortController().signal)).toHaveLength(1);
+    expect((await provenance(h.bound.id)).first_admission_path).toBe("classifier_candidates");
+    await expectThemeApproval(h);
+  });
+
+  it.each([
+    ["another owner", { isExternal: true, descriptorOwnerUserId: ids.userB }],
+    ["missing owner", { isExternal: true }],
+    ["unknown origin", { unstamped: true, descriptorOwnerUserId: ids.userA }],
+    ["mixed owners", { isExternal: true, descriptorOwnerUserId: ids.userA, mixedOwners: true }]
+  ] as const)("taints %s classifier descriptors durably", async (_label, options) => {
+    const h = await harness(options);
+    expect(await h.ports.listTools()).not.toHaveLength(0);
+    expect((await provenance(h.bound.id)).first_admission_path).toBe("tool_external_descriptors");
+    expect(await store.isTainted(ids.userA, h.bound.id)).toBe(true);
+    expect(await store.isTainted(ids.userA, h.source.id)).toBe(false);
+    await expectThemeApproval(h);
+  });
+
+  it("refuses token/factory actor mismatch before exposing owned classifier descriptors", async () => {
+    const h = await harness({
+      isExternal: true,
+      descriptorOwnerUserId: ids.userA,
+      factoryActorUserId: ids.userB
+    });
+    await expect(h.ports.listTools()).rejects.toThrow("context_admission_unavailable");
+    expect(await store.isTainted(ids.userA, h.bound.id)).toBe(false);
+  });
+
   it("records external descriptions before listing and asks before the next write on that thread", async () => {
     const h = await harness({ isExternal: true });
     await expectCleanThemeAuto(h);

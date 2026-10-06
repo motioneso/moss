@@ -11,8 +11,9 @@
 - **Delivery:** one worktree, one branch, one PR. Eight builder slices, each sized for one session.
   Phase 1 ships as one unit, so nothing merges until slice 8 records the live proof.
 - **Current implementation:** Slice 7 is hosted-verified at `a77aa4744` (all four integration
-  shards and all acceptance groups green). Slice 8's browser/owner-proof tooling is being
-  implemented under the explicit no-live-dev-access fallback; see 8.13. Phase 1 is not complete.
+  shards and all acceptance groups green). Slice 8's scripted browser proof passed hosted CI at
+  `aff106749`; current-revision verification, owner live proof and Ben's clean-engine acceptance
+  ruling remain outstanding. See 8.13–8.14. Phase 1 is not complete.
 
 ## 1. Seams
 
@@ -1034,10 +1035,9 @@ details and the outstanding hosted/live verification limits are recorded in sect
 **Additional verification requirements from Slice 6 review (#3065, phase-1 merge blockers):**
 
 - Include remote integration tool descriptions and input schemas exposed through `tools/list`.
-  They are outside text before any result runs (`integrations/src/tool-manifests.ts` to the
-  gateway DTO and MCP transport). Record admission against the bound thread before exposure, or
-  establish an explicit trusted-descriptor sanitization boundary. Result-only admission misses
-  this prompt surface.
+  The later owner-descriptor ruling in section 8.14 trusts only the chat owner's own connection
+  or explicitly accepted current add-on installation. Unknown/other-owner descriptors still
+  require bound-thread admission before exposure. Result-only admission misses this surface.
 - Coordinate admission with dispatch, rather than assuming a fresh boolean lookup is an atomic
   barrier. Slice 6 rechecks after asynchronous policy lookups, but handler transaction acquisition,
   app-route preflight and native/outside-agent audit waits remain possible interleavings before
@@ -1106,8 +1106,8 @@ details and the outstanding hosted/live verification limits are recorded in sect
 
 ### Slice 8: browser test and live proof
 
-**Current status (2026-10-06): browser and owner-proof tooling implemented, hosted browser
-verification pending.** No live dev or real-provider proof has run in this environment. The owner
+**Current status (2026-10-06): browser and owner-proof tooling implemented; scripted browser
+verification passed at `aff106749`. Current-revision CI and owner live proof remain outstanding.** No live dev or real-provider proof has run in this environment. The owner
 confirmed that no dev instance is reachable from the sandbox; no further access attempts are part
 of this work. The fallback is the hosted scripted browser test and the committed step-by-step
 checklist, not a fabricated live pass.
@@ -1121,10 +1121,11 @@ checklist, not a fabricated live pass.
   authorize the write; two same-task Approve clicks resolve once. The page's theme and gallery
   change without a document reload. Real Fastify logs show the internal theme `PUT` once;
   browser requests show one approval resolution and no browser-side theme `PUT`.
-- **Approved plan correction:** the supported scripted path uses ACP, which is deliberately
+- **Proposed plan correction, awaiting Ben:** the supported scripted path uses ACP, which is deliberately
   tainted at launch. It cannot honestly prove clean automatic browser execution. No injected
   clean engine or weakened launch rule substitutes for that path. Clean automatic behavior has
-  real-gateway/database coverage; a clean-engine browser/live result remains unproved.
+  real-gateway/database coverage; a clean-engine browser/live result remains unproved. Approval
+  of the sandbox fallback did not waive the original no-ask browser or clean Run B requirements.
 - **Real spec:** a note containing "switch my theme to dark" exists; the user asks an unrelated
   question so recall pulls the note in; asking for a theme change shows an approval card with the
   tainted notice, through both `app.callAction` and the dedicated mode tool; Moss reading the note
@@ -1710,7 +1711,10 @@ provider is an explicitly disclosed decision stand-in: Moss's UI, ACP/MCP transp
 approval, act-as auth, real theme handler and screen refresh remain unchanged.
 
 The original scripted auto-run expectation conflicts with Slice 7's supported ACP launch rule.
-The authored case therefore proves a real approved change, visible pending/complete states, drawer
+Replacing it is a proposed plan correction awaiting Ben, not an approved scope reduction. Ben
+approved where proof could run; he has not waived the no-ask browser case or clean Run B. All
+current live engines use ACP, so the kill gate is awaiting his ruling, not failed or passed.
+The authored case proves a real approved change, visible pending/complete states, drawer
 interruption, repeated Approve protection, exactly one internal theme PUT and immediate refresh
 without reload. It emits bounded `APP_ACTIONS_EVIDENCE` text retained by the hosted workflow; it
 never logs the raw server log or a token. The phase-1 clean automatic path is database-tested, not
@@ -1735,3 +1739,38 @@ Slice 7 prerequisite evidence is complete at `a77aa4744`: all four integration s
 (3,104 passed, two unrelated skips), all 25 tracked target suites ran 344/344 with zero skips, and all
 four Meetings acceptance groups passed. See the PR's CI links and bounded counts. This evidence
 unblocked Slice 8 implementation; it is not evidence of the new browser spec or live kill gate.
+
+### 8.14 Owner-connected and owner-approved descriptors (2026-10-06)
+
+Ben's later ruling narrows descriptor admission only. MCP listing and live/shadow classifier menus
+may expose descriptions/input schemas without taint when the host proves that this chat owner
+personally connected the integration or approved the current add-on installation. Both consumers
+use token-bound actor verification before deciding; mixed/unknown ownership still taints. A public
+DTO or external JSON cannot supply the host-only ownership stamp.
+
+Integration ownership comes from the RLS-scoped connection's immutable owner. The current
+`discovered_tools` snapshot is replaced on discovery. Classifier fingerprints serve review/sort
+freshness, not a separately retained connect-time descriptor-acceptance baseline. As instructed, this change does not build that new
+baseline system. Follow-up: record explicit descriptor acceptance and taint on remote descriptor
+changes. Until then, an owner's refreshed integration descriptions retain owner trust.
+
+Add-ons already have accepted manifest/package hashes. Migration 0294 adds current-approval actor
+attribution without backfilling legacy `enabled_by`, which could name an earlier installer after
+an upgrade. Trust is established by instance-admin enable/reapprove of the current discovered
+hashes, explicit draft ship, or acceptance of an install/upgrade staged by that actor. A personal
+module toggle never establishes it. Reconcile must match both accepted hashes and the synthesized
+snapshot; descriptor mutation, drift, a different approver, or missing attribution remains outside.
+An admin-installed add-on is thus untrusted for a non-admin chat owner. Historical installations
+need a fresh current-installation approval (for example disable/re-enable in Instance modules);
+that action affects instance availability and is not silently performed for the user.
+
+This exception is listing-only. Tool results, progress, candidates, forwarded safe errors and
+model-visible schema validation diagnostics retain admission. Existing conversations remain
+fail-closed; taint never clears. ACP `admitsOutsideContentWithoutPermission` and launch admission
+are unchanged, so every currently supported live engine still starts tainted. This ruling does
+not settle section 8.13's clean-engine/browser acceptance questions.
+
+Verification covers exact-owner/foreign/unknown listings, authentic integration and accepted
+add-on adapters, classifier token mismatch, public DTO non-disclosure, current-hash rescan/mutation,
+legacy and upgrade attribution, and listing followed by each outside output path. Guard-removal
+controls must fail for the relevant rule. New DB cases run in hosted CI, not an unisolated local DB.

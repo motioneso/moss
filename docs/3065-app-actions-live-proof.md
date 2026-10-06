@@ -10,6 +10,20 @@ and the [approved design](superpowers/specs/2026-10-05-moss-acts-through-app-des
 Ben owns the live kill-gate decision. This checklist does not authorize deployment, credential
 handling by another person/agent, or changes to production.
 
+**Kill gate: AWAITING BEN'S RULING, not failed or passed.** Every currently supported live engine
+uses ACP and records `outside_agent_launch` before its first turn. Current live engines therefore
+cannot establish the clean Run B required below. The owner-connected/approved tool-descriptor
+exception does not change that launch rule. Ben still needs to rule on whether all live writes
+asking is acceptable, whether to waive or replace clean Run B and the no-ask browser case, and
+whether eight successful tasks with People/news still blocked meets the usability gate. The
+scripted approval/change/refresh proof is green at `aff106749`; it does not decide these questions.
+
+**Named runners:** Ben runs section 1A's real-model opt-in, including Codex sign-in/credential
+handling, and S3's server restart. The coordinator may run section 1B's credential-free UI and
+read-only observation steps against Ben's verified dev instance when access is available. Any
+provider sign-in, device permission or restart in that path goes back to Ben. No such live access
+exists from the current sandbox, so those observations remain outstanding.
+
 ## 1. Two different executions
 
 ### A. Opt-in, disposable real-model UAT
@@ -21,8 +35,8 @@ and routes. They **do not count as the unassisted ten-task kill gate**.
 The existing UAT provisioner detects the operator's local Codex login and copies it into the
 throwaway stack's CLI-auth volume. `bringUpRealChatModel` installs/logs in that provider and selects
 an available economy-tier chat model. It does not silently choose a pricier tier. This can use the
-owner's model allowance. The owner must understand and explicitly initiate this mode; an agent
-must not read/copy login files or run it merely because the file happens to exist.
+owner's model allowance. Ben must understand and explicitly initiate this mode, including its
+Codex sign-in and login-copy step. The coordinator does not handle those credentials.
 
 The supported wrapper refuses real mode unless `JARVIS_UAT_REAL_CHAT_CONFIGURED=1` is supplied
 **before provisioning**. Provisioning then clears/re-establishes that marker based on actual login
@@ -33,7 +47,8 @@ proof. Missing or unusable economy models fail. The spec also refuses any target
 `127.0.0.1`, reserved ports `20000–20099`, and generated `uat-<pid>_<suffix>` Compose project.
 Never set base URL/project variables manually to aim it at a live instance. **Never use port 1533.**
 
-Owner-only commands, from the checkout at `~/Jarv1s`, after reading this section:
+Commands from the checkout at `~/Jarv1s`, after reading this section. The coordinator can run the
+credential-free scripted command; only Ben runs the real-provider opt-in:
 
 ```bash
 # Credential-free scripted browser path. Does not run a real model.
@@ -110,14 +125,15 @@ Before either manual run, record:
   `outside_agent_launch` before any turn. Even a fresh empty account therefore asks for ordinary
   writes, with the outside-context notice. That is expected conservative behavior. An ACP card
   alone proves neither recall-caused nor native-read-caused clean → tainted admission.
-- The scripted CI browser uses ACP too. Its approved real-route action is a plan exception to the
-  original scripted auto-run example; it is not clean-thread auto-run proof.
+- The scripted CI browser uses ACP too. Its approved real-route action is a **proposed plan
+  correction, awaiting Ben**, rather than an approved replacement for the original no-ask example.
+  It is not clean-thread auto-run proof.
 - The original clean Run B and clean native-read causal proof require an actually supported engine
   that can remain clean with empty recall, no outside descriptors and no prior admission. Verify
   the thread's durable provenance is present, untainted, and has no automatic reservation before
   claiming this. Do not disable admission, clear safety state, or switch to an unsupported path.
-- If no such engine is available, run ACP diagnostics if useful but label clean Run B and native
-  clean → tainted causality **blocked/not proven**. Only Ben can approve a changed acceptance plan;
+- No such engine is currently available. ACP diagnostics can still be useful; label clean Run B
+  **awaiting Ben's ruling** and native clean → tainted causality **not proven**. Only Ben can approve a changed acceptance plan;
   the test author cannot silently reinterpret ACP as clean.
 - A clean thread can later admit outside data when a task reads another app record or accepts a
   memory. Record that first admission and the affected task. Subsequent asks cannot be attributed
@@ -251,7 +267,7 @@ Record each as PASS, FAIL or BLOCKED, with actual evidence. Do not write PASS in
 1. Finish the last action; do not leave a pending approval. Record the exact tainted thread ID,
    current mode, `tainted_at` and first-admission metadata using approved read-only diagnostics.
    Do not clear/resume a different conversation. Keep the database and vault intact.
-2. The owner restarts the verified non-production API/chat service using that deployment's normal
+2. Ben restarts the verified non-production API/chat service using that deployment's normal
    process supervisor. Record its identity before doing so and the changed process/container start
    time afterwards. A web-page reload, CLI-session reconnect, or Compose `up -d` no-op does not
    prove a server restart. Never stop/restart production, an unidentified service, or port 1533.

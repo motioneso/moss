@@ -9,6 +9,7 @@ import {
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import {
   normalizeClassifierCandidates,
+  type ModuleAssistantToolManifest,
   type MossModuleManifest,
   type ToolContext
 } from "@moss/module-sdk";
@@ -45,7 +46,10 @@ export type ClassifierGatePortsFactory = (
 export interface ClassifierGatePortsFactoryDeps {
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly dataContext: DataContextRunner;
-  readonly gateway: Pick<AssistantToolGateway, "callToolForGate" | "recordContextForSession">;
+  readonly gateway: Pick<
+    AssistantToolGateway,
+    "callToolForGate" | "recordContextForSession" | "admitToolDescriptorsForSession"
+  >;
   readonly classifierDeps: ClassifierDeps;
   /** The human-readable area label shown to the classifier; defaults to the manifest name. */
   readonly moduleDescription?: (manifest: MossModuleManifest) => string;
@@ -165,21 +169,19 @@ export function createClassifierGatePortsFactory(
         listedIds.clear();
         const manifests = await deps.resolveActiveModules(actorUserId);
         const tools: GateTool[] = [];
-        let hasOutsideDescriptors = false;
+        const descriptors: ModuleAssistantToolManifest[] = [];
         for (const manifest of manifests) {
           for (const tool of manifest.assistantTools ?? []) {
             if (!isClassifierCapable(tool)) continue;
-            // Decide before projection drops provenance; an unstamped tool is outside content.
-            if (tool.isExternal !== false) hasOutsideDescriptors = true;
+            // Preserve host-only ownership until the token-bound admission check, before projection.
+            descriptors.push(tool);
             byName.set(tool.name, tool);
             const gateTool = asGateTool(manifest, tool, describe(manifest));
             listedIds.add(`${gateTool.moduleId}.${gateTool.name}`);
             tools.push(gateTool);
           }
         }
-        if (hasOutsideDescriptors) {
-          await deps.gateway.recordContextForSession(token, "tool_external_descriptors");
-        }
+        await deps.gateway.admitToolDescriptorsForSession(token, actorUserId, descriptors);
         return tools;
       },
       loadCandidates: async (tool, signal) => {

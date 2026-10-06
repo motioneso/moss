@@ -23,6 +23,9 @@ export function reconcileExternalModules(
     const { id, manifest, packageHash } = discovery;
     const base = {
       id,
+      manifestHash: discovery.manifestHash,
+      packageHash,
+      descriptorApprovedByUserId: null,
       name: manifest.name,
       version: manifest.version,
       publisher: manifest.publisher,
@@ -83,6 +86,10 @@ export function reconcileExternalModules(
       modules.push({
         ...base,
         status: "enabled",
+        descriptorApprovedByUserId:
+          row.manifestHash === discovery.manifestHash
+            ? (row.descriptorApprovedByUserId ?? null)
+            : null,
         active: true,
         drifted: false,
         disabledReason: null,

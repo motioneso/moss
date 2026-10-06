@@ -608,6 +608,12 @@ export interface ModuleAssistantToolManifest {
   readonly inputSchema?: JsonSchema;
   /** Set only by the trusted registry boundary; never accepted from an external manifest. */
   readonly isExternal?: boolean;
+  /**
+   * Host-only attribution for personally connected/approved tool descriptors. Never accepted
+   * from external module JSON. Exempts listing only when it matches the verified chat actor;
+   * it does not change result/error provenance, execution policy or external input validation.
+   */
+  readonly descriptorOwnerUserId?: string;
   readonly outputSchema?: JsonSchema;
   readonly featureFlagId?: string;
   readonly execute?: ToolExecute;
