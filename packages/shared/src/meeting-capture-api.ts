@@ -199,6 +199,10 @@ export interface MeetingCaptureDevicesResult {
   readonly processingReady: boolean;
 }
 export interface MeetingCaptureStartInput {
+  readonly requestKey: string;
+}
+/** Accepted only to replay an already-issued pre-minimal Start with its exact fingerprint. */
+export interface MeetingCaptureLegacyStartInput {
   /** Legacy input accepted during rollout; only the stored account acknowledgement authorizes capture. */
   readonly noticeAcknowledged?: true;
   readonly deviceId: string;
@@ -207,6 +211,7 @@ export interface MeetingCaptureStartInput {
   readonly requestKey: string;
   readonly selection: MeetingCaptureSelection;
 }
+export type MeetingCaptureStartRequest = MeetingCaptureStartInput | MeetingCaptureLegacyStartInput;
 export interface MeetingCaptureCommandsInput {
   readonly connectionId: string;
   readonly verifier: string;
@@ -244,8 +249,8 @@ export interface MeetingCaptureClaimResult {
 export type MeetingCaptureDevicesResponse = MeetingCaptureDevicesResult;
 
 export interface MeetingCaptureCancelStartInput {
-  readonly deviceId: string;
-  readonly connectionId: string;
+  readonly deviceId?: string;
+  readonly connectionId?: string;
   /** Original explicit Start key. Cancels even when Start has not reached the server. */
   readonly requestKey: string;
 }

@@ -90,7 +90,14 @@ export type MeetingOutputGenerationAvailability =
   | "available"
   | "model-unavailable"
   | "check-failed";
+export interface MeetingAutomaticSummary {
+  readonly status: "waiting" | "pending" | "saved" | "failed" | "skipped";
+  readonly requestKey: string;
+  readonly code?: string;
+  readonly expiresAt: string | null;
+}
 export interface MeetingOutputsResponse {
+  readonly automaticSummary?: MeetingAutomaticSummary | null;
   readonly artifacts: readonly MeetingOutputArtifact[];
   readonly candidates: readonly MeetingActionCandidate[];
   readonly headVersion: number;

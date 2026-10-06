@@ -68,6 +68,8 @@ interface HistoryRow {
   updated_at: Date;
   has_notes: boolean;
   notes_revision: number;
+  capture_duration_ms?: number | null;
+  output_overview?: string | null;
   transcript_revision: number;
   segment_count: number;
   final_count: number;
@@ -99,7 +101,7 @@ export function meetingHistoryItem(row: HistoryRow): MeetingHistoryItem {
     updatedAt: row.updated_at.toISOString(),
     hasNotes: row.has_notes,
     notesRevision: row.notes_revision,
-    capture: { status: "unavailable" },
+    capture: { status: "unavailable", durationMs: row.capture_duration_ms ?? null },
     transcript: {
       status: row.segment_count ? "retained" : "none",
       revision: row.transcript_revision,
@@ -114,6 +116,7 @@ export function meetingHistoryItem(row: HistoryRow): MeetingHistoryItem {
       omittedSourceCount: row.omitted_sources
     },
     summary: {
+      overview: row.output_overview || null,
       status: row.output_version === null ? "none" : row.output_stale ? "stale" : "available",
       version: row.output_version,
       origin: row.output_origin,
@@ -207,7 +210,7 @@ export class MeetingHistoryRepository {
         WHERE r.owner_user_id = app.current_actor_user_id() AND ${identity} AND ${cursor} AND ${search}
         ORDER BY r.created_at DESC,r.id DESC ${earlyLimit}
       ), history AS (
-        SELECT r.*, coalesce(t.transcript_revision,0) AS transcript_revision,
+        SELECT r.*, capture.duration_ms AS capture_duration_ms, coalesce(a.history_overview,n.history_overview) AS output_overview, coalesce(t.transcript_revision,0) AS transcript_revision,
           s.segment_count,s.final_count,s.provisional_count,s.start_ms,s.end_ms,
           coalesce(t.history_sources_json,'[]') AS sources_json,coalesce(t.history_omitted_sources,0) AS omitted_sources,
           coalesce(a.version,n.version) AS output_version,coalesce(a.history_origin,n.history_origin) AS output_origin,
@@ -226,6 +229,10 @@ export class MeetingHistoryRepository {
           saved.saved_count
         FROM records r
         LEFT JOIN LATERAL (
+          SELECT recorded_duration_ms AS duration_ms
+          FROM app.meeting_capture_grants WHERE meeting_id=r.id AND state_json IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 1
+        ) capture ON true
+        LEFT JOIN LATERAL (
           SELECT transcript_revision,history_sources_json,history_omitted_sources
           FROM app.meeting_transcript_batches WHERE meeting_id=r.id ORDER BY version DESC LIMIT 1
         ) t ON true
@@ -235,11 +242,11 @@ export class MeetingHistoryRepository {
           FROM app.meeting_history_segments WHERE meeting_id=r.id
         ) s
         LEFT JOIN LATERAL (
-          SELECT version,history_origin,created_at,inactive,history_stale,history_notes_revision,history_transcript_revision
+          SELECT version,history_origin,created_at,inactive,history_stale,history_notes_revision,history_transcript_revision,history_overview
           FROM app.meeting_output_artifacts WHERE meeting_id=r.id AND NOT inactive ORDER BY version DESC LIMIT 1
         ) a ON true
         LEFT JOIN LATERAL (
-          SELECT version,history_origin,created_at,inactive,history_stale,history_notes_revision,history_transcript_revision
+          SELECT version,history_origin,created_at,inactive,history_stale,history_notes_revision,history_transcript_revision,history_overview
           FROM app.meeting_output_artifacts WHERE meeting_id=r.id ORDER BY version DESC LIMIT 1
         ) n ON a.version IS NULL
         LEFT JOIN LATERAL (

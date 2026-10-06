@@ -36,6 +36,7 @@ const collections = [
   "export_requests",
   "capture_connections",
   "capture_start_cancellations",
+  "stop_summaries",
   "recording_notices",
   "capture_grants"
 ] as const;
@@ -113,7 +114,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly twelve source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly thirteen source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -228,7 +229,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(12);
+      expect(queries).toHaveLength(13);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -255,7 +256,19 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0290_meeting_recording_notice.sql", import.meta.url),
       "utf8"
     );
+    const minimalMigration = await readFile(
+      new URL("../../packages/meetings/sql/0292_meeting_minimal.sql", import.meta.url),
+      "utf8"
+    );
+    const minimalSelectGrants = [
+      ...minimalMigration.matchAll(
+        /GRANT SELECT \([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
+      )
+    ]
+      .map((match) => match[0])
+      .join("\n");
     const migration =
+      minimalSelectGrants +
       originalMigration +
       (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +
       (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "") +
@@ -278,7 +291,13 @@ describe("Meetings account-export collector", () => {
         ];
         expect(grants.length).toBeGreaterThan(0);
         expect(
-          grants.flatMap((grant) => grant[1]!.split(",").map((part) => part.trim())).sort()
+          grants
+            .flatMap((grant) => grant[1]!.split(",").map((part) => part.trim()))
+            .filter(
+              (column) =>
+                !["history_kind", "history_result_status", "history_result_code"].includes(column)
+            )
+            .sort()
         ).toEqual([...columns].sort());
       }
       expect(migration).not.toMatch(/GRANT\s+(?:INSERT|UPDATE|DELETE|ALL)|BYPASSRLS|\bFOR ALL\b/i);

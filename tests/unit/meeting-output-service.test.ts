@@ -1,3 +1,4 @@
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isDeepStrictEqual } from "node:util";
 import type { AccessContext, DataContextDb } from "@moss/db";
@@ -140,9 +141,6 @@ function setup() {
         request_key: key,
         input_json: encoded,
         result_json: null,
-        history_kind: "generate",
-        history_result_status: null,
-        history_result_code: null,
         expires_at: new Date(Date.now() + 180_000)
       });
     });
@@ -189,9 +187,12 @@ function setup() {
   const generator = vi
     .fn<MeetingOutputGenerator>()
     .mockResolvedValue({ content: CONTENT, modelRoute: "configured-route" });
-  const service = new MeetingOutputService(dataContext, generator, repository);
+  const summaries = new MeetingStopSummaryRepository();
+  const admit = vi.spyOn(summaries, "admit").mockResolvedValue(INPUT);
+  const service = new MeetingOutputService(dataContext, generator, repository, summaries);
   return {
     service,
+    admit,
     generator,
     state,
     requests,
@@ -346,9 +347,6 @@ describe("meeting output generation service", () => {
       request_key: INPUT.requestKey,
       input_json: JSON.stringify({ kind: "generate", ...INPUT }),
       result_json: null,
-      history_kind: "generate",
-      history_result_status: null,
-      history_result_code: null,
       expires_at: new Date(0)
     });
     const result = await harness.service.generate(ACTOR, MEETING_ID, INPUT);
@@ -623,5 +621,56 @@ describe("meeting output generation service", () => {
     expect(harness.inputs).not.toHaveBeenCalled();
     expect(harness.reserve).not.toHaveBeenCalled();
     expect(harness.generator).not.toHaveBeenCalled();
+  });
+});
+
+describe("automatic summary shares durable output reservation", () => {
+  it("reserves before dispatch and never charges again for repeated Stop or status jobs", async () => {
+    const f = setup();
+    f.generator.mockImplementation(async () => {
+      expect(f.state.inTransaction).toBe(false);
+      expect(f.requests.has(INPUT.requestKey)).toBe(true);
+      return { content: CONTENT, modelRoute: "configured-route" };
+    });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved"
+    });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved",
+      replayed: true
+    });
+    expect(f.generator).toHaveBeenCalledOnce();
+    expect(f.reserve).toHaveBeenCalledOnce();
+  });
+  it("returns a durable configured-route failure without a retry dispatch", async () => {
+    const f = setup();
+    f.generator.mockRejectedValue(new MeetingOutputError("meeting_output_route_unavailable"));
+    const failed = await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey);
+    expect(failed).toMatchObject({ status: "failed", code: "meeting_output_route_unavailable" });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toEqual(failed);
+    expect(f.generator).toHaveBeenCalledOnce();
+  });
+  it("reports a process-interrupted reservation without a second provider attempt", async () => {
+    const f = setup();
+    f.requests.set(INPUT.requestKey, {
+      meeting_id: MEETING_ID,
+      owner_user_id: ACTOR.actorUserId,
+      request_key: INPUT.requestKey,
+      input_json: JSON.stringify({ kind: "generate", ...INPUT }),
+      expires_at: new Date(0),
+      result_json: null
+    });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "failed",
+      code: "meeting_output_interrupted"
+    });
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("does not reserve or dispatch when finalization admission skips the attempt", async () => {
+    const f = setup();
+    f.admit.mockResolvedValue(null);
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toBeNull();
+    expect(f.reserve).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,5 @@
+import type { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
+import { MeetingPreferencesRepository, savedCaptureSelection } from "./preferences.js";
 import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
@@ -99,6 +101,11 @@ export interface MeetingCaptureDependencies {
   readonly transcribe: MeetingCaptureTranscriber;
   readonly trustedOrigins: readonly string[];
   readonly now?: () => Date;
+  readonly scheduleSummary?: (
+    db: DataContextDb,
+    actor: AccessContext,
+    input: Parameters<MeetingStopSummaryRepository["schedule"]>[2]
+  ) => Promise<void>;
 }
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 function matches(value: string, expected: string | null) {
@@ -120,9 +127,26 @@ export class MeetingCaptureService {
     private readonly repository = new MeetingCaptureRepository(),
     private readonly transcript = new MeetingTranscriptRepository(),
     private readonly connections = new MeetingCaptureConnectionRepository(),
-    private readonly notices = new MeetingRecordingNoticeRepository()
+    private readonly notices = new MeetingRecordingNoticeRepository(),
+    private readonly preferences = new MeetingPreferencesRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
+  }
+  private async scheduleSummary(
+    db: DataContextDb,
+    actor: AccessContext,
+    grant: CaptureGrant,
+    state: CaptureStoredState,
+    stoppedNow = false
+  ): Promise<void> {
+    if (state.desired === "stopped" && state.stopCutoffMs !== null && state.finalizationDeadline)
+      await this.deps.scheduleSummary?.(db, actor, {
+        meetingId: grant.meeting_id,
+        grantId: grant.id,
+        deadline: state.finalizationDeadline,
+        finalized: state.finalized === true,
+        stoppedNow
+      });
   }
   async browser(
     headers: IncomingHttpHeaders,
@@ -293,6 +317,7 @@ export class MeetingCaptureService {
         state.finalized = true;
       state.lastSeenAt = this.now().toISOString();
       await this.repository.save(db, grant, state);
+      await this.scheduleSummary(db, proof.actor, grant, state);
       const capture = captureView(grant, state, this.now());
       return { capture, changed: capture.revision !== previousRevision };
     });
@@ -350,6 +375,7 @@ export class MeetingCaptureService {
             state.lastSeenAt = connection.last_seen_at.toISOString();
           }
         }
+        await this.scheduleSummary(db, actor, grant, state);
         capture = captureView(grant, state, this.now());
       }
       return {
@@ -453,21 +479,40 @@ export class MeetingCaptureService {
       const state = captureState(grant);
       await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
       if (grant.status !== "approved") expireCaptureLease(state, this.now(), grant.expires_at);
-      if (grant.status === "approved" && input.command === "record") {
+      let command = input;
+      if (input.command === "record") {
+        // Legacy source-bearing controls can replay their receipt, but cannot create a new epoch.
+        if (input.selection) throw new MeetingCaptureError("meeting_capture_setup_required", 409);
+        const preferences = await this.preferences.get(db);
+        const source = preferences.rememberedSource;
+        if (
+          !preferences.setupCompletedAt ||
+          !source ||
+          source.deviceId !== grant.device_id ||
+          source.mode !== preferences.defaultCaptureMode
+        )
+          throw new MeetingCaptureError("meeting_capture_setup_required", 409);
         const connection = await this.connections.connection(db, grant.device_id);
-        if (!connection || connection.connection_id !== grant.connection_id)
-          throw new MeetingCaptureError();
-        state.inventory = JSON.parse(connection.inventory_json) as typeof state.inventory;
-        state.lastSeenAt = connection.last_seen_at.toISOString();
-      }
-      if (input.command === "record")
+        if (
+          !connection ||
+          connection.connection_id !== grant.connection_id ||
+          connection.capability_revision !== grant.capability_revision ||
+          connection.expires_at <= this.now() ||
+          this.now().getTime() - connection.last_seen_at.getTime() > 30000
+        )
+          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+        state.inventory = JSON.parse(connection.inventory_json) as NonNullable<
+          typeof state.inventory
+        >;
+        if (grant.status === "approved") state.lastSeenAt = connection.last_seen_at.toISOString();
+        command = {
+          ...input,
+          selection: savedCaptureSelection(source, state.inventory),
+          noticeAcknowledged: true
+        };
         await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
-      applyCaptureControl(
-        state,
-        input.command === "record" ? { ...input, noticeAcknowledged: true } : input,
-        this.now(),
-        processing?.modelRoute ?? ""
-      );
+      }
+      applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
       if (grant.status === "approved" && input.command === "record")
         await this.repository.renewClaim(
           db,
@@ -486,6 +531,7 @@ export class MeetingCaptureService {
       await this.repository.save(db, grant, state);
       if (input.command === "stop")
         await this.stopTranscript(db, meetingId, input.requestKey, state);
+      await this.scheduleSummary(db, actor, grant, state, input.command === "stop");
       const result = { capture: captureView(grant, state, this.now()) };
       await this.repository.reserve(db, grant.id, {
         requestKey: input.requestKey,
@@ -524,17 +570,20 @@ export class MeetingCaptureService {
     actor: CaptureBrowserBinding,
     meetingId: string,
     input: MeetingCaptureCancelStartInput
-  ): Promise<MeetingCaptureCancelStartResult> {
+  ): Promise<MeetingCaptureCancelStartResult & { readonly wakeConnectionId?: string }> {
     return this.deps.dataContext.withDataContext(actor, async (db) => {
-      await this.connections.lock(db, input.deviceId);
+      await this.connections.lockRequest(db, input.requestKey);
+      const initial = await this.connections.byRequest(db, input.requestKey);
+      if (initial) await this.connections.lock(db, initial.device_id);
       await this.repository.lockMeeting(db, meetingId);
-      await this.deps.assertBinding({ actorUserId: actor.actorUserId, sessionId: actor.sessionId });
+      // Claim/status can finish while the device lock is awaited. Never mutate its old snapshot.
       const grant = await this.connections.byRequest(db, input.requestKey);
+      await this.deps.assertBinding({ actorUserId: actor.actorUserId, sessionId: actor.sessionId });
       if (
         grant &&
         (grant.meeting_id !== meetingId ||
-          grant.device_id !== input.deviceId ||
-          grant.connection_id !== input.connectionId)
+          (input.deviceId !== undefined && grant.device_id !== input.deviceId) ||
+          (input.connectionId !== undefined && grant.connection_id !== input.connectionId))
       )
         throw new MeetingCaptureError("meeting_capture_conflict", 409);
       await this.connections.cancel(db, meetingId, input);
@@ -557,7 +606,12 @@ export class MeetingCaptureService {
       await this.repository.save(db, grant, state);
       if (state.desired === "stopped")
         await this.stopTranscript(db, meetingId, input.requestKey, state);
-      return { cancelled: true, capture: captureView(grant, state, this.now()) };
+      await this.scheduleSummary(db, actor, grant, state, true);
+      return {
+        cancelled: true,
+        capture: captureView(grant, state, this.now()),
+        ...(grant.connection_id ? { wakeConnectionId: grant.connection_id } : {})
+      };
     });
   }
   async audio(

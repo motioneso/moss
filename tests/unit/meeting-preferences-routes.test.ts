@@ -38,7 +38,11 @@ describe("meeting capture defaults", () => {
     async (value) => {
       const { app, preferences } = setup(value);
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
-        defaultCaptureMode: null
+        defaultCaptureMode: null,
+        rememberedSource: null,
+        summarizeOnStop: true,
+        summaryTemplateId: "general",
+        setupCompletedAt: null
       });
       expect(preferences.upsert).not.toHaveBeenCalled();
     }
@@ -48,7 +52,11 @@ describe("meeting capture defaults", () => {
     async (mode) => {
       const { app, preferences, scoped } = setup(mode);
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
-        defaultCaptureMode: mode
+        defaultCaptureMode: mode,
+        rememberedSource: null,
+        summarizeOnStop: true,
+        summaryTemplateId: "general",
+        setupCompletedAt: null
       });
       expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
     }
@@ -60,10 +68,15 @@ describe("meeting capture defaults", () => {
       const response = await app.inject({
         method: "PUT",
         url: "/api/meetings/preferences",
-        payload: { defaultCaptureMode, ownerUserId: "other" }
+        payload: { defaultCaptureMode }
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ defaultCaptureMode });
+      expect(response.json()).toMatchObject({
+        defaultCaptureMode,
+        summarizeOnStop: true,
+        summaryTemplateId: "general",
+        setupCompletedAt: null
+      });
       expect(preferences.upsert).toHaveBeenCalledExactlyOnceWith(
         scoped,
         MEETING_CAPTURE_DEFAULT_KEY,

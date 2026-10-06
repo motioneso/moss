@@ -1,3 +1,4 @@
+import { CaptureWaiters } from "../../packages/meetings/src/capture-waiters.js";
 import Fastify, { type FastifyRequest } from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { registerMeetingCaptureRoutes } from "../../packages/meetings/src/capture-routes.js";
@@ -268,7 +269,7 @@ describe("recording notice route boundary", () => {
       });
       const start = vi
         .spyOn(MeetingCaptureConnectionService.prototype, "start")
-        .mockResolvedValue({ capture: {} as never });
+        .mockResolvedValue({ capture: {} as never, wakeConnectionId: undefined });
       const control = vi
         .spyOn(MeetingCaptureService.prototype, "browserControl")
         .mockResolvedValue({ capture: {} as never });
@@ -307,4 +308,40 @@ describe("recording notice route boundary", () => {
       }
     }
   );
+});
+
+describe("saved-source wake routing", () => {
+  it("wakes only the resolved connection and never returns internal wake metadata", async () => {
+    const server = Fastify();
+    const connectionA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      connectionB = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
+      actorUserId: meetingId,
+      sessionId: meetingId,
+      expiresAt: new Date("2027-01-01")
+    });
+    const start = vi.spyOn(MeetingCaptureConnectionService.prototype, "start").mockResolvedValue({
+      capture: { grantId: meetingId } as never,
+      wakeConnectionId: connectionA
+    });
+    const notify = vi.spyOn(CaptureWaiters.prototype, "notify");
+    registerMeetingCaptureRoutes(server, dependencies());
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/api/meetings/records/${meetingId}/capture/start`,
+        payload: { requestKey: meetingId }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ capture: { grantId: meetingId } });
+      expect(notify).toHaveBeenCalledWith(`device:${connectionA}`);
+      expect(notify).not.toHaveBeenCalledWith(`device:${connectionB}`);
+      expect(notify.mock.calls.filter(([key]) => key.startsWith("device:"))).toHaveLength(1);
+    } finally {
+      browser.mockRestore();
+      start.mockRestore();
+      notify.mockRestore();
+      await server.close();
+    }
+  });
 });

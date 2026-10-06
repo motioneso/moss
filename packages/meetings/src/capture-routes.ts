@@ -10,7 +10,7 @@ import type {
   MeetingCaptureCommandsInput,
   MeetingCaptureClaimInput,
   MeetingCaptureCancelStartInput,
-  MeetingCaptureStartInput,
+  MeetingCaptureStartRequest,
   MeetingCaptureStatusInput
 } from "@moss/shared";
 import { MeetingCaptureConnectionService } from "./capture-connection-service.js";
@@ -135,10 +135,6 @@ const controlProperties = {
   noticeAcknowledged: { const: true }
 };
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
-const recordNoticeRequired = {
-  if: { properties: { command: { const: "record" } }, required: ["command"] },
-  then: { required: ["selection"] }
-};
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
 function ipRateLimit(max: number) {
@@ -277,24 +273,29 @@ export function registerMeetingCaptureRoutes(
       }
     }
   );
-  server.post<{ Params: { id: string }; Body: MeetingCaptureStartInput }>(
+  server.post<{ Params: { id: string }; Body: MeetingCaptureStartRequest }>(
     "/api/meetings/records/:id/capture/start",
     {
       ...options,
       config: ipRateLimit(60),
       schema: {
         params,
-        body: object(
-          {
-            deviceId: uuid,
-            connectionId: uuid,
-            expectedRevision: { type: "integer", minimum: 1 },
-            noticeAcknowledged: { const: true },
-            requestKey: uuid,
-            selection
-          },
-          ["deviceId", "connectionId", "expectedRevision", "requestKey", "selection"]
-        )
+        body: {
+          oneOf: [
+            object({ requestKey: uuid }),
+            object(
+              {
+                deviceId: uuid,
+                connectionId: uuid,
+                expectedRevision: { type: "integer", minimum: 1 },
+                noticeAcknowledged: { const: true },
+                requestKey: uuid,
+                selection
+              },
+              ["deviceId", "connectionId", "expectedRevision", "requestKey", "selection"]
+            )
+          ]
+        }
       }
     },
     async (request, reply) => {
@@ -304,9 +305,9 @@ export function registerMeetingCaptureRoutes(
           request.params.id,
           request.body
         );
-        waiters.notify(`device:${request.body.connectionId}`);
+        if (result.wakeConnectionId) waiters.notify(`device:${result.wakeConnectionId}`);
         waiters.notify(`meeting:${request.params.id}`);
-        return result;
+        return { capture: result.capture };
       } catch (error) {
         return failure(error, reply);
       }
@@ -317,7 +318,13 @@ export function registerMeetingCaptureRoutes(
     {
       ...options,
       config: ipRateLimit(60),
-      schema: { params, body: object({ deviceId: uuid, connectionId: uuid, requestKey: uuid }) }
+      schema: {
+        params,
+        body: {
+          ...object({ deviceId: uuid, connectionId: uuid, requestKey: uuid }, ["requestKey"]),
+          dependencies: { deviceId: ["connectionId"], connectionId: ["deviceId"] }
+        }
+      }
     },
     async (request, reply) => {
       try {
@@ -326,9 +333,9 @@ export function registerMeetingCaptureRoutes(
           request.params.id,
           request.body
         );
-        waiters.notify(`device:${request.body.connectionId}`);
+        if (result.wakeConnectionId) waiters.notify(`device:${result.wakeConnectionId}`);
         waiters.notify(`meeting:${request.params.id}`);
-        return result;
+        return { cancelled: result.cancelled, capture: result.capture };
       } catch (error) {
         return failure(error, reply);
       }
@@ -470,7 +477,7 @@ export function registerMeetingCaptureRoutes(
       config: ipRateLimit(300),
       schema: {
         params,
-        body: { ...object(controlProperties, controlRequired), ...recordNoticeRequired }
+        body: object(controlProperties, controlRequired)
       }
     },
     async (request, reply) => {

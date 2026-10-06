@@ -162,7 +162,7 @@ export class MeetingCaptureRepository {
           : grant.status;
     const serialized = JSON.stringify(state);
     if (grant.state_json === serialized && grant.status === status) return;
-    await sql`UPDATE app.meeting_capture_grants SET status=${status},state_json=${serialized} WHERE id=${grant.id}::uuid`.execute(
+    await sql`UPDATE app.meeting_capture_grants SET status=${status},state_json=${serialized},recorded_duration_ms=${state.recordedDurationMs ?? null} WHERE id=${grant.id}::uuid`.execute(
       db.db
     );
     grant.state_json = serialized;

@@ -27,6 +27,12 @@ export interface CaptureConnection {
 }
 /** Connection identities and exact Start commands are module-owned, owner-scoped metadata. */
 export class MeetingCaptureConnectionRepository {
+  async lockRequest(db: DataContextDb, requestKey: string) {
+    assertDataContextDb(db);
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended('meeting-start:' || current_setting('app.actor_user_id') || ':' || ${requestKey}::uuid::text,0))`.execute(
+      db.db
+    );
+  }
   async lock(db: DataContextDb, deviceId: string) {
     assertDataContextDb(db);
     await sql`SELECT pg_advisory_xact_lock(hashtextextended('meeting-device:' || ${deviceId}::uuid::text,0))`.execute(
@@ -158,13 +164,17 @@ export class MeetingCaptureConnectionRepository {
       const row = existing.rows[0];
       if (
         row.meeting_id !== meetingId ||
-        row.device_id !== input.deviceId ||
-        row.connection_id !== input.connectionId
+        (input.deviceId !== undefined &&
+          row.device_id !== null &&
+          row.device_id !== input.deviceId) ||
+        (input.connectionId !== undefined &&
+          row.connection_id !== null &&
+          row.connection_id !== input.connectionId)
       )
         throw new MeetingCaptureError("meeting_capture_conflict", 409);
       return;
     }
-    await sql`INSERT INTO app.meeting_capture_start_cancellations (request_key,meeting_id,device_id,connection_id) VALUES (${input.requestKey}::uuid,${meetingId}::uuid,${input.deviceId}::uuid,${input.connectionId}::uuid)`.execute(
+    await sql`INSERT INTO app.meeting_capture_start_cancellations (request_key,meeting_id,device_id,connection_id) VALUES (${input.requestKey}::uuid,${meetingId}::uuid,${input.deviceId ?? null}::uuid,${input.connectionId ?? null}::uuid)`.execute(
       db.db
     );
   }

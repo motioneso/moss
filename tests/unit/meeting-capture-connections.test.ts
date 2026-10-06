@@ -1,9 +1,10 @@
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { captureMetadataJson } from "../../packages/meetings/src/capture-metadata.js";
 import { MEETING_RECORDING_NOTICE } from "@moss/shared";
 import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { MeetingCaptureInventory, MeetingCaptureStartInput } from "@moss/shared";
+import type { MeetingCaptureInventory, MeetingCaptureLegacyStartInput } from "@moss/shared";
 import { MeetingCaptureConnectionService } from "../../packages/meetings/src/capture-connection-service.js";
 import {
   MeetingCaptureConnectionRepository,
@@ -138,8 +139,28 @@ function fixture() {
       acknowledgedAt: now.toISOString()
     }
   });
-  const service = new MeetingCaptureConnectionService(deps, grants, connections, notices);
-  const start: MeetingCaptureStartInput = {
+  const preferences = new MeetingPreferencesRepository();
+  vi.spyOn(preferences, "get").mockResolvedValue({
+    rememberedSource: {
+      deviceId,
+      microphoneId: "mic-uid",
+      applicationId: "com.example.meeting",
+      mode: "selected-app"
+    },
+    defaultCaptureMode: "selected-app",
+    summarizeOnStop: true,
+    summaryTemplateId: "general",
+    setupCompletedAt: now.toISOString()
+  });
+  vi.spyOn(connections, "lockRequest").mockResolvedValue();
+  const service = new MeetingCaptureConnectionService(
+    deps,
+    grants,
+    connections,
+    notices,
+    preferences
+  );
+  const legacyStart: MeetingCaptureLegacyStartInput = {
     noticeAcknowledged: true,
     deviceId,
     connectionId,
@@ -172,7 +193,9 @@ function fixture() {
     connection,
     actor,
     browser,
-    start,
+    start: { requestKey },
+    legacyStart,
+    preferences,
     headers,
     claim,
     get grant() {
@@ -220,9 +243,9 @@ describe("shared connection explicit Start and native claim", () => {
     const f = fixture();
     await f.service.start(f.browser, meetingId, f.start);
     f.grant!.start_fingerprint = hash(
-      captureMetadataJson({ meetingId, sessionId: f.browser.sessionId, ...f.start })
+      captureMetadataJson({ meetingId, sessionId: f.browser.sessionId, ...f.legacyStart })
     );
-    expect(await f.service.start(f.browser, meetingId, f.start)).toMatchObject({
+    expect(await f.service.start(f.browser, meetingId, f.legacyStart)).toMatchObject({
       capture: { grantId: requestKey }
     });
     await expect(
@@ -256,7 +279,7 @@ describe("shared connection explicit Start and native claim", () => {
     await expect(
       f.service.start(f.browser, meetingId, {
         ...f.start,
-        selection: { mode: "microphone-only", microphone: f.start.selection.microphone }
+        selection: { mode: "microphone-only", microphone: f.legacyStart.selection.microphone }
       })
     ).rejects.toMatchObject({ code: "meeting_capture_conflict" });
     await expect(
@@ -308,17 +331,52 @@ describe("shared connection explicit Start and native claim", () => {
       expect(f.connections.create).not.toHaveBeenCalled();
     }
   );
-  it("binds current readiness and stable app identity without broadening sources", async () => {
-    for (const change of [
-      { expectedRevision: 2 },
-      { selection: { ...fixture().start.selection, applicationId: "com.other.app" } }
-    ]) {
-      const f = fixture();
-      await expect(
-        f.service.start(f.browser, meetingId, { ...f.start, ...change })
-      ).rejects.toThrow();
-      expect(f.connections.create).not.toHaveBeenCalled();
-    }
+  it.each([
+    "missing microphone",
+    "different microphone",
+    "missing app",
+    "different app",
+    "ambiguous app"
+  ])("refuses saved-source %s without fallback", async (change) => {
+    const f = fixture();
+    const latest = {
+      ...structuredClone(inventory),
+      microphones: [...inventory.microphones],
+      applications: [...inventory.applications]
+    };
+    if (change === "missing microphone") latest.microphones = [];
+    if (change === "missing app") latest.applications = [];
+    if (change === "different microphone")
+      latest.microphones = [
+        { deviceId: "other-mic", sourceId: "other-source", label: "Other microphone" }
+      ];
+    if (change === "different app")
+      latest.applications = [
+        { applicationId: "com.other.app", appProcessTreeId: "456", label: "Other app" }
+      ];
+    if (change === "ambiguous app")
+      latest.applications = [
+        ...latest.applications,
+        { applicationId: "com.example.meeting", appProcessTreeId: "456", label: "Other instance" }
+      ];
+    f.connection.inventory_json = JSON.stringify(latest);
+    await expect(f.service.start(f.browser, meetingId, f.start)).rejects.toMatchObject({
+      code: "meeting_capture_source_unavailable"
+    });
+    expect(f.connections.create).not.toHaveBeenCalled();
+  });
+  it("replays the original selection after saved defaults change", async () => {
+    const f = fixture();
+    const first = await f.service.start(f.browser, meetingId, f.start);
+    vi.mocked(f.preferences.get).mockResolvedValue({
+      rememberedSource: { deviceId: meetingId, microphoneId: "other-mic", mode: "microphone-only" },
+      defaultCaptureMode: "microphone-only",
+      summarizeOnStop: true,
+      summaryTemplateId: "general",
+      setupCompletedAt: now.toISOString()
+    });
+    expect(await f.service.start(f.browser, meetingId, f.start)).toEqual(first);
+    expect(f.connections.create).toHaveBeenCalledOnce();
   });
   it("keeps the native-created secret off the server result and retries exactly one hash", async () => {
     const f = fixture();
@@ -331,6 +389,84 @@ describe("shared connection explicit Start and native claim", () => {
     await expect(
       f.service.claim(f.headers, "wrong-hash", { ...f.claim, credentialHash: "a".repeat(64) })
     ).rejects.toMatchObject({ code: "meeting_capture_conflict" });
+  });
+  it("cancels fresh claimed state after waiting for the device lock, never a stale approved snapshot", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, f.start);
+    const stale = structuredClone(f.grant!);
+    f.setClock(new Date(now.getTime() + 2000));
+    let current = stale;
+    vi.mocked(f.connections.byRequest).mockImplementation(async () => structuredClone(current));
+    vi.mocked(f.connections.lock).mockImplementation(async () => {
+      const state = JSON.parse(stale.state_json!);
+      state.originAt = new Date(now.getTime() + 1500).toISOString();
+      state.recordedDurationMs = 250;
+      state.transcriptRevision = 7;
+      state.observed = { generation: 1, phase: "recording" };
+      current = {
+        ...stale,
+        status: "active",
+        credential_hash: "a".repeat(64),
+        state_json: JSON.stringify(state)
+      };
+    });
+    vi.spyOn(f.connections, "cancel").mockResolvedValue();
+    vi.spyOn(f.grants, "save").mockImplementation(async (_db, grant, state) => {
+      if (grant.status === "approved" && !grant.credential_hash && state.desired === "stopped")
+        state.finalized = true;
+      grant.state_json = JSON.stringify(state);
+    });
+    const capture = new MeetingCaptureService(f.deps, f.grants, undefined, f.connections);
+    const result = await capture.cancelStart(f.browser, meetingId, { requestKey });
+    expect(result.capture).toMatchObject({
+      desired: "stopped",
+      stopCutoffMs: 500,
+      finalization: "pending",
+      recordedDurationMs: 250,
+      transcriptRevision: 7
+    });
+    expect(vi.mocked(f.grants.save).mock.calls[0]?.[1]).toMatchObject({
+      status: "active",
+      credential_hash: "a".repeat(64)
+    });
+  });
+  it("preserves a concurrent Stop's immutable cutoff and deadline when cancellation acquires its locks", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, f.start);
+    await f.service.claim(f.headers, "claim", f.claim);
+    const stale = structuredClone(f.grant!);
+    let current = stale;
+    f.setClock(new Date(now.getTime() + 2000));
+    vi.mocked(f.connections.byRequest).mockImplementation(async () => structuredClone(current));
+    const deadline = new Date(now.getTime() + 60750).toISOString();
+    vi.mocked(f.connections.lock).mockImplementation(async () => {
+      const state = JSON.parse(stale.state_json!);
+      state.desired = "stopped";
+      state.generation = 2;
+      state.stopCutoffMs = 750;
+      state.finalizationDeadline = deadline;
+      state.epochs[0].endMs = 750;
+      state.transcriptRevision = 8;
+      current = { ...stale, status: "finalizing", state_json: JSON.stringify(state) };
+    });
+    vi.spyOn(f.connections, "cancel").mockResolvedValue();
+    vi.spyOn(f.grants, "save").mockImplementation(async (_db, grant, state) => {
+      grant.state_json = JSON.stringify(state);
+    });
+    const result = await new MeetingCaptureService(
+      f.deps,
+      f.grants,
+      undefined,
+      f.connections
+    ).cancelStart(f.browser, meetingId, { requestKey });
+    expect(result.capture).toMatchObject({
+      desired: "stopped",
+      generation: 2,
+      stopCutoffMs: 750,
+      epochEndMs: 750,
+      finalizationDeadline: deadline,
+      transcriptRevision: 8
+    });
   });
   it("replays terminal cleanup metadata without reactivating stopped authority", async () => {
     const f = fixture();

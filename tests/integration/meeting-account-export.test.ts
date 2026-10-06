@@ -378,7 +378,18 @@ describe("Meetings export worker grants and owner RLS", () => {
           has_table_privilege('jarvis_worker_runtime', ${qualified}, 'DELETE') AS "delete"
       `.execute(bootstrapDb);
       expect(privileges.rows).toEqual([
-        { table_select: false, insert: false, update: false, delete: false }
+        {
+          table_select: false,
+          insert: [
+            "meeting_output_requests",
+            "meeting_output_artifacts",
+            "meeting_action_candidates"
+          ].includes(table),
+          update: ["meeting_records", "meeting_output_requests", "meeting_stop_summaries"].includes(
+            table
+          ),
+          delete: false
+        }
       ]);
       const columnPrivileges = await sql<{ column_name: string; readable: boolean }>`
         SELECT column_name,
@@ -391,7 +402,11 @@ describe("Meetings export worker grants and owner RLS", () => {
       );
       for (const column of columnPrivileges.rows) {
         expect(column.readable, `${table}.${column.column_name}`).toBe(
-          columns.some((original) => original === column.column_name)
+          columns.some((original) => original === column.column_name) ||
+            (table === "meeting_output_requests" &&
+              ["history_kind", "history_result_status", "history_result_code"].includes(
+                column.column_name
+              ))
         );
       }
     }
@@ -418,7 +433,13 @@ describe("Meetings export worker grants and owner RLS", () => {
       }
     );
 
-    for (const column of derived) {
+    for (const column of derived.filter(
+      (column) =>
+        !(
+          table === "meeting_output_requests" &&
+          ["history_kind", "history_result_status", "history_result_code"].includes(column)
+        )
+    )) {
       it(`worker cannot read derived ${table}.${column}`, async () => {
         await expect(
           workerContext.withDataContext({ actorUserId: ids.userA }, (db) =>

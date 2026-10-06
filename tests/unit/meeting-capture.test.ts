@@ -1,3 +1,6 @@
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { MEETING_RECORDING_NOTICE } from "@moss/shared";
 import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -400,7 +403,23 @@ function fixture() {
   vi.spyOn(repository, "bindNotice").mockImplementation(async (_db, row, version) => {
     row.notice_policy_version = version;
   });
-  const service = new MeetingCaptureService(deps, repository, transcript, connections, notices);
+  const preferences = new MeetingPreferencesRepository();
+  vi.spyOn(preferences, "get").mockResolvedValue({
+    rememberedSource: { deviceId, microphoneId: "mic-device", mode: "microphone-only" },
+    defaultCaptureMode: "microphone-only",
+    summarizeOnStop: true,
+    summaryTemplateId: "general",
+    setupCompletedAt: origin.toISOString()
+  });
+  vi.spyOn(connections, "lockRequest").mockResolvedValue();
+  const service = new MeetingCaptureService(
+    deps,
+    repository,
+    transcript,
+    connections,
+    notices,
+    preferences
+  );
   return {
     deps,
     service,
@@ -417,7 +436,7 @@ describe("capture service authorization and dispatch", () => {
   it("rejects an unacknowledged record replay before reading its old receipt", async () => {
     const f = fixture();
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    const resume = command("record", 2);
+    const resume = { ...command("record", 2), selection: undefined };
     await f.service.browserControl(f.browser, meetingId, resume);
     const receiptReads = vi.mocked(f.repository.receipt).mock.calls.length;
     vi.mocked(f.notices.get).mockResolvedValue({
@@ -451,9 +470,58 @@ describe("capture service authorization and dispatch", () => {
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
     await f.service.browserControl(f.browser, meetingId, {
       ...command("record", 2),
+      selection: undefined,
       noticeAcknowledged: undefined
     });
     expect(f.grant.notice_policy_version).toBe(MEETING_RECORDING_NOTICE.policyVersion);
+  });
+  it("commits Stop if optional summary enqueue fails", async () => {
+    const f = fixture();
+    const row = {
+      meeting_id: meetingId,
+      owner_user_id: owner,
+      grant_id: grantId,
+      request_key: randomUUID(),
+      template_id: "general",
+      status: "waiting",
+      code: null,
+      due_at: at(62000),
+      created_at: at(2000),
+      early_enqueued: false,
+      input_json: null
+    };
+    const recorded = makeRecordingDb({ rows: [row] });
+    const preferences = new MeetingPreferencesRepository();
+    vi.spyOn(preferences, "get").mockResolvedValue({
+      defaultCaptureMode: null,
+      rememberedSource: null,
+      summarizeOnStop: true,
+      summaryTemplateId: "general",
+      setupCompletedAt: null
+    });
+    const automatic = new MeetingStopSummaryRepository(preferences);
+    vi.spyOn(automatic, "row").mockResolvedValue(null);
+    Object.assign(f.deps, {
+      scheduleSummary: async (
+        _db: unknown,
+        actor: Parameters<MeetingStopSummaryRepository["schedule"]>[1],
+        input: Parameters<MeetingStopSummaryRepository["schedule"]>[2]
+      ) =>
+        automatic.schedule(recorded.scoped, actor, input, async () => {
+          throw new Error("Synthetic unavailable queue");
+        })
+    });
+    await expect(
+      f.service.browserControl(f.browser, meetingId, command("stop", 1))
+    ).resolves.toMatchObject({ capture: { desired: "stopped", stopCutoffMs: 2000 } });
+    expect(recorded.queries.some((query) => query.sql.includes("ROLLBACK TO SAVEPOINT"))).toBe(
+      true
+    );
+    expect(
+      recorded.queries.some((query) =>
+        query.parameters.includes("meeting_output_queue_unavailable")
+      )
+    ).toBe(true);
   });
   it("keeps safe Stop acknowledgements and bounded final flush available after the gap cap", async () => {
     const f = fixture();
@@ -747,7 +815,7 @@ describe("capture processing stays independent", () => {
   it("replays a committed Resume after processing readiness becomes unavailable", async () => {
     const f = fixture();
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    const resume = command("record", 2);
+    const resume = { ...command("record", 2), selection: undefined };
     const resumed = await f.service.browserControl(f.browser, meetingId, resume);
     vi.mocked(f.deps.processingAvailability).mockRejectedValue(
       new Error("synthetic unavailable route")

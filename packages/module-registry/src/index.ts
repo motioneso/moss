@@ -25,7 +25,10 @@ import {
   registerMeetingRecordRoutes,
   registerMeetingOutputRoutes,
   registerMeetingExportRoutes,
-  MeetingExportService
+  MeetingExportService,
+  MEETING_STOP_SUMMARY_QUEUES,
+  createMeetingStopSummaryScheduler,
+  registerMeetingStopSummaryWorker
 } from "@moss/meetings";
 import {
   backtrackModuleManifest,
@@ -2842,9 +2845,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: meetingsModuleManifest,
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: MEETING_STOP_SUMMARY_QUEUES,
     registerRoutes: (server, deps) => {
-      registerMeetingCaptureRoutes(server, createMeetingCaptureRuntime(deps));
+      registerMeetingCaptureRoutes(server, {
+        ...createMeetingCaptureRuntime(deps),
+        scheduleSummary: createMeetingStopSummaryScheduler(deps.boss)
+      });
       registerMeetingRecordRoutes(server, {
         beforeRemove: deleteMeetingChatThreads,
         dataContext: deps.dataContext,
@@ -2867,7 +2873,19 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           deps.resolveActiveModules
         )
       });
-    }
+    },
+    registerWorkers: (boss, deps) =>
+      registerMeetingStopSummaryWorker(
+        boss,
+        deps.dataContext,
+        createMeetingOutputRuntime({
+          dataContext: deps.dataContext,
+          resolveActiveModules: createActiveModulesResolver({
+            dataContext: deps.dataContext,
+            manifests: getBuiltInModuleManifests
+          })
+        }).generator
+      )
   },
   {
     manifest: scratchpadModuleManifest,
