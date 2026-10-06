@@ -253,14 +253,23 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +
       "models yet', 'The sign-in helper is not running', 'The provider rejected the API key', or 'Could not reach the provider') and an " +
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
-      "reads '* Manually added', and they survive refreshes and re-logins). System One (TypeSafe) " +
-      "is offered as a provider type; it answers fixed named questions and is used only for the " +
-      "Trail Marker focus judgment and the story and email sorting questions, not chat: its models are " +
-      "offered only in the Classifier row and its card has no Set as default button. The " +
+      "reads '* Manually added', and they survive refreshes and re-logins). A decision model (the " +
+      "System One provider kind) is offered as three presets: Jev (TypeSafe), Clef (Cloudflare) and " +
+      "Any compatible service. Jev asks for an optional address and an API key; Clef asks for a " +
+      "Cloudflare account ID and API token and builds the address from them; Any compatible " +
+      "service asks for an address and an API key, stays addable more than once, and is named for " +
+      "its address host (for example Decision model (openrouter.ai)). A decision " +
+      "model answers fixed named questions and is used only for the Trail Marker focus judgment " +
+      "and the story and email sorting questions, not chat: its models are offered only in the " +
+      "Classifier row and its card has no Set as default button. A model added by hand on a " +
+      "decision model starts with the JSON capability and the Economy tier. When a decision-model " +
+      "service has no model list, its Test line says the service does not list its models, so the " +
+      "key could not be checked, and points to adding one by hand. The " +
       "Classifier row also sets the model " +
       "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
       "one is chosen it says Trail Marker's app and window titles also go to that model, or for " +
-      "a System One model that they go to TypeSafe, which also answers News, Sports and email " +
+      "a decision model that they go to the chosen service (TypeSafe for Jev), which also answers " +
+      "News, Sports and email " +
       "sorting questions. " +
       "Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
@@ -308,7 +317,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "message still goes to the main model. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +
       "sender, dates and text go to that model first and to the main model if it does not " +
-      "answer. For a System One model the line instead says it answers the News, Sports and " +
+      "answer. For a decision model the line instead says it answers the News, Sports and " +
       "email sorting questions with a yes or no, that each email's subject, sender, dates and " +
       "text go there too, and that the main model still handles other sorting work. When a " +
       "hosted model is chosen and the Chat gate is Shadow or On, the row also says eligible " +

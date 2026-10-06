@@ -228,7 +228,11 @@ export function ProviderModels(props: {
       {!open ? null : (
         <>
           {adding ? (
-            <AddModelForm providerConfigId={provider.id} onClose={() => setAdding(false)} />
+            <AddModelForm
+              providerConfigId={provider.id}
+              providerKind={provider.providerKind}
+              onClose={() => setAdding(false)}
+            />
           ) : null}
           {props.modelChoiceNote ? (
             <div className="prov__synced" role="note">
