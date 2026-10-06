@@ -24,7 +24,7 @@ import { join } from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { ListActivityLinesResponse } from "../../packages/shared/src/ai-activity-lines-api.js";
-import type { ListAiModelsResponse } from "../../packages/shared/src/ai-api.js";
+import type { ListAiConfiguredModelsResponse } from "../../packages/shared/src/ai-types.js";
 import { R26, signIn } from "./classifier-2984-r26-helpers.js";
 
 const CLEF_DIR = join(homedir(), ".config", "clef");
@@ -80,7 +80,9 @@ async function modelsOf(page: Page, providerName: string) {
     providers: { id: string; displayName: string }[];
   };
   const id = providers.providers.find((p) => p.displayName === providerName)?.id;
-  const models = (await (await page.request.get("/api/ai/models")).json()) as ListAiModelsResponse;
+  const models = (await (
+    await page.request.get("/api/ai/models")
+  ).json()) as ListAiConfiguredModelsResponse;
   return models.models.filter((m) => m.providerConfigId === id);
 }
 
