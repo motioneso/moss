@@ -20,7 +20,6 @@ import {
   getEmbeddingProviderConfig
 } from "./embedding-provider-config.js";
 import { GraphMemoryRecallService } from "./graph-recall-service.js";
-import { MemoryGraphDashboardRepository } from "./graph-dashboard-repository.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
 import type { MemoryRememberInput, NewMemoryEntity } from "./graph-types.js";
 
@@ -34,7 +33,6 @@ export function registerMemoryGraphRoutes(
   dependencies: MemoryGraphRouteDependencies
 ): void {
   const repository = new MemoryGraphRepository();
-  const dashboardRepository = new MemoryGraphDashboardRepository(repository);
 
   server.get(
     "/api/memory/graph/recall",
@@ -248,12 +246,10 @@ export function registerMemoryGraphRoutes(
     async (request, reply) => {
       try {
         const access = await dependencies.resolveAccessContext(request);
-        const result = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
-          dashboardRepository.forgetFactWithConflictCleanup(
-            scopedDb,
-            access.actorUserId,
-            request.params.id
-          )
+        const result = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
+          (await createGraphService(scopedDb)).forget(scopedDb, access.actorUserId, {
+            factId: request.params.id
+          })
         );
         if (!result.deleted) return reply.code(404).send({ error: "Memory fact not found" });
         return reply.code(204).send();
