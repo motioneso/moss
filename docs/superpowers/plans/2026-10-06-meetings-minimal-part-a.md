@@ -4,7 +4,7 @@ Status: approved scoped implementation; draft pull request only, no merge or dep
 
 ## Source and boundary
 
-Build from PR #3056 at `2cdb2cd21cf7b0ebffcc586559623cf4eacf1428`.
+Build from PR #3056 at `588f2d5ed779b39eb549679f06a547fb90f0f898`.
 The approved design source is PR #3077 at `4d893f5c3bf7581f067cf412f9db1e6ef74cbe14`:
 `docs/superpowers/specs/2026-10-06-meetings-minimal-design.md` and its seven frozen mockups.
 Those source documents are copied unchanged here for reproducibility; their original draft
@@ -50,14 +50,14 @@ status may be displayed, without changing the link authorization model.
 - Live owner-controlled Mac acceptance is outstanding. Even a green hosted run leaves this
   user-facing change code-complete, unverified until the real assembled path is recorded on the PR.
 
-## Local base and publication boundary
+## Published base and publication boundary
 
-The approved #3056 correction at `2cdb2cd21` is local only. Its one permitted plain push failed;
-no retry or alternate publication route is authorized. The user explicitly approved local Part A
-work atop it. Before publishing this branch, verify whether the owner has published that base.
-If it remains local, stop and disclose that the comparison would include the held #3056 commits.
-Do not publish those commits indirectly. PR #3071 separately owns migrations 0289, 0291 and 0293;
-this Part A reserves 0292, subject to a fresh collision check before publication.
+The owner published the #3056 corrections and its narrow acceptance-fixture fixes. This build
+starts from the verified published `588f2d5ed` head; preserve its account notice, title feedback
+correction, schema/cascade fixtures, visible notice label click and new-meeting timing assertions.
+No additional #3056 publication is authorized. PR #3071 separately owns migrations 0289, 0291,
+0293 and 0294; this Part A reserves 0292, checked against the live inventory before publication.
+Add 0292 to the foundation schema catalog and all affected lifecycle/export fixtures.
 
 ## Publication
 
