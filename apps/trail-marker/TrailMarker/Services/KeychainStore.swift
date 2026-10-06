@@ -3,7 +3,21 @@ import Security
 
 /// Generic-password storage. Legacy companion items retain their host/device account key.
 /// Independent recording namespaces additionally bind the full canonical origin below.
-struct KeychainStore {
+protocol CompanionCredentialStore {
+    func read(for identity: LinkedIdentity) -> String?
+    func store(credential: String, for identity: LinkedIdentity) throws
+    @discardableResult func delete(for identity: LinkedIdentity) -> Bool
+    func readRecordingProof(for identity: LinkedIdentity) -> String?
+    func storeRecordingProof(_ proof: String, for identity: LinkedIdentity) throws
+    @discardableResult func deleteRecordingProof(for identity: LinkedIdentity) -> Bool
+    func readPendingRecordingProof(for identity: LinkedIdentity) -> PendingRecordingProof?
+    func storePendingRecordingProof(_ value: PendingRecordingProof, for identity: LinkedIdentity) throws
+    func deletePendingRecordingProof(for identity: LinkedIdentity)
+}
+
+// Future hardware binding belongs at the credential/proof boundary and its server verifier.
+// The current link remains the existing bearer plus recording proof; no hardware key is created.
+struct KeychainStore: CompanionCredentialStore {
     private let service: String
     private let recordingOrigin: String?
 

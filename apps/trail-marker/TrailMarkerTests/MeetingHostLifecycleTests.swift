@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import TrailMarker
@@ -60,7 +61,9 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try host.acceptStart(fixture.server.command, claim: claim, credential: fixture.pending.credential, origin: 9_000_000_000)
         await fulfillment(of: [entered], timeout: 2)
         fixture.wall = fixture.wall.addingTimeInterval(61)
-        fixture.monotonic += 61_000_000_000
+        // Isolate the Start's wall-clock deadline from the independent monotonic lease.
+        // A separate test below expires that lease while the same permission is pending.
+        fixture.monotonic += 1_000_000_000
         permission?.resume(returning: true)
         permission = nil
         try await waitUntil(timeout: 4) { fixture.server.finalized && host.phase == .stopped }
@@ -125,6 +128,153 @@ final class MeetingHostLifecycleTests: XCTestCase {
         XCTAssertEqual(fixture.device.starts, 0)
     }
 
+    func testAcceptedStartShowsPillAndDotThroughPauseThenStopClearsBoth() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { XCTFail("No new Mac confirmation"); return false }
+        defer { host.shutdown(reason: "Synthetic test finished") }
+        let pill = MeetingRecordingPillController(host: host)
+        let status = MeetingCaptureStatusItem(host: host, showControls: {})
+        XCTAssertFalse(pill.panel.isVisible)
+        XCTAssertFalse(host.recordingPresentation.showsPill, "Linking alone never presents recording")
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        XCTAssertTrue(host.recordingPresentation.showsPill)
+        XCTAssertTrue(pill.panel.isVisible, "The actual panel follows accepted Start")
+        XCTAssertTrue(host.recordingPresentation.showsRedDot)
+        host.hideRecordingPill()
+        XCTAssertFalse(pill.panel.isVisible, "Hide orders out only the panel")
+        XCTAssertFalse(host.recordingPresentation.showsPill)
+        XCTAssertTrue(host.recordingPresentation.showsRedDot)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        XCTAssertEqual(host.phase, .paused)
+        host.open(URL(string: "moss-meeting://invalid")!)
+        XCTAssertEqual(host.phase, .paused, "An invalid activation must not hide the current session's Stop control")
+        XCTAssertTrue(host.recordingPresentation.showsRedDot)
+        try await waitUntil { status.item.button?.attributedTitle.string == "● Meeting" }
+        XCTAssertEqual(status.item.button?.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor, .systemRed)
+        XCTAssertTrue(status.item.menu?.items.first(where: { $0.title == "Stop recording" })?.isEnabled == true)
+        XCTAssertTrue(host.canStop)
+        host.stopFromUserClick()
+        XCTAssertFalse(host.recordingPresentation.showsPill)
+        XCTAssertFalse(host.recordingPresentation.showsRedDot)
+        try await waitUntil { status.item.button?.attributedTitle.string == "Meeting" }
+    }
+
+    func testEveryIdentityStopPathClearsSurfacesAndDiscardsUnsentAudio() async throws {
+        let another = LinkedIdentity(instance: try InstanceURL.parse("https://moss.example").get(),
+            deviceId: "another-device", accountName: "Fixture", accountEmail: "another@example.invalid")
+        let events: [ConnectionEvent] = [.userLogout, .userDisconnect, .userQuit,
+            .heartbeatFailed(.credentialInvalid, generation: 0),
+            .heartbeatFailed(.accountBlocked(code: "account_deactivated"), generation: 0),
+            .linkCompleted(another, credential: "tm1_synthetic", generation: 0)]
+        for event in events {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            let host = fixture.host { false }
+            defer { host.shutdown(reason: "Synthetic test finished") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+            buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+            XCTAssertNotNil(buffer.peek())
+            XCTAssertTrue(host.beforeConnectionEvent(event))
+            XCTAssertFalse(host.recordingPresentation.showsPill)
+            XCTAssertFalse(host.recordingPresentation.showsRedDot)
+            XCTAssertNil(buffer.peek(), "Terminal identity path must discard unsent audio")
+        }
+    }
+
+    func testLeaseExpiryClearsPausedSessionAndDropsItsRetainedAudio() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic test finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+        buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+        host.pauseFromUserClick()
+        XCTAssertTrue(host.recordingPresentation.showsRedDot)
+        fixture.monotonic += 30_000_000_000
+        host.service()
+        XCTAssertFalse(host.recordingPresentation.showsPill)
+        XCTAssertFalse(host.recordingPresentation.showsRedDot)
+        XCTAssertNil(buffer.peek())
+        XCTAssertEqual(host.phase, .stopped)
+    }
+
+    func testBrowserRevocationStopsPillDotAndActualCapture() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic test finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+        buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+        fixture.server.browserState("revoked", generation: 2)
+        try await waitUntil(timeout: 4) { host.phase == .stopped }
+        XCTAssertFalse(host.recordingPresentation.showsPill)
+        XCTAssertFalse(host.recordingPresentation.showsRedDot)
+        XCTAssertNil(buffer.peek())
+    }
+
+    func testLeaseExpiryDuringPermissionWaitCannotStartAfterLateGrant() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let entered = expectation(description: "Permission wait")
+        var permission: CheckedContinuation<Bool, Never>?
+        let host = fixture.host {
+            entered.fulfill()
+            return await withCheckedContinuation { permission = $0 }
+        }
+        defer { host.shutdown(reason: "Synthetic test finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        await fulfillment(of: [entered], timeout: 2)
+        fixture.monotonic += 30_000_000_000
+        host.service()
+        permission?.resume(returning: true)
+        permission = nil
+        await Task.yield()
+        XCTAssertEqual(host.phase, .stopped)
+        XCTAssertFalse(host.recordingPresentation.showsPill)
+        XCTAssertFalse(host.recordingPresentation.showsRedDot)
+        XCTAssertEqual(fixture.device.starts, 0, "A late OS permission cannot renew an expired lease")
+    }
+
+    func testHardExpiryAndCleanupFailureClearBothSurfacesAndDiscardAudio() async throws {
+        for cleanupFailure in [false, true] {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            let host = fixture.host { false }
+            defer { fixture.device.failStop = false; host.shutdown(reason: "Synthetic test finished") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+            buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+            if cleanupFailure {
+                fixture.device.failStop = true
+                XCTAssertTrue(host.beforeConnectionEvent(.userLogout), "A retained driver handle cannot prevent server Unlink")
+                XCTAssertTrue(host.cleanupBlocked)
+            } else {
+                fixture.wall = fixture.wall.addingTimeInterval(7201)
+                host.service()
+                XCTAssertEqual(host.phase, .stopped)
+            }
+            XCTAssertFalse(host.recordingPresentation.showsPill)
+            XCTAssertFalse(host.recordingPresentation.showsRedDot)
+            XCTAssertNil(buffer.peek())
+            buffer.receive(hostTimeNanoseconds: fixture.monotonic + 100_000_000, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+            XCTAssertNil(buffer.peek(), "Closed callbacks cannot refill after a terminal path")
+        }
+    }
+
     private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 10_000_000) }
@@ -133,8 +283,10 @@ final class MeetingHostLifecycleTests: XCTestCase {
 
     private final class Device: MeetingAudioCapturing {
         var starts = 0
-        func start(into receiver: MeetingAudioReceiving) throws { starts += 1 }
-        func stop() throws {}
+        var failStop = false
+        var receiver: MeetingAudioReceiving?
+        func start(into receiver: MeetingAudioReceiving) throws { starts += 1; self.receiver = receiver }
+        func stop() throws { if failStop { throw MeetingAudioFailure.cleanupFailed } }
     }
 
     @MainActor

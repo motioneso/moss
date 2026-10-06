@@ -65,6 +65,17 @@ struct MeetingRemoteCapture: Decodable {
     var processing: MeetingProcessingStatus? = nil
     var transcriptRevision: Int? = nil
     var leaseMs: UInt64? = nil
+    var revocationReason: String? = nil
+
+    var revocationMessage: String {
+        switch revocationReason {
+        case "device-unavailable": return "Recording stopped because this Mac was unlinked or its link expired."
+        case "recording-permission-revoked": return "Recording stopped because recording permission was switched off in Moss."
+        case "session-ended": return "Recording stopped because the starting browser session signed out or expired."
+        case "connection-replaced": return "Recording stopped because this Mac connected again. Press Start in Moss again."
+        default: return MeetingHostError.authorizationExpired.message
+        }
+    }
 
     func validate() throws {
         guard generation >= 0, generation <= 9_007_199_254_740_991, epoch <= 64,

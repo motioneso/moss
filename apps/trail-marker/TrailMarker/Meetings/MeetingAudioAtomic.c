@@ -1,6 +1,7 @@
 #include "MeetingAudioAtomic.h"
 #include <stdatomic.h>
 #include <stdlib.h>
+#include <math.h>
 
 _Static_assert(sizeof(unsigned int) == sizeof(uint32_t), "Meeting audio atomic words must be 32 bits");
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "Meeting audio callbacks require lock-free atomic words");
@@ -105,4 +106,27 @@ MeetingAudioDropCounts MeetingAudioDropMailboxReadCounts(MeetingAudioDropMailbox
         .accepted = atomic_load_explicit(&mailbox->accepted, memory_order_relaxed),
         .rejected = atomic_load_explicit(&mailbox->rejected, memory_order_relaxed)
     };
+}
+
+// The lock-free 64-bit width/ATOMIC_LLONG_LOCK_FREE assertions above apply here too.
+struct MeetingAudioLevel { atomic_ullong packed; };
+MeetingAudioLevel *MeetingAudioLevelCreate(void) {
+    MeetingAudioLevel *level = malloc(sizeof(*level));
+    if (level) { atomic_init(&level->packed, 0); }
+    return level;
+}
+void MeetingAudioLevelDestroy(MeetingAudioLevel *level) { free(level); }
+void MeetingAudioLevelStore(MeetingAudioLevel *level, float peak, uint64_t hostNanoseconds) {
+    uint64_t milliseconds = hostNanoseconds / UINT64_C(1000000);
+    // NaN/nonpositive inputs, over-range clocks and silence must never invent motion.
+    uint64_t magnitude = isfinite(peak) && peak > 0 ? (uint64_t)((peak < 1 ? peak : 1) * 65535) : 0;
+    uint64_t packed = milliseconds <= (UINT64_MAX >> 16) ? (milliseconds << 16) | magnitude : 0;
+    atomic_store_explicit(&level->packed, packed, memory_order_release);
+}
+float MeetingAudioLevelRead(MeetingAudioLevel *level, uint64_t nowNanoseconds) {
+    uint64_t packed = atomic_load_explicit(&level->packed, memory_order_acquire);
+    uint64_t captured = packed >> 16;
+    uint64_t now = nowNanoseconds / UINT64_C(1000000);
+    if (now < captured || now - captured >= 500) { return 0; }
+    return (float)(packed & UINT64_C(65535)) / 65535;
 }

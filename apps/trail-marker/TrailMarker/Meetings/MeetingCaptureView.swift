@@ -65,7 +65,7 @@ struct MeetingCaptureView: View {
 /// consent, switch or lifecycle. The item cannot be dismissed while recording.
 @MainActor
 final class MeetingCaptureStatusItem: NSObject {
-    private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let host: MeetingCaptureHost
     private let showControls: () -> Void
     private var cancellables = Set<AnyCancellable>()
@@ -74,15 +74,24 @@ final class MeetingCaptureStatusItem: NSObject {
         self.host = host
         self.showControls = showControls
         super.init()
-        host.$phase.combineLatest(host.$cleanupBlocked).sink { [weak self] phase, cleanup in
-            self?.update(phase, cleanup: cleanup)
+        host.$phase.combineLatest(host.$cleanupBlocked,
+            host.$recordingPresentation.map(\.showsRedDot).removeDuplicates())
+        .sink { [weak self] _, _, _ in
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.update(self.host.phase, cleanup: self.host.cleanupBlocked)
+            }
         }.store(in: &cancellables)
+        update(host.phase, cleanup: host.cleanupBlocked)
     }
 
     private func update(_ phase: MeetingCaptureHost.Phase, cleanup: Bool) {
         item.isVisible = ![.unprepared, .stopped].contains(phase) || cleanup
-        let recording = phase == .recording || cleanup
-        item.button?.title = recording ? "● Meeting" : "Ⅱ Meeting"
+        let recording = host.recordingPresentation.showsRedDot
+        let title = NSMutableAttributedString(string: recording ? "● Meeting" : "Meeting",
+            attributes: [.foregroundColor: NSColor.labelColor])
+        if recording { title.addAttribute(.foregroundColor, value: NSColor.systemRed, range: NSRange(location: 0, length: 1)) }
+        item.button?.attributedTitle = title
         item.button?.toolTip = recording ? "Meeting recording: click for Pause and Stop" : "Meeting capture: \(phase.rawValue)"
         item.button?.setAccessibilityLabel(recording ? "Meeting recording" : "Meeting capture \(phase.rawValue)")
         let menu = NSMenu()

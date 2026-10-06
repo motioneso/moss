@@ -37,6 +37,14 @@ final class MeetingCaptureRuntime {
             return output.buffer.diagnostics.acceptedCallbacks == 0
         }
     }
+    /// Read by the presentation tick only. Never enters upload bodies or diagnostics.
+    func capturedLevel(at now: UInt64) -> Float {
+        queue.sync {
+            guard machine.state == .recording else { return 0 }
+            return pending.filter { $0.buffer.epoch == machine.epoch && $0.cutoff == nil }
+                .map { $0.buffer.capturedLevel(at: now) }.max() ?? 0
+        }
+    }
     var audioDiagnostics: [MeetingAudioSource: MeetingAudioBuffer.Diagnostics] {
         queue.sync {
             Dictionary(uniqueKeysWithValues: pending.filter { $0.buffer.epoch == machine.epoch }

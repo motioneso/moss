@@ -19,7 +19,7 @@ jobs:
   test:
     name: Build and test
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -80,3 +80,18 @@ jobs:
       - name: Verify meeting audio negative controls
         working-directory: apps/trail-marker
         run: python3 scripts/check-meeting-negative-controls.py
+
+      - name: Verify meeting visibility and unlink negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-link-negative-controls.py
+
+      - name: Preserve native negative-control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trail-marker-negative-controls
+          path: |
+            ${{ runner.temp }}/meeting-negative-controls-*/
+            ${{ runner.temp }}/meeting-link-negative-*/
+          if-no-files-found: ignore
+          retention-days: 7

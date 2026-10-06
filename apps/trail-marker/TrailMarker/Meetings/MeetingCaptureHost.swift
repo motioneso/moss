@@ -8,7 +8,10 @@ import Foundation
 @MainActor
 final class MeetingCaptureHost: ObservableObject {
     enum Phase: String { case unprepared, ready, recording, paused, stopping, stopped, error }
-    @Published private(set) var phase: Phase = .unprepared
+    @Published private(set) var phase: Phase = .unprepared {
+        didSet { refreshRecordingPresentation() }
+    }
+    @Published private(set) var recordingPresentation = MeetingRecordingPresentation()
     @Published private(set) var message = "Choose sources and press Start meeting in Moss."
     @Published private(set) var processingMessage: String?
     @Published private(set) var connectivityMessage: String?
@@ -92,6 +95,13 @@ final class MeetingCaptureHost: ObservableObject {
     var isRecording: Bool { phase == .recording || cleanupBlocked }
     var canStop: Bool { [.recording, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) || cleanupBlocked }
 
+    func hideRecordingPill() { recordingPresentation.hide() }
+    private func refreshRecordingPresentation() {
+        let now = self.now()
+        recordingPresentation.update(phase: phase, reconnecting: connectivityMessage != nil,
+            elapsedMilliseconds: recordingDuration.milliseconds(at: now), level: runtime.capturedLevel(at: now))
+    }
+
     func startConnection() { recordingConnection.start() }
     @discardableResult func shutdown(reason: String) -> Bool {
         recordingConnection.stop()
@@ -106,7 +116,7 @@ final class MeetingCaptureHost: ObservableObject {
             activation = next
             inventory = try ports.readInventory().wire
             message = "Choose sources and press Start meeting in the browser you are using."
-        } catch { if !isRecording { show(error) } }
+        } catch { if !canStop { show(error) } }
     }
 
     func acceptStart(_ command: MeetingRecordingCommand, claim: MeetingRecordingClaimReply, credential: String, origin: UInt64) throws {
@@ -121,6 +131,7 @@ final class MeetingCaptureHost: ObservableObject {
         self.credential = credential
         grantId = claim.grantId
         grantExpiry = expires
+        leaseDeadlineNanoseconds = self.now() + min(30000, claim.capture.leaseMs ?? 30000) * 1_000_000
         startCommandDeadline = deadline
         initialStartGeneration = claim.capture.generation
         originNanoseconds = origin
@@ -131,6 +142,8 @@ final class MeetingCaptureHost: ObservableObject {
         processingMessage = nil
         connectivityMessage = nil
         phase = .ready
+        if ["recording", "paused"].contains(claim.capture.desired) { recordingPresentation.acceptedStart() }
+        refreshRecordingPresentation()
         fence.acceptFreshStart(generation: claim.capture.generation)
         remote = claim.capture
         if deadline <= self.ports.wallNow() { localControl("stop") }
@@ -227,7 +240,7 @@ final class MeetingCaptureHost: ObservableObject {
 
     private func apply(_ next: MeetingRemoteCapture, inventory: MeetingInventorySnapshot, at now: UInt64) async throws {
         let start = fence.shouldStart(generation: next.generation, desired: next.desired)
-        if next.desired == "revoked" { _ = terminate(reason: MeetingHostError.authorizationExpired.message); return }
+        if next.desired == "revoked" { _ = terminate(reason: next.revocationMessage); return }
         if next.desired == "stopped" {
             stoppedByUser = true
             if [.idle, .ready, .finished].contains(runtime.snapshot.state), !cleanupBlocked {
@@ -349,7 +362,8 @@ final class MeetingCaptureHost: ObservableObject {
         observers.append((workspace, sleep))
     }
 
-    private func service() {
+    func service() {
+        defer { refreshRecordingPresentation() }
         do {
             let now = self.now()
             if cleanupBlocked {
@@ -359,8 +373,11 @@ final class MeetingCaptureHost: ObservableObject {
             guard grantExpiry.map({ self.ports.wallNow() < $0 }) == true else {
                 _ = terminate(reason: MeetingHostError.authorizationExpired.message); return
             }
+            if leaseDeadlineNanoseconds > 0, now >= leaseDeadlineNanoseconds {
+                _ = terminate(reason: "Recording stopped because its connection lease expired. Press Start in Moss again.")
+                return
+            }
             if phase == .recording {
-                guard now < leaseDeadlineNanoseconds else { throw MeetingHostError.network }
                 validateCurrentSources(try ports.readInventory())
             }
             let gaps = try runtime.service(at: now)
@@ -372,7 +389,10 @@ final class MeetingCaptureHost: ObservableObject {
             recordAudioDiagnostics()
             for gap in gaps { record(gap) }
             if phase == .recording, runtime.snapshot.state != .recording {
-                if gaps.contains(where: { $0.reason == .captureFailure(.leaseExpired) }) { throw MeetingHostError.network }
+                if gaps.contains(where: { $0.reason == .captureFailure(.leaseExpired) }) {
+                    _ = terminate(reason: "Recording stopped because its connection lease expired. Press Start in Moss again.")
+                    return
+                }
                 if gaps.contains(where: { $0.reason == .bufferFull || $0.reason == .expired }) { throw MeetingHostError.bufferExhausted }
                 throw MeetingHostError.sourceChanged
             }
@@ -613,6 +633,7 @@ final class MeetingCaptureHost: ObservableObject {
     /// Receivers close and sends are disabled before task cancellation or credential removal.
     @discardableResult
     func terminate(reason: String) -> Bool {
+        recordingPresentation.stop()
         uploadAdmitted = false
         var clean = true
         recordingDuration.pause(at: self.now())
@@ -640,10 +661,16 @@ final class MeetingCaptureHost: ObservableObject {
 
     func beforeConnectionEvent(_ event: ConnectionEvent) -> Bool {
         switch event {
-        case .userDisconnect, .userLogout, .userQuit:
+        case .userLogout:
+            recordingConnection.stop()
+            _ = terminate(reason: "Meeting capture ended. Waiting for Moss to confirm Unlink.")
+            // Admission and buffers close even if a driver retains a handle. Do not let a
+            // cleanup failure prevent the server from revoking this Mac's authority.
+            return true
+        case .userDisconnect, .userQuit:
             recordingConnection.stop()
             return terminate(reason: "Meeting capture ended. Start a new meeting in Moss to record.")
-        case .linkCompleted(let identity, _, _) where identity != ports.identity():
+        case .linkCompleted(_, _, let generation) where generation == connection.currentGeneration:
             recordingConnection.stop()
             return terminate(reason: "Account changed. Press Start meeting in Moss again.")
         case .heartbeatFailed(let error, let generation) where generation == connection.currentGeneration:

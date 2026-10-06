@@ -40,8 +40,7 @@ reset them:
   Meeting recording proof and pending approval proof use separate recording namespaces, scoped
   to the instance origin and device. For a deliberate first-run reset, use Keychain Access
   (search "trailmarker") to remove the development identity's matching items. Deleting only the
-  base service does not remove its separate recording proofs. Ordinary logout clears the linked
-  identity's recording proofs.
+  base service does not remove its separate recording proofs. Unlink clears the linked identity’s recording proofs only after Moss confirms server logout.
 - **Preferences**: `UserDefaults` under the app's bundle identifier. Reset with
   `defaults delete com.moss.trailmarker`.
 - **Backtrack's offline buffer**: `~/Library/Application Support/com.moss.trailmarker/Backtrack/buffer.bin`,
@@ -136,10 +135,10 @@ capability in that approval; existing paired clients show a one-time upgrade in 
 recording proof is stored in this Mac's Keychain; the server holds its hash. Connecting or approving
 does not record. Backtrack keeps its separate existing consent and retention behavior.
 
-In Meetings, select this named Mac, a microphone and one of microphone-only, microphone + selected
-app, or microphone + computer audio, then choose **Start meeting**. Moss remembers the stable source
-identities; Change selects different ones. Missing or ambiguous sources require explicit selection
-and never widen capture. First use may request an OS microphone/system-audio permission. If Stop,
+In Settings, Meetings, link this named Mac and save a microphone and one of microphone-only,
+microphone + selected app, or microphone + computer audio. Each meeting then starts with **Start**.
+Moss remembers the stable source identities; changing them happens in Settings. Missing or
+ambiguous sources require explicit selection and never widen capture. First use may request an OS microphone/system-audio permission. If Stop,
 revocation or expiry occurs while permission is pending, granting permission cannot start audio.
 There is no per-meeting Prepare, approval, notice checkbox or second Record button. Trail Marker
 keeps the current browser in place rather than launching the default browser for each meeting.
@@ -148,11 +147,37 @@ Viewing Moss from another computer controls the explicitly named recorder; it ne
 that browser's hardware or the server's hardware. Browser-only capture is not implemented.
 Transcription is configured only through AI providers in Moss.
 
-The meeting menu-bar indicator has local Pause/Stop controls and remains visible across browser
-navigation. Moss also keeps recording controls available while visiting History or other modules.
+Each accepted Start shows a small draggable pill above ordinary windows on every Space, including
+alongside full-screen apps. It shows Recording, Paused, No audio or Reconnecting, elapsed captured
+time and the peak levels of actual captured audio. Each 250 ms display tick draws silence as a
+flat line and treats a peak at least 500 ms old as missing input; Pause clears it immediately.
+The display reads a bounded local atomic scalar per source; it does not retain extra samples, send levels or put them in logs. When both
+sources are selected, it shows the maximum current source peak. Reconnecting can still display
+real input during a valid capture lease. The pill’s close button hides it until the next accepted
+Start, without stopping capture. Its paused play button opens the existing Resume action in Moss.
+No system notification or additional on-Mac recording confirmation is added.
+
+The Trail Marker menu-bar mark shows a red dot from accepted Start until Stop, including Pause.
+The existing meeting menu retains local Pause/Stop controls after the pill is hidden and across
+browser navigation. Stop or a terminal authorization, expiry, identity or cleanup path clears both
+recording surfaces. Moss also keeps controls available while visiting History or other modules.
 Pause closes inputs and starts no new audio uploads. Stop fixes the cutoff and drains only retained
 pre-cutoff audio for up to 60 seconds; a new native recording waits for this bounded finalization.
-Pause All, logout and quit close capture. Cleanup failures remain visible and block continuation.
+Pause All, Unlink and quit close capture. A lease expiration discards unsent audio even when paused.
+Cleanup failures remain visible in meeting controls and block continuation.
+
+Mac **Unlink** uses the canonical companion logout. It stops capture and drops unsent audio before
+network work, then deletes the companion credential and recording proofs only after a 204 server
+response. The matching Part B server makes logout idempotent: it deletes the row matching the
+saved credential’s digest, including an expired row, or confirms that no matching row remains.
+A retry after a lost 204 or an earlier Settings Unlink can therefore confirm completion without
+restoring recording access. Failed requests, including an unconfirmed 401, retain the credentials
+and show “Not unlinked yet” with Retry Unlink and a Settings remediation. Requests time out after 15 seconds;
+retry delays grow from 5 seconds to a 300-second cap. Pending unlink survives restart and permits
+only logout retries, never a reconnect or new recording. If the server confirmed but Keychain
+cleanup failed, restart retries only that local cleanup. The recording permission has no separate
+inactivity expiry; Unlink, revoke and device expiry still end it. Hardware-bound credentials are a
+future credential/server-verifier seam; this build creates no hardware key or new sign-in flow.
 Reconnection and restart never issue a new Start or silently resume a paused/expired recording.
 
 Capture tolerates ordinary host-clock jitter, unchanged format notifications and brief callback
@@ -175,3 +200,18 @@ needs fresh exact-head hosted checks and new hardware proof; synthetic tests are
 Use generated or personal non-sensitive test audio for the owner-controlled trial. No live device
 permission, recording capability or provider credential was activated by development work. See
 `packages/meetings/README.md` and the 6 October connection/reliability plan for proof boundaries.
+
+### Native visibility and unlink verification
+
+`MeetingRecordingPresentationTests`, `MeetingHostLifecycleTests` and `CompanionUnlinkTests` use
+synthetic audio, fake devices, memory credentials and synthetic transports to cover T12/T13.
+The Mac workflow runs those tests, then `scripts/check-meeting-link-negative-controls.py` removes
+each named protection, requires its targeted XCTest assertion failure, restores exact source bytes,
+and requires the same test to pass. XCResult JSON/bundles and bounded logs are retained as a CI
+artifact. A build failure, crash, empty run or unrelated failure does not count as a negative proof.
+
+On Linux, `python3 scripts/check-meeting-audio-portable.py` executes the production C atomics with
+concurrent producers and guard-removal checks. `python3 scripts/check-meeting-link-negative-controls.py
+--check --self-test` only validates native mutation anchors and the result-validation harness; it
+does not compile Swift or execute XCTest. macOS build/test, visible all-Spaces behavior and a real
+linked-Mac Start/Unlink trial remain separate required gates. A design mockup is not live proof.
