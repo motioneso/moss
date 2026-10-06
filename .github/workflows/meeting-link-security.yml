@@ -27,6 +27,9 @@ on:
       - "tests/integration/meeting-link-*.ts"
       - "tests/unit/meeting-link-security.test.ts"
       - "tests/unit/meeting-capture-maintenance.test.ts"
+      - "tests/unit/api-capture-maintenance-startup.test.ts"
+      - "tests/unit/database-pool-idle-error.test.ts"
+      - "tests/unit/meeting-link-proof-recognition.test.ts"
       - "tests/unit/queue-definitions.test.ts"
       - "tests/unit/owned-pg-client.test.ts"
       - "tests/unit/worker-schedule-mode.test.ts"
@@ -60,7 +63,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify pooled transport cancellation and capture-only supervision
         run: |
-          node node_modules/vitest/vitest.mjs run tests/unit/owned-pg-client.test.ts tests/unit/meeting-capture-maintenance.test.ts tests/unit/worker-schedule-mode.test.ts tests/unit/capture-maintenance-deployment.test.ts
+          node node_modules/vitest/vitest.mjs run tests/unit/owned-pg-client.test.ts tests/unit/meeting-capture-maintenance.test.ts tests/unit/worker-schedule-mode.test.ts tests/unit/capture-maintenance-deployment.test.ts tests/unit/api-capture-maintenance-startup.test.ts tests/unit/database-pool-idle-error.test.ts tests/unit/meeting-link-proof-recognition.test.ts
           python3 scripts/check-meeting-link-negative-controls.py --unit
       - name: Verify real auth, database races and source restoration
         run: |

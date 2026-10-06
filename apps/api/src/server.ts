@@ -770,7 +770,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   });
 
   server.addHook("onReady", async () => {
-    // The maintenance runtime starts the producer first, including injected producers.
+    // Only the composition root starts its own producer. Injected queue clients retain
+    // their caller-owned lifecycle; maintenance borrows send and owns its consumer.
+    if (ownsBoss) await boss.start();
     await captureMaintenance.start();
   });
 

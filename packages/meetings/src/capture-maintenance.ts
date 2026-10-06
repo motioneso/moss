@@ -43,7 +43,7 @@ export function captureMaintenanceJobId(grantId: string, sequence: number): stri
   return `${value.slice(0, 8)}-${value.slice(8, 12)}-4${value.slice(13, 16)}-8${value.slice(17, 20)}-${value.slice(20, 32)}`;
 }
 export function createMeetingCaptureMaintenanceScheduler(
-  boss: PgBoss
+  boss: Pick<PgBoss, "send">
 ): CaptureMaintenanceScheduler {
   return async (db, actor, input) => {
     const id = captureMaintenanceJobId(input.grantId, input.sequence);

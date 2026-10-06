@@ -24,6 +24,7 @@ import { createMeetingCaptureMaintenanceRuntime } from "../../apps/api/src/meeti
 const hooks = vi.hoisted(() => ({
   events: [] as string[],
   workFailure: false,
+  startFailure: false,
   drain: async () => {}
 }));
 vi.mock("@moss/jobs", async (original) => ({
@@ -31,6 +32,7 @@ vi.mock("@moss/jobs", async (original) => ({
   createPgBossClient: () => ({
     start: async () => {
       hooks.events.push("consumer-start");
+      if (hooks.startFailure) throw new Error("synthetic consumer startup failure");
     },
     work: async () => {
       hooks.events.push("register-worker");
@@ -49,6 +51,7 @@ vi.mock("@moss/jobs", async (original) => ({
 afterEach(() => {
   hooks.events.length = 0;
   hooks.workFailure = false;
+  hooks.startFailure = false;
   hooks.drain = async () => {};
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -162,13 +165,9 @@ describe("durable capture maintenance", () => {
       captureView(grant, { ...state, maintenanceSequence: 1 }, at).revision
     );
   });
-  it("starts an injected producer before its consumer and drains work before dependent pools close", async () => {
+  it("borrows a send-only producer and drains its consumer before dependent pools close", async () => {
     const runtime = createMeetingCaptureMaintenanceRuntime({
-      producer: {
-        start: async () => {
-          hooks.events.push("producer-start");
-        }
-      } as unknown as PgBoss,
+      producer: { send: vi.fn() },
       workerConnectionString: "synthetic unused connection",
       appConnectionString: "synthetic unused app connection",
       auth: {
@@ -186,7 +185,7 @@ describe("durable capture maintenance", () => {
       hooks.events.push("auth-app-pools-close");
     });
     await Promise.resolve();
-    expect(hooks.events).toEqual(["producer-start", "consumer-start", "register-worker", "drain"]);
+    expect(hooks.events).toEqual(["consumer-start", "register-worker", "drain"]);
     release();
     await closed;
     expect(hooks.events.slice(-2)).toEqual(["consumer-stop", "auth-app-pools-close"]);
@@ -194,11 +193,7 @@ describe("durable capture maintenance", () => {
   it("failed worker registration closes the consumer and fails startup", async () => {
     hooks.workFailure = true;
     const runtime = createMeetingCaptureMaintenanceRuntime({
-      producer: {
-        start: async () => {
-          hooks.events.push("producer-start");
-        }
-      } as unknown as PgBoss,
+      producer: { send: vi.fn() },
       workerConnectionString: "synthetic unused connection",
       appConnectionString: "synthetic unused app connection",
       auth: {
@@ -207,14 +202,24 @@ describe("durable capture maintenance", () => {
       } as unknown as MossAuthRuntime
     });
     await expect(runtime.start()).rejects.toThrow("synthetic worker registration failure");
-    expect(hooks.events).toEqual([
-      "producer-start",
-      "consumer-start",
-      "register-worker",
-      "consumer-stop"
-    ]);
+    expect(hooks.events).toEqual(["consumer-start", "register-worker", "consumer-stop"]);
     await runtime.close();
-    expect(hooks.events).toHaveLength(4);
+    expect(hooks.events).toHaveLength(3);
+  });
+  it("fails closed when its dedicated consumer cannot start", async () => {
+    hooks.startFailure = true;
+    const runtime = createMeetingCaptureMaintenanceRuntime({
+      producer: { send: vi.fn() },
+      workerConnectionString: "synthetic unused connection",
+      appConnectionString: "synthetic unused app connection",
+      auth: {
+        recordingCapabilities: { probeCaptureBinding: vi.fn() }
+      } as unknown as MossAuthRuntime
+    });
+    await expect(runtime.start()).rejects.toThrow("synthetic consumer startup failure");
+    expect(hooks.events).toEqual(["consumer-start", "consumer-stop"]);
+    await runtime.close();
+    expect(hooks.events).toHaveLength(2);
   });
 });
 

@@ -229,6 +229,58 @@ blocking issue. Repaired real-PostgreSQL, Compose, browser, native XCTest and li
 proof still require hosted or owner execution. The known stacked 0292 collision report is not
 addressed by renumbering Part A.
 
+## CI follow-up on the published review repair
+
+The owner published the first review repair at
+`7fea89d7469d265e90d8ceddc6fc692384d37063`, tree
+`997b1f5ba65b135a50979878adbfc00e448c2077`. The next patch contains only the four subsequently
+reported CI corrections and is based on that published head. Compose smoke passed on that
+baseline; the deployment fallback and SQL migrations are unchanged in this follow-up.
+
+`OwnedPgClient` previously extended `pg.Client` during module evaluation, breaking unrelated
+database/auth imports whose pg mock only provided Pool. Both the client subclass and the
+underlying maintenance pool now initialize on first use. An unused pool can be closed without
+constructing either, and close remains terminal. The original Pool-only mock is preserved.
+
+Maintenance also attempted to start a producer it borrowed, breaking notification-digest's
+send-only injected queue clients. The API composition root now starts and awaits only the
+producer it owns. Maintenance borrows the send port and still starts, registers and drains its
+own consumer. Producer failure blocks consumer startup; consumer failure still blocks readiness.
+This restores lifecycle ownership rather than skipping a required production startup step.
+
+The hosted real-auth positive gate passed all 47 tests, then the hourly guard-removal proof
+stopped because Vitest rendered the expected rejection mismatch as an Error wrapper. Removing
+the hour guard reaches the independent SQL cardinality constraint, whose database error lacks
+the required HTTP 429 contract. The test now checks that contract with a named scalar assertion,
+and the runner requires both its marker and exact failure shape. The unchanged SQL CHECK stays
+enabled throughout. A portable regression feeds the installed Vitest assertion into the actual
+recognizer; the old matcher failed and the corrected matcher passed. Raw database, setup and
+unrelated failures remain rejected. The repaired hosted red/restored-green loop remains pending.
+
+The Mac positive XCTest suite and existing audio negative controls passed. The new captured-level
+mutation correctly produced zero instead of the actual 0.75 peak, and the restored test passed.
+Its runner incorrectly expected `XCTAssertEqual failed` instead of XCTest's
+`XCTAssertEqualWithAccuracy failed`. Only that control's matcher and its portable regression
+fixtures change. Production Swift, captured-level publication, clocks and waveform assertions
+are byte-unchanged. The real report is now recognized while unrelated assertions, setup/crash,
+empty runs and wrong exits remain rejected. No new local Mac execution is claimed.
+
+Independent backend and native-harness reviews found no blocking source issue. Four lifecycle
+guard removals and both proof-recognition regressions were observed failing before restoration
+and passing afterward. The seven notification-digest database cases and the corrected hosted
+database/Mac proof runners still require reruns; unit lifecycle and parser checks do not replace
+them. This follow-up makes no additional Part B changes and does not renumber the stacked 0292.
+
+Final local follow-up verification passed 87 relevant suites and 1,089 tests, all six TypeScript
+configurations, full lint/format and required static checks. All 15 database-free server negative
+controls again produced their intended failures and restored passes. The native runner's 12
+anchors and portable recognition self-tests also passed. No local real-database or new native
+execution is claimed for this candidate.
+
+An additional API bundle attempt stopped before bundling: the executor's pnpm wrapper tried to
+bootstrap into an unavailable directory. The app-map generator passed directly, but a standard
+API bundle is not claimed and remains a hosted check.
+
 ## Publication
 
 Use explicit-path local commits and preserve a clean worktree. Publish only the new feature

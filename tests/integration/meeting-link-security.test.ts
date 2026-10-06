@@ -382,9 +382,19 @@ describe("Mac link real-auth security matrix (isolated gate only)", () => {
       VALUES($1,ARRAY(SELECT clock_timestamp()-interval '2 minutes'-n*interval '1 second' FROM generate_series(0,59) AS n))`,
       [f.browser.actorUserId]
     );
-    await expect(
-      context.withDataContext(f.browser, (db) => new MeetingCaptureStartLimiter().consume(db))
-    ).rejects.toMatchObject({ httpStatus: 429 });
+    const rejection = await context
+      .withDataContext(f.browser, (db) => new MeetingCaptureStartLimiter().consume(db))
+      .then(
+        () => undefined,
+        (error: unknown) => error
+      );
+    // The unchanged SQL cardinality constraint also rejects row 61. Its generic database
+    // error is not the semantic 429 contract, so guard removal must fail this exact oracle.
+    const httpStatus =
+      rejection !== null && typeof rejection === "object" && "httpStatus" in rejection
+        ? rejection.httpStatus
+        : undefined;
+    expect(httpStatus, "capture-hour-semantic-429").toBe(429);
     const exported = await workerContext.withDataContext(f.browser, (db) =>
       collectMeetingsExportSection(db, f.browser)
     );

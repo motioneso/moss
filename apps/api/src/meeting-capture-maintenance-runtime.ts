@@ -14,7 +14,8 @@ import {
  * than distribute auth credentials or widen the worker role. Background engines stay off here.
  */
 export function createMeetingCaptureMaintenanceRuntime(input: {
-  producer: PgBoss;
+  /** Borrowed send port; the caller owns producer readiness and shutdown. */
+  producer: Pick<PgBoss, "send">;
   workerConnectionString: string;
   appConnectionString: string;
   auth: MossAuthRuntime;
@@ -30,7 +31,6 @@ export function createMeetingCaptureMaintenanceRuntime(input: {
       });
       maintenancePool = pool;
       try {
-        await input.producer.start();
         await consumer.start();
         started = true;
         await registerMeetingCaptureMaintenanceWorker(consumer, {

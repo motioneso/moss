@@ -3,6 +3,7 @@
 
 --unit executes database-free behavioral tests. --hosted is only for the canonical
 isolated verify gate. --check validates source anchors without executing security proof.
+--self-test checks proof recognition without database access or source mutation.
 A named assertion must fail under each mutation; compile/import/setup failures do not count.
 Every source is restored byte-for-byte before its green run, including on interruption.
 """
@@ -132,7 +133,7 @@ HOSTED_CONTROLS = [
     ], INTEGRATION),
     control("T10-account-hour", "T10 enforces 60/hour independently", [
         mutation(BUDGET, 'recent.length >= 60 ?', 'false ?')
-    ], INTEGRATION),
+    ], INTEGRATION, "capture-hour-semantic-429"),
     control("T11-recording-logs", "T11 full Start/record/Stop", [
         mutation(LOGGER, 'paths: [...new Set([...paths, ...recordingSecretPaths])]', 'paths: [...paths]')
     ], INTEGRATION)
@@ -159,7 +160,7 @@ FAILURE_PATTERNS = {
     "T10-account-minute": r"to have a length of 1 but got \+?0",
     # The independent SQL cardinality constraint still rejects row 61. This mutation
     # proves the missing semantic 429 guard, not permission to exceed the storage bound.
-    "T10-account-hour": r"httpStatus",
+    "T10-account-hour": r"expected undefined to be 429",
     "T11-log-redaction": r"not to contain",
     "T11-recording-logs": r"not to contain"
 }
@@ -193,6 +194,29 @@ def run_test(item, path):
     return result.returncode, matching, output
 
 
+def expected_assertion(item, failure):
+    is_assertion = "AssertionError" in failure or (failure.startswith("Error: promise resolved ") and "__VITEST_REJECTS__" in failure)
+    return bool(is_assertion and re.search(FAILURE_PATTERNS[item["name"]], failure, re.S)
+                and (not item["marker"] or item["marker"] in failure))
+
+
+def self_test():
+    item = next(control for control in HOSTED_CONTROLS if control["name"] == "T10-account-hour")
+    expected = "AssertionError: capture-hour-semantic-429: expected undefined to be 429 // Object.is equality"
+    if not expected_assertion(item, expected):
+        raise RuntimeError("Hour-limit proof must recognize its named semantic 429 assertion")
+    rejected = [
+        "error: new row for relation meeting_capture_start_limits violates check constraint meeting_capture_start_limits_bounded",
+        "Error: expected error: new row for relation meeting_capture_start_limits to match object { httpStatus: 429 } __VITEST_REJECTS__",
+        "AssertionError: expected undefined to be 429 // Object.is equality",
+        "AssertionError: capture-hour-semantic-429: expected 200 to be 429",
+        "TypeError: capture-hour-semantic-429: cannot read property httpStatus",
+        "Error: capture-hour-semantic-429: setup failed"
+    ]
+    if any(expected_assertion(item, failure) for failure in rejected):
+        raise RuntimeError("Hour-limit proof accepted a database/setup/unrelated failure")
+
+
 def run_control(item, directory):
     originals = {path: (ROOT / path).read_bytes() for path, _, _ in item["edits"]}
     try:
@@ -205,9 +229,7 @@ def run_control(item, directory):
             raise RuntimeError(f'{item["name"]}: mutation did not fail its named assertion; inspect {output}')
         for test in failures:
             failure = "\n".join(test.get("failureMessages", []))
-            is_assertion = "AssertionError" in failure or (failure.startswith("Error: promise resolved ") and "__VITEST_REJECTS__" in failure)
-            if (not is_assertion or not re.search(FAILURE_PATTERNS[item["name"]], failure, re.S)
-                    or (item["marker"] and item["marker"] not in failure)):
+            if not expected_assertion(item, failure):
                 raise RuntimeError(f'{item["name"]}: wrong failure (not the intended assertion); inspect {output}')
     finally:
         for path, contents in originals.items():
@@ -243,9 +265,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true")
+    mode.add_argument("--self-test", action="store_true")
     mode.add_argument("--unit", action="store_true")
     mode.add_argument("--hosted", action="store_true")
     args = parser.parse_args()
+    self_test()
+    if args.self_test:
+        print("Proof-recognition self-test passed; no database or guard-removal proof was executed.")
+        return
     validate(UNIT_CONTROLS + HOSTED_CONTROLS)
     if args.check:
         print("Validated source anchors; no unit, database or negative proof was executed.")

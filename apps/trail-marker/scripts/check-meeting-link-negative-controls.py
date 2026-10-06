@@ -51,7 +51,7 @@ CONTROLS = [
     ("Meetings/MeetingAudioBuffer.swift", "MeetingRecordingPresentationTests", {
         "name": "T12-actual-captured-level", "test": "testActualCapturedPeakExpiresAndPauseNeverDisplaysRetainedAudio",
         "before": "        MeetingAudioLevelStore(displayLevel, peak, host)",
-        "after": "        MeetingAudioLevelStore(displayLevel, 0, host)", "assertion": "XCTAssertEqual failed",
+        "after": "        MeetingAudioLevelStore(displayLevel, 0, host)", "assertion": "XCTAssertEqualWithAccuracy failed",
     }),
     ("Meetings/MeetingCaptureHost.swift", "MeetingHostLifecycleTests", {
         "name": "T12-paused-lease-expiry", "test": "testLeaseExpiryClearsPausedSessionAndDropsItsRetainedAudio",
@@ -90,6 +90,51 @@ def select(source, test_class, control):
     return RUNNER.validate_sources()
 
 
+def self_test():
+    # Keep the original generic runner's fail-closed checks as well as this concrete
+    # assertion spelling observed in macOS run 37522944746, job 112472689605.
+    RUNNER.CONTROLS = ({"test": "fixture", "assertion": "XCTAssertNil failed"},)
+    RUNNER.self_test()
+    _, test_class, control = next(entry for entry in CONTROLS
+                                  if entry[2]["name"] == "T12-actual-captured-level")
+    RUNNER.TEST_CLASS = test_class
+    failure = {
+        "testCaseName": f"{test_class}.{control['test']}()",
+        "message": 'XCTAssertEqualWithAccuracy failed: ("0.0") is not equal to ("0.75") +/- ("0.0001") - Display the maximum actual source peak',
+    }
+    negative = {"metrics": {"testsCount": "1", "testsFailedCount": "1"},
+                "issues": {"testFailureSummaries": [failure]}}
+    RUNNER.verify_result(negative, 65, control, True)
+    # The real mutation also fails the later positive-level assertion. It is still
+    # one executed test; every failure must belong to it and be an XCTest assertion.
+    additional = {**failure, "message": 'XCTAssertGreaterThan failed: ("0.0") is not greater than ("0.0")'}
+    RUNNER.verify_result({**negative, "issues": {"testFailureSummaries": [failure, additional]}},
+                         65, control, True)
+    RUNNER.verify_result({"metrics": {"testsCount": "1"}, "issues": {}}, 0, control, False)
+    invalid = [
+        ({**negative, "issues": {"testFailureSummaries": [additional]}}, 65),
+        ({**negative, "issues": {"testFailureSummaries": [
+            {**failure, "message": "XCTAssertEqual failed: unrelated equality assertion"}]}}, 65),
+        ({**negative, "issues": {"testFailureSummaries": [failure,
+            {**failure, "testCaseName": "Unrelated.test()"}]}}, 65),
+        ({**negative, "issues": {"testFailureSummaries": [failure,
+            {**failure, "message": "Failed to launch test host"}]}}, 65),
+        ({**negative, "issues": {"testFailureSummaries": [
+            {**failure, "message": "Test host crashed"}]}}, 65),
+        ({**negative, "issues": {"testFailureSummaries": [failure],
+            "errorSummaries": [{"message": "Compiler failure"}]}}, 65),
+        ({**negative, "metrics": {"testsCount": "0", "testsFailedCount": "1"}}, 65),
+        (negative, 0),
+    ]
+    for result, code in invalid:
+        try:
+            RUNNER.verify_result(result, code, control, True)
+        except RuntimeError:
+            continue
+        raise RuntimeError("T12 matcher accepted an unrelated assertion, setup/crash/build failure, empty run or wrong exit")
+    print("T12 captured-level report recognized; unrelated assertions and non-test failures rejected.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
@@ -98,10 +143,7 @@ def main():
     for source, test_class, control in CONTROLS:
         select(source, test_class, control)
     if args.self_test:
-        # The original harness self-test has an XCTAssertNil fixture; preserve its exact
-        # assertion discriminator rather than weakening the test for new control types.
-        RUNNER.CONTROLS = ({"test": "fixture", "assertion": "XCTAssertNil failed"},)
-        RUNNER.self_test()
+        self_test()
     if args.check or args.self_test:
         print(f"Validated {len(CONTROLS)} T12/T13 anchors. Native execution remains required.")
         return
