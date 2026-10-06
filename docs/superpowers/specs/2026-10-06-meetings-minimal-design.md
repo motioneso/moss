@@ -251,7 +251,8 @@ notice, Start returns a prerequisite error and the page asks once, then starts (
     `rememberedSource`, checks it against the connection's latest inventory, and fails with a
     prerequisite error rather than substitute a source (R13).
   - Stored notice binding (R8).
-  - Red dot on the Mac's menu bar item while recording (R6).
+  - Floating status pill with a live waveform, and a red dot on the menu bar item, while recording
+    (R6).
 - Pause, stop, the stop cutoff and the existing capture lease limits are unchanged.
 
 ## Security
@@ -311,7 +312,8 @@ Design review only; no code was run.
   `POST /api/meetings/capture/commands` with `waitMs` 10 000 (server cap 20 000). Start wakes the
   waiter. Nothing connects in to the Mac, and nothing is pushed.
 - The Mac shows `MeetingCaptureStatusItem`, a menu bar item "● Meeting" with Pause and Stop, in
-  every phase except unprepared and stopped. A remote Start raises no notification and no window.
+  every phase except unprepared and stopped. While recording it also shows the floating status pill
+  (R6). A remote Start raises no system notification.
 - On 401 or 403 the Mac terminates capture (`MeetingCaptureHost.swift`, `poll`).
 - Logs. `apps/api/src/recording-logger-options.ts` redacts the proof header, `verifier`,
   `pcmBase64` and `recordingProof`. The Fastify 5.8.5 default request serializer logs method, URL,
@@ -340,10 +342,10 @@ Design review only; no code was run.
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stolen `tm1_` and proof, copied off the Mac | From anywhere, register as that Mac's recorder, take the next Start and upload chosen audio into that meeting, or kill a live recording by registering a new connection. Cannot read transcripts, notes or other meetings; the command carries ids and the selection only. Cannot make the real Mac record.            | Unlink revokes both at once (R1, R2). Settings shows last contact. Code execution on the Mac is out of scope; it can open the microphone without Moss. Residual: no hardware-bound key. A Secure Enclave key is a follow-up, not a blocker. |
 | Mac left signed in, or sold                 | Polling slides the 90 d window, so the link lives up to 365 d. The owner's next Start records whatever room that Mac is in.                                                                                                                                                                                            | Unlink from Settings or the Mac (R1, R2). No capability lapse (R9, Ben 2026-10-06). Settings lists each Mac with last contact.                                                                                                              |
-| Stolen browser session presses Start        | Records the room of any linked, connected Mac for up to 2 h. Today the only signs are the menu bar item and the OS microphone indicator.                                                                                                                                                                               | Grant is bound to that session; revoking it stops capture (R5). Red dot on the menu bar item while recording (R6). Per-account Start limit (R10).                                                                                           |
+| Stolen browser session presses Start        | Records the room of any linked, connected Mac for up to 2 h. Today the only signs are the menu bar item and the OS microphone indicator.                                                                                                                                                                               | Grant is bound to that session; revoking it stops capture (R5). Floating status pill and menu bar red dot while recording (R6). Per-account Start limit (R10).                                                                              |
 | Second user on the same Moss install        | None found. Device rows are per user and auth-runtime only. Start asserts the actor owns the device. Connections, grants and receipts are owner RLS with no admin bypass. `mm1_` names its owner, and RLS then hides any other owner's grant.                                                                          | Holds. Test it (T6).                                                                                                                                                                                                                        |
 | Replay of an old Start                      | None found. `requestKey` is unique per owner and fingerprinted over meeting, session and body. A cancellation fence persists. Claim needs the current connection's in-memory verifier within 60 s. One active grant per meeting and per connection. A meeting with captured audio or a transcript refuses a new Start. | Holds. Test it (T7).                                                                                                                                                                                                                        |
-| Mac records with no visible sign            | The menu bar item can be hidden by menu bar overflow behind the camera notch or by a menu bar manager. The OS microphone indicator is macOS behaviour, not app code, and is not verified here.                                                                                                                         | Accepted by Ben 2026-10-06: R6 is a red dot on the menu bar item only, no notification or panel.                                                                                                                                            |
+| Mac records with no visible sign            | The menu bar item can be hidden by menu bar overflow behind the camera notch or by a menu bar manager. The OS microphone indicator is macOS behaviour, not app code, and is not verified here.                                                                                                                         | The floating pill (R6) shows even when the menu bar item is hidden. Closing the pill leaves only the red dot and the OS indicator, accepted by Ben 2026-10-06.                                                                              |
 
 #### 4. Required controls
 
@@ -363,10 +365,16 @@ Design review only; no code was run.
   call re-runs `liveBinding`.
 - R5 Session binding. The grant stays bound to the starting browser session. Signing that session
   out, or "sign out everywhere else", stops capture within 30 s.
-- R6 Visible on the Mac. While recording, the Trail Marker menu bar item shows a red dot. It
-  posts no notification and shows no panel. Ben ruled this on 2026-10-06. The menu bar item and the
-  OS microphone indicator are the only on-Mac signs, so a hidden menu bar item (notch overflow or a
-  menu bar manager) leaves only the OS indicator.
+- R6 Visible on the Mac. Ben ruled this on 2026-10-06.
+  - While recording, Trail Marker shows a small floating pill above other windows, on every Space.
+  - The pill shows the state (recording, paused, no audio, reconnecting), the elapsed time and a
+    live waveform.
+  - The waveform draws the level of the audio actually being captured. It goes flat when no audio
+    arrives, so a dead microphone or source shows at a glance. It is never a decorative animation.
+  - The pill can be dragged. Its close button hides it until the next Start and does not stop
+    recording.
+  - The menu bar item shows a red dot from Start until Stop.
+  - No system notification is posted.
 - R7 No on-Mac confirmation. A confirm click would undo the one-click Start Ben asked for, and it
   does not stop the stolen-session case once a person is at the Mac anyway. Visibility (R6) plus
   revoke (R1, R5) is the control.
@@ -394,22 +402,22 @@ Integration tests run against the real auth services, not the `reapprove` fake i
 `tests/integration/meeting-capture.test.ts`. "Fail" means the test must be seen failing with the
 named protection removed, recorded on the build PR.
 
-| #   | Test                                                                                                       | Level       | Must fail when removed                  |
-| --- | ---------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------------- |
-| T1  | Unlink from Moss mid-recording: next status and audio return 401/403; no chunk stored after commit         | Integration | Device check in `liveBinding`           |
-| T2  | Mac logout mid-recording: same result as T1                                                                | Integration | Device check in `liveBinding`           |
-| T3  | Capability revoke mid-recording: grant revoked within one lease; audio refused                             | Integration | Capability revision check               |
-| T4  | Starting browser session signed out: capture stops; audio refused                                          | Integration | Session check in `liveBinding`          |
-| T5  | Claim after 60 s, call after 30 s lease, call after 2 h cap: all refused                                   | Integration | Each expiry comparison                  |
-| T6  | User B cannot list, Start, claim or send audio for user A's Mac or grant; admin cannot either              | Integration | Device owner check in Start; RLS policy |
-| T7  | Same `requestKey` with a changed body is 409; old Start after a new connection cannot be claimed           | Integration | Fingerprint check; verifier check       |
-| T8  | Start with a missing or stale notice acknowledgement returns the prerequisite error                        | Integration | Notice version check                    |
-| T9  | Capability stays valid with no Start for over 90 d; Unlink and revoke still end it                         | Integration | Revoke path                             |
-| T10 | Eleventh Start in a minute from one account returns 429                                                    | Integration | Per-account limiter                     |
-| T11 | Full start, record, stop: captured log stream and user export contain no `tm1_`, `mm1_`, proof or verifier | Integration | Redact path; export column grant        |
-| T12 | The menu bar item shows the red dot from accepted Start until Stop, and clears it on every stop path       | Mac unit    | Red dot state                           |
-| T13 | Mac Unlink calls logout before deleting Keychain items, and keeps them while logout fails                  | Mac unit    | Ordering                                |
-| T14 | Live path on a real linked Mac: Start shows the red dot; Unlink in Settings stops capture within 30 s      | Live, on PR | Not applicable                          |
+| #   | Test                                                                                                                                      | Level       | Must fail when removed                  |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------------- |
+| T1  | Unlink from Moss mid-recording: next status and audio return 401/403; no chunk stored after commit                                        | Integration | Device check in `liveBinding`           |
+| T2  | Mac logout mid-recording: same result as T1                                                                                               | Integration | Device check in `liveBinding`           |
+| T3  | Capability revoke mid-recording: grant revoked within one lease; audio refused                                                            | Integration | Capability revision check               |
+| T4  | Starting browser session signed out: capture stops; audio refused                                                                         | Integration | Session check in `liveBinding`          |
+| T5  | Claim after 60 s, call after 30 s lease, call after 2 h cap: all refused                                                                  | Integration | Each expiry comparison                  |
+| T6  | User B cannot list, Start, claim or send audio for user A's Mac or grant; admin cannot either                                             | Integration | Device owner check in Start; RLS policy |
+| T7  | Same `requestKey` with a changed body is 409; old Start after a new connection cannot be claimed                                          | Integration | Fingerprint check; verifier check       |
+| T8  | Start with a missing or stale notice acknowledgement returns the prerequisite error                                                       | Integration | Notice version check                    |
+| T9  | Capability stays valid with no Start for over 90 d; Unlink and revoke still end it                                                        | Integration | Revoke path                             |
+| T10 | Eleventh Start in a minute from one account returns 429                                                                                   | Integration | Per-account limiter                     |
+| T11 | Full start, record, stop: captured log stream and user export contain no `tm1_`, `mm1_`, proof or verifier                                | Integration | Redact path; export column grant        |
+| T12 | The pill and red dot show from accepted Start until Stop and clear on every stop path; the waveform is flat on silent input               | Mac unit    | Pill, waveform and red dot state        |
+| T13 | Mac Unlink calls logout before deleting Keychain items, and keeps them while logout fails                                                 | Mac unit    | Ordering                                |
+| T14 | Live path on a real linked Mac: Start shows the pill with a moving waveform and the red dot; Unlink in Settings stops capture within 30 s | Live, on PR | Not applicable                          |
 
 #### 6. Verdict
 
@@ -481,7 +489,8 @@ Decided by Ben, 2026-10-06:
 
 Ben ruled on the security-review defaults on 2026-10-06:
 
-5. While recording, the Mac's menu bar item shows a red dot. No notification and no panel (R6).
+5. While recording, the Mac shows a floating status pill with a live waveform, and a red dot on
+   the menu bar item. No system notification (R6).
 6. The recording permission does not lapse (R9).
 7. Binding the link to the Mac's hardware (Secure Enclave key) is a later follow-up, not part of
    this build.
