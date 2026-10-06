@@ -22,6 +22,7 @@ import {
 } from "@moss/connectors";
 import type { Kysely } from "kysely";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { parseToolOutputText } from "./fixtures/tool-output.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { captureFetch, okText } from "./focus-time-helpers.js";
 
@@ -222,9 +223,8 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     });
     const res = await callAndApprove(gateway, emitted, token, "iso.write", {});
     expect(res.ok).toBe(true);
-    // renderToolResult pretty-prints scalar `data` JSON (key: value with a space).
-    expect(okText(res)).toContain('"sawAllowed": true');
-    expect(okText(res)).toContain('"sawSecret": false');
+    // Assert the exact service-visibility result inside the outside-content envelope.
+    expect(parseToolOutputText(okText(res))).toEqual({ sawAllowed: true, sawSecret: false });
   });
 
   it("a READ tool NEVER receives an injected service, even if it declares one (HIGH #5)", async () => {

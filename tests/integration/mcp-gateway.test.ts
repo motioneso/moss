@@ -194,74 +194,78 @@ describe("AssistantToolGateway", () => {
     expect(resolverCalls).toBeGreaterThanOrEqual(2); // both surfaces actually invoked the resolver
   });
 
-  it("only exposes explicitly safe HttpError messages from handler failures", async () => {
-    const failingTool = (name: string, error: unknown, safeErrors?: true) => ({
-      name,
-      description: "Throws an error.",
-      permissionId: "safe-errors.view",
-      actionFamilyId: "safe-errors",
-      risk: "write" as const,
-      executionPolicy: "auto" as const,
-      ...(safeErrors ? { safeErrors } : {}),
-      inputSchema: { type: "object", properties: {} },
-      execute: async () => {
-        throw error;
-      }
-    });
-    const safeErrorModule = {
-      id: "safe-errors",
-      name: "Safe errors",
-      version: "0",
-      publisher: "test",
-      lifecycle: "optional" as const,
-      compatibility: { jarv1s: "*" },
-      assistantActionFamilies: [
-        {
-          id: "safe-errors",
-          label: "Safe errors",
-          description: "Test handler errors.",
-          defaultTier: "ask_each_time" as const,
-          allowedTiers: ["ask_each_time", "trusted_auto"] as const
+  it.each([
+    ["safe-errors.opted-in", "safe message", true],
+    ["safe-errors.default", "Tool safe-errors.default failed", false],
+    ["safe-errors.hostile", "Tool safe-errors.hostile failed", false]
+  ] as const)(
+    "only exposes explicitly safe HttpError messages (%s)",
+    async (toolName, error, tainted) => {
+      const failingTool = (name: string, error: unknown, safeErrors?: true) => ({
+        name,
+        description: "Throws an error.",
+        permissionId: "safe-errors.view",
+        actionFamilyId: "safe-errors",
+        risk: "write" as const,
+        executionPolicy: "auto" as const,
+        ...(safeErrors ? { safeErrors } : {}),
+        inputSchema: { type: "object", properties: {} },
+        execute: async () => {
+          throw error;
         }
-      ],
-      assistantTools: [
-        failingTool("safe-errors.opted-in", new HttpError(400, "safe message"), true),
-        failingTool("safe-errors.default", new HttpError(400, "should stay hidden")),
-        failingTool("safe-errors.hostile", new Error("SECRET token=private-value"), true)
-      ]
-    } satisfies MossModuleManifest;
-    const safeGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [safeErrorModule],
-      repository,
-      ...conversations.gatewayDependencies,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 1000,
-      actionPolicy: () => ({
-        getFamilyTier: async () => "trusted_auto",
-        getFamilyManifest: async () => safeErrorModule.assistantActionFamilies[0] ?? null
-      })
-    });
-    const token = tokens.mint({
-      ...conversations.bindingFor(ids.userA),
-      chatSessionId: "safe-errors",
-      allowedToolNames: null
-    });
+      });
+      const safeErrorModule = {
+        id: "safe-errors",
+        name: "Safe errors",
+        version: "0",
+        publisher: "test",
+        lifecycle: "optional" as const,
+        compatibility: { jarv1s: "*" },
+        assistantActionFamilies: [
+          {
+            id: "safe-errors",
+            label: "Safe errors",
+            description: "Test handler errors.",
+            defaultTier: "ask_each_time" as const,
+            allowedTiers: ["ask_each_time", "trusted_auto"] as const
+          }
+        ],
+        assistantTools: [
+          failingTool("safe-errors.opted-in", new HttpError(400, "safe message"), true),
+          failingTool("safe-errors.default", new HttpError(400, "should stay hidden")),
+          failingTool("safe-errors.hostile", new Error("SECRET token=private-value"), true)
+        ]
+      } satisfies MossModuleManifest;
+      const safeGateway = new AssistantToolGateway({
+        resolveActiveModules: async () => [safeErrorModule],
+        repository,
+        ...conversations.gatewayDependencies,
+        tokens,
+        confirmations,
+        notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
+        confirmTimeoutMs: 1000,
+        actionPolicy: () => ({
+          getFamilyTier: async () => "trusted_auto",
+          getFamilyManifest: async () => safeErrorModule.assistantActionFamilies[0] ?? null
+        })
+      });
+      const token = tokens.mint({
+        ...conversations.bindingFor(ids.userA),
+        chatSessionId: "safe-errors",
+        allowedToolNames: null
+      });
 
-    await expect(safeGateway.callTool(token, "safe-errors.opted-in", {})).resolves.toEqual({
-      ok: false,
-      error: "safe message"
-    });
-    await expect(safeGateway.callTool(token, "safe-errors.default", {})).resolves.toEqual({
-      ok: false,
-      error: "Tool safe-errors.default failed"
-    });
-    await expect(safeGateway.callTool(token, "safe-errors.hostile", {})).resolves.toEqual({
-      ok: false,
-      error: "Tool safe-errors.hostile failed"
-    });
-  });
+      // beforeEach gives each independent disclosure case its own new clean conversation.
+      const binding = conversations.bindingFor(ids.userA);
+      const provenance = conversations.gatewayDependencies.provenance;
+      expect(await provenance.isTainted(binding.actorUserId, binding.threadId)).toBe(false);
+      await expect(safeGateway.callTool(token, toolName, {})).resolves.toEqual({
+        ok: false,
+        error
+      });
+      expect(await provenance.isTainted(binding.actorUserId, binding.threadId)).toBe(tainted);
+    }
+  );
 
   it("auto write tools can receive declared services while read tools cannot", async () => {
     const calls: unknown[] = [];

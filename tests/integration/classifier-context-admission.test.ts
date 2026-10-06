@@ -103,7 +103,9 @@ async function harness(
     notifier: { emit: (_session, record) => records.push(record) },
     provenance: store,
     confirmTimeoutMs: 5000,
-    yoloMode: async () => true,
+    // This suite contrasts ordinary trusted-auto policy with tainted confirmation.
+    // Keep YOLO explicitly off so the clean baseline is exactly approvalMode=auto.
+    yoloMode: async () => false,
     actionPolicy: () => ({
       getFamilyTier: async () => "trusted_auto",
       getFamilyManifest: async (_moduleId, familyId) =>

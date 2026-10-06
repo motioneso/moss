@@ -35,6 +35,7 @@ import type {
 } from "../../packages/chat/src/live/types.js";
 
 import { ids } from "./test-database.js";
+import { parseToolOutputText } from "./fixtures/tool-output.js";
 import {
   NewsChatToolsHarness,
   feedForRefresh,
@@ -79,7 +80,7 @@ class DeterministicDiagnosticsEngine implements CliChatEngine {
       return;
     }
 
-    const report = JSON.parse(content) as {
+    const report = parseToolOutputText(content) as {
       readonly modules?: readonly {
         readonly status?: string;
         readonly facts?: Record<string, unknown>;
