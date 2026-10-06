@@ -329,7 +329,12 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     await native.close();
     await connection.refresh();
     await panel.getByRole("link", { name: "New meeting", exact: true }).click();
-    await expect(page.getByText("Generated PCM microphone", { exact: false })).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Retained transcript", exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Generated PCM microphone Â· Output not captured", { exact: true })
+    ).toBeVisible();
     const createdAgain = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
