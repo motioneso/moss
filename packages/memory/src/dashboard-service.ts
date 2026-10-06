@@ -111,8 +111,17 @@ export class MemoryDashboardService {
     req: AcceptMemoryCandidateRequest
   ): Promise<{ accepted: boolean }> {
     assertDataContextDb(scopedDb);
-    const candidate = await this.candidatesRepo.getById(scopedDb, ownerUserId, candidateId);
-    if (!candidate || candidate.status !== "pending") return { accepted: false };
+    const pending = await this.candidatesRepo.getById(scopedDb, ownerUserId, candidateId);
+    if (!pending || pending.status !== "pending") return { accepted: false };
+    // The earlier read is not a claim: another accept may have passed it too. Only
+    // the transaction that updates the still-pending row may create its memory.
+    const candidate = await this.candidatesRepo.claimPendingForPromotion(
+      scopedDb,
+      ownerUserId,
+      candidateId,
+      "accepted via dashboard"
+    );
+    if (!candidate) return { accepted: false };
 
     const payload = candidate.payloadJson as Record<string, unknown> | null;
     const kind = typeof payload?.kind === "string" ? payload.kind : null;
@@ -177,12 +186,6 @@ export class MemoryDashboardService {
       });
     }
 
-    await this.candidatesRepo.markPromoted(
-      scopedDb,
-      ownerUserId,
-      candidateId,
-      "accepted via dashboard"
-    );
     return { accepted: true };
   }
 

@@ -118,6 +118,28 @@ export class MemoryCandidatesRepository {
     return this.#mark(scopedDb, ownerUserId, id, "promoted", reason);
   }
 
+  /** Claim before creating memory, in the same actor-scoped transaction. */
+  async claimPendingForPromotion(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    id: string,
+    reason: string
+  ): Promise<MemoryCandidateRecord | undefined> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<CandidateRow>`
+      UPDATE app.memory_candidates
+      SET status = 'promoted',
+          promotion_reason = ${reason},
+          resolved_at = now(),
+          updated_at = now()
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ${id}::uuid
+        AND status = 'pending'
+      RETURNING *
+    `.execute(scopedDb.db);
+    return result.rows[0] ? mapCandidate(result.rows[0]) : undefined;
+  }
+
   async markRejected(
     scopedDb: DataContextDb,
     ownerUserId: string,

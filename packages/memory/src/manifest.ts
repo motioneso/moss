@@ -388,9 +388,9 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.candidate_review",
       description:
-        "Moss proposes new memories as it learns. In Memory settings, or by asking Moss in chat, you " +
-        "accept, reject, or suppress each one before it becomes a kept memory. Accepting from chat " +
-        "always shows an approval card."
+        "Review suggested memories in Memory settings or chat. Accept each pending suggestion once; a repeat or losing " +
+        "concurrent accept is refused as no longer pending. You can reject or suppress suggestions. " +
+        "Accepting from chat always asks first."
     },
     {
       id: "memory.notes_ingest",

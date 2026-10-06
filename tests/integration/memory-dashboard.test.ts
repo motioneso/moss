@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { type Kysely, sql } from "kysely";
 
@@ -306,6 +306,126 @@ describe("POST /api/memory/candidates/:id/accept", () => {
         `.execute(db.db)
     );
     expect(facts.rows).toHaveLength(1);
+  });
+
+  it("accepts one pending suggestion exactly once when two accepts race", async () => {
+    const excerpt = `Concurrent suggestion ${randomUUID()}`;
+    const candidate = await insertManualCandidate(ids.userA, excerpt);
+    const getById = MemoryCandidatesRepository.prototype.getById;
+    let pendingReads = 0;
+    let releaseReads!: () => void;
+    const readsReleased = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    // Hold both real database reads before either request can proceed. The old
+    // implementation then creates two memories; the conditional claim admits one.
+    const read = vi
+      .spyOn(MemoryCandidatesRepository.prototype, "getById")
+      .mockImplementation(async function (
+        this: MemoryCandidatesRepository,
+        scopedDb,
+        ownerUserId,
+        id
+      ) {
+        const row = await getById.call(this, scopedDb, ownerUserId, id);
+        if (ownerUserId === ids.userA && id === candidate.id && row?.status === "pending") {
+          pendingReads += 1;
+          await readsReleased;
+        }
+        return row;
+      });
+    const accept = () =>
+      server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/accept`,
+        headers: authHeaders(ids.userA)
+      });
+    const responses = Promise.all([accept(), accept()]);
+    try {
+      await vi.waitFor(() => expect(pendingReads).toBe(2), { timeout: 5_000 });
+      releaseReads();
+      const results = await responses;
+      expect(results.map((result) => result.statusCode).sort()).toEqual([200, 404]);
+      expect(results.find((result) => result.statusCode === 200)?.json()).toEqual({
+        accepted: true
+      });
+      expect(results.find((result) => result.statusCode === 404)?.json()).toEqual({
+        error: "Candidate not found or not pending"
+      });
+    } finally {
+      releaseReads();
+      try {
+        await responses;
+      } finally {
+        read.mockRestore();
+      }
+    }
+    const state = await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-concurrent-accept-check" },
+      async (db) => ({
+        candidate: await candidatesRepo.getById(db, ids.userA, candidate.id),
+        facts: await sql<{ object_text: string }>`
+          SELECT object_text FROM app.memory_facts
+          WHERE owner_user_id = ${ids.userA}::uuid AND object_text = ${excerpt}
+        `.execute(db.db)
+      })
+    );
+    expect(state.candidate?.status).toBe("promoted");
+    expect(state.facts.rows).toEqual([{ object_text: excerpt }]);
+  });
+
+  it("rolls back the acceptance claim and memory when embedding fails, allowing retry", async () => {
+    const excerpt = `Retry suggestion ${randomUUID()}`;
+    const candidate = await insertManualCandidate(ids.userA, excerpt);
+    const embedding = vi
+      .spyOn(StubEmbeddingProvider.prototype, "embedDocument")
+      .mockRejectedValueOnce(new Error("Synthetic embedding failure"));
+    const accept = () =>
+      server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/accept`,
+        headers: authHeaders(ids.userA)
+      });
+    try {
+      expect((await accept()).statusCode).toBe(500);
+      expect(embedding).toHaveBeenCalledOnce();
+    } finally {
+      embedding.mockRestore();
+    }
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-accept-rollback" },
+      async (db) => {
+        expect((await candidatesRepo.getById(db, ids.userA, candidate.id))?.status).toBe("pending");
+        const facts = await sql<{ id: string }>`
+          SELECT id FROM app.memory_facts
+          WHERE owner_user_id = ${ids.userA}::uuid AND object_text = ${excerpt}
+        `.execute(db.db);
+        expect(facts.rows).toHaveLength(0);
+      }
+    );
+    expect((await accept()).statusCode).toBe(200);
+    expect((await accept()).statusCode).toBe(404);
+  });
+
+  it("does not claim another user's pending suggestion (RLS)", async () => {
+    const candidate = await insertManualCandidate(ids.userA, `Private suggestion ${randomUUID()}`);
+    const result = await server.inject({
+      method: "POST",
+      url: `/api/memory/candidates/${candidate.id}/accept`,
+      headers: authHeaders(ids.userB)
+    });
+    expect(result.statusCode).toBe(404);
+    expect(result.json()).toEqual({ error: "Candidate not found or not pending" });
+    const foreignClaim = await appDataContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "test-foreign-claim" },
+      (db) => candidatesRepo.claimPendingForPromotion(db, ids.userA, candidate.id, "foreign claim")
+    );
+    expect(foreignClaim).toBeUndefined();
+    const check = await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-foreign-accept-check" },
+      (db) => candidatesRepo.getById(db, ids.userA, candidate.id)
+    );
+    expect(check?.status).toBe("pending");
   });
 
   it("returns 404 for unknown candidate", async () => {
