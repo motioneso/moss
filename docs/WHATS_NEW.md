@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 
 - **Loading screen matches your colours.** The loading screen now follows your light or dark setting and shows a gently animated Moss logo instead of a spinning circle. [PR #3052](https://github.com/motioneso/moss/pull/3052)
 
+#### Fixed
+
+- **Small settings screen fixes.** Admin menu labels now meet the minimum text size, and the Activity filter row wraps instead of running off the edge on narrow phones. [PR #3060](https://github.com/motioneso/moss/pull/3060)
+
 ### 2026-10-04
 
 #### Fixed
