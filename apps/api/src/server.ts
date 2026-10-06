@@ -15,7 +15,14 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
-import { createMossAuthRuntime, type MossAuthRuntime } from "@moss/auth";
+import {
+  ACT_AS_GRANT_HEADER,
+  createActAsGrantRegistry,
+  createMossAuthRuntime,
+  withActAsGrantsAndRequestCache,
+  type ActAsGrantRegistry,
+  type MossAuthRuntime
+} from "@moss/auth";
 import { createCliStructuredAdapterFactory } from "@moss/chat";
 import {
   ConnectorsRepository,
@@ -60,6 +67,7 @@ import {
   type HostDiagnosticsInfo
 } from "@moss/shared";
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
+import { actAsRateLimitKey, installActAsActorLookup } from "@moss/module-sdk/server";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
 import { INTEGRATIONS_FAMILY, SettingsRepository, loadFamilyKeyring } from "@moss/settings";
@@ -108,6 +116,8 @@ export interface CreateApiServerOptions {
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
   readonly authRuntime?: MossAuthRuntime;
+  /** #3065: tests inject a registry with a fake clock. */
+  readonly actAsGrants?: ActAsGrantRegistry;
   /**
    * `boolean` is the common case (silence in tests, real pino otherwise). A test that must
    * assert on captured log content (companion-backtrack-routes.test.ts, secrets-never-escape)
@@ -173,7 +183,8 @@ export function hasAuthMaterial(request: FastifyRequest): boolean {
   const cookie = request.headers.cookie;
   return (
     (typeof authorization === "string" && authorization.trim().length > 0) ||
-    (typeof cookie === "string" && cookie.trim().length > 0)
+    (typeof cookie === "string" && cookie.trim().length > 0) ||
+    request.headers[ACT_AS_GRANT_HEADER] !== undefined
   );
 }
 
@@ -255,14 +266,19 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
     trustProxy
   });
-  const authRuntime =
+  // #3065: wrap before any caller captures resolveAccessContext (several below do).
+  const actAsGrants = options.actAsGrants ?? createActAsGrantRegistry();
+  const { authRuntime, actAsActor } = withActAsGrantsAndRequestCache(
     options.authRuntime ??
-    createMossAuthRuntime({
-      appDb,
-      runner: dataContext,
-      // Surfaces the legacy session-bearer observability event (#113) into the API logs.
-      logger: server.log
-    });
+      createMossAuthRuntime({
+        appDb,
+        runner: dataContext,
+        // Surfaces the legacy session-bearer observability event (#113) into the API logs.
+        logger: server.log
+      }),
+    actAsGrants
+  );
+  installActAsActorLookup(server, actAsActor);
   const ownsAuthRuntime = options.authRuntime === undefined;
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
 
@@ -867,6 +883,10 @@ const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // it out of the limiter's in-memory store and any error/header output. Namespaced prefixes
 // prevent a bearer hash from ever colliding with a cookie hash or an IP literal.
 function authPrincipalRateLimitKey(request: FastifyRequest): string {
+  // #3065: in-process act-as calls come from loopback; key them on the grant's actor.
+  const actAs = actAsRateLimitKey(request);
+  if (actAs) return actAs;
+
   const authorization = request.headers.authorization ?? "";
   if (authorization.toLowerCase().startsWith("bearer ")) {
     const token = authorization.slice(authorization.indexOf(" ") + 1).trim();
