@@ -62,17 +62,29 @@ function count(projectName: string, sql: string): number {
   return Number(psql(projectName, sql));
 }
 
-/** One segment plus its `screen` chunk, started `ago` before now, for `owner`. */
-function seedSegment(projectName: string, owner: string, label: string, ago: string): void {
+/**
+ * One segment plus its `screen` chunk for `owner`. `ago` starts it that far before the
+ * database's now; `startedAtMs` starts it at an exact instant (a browser-local time the test
+ * resolved), so the sample always lands inside the day the Settings delete covers.
+ */
+function seedSegment(
+  projectName: string,
+  owner: string,
+  label: string,
+  ago: string,
+  startedAtMs?: number
+): void {
+  const started =
+    startedAtMs === undefined ? `now() - interval '${ago}'` : `to_timestamp(${startedAtMs / 1000})`;
   const id = psql(
     projectName,
     `INSERT INTO app.backtrack_segments
        (owner_user_id, device_id, started_at, ended_at, app_name, bundle_id, window_title, body,
         body_hash, client_started_at, indexed_at)
-     VALUES ('${owner}', gen_random_uuid(), now() - interval '${ago}',
-             now() - interval '${ago}' + interval '1 minute', 'Safari', 'com.apple.Safari',
+     VALUES ('${owner}', gen_random_uuid(), ${started},
+             ${started} + interval '1 minute', 'Safari', 'com.apple.Safari',
              '${label}', '${label} body', decode(md5('${label}') || md5('${label}'), 'hex'),
-             now() - interval '${ago}', now())
+             ${started}, now())
      RETURNING id`
   ).split(/\s/)[0];
   psql(
@@ -143,9 +155,18 @@ test("Delete today removes only the signed-in person's rows from today (#2638)",
       projectName,
       `DELETE FROM app.memory_chunks WHERE source_kind = 'screen' AND owner_user_id IN ('${adminId}', '${OTHER_USER_ID}')`
     );
-    seedSegment(projectName, adminId, "admin-today", "1 minute");
+    // The "today" samples sit just after the browser-local midnight, not minutes before
+    // now: the "Today" delete below covers midnight-to-now, so seeding relative to now would
+    // place them yesterday on a run just past midnight and delete nothing (see #3034).
+    const todayBase = await page.evaluate(() => {
+      const midnight = new Date();
+      midnight.setHours(0, 1, 0, 0);
+      return midnight.getTime();
+    });
+    await expect.poll(() => Date.now(), { timeout: 180_000 }).toBeGreaterThan(todayBase);
+    seedSegment(projectName, adminId, "admin-today", "1 minute", todayBase);
     seedSegment(projectName, adminId, "admin-older", "40 hours");
-    seedSegment(projectName, OTHER_USER_ID, "other-today", "1 minute");
+    seedSegment(projectName, OTHER_USER_ID, "other-today", "1 minute", todayBase);
     expect(
       count(
         projectName,
@@ -342,10 +363,22 @@ test("A Mac's uploads are indexed, deleted from Settings, and stay deleted on re
   const credential = await test.step("pair a stand-in Mac through the real API", () =>
     pairStandInMac(page, baseURL));
 
-  const now = Date.now();
+  // Anchor the samples just after the browser-local midnight instead of minutes before
+  // now: the "Today" delete below covers midnight-to-now, so a run in the first minutes
+  // after midnight would otherwise place both samples yesterday and delete nothing.
+  // 00:01 is always inside today and inside the 26-hour upload age window. The samples
+  // use the same spacing as the later ones below (second starts 1.5 s after the first, so
+  // it ends at +2.5 s), and the wait runs past +3 s, so both have ended before the upload
+  // arrives even on a run that reaches this step just past midnight.
+  const morningBase = await page.evaluate(() => {
+    const midnight = new Date();
+    midnight.setHours(0, 1, 0, 0);
+    return midnight.getTime();
+  });
+  await expect.poll(() => Date.now(), { timeout: 180_000 }).toBeGreaterThan(morningBase + 3_000);
   const morning: UploadSegment[] = [
-    { startedAt: new Date(now - 10 * 60_000), body: "uat morning page one" },
-    { startedAt: new Date(now - 5 * 60_000), body: "uat morning page two" }
+    { startedAt: new Date(morningBase), body: "uat morning page one" },
+    { startedAt: new Date(morningBase + 1_500), body: "uat morning page two" }
   ];
 
   await test.step("upload two segments; the worker indexes them into screen chunks", async () => {
