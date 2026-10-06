@@ -149,23 +149,6 @@ export class MemoryCandidatesRepository {
     return this.#mark(scopedDb, ownerUserId, id, "rejected", reason);
   }
 
-  async listPending(
-    scopedDb: DataContextDb,
-    ownerUserId: string,
-    limit: number
-  ): Promise<MemoryCandidateRecord[]> {
-    assertDataContextDb(scopedDb);
-    const result = await sql<CandidateRow>`
-      SELECT *
-      FROM app.memory_candidates
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND status = 'pending'
-      ORDER BY created_at DESC, id
-      LIMIT ${Math.max(0, Math.min(100, Math.trunc(limit)))}
-    `.execute(scopedDb.db);
-    return result.rows.map(mapCandidate);
-  }
-
   async listPendingWithCount(
     scopedDb: DataContextDb,
     ownerUserId: string,
@@ -276,6 +259,7 @@ export class MemoryCandidatesRepository {
           updated_at = now()
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND id = ${id}::uuid
+        AND status = 'pending'
       RETURNING id
     `.execute(scopedDb.db);
     return result.rows.length > 0;

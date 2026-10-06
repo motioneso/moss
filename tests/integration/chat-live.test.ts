@@ -419,7 +419,8 @@ describe("handleExtractFactsJob — memory distillation candidates + no-op degra
       );
 
       expect(calls).toBe(0);
-      expect(await candidatesRepository.listPending(scopedDb, ids.userA, 10)).toEqual([]);
+      const pending = await candidatesRepository.listPendingWithCount(scopedDb, ids.userA, 10);
+      expect(pending.items).toEqual([]);
     });
   });
 
@@ -457,8 +458,8 @@ describe("handleExtractFactsJob — memory distillation candidates + no-op degra
         }))
       );
 
-      const pending = await candidatesRepository.listPending(scopedDb, ids.userA, 10);
-      expect(pending).toContainEqual(
+      const pending = await candidatesRepository.listPendingWithCount(scopedDb, ids.userA, 10);
+      expect(pending.items).toContainEqual(
         expect.objectContaining({ kind: "fact", status: "pending", provenance: "inferred" })
       );
       const core = await graphRepository.listCoreFacts(scopedDb, ids.userA, 50);
@@ -816,9 +817,9 @@ describe("handleExtractFactsJob — memory distillation candidates + no-op degra
         }))
       );
 
-      const pending = await candidatesRepository.listPending(scopedDb, ids.userA, 10);
+      const pending = await candidatesRepository.listPendingWithCount(scopedDb, ids.userA, 10);
       const core = await graphRepository.listCoreFacts(scopedDb, ids.userA, 50);
-      expect(JSON.stringify(pending)).not.toContain("sk-1234567890abcdef");
+      expect(JSON.stringify(pending.items)).not.toContain("sk-1234567890abcdef");
       expect(JSON.stringify(core)).not.toContain("sk-1234567890abcdef");
     });
   });
@@ -900,8 +901,10 @@ describe("handleExtractFactsJob — memory distillation candidates + no-op degra
         }))
       );
 
-      const pending = await candidatesRepository.listPending(scopedDb, ids.userA, 10);
-      expect(pending).toContainEqual(expect.objectContaining({ status: "pending", kind: "fact" }));
+      const pending = await candidatesRepository.listPendingWithCount(scopedDb, ids.userA, 10);
+      expect(pending.items).toContainEqual(
+        expect.objectContaining({ status: "pending", kind: "fact" })
+      );
       const core = await graphRepository.listCoreFacts(scopedDb, ids.userA, 50);
       expect(core.some((fact) => fact.objectText === "Alex a follow up")).toBe(false);
     });

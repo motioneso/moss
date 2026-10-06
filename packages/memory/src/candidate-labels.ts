@@ -2,6 +2,16 @@ import type { MemoryCandidateRecord } from "./candidates-repository.js";
 import type { MemoryRecordKind } from "./graph-types.js";
 
 type CandidatePayload = Record<string, unknown> | null;
+const RECORD_KINDS = [
+  "fact",
+  "preference",
+  "goal",
+  "constraint",
+  "decision",
+  "relationship",
+  "alias",
+  "inference"
+] as const satisfies readonly MemoryRecordKind[];
 
 /** A manual "remember this" request stores the remembered text as its excerpt. */
 function manualExcerpt(payload: CandidatePayload): string | null {
@@ -9,10 +19,13 @@ function manualExcerpt(payload: CandidatePayload): string | null {
   return payload.excerpt.trim() || null;
 }
 
-export function candidateTitle(payload: CandidatePayload): string {
+export function candidateTitle(
+  payload: CandidatePayload,
+  options: { readonly fullText?: boolean } = {}
+): string {
   if (!payload) return "Memory candidate";
   const excerpt = manualExcerpt(payload);
-  if (excerpt) return excerpt.slice(0, 120);
+  if (excerpt) return options.fullText ? excerpt : excerpt.slice(0, 120);
   const fact = (payload.fact ?? null) as Record<string, unknown> | null;
   if (fact) {
     const parts = [fact.subject, fact.predicate, fact.objectText ?? fact.objectName].filter(
@@ -22,7 +35,8 @@ export function candidateTitle(payload: CandidatePayload): string {
   }
   const entity = (payload.entity ?? null) as Record<string, unknown> | null;
   if (entity && typeof entity.name === "string") return entity.name;
-  if (typeof payload.summary === "string") return payload.summary.slice(0, 120);
+  if (typeof payload.summary === "string")
+    return options.fullText ? payload.summary : payload.summary.slice(0, 120);
   return "Memory candidate";
 }
 
@@ -47,20 +61,35 @@ export interface PendingMemoryCandidateItem {
   readonly id: string;
   readonly title: string;
   readonly summary: string;
+  readonly titleTruncated: boolean;
+  readonly summaryTruncated: boolean;
   readonly recordKind?: MemoryRecordKind;
   readonly provenance: MemoryCandidateRecord["provenance"];
   readonly createdAt: string;
 }
 
-/** The pending-list projection: display text only, never episode or source references. */
+function excerpt(text: string, maxUnits: number): { text: string; truncated: boolean } {
+  let units = 0;
+  for (const point of text) {
+    if (units + point.length > maxUnits) break;
+    units += point.length;
+  }
+  return { text: text.slice(0, units), truncated: units < text.length };
+}
+
+/** Bounded list excerpts only; candidateLabel and approval targets keep their full text. */
 export function pendingCandidateItem(c: MemoryCandidateRecord): PendingMemoryCandidateItem {
   const payload = c.payloadJson as CandidatePayload;
-  const recordKind =
-    typeof payload?.recordKind === "string" ? (payload.recordKind as MemoryRecordKind) : undefined;
+  const recordKind = RECORD_KINDS.find((kind) => kind === payload?.recordKind);
+  // Five rows at these UTF-16 limits fit the 16k tool budget even after JSON and HTML escaping.
+  const title = excerpt(candidateTitle(payload, { fullText: true }), 120);
+  const summary = excerpt(candidateSummary(payload), 200);
   return {
     id: c.id,
-    title: candidateTitle(payload),
-    summary: candidateSummary(payload),
+    title: title.text,
+    summary: summary.text,
+    titleTruncated: title.truncated,
+    summaryTruncated: summary.truncated,
     ...(recordKind ? { recordKind } : {}),
     provenance: c.provenance,
     createdAt: c.createdAt.toISOString()

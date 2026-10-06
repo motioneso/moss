@@ -124,11 +124,21 @@ export const getMemoryDashboardRouteSchema = {
 const pendingCandidateSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "title", "summary", "provenance", "createdAt"],
+  required: [
+    "id",
+    "title",
+    "summary",
+    "titleTruncated",
+    "summaryTruncated",
+    "provenance",
+    "createdAt"
+  ],
   properties: {
     id: { type: "string" },
-    title: { type: "string" },
-    summary: { type: "string" },
+    title: { type: "string", maxLength: 120 },
+    summary: { type: "string", maxLength: 200 },
+    titleTruncated: { type: "boolean" },
+    summaryTruncated: { type: "boolean" },
     recordKind: { type: "string", enum: recordKindEnum },
     provenance: { type: "string", enum: ["volunteered", "inferred"] },
     createdAt: { type: "string" }

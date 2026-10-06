@@ -28,7 +28,7 @@ import {
 } from "./embedding-provider-config.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
 
-const PENDING_CANDIDATE_LIMIT = 50;
+const PENDING_CANDIDATE_LIMIT = 5;
 
 export interface MemoryDashboardRouteDependencies {
   readonly dataContext: DataContextRunner;
@@ -145,7 +145,8 @@ export function registerMemoryDashboardRoutes(
           const svc = await createDashboardService(scopedDb, graphRepo);
           return svc.rejectCandidate(scopedDb, access.actorUserId, id, body.reason ?? "");
         });
-        if (!result.rejected) return reply.code(404).send({ error: "Candidate not found" });
+        if (!result.rejected)
+          return reply.code(404).send({ error: "Candidate not found or not pending" });
         return reply.code(204).send();
       } catch (error) {
         return handleDashboardRouteError(error, reply);
@@ -165,7 +166,8 @@ export function registerMemoryDashboardRoutes(
           const svc = await createDashboardService(scopedDb, graphRepo);
           return svc.suppressCandidate(scopedDb, access.actorUserId, id, body.reason ?? "");
         });
-        if (!result.suppressed) return reply.code(404).send({ error: "Candidate not found" });
+        if (!result.suppressed)
+          return reply.code(404).send({ error: "Candidate not found or not pending" });
         return reply.code(204).send();
       } catch (error) {
         return handleDashboardRouteError(error, reply);

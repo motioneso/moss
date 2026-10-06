@@ -199,10 +199,17 @@ describe("GET /api/memory/candidates", () => {
     expect(res.body).not.toContain("Other user's suggestion 3065");
   });
 
-  it("reports how many owner-pending suggestions remain beyond the first 50", async () => {
-    const ownIds = new Set<string>();
+  it("returns five complete owner-pending suggestions and counts the remaining 47", async () => {
+    const ownItems = new Map<string, { title: string; summary: string; createdAt: string }>();
     for (let i = 0; i < 52; i += 1) {
-      ownIds.add((await insertManualCandidate(ids.userC, `Owner overflow suggestion ${i}`)).id);
+      const summary =
+        `Owner overflow suggestion ${i}: ${"complete suggestion text ".repeat(30)}`.trim();
+      const candidate = await insertManualCandidate(ids.userC, summary);
+      ownItems.set(candidate.id, {
+        title: summary.slice(0, 120),
+        summary: summary.slice(0, 200),
+        createdAt: candidate.createdAt.toISOString()
+      });
     }
     await insertManualCandidate(ids.userD, "Other owner overflow suggestion");
     const rejected = await insertManualCandidate(ids.userC, "Rejected overflow suggestion");
@@ -223,9 +230,19 @@ describe("GET /api/memory/candidates", () => {
       hasMore: boolean;
       remainingCount: number;
     }>();
-    expect(body).toMatchObject({ total: 52, hasMore: true, remainingCount: 2 });
-    expect(body.items).toHaveLength(50);
-    expect(body.items.every((item) => ownIds.has(item.id))).toBe(true);
+    expect(body).toMatchObject({ total: 52, hasMore: true, remainingCount: 47 });
+    expect(body.items).toHaveLength(5);
+    expect(new Set(body.items.map((item) => item.id)).size).toBe(5);
+    for (const item of body.items) {
+      expect(ownItems.has(item.id)).toBe(true);
+      expect(item).toEqual({
+        id: item.id,
+        ...ownItems.get(item.id),
+        titleTruncated: true,
+        summaryTruncated: true,
+        provenance: "volunteered"
+      });
+    }
     expect(res.body).not.toContain("Other owner overflow suggestion");
     expect(res.body).not.toContain("Rejected overflow suggestion");
 
@@ -305,6 +322,159 @@ describe("POST /api/memory/candidates/:id/suppress", () => {
       (db) => candidatesRepo.getById(db, ids.userA, candidate.id)
     );
     expect(check?.status).toBe("suppressed");
+  });
+});
+
+async function candidateDecisionState(candidateId: string, excerpt: string) {
+  return appDataContext.withDataContext(
+    { actorUserId: ids.userA, requestId: "candidate-decision-check" },
+    async (db) => {
+      const candidate = await sql<Record<string, unknown>>`
+        SELECT * FROM app.memory_candidates
+        WHERE owner_user_id = ${ids.userA}::uuid AND id = ${candidateId}::uuid
+      `.execute(db.db);
+      const facts = await sql<Record<string, unknown>>`
+        SELECT * FROM app.memory_facts
+        WHERE owner_user_id = ${ids.userA}::uuid AND object_text = ${excerpt}
+        ORDER BY id
+      `.execute(db.db);
+      expect(candidate.rows).toHaveLength(1);
+      return { candidate: candidate.rows[0]!, facts: facts.rows };
+    }
+  );
+}
+
+describe("pending-only memory candidate decisions", () => {
+  it.each(["reject", "suppress"] as const)(
+    "preserves the full accepted candidate and its single memory after a late %s",
+    async (action) => {
+      const excerpt = `Accepted before ${action} ${randomUUID()}`;
+      const candidate = await insertManualCandidate(ids.userA, excerpt);
+      const accepted = await server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/accept`,
+        headers: authHeaders(ids.userA)
+      });
+      expect(accepted.statusCode).toBe(200);
+      const before = await candidateDecisionState(candidate.id, excerpt);
+      expect(before.candidate).toMatchObject({
+        status: "promoted",
+        promotion_reason: expect.any(String),
+        resolved_at: expect.any(Date),
+        updated_at: expect.any(Date)
+      });
+      expect(before.facts).toHaveLength(1);
+
+      const late = await server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/${action}`,
+        headers: authHeaders(ids.userA),
+        payload: { reason: "stale decision must not overwrite acceptance" }
+      });
+      expect(late.statusCode).toBe(404);
+      expect(late.json()).toEqual({ error: "Candidate not found or not pending" });
+      expect(await candidateDecisionState(candidate.id, excerpt)).toEqual(before);
+    }
+  );
+
+  it.each([
+    ["reject", "reject", "rejected"],
+    ["reject", "suppress", "rejected"],
+    ["suppress", "reject", "suppressed"],
+    ["suppress", "suppress", "suppressed"]
+  ] as const)(
+    "preserves the complete row after %s followed by %s",
+    async (first, later, status) => {
+      const excerpt = `Terminal ${first} then ${later} ${randomUUID()}`;
+      const candidate = await insertManualCandidate(ids.userA, excerpt);
+      const initial = await server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/${first}`,
+        headers: authHeaders(ids.userA),
+        payload: { reason: "original decision" }
+      });
+      expect(initial.statusCode).toBe(204);
+      const before = await candidateDecisionState(candidate.id, excerpt);
+      expect(before.candidate).toMatchObject({
+        status,
+        promotion_reason: "original decision",
+        resolved_at: expect.any(Date),
+        updated_at: expect.any(Date)
+      });
+      expect(before.facts).toEqual([]);
+
+      const repeated = await server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/${later}`,
+        headers: authHeaders(ids.userA),
+        payload: { reason: "replacement decision must not be saved" }
+      });
+      expect(repeated.statusCode).toBe(404);
+      expect(repeated.json()).toEqual({ error: "Candidate not found or not pending" });
+      expect(await candidateDecisionState(candidate.id, excerpt)).toEqual(before);
+    }
+  );
+
+  it("lets exactly one rejection or suppression win when both decisions race", async () => {
+    const excerpt = `Concurrent reject and suppress ${randomUUID()}`;
+    const candidate = await insertManualCandidate(ids.userA, excerpt);
+    let decisionsReady = 0;
+    let releaseDecisions!: () => void;
+    const decisionsReleased = new Promise<void>((resolve) => {
+      releaseDecisions = resolve;
+    });
+    const marks = (["markRejected", "markSuppressed"] as const).map((method) => {
+      const mark = MemoryCandidatesRepository.prototype[method];
+      return vi
+        .spyOn(MemoryCandidatesRepository.prototype, method)
+        .mockImplementation(async function (
+          this: MemoryCandidatesRepository,
+          db,
+          ownerUserId,
+          id,
+          reason
+        ) {
+          if (ownerUserId === ids.userA && id === candidate.id) {
+            decisionsReady += 1;
+            await decisionsReleased;
+          }
+          return mark.call(this, db, ownerUserId, id, reason);
+        });
+    });
+    const actions = ["reject", "suppress"] as const;
+    const responses = Promise.all(
+      actions.map((action) =>
+        server.inject({
+          method: "POST",
+          url: `/api/memory/candidates/${candidate.id}/${action}`,
+          headers: authHeaders(ids.userA),
+          payload: { reason: `${action} won` }
+        })
+      )
+    );
+    try {
+      await vi.waitFor(() => expect(decisionsReady).toBe(2), { timeout: 5_000 });
+      releaseDecisions();
+      const results = await responses;
+      expect(results.map((result) => result.statusCode).sort()).toEqual([204, 404]);
+      expect(results.find((result) => result.statusCode === 404)?.json()).toEqual({
+        error: "Candidate not found or not pending"
+      });
+      const winner = actions[results.findIndex((result) => result.statusCode === 204)]!;
+      const state = await candidateDecisionState(candidate.id, excerpt);
+      expect(state.candidate).toMatchObject({
+        status: winner === "reject" ? "rejected" : "suppressed",
+        promotion_reason: `${winner} won`
+      });
+      expect(state.facts).toEqual([]);
+    } finally {
+      releaseDecisions();
+      try {
+        await responses;
+      } finally {
+        for (const mark of marks) mark.mockRestore();
+      }
+    }
   });
 });
 
