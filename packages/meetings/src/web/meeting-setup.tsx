@@ -9,11 +9,11 @@ import { captureKeys } from "./capture-client.js";
 import { newCaptureSession, startMeetingCapture, type CaptureSession } from "./capture-session.js";
 import { useSessionDraft } from "./session-draft.js";
 import { CaptureNotice } from "./capture-notice.js";
+import { isRecordingNoticeAcknowledged, useRecordingNotice } from "./recording-notice.js";
 import { CaptureReady } from "./capture-ready.js";
 import { useReadyCapture } from "./capture-choice.js";
 
 interface SetupDraft {
-  readonly noticeAcknowledged: boolean;
   readonly title: string;
   readonly request: CreateMeetingRecordInput | null;
   readonly creating: boolean;
@@ -23,13 +23,13 @@ const setupKey = ["meetings", "setup-draft"] as const;
 export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) => void }) {
   const client = useQueryClient();
   const form = useSessionDraft<SetupDraft>(setupKey, () => ({
-    noticeAcknowledged: false,
     title: "",
     request: null,
     creating: false,
     error: null
   }));
   const ready = useReadyCapture();
+  const notice = useRecordingNotice();
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -40,7 +40,7 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
   const title = form.data.title;
   const titleValid = !title.includes("\0") && new TextEncoder().encode(title.trim()).length <= 240;
   const canStart =
-    form.data.noticeAcknowledged &&
+    notice.acknowledged &&
     !!ready.device &&
     !ready.device.busy &&
     !!ready.selection &&
@@ -52,7 +52,7 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
       !current ||
       current.creating ||
       !titleValid ||
-      (record && (!canStart || current.noticeAcknowledged !== true))
+      (record && (!canStart || !isRecordingNoticeAcknowledged(client)))
     )
       return;
     const request = current.request ?? {
@@ -72,27 +72,21 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
     const deadline = setTimeout(() => controller.abort(), 12000);
     try {
       const { meeting, created } = await createMeeting(request, controller.signal);
-      if (
-        !ownsSubmission() ||
-        (record && client.getQueryData<SetupDraft>(setupKey)?.noticeAcknowledged !== true)
-      )
-        return;
+      if (!ownsSubmission()) return;
       if (created) client.setQueryData(meetingKeys.record(meeting.id), { meeting });
       client.setQueryData<CaptureSession>(captureKeys.session(meeting.id), {
         ...newCaptureSession(),
         choice: ready.choice
       });
       form.update(() => ({
-        noticeAcknowledged: false,
         title: "",
         request: null,
         creating: false,
         error: null
       }));
       void client.invalidateQueries({ queryKey: meetingKeys.history });
-      if (record && ready.device && ready.selection) {
+      if (record && isRecordingNoticeAcknowledged(client) && ready.device && ready.selection) {
         void startMeetingCapture(client, meeting.id, meeting.title, {
-          noticeAcknowledged: true,
           deviceId: ready.device.deviceId,
           connectionId: ready.device.connectionId,
           expectedRevision: ready.device.revision,
@@ -165,13 +159,7 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
           {form.data.error}
         </p>
       ) : null}
-      <CaptureNotice
-        acknowledged={form.data.noticeAcknowledged}
-        disabled={form.data.creating}
-        onChange={(noticeAcknowledged) =>
-          form.update((current) => ({ ...current, noticeAcknowledged }))
-        }
-      />
+      <CaptureNotice disabled={form.data.creating} />
       <div className="meetings-actions">
         <Button
           disabled={form.data.creating || !titleValid || !canStart}

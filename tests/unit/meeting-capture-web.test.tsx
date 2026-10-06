@@ -9,6 +9,7 @@ import type {
   MeetingCaptureDevice,
   MeetingCaptureState,
   MeetingCapturePreferences,
+  MeetingRecordingNoticeStatus,
   MeetingRecord
 } from "@moss/shared";
 import { registerDraftInputRegressions } from "./meeting-draft-input-cases.js";
@@ -88,6 +89,7 @@ let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
 let preferences: MeetingCapturePreferences;
+let recordingNotice: MeetingRecordingNoticeStatus;
 let devices: readonly MeetingCaptureDevice[];
 let status: Omit<MeetingCaptureBrowserStatus, "capture"> & { capture: MeetingCaptureState | null };
 let calls: { path: string; body: Record<string, unknown> | undefined }[];
@@ -97,6 +99,13 @@ const json = (value: unknown, code = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(value), { status: code, headers });
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  recordingNotice = {
+    currentNotice: {
+      policyVersion: "2026-10-06",
+      text: "Tell people when recording. Selected audio goes to your transcription service."
+    },
+    acknowledgement: null
+  };
   preferences = {
     defaultCaptureMode: "microphone-only",
     rememberedSource: {
@@ -120,6 +129,17 @@ beforeEach(() => {
       ? (JSON.parse(String(options.body)) as Record<string, unknown>)
       : undefined;
     calls.push({ path, body });
+    if (path === "/api/meetings/recording-notice") {
+      if (body)
+        recordingNotice = {
+          ...recordingNotice,
+          acknowledgement: {
+            policyVersion: String(body.policyVersion),
+            acknowledgedAt: new Date().toISOString()
+          }
+        };
+      return json(recordingNotice);
+    }
     if (path === "/api/meetings/preferences") {
       if (body) preferences = body as unknown as MeetingCapturePreferences;
       return json(preferences);
@@ -210,8 +230,11 @@ async function click(text: string) {
 }
 async function acknowledgeNotice(scope: ParentNode = host) {
   const notice = scope.querySelector<HTMLInputElement>('input[aria-label="Recording notice"]');
-  expect(notice).not.toBeNull();
-  if (!notice!.checked) await act(async () => notice!.click());
+  if (!notice) {
+    expect(scope.textContent).toContain("Recording notice acknowledged");
+    return;
+  }
+  if (!notice.checked) await act(async () => notice.click());
   if (vi.isFakeTimers()) await act(async () => vi.advanceTimersByTimeAsync(1));
   else await settle();
 }
@@ -262,7 +285,11 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
       status.capture = value;
     },
     getCapture: () => status.capture,
-    calls: () => calls
+    calls: () => calls,
+    getNotice: () => recordingNotice,
+    setNotice: (value) => {
+      recordingNotice = value;
+    }
   });
   it("keeps every rapidly typed title character before deferred query notifications", async () => {
     await mount(<MeetingSetup onCreated={() => {}} />);
@@ -323,7 +350,7 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
       await click("Start meeting");
       const starts = calls.filter((call) => call.path.endsWith("/capture/start"));
       expect(starts).toHaveLength(1);
-      expect(starts[0]!.body?.noticeAcknowledged).toBe(true);
+      expect(starts[0]!.body).not.toHaveProperty("noticeAcknowledged");
       expect(starts[0]!.body?.selection).toMatchObject({
         mode,
         microphone: { deviceId: "stable-mic", sourceId: "mic" }
@@ -754,6 +781,13 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
   it.each(["panel", "strip"] as const)(
     "a second browser narrowing the same grant cannot make stale %s Resume broaden capture",
     async (surface) => {
+      recordingNotice = {
+        ...recordingNotice,
+        acknowledgement: {
+          policyVersion: recordingNotice.currentNotice.policyVersion,
+          acknowledgedAt: new Date().toISOString()
+        }
+      };
       status.capture = capture({
         selection: {
           mode: "computer-audio",
@@ -798,7 +832,7 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
         act(() => refreshCaptureStatus(client, meeting.id));
         await settle();
         await click("Pause");
-        await acknowledgeNotice();
+        expect(host.querySelector('input[aria-label="Recording notice"]')).toBeNull();
         await click("Resume");
         const resumed = calls.filter(
           (call) => call.path.endsWith("/capture/control") && call.body?.command === "record"
@@ -812,6 +846,23 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
       }
     }
   );
+  it("keeps notice acknowledgement on the meeting page while strip Stop remains available", async () => {
+    status.capture = capture({
+      desired: "paused",
+      generation: 2,
+      observed: { generation: 2, phase: "paused" }
+    });
+    client.setQueryData(captureKeys.active, { meetingId: meeting.id, title: meeting.title });
+    await mount(<Shell />, "/other");
+    expect(host.querySelector('input[aria-label="Recording notice"]')).toBeNull();
+    expect(host.textContent).not.toContain(recordingNotice.currentNotice.text);
+    expect(button("Resume").disabled).toBe(true);
+    expect(button("Stop and review").disabled).toBe(false);
+    const link = [...host.querySelectorAll("a")].find(
+      (item) => item.textContent === "Review the recording notice on the meeting page"
+    );
+    expect(link?.getAttribute("href")).toBe(`/meetings?id=${meeting.id}`);
+  });
   it("preserves a visible unsent source Change within the same paused generation", async () => {
     status.capture = capture();
     await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);

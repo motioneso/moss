@@ -45,6 +45,7 @@ function ActiveCaptureStrip({ active }: { readonly active: ActiveCapture }) {
             unavailable={query.isError}
             updatedAt={query.dataUpdatedAt}
             processingReady={query.data?.processingReady}
+            showNotice={false}
           />
           {stopped ? (
             <Button variant="link" onClick={() => client.setQueryData(captureKeys.active, null)}>

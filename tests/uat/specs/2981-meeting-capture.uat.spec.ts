@@ -7,7 +7,8 @@ import type {
   MeetingTranscriptSnapshotResponse,
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
-  MeetingCaptureState
+  MeetingCaptureState,
+  MeetingRecordingNoticeStatus
 } from "@moss/shared";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { requireUatBaseURL, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
@@ -146,8 +147,29 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     await page.getByLabel("Recording device", { exact: true }).selectOption(deviceId);
     await page.getByRole("radio", { name: /^Microphone only/ }).click();
     await page.getByLabel("Microphone", { exact: true }).selectOption("synthetic-device");
-    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
-    await page.getByRole("checkbox", { name: "Recording notice", exact: true }).check();
+    const noticeResponse = await page.request.get("/api/meetings/recording-notice");
+    expect(noticeResponse.status()).toBe(200);
+    const notice = (await noticeResponse.json()) as MeetingRecordingNoticeStatus;
+    if (notice.acknowledgement?.policyVersion !== notice.currentNotice.policyVersion) {
+      await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
+      const acknowledged = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/meetings/recording-notice") &&
+          response.request().method() === "PUT"
+      );
+      await page.getByRole("checkbox", { name: "Recording notice", exact: true }).check();
+      const saved = await acknowledged;
+      expect(saved.status()).toBe(200);
+      expect(saved.request().postDataJSON()).toEqual({
+        policyVersion: notice.currentNotice.policyVersion
+      });
+      expect(
+        ((await saved.json()) as MeetingRecordingNoticeStatus).acknowledgement?.policyVersion
+      ).toBe(notice.currentNotice.policyVersion);
+    }
+    await expect(page.getByRole("checkbox", { name: "Recording notice", exact: true })).toHaveCount(
+      0
+    );
     await connection.refresh();
     const created = page.waitForResponse(
       (response) =>
@@ -164,6 +186,7 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     const path = `/api/meetings/records/${meetingId}`;
     const startResponse = await started;
     expect(startResponse.status()).toBe(200);
+    expect(startResponse.request().postDataJSON()).not.toHaveProperty("noticeAcknowledged");
     expect(startResponse.request().postDataJSON()).toMatchObject({
       deviceId,
       connectionId: connection.connectionId,
@@ -313,8 +336,10 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
       (response) =>
         response.url().endsWith("/capture/start") && response.request().method() === "POST"
     );
-    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
-    await page.getByRole("checkbox", { name: "Recording notice", exact: true }).check();
+    await expect(page.getByRole("checkbox", { name: "Recording notice", exact: true })).toHaveCount(
+      0
+    );
+    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Start meeting", exact: true }).click();
     secondMeetingId = (await (await createdAgain).json()).meeting.id as string;
     const nextResponse = await startedAgain;
@@ -352,7 +377,7 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     expect(observations).toHaveLength(2);
     expect(observations.every((item) => item.generatedPcm && item.timestampsRequested)).toBe(true);
     console.log(
-      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; rapid title entry; one Start with explicit remembered microphone; persistent controls during History navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop â†’ New â†’ Start succeeds with remembered sources. Synthetic transport only, not live Mac capture proof."
+      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; rapid title entry; one Start with explicit remembered microphone; persistent controls during History navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop â†’ New â†’ Start succeeds with remembered sources and the same server-stored account recording acknowledgement, with no per-meeting checkbox. Synthetic transport only, not live Mac capture proof."
     );
   } finally {
     try {

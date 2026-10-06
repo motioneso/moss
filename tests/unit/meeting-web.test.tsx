@@ -57,7 +57,7 @@ describe("Meetings draft screen", () => {
     expect(html).toContain("/settings?section=profile");
     expect(html).toMatch(/disabled=""[^>]*>Start meeting/);
     expect(html).not.toContain("Prepare this meeting");
-    expect(html).toContain("Participants have been notified and recording is permitted");
+    expect(html).toContain("Checking the recording notice");
   });
   it("distinguishes loading from empty history", () => {
     const loading = render("/meetings?view=history");

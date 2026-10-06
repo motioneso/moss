@@ -23,6 +23,7 @@ import {
 } from "./capture-presentation.js";
 import { isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { refreshCaptureStatus } from "./capture-status.js";
+import { isRecordingNoticeAcknowledged, refreshRecordingNotice } from "./recording-notice.js";
 
 type CaptureRequest =
   | { readonly kind: "start"; readonly input: MeetingCaptureStartInput }
@@ -34,7 +35,6 @@ interface CaptureOperation {
   readonly retryAt?: number;
 }
 export interface CaptureSession {
-  readonly noticeAcknowledged: boolean;
   readonly grantId: string | null;
   readonly startRequest: MeetingCaptureStartInput | null;
   readonly choiceGeneration: number | null;
@@ -48,7 +48,6 @@ export interface ActiveCapture {
 }
 export function newCaptureSession(): CaptureSession {
   return {
-    noticeAcknowledged: false,
     grantId: null,
     startRequest: null,
     choiceGeneration: null,
@@ -122,8 +121,7 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
     !isMeetingAccessDenied(client.getQueryState(captureKeys.status(id))?.error);
   const needsNotice =
     request.kind === "start" || (request.kind === "control" && request.input.command === "record");
-  const noticeAccepted = () =>
-    !needsNotice || client.getQueryData<CaptureSession>(key)?.noticeAcknowledged === true;
+  const noticeAccepted = () => !needsNotice || isRecordingNoticeAcknowledged(client);
   const pending = client.getQueryData<CaptureSession>(key)?.operation;
   const previousGrantId =
     client.getQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id))?.capture?.grantId ??
@@ -251,6 +249,9 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
           /* Fall through to the visible recovery state after the bounded reconciliation. */
         }
       }
+      const noticeRequired =
+        error instanceof ApiError && error.code === "meeting_capture_notice_required";
+      if (noticeRequired) refreshRecordingNotice(client);
       const processingUnavailable =
         error instanceof ApiError && error.code === "meeting_capture_processing_unavailable";
       const recorderBusy = error instanceof ApiError && error.code === "meeting_capture_busy";
@@ -277,15 +278,17 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
               phase: "retry",
               retryAt: error instanceof CaptureRequestError ? error.retryAt : undefined
             },
-        error: processingUnavailable
-          ? "Transcription unavailable. Check Settings → AI providers, then try again."
-          : error instanceof CaptureRequestError && error.status === 429
-            ? "The server asked us to wait before retrying. Trail Marker’s local Pause and Stop remain available."
-            : recorderBusy
-              ? "This Mac is still recording or finishing the previous meeting. Stop it and wait for the transcript to finish, then try Start again."
-              : definite
-                ? "The connection or sources changed. Check the source summary and try again."
-                : "The command is unconfirmed. Check Trail Marker’s indicator. Stop remains available; retry uses the same request."
+        error: noticeRequired
+          ? "Review the current recording notice before trying again. Pause and Stop remain available."
+          : processingUnavailable
+            ? "Transcription unavailable. Check Settings → AI providers, then try again."
+            : error instanceof CaptureRequestError && error.status === 429
+              ? "The server asked us to wait before retrying. Trail Marker’s local Pause and Stop remain available."
+              : recorderBusy
+                ? "This Mac is still recording or finishing the previous meeting. Stop it and wait for the transcript to finish, then try Start again."
+                : definite
+                  ? "The connection or sources changed. Check the source summary and try again."
+                  : "The command is unconfirmed. Check Trail Marker’s indicator. Stop remains available; retry uses the same request."
       });
       if (
         definite &&
@@ -305,11 +308,11 @@ export async function startMeetingCapture(
   title: string,
   input: MeetingCaptureStartInput
 ) {
-  if (input.noticeAcknowledged !== true) return false;
-  client.setQueryData<CaptureSession>(captureKeys.session(id), (current) => ({
-    ...(current ?? newCaptureSession()),
-    noticeAcknowledged: true
-  }));
+  if (!isRecordingNoticeAcknowledged(client)) return false;
+  client.setQueryData<CaptureSession>(
+    captureKeys.session(id),
+    (current) => current ?? newCaptureSession()
+  );
   client.setQueryData<ActiveCapture>(captureKeys.active, { meetingId: id, title });
   return send(client, id, { kind: "start", input });
 }
@@ -354,10 +357,6 @@ export function useCaptureSession(id: string) {
   }
   return {
     state: query.data,
-    isNoticeAcknowledged: () =>
-      client.getQueryData<CaptureSession>(key)?.noticeAcknowledged === true,
-    acknowledgeNotice: (noticeAcknowledged: boolean) =>
-      update((current) => ({ ...current, noticeAcknowledged })),
     bindCapture: (capture: MeetingCaptureState) => {
       const current = client.getQueryData<CaptureSession>(key);
       if (current?.grantId === capture.grantId && current.choiceGeneration === capture.generation)
