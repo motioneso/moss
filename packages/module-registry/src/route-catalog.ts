@@ -59,8 +59,22 @@ export interface DestructiveWordPostAllowed {
  * (decision 2.22) match by pattern so a new route in a family is caught without a table row.
  */
 export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
-  { pattern: /^\/api\/admin(\/|$)/, category: "self_authority" },
+  {
+    pattern: /^\/api\/admin(\/|$)/,
+    category: "self_authority",
+    julyPrefixes: [
+      "settings.module.install.",
+      "settings.module.remove.",
+      "settings.module.purge.",
+      "ai.adminPin."
+    ]
+  },
   { pattern: /^\/api\/auth(\/|$)/, category: "identity_auth_registration" },
+  {
+    pattern: /^\/api\/onboarding\/provider-(login|install)(\/|$)/,
+    category: "secrets",
+    julyPrefixes: ["settings.onboarding.login.", "settings.onboarding.install."]
+  },
   { pattern: /^\/api\/onboarding(\/|$)/, category: "identity_auth_registration" },
   { pattern: /^\/api\/companion(\/|$)/, category: "identity_auth_registration" },
   { pattern: /^\/api\/mcp(\/|$)/, category: "self_authority" },
@@ -94,6 +108,23 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
     julyPrefixes: ["settings.connector.featureGrant."]
   },
   {
+    pattern: /^\/api\/ai\/providers\/[^/]+\/default$/,
+    category: "self_authority",
+    julyPrefixes: ["ai.defaultProvider."]
+  },
+  {
+    pattern: /^\/api\/ai\/providers(\/[^/]+)?$/,
+    category: "secrets",
+    writesOnly: true,
+    julyPrefixes: ["settings.provider.create.", "settings.provider.update."]
+  },
+  {
+    pattern:
+      /^\/api\/ai\/providers\/[^/]+\/(test|cli-check|discover-models|models\/discover|models\/refresh)$/,
+    category: "external_effect",
+    julyPrefixes: ["settings.providerTest.", "settings.providerDiscovery."]
+  },
+  {
     pattern: /^\/api\/ai\/providers(\/|$)/,
     category: "assistant_brain",
     julyPrefixes: ["ai.providerRevoke.", "ai.modelDisable."]
@@ -101,7 +132,7 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
   {
     pattern: /^\/api\/me\/persona(\/|$)/,
     category: "prompt_shaping",
-    julyPrefixes: ["settings.persona."]
+    julyPrefixes: ["settings.persona.", "settings.assistantName."]
   },
   {
     pattern: /^\/api\/chat\/skills(\/|$)/,
@@ -173,10 +204,217 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
 ];
 
 /** Routes doing what an excluded tool family does that no path rule covers. Slices 3 and 4. */
-export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [];
+export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
+  {
+    method: "POST",
+    path: "/api/connectors/google/authorize",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.authorize."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/google/complete",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.complete."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/imap/connect",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.connect."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/imap/test-connection",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.connect."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/accounts",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.connect."]
+  },
+  {
+    method: "PATCH",
+    path: "/api/connectors/accounts/:id",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.connect."]
+  },
+  {
+    method: "POST",
+    path: "/api/integrations",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.connect."]
+  },
+  {
+    method: "PATCH",
+    path: "/api/integrations/:id",
+    category: "secrets",
+    julyPrefixes: ["settings.connector.connect."]
+  },
+  {
+    method: "DELETE",
+    path: "/api/me/account",
+    category: "identity_auth_registration",
+    julyPrefixes: ["settings.account.lifecycle."]
+  },
+  {
+    method: "DELETE",
+    path: "/api/me/sessions/others",
+    category: "identity_auth_registration",
+    julyPrefixes: ["settings.session.revoke."]
+  },
+  {
+    method: "DELETE",
+    path: "/api/me/sessions/:id",
+    category: "identity_auth_registration",
+    julyPrefixes: ["settings.session.revoke."]
+  },
+  {
+    method: "PUT",
+    path: "/api/integrations/:id/classifier/send-without-asking",
+    category: "self_authority",
+    julyPrefixes: ["settings.permissions."]
+  },
+  {
+    method: "POST",
+    path: "/api/ai/module-builds/:buildId/approve",
+    category: "self_authority",
+    julyPrefixes: ["settings.module.install."]
+  },
+  {
+    method: "POST",
+    path: "/api/ai/models",
+    category: "assistant_brain",
+    julyPrefixes: ["ai.modelDisable."]
+  },
+  {
+    method: "PATCH",
+    path: "/api/ai/models/:id",
+    category: "assistant_brain",
+    julyPrefixes: ["ai.modelDisable."]
+  },
+  {
+    method: "DELETE",
+    path: "/api/ai/models/:id",
+    category: "assistant_brain",
+    julyPrefixes: ["ai.modelDisable."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/google/sync",
+    category: "external_effect",
+    julyPrefixes: ["settings.connectorSync."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/email-refresh",
+    category: "external_effect",
+    julyPrefixes: ["settings.connectorSync."]
+  },
+  {
+    method: "POST",
+    path: "/api/integrations/:id/refresh",
+    category: "external_effect",
+    julyPrefixes: ["settings.connectorSync."]
+  },
+  {
+    method: "POST",
+    path: "/api/connectors/accounts/:id/revoke",
+    category: "external_effect",
+    julyPrefixes: ["settings.connectorRevoke."]
+  },
+  {
+    method: "DELETE",
+    path: "/api/integrations/:id",
+    category: "external_effect",
+    julyPrefixes: ["settings.connectorRevoke."]
+  },
+  {
+    method: "PUT",
+    path: "/api/me/notification-digest-preference",
+    category: "external_effect",
+    julyPrefixes: ["settings.digest."]
+  },
+  {
+    method: "PATCH",
+    path: "/api/me/proactive-monitoring-settings",
+    category: "external_effect",
+    julyPrefixes: ["settings.proactive."]
+  },
+  {
+    method: "POST",
+    path: "/api/me/proactive-cards/refresh",
+    category: "external_effect",
+    julyPrefixes: ["settings.proactive."]
+  },
+  {
+    method: "POST",
+    path: "/api/me/export",
+    category: "external_effect",
+    julyPrefixes: ["settings.export."]
+  },
+  {
+    method: "POST",
+    path: "/api/ai/transcriptions",
+    category: "external_effect",
+    julyPrefixes: ["settings.transcription."]
+  },
+  {
+    method: "POST",
+    path: "/api/workflows/runs/:id/cancel",
+    category: "external_effect",
+    julyPrefixes: ["settings.cancelledWork."]
+  },
+  {
+    method: "POST",
+    path: "/api/ai/module-builds/:buildId/cancel",
+    category: "external_effect",
+    julyPrefixes: ["settings.cancelledWork."]
+  }
+];
 
 /** July prefixes with no route to block, each with its reason. Slices 3 and 4. */
-export const JULY_PREFIXES_WITHOUT_ROUTES: readonly JulyPrefixWithoutRoutes[] = [];
+export const JULY_PREFIXES_WITHOUT_ROUTES: readonly JulyPrefixWithoutRoutes[] = [
+  {
+    prefix: "settings.secretRegistry.",
+    reason:
+      "Its only route, PATCH /api/admin/settings/:key, is blocked by the admin path rule as self_authority."
+  },
+  { prefix: "settings.webSearchKey.", reason: "Platform route; never in the catalog." },
+  {
+    prefix: "settings.admin.promote.",
+    reason: "Platform admin user routes; never in the catalog."
+  },
+  {
+    prefix: "settings.registration.flag.",
+    reason: "Platform admin registration route; never in the catalog."
+  },
+  {
+    prefix: "settings.onboarding.state.",
+    reason: "Onboarding status, complete and skip are platform routes; never in the catalog."
+  },
+  {
+    prefix: "settings.moduleQueueRun.",
+    reason: "Platform module queue route; never in the catalog."
+  },
+  {
+    prefix: "settings.hostInstall.",
+    reason: "Platform host install and restart routes; never in the catalog."
+  },
+  { prefix: "ai.multiplexer.", reason: "Platform chat-multiplexer route; never in the catalog." },
+  { prefix: "settings.promptDataWidening.", reason: "No prompt data widening flag exists yet." },
+  {
+    prefix: "ai.embedProvider.",
+    reason: "An admin setting, blocked by the admin path rule as self_authority."
+  },
+  {
+    prefix: "ai.chatModelOverride.",
+    reason:
+      "Listed under both self_authority and assistant_brain; its routes are blocked as self_authority by the chat-model-override path rule, which a named-route test pins."
+  }
+];
 
 /** POST paths naming a destructive word that are not destructive, each with its reason. */
 export const DESTRUCTIVE_WORD_POST_ALLOWLIST: readonly DestructiveWordPostAllowed[] = [];

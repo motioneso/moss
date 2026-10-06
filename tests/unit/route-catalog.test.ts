@@ -412,6 +412,16 @@ describe("real manifests", () => {
     console.log(`route catalog: ${total} manifest routes, ${catalog.routes.length} in catalog`);
     expect(total).toBeGreaterThan(300);
     expect(catalog.routes.length).toBeGreaterThan(0);
-    expect(catalog.routes.every((r) => r.policy.access === "blocked")).toBe(true);
+    const declaring = new Set(
+      manifests
+        .filter((m) => m.chatDefaults || (m.routes ?? []).some((route) => route.chat))
+        .map((m) => m.id)
+    );
+    // Routes of modules that declare nothing enter the catalog only when a path rule forces them.
+    expect(
+      catalog.routes
+        .filter((r) => !declaring.has(r.moduleId))
+        .every((r) => r.policy.access === "blocked")
+    ).toBe(true);
   });
 });

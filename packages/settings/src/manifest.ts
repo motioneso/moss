@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { customThemeTarget } from "./chat-targets.js";
 import {
   appGetMapSliceExecute,
   appGetMapSliceInputSchema,
@@ -90,266 +91,348 @@ export const settingsModuleManifest: MossModuleManifest = {
   routes: [
     {
       method: "GET",
-      path: "/api/bootstrap/status"
+      path: "/api/bootstrap/status",
+      chat: { access: "read" }
     },
     {
       method: "GET",
       path: "/api/me",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PATCH",
       path: "/api/me/profile",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/locale",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/locale",
+      chat: {
+        access: "write",
+        title: "Change your language, region and time zone",
+        content: "user_authored"
+      },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/quiet-hours",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/quiet-hours",
+      chat: {
+        access: "write",
+        title: "Change your quiet hours",
+        content: "user_authored",
+        coveredBy: "settings.quietHours.set"
+      },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/notification-preferences",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/notification-preferences/:moduleId",
+      chat: {
+        access: "write",
+        title: "Turn a module's notifications on or off",
+        content: "user_authored",
+        coveredBy: "settings.notificationPreference.setEnabled"
+      },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/notification-digest-preference",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/notification-digest-preference",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/weather-location",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/weather-location",
+      chat: {
+        access: "write",
+        title: "Change your weather location",
+        content: "user_authored",
+        coveredBy: "settings.weatherLocation.set"
+      },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/weather-location/search",
+      chat: { access: "read", outbound: true },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/weather-location/reverse",
+      chat: { access: "read", outbound: true },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/weather-unit",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/weather-unit",
+      chat: { access: "write", title: "Change your weather units", content: "user_authored" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/themes",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/themes/active",
+      chat: { access: "write", title: "Switch your theme", content: "user_authored" },
       permissionId: "settings.write"
     },
     {
       method: "PUT",
       path: "/api/me/themes/mode",
+      chat: {
+        access: "write",
+        title: "Switch between light and dark mode",
+        content: "user_authored",
+        coveredBy: "settings.themeMode.set"
+      },
       permissionId: "settings.write"
     },
     {
       method: "PUT",
       path: "/api/me/themes/:id",
+      chat: { access: "write", title: "Save a custom theme", content: "user_authored" },
       permissionId: "settings.write"
     },
     {
       method: "DELETE",
       path: "/api/me/themes/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete a custom theme",
+        content: "user_authored",
+        target: customThemeTarget
+      },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/notes-source",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/notes-source/directories",
+      chat: { access: "read" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/notes-source",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/notes-last-sync",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/sessions",
+      chat: { access: "read" },
       permissionId: "settings.view"
     },
     {
       method: "DELETE",
       path: "/api/me/sessions/others",
+      chat: { access: "blocked", blockedBecause: "identity_auth_registration" },
       permissionId: "settings.write"
     },
     {
       method: "DELETE",
       path: "/api/me/sessions/:id",
+      chat: { access: "blocked", blockedBecause: "identity_auth_registration" },
       permissionId: "settings.write"
     },
     {
       method: "DELETE",
       path: "/api/me/account",
+      chat: { access: "blocked", blockedBecause: "identity_auth_registration" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/persona",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/install-manifest",
+      chat: { access: "read" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/persona",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.write"
     },
     {
       method: "POST",
       path: "/api/me/persona/preview",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/source-behaviors",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/source-behaviors/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/priority-model",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PATCH",
       path: "/api/me/priority-model",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/proactive-monitoring-settings",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PATCH",
       path: "/api/me/proactive-monitoring-settings",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/admin/auth/providers",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/admin/users",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/admin/yolo",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "PUT",
       path: "/api/admin/yolo/instance",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "PUT",
       path: "/api/admin/yolo/users/:id",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "POST",
       path: "/api/admin/yolo/allow-all",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/admin/settings",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "PATCH",
       path: "/api/admin/settings/:key",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/admin/runtime-config/:key",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "PUT",
       path: "/api/admin/runtime-config/:key",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/admin/audit-events",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/admin/modules",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "PATCH",
       path: "/api/admin/modules/:id",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     // #917: external-module admin surface. Admin-only (settings.manage), same as the
@@ -357,92 +440,110 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/admin/external-modules",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "POST",
       path: "/api/admin/external-modules/:id",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/me/modules",
+      chat: { access: "read" },
       permissionId: "settings.view"
     },
     {
       method: "PATCH",
       path: "/api/me/modules/:id",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/me/yolo",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/yolo",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "settings.write"
     },
     {
       method: "GET",
       path: "/api/settings/me/data-export",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "POST",
       path: "/api/me/export",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/export/status/:jobId",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/export/download/:jobId",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "POST",
       path: "/api/onboarding/provider-check",
+      chat: { access: "blocked", blockedBecause: "identity_auth_registration" },
       permissionId: "settings.manage"
     },
     {
       method: "POST",
       path: "/api/onboarding/provider-install",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "settings.manage"
     },
     // #342 Phase 3 (§L.5): the admin-gated provider-login routes (login presentation layer).
     {
       method: "POST",
       path: "/api/onboarding/provider-login/begin",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "settings.manage"
     },
     {
       method: "POST",
       path: "/api/onboarding/provider-login/poll",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "settings.manage"
     },
     {
       method: "POST",
       path: "/api/onboarding/provider-login/submit-token",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "settings.manage"
     },
     {
       method: "POST",
       path: "/api/onboarding/provider-login/cancel",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "settings.manage"
     },
     {
       method: "GET",
       path: "/api/me/chat-archive",
+      chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/chat-archive",
+      chat: { access: "write", title: "Change how long chats are kept", content: "user_authored" },
       permissionId: "settings.write"
     }
   ],

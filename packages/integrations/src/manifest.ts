@@ -21,16 +21,48 @@ export const integrationsModuleManifest = {
   // Chat tools are dynamic (one per discovered connection tool), so there is no static
   // assistantTools list — see Task 8.
   routes: [
-    { method: "GET", path: "/api/integrations" },
-    { method: "POST", path: "/api/integrations" },
-    { method: "GET", path: "/api/integrations/:id" },
-    { method: "PATCH", path: "/api/integrations/:id" },
-    { method: "POST", path: "/api/integrations/:id/refresh" },
-    { method: "DELETE", path: "/api/integrations/:id" },
-    { method: "PUT", path: "/api/integrations/:id/classifier/kept-out" },
-    { method: "POST", path: "/api/integrations/:id/classifier/prepare" },
-    { method: "POST", path: "/api/integrations/:id/classifier/sort" },
-    { method: "PUT", path: "/api/integrations/:id/classifier/send-without-asking" }
+    { method: "GET", path: "/api/integrations", chat: { access: "read" } },
+    {
+      method: "POST",
+      path: "/api/integrations",
+      chat: { access: "blocked", blockedBecause: "secrets" }
+    },
+    { method: "GET", path: "/api/integrations/:id", chat: { access: "read" } },
+    {
+      method: "PATCH",
+      path: "/api/integrations/:id",
+      chat: { access: "blocked", blockedBecause: "secrets" }
+    },
+    {
+      method: "POST",
+      path: "/api/integrations/:id/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "DELETE",
+      path: "/api/integrations/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "PUT",
+      path: "/api/integrations/:id/classifier/kept-out",
+      chat: { access: "blocked", blockedBecause: "self_authority" }
+    },
+    {
+      method: "POST",
+      path: "/api/integrations/:id/classifier/prepare",
+      chat: { access: "blocked", blockedBecause: "self_authority" }
+    },
+    {
+      method: "POST",
+      path: "/api/integrations/:id/classifier/sort",
+      chat: { access: "blocked", blockedBecause: "self_authority" }
+    },
+    {
+      method: "PUT",
+      path: "/api/integrations/:id/classifier/send-without-asking",
+      chat: { access: "blocked", blockedBecause: "self_authority" }
+    }
   ],
   jobs: [
     { queueName: INTEGRATION_CLASSIFIER_SORT_QUEUE, metadataOnly: true },

@@ -8,6 +8,7 @@ import {
   listMemoryCorrectionsResponseSchema
 } from "@moss/shared";
 
+import { memoryFactTarget } from "./chat-targets.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -257,86 +258,262 @@ export const chatModuleManifest = {
     {
       method: "GET",
       path: "/api/chat/threads",
+      chat: { access: "read" },
       responseSchema: listChatThreadsResponseSchema,
       permissionId: "chat.view"
     },
     {
       method: "GET",
       path: "/api/chat/threads/:id/messages",
+      chat: { access: "read" },
       responseSchema: listChatThreadMessagesResponseSchema,
       permissionId: "chat.view"
     },
-    { method: "GET", path: "/api/chat/meeting-context", permissionId: "chat.view" },
-    { method: "POST", path: "/api/chat/turn", permissionId: "chat.message" },
+    {
+      method: "GET",
+      path: "/api/chat/meeting-context",
+      chat: { access: "read" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/turn",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     // #1133 — file/image upload staged for the next turn; sending is what needs the
     // message permission, so the upload shares it.
-    { method: "POST", path: "/api/chat/attachments", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/evening-interview", permissionId: "chat.message" },
+    {
+      method: "POST",
+      path: "/api/chat/attachments",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/evening-interview",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     // #1284 — the generic seed seam (evening-interview above is one dedicated caller).
     // `chat.message` because a seed carries exactly the authority of a user turn: it frames
     // what the assistant sees before the first message, so it is a write to the conversation,
     // not a read of it. Missing this entry does not fail a unit test — it fails
     // assertRouteCoverage at server BOOT, taking down every integration test that stands the
     // API up. tests/unit/chat-route-coverage.test.ts now catches it here instead.
-    { method: "POST", path: "/api/chat/seed", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/turn/cancel", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/stream", permissionId: "chat.view" },
-    { method: "POST", path: "/api/chat/clear", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/private/end", permissionId: "chat.message" },
+    {
+      method: "POST",
+      path: "/api/chat/seed",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/turn/cancel",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/stream",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/clear",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/private/end",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     {
       method: "GET",
       path: "/api/chat/privacy",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: getChatPrivacyStateResponseSchema,
       permissionId: "chat.view"
     },
-    { method: "POST", path: "/api/chat/switch", permissionId: "chat.message" },
-    { method: "PUT", path: "/api/chat/page-context", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/threads/:id/resume", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/settings", permissionId: "chat.view" },
-    { method: "PUT", path: "/api/chat/settings", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/memory/settings", permissionId: "chat.view" },
-    { method: "PATCH", path: "/api/chat/memory/settings", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/memory/facts", permissionId: "chat.view" },
+    {
+      method: "POST",
+      path: "/api/chat/switch",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "PUT",
+      path: "/api/chat/page-context",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/threads/:id/resume",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/settings",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/chat/settings",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/memory/settings",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/memory/settings",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/memory/facts",
+      chat: { access: "read" },
+      permissionId: "chat.view"
+    },
     {
       method: "GET",
       path: "/api/chat/memory/corrections",
+      chat: { access: "read" },
       responseSchema: listMemoryCorrectionsResponseSchema,
       permissionId: "chat.view"
     },
-    { method: "DELETE", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
+    {
+      method: "DELETE",
+      path: "/api/chat/memory/facts/:id",
+      chat: {
+        access: "destructive",
+        title: "Forget something Moss remembers about you",
+        target: memoryFactTarget
+      },
+      permissionId: "chat.message"
+    },
     // #2908 — the owner deletes their own classifier shadow records on request. RLS scopes the
     // delete; there is no admin path and no separate verb for another actor.
-    { method: "DELETE", path: "/api/chat/classifier/shadow-records", permissionId: "chat.message" },
+    {
+      method: "DELETE",
+      path: "/api/chat/classifier/shadow-records",
+      chat: {
+        access: "destructive",
+        title: "Delete the tool-picking trial records",
+        content: "user_authored",
+        coveredBy: "chat.deleteClassifierShadowRecords"
+      },
+      permissionId: "chat.message"
+    },
     // #2957 — temporary shadow report: the viewer's own classifier shadow counts and
     // disagreements. Owner-only through row security, including for admins.
-    { method: "GET", path: "/api/chat/classifier/shadow-report", permissionId: "chat.view" },
-    { method: "PATCH", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/memory/facts/:id/confirm", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/memory/facts/:id/reject", permissionId: "chat.message" },
+    {
+      method: "GET",
+      path: "/api/chat/classifier/shadow-report",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/memory/facts/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/memory/facts/:id/confirm",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/memory/facts/:id/reject",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     {
       method: "POST",
       path: "/api/chat/action-requests/:id/resolve",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "chat.message"
     },
     {
       method: "GET",
       path: "/api/chat/messages/:messageId/provenance",
+      chat: { access: "read" },
       permissionId: "chat.view"
     },
     {
       method: "GET",
       path: "/api/chat/messages/:messageId/provenance/:supportId/dereference",
+      chat: { access: "read" },
       permissionId: "chat.view"
     },
-    { method: "POST", path: "/api/mcp", permissionId: "chat.message" },
-    { method: "POST", path: "/internal/permission", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/skills", permissionId: "chat.view" },
-    { method: "GET", path: "/api/chat/skills/:id", permissionId: "chat.view" },
-    { method: "POST", path: "/api/chat/skills", permissionId: "chat.message" },
-    { method: "PATCH", path: "/api/chat/skills/:id", permissionId: "chat.message" },
-    { method: "PATCH", path: "/api/chat/skills/:id/enabled", permissionId: "chat.message" },
-    { method: "DELETE", path: "/api/chat/skills/:id", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/skills/import", permissionId: "chat.message" }
+    {
+      method: "POST",
+      path: "/api/mcp",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/internal/permission",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/skills",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/skills/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/skills",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/skills/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/skills/:id/enabled",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "DELETE",
+      path: "/api/chat/skills/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/skills/import",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    }
   ],
   assistantActionFamilies: [
     {
