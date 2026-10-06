@@ -157,9 +157,11 @@ describe("InstanceModulesPane external-modules group (#1084)", () => {
 
   it("explains actor-scoped current-installation approval without trusting results", () => {
     const html = renderWithQuery(seedClient());
-    expect(html).toContain("approves its current tool descriptions");
-    expect(html).toContain("Other users still treat those descriptions as outside content");
-    expect(html).toContain("personal module list does not count");
+    expect(html).toContain("approves its tool descriptions for your chats");
+    expect(html).toContain("switching it off and on approves it for you");
+    expect(html).toContain("While it is off, it is hidden for everyone");
+    expect(html).toContain("Your personal module switch does not approve it");
+    expect(html).toContain("Other users still treat its descriptions as outside content");
     expect(html).toContain("Tool results and forwarded errors still make later changes ask");
   });
 

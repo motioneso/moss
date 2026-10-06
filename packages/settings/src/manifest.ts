@@ -637,7 +637,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.addonDescriptorApproval",
       description:
-        "Instance-level enable/reapprove, draft ship or an accepted install/upgrade approves the current add-on hashes for your chats. Older installs need fresh approval; a personal module toggle does not count."
+        "To approve an older add-on's tool descriptions for your chats, switch it off and on in Instance modules. While off, it is hidden for everyone. The personal module switch does not approve it."
     },
     {
       id: "app.callAction",

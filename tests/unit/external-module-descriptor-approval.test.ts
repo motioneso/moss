@@ -179,24 +179,41 @@ describe("accepted add-on descriptor ownership", () => {
     expect(own.classifier?.description).toBe("Read demo");
   });
 
-  it("does not grant trust across a concurrent rescan with the same module id", async () => {
-    const first = discovery();
-    const nextManifest = { ...first.manifest, version: "2.0.0" };
-    const next = {
-      ...first,
-      manifest: nextManifest,
-      manifestHash: hashCanonicalManifest(nextManifest),
-      packageHash: "sha256:next"
-    };
-    const generated = createExternalToolManifests([first], async () => ({ data: {} }));
-    const resolve = createExternalActiveModulesResolver(
-      async () => {
-        await Promise.resolve();
-        return generated;
-      },
-      () => new Set([first.id]),
-      async () => reconcileExternalModules([next], [accepted(next)]).modules
-    );
-    expect(stamp(await resolve(OWNER))).toBeUndefined();
-  });
+  it.each(["manifest", "package"] as const)(
+    "refuses a concurrent rescan when only the %s hash differs",
+    async (changedHash) => {
+      const first = discovery();
+      const nextManifest =
+        changedHash === "manifest" ? { ...first.manifest, version: "2.0.0" } : first.manifest;
+      const next: ExternalModuleDiscovery = {
+        ...first,
+        manifest: nextManifest,
+        manifestHash: hashCanonicalManifest(nextManifest),
+        packageHash: changedHash === "package" ? "sha256:next" : first.packageHash
+      };
+      // Resolve the current accepted discovery separately from the earlier tool snapshot.
+      // Exactly one binding differs, so the other guard cannot mask its removal.
+      const [active] = reconcileExternalModules([next], [accepted(next)]).modules;
+      expect(active).toMatchObject({ active: true, descriptorApprovedByUserId: OWNER });
+      if (changedHash === "manifest") {
+        expect(next.manifestHash).not.toBe(first.manifestHash);
+        expect(next.packageHash).toBe(first.packageHash);
+      } else {
+        expect(next.manifestHash).toBe(first.manifestHash);
+        expect(next.packageHash).not.toBe(first.packageHash);
+      }
+      const generated = createExternalToolManifests([first], async () => ({ data: {} }));
+      const resolve = createExternalActiveModulesResolver(
+        async () => {
+          await Promise.resolve();
+          return generated;
+        },
+        () => new Set([first.id]),
+        async () => (active ? [active] : [])
+      );
+      const resolved = await resolve(OWNER);
+      expect(resolved).toHaveLength(1);
+      expect(stamp(resolved)).toBeUndefined();
+    }
+  );
 });

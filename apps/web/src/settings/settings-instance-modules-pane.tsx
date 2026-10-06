@@ -144,10 +144,11 @@ export function InstanceModulesPane() {
         kept.
       </Note>
       <Note>
-        Enabling, installing or upgrading an external module approves its current tool descriptions
-        for your chats. Other users still treat those descriptions as outside content. Older
-        installs need a new instance-level approval; turning a module on in your personal module
-        list does not count. Tool results and forwarded errors still make later changes ask.
+        Installing or updating an add-on approves its tool descriptions for your chats. For an older
+        add-on, switching it off and on approves it for you. While it is off, it is hidden for
+        everyone. Your personal module switch does not approve it. Other users still treat its
+        descriptions as outside content. Tool results and forwarded errors still make later changes
+        ask.
       </Note>
       {/* #1187 decision 5: the trust warning is only true when the inventory actually
           contains a module from outside the pinned registry — `external?.enabled` alone

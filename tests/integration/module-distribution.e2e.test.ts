@@ -589,16 +589,53 @@ describe("module distribution e2e (#964)", () => {
       payload: { enabled: true }
     });
     expect(acceptedByA.statusCode).toBe(200);
-    const second = await signUp(server, "second-admin@moddist.test", "Second admin");
-    const promotion = new Client({ connectionString: connectionStrings.bootstrap });
-    await promotion.connect();
+    const beforeUpgrade = new Client({ connectionString: connectionStrings.bootstrap });
+    await beforeUpgrade.connect();
     try {
-      await promotion.query("UPDATE app.users SET is_instance_admin = true WHERE id = $1", [
-        second.userId
-      ]);
+      const prior = await beforeUpgrade.query(
+        "SELECT descriptor_approved_by FROM app.external_modules WHERE id = $1",
+        [FIXTURE_MODULE_ID]
+      );
+      expect(prior.rows[0]?.descriptor_approved_by).toBe(adminUserId);
     } finally {
-      await promotion.end();
+      await beforeUpgrade.end();
     }
+    const second = await signUp(server, "second-admin@moddist.test", "Second admin");
+    // A later sign-up is pending by default. Promotion is not account approval, and
+    // auth reads that status from the DB on each request (not the sign-up cookie).
+    const promotion = await server.inject({
+      method: "POST",
+      url: `/api/admin/users/${second.userId}/promote`,
+      headers: { cookie: adminCookie }
+    });
+    expect(promotion.statusCode).toBe(200);
+    expect(promotion.json().user).toMatchObject({
+      id: second.userId,
+      isInstanceAdmin: true,
+      status: "pending"
+    });
+    const requestsBeforePendingAttempt = registryIndexRequestCount;
+    const pendingDownload = await server.inject({
+      method: "POST",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
+      headers: { cookie: second.cookie, "content-type": "application/json" },
+      payload: {}
+    });
+    expect(pendingDownload.statusCode).toBe(403);
+    expect(pendingDownload.json()).toMatchObject({ code: "account_pending_approval" });
+    expect(registryIndexRequestCount).toBe(requestsBeforePendingAttempt);
+    const approval = await server.inject({
+      method: "POST",
+      url: `/api/admin/users/${second.userId}/approve`,
+      headers: { cookie: adminCookie }
+    });
+    expect(approval.statusCode).toBe(200);
+    expect(approval.json().user).toMatchObject({
+      id: second.userId,
+      isInstanceAdmin: true,
+      status: "active"
+    });
+    // Keep the original cookie: successful download below proves fresh account status.
     latestVersion = "0.3.0";
     // ?refresh=1 busts the server's 10-minute index cache (Task 6).
     const list = await server.inject({
@@ -606,6 +643,7 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry?refresh=1",
       headers: { cookie: adminCookie }
     });
+    expect(list.statusCode).toBe(200);
     expect(
       list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
     ).toMatchObject({
@@ -637,11 +675,11 @@ describe("module distribution e2e (#964)", () => {
     const column = await client.query(
       `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = '${FIXTURE_TABLE_SLUG}_items' AND column_name = 'label'`
     );
-    const approval = await client.query(
+    const acceptedApproval = await client.query(
       "SELECT descriptor_approved_by, enabled_by, staged_by FROM app.external_modules WHERE id = $1",
       [FIXTURE_MODULE_ID]
     );
-    expect(approval.rows[0]).toEqual({
+    expect(acceptedApproval.rows[0]).toEqual({
       descriptor_approved_by: second.userId,
       enabled_by: second.userId,
       staged_by: null
