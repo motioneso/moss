@@ -157,7 +157,9 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
           response.url().endsWith("/api/meetings/recording-notice") &&
           response.request().method() === "PUT"
       );
-      await page.getByRole("checkbox", { name: "Recording notice", exact: true }).check();
+      // The design-system switch hides its native checkbox; the label is the clickable surface.
+      const noticeSwitch = page.getByRole("checkbox", { name: "Recording notice", exact: true });
+      await page.locator("label.jds-switch", { has: noticeSwitch }).click();
       const saved = await acknowledged;
       expect(saved.status()).toBe(200);
       expect(saved.request().postDataJSON()).toEqual({
