@@ -225,6 +225,7 @@ blocking	tests/uat/specs/2981-meeting-history.uat.spec.ts	tests/uat/specs/2981-m
 blocking	tests/uat/run-meetings-uat.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
 blocking	.github/workflows/meeting-drafts-uat.yml	tests/uat/specs/2981-meeting-history.uat.spec.ts
 blocking	tests/uat/specs/meeting-history-layout.ts	tests/uat/specs/2981-meeting-history.uat.spec.ts
+blocking	tests/uat/specs/meeting-capture-browser-fixture.ts	tests/uat/specs/2981-meeting-automatic-summary.uat.spec.ts
 # #2956 slice C: the Activity page lines, detail dialog and layout. A real briefing
 # synthesis records a line the admin then sees as fixed words with a working dialog.
 blocking	apps/web/src/settings/settings-activity-pane.tsx	tests/uat/specs/2956-activity-history.uat.spec.ts

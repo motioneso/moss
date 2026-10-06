@@ -10,6 +10,7 @@ import type {
   MeetingRecordingNoticeStatus
 } from "@moss/shared";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
+import { createCaptureBrowserFixture } from "./meeting-capture-browser-fixture.js";
 import { requireUatBaseURL, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 import {
   connectCaptureFixture,
@@ -39,6 +40,7 @@ test("Stop automatically writes one summary after finalization without a generat
   if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
     throw new Error("Use the credential-free Meetings UAT wrapper");
   const baseURL = requireUatBaseURL();
+  const browserFixture = createCaptureBrowserFixture(page.request, baseURL);
   const fixtureName = `${project}-meeting-auto-summary-fixture`;
   const pinPath = `/api/admin/users/${UAT_ADMIN_ID}/ai-pin`;
   let providerId: string | undefined;
@@ -115,11 +117,7 @@ test("Stop automatically writes one summary after finalization without a generat
     expect(noticeResponse.status()).toBe(200);
     const notice = (await noticeResponse.json()) as MeetingRecordingNoticeStatus;
     expect(
-      (
-        await page.request.put("/api/meetings/recording-notice", {
-          data: { policyVersion: notice.currentNotice.policyVersion }
-        })
-      ).status()
+      (await browserFixture.acknowledgeNotice(notice.currentNotice.policyVersion)).status()
     ).toBe(200);
     expect(
       (
@@ -259,9 +257,7 @@ test("Stop automatically writes one summary after finalization without a generat
       OUTPUT_FIXTURE_OVERVIEW
     );
     expect(generationPosts).toBe(0);
-    expect((await page.request.post(`${path}/capture/control`, { data: stopInput })).status()).toBe(
-      200
-    );
+    expect((await browserFixture.replayControl(meetingId, stopInput)).status()).toBe(200);
     const replayed = await page.request.get(`${path}/outputs`);
     expect(replayed.status()).toBe(200);
     const replayOutputs = (await replayed.json()) as MeetingOutputsResponse;

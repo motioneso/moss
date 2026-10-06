@@ -176,3 +176,26 @@ names, role lists and commands to their migration declarations. Root and test Ty
 passed sequentially with a 4 GB heap. Database integration and its policy-removal negative control were not run locally:
 Docker and the required isolated verify-gate database remain unavailable. Hosted verification
 of the corrected control is still required.
+
+## Automatic-summary UAT Origin correction (2026-10-06)
+
+Hosted UAT job `112411341867` reached the recording-notice read, then received 401 for its
+acknowledgement PUT. The fixture used Playwright's cookie-sharing `page.request` API context,
+which does not supply a browser request's Origin automatically. The registered capture mutation
+guard correctly rejected the missing Origin before resolving the session. Pairing uses an actual
+browser Approve click and does not have this omission.
+
+The automatic-summary fixture now uses a small request helper that supplies the configured base
+URL's origin for both notice acknowledgement and the later Stop replay POST. Both generated
+requests are exercised through registered Fastify routes: each returned 401 before the helper
+fix and 200 after it, while missing and untrusted Origins still return 401 before session or
+store access. Setup/cleanup preferences, transcript, record deletion, AI configuration and device
+session revocation use their existing authenticated routes; no other capture-browser mutation
+in this spec was missing the header. Production authentication and CSRF checks are unchanged.
+The helper is included in the Meetings workflow paths and maps to the automatic-summary spec
+in the canonical UAT trigger map, so helper-only changes retain that acceptance coverage.
+
+Five focused offline fixture/notice/capture/preferences/UAT-environment suites passed all 57 tests, and scoped
+ESLint, Prettier, file-size and root/tests TypeScript checks passed (compilers ran sequentially
+with a 4 GB heap). No database or browser UAT ran locally. Hosted execution remains required
+to verify the rest of the automatic-summary scenario.
