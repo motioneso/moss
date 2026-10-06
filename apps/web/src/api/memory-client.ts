@@ -171,3 +171,9 @@ export async function deleteMemoryEntity(id: string): Promise<void> {
     method: "DELETE"
   });
 }
+
+export async function deleteMemoryFact(id: string): Promise<void> {
+  await requestJson<unknown>(`/api/memory/graph/facts/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
