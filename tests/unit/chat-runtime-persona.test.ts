@@ -61,7 +61,7 @@ describe("MOSS_PERSONA_APP_ACTIONS", () => {
   // matched, so the model read it as a formatting rule for its own replies.
   it("treats show, display, use and default-style requests as settings changes", () => {
     expect(MOSS_PERSONA_APP_ACTIONS).toContain(
-      "A request about how the app shows, sorts, formats, or defaults something"
+      "A standalone request about how the app shows, sorts, formats, or defaults something"
     );
     expect(MOSS_PERSONA_APP_ACTIONS).toContain(
       "(units, views, themes, layouts, languages, time or date formats) is a settings change"
@@ -69,6 +69,19 @@ describe("MOSS_PERSONA_APP_ACTIONS", () => {
     for (const phrasing of ['"show"', '"display"', '"use"', '"make"', '"default to"', '"I want"']) {
       expect(MOSS_PERSONA_APP_ACTIONS).toContain(phrasing);
     }
+  });
+
+  // #3065 review: ordinary writes do not always show an approval card, so "What's the weather in
+  // Paris? Show it in Fahrenheit." must not quietly save the user's weather unit.
+  it("keeps a unit or format ask tied to a question to that one reply", () => {
+    const sentences = MOSS_PERSONA_APP_ACTIONS.split(/(?<=\.)\s+/);
+    const oneOff = sentences.find((sentence) => /unit or format request/.test(sentence));
+    expect(oneOff).toBeDefined();
+    expect(oneOff).toMatch(/tied to a question in the same message/);
+    expect(oneOff).toMatch(/only that one reply/);
+    expect(oneOff).toMatch(/saves nothing/);
+    expect(oneOff).not.toMatch(/settings change/);
+    expect(MOSS_PERSONA_APP_ACTIONS).toMatch(/If unclear, ask which they mean\./);
   });
 
   it("changes Moss's own reply style only when the request is about Moss's replies", () => {
