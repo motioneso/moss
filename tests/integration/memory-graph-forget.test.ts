@@ -121,7 +121,7 @@ describe("forgetting a memory fact cleans up conflicts", () => {
     expect(after.group?.status).toBe("resolved");
   });
 
-  it("forget a superseded fact after a correction", async () => {
+  it("forget an overruled fact after another is confirmed", async () => {
     const { facts, groupId } = await seedConflict(["first", "second", "third"]);
     const [first, second] = facts;
     await appDataContext.withDataContext(
