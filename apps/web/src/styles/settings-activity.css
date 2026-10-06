@@ -18,6 +18,7 @@
 
 .act-filters__group {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-right: var(--space-3);
 }
