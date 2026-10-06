@@ -1123,8 +1123,8 @@ checklist, not a fabricated live pass.
   browser requests show one approval resolution and no browser-side theme `PUT`.
 - **Plan correction, ruled by Ben on 2026-10-06:** the supported scripted path uses ACP, which is
   deliberately tainted at launch, so it cannot prove clean automatic browser execution. Ben ruled
-  that every live write asking first is acceptable for phase 1, dropped the no-ask browser case and
-  clean Run B, and set the usability bar at all eight allowed tasks (People and News topic edits stay
+  that every live write asking first is acceptable for phase 1, deferred the no-ask browser case and
+  clean Run B to #3078 (fresh live chats start clean; it does not block this deployment), and set the usability bar at all eight allowed tasks (People and News topic edits stay
   blocked and are not counted). Clean automatic behavior keeps its real-gateway/database coverage.
 - **Real spec:** a note containing "switch my theme to dark" exists; the user asks an unrelated
   question so recall pulls the note in; asking for a theme change shows an approval card with the

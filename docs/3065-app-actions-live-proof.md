@@ -14,7 +14,8 @@ handling by another person/agent, or changes to production.
 records `outside_agent_launch` before its first turn, so every live write asks first. Ben ruled:
 
 - Every live write asking first is acceptable for phase 1.
-- Clean Run B and the no-ask browser case are dropped. Run A alone decides the gate.
+- Clean Run B and the no-ask browser case are deferred to #3078 (fresh live chats start clean).
+  They do not block this deployment. Run A alone decides the gate.
 - The usability bar is all eight allowed tasks succeeding with no hand-holding. Adding a person
   and editing a news topic stay blocked by route policy and are not counted.
 
