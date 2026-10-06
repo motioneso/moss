@@ -1751,15 +1751,12 @@ DTO or external JSON cannot supply the host-only ownership stamp.
 Integration ownership comes from the RLS-scoped connection's immutable owner. The current
 `discovered_tools` snapshot is replaced on discovery. Classifier fingerprints serve review/sort
 freshness, not a separately retained connect-time descriptor-acceptance baseline. As instructed,
-this change does not build that new baseline system. Follow-up: record explicit descriptor acceptance and taint on remote descriptor
-changes. Until then, an owner's refreshed integration descriptions retain owner trust.
+this change does not build that new baseline system. An owner's refreshed integration
+descriptions retain owner trust.
 
-In plain terms, **pressing Refresh on your own integration currently counts as approving its new
-tool descriptions**, even when you meant only to fix a connection problem. That behavior has not
-received a separate ruling from Ben: **Ben must confirm it in the morning**. This build leaves the
-behavior unchanged and does not treat the no-new-baseline instruction as that confirmation. The
-follow-up is an explicitly accepted descriptor baseline with change detection; its scope/issue
-should be settled with that decision. This question is separate from ACP's launch rule.
+In plain terms, **pressing Refresh on your own integration counts as approving its new tool
+descriptions**. Ben confirmed this on 2026-10-06, so no descriptor-acceptance baseline or
+change-detection follow-up is planned. This question is separate from ACP's launch rule.
 
 Add-ons already have accepted manifest/package hashes. Migration 0294 adds current-approval actor
 attribution without backfilling legacy `enabled_by`, which could name an earlier installer after
