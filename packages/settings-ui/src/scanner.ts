@@ -40,7 +40,9 @@ export interface GeneratedWebRoute {
 export interface WebScanResult {
   readonly routes: readonly GeneratedWebRoute[];
   readonly contributions: Readonly<Record<string, string>>;
+  readonly persistentControls: Readonly<Record<string, string>>;
   readonly manifestFiles: readonly string[];
+  readonly packageFiles: readonly string[];
 }
 
 interface PackageInfo {
@@ -151,27 +153,35 @@ export const SHELL_RESERVED_WEB_PATHS: readonly string[] = [
 export function scanModuleWeb(options: ScanOptions): WebScanResult {
   const routes: GeneratedWebRoute[] = [];
   const contributions: Record<string, string> = {};
+  const persistentControls: Record<string, string> = {};
   const manifestFiles: string[] = [];
+  const packageFiles: string[] = [];
   const seenPaths = new Map<string, string>();
   const reservedPaths = new Set(SHELL_RESERVED_WEB_PATHS);
 
   for (const pkg of listModulePackages(options.rootDir)) {
-    if (!pkg.exports || !("./web" in pkg.exports)) continue;
+    const hasWeb = pkg.exports && "./web" in pkg.exports;
+    const hasControls = pkg.exports && "./web/persistent-controls" in pkg.exports;
+    if (!hasWeb && !hasControls) continue;
+    const entry = hasWeb ? "./web" : "./web/persistent-controls";
+    packageFiles.push(join(pkg.dir, "package.json"));
 
     const manifestFile = join(pkg.dir, "src", "manifest.ts");
     if (!existsSync(manifestFile)) {
-      throw new Error(`package "${pkg.name}" declares a "./web" export but has no src/manifest.ts`);
+      throw new Error(
+        `package "${pkg.name}" declares a "${entry}" export but has no src/manifest.ts`
+      );
     }
     manifestFiles.push(manifestFile);
 
     const manifest = readWebManifest(manifestFile);
     if (!manifest) {
       throw new Error(
-        `package "${pkg.name}" declares a "./web" export but its manifest could not be parsed`
+        `package "${pkg.name}" declares a "${entry}" export but its manifest could not be parsed`
       );
     }
 
-    for (const entry of manifest.navigation) {
+    for (const entry of hasWeb ? manifest.navigation : []) {
       if (reservedPaths.has(entry.path)) {
         throw new Error(
           `module web route path "${entry.path}" is reserved by the app shell and cannot be claimed by "${manifest.id}"`
@@ -197,13 +207,18 @@ export function scanModuleWeb(options: ScanOptions): WebScanResult {
       });
     }
 
-    contributions[manifest.id] = `() => import(${JSON.stringify(`${pkg.name}/web`)})`;
+    if (hasWeb) contributions[manifest.id] = `() => import(${JSON.stringify(`${pkg.name}/web`)})`;
+    if (hasControls)
+      persistentControls[manifest.id] =
+        `() => import(${JSON.stringify(`${pkg.name}/web/persistent-controls`)})`;
   }
 
   return {
     routes: routes.sort((a, b) => a.moduleId.localeCompare(b.moduleId)),
     contributions,
-    manifestFiles
+    persistentControls,
+    manifestFiles,
+    packageFiles
   };
 }
 
@@ -213,10 +228,18 @@ export function emitWebVirtualModule(result: WebScanResult): string {
     .map(([moduleId, loader]) => `  { moduleId: ${JSON.stringify(moduleId)}, load: ${loader} }`)
     .join(",\n");
 
+  const controlsEntries = Object.entries(result.persistentControls)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([moduleId, loader]) => `  { moduleId: ${JSON.stringify(moduleId)}, load: ${loader} }`)
+    .join(",\n");
+
   return [
     `export const MODULE_WEB_ROUTES = ${JSON.stringify(result.routes, null, 2)};`,
     `export const MODULE_WEB_CONTRIBUTIONS = [`,
     contributionEntries,
+    `];`,
+    `export const MODULE_PERSISTENT_CONTROLS = [`,
+    controlsEntries,
     `];`,
     ``
   ].join("\n");

@@ -1,11 +1,20 @@
+import { registerMeetingRecordingNoticeRoutes } from "./recording-notice-routes.js";
+import { captureAudioDiagnostic } from "./capture-diagnostics.js";
+import { captureAuthorizationError } from "./capture-authorization.js";
+import { Ajv } from "ajv";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
-  MeetingCaptureLinkInput,
-  MeetingCaptureRedeemInput,
+  MeetingCaptureConnectionInput,
+  MeetingCaptureCommandsInput,
+  MeetingCaptureClaimInput,
+  MeetingCaptureCancelStartInput,
+  MeetingCaptureStartInput,
   MeetingCaptureStatusInput
 } from "@moss/shared";
+import { MeetingCaptureConnectionService } from "./capture-connection-service.js";
+import { CaptureWaiters } from "./capture-waiters.js";
 import { MeetingCaptureError } from "./capture-domain.js";
 import { MeetingCaptureService, type MeetingCaptureDependencies } from "./capture-service.js";
 
@@ -19,15 +28,38 @@ const object = (properties: Record<string, unknown>, required = Object.keys(prop
   required
 });
 const microphone = object({ deviceId: text, sourceId: text });
+// Route-local validator: source envelopes are never coerced or stripped while discriminating.
+const captureBodyValidator = new Ajv({
+  removeAdditional: false,
+  coerceTypes: false,
+  useDefaults: false,
+  discriminator: true,
+  strict: false
+});
+const captureQueryValidator = new Ajv({
+  removeAdditional: false,
+  coerceTypes: true,
+  useDefaults: false,
+  strict: false
+});
+for (const validator of [captureBodyValidator, captureQueryValidator])
+  validator.addFormat("uuid", /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const selection = {
+  type: "object",
+  required: ["mode"],
+  discriminator: { propertyName: "mode" },
   oneOf: [
     object({ mode: { const: "microphone-only" }, microphone }),
-    object({
-      mode: { const: "selected-app" },
-      microphone,
-      outputSourceId: text,
-      appProcessTreeId: text
-    }),
+    object(
+      {
+        mode: { const: "selected-app" },
+        microphone,
+        outputSourceId: text,
+        appProcessTreeId: text,
+        applicationId: text
+      },
+      ["mode", "microphone", "outputSourceId", "appProcessTreeId"]
+    ),
     object({
       mode: { const: "computer-audio" },
       microphone,
@@ -45,6 +77,7 @@ const selection = {
     })
   ]
 };
+
 const permission = { enum: ["granted", "denied", "unknown"] };
 const inventory = object({
   microphones: {
@@ -55,7 +88,10 @@ const inventory = object({
   applications: {
     type: "array",
     maxItems: 128,
-    items: object({ appProcessTreeId: text, label: text })
+    items: object({ appProcessTreeId: text, applicationId: text, label: text }, [
+      "appProcessTreeId",
+      "label"
+    ])
   },
   computerAudio: object({
     available: { type: "boolean" },
@@ -99,6 +135,10 @@ const controlProperties = {
   noticeAcknowledged: { const: true }
 };
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
+const recordNoticeRequired = {
+  if: { properties: { command: { const: "record" } }, required: ["command"] },
+  then: { required: ["selection"] }
+};
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
 function ipRateLimit(max: number) {
@@ -111,9 +151,12 @@ function ipRateLimit(max: number) {
   };
 }
 function failure(error: unknown, reply: FastifyReply) {
-  if (error instanceof MeetingCaptureError)
+  if (error instanceof MeetingCaptureError) {
+    if (error.httpStatus === 429) reply.header("Retry-After", "1");
     return reply.code(error.httpStatus).send({ code: error.code });
-  return reply.code(503).send({ code: "meeting_capture_unavailable" });
+  }
+  const unavailable = captureAuthorizationError(error);
+  return reply.code(unavailable.httpStatus).send({ code: unavailable.code });
 }
 /** Explicit browser controls and a separate mm1-only native surface. No general session fallback. */
 export function registerMeetingCaptureRoutes(
@@ -121,46 +164,171 @@ export function registerMeetingCaptureRoutes(
   deps: MeetingCaptureDependencies
 ): void {
   const service = new MeetingCaptureService(deps);
+  const connections = new MeetingCaptureConnectionService(deps);
+  registerMeetingRecordingNoticeRoutes(server, {
+    dataContext: deps.dataContext,
+    resolveAccessContext: (request) =>
+      service.browser(request.headers, request.id, request.method !== "GET")
+  });
+  const waiters = new CaptureWaiters();
   const noStore = async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header("Cache-Control", "no-store");
   };
-  const options = { onRequest: noStore, bodyLimit: 131072 };
-  server.post<{ Body: MeetingCaptureLinkInput }>(
-    "/api/meetings/capture/link",
-    {
-      ...options,
-      config: ipRateLimit(20),
-      schema: {
-        body: object({
-          meetingId: uuid,
-          verifierHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
-        })
-      }
-    },
-    async (request, reply) => {
-      try {
-        return await service.link(request.headers, request.id, request.body);
-      } catch (error) {
-        return failure(error, reply);
-      }
-    }
-  );
-  server.post<{ Body: MeetingCaptureRedeemInput }>(
-    "/api/meetings/capture/redeem",
+  const options = {
+    onRequest: noStore,
+    bodyLimit: 131072,
+    validatorCompiler: ({ schema, httpPart }: { schema: unknown; httpPart?: string }) =>
+      (httpPart === "body" ? captureBodyValidator : captureQueryValidator).compile(schema as object)
+  };
+  server.post<{ Body: MeetingCaptureConnectionInput }>(
+    "/api/meetings/capture/connection",
     {
       ...options,
       config: ipRateLimit(120),
       schema: {
         body: object({
-          meetingId: uuid,
-          challengeId: uuid,
-          verifier: { type: "string", pattern: "^[A-Za-z0-9_-]{43}$" }
+          connectionId: uuid,
+          verifierHash: { type: "string", pattern: "^[a-f0-9]{64}$" },
+          inventory
         })
       }
     },
     async (request, reply) => {
       try {
-        return await service.redeem(request.headers, request.id, request.body);
+        return await connections.register(request.headers, request.id, request.body);
+      } catch (error) {
+        return failure(error, reply);
+      }
+    }
+  );
+  server.post<{ Body: MeetingCaptureCommandsInput }>(
+    "/api/meetings/capture/commands",
+    {
+      ...options,
+      config: ipRateLimit(120),
+      schema: {
+        body: object(
+          {
+            connectionId: uuid,
+            verifier: { type: "string", pattern: "^[A-Za-z0-9_-]{43}$" },
+            revision: { type: "string", maxLength: 64 },
+            waitMs: { type: "integer", minimum: 0, maximum: 20000 }
+          },
+          ["connectionId", "verifier"]
+        )
+      }
+    },
+    async (request, reply) => {
+      const abort = new AbortController();
+      reply.raw.once("close", () => abort.abort());
+      try {
+        const deadline = Date.now() + (request.body.waitMs ?? 0);
+        let result = await connections.commands(request.headers, request.id, request.body);
+        while (
+          request.body.revision === result.revision &&
+          Date.now() < deadline &&
+          !abort.signal.aborted
+        ) {
+          await waiters.wait(
+            `device:${request.body.connectionId}`,
+            deadline - Date.now(),
+            abort.signal
+          );
+          result = await connections.commands(request.headers, request.id, request.body);
+        }
+        return result;
+      } catch (error) {
+        return failure(error, reply);
+      }
+    }
+  );
+  server.post<{ Body: MeetingCaptureClaimInput }>(
+    "/api/meetings/capture/claim",
+    {
+      ...options,
+      config: ipRateLimit(60),
+      schema: {
+        body: object({
+          connectionId: uuid,
+          verifier: { type: "string", pattern: "^[A-Za-z0-9_-]{43}$" },
+          grantId: uuid,
+          credentialHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
+        })
+      }
+    },
+    async (request, reply) => {
+      try {
+        const result = await connections.claim(request.headers, request.id, request.body);
+        waiters.notify(`meeting:${result.meetingId}`);
+        return result;
+      } catch (error) {
+        return failure(error, reply);
+      }
+    }
+  );
+  server.get(
+    "/api/meetings/capture/devices",
+    { ...options, config: ipRateLimit(120) },
+    async (request, reply) => {
+      try {
+        return await connections.devices(await service.browser(request.headers, request.id, false));
+      } catch (error) {
+        return failure(error, reply);
+      }
+    }
+  );
+  server.post<{ Params: { id: string }; Body: MeetingCaptureStartInput }>(
+    "/api/meetings/records/:id/capture/start",
+    {
+      ...options,
+      config: ipRateLimit(60),
+      schema: {
+        params,
+        body: object(
+          {
+            deviceId: uuid,
+            connectionId: uuid,
+            expectedRevision: { type: "integer", minimum: 1 },
+            noticeAcknowledged: { const: true },
+            requestKey: uuid,
+            selection
+          },
+          ["deviceId", "connectionId", "expectedRevision", "requestKey", "selection"]
+        )
+      }
+    },
+    async (request, reply) => {
+      try {
+        const result = await connections.start(
+          await service.browser(request.headers, request.id, true),
+          request.params.id,
+          request.body
+        );
+        waiters.notify(`device:${request.body.connectionId}`);
+        waiters.notify(`meeting:${request.params.id}`);
+        return result;
+      } catch (error) {
+        return failure(error, reply);
+      }
+    }
+  );
+  server.post<{ Params: { id: string }; Body: MeetingCaptureCancelStartInput }>(
+    "/api/meetings/records/:id/capture/cancel-start",
+    {
+      ...options,
+      config: ipRateLimit(60),
+      schema: { params, body: object({ deviceId: uuid, connectionId: uuid, requestKey: uuid }) }
+    },
+    async (request, reply) => {
+      try {
+        const result = await service.cancelStart(
+          await service.browser(request.headers, request.id, true),
+          request.params.id,
+          request.body
+        );
+        waiters.notify(`device:${request.body.connectionId}`);
+        waiters.notify(`meeting:${request.params.id}`);
+        return result;
       } catch (error) {
         return failure(error, reply);
       }
@@ -178,7 +346,9 @@ export function registerMeetingCaptureRoutes(
             grantId: uuid,
             inventory,
             observed,
-            gaps: { type: "array", maxItems: 32, items: gap }
+            gaps: { type: "array", maxItems: 32, items: gap },
+            finalized: { type: "boolean" },
+            recordedDurationMs: counter
           },
           ["meetingId", "grantId", "inventory", "observed"]
         )
@@ -186,7 +356,9 @@ export function registerMeetingCaptureRoutes(
     },
     async (request, reply) => {
       try {
-        return await service.status(request.headers, request.id, request.body);
+        const result = await service.status(request.headers, request.id, request.body);
+        if (result.changed) waiters.notify(`meeting:${request.body.meetingId}`);
+        return { capture: result.capture };
       } catch (error) {
         return failure(error, reply);
       }
@@ -206,7 +378,9 @@ export function registerMeetingCaptureRoutes(
     },
     async (request, reply) => {
       try {
-        return await service.nativeControl(request.headers, request.id, request.body);
+        const result = await service.nativeControl(request.headers, request.id, request.body);
+        waiters.notify(`meeting:${request.body.meetingId}`);
+        return result;
       } catch (error) {
         return failure(error, reply);
       }
@@ -236,40 +410,54 @@ export function registerMeetingCaptureRoutes(
     },
     async (request, reply) => {
       try {
-        return await service.audio(request.headers, request.id, request.body);
+        const result = await service.audio(request.headers, request.id, request.body);
+        const diagnostic = captureAudioDiagnostic(request.body, result);
+        if (diagnostic) request.log.warn(diagnostic, "Meeting clip processing outcome");
+        waiters.notify(`meeting:${request.body.meetingId}`);
+        return result;
       } catch (error) {
         return failure(error, reply);
       }
     }
   );
-  server.get<{ Params: { id: string } }>(
+  server.get<{ Params: { id: string }; Querystring: { revision?: string; waitMs?: number } }>(
     "/api/meetings/records/:id/capture",
-    { ...options, config: ipRateLimit(300), schema: { params } },
-    async (request, reply) => {
-      try {
-        return await service.browserStatus(
-          await service.browser(request.headers, request.id, false),
-          request.params.id
-        );
-      } catch (error) {
-        return failure(error, reply);
-      }
-    }
-  );
-  server.post<{ Params: { id: string }; Body: { challengeId: string } }>(
-    "/api/meetings/records/:id/capture/approve",
     {
       ...options,
-      config: ipRateLimit(60),
-      schema: { params, body: object({ challengeId: uuid }) }
+      config: ipRateLimit(180),
+      schema: {
+        params,
+        querystring: object(
+          {
+            revision: { type: "string", maxLength: 64 },
+            waitMs: { type: "integer", minimum: 0, maximum: 20000 }
+          },
+          []
+        )
+      }
     },
     async (request, reply) => {
+      const abort = new AbortController();
+      reply.raw.once("close", () => abort.abort());
       try {
-        return await service.approve(
-          await service.browser(request.headers, request.id, true),
-          request.params.id,
-          request.body.challengeId
-        );
+        const deadline = Date.now() + (request.query.waitMs ?? 0);
+        const read = async () =>
+          service.browserStatus(
+            await service.browser(request.headers, request.id, false),
+            request.params.id
+          );
+        let result = await read();
+        while (
+          request.query.revision === result.revision &&
+          Date.now() < deadline &&
+          !abort.signal.aborted &&
+          result.capture?.finalization !== "complete" &&
+          result.capture?.desired !== "revoked"
+        ) {
+          await waiters.wait(`meeting:${request.params.id}`, deadline - Date.now(), abort.signal);
+          result = await read();
+        }
+        return result;
       } catch (error) {
         return failure(error, reply);
       }
@@ -280,15 +468,20 @@ export function registerMeetingCaptureRoutes(
     {
       ...options,
       config: ipRateLimit(300),
-      schema: { params, body: object(controlProperties, controlRequired) }
+      schema: {
+        params,
+        body: { ...object(controlProperties, controlRequired), ...recordNoticeRequired }
+      }
     },
     async (request, reply) => {
       try {
-        return await service.browserControl(
+        const result = await service.browserControl(
           await service.browser(request.headers, request.id, true),
           request.params.id,
           request.body
         );
+        waiters.notify(`meeting:${request.params.id}`);
+        return result;
       } catch (error) {
         return failure(error, reply);
       }

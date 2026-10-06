@@ -20,11 +20,12 @@ import {
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { MacCompanion } from "../../apps/web/src/settings/settings-profile-subviews.js";
 
-function renderApproval(): string {
+function renderApproval(recordingPolicyVersion?: 1): string {
   const client = new QueryClient();
   client.setQueryData(queryKeys.companionPairAttempt("abc"), {
     deviceName: "Ben's MacBook",
-    status: "pending"
+    status: "pending",
+    recordingPolicyVersion
   });
   return renderToStaticMarkup(
     createElement(
@@ -55,9 +56,17 @@ describe("Trail Marker approval page copy", () => {
   });
 });
 
+it("includes recording in supported pairing and keeps legacy pairing unapproved", () => {
+  expect(renderApproval(1)).toContain("Use this Mac for Meetings when you choose Start");
+  expect(renderApproval(1)).toContain("Connecting never starts recording");
+  expect(renderApproval()).not.toContain("Use this Mac for Meetings when you choose Start");
+});
+
 describe("Trail Marker Settings group", () => {
   it("says how to connect, using the address the person is on", () => {
-    const html = renderToStaticMarkup(createElement(MacCompanion));
+    const html = renderToStaticMarkup(
+      createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MacCompanion))
+    );
     expect(html).toContain("How to connect");
     expect(html).toContain(window.location.origin);
     expect(html).toContain("Connect in Browser");
@@ -65,7 +74,9 @@ describe("Trail Marker Settings group", () => {
   });
 
   it("describes the focus access a linked Mac gets, not just check-in", () => {
-    const html = renderToStaticMarkup(createElement(MacCompanion));
+    const html = renderToStaticMarkup(
+      createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MacCompanion))
+    );
     expect(html).toContain("which focus block you have on");
   });
 });

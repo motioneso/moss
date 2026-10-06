@@ -50,7 +50,7 @@ describe("meeting capture defaults", () => {
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
         defaultCaptureMode: mode
       });
-      expect(preferences.get).toHaveBeenCalledExactlyOnceWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
+      expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
     }
   );
   it.each([null, "microphone-only", "selected-app", "computer-audio"])(
@@ -95,6 +95,56 @@ describe("meeting capture defaults", () => {
     expect(response.statusCode).toBe(401);
     expect(actors).toEqual([]);
     expect(preferences.get).not.toHaveBeenCalled();
+    expect(preferences.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("remembered exact meeting source", () => {
+  it("stores only explicit stable source identity and can clear it", async () => {
+    const { app, preferences } = setup();
+    const rememberedSource = {
+      deviceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      microphoneId: "mic-uid",
+      mode: "selected-app",
+      applicationId: "com.example.meet"
+    };
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/meetings/preferences",
+      payload: { defaultCaptureMode: "selected-app", rememberedSource }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().rememberedSource).toEqual(rememberedSource);
+    expect(preferences.upsert).toHaveBeenCalledWith(
+      expect.anything(),
+      "meetings.capture.remembered-source",
+      rememberedSource
+    );
+    const cleared = await app.inject({
+      method: "PUT",
+      url: "/api/meetings/preferences",
+      payload: { defaultCaptureMode: null, rememberedSource: null }
+    });
+    expect(cleared.json().rememberedSource).toBeNull();
+  });
+  it("does not partially save a mode if a selected-app preference lacks stable identity", async () => {
+    const { app, preferences } = setup();
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: "/api/meetings/preferences",
+          payload: {
+            defaultCaptureMode: "selected-app",
+            rememberedSource: {
+              deviceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              microphoneId: "mic",
+              mode: "selected-app"
+            }
+          }
+        })
+      ).statusCode
+    ).toBe(400);
     expect(preferences.upsert).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ final class ConnectionRuntime: ObservableObject {
     @Published private(set) var state: ConnectionState = .notLinked
     @Published private(set) var identity: LinkedIdentity?
     @Published private(set) var lastDiagnostic: String?
+    @Published private(set) var recordingProofRevision = 0
     /// Bumped every time a link ends (log out, revoked). Focus resets itself on each change, so a
     /// relink in the same run, possibly as another account, starts from nothing (#2643).
     @Published private(set) var linkEndCount = 0
@@ -93,6 +94,7 @@ final class ConnectionRuntime: ObservableObject {
             case .storeCredential(let credential, let newIdentity):
                 if let previous = identity, previous != newIdentity {
                     keychain.delete(for: previous)
+                    keychain.deleteRecordingProof(for: previous)
                 }
                 identity = newIdentity
                 preferences.linkedIdentity = newIdentity
@@ -103,6 +105,7 @@ final class ConnectionRuntime: ObservableObject {
             case .clearCredential:
                 if let identity {
                     keychain.delete(for: identity)
+                    keychain.deleteRecordingProof(for: identity)
                 }
                 preferences.linkedIdentity = nil
                 identity = nil
@@ -111,7 +114,7 @@ final class ConnectionRuntime: ObservableObject {
                 startRevokeTask(generation: generation)
             case .clearLocalData(let keepInstance):
                 if keepInstance {
-                    if let identity { keychain.delete(for: identity) }
+                    if let identity { keychain.delete(for: identity); keychain.deleteRecordingProof(for: identity) }
                     preferences.clearAccountData()
                 } else {
                     preferences.clearAll()
@@ -214,6 +217,59 @@ final class ConnectionRuntime: ObservableObject {
         }
         guard let identity, let credential = keychain.read(for: identity) else { return nil }
         return (CompanionClient(instance: identity.instance, transport: transportFactory(identity.instance)), credential)
+    }
+
+    func recordingCredentials() -> (identity: LinkedIdentity, companion: String, proof: String)? {
+        guard let identity, let (_, companion) = requestClient(),
+              let proof = keychain.readRecordingProof(for: identity) else { return nil }
+        return (identity, companion, proof)
+    }
+
+    func storeRecordingProof(_ proof: String, for approvedIdentity: LinkedIdentity) throws {
+        guard identity == approvedIdentity, proof.count == 43 else { throw MeetingHostError.authorizationExpired }
+        try keychain.storeRecordingProof(proof, for: approvedIdentity)
+        keychain.deletePendingRecordingProof(for: approvedIdentity)
+        recordingProofRevision += 1
+    }
+
+    /// Called only after bootstrap itself rejects the saved proof. Do not publish a revision
+    /// that would initiate another approval automatically; the user's next Connect retries it.
+    func discardRejectedRecordingProof() {
+        if let identity { keychain.deleteRecordingProof(for: identity) }
+    }
+
+    /// Existing devices ask for the same one-time connection approval in the user's current
+    /// Moss tab. Persist the independent candidate before requesting, so lost replies/relaunch
+    /// retry the same proof and request key rather than replacing an approved capability.
+    func refreshRecordingCapability() async throws -> String {
+        guard let expectedIdentity = identity, let (client, credential) = requestClient() else {
+            throw MeetingHostError.authorizationExpired
+        }
+        if keychain.readRecordingProof(for: expectedIdentity) != nil { return "approved" }
+        let existing = keychain.readPendingRecordingProof(for: expectedIdentity)
+        var pending = existing ??
+            PendingRecordingProof(requestKey: UUID().uuidString.lowercased(), proof: LinkAttempt.makeVerifier())
+        // The attempt's deadline bounds consent, not an approval already made while this
+        // Mac was offline. Reconcile the same proof/key before discarding any candidate.
+        if existing == nil { try keychain.storePendingRecordingProof(pending, for: expectedIdentity) }
+        if pending.attemptId == nil {
+            let reply = try await client.requestRecordingCapability(credential: credential,
+                requestKey: pending.requestKey, proofHash: MeetingCaptureClient.verifierHash(pending.proof))
+            guard identity == expectedIdentity, !Task.isCancelled, requestClient() != nil else { return "cancelled" }
+            pending.attemptId = reply.attemptId
+            pending.expiresAt = reply.expiresAt
+            try keychain.storePendingRecordingProof(pending, for: expectedIdentity)
+        }
+        guard let attemptId = pending.attemptId else { throw MeetingHostError.invalidResponse }
+        let reply = try await client.recordingCapabilityStatus(credential: credential, attemptId: attemptId)
+        guard identity == expectedIdentity, !Task.isCancelled, requestClient() != nil else { return "cancelled" }
+        if reply.status == "approved" {
+            guard reply.policyVersion == 1, (reply.revision ?? 0) > 0 else { throw MeetingHostError.invalidResponse }
+            try storeRecordingProof(pending.proof, for: expectedIdentity)
+        } else if reply.status == "expired" || reply.status == "denied" {
+            keychain.deletePendingRecordingProof(for: expectedIdentity)
+        }
+        return reply.status
     }
 
     // MARK: - Settings-pane actions

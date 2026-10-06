@@ -32,6 +32,16 @@ export interface ModuleWebContribution {
   readonly onboarding?: ModuleOnboardingContribution;
 }
 
+/**
+ * Optional default export of `./web/persistent-controls`, discovered separately from `./web`.
+ * The shell loads only these entries across routes. Keep this entry's imports limited to its
+ * controls and their styles; never import the full web contribution or screen components.
+ */
+export interface ModulePersistentControlsContribution {
+  readonly moduleId: string;
+  readonly element: ReactNode;
+}
+
 export interface ModuleWebRoute {
   /** Must equal one of the module's backend manifest `navigation[].path` entries. */
   readonly path: string;

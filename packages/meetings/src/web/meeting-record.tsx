@@ -28,6 +28,7 @@ import { MeetingTranscript, useMeetingTranscript } from "./meeting-transcript.js
 import { MeetingSummary } from "./meeting-summary.js";
 import { DeleteMeetingDialog } from "./delete-meeting-dialog.js";
 import { CapturePanel } from "./capture-panel.js";
+import { useSessionDraft } from "./session-draft.js";
 
 export function MeetingRecord({
   id,
@@ -122,13 +123,7 @@ export function MeetingNotes({
   const client = useQueryClient();
   const key = useMemo(() => meetingKeys.editor(meeting.id), [meeting.id]);
   // Deliberately memory-only: recovery across app navigation without putting private notes in localStorage.
-  const editor = useQuery<MeetingEditorState>({
-    queryKey: key,
-    queryFn: () => newEditor(meeting),
-    initialData: () => client.getQueryData<MeetingEditorState>(key) ?? newEditor(meeting),
-    enabled: false,
-    gcTime: Infinity
-  });
+  const editor = useSessionDraft<MeetingEditorState>(key, () => newEditor(meeting));
   const state = editor.data;
   const [showDelete, setShowDelete] = useState(false);
   const [conflictLoading, setConflictLoading] = useState(false);
@@ -140,16 +135,14 @@ export function MeetingNotes({
   const notesValid =
     !state.text.includes("\0") && new TextEncoder().encode(state.text).length <= 64000;
   function update(change: (current: MeetingEditorState) => MeetingEditorState) {
-    const next = client.setQueryData<MeetingEditorState>(key, (current) =>
-      current ? change(current) : undefined
-    );
+    const next = editor.update(change);
     // A pending save can finish after navigation unmounts this editor. Keep the shell's
     // marker aligned with the cached edits without depending on a mounted-view effect.
     if (next)
       setSessionUnsavedChanges(client, `meetings:${meeting.id}:notes`, hasUnsavedNotes(next));
   }
   useEffect(() => {
-    client.setQueryData<MeetingEditorState>(key, (current) =>
+    editor.update((current) =>
       current &&
       current.phase === "idle" &&
       !hasUnsavedNotes(current) &&
@@ -157,22 +150,23 @@ export function MeetingNotes({
         ? newEditor(meeting)
         : current
     );
-  }, [client, meeting, key]);
+  }, [meeting, editor.update]);
   async function loadCurrent() {
     const pendingKey = client.getQueryData<MeetingEditorState>(key)?.pending?.requestKey;
     setConflictLoading(true);
     setConflictError(false);
     try {
       const { meeting: latest } = await getMeeting(meeting.id);
+      if (!editor.currentSession()) return;
       update((current) =>
         current.phase === "conflict" && current.pending?.requestKey === pendingKey
           ? { ...current, latest }
           : current
       );
     } catch {
-      setConflictError(true);
+      if (editor.currentSession()) setConflictError(true);
     } finally {
-      setConflictLoading(false);
+      if (editor.currentSession()) setConflictLoading(false);
     }
   }
   async function save() {
@@ -182,6 +176,7 @@ export function MeetingNotes({
     if (!current.pending && (!notesValid || !hasUnsavedNotes(current))) return;
     const next = beginNoteSave(current, randomUuid());
     const stillCurrent = () =>
+      editor.currentSession() &&
       !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(meeting.id))?.error) &&
       client.getQueryData<MeetingEditorState>(key)?.pending?.requestKey ===
         next.pending?.requestKey;

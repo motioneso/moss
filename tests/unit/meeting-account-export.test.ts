@@ -34,6 +34,9 @@ const collections = [
   "action_candidates",
   "export_receipts",
   "export_requests",
+  "capture_connections",
+  "capture_start_cancellations",
+  "recording_notices",
   "capture_grants"
 ] as const;
 
@@ -110,7 +113,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly nine source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly twelve source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -130,6 +133,51 @@ describe("Meetings account-export collector", () => {
       // An account export includes inactive, older and manual artifacts with no status filter.
       expect(queries[8]?.sql).not.toMatch(/credential_hash|verifier_hash|session_id/);
       expect(queries[4]?.sql).toMatch(/WHERE owner_user_id = \$1::uuid\s+ORDER BY/);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it("allowlists recording export metadata without connection proofs or authorization material", async () => {
+    const expected = {
+      meeting_capture_connections: [
+        "device_id",
+        "owner_user_id",
+        "device_name",
+        "inventory_json",
+        "last_seen_at",
+        "expires_at"
+      ],
+      meeting_capture_start_cancellations: [
+        "meeting_id",
+        "owner_user_id",
+        "request_key",
+        "created_at"
+      ],
+      meeting_capture_grants: [
+        "id",
+        "meeting_id",
+        "owner_user_id",
+        "device_name",
+        "status",
+        "state_json",
+        "notice_policy_version",
+        "created_at",
+        "expires_at"
+      ]
+    };
+    const { db, queries, scopedDb } = harness();
+    try {
+      await collectMeetingsExportSection(scopedDb, ctx);
+      for (const [table, columns] of Object.entries(expected)) {
+        const query = queries.find((query) => query.sql.includes(`FROM app.${table}`))!;
+        expect(query).toBeDefined();
+        const selected = query.sql.match(/SELECT\s+([\s\S]*?)\s+FROM/)?.[1];
+        expect(selected?.split(",").map((part) => part.trim().split(/\s|::/)[0])).toEqual(columns);
+        expect(query.sql).not.toMatch(
+          /credential_hash|verifier_hash|proof_hash|session_id|connection_id|capability_revision|start_request_key|start_fingerprint|\btoken\b/i
+        );
+      }
     } finally {
       await db.destroy();
     }
@@ -180,7 +228,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(9);
+      expect(queries).toHaveLength(12);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -196,8 +244,22 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0284_meeting_capture.sql", import.meta.url),
       "utf8"
     );
+    const connectionMigration = await readFile(
+      new URL(
+        "../../packages/meetings/sql/0288_meeting_recording_connections.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    const noticeMigration = await readFile(
+      new URL("../../packages/meetings/sql/0290_meeting_recording_notice.sql", import.meta.url),
+      "utf8"
+    );
     const migration =
-      originalMigration + (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "");
+      originalMigration +
+      (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +
+      (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "") +
+      (noticeMigration.match(/-- Ordinary acknowledgement metadata[\s\S]*$/)?.[0] ?? "");
     const { db, queries, scopedDb } = harness();
     try {
       await collectMeetingsExportSection(scopedDb, ctx);
@@ -206,11 +268,18 @@ describe("Meetings account-export collector", () => {
         const selected = query.sql.match(/SELECT\s+([\s\S]*?)\s+FROM/)?.[1];
         expect(selected).toBeDefined();
         const columns = selected!.split(",").map((part) => part.trim().split(/\s|::/)[0]);
-        const grant = migration.match(
-          new RegExp(`GRANT SELECT \\(([^)]+)\\)\\s+ON app\\.${table} TO jarvis_worker_runtime;`)
-        );
-        expect(grant).not.toBeNull();
-        expect(grant![1]!.split(",").map((part) => part.trim())).toEqual(columns);
+        const grants = [
+          ...migration.matchAll(
+            new RegExp(
+              `GRANT SELECT \\(([^)]+)\\)\\s+ON app\\.${table} TO jarvis_worker_runtime;`,
+              "g"
+            )
+          )
+        ];
+        expect(grants.length).toBeGreaterThan(0);
+        expect(
+          grants.flatMap((grant) => grant[1]!.split(",").map((part) => part.trim())).sort()
+        ).toEqual([...columns].sort());
       }
       expect(migration).not.toMatch(/GRANT\s+(?:INSERT|UPDATE|DELETE|ALL)|BYPASSRLS|\bFOR ALL\b/i);
     } finally {

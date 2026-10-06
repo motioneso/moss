@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CliStructuredAdapter } from "../../packages/chat/src/live/cli-structured-adapter.js";
 import type { ChatEngineFactory } from "../../packages/chat/src/live/runtime.js";
-import type { ModelActivityEntry } from "@moss/ai";
+import {
+  GATE_TIMEOUT_ABORT_REASON,
+  installModelActivityRecorder,
+  type GenerateStructuredProviderInput,
+  type ModelActivityEntry
+} from "@moss/ai";
 
 describe("CliStructuredAdapter (#982/#869/#981)", () => {
   it("runs the existing one-shot engine and returns raw reply text", async () => {
@@ -481,5 +486,52 @@ describe("CliStructuredAdapter — model activity recording (#2889)", () => {
       maxOutputTokens: 100
     });
     expect(result).toEqual({ rawText: '{"ok":true}', usage: { inputTokens: 0, outputTokens: 0 } });
+  });
+});
+
+describe("CliStructuredAdapter — gate timeout while queued for the CLI slot (#3064)", () => {
+  function hangingEngine() {
+    return {
+      provider: "anthropic" as const,
+      launch: async () => ({ offset: 0 }),
+      submit: async (_text: string) => {
+        await new Promise<never>(() => undefined);
+      },
+      readNew: async () => ({ records: [], offset: 0, complete: false }),
+      interrupt: async () => undefined,
+      isAlive: async () => false,
+      kill: async () => undefined
+    };
+  }
+
+  function input(signal: AbortSignal): GenerateStructuredProviderInput {
+    return {
+      model: { provider_kind: "anthropic", provider_model_id: "cli-model" },
+      messages: [{ role: "user", content: "pick" }],
+      schema: { type: "object" },
+      maxOutputTokens: 100,
+      signal
+    };
+  }
+
+  it("files nothing when the gate deadline lands while the call waits for the CLI slot", async () => {
+    const adapter = new CliStructuredAdapter("anthropic", () => hangingEngine());
+    const busy = new AbortController();
+    const first = adapter.generateStructured(input(busy.signal)).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 20));
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const gate = new AbortController();
+      const second = adapter.generateStructured(input(gate.signal));
+      await new Promise((r) => setTimeout(r, 5));
+      gate.abort(GATE_TIMEOUT_ABORT_REASON);
+      await expect(second).rejects.toThrow("aborted");
+      expect(entries).toEqual([]);
+    } finally {
+      installModelActivityRecorder(null);
+      busy.abort();
+      await first;
+    }
   });
 });

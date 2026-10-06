@@ -24,7 +24,9 @@ export const meetingsModuleManifest = {
       "sql/0279_meeting_exports.sql",
       "sql/0280_meeting_history.sql",
       "sql/0283_meeting_account_export.sql",
-      "sql/0284_meeting_capture.sql"
+      "sql/0284_meeting_capture.sql",
+      "sql/0288_meeting_recording_connections.sql",
+      "sql/0290_meeting_recording_notice.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -39,7 +41,10 @@ export const meetingsModuleManifest = {
       "app.meeting_export_requests",
       "app.meeting_capture_links",
       "app.meeting_capture_grants",
-      "app.meeting_capture_receipts"
+      "app.meeting_capture_receipts",
+      "app.meeting_capture_connections",
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_recording_notices"
     ]
   },
   permissions: [
@@ -68,20 +73,29 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a prepared Mac recorder and configured transcription.",
+        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a connected Mac recorder with one-time recording approval and configured transcription.",
       permissionId: "meetings.read"
     }
   ],
   routes: [
-    { method: "POST", path: "/api/meetings/capture/link", permissionId: "meetings.write" },
-    { method: "POST", path: "/api/meetings/capture/redeem", permissionId: "meetings.write" },
+    { method: "GET", path: "/api/meetings/recording-notice", permissionId: "meetings.read" },
+    { method: "PUT", path: "/api/meetings/recording-notice", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/connection", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/commands", permissionId: "meetings.write" },
+    { method: "POST", path: "/api/meetings/capture/claim", permissionId: "meetings.write" },
+    { method: "GET", path: "/api/meetings/capture/devices", permissionId: "meetings.read" },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/capture/cancel-start",
+      permissionId: "meetings.write"
+    },
     { method: "POST", path: "/api/meetings/capture/status", permissionId: "meetings.write" },
     { method: "POST", path: "/api/meetings/capture/control", permissionId: "meetings.write" },
     { method: "POST", path: "/api/meetings/capture/audio", permissionId: "meetings.write" },
     { method: "GET", path: "/api/meetings/records/:id/capture", permissionId: "meetings.read" },
     {
       method: "POST",
-      path: "/api/meetings/records/:id/capture/approve",
+      path: "/api/meetings/records/:id/capture/start",
       permissionId: "meetings.write"
     },
     {
@@ -127,21 +141,62 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.recording_notice",
+      description:
+        "Acknowledge the recording notice once per account. Start and Resume check the server-stored current version and bind it to the grant. Only a version change asks again; Pause, Stop and cancellation stay available.",
+      errors: [
+        {
+          code: "meeting_capture_notice_required",
+          class: "prerequisite",
+          remediationRef: "meetings.review_recording_notice",
+          description:
+            "The account has not acknowledged the current notice version. Review it on the meeting page before Start or Resume. Another meeting or browser reuses the same acknowledgement."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.review_recording_notice",
+          path: "/meetings",
+          description:
+            "Open the meeting page, read the current recording notice and explicitly acknowledge it. The server saves that version for the account; then retry Start or Resume."
+        }
+      ]
+    },
+    {
       id: "transcribe.meeting",
       description:
-        "Activity records each meeting clip transcription with the fixed title Transcribed a meeting clip, model, duration and outcome. It does not include recorded audio or transcript text."
+        "Capture duration uses native acknowledgement. Transcription delay is separate; transient clips retry within bounded memory. Activity records clip model, duration and outcome without audio or transcript text."
     },
     {
       id: "meetings.native_capture",
       description:
-        "Record on a prepared, explicitly approved Mac with a microphone and optional selected-app or computer audio. Pause closes inputs; Stop finalizes pre-cutoff audio. Source labels only. Windows is unavailable.",
+        "Connect Mac once, remember exact sources, acknowledge the notice once per account, then Start. No broader fallback. Persistent Pause/Stop; Stop finalizes within 60 seconds. Windows unavailable.",
       errors: [
+        {
+          code: "meeting_capture_source_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.connect_recorder",
+          description:
+            "The selected microphone or app changed or disconnected. Review Change and explicitly select an available source; Moss never broadens capture automatically."
+        },
+        {
+          code: "meeting_capture_processing_failed",
+          class: "transient",
+          description:
+            "A transcription clip failed. Capture continues while transient failures retry within the memory limit; an unrecoverable clip leaves a visible gap."
+        },
+        {
+          code: "meeting_capture_rate_limited",
+          class: "transient",
+          description:
+            "Capture transport is temporarily rate limited. Moss honors Retry-After while keeping Pause and Stop available."
+        },
         {
           code: "meeting_capture_unavailable",
           class: "prerequisite",
-          remediationRef: "meetings.prepare_recorder",
+          remediationRef: "meetings.connect_recorder",
           description:
-            "The meeting recorder is unavailable, expired or revoked. Open the recorder and approve this device again for the meeting."
+            "The recording connection is unavailable, expired or revoked. Check the companion connection in Settings and complete its one-time recording upgrade if requested."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -160,7 +215,7 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_conflict",
           class: "validation",
           description:
-            "Capture state changed. Refresh the meeting and review its current status before trying again."
+            "Capture state or selected sources changed. Refresh and review before trying again. After a completed recording, create New meeting so its transcript and clock remain separate."
         },
         {
           code: "meeting_capture_limit",
@@ -172,15 +227,15 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_busy",
           class: "transient",
           description:
-            "A previous clip is still processing. The native recorder retains only bounded transient audio and pauses when its buffer fills."
+            "The device is recording or finalizing another meeting, or a clip is still processing. Finalization lasts at most 60 seconds. The native recorder retains bounded transient audio and pauses when its buffer fills."
         }
       ],
       remediations: [
         {
-          id: "meetings.prepare_recorder",
+          id: "meetings.connect_recorder",
           path: "/meetings",
           description:
-            "Open the meeting, prepare Trail Marker on the linked Mac, and approve that named device for the meeting. Choose sources before recording."
+            "Connect Trail Marker in Settings and approve its recording capability once. Open New meeting, review the remembered named sources or choose Change, then Start."
         },
         {
           id: "meetings.configure_transcription",
@@ -198,7 +253,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.history",
       description:
-        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs an approved Mac recorder. Receipts do not verify current Tasks or vault files.",
+        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs a connected Mac with one-time recording capability approval. Receipts do not verify current Tasks or vault files.",
       errors: [
         {
           code: "meeting_history_access_denied",
@@ -455,7 +510,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.capture_default",
       description:
-        "Explicitly save or clear a personal capture-mode default in meeting Setup. Choosing another mode does not change the saved default. Native Mac recording requires explicit device approval and source selection."
+        "Remember the explicitly selected Mac, microphone UID, capture mode and stable app identity. Change reviews exact sources; a missing source never chooses a broader fallback. Use the once-approved companion connection and one explicit Start."
     },
     {
       id: "meetings.notes_recovery",
@@ -516,7 +571,13 @@ export const meetingsModuleManifest = {
         { table: "app.meeting_export_requests", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_capture_links", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_capture_grants", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_capture_receipts", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_capture_receipts", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_connections", countPredicate: "owner_user_id = $1::uuid" },
+        {
+          table: "app.meeting_capture_start_cancellations",
+          countPredicate: "owner_user_id = $1::uuid"
+        },
+        { table: "app.meeting_recording_notices", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

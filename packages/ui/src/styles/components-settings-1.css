@@ -80,7 +80,7 @@
 }
 .set2__navgroup {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }

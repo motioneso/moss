@@ -1,4 +1,4 @@
-import { Field, FormLabel, Note, RadioCardGroup, Select, Switch } from "@moss/ui";
+import { Field, FormLabel, RadioCardGroup, Select } from "@moss/ui";
 import type { MeetingCaptureInventory } from "@moss/shared";
 import { CAPTURE_MODES } from "./capture-modes.js";
 import type { CaptureChoice } from "./capture-presentation.js";
@@ -39,7 +39,9 @@ export function CaptureSources({
           <p className="jds-hint">
             {inventory.microphonePermission === "granted"
               ? "Microphone permission granted"
-              : "Allow microphone access in Trail Marker and macOS System Settings."}
+              : inventory.microphonePermission === "unknown"
+                ? "macOS will ask for microphone permission when you choose Start."
+                : "Allow microphone access for Trail Marker in macOS System Settings."}
           </p>
         </Field>
         {choice.mode === "selected-app" ? (
@@ -52,11 +54,20 @@ export function CaptureSources({
             >
               <option value="">Choose a meeting app</option>
               {inventory.applications.map((application) => (
-                <option key={application.appProcessTreeId} value={application.appProcessTreeId}>
+                <option
+                  key={application.appProcessTreeId}
+                  value={application.applicationId ?? ""}
+                  disabled={!application.applicationId}
+                >
                   {application.label}
                 </option>
               ))}
             </Select>
+            {inventory.applications.some((application) => !application.applicationId) ? (
+              <p className="jds-hint">
+                Update Trail Marker to select apps by their stable identity.
+              </p>
+            ) : null}
             {!inventory.applications.length ? (
               <p className="jds-hint">
                 Open the meeting app on your Mac, then refresh the sources in Trail Marker.
@@ -76,18 +87,13 @@ export function CaptureSources({
           </Field>
         )}
       </div>
-      {choice.mode === "computer-audio" ? (
-        <Note variant="practical">
-          Computer audio can include other apps, media, and notifications.
-        </Note>
-      ) : null}
       {choice.mode &&
       choice.mode !== "microphone-only" &&
       inventory.systemAudioPermission !== "granted" ? (
         <p className="jds-hint">
           {inventory.systemAudioPermission === "denied"
             ? "Allow system audio recording for Trail Marker in macOS System Settings, then refresh the sources."
-            : "macOS may ask for system audio permission when you choose Record."}
+            : "macOS may ask for system audio permission when you start recording."}
         </p>
       ) : null}
       {choice.mode === "computer-audio" && !inventory.computerAudio.available ? (
@@ -95,12 +101,6 @@ export function CaptureSources({
           Computer audio is unavailable on this Mac. Choose another mode explicitly.
         </p>
       ) : null}
-      <Switch
-        ariaLabel="Participants have been notified and recording is permitted"
-        label="Participants have been notified and recording is permitted."
-        checked={choice.notice}
-        onChange={(notice) => onChange({ notice })}
-      />
     </>
   );
 }

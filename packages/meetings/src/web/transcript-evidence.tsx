@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { Button, Note, Eyebrow } from "@moss/ui";
 import type { MeetingTranscriptEvidence } from "@moss/shared";
 import { getMeetingTranscriptEvidence } from "./client.js";
-import { transcriptTime } from "./meeting-transcript.js";
+import { transcriptTime } from "./transcript-time.js";
 
 const fields = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"] as const;
 export function parseTranscriptEvidence(

@@ -21,6 +21,7 @@ export type MeetingCaptureSelection = {
       readonly mode: "selected-app";
       readonly outputSourceId: string;
       readonly appProcessTreeId: string;
+      readonly applicationId?: string;
     }
   | {
       readonly mode: "computer-audio";

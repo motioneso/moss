@@ -13,14 +13,45 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         var frames: Int = 0
         var position: Int = 0
         var sequence: UInt64 = 0
-        var end: UInt64 { start + UInt64((Double(frames) * 1_000_000_000 / rate).rounded(.up)) }
+        var sampleOffset: UInt64 = 0
+        var clockOrigin: UInt64 = 0
+        var observedStart: UInt64 = 0
+        var end: UInt64 {
+            clockOrigin + MeetingAudioSampleClock.nanoseconds(frames: sampleOffset + UInt64(frames), sampleRate: rate)!
+        }
     }
 
     let source: MeetingAudioSource
     let epoch: UInt64
     private let origin: UInt64
+    private let lease: MeetingAudioLease?
     private let lock = NSLock()
     private let callbackFailures = MeetingAudioAtomicState()
+    private let closed = MeetingAudioAtomicState()
+    private let scopeVerification = MeetingAudioAtomicState()
+    private let sendLock = NSLock()
+    var isScopeVerificationPending: Bool { scopeVerification.value != 0 }
+    func setScopeVerificationPending(_ pending: Bool) {
+        sendLock.lock()
+        scopeVerification.exchange(pending ? 1 : 0)
+        sendLock.unlock()
+    }
+    /// Control-plane only. Scope verification and actual request initiation are ordered at
+    /// this boundary, after packet copying/encoding. Audio callbacks never take this lock.
+    func withSendAdmission(_ initiate: () throws -> Void) rethrows -> Bool {
+        sendLock.lock()
+        defer { sendLock.unlock() }
+        let fault = failure
+        guard !isScopeVerificationPending, fault != .invalidSelection,
+              fault == nil || closed.value != 0 else { return false }
+        // Closed epochs may drain valid pre-fault samples after explicit Resume/Stop. A
+        // scope fault never gains that exception because its retained audio is uncertain.
+        try initiate()
+        return true
+    }
+    private let droppedCallbacks: OpaquePointer
+    private var captureGaps = [MeetingAudioGap?](repeating: nil, count: 64)
+    private var captureGapCount = 0
     private let controlLock = NSLock()
     private let samples: UnsafeMutablePointer<Float>
     private let sampleCapacity: Int
@@ -30,72 +61,172 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     private var blockHead = 0
     private var blockCount = 0
     private var nextSequence: UInt64 = 0
-    private var lastStart: UInt64?
-    private var lastEnd: UInt64?
+    private var sampleOrigin: Double?
+    private var nextSampleTime: Double?
+    private var clockOrigin: UInt64 = 0
     private var rate: Double?
+    private var sampleDiscontinuities: UInt32 = 0
+    private var maximumHostClockDifferenceNanoseconds: UInt64 = 0
     private var accepting = true
     private var storedFailure: MeetingAudioFailure?
 
     init(source: MeetingAudioSource, epoch: UInt64, originNanoseconds: UInt64,
-         sampleCapacity: Int = 2_097_152, blockCapacity: Int = 4096) throws {
+         sampleCapacity: Int = 2_097_152, blockCapacity: Int = 4096, lease: MeetingAudioLease? = nil) throws {
         guard epoch > 0, sampleCapacity > 0, sampleCapacity <= 11_520_000,
               blockCapacity > 0, blockCapacity <= 16384 else { throw MeetingAudioFailure.invalidSelection }
+        guard let mailbox = MeetingAudioDropMailboxCreate() else { throw MeetingAudioFailure.bufferFull }
+        droppedCallbacks = mailbox
         self.source = source
         self.epoch = epoch
         origin = originNanoseconds
+        self.lease = lease
         self.sampleCapacity = sampleCapacity
         samples = .allocate(capacity: sampleCapacity)
         samples.initialize(repeating: 0, count: sampleCapacity)
         blocks = Array(repeating: Block(), count: blockCapacity)
     }
 
+    /// Synthetic compatibility path. Real devices supply mSampleTime, never infer it from host jitter.
     func receive(hostTimeNanoseconds start: UInt64, sampleRate: Double, frameCount: Int,
                  sampleAt: (Int) -> Float) {
-        // Never wait behind control-plane packet copies/expiry. Latch an explicit fault
-        // atomically so even a final dropped callback is visible without a later callback.
-        guard lock.try() else { callbackFailures.insert(1); return }
-        defer { lock.unlock() }
-        guard accepting, storedFailure == nil, callbackFailures.value == 0 else { return }
-        guard sampleRate.isFinite, (8000...192000).contains(sampleRate),
-              sampleRate.rounded() == sampleRate, frameCount > 0,
-              frameCount <= Self.maximumCallbackFrames else { failLocked(.invalidFormat); return }
-        guard rate.map({ $0 == sampleRate }) ?? true else { failLocked(.invalidFormat); return }
-        let duration = UInt64((Double(frameCount) * 1_000_000_000 / sampleRate).rounded(.up))
-        guard start >= origin, start <= UInt64.max - duration,
-              lastStart.map({ start > $0 }) ?? true else { failLocked(.invalidTimestamp); return }
-        // Tolerate at most two sample periods for host-clock timestamp rounding/jitter.
-        // Larger gaps/overlap require an explicit new epoch instead of invented continuity.
-        if let previousEnd = lastEnd {
-            let difference = start >= previousEnd ? start - previousEnd : previousEnd - start
-            let tolerance = UInt64((2_000_000_000 / sampleRate).rounded(.up))
-            guard difference <= tolerance else { failLocked(.invalidTimestamp); return }
+        receive(sampleTime: (Double(start) * sampleRate / 1_000_000_000).rounded(),
+                hostTimeNanoseconds: start, sampleRate: sampleRate, frameCount: frameCount, sampleAt: sampleAt)
+    }
+
+    func receive(sampleTime: Double, hostTimeNanoseconds host: UInt64, sampleRate: Double,
+                 frameCount: Int, sampleAt: (Int) -> Float) {
+        guard closed.value == 0 else { return }
+        guard lock.try() else {
+            drop(sampleTime: sampleTime, hostTimeNanoseconds: host, sampleRate: sampleRate, frameCount: frameCount)
+            return
         }
+        defer { lock.unlock() }
+        guard accepting, closed.value == 0, storedFailure == nil, callbackFailures.value == 0 else { return }
+        consumeDropsLocked()
+        guard storedFailure == nil,
+              let interval = advanceClockLocked(sampleTime: sampleTime, host: host, rate: sampleRate, frames: frameCount) else { return }
         guard frameCount <= sampleCapacity - usedSamples, blockCount < blocks.count,
-              blockCount == 0 || start + duration - blocks[blockHead].start <= Self.maximumAgeNanoseconds,
+              blockCount == 0 || (interval.end - blocks[blockHead].start <= Self.maximumAgeNanoseconds &&
+                (host < blocks[blockHead].observedStart || host - blocks[blockHead].observedStart < Self.maximumAgeNanoseconds)),
               nextSequence < UInt64.max else { failLocked(.bufferFull); return }
-        // Validate before publishing the block. A malformed sample never becomes pending audio.
         for index in 0..<frameCount {
             let value = sampleAt(index)
             guard value.isFinite else { failLocked(.invalidFormat); return }
             samples[(sampleTail + index) % sampleCapacity] = value
         }
+        // A close or scope/format fault during copying cannot publish an in-flight callback.
+        guard closed.value == 0, callbackFailures.value == 0 else { return }
         blocks[(blockHead + blockCount) % blocks.count] = Block(
-            start: start, rate: sampleRate, frames: frameCount, position: sampleTail, sequence: nextSequence
+            start: interval.start, rate: sampleRate, frames: frameCount, position: sampleTail, sequence: nextSequence,
+            sampleOffset: interval.offset, clockOrigin: clockOrigin, observedStart: host
         )
         sampleTail = (sampleTail + frameCount) % sampleCapacity
         usedSamples += frameCount
         blockCount += 1
         nextSequence += 1
-        lastStart = start
-        lastEnd = start + duration
+    }
+
+    func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
+        guard closed.value == 0 else { return }
+        guard frameCount > 0, frameCount <= Self.maximumCallbackFrames else { fail(.invalidFormat); return }
+        let record = MeetingAudioDropRecord(sampleTime: sampleTime, hostTimeNanoseconds: hostTimeNanoseconds,
+                                           sampleRate: sampleRate, frameCount: UInt32(frameCount))
+        if !MeetingAudioDropMailboxPush(droppedCallbacks, record) { callbackFailures.insert(8) }
+    }
+
+    /// The first measured hardware timestamp anchors the sample clock to the monotonic host clock.
+    /// All later boundaries use cumulative samples. Host scheduling jitter is not lost audio.
+    /// Observed host timestamps are retained separately and also constrain Stop trimming.
+    private func advanceClockLocked(sampleTime: Double, host: UInt64, rate sampleRate: Double,
+                                    frames: Int) -> (start: UInt64, end: UInt64, offset: UInt64)? {
+        guard sampleRate.isFinite, (8000...192000).contains(sampleRate), sampleRate.rounded() == sampleRate,
+              frames > 0, frames <= Self.maximumCallbackFrames,
+              rate.map({ $0 == sampleRate }) ?? true else { failLocked(.invalidFormat); return nil }
+        guard sampleTime.isFinite, sampleTime.rounded() == sampleTime,
+              abs(sampleTime) <= 9_007_199_254_732_800, host >= origin,
+              let duration = MeetingAudioSampleClock.nanoseconds(frames: UInt64(frames), sampleRate: sampleRate),
+              host <= UInt64.max - duration else { failLocked(.invalidTimestamp); return nil }
+        if sampleOrigin == nil { sampleOrigin = sampleTime; clockOrigin = host }
+        guard nextSampleTime.map({ sampleTime == $0 }) ?? true,
+              let first = sampleOrigin, sampleTime >= first else {
+            if sampleDiscontinuities < UInt32.max { sampleDiscontinuities += 1 }
+            failLocked(.invalidTimestamp)
+            return nil
+        }
+        let offset = UInt64(sampleTime - first)
+        guard let startOffset = MeetingAudioSampleClock.nanoseconds(frames: offset, sampleRate: sampleRate),
+              let endOffset = MeetingAudioSampleClock.nanoseconds(frames: offset + UInt64(frames), sampleRate: sampleRate),
+              clockOrigin <= UInt64.max - endOffset else { failLocked(.invalidTimestamp); return nil }
+        if let lease {
+            let deadline = lease.deadline
+            guard host + duration <= deadline, clockOrigin + endOffset <= deadline else {
+                failLocked(.leaseExpired)
+                return nil
+            }
+        }
+        let mappedStart = clockOrigin + startOffset
+        let clockDifference = host >= mappedStart ? host - mappedStart : mappedStart - host
+        maximumHostClockDifferenceNanoseconds = max(maximumHostClockDifferenceNanoseconds, clockDifference)
         rate = sampleRate
+        nextSampleTime = sampleTime + Double(frames)
+        return (clockOrigin + startOffset, clockOrigin + endOffset, offset)
+    }
+
+    /// Called only with the admission lock. The C mailbox has one consumer and bounded producers.
+    private func consumeDropsLocked() {
+        var record = MeetingAudioDropRecord()
+        for _ in 0..<64 {
+            guard MeetingAudioDropMailboxPop(droppedCallbacks, &record) else { break }
+            guard storedFailure == nil,
+                  let interval = advanceClockLocked(sampleTime: record.sampleTime, host: record.hostTimeNanoseconds,
+                                                    rate: record.sampleRate, frames: Int(record.frameCount)) else { continue }
+            let gap = MeetingAudioGap(source: source, epoch: epoch, startNanoseconds: interval.start,
+                                      endNanoseconds: interval.end, reason: .callbackContention)
+            if captureGapCount > 0, let previous = captureGaps[captureGapCount - 1],
+               let merged = Self.coalescedGap(previous, gap, toleranceNanoseconds: 0) {
+                captureGaps[captureGapCount - 1] = merged
+            } else if captureGapCount < captureGaps.count {
+                captureGaps[captureGapCount] = gap
+                captureGapCount += 1
+            } else { failLocked(.bufferFull) }
+        }
+    }
+
+    /// Control plane, including after close: a dropped final callback remains visible without a successor.
+    func drainCaptureGaps(cutoffNanoseconds: UInt64? = nil) -> [MeetingAudioGap] {
+        lock.lock()
+        defer { lock.unlock() }
+        consumeDropsLocked()
+        var result: [MeetingAudioGap] = []
+        for index in 0..<captureGapCount {
+            if let gap = captureGaps[index] {
+                let end = min(gap.endNanoseconds, cutoffNanoseconds ?? UInt64.max)
+                if gap.startNanoseconds < end {
+                    result.append(MeetingAudioGap(source: source, epoch: epoch,
+                        startNanoseconds: gap.startNanoseconds, endNanoseconds: end, reason: gap.reason))
+                }
+            }
+            captureGaps[index] = nil
+        }
+        captureGapCount = 0
+        return result
     }
 
     func fail(_ failure: MeetingAudioFailure) {
-        // Scope uncertainty must survive simultaneous copying/other faults, because runtime
-        // discards that epoch instead of later flushing potentially out-of-scope retained audio.
-        if failure == .invalidSelection { callbackFailures.insert(2) }
-        guard lock.try() else { callbackFailures.insert(1); return }
+        // Reporting a real fault is independent of lock availability. Scope failure always wins.
+        let bit: UInt32
+        switch failure {
+        case .invalidSelection: bit = 1
+        case .invalidFormat: bit = 2
+        case .invalidTimestamp: bit = 4
+        case .bufferFull: bit = 8
+        case .deviceFailure: bit = 16
+        case .invalidTransition: bit = 32
+        case .cleanupFailed: bit = 64
+        case .leaseExpired: bit = 128
+        }
+        callbackFailures.insert(bit)
+        guard lock.try() else { return }
         defer { lock.unlock() }
         guard accepting else { return }
         failLocked(failure)
@@ -110,12 +241,46 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         lock.lock()
         defer { lock.unlock() }
         let flags = callbackFailures.value
-        if flags & 2 != 0 { return .invalidSelection }
-        return storedFailure ?? (flags == 0 ? nil : .bufferFull)
+        if flags & 1 != 0 { return .invalidSelection }
+        if let storedFailure { return storedFailure }
+        if flags & 2 != 0 { return .invalidFormat }
+        if flags & 4 != 0 { return .invalidTimestamp }
+        if flags & 8 != 0 { return .bufferFull }
+        if flags & 16 != 0 { return .deviceFailure(operation: "audio-callback", status: -1) }
+        if flags & 32 != 0 { return .invalidTransition }
+        if flags & 64 != 0 { return .cleanupFailed }
+        if flags & 128 != 0 { return .leaseExpired }
+        return nil
+    }
+
+    struct Diagnostics: Equatable {
+        let sampleRate: Double?
+        let effectiveCapacityNanoseconds: UInt64?
+        let bufferedSamples: Int
+        let bufferedCallbacks: Int
+        let acceptedCallbacks: UInt64
+        let droppedCallbacks: UInt32
+        let dropMailboxOverflows: UInt32
+        let sampleDiscontinuities: UInt32
+        let maximumHostClockDifferenceNanoseconds: UInt64
+    }
+
+    /// Content-free counters, read off the realtime path. Active-producer counts are approximate.
+    var diagnostics: Diagnostics {
+        lock.lock()
+        defer { lock.unlock() }
+        let drops = MeetingAudioDropMailboxReadCounts(droppedCallbacks)
+        return Diagnostics(sampleRate: rate,
+            effectiveCapacityNanoseconds: rate.map { Self.effectiveCapacityNanoseconds(sampleRate: $0, sampleCapacity: sampleCapacity) },
+            bufferedSamples: usedSamples, bufferedCallbacks: blockCount, acceptedCallbacks: nextSequence,
+            droppedCallbacks: drops.accepted, dropMailboxOverflows: drops.rejected,
+            sampleDiscontinuities: sampleDiscontinuities,
+            maximumHostClockDifferenceNanoseconds: maximumHostClockDifferenceNanoseconds)
     }
 
     /// Closes admission before the caller stops the device; later callbacks cannot refill the ring.
     func close() {
+        closed.insert(1)
         lock.lock()
         accepting = false
         lock.unlock()
@@ -147,33 +312,39 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         } ?? first.frames
         var selected: [(Block, Int)] = []
         var total = 0
+        var discontinuity = false
         for offset in 0..<blockCount {
             let block = blocks[(blockHead + offset) % blocks.count]
+            guard block.sampleOffset == first.sampleOffset + UInt64(total) else { discontinuity = true; break }
             var count = block.frames
             if let cutoff = cutoffNanoseconds {
-                guard cutoff > block.start else { break }
-                let available = (Double(cutoff - block.start) * block.rate / 1_000_000_000).rounded(.down)
+                guard cutoff > block.start, cutoff > block.observedStart else { break }
+                let available = (Double(cutoff - block.observedStart) * block.rate / 1_000_000_000).rounded(.down)
                 if available < Double(count) { count = max(0, Int(available)) }
+                while count > 0 {
+                    let end = first.clockOrigin + MeetingAudioSampleClock.nanoseconds(
+                        frames: first.sampleOffset + UInt64(total + count), sampleRate: first.rate)!
+                    let observedEnd = block.observedStart + MeetingAudioSampleClock.nanoseconds(
+                        frames: UInt64(count), sampleRate: block.rate)!
+                    if end <= cutoff && observedEnd <= cutoff { break }
+                    count -= 1
+                }
             }
-            // Bound the coalesced timeline and integer addition, including accumulated
-            // timestamp jitter. A callback's own end need not equal the merged sample end.
-            let limit = cutoffNanoseconds ?? UInt64.max
-            while count > 0 && UInt64((Double(total + count) * 1_000_000_000 /
-                    first.rate).rounded(.up)) > limit - first.start { count -= 1 }
             guard count > 0 else { break }
             selected.append((block, count))
             total += count
             if total >= targetFrames || count < block.frames { break }
         }
         lock.unlock()
-        guard total > 0, allowPartial || total >= targetFrames, let last = selected.last else { return nil }
+        guard total > 0, allowPartial || discontinuity || total >= targetFrames, let last = selected.last else { return nil }
         var copy = [Float]()
         copy.reserveCapacity(total)
         for (block, count) in selected {
             for index in 0..<count { copy.append(samples[(block.position + index) % sampleCapacity]) }
         }
         return Chunk(packet: MeetingAudioPacket(source: source, epoch: epoch, sequence: first.sequence,
-            startNanoseconds: first.start, sampleRate: first.rate, samples: copy), throughSequence: last.0.sequence)
+            startNanoseconds: first.start, sampleRate: first.rate, samples: copy,
+            timelineOriginNanoseconds: first.clockOrigin, sampleOffset: first.sampleOffset), throughSequence: last.0.sequence)
     }
 
     /// A receive receipt, not completion of ASR. Only an unchanged head/chunk may be acknowledged.
@@ -228,7 +399,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         return gaps
     }
 
-    /// Match the admission jitter allowance only; never bridge a real discontinuity or epoch.
+    /// Never bridge a real discontinuity or epoch. Callers choose rounding tolerance explicitly.
     static func coalescedGap(_ previous: MeetingAudioGap, _ next: MeetingAudioGap,
                              toleranceNanoseconds: UInt64) -> MeetingAudioGap? {
         guard previous.source == next.source, previous.epoch == next.epoch, previous.reason == next.reason,
@@ -245,7 +416,16 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         lock.lock()
         defer { lock.unlock() }
         guard blockCount > 0, now >= blocks[blockHead].start else { return false }
-        return now - blocks[blockHead].start >= Self.warningAgeNanoseconds
+        let warning = min(Self.warningAgeNanoseconds,
+                          Self.effectiveCapacityNanoseconds(sampleRate: blocks[blockHead].rate, sampleCapacity: sampleCapacity) / 2)
+        return now - blocks[blockHead].start >= warning || usedSamples >= sampleCapacity - sampleCapacity / 4 ||
+            blockCount >= blocks.count - blocks.count / 4
+    }
+
+    static func effectiveCapacityNanoseconds(sampleRate: Double, sampleCapacity: Int = 2_097_152) -> UInt64 {
+        guard sampleCapacity > 0,
+              let capacity = MeetingAudioSampleClock.nanoseconds(frames: UInt64(sampleCapacity), sampleRate: sampleRate) else { return 0 }
+        return min(maximumAgeNanoseconds, capacity)
     }
 
     @discardableResult func discard(reason: MeetingAudioGapReason? = nil) -> MeetingAudioGap? {
@@ -272,6 +452,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     }
 
     deinit {
+        MeetingAudioDropMailboxDestroy(droppedCallbacks)
         samples.deinitialize(count: sampleCapacity)
         samples.deallocate()
     }

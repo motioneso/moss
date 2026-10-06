@@ -9,6 +9,7 @@ import { useMeetingDate } from "./locale.js";
 import { isMeetingAccessDenied, meetingKeys, meetingRecordQueryOptions } from "./client.js";
 import { historyKeys } from "./history-client.js";
 import { historyFilter } from "./history-presentation.js";
+import { useSessionDraft } from "./session-draft.js";
 import "./styles.css";
 
 export function MeetingsPage() {
@@ -16,13 +17,7 @@ export function MeetingsPage() {
   const id = params.get("id");
   const date = useMeetingDate();
   const client = useQueryClient();
-  const historyView = useQuery({
-    queryKey: historyKeys.view,
-    queryFn: () => ({ query: "" }),
-    initialData: () => client.getQueryData<{ query: string }>(historyKeys.view) ?? { query: "" },
-    enabled: false,
-    gcTime: Infinity
-  });
+  const historyView = useSessionDraft(historyKeys.view, () => ({ query: "" }));
   const navigation = useLocation().key;
   const hasReference = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"].some(
     (field) => params.has(field)
@@ -71,7 +66,7 @@ export function MeetingsPage() {
               : undefined
             : history
               ? "Find a conversation, revisit its notes, or ask Moss what happened."
-              : "Create a draft, keep your personal notes, and find them again."
+              : "Choose your sources, start a meeting, and keep a useful record."
         }
         aside={
           <Button
@@ -97,9 +92,7 @@ export function MeetingsPage() {
             selectedId={params.get("selected")}
             detailOpen={params.has("selected") && params.get("panel") !== "results"}
             onSearch={(query) => {
-              client.setQueryData<{ query: string }>(historyKeys.view, (current) =>
-                current ? { query } : undefined
-              );
+              historyView.update(() => ({ query }));
               setParams(
                 (current) => {
                   current.delete("selected");

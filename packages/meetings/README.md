@@ -4,70 +4,99 @@ Issue [#2981](https://github.com/motioneso/moss/issues/2981), approved
 [design](../../docs/superpowers/specs/2026-10-03-meeting-companion.md) and
 [plan](../../docs/superpowers/plans/2026-10-03-2981-meeting-companion.md).
 
-## Native capture development checkpoint (5 October 2026)
+## Native capture repair checkpoint (6 October 2026)
 
-This branch adds the first browser-to-native Mac capture path. It is **code in development,
-not verified native recording** until the exact published commit passes hosted checks and
-owner-run OS/device acceptance. Windows has a shared protocol but no native host yet.
+The current repair follows the [connection and reliability plan](../../docs/superpowers/plans/2026-10-06-2981-capture-reliability-and-connection.md).
+It replaces the first Mac implementation's per-meeting preparation and approval with a shared
+Trail Marker connection and one explicit **Start meeting**. The first implementation passed
+synthetic checks but failed owner testing; the repair still needs exact-head hosted checks and
+new owner-run OS/device acceptance. Windows shares the protocol but has no native host yet.
 
-Moss may run on a remote, headless server without a microphone or audio devices. The native
-companion runs on the computer whose microphone/apps you explicitly choose to record; device
-inventory and OS capture stay on that computer. Both the browser and companion connect to the
-same public HTTPS Moss origin (including its port), which need not be localhost. Use the final
-canonical origin: capture handoff rejects deployment subpaths, and the transport never follows
-HTTP redirects. The server
-authorizes and processes uploaded clips; it never opens its own microphone or system output.
+Moss may run on a remote, headless server without audio devices. Trail Marker runs on the
+computer whose microphone/apps the person explicitly chooses. Device inventory and OS capture
+stay on that computer. Browser and companion connect to the same public HTTPS Moss origin,
+including its port; that may be a remote server. Use its final canonical origin: deployment
+subpaths and HTTP redirects are unsupported. The server authorizes and processes uploaded clips;
+it never opens a server microphone or output device. Browser-only capture is not implemented.
 
 The supported static-web nginx proxy gives only `/api/meetings/capture/audio` a 5,200,000-byte
-request limit and unbuffered HTTP/1.1 forwarding. A custom reverse proxy must preserve that bound
-and stream audio without request-body spooling or body logging. The dedicated proxy workflow
-checks fixed-length/chunked synthetic uploads and temporary-file negative controls; it does not
-validate an operator’s deployed proxy or grant recording permission.
+request limit and unbuffered HTTP/1.1 forwarding. A custom proxy must preserve that bound and
+stream audio without request-body spooling or body logging. The proxy workflow exercises
+fixed-length/chunked generated uploads and temporary-file negative controls; it does not validate
+an operator's deployed proxy.
 
-The browser panel names the approved recorder. A second browser signed in as the same owner can
-explicitly control that recorder, but opening a meeting never chooses a different computer or
-starts capture. Check the named recorder before choosing sources and Record. This slice requires
-the Mac companion on the recording computer; browser-only capture is not implemented.
+Connect Trail Marker once through the existing connection flow. New clients disclose meeting
+recording in that approval; already paired clients require one clear capability upgrade. This
+authorizes future explicit Starts, and does not start capture. In Meetings, choose the named
+recorder and microphone with microphone-only, microphone + selected app, or microphone + computer
+audio. Sources are remembered by device/microphone/app identity. Use Change when needed, then
+acknowledge the recording notice once, then Start meeting. There is no per-meeting Prepare or
+device approval. The server stores the account’s acknowledgement against the notice text-policy
+version and requires the current version before Start or Resume, including a retried command.
+Each grant binds that version. Another meeting or browser does not ask again; only a changed
+notice version does. Pause, Stop and cancellation never need notice acknowledgement. First use
+may prompt for the relevant OS permission. Granting permission alone cannot start a cancelled or
+expired command. The browser stays where the person started; Trail Marker does not choose their
+default browser for each meeting.
 
-Create or reopen a draft, open Trail Marker from its capture panel, explicitly prepare the
-microphone, then approve the named Mac for that meeting in Moss. Select a microphone and one
-of the three capture modes, acknowledge the recording notice, and press Record. Provider
-configuration stays in Settings → AI providers. Opening a page, launching the app, reconnecting,
-or granting microphone permission alone never requests a recording start.
+A second browser signed in as the same owner may explicitly control the named recorder. Opening
+a meeting never changes the recording computer. Missing or ambiguous remembered sources require
+selection; a missing selected app never widens to computer audio. Provider configuration stays in
+Settings → AI providers. Connecting, page navigation, app restart or reconnect never creates a
+recording Start.
 
-The native host uses AUHAL microphone capture and macOS 14.2+ Core Audio process taps for
-selected-app or computer output. Tracks stay separate on a shared monotonic timeline and are
-sent as bounded native-rate mono PCM chunks. The server wraps each clip as WAV, requests ASR
-segment timestamps from the configured transcription route, and writes ordinary retained
-transcript revisions. This is chunked transcription with source labels only, not streaming or
-speaker diarization. A configured endpoint still needs real timestamp/latency acceptance.
+The native host uses AUHAL microphone capture and macOS 14.2+ Core Audio process taps. Separate
+tracks share a monotonic timeline and use bounded native-rate mono PCM chunks. Sample progression
+establishes continuity; host-clock jitter and unchanged format notifications are not automatic
+capture failures. The server wraps clips as WAV, requests timestamps from the configured
+transcription route and writes retained transcript revisions. This is chunked transcription with
+source labels, not speaker diarization. Real provider timestamp/latency acceptance remains needed.
 
-Pause closes inputs and admits no new audio sends. Stop closes inputs and allows a bounded
-pre-cutoff final flush. UI statuses distinguish a requested command from its native
-acknowledgement. The native menu-bar indicator remains visible across browser navigation.
-Source changes, failed cleanup, connection loss, expired approval, logout and application quit
-have explicit teardown paths. Retained gap metadata is shown when the meeting is reopened;
-raw audio remains bounded transient memory with no crash-recovery archive.
+System-audio permission stays `unknown` in inventory until there is trustworthy platform evidence;
+tap creation alone is not permission proof. Native controls show Waiting for output audio until
+the first valid callback, including a zero-valued callback. That establishes callback delivery,
+not intelligible sound or chosen-app isolation. The owner trial must exercise a known test tone.
 
-Authorization uses a separate, two-hour-maximum meeting/device grant bound to the approving
-browser session and existing device. The existing Trail Marker credential can only bootstrap
-an identity challenge; it cannot upload audio, read capture state or control a meeting. The
-browser approves an exact device/meeting. Native exchange returns the separate credential only
-to that device, in memory. Credentials never go in the activation URL. The implementation and
-its negative controls must be reviewed together before these boundaries are release claims.
+Pause closes inputs and sends no new audio. Stop closes inputs, fixes the cutoff and permits only
+pre-cutoff finalization, bounded to 60 seconds. The single native recorder waits for that bounded
+finalization before another meeting starts. Browser controls distinguish requested commands from
+native acknowledgement, and remain available while navigating the meeting list or another Moss
+module. The native menu-bar indicator has local Pause/Stop controls. Recording duration follows
+acknowledged capture time; connectivity and transcription delay have separate status.
 
-Computer-audio capture uses global process exclusion, not a selected output endpoint. Native
-Moss bundles are excluded; this does not promise that a future Moss web player inside a shared
-browser is excluded. Computer mode fails closed when the host's Core Audio process identity
-cannot be resolved, and process-list changes conservatively interrupt that mode. Selected-app
-mode uses a fixed verified process membership and requires explicit resume when that membership
-changes. These limitations need actual Teams/Zoom and device-change testing.
+Each track retains at most 2,097,152 Float32 samples (8 MiB), with a process limit of 16 retained
+rings (128 MiB of sample storage, plus bounded metadata/request buffers), and a maximum age of
+60 seconds. The sample limit is shorter at higher rates:
+about 43.7 seconds at 48 kHz. The connection lease permits at most 30 seconds without successful
+authorization refresh. Whichever bound is reached first applies. Retryable chunk failures use
+bounded backoff and the same identity; a terminal transcription failure records a gap and releases
+that chunk without pausing healthy inputs. Sources receive fair independent upload scheduling.
+Exhausted bounds pause visibly. There is no audio disk spool or crash-recovery archive, and no
+promise of arbitrary offline recording. Safe diagnostic reason/stage/status fields omit raw
+provider errors, audio, transcript text and credentials.
 
-The existing draft/notes, searchable History, transcript evidence, Ask Moss, reviewed Tasks,
-summaries and private export flows remain available independently of recording. Account export
-adds recorder state and retained gaps, excluding credentials, verifiers and browser-session IDs.
-Summary generation warns about recorded capture gaps. No provider or device permission was
-activated by development work; synthetic CI fixtures do not replace actual recording proof.
+Recording authority is separate from Trail Marker's legacy identity credential. The shared
+connection requires an independently stored recording-capability proof, current owner/device
+capability revision and an ephemeral native connection verifier. Existing paired devices receive
+no recording capability from migration. Browser approval is cookie-only and origin checked.
+An explicit Start binds the current browser session, meeting, exact device/connection and sources;
+only that native connection can claim the short-lived grant. Native creates the per-meeting secret
+in memory and the server stores only its hash. Lost-response retries preserve identity. Revocation,
+logout, expiry, reconnect and stale callbacks are fenced; reapproval does not revive old grants.
+The legacy credential alone cannot upload audio or control a meeting.
+
+Computer capture excludes native Moss processes. Unrelated process-list notifications do not
+invalidate a verified exclusion set; changes affecting that set or output device are rechecked
+and may pause capture. Inability to establish safe host-process exclusion disables computer mode.
+This does not promise exclusion of a future Moss web player inside a shared browser. Selected-app
+capture keeps its verified process scope and requires explicit Resume after that scope changes.
+Teams/Zoom, device changes, actual isolation, permission timing, cleanup, latency and CPU still need
+hardware testing.
+
+The existing notes, History, transcript evidence, Ask Moss, reviewed Tasks, summaries and private
+export flows remain independent of recording. Exports include retained capture/gap metadata but
+exclude credentials, proofs, verifiers and browser-session IDs. Summaries warn about retained gaps.
+Development and CI use generated fixtures; no provider credential or OS permission was activated.
 
 ## Draft API
 
@@ -88,9 +117,10 @@ start capture, contact a provider, or create/expand companion grants.
   survive deletion; their source evidence can become unavailable. Repeated and inaccessible
   deletion requests return the same 204 response. The UI
   requires confirmation and explains the retained content and unsaved edits that will be lost.
-- `GET` / `PUT /api/meetings/preferences`: `{ defaultCaptureMode }`, where the value is
-  `microphone-only`, `selected-app`, `computer-audio`, or `null` to clear the explicit default.
-  Reading preferences never creates a default, and choosing a mode alone does not save it.
+- `GET` / `PUT /api/meetings/preferences`: `{ defaultCaptureMode, rememberedSource? }`. The mode
+  is `microphone-only`, `selected-app`, `computer-audio`, or `null`. An explicitly chosen source
+  stores device ID, microphone UID and, for selected-app mode, stable application identity.
+  Reading preferences never creates a default or silently substitutes another source.
 
 Titles are at most 240 UTF-8 bytes; notes at most 64,000 UTF-8 bytes. Draft titles are immutable
 at this checkpoint. A stored draft is not evidence that capture occurred. Migration 0273 defines

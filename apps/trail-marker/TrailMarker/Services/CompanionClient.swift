@@ -16,6 +16,8 @@ struct CreatePairAttemptRequest: Encodable {
     let appVersion: String
     let osVersion: String
     let verifierHash: String
+    var recordingProofHash: String? = nil
+    var recordingPolicyVersion: Int? = nil
 }
 
 struct CreatePairAttemptResponse: Decodable, Equatable {
@@ -40,11 +42,17 @@ struct RedeemPairAttemptRequest: Encodable {
     let verifier: String
 }
 
+struct RecordingCapabilityApproval: Codable, Equatable {
+    let policyVersion: Int
+    let revision: Int
+}
+
 struct RedeemPairAttemptResponse: Decodable, Equatable {
     let credential: String
     let device: CompanionDeviceSummary
     let account: CompanionAccountSummary
     let expiresAt: String
+    var recordingCapability: RecordingCapabilityApproval? = nil
 }
 
 enum RedeemOutcome: Equatable {
@@ -295,6 +303,32 @@ struct CompanionClient {
         _ = try await sendChecked(request, okStatuses: [204])
     }
 
+    func requestRecordingCapability(credential: String, requestKey: String,
+                                    proofHash: String) async throws -> RecordingCapabilityAttempt {
+        struct Body: Encodable { let requestKey: String; let proofHash: String; let policyVersion = 1 }
+        let request = try jsonRequest(path: "/api/companion/recording-capability/attempt", method: "POST",
+            body: Body(requestKey: requestKey, proofHash: proofHash), credential: credential)
+        return try await recordingReply(RecordingCapabilityAttempt.self, request: request)
+    }
+
+    func recordingCapabilityStatus(credential: String, attemptId: String) async throws -> RecordingCapabilityStatus {
+        struct Body: Encodable { let attemptId: String }
+        let request = try jsonRequest(path: "/api/companion/recording-capability/status", method: "POST",
+            body: Body(attemptId: attemptId), credential: credential)
+        return try await recordingReply(RecordingCapabilityStatus.self, request: request)
+    }
+
+    /// Recording approval retries preserve this endpoint's Retry-After. Legacy companion
+    /// consumers retain their established error mapping and heartbeat/backtrack behavior.
+    private func recordingReply<Reply: Decodable>(_ type: Reply.Type, request: URLRequest) async throws -> Reply {
+        let (data, response) = try await send(request)
+        if response.statusCode == 429 || (500...599).contains(response.statusCode) {
+            throw MeetingHostError.retryAfter(milliseconds: MeetingCaptureClient.retryDelay(response))
+        }
+        guard response.statusCode == 200 else { throw makeError(status: response.statusCode, data: data) }
+        return try decode(type, from: data)
+    }
+
     func heartbeat(credential: String, app: String, os: String) async throws -> CompanionHeartbeatResponse {
         let body = CompanionHeartbeatRequest(appVersion: app, osVersion: os)
         let request = try jsonRequest(
@@ -459,4 +493,21 @@ struct CompanionClient {
             return .unreachable
         }
     }
+}
+
+struct RecordingCapabilityAttempt: Decodable {
+    let attemptId: String
+    let expiresAt: String
+    let status: String
+}
+struct RecordingCapabilityStatus: Decodable {
+    let status: String
+    let policyVersion: Int
+    let revision: Int?
+}
+struct PendingRecordingProof: Codable {
+    let requestKey: String
+    let proof: String
+    var attemptId: String? = nil
+    var expiresAt: String? = nil
 }

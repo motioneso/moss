@@ -47,20 +47,17 @@ describe("Meetings draft screen", () => {
     );
     expect(found.contributions.meetings).toContain("@moss/meetings/web");
   });
-  it("offers three explicit capture choices before creating a draft and connecting a Mac", () => {
+  it("offers an optional title and one Start with a shared connection remedy", () => {
     const html = render("/meetings", (client) =>
       client.setQueryData(meetingKeys.preferences, { defaultCaptureMode: null })
     );
-    expect(html).toContain("Microphone and computer audio");
-    expect(html).toContain("Microphone and selected app");
-    expect(html).toContain("Microphone only");
-    expect(html).not.toContain('aria-pressed="true"');
-    expect(html).toMatch(
-      /disabled=""[^>]*aria-describedby="meeting-capture-unavailable"[^>]*>Start meeting/
-    );
-    expect(html).toContain("connect Trail Marker on your Mac");
-    expect(html).toContain("/settings?section=aiproviders");
-    expect(html).not.toContain("Ready to start");
+    expect(html).toContain("Meeting title (optional)");
+    expect(html).toContain("Connect Trail Marker once for Meetings and Backtrack");
+    expect(html).toContain("Connecting doesn’t start recording");
+    expect(html).toContain("/settings?section=profile");
+    expect(html).toMatch(/disabled=""[^>]*>Start meeting/);
+    expect(html).not.toContain("Prepare this meeting");
+    expect(html).toContain("Checking the recording notice");
   });
   it("distinguishes loading from empty history", () => {
     const loading = render("/meetings?view=history");

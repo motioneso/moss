@@ -96,7 +96,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "profile",
     label: "Account & preferences",
     description:
-      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, says what to enter in Trail Marker to connect (this site's address), describes how browser approval links a Mac and what the linked Mac may do, and points at Active sessions as the place a linked Mac appears and can be signed out. Active sessions lists a linked Mac by the name it gave, with its app version. About the Mac app itself (not shown on this page): Trail Marker only takes a picture of the exact window in front, and only when Accessibility is granted so it can identify that window (if it can't, it takes none; remedy: grant Trail Marker Accessibility in the Mac's System Settings); its menu's Pause All pauses everything and sends nothing at all (its Test vision button then says to resume first), and a Focus switch in the menu pauses just Focus while staying connected (Test vision then says to switch Focus back on); logging out, or Moss revoking the Mac, clears its Focus settings on that Mac." +
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, says what to enter in Trail Marker to connect (this site's address), describes how browser approval links a Mac and what the linked Mac may do, and points at Active sessions as the place a linked Mac appears and can be signed out. Supported connections include one explicit meeting-recording approval with a concise source and transcription disclosure; existing Macs need a one-time connection upgrade shown here. Connection alone never starts recording. Meetings and Backtrack share the companion connection while Backtrack retains its own consent settings. During a meeting, a persistent recording strip retains recording status, acknowledged duration and Pause/Stop while navigating to other modules; connection uncertainty and delayed transcription remain separate. Active sessions lists a linked Mac by the name it gave, with its app version. About the Mac app itself (not shown on this page): Trail Marker only takes a picture of the exact window in front, and only when Accessibility is granted so it can identify that window (if it can't, it takes none; remedy: grant Trail Marker Accessibility in the Mac's System Settings); its menu's Pause All pauses everything and sends nothing at all (its Test vision button then says to resume first), and a Focus switch in the menu pauses just Focus while staying connected (Test vision then says to switch Focus back on); logging out, or Moss revoking the Mac, clears its Focus settings on that Mac." +
       " Backtrack is currently a Debug-build-only preview in the Mac app's Settings, with separate consent and a menu switch. It reads the front window's visible text through Accessibility, skipping password fields, and uses on-device text recognition only when that gives too little. It keeps text in memory on that Mac until quit, with Show text and search; it does not yet upload anything. Moss can store Backtrack history only when an admin turns Backtrack storage on; Settings > Modules > Backtrack then shows and deletes it, kept 37 days, plus up to one hourly run. Chat cannot answer from it yet. Switches and periodic checks skip recently read similar screens, with a fresh read after at most five minutes; a window that keeps showing nothing new is read less often, and periodic reads wait while you type. After five minutes without keyboard or mouse input it stops recording; use the keyboard or mouse to resume within five seconds. Pause All, lock, sleep, missing permissions and Never watch exclusions also stop capture; resume, unlock or grant Accessibility and Screen Recording in Mac System Settings as appropriate. Turning Backtrack off, withdrawing consent, logging out or revoking the Mac clears remembered text.",
     path: "/settings?section=profile",
     scope: "user"
@@ -182,7 +182,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "and shows one of eight states: Off; a one-time confirmation before anything is sent, " +
       "listing what is sent, who reads it, what it costs and what is not sent, with Turn on and " +
       "prepare and Cancel; Preparing, with how many tools are done and a progress bar; Ready, " +
-      "with how many tools can answer quick requests, how many always ask before they run, that " +
+      "with how many tools can answer quick requests (look-up tools are left out, since the " +
+      "classifier never offers them), how many always ask before they run, that " +
       "YOLO mode skips the asking, and when they were prepared; a tool changed, which says how " +
       "many are being prepared again; Couldn't prepare, saying why (for example the default chat " +
       "model did not answer) with Try again, which also sorts again any tool whose sort " +
@@ -253,14 +254,23 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +
       "models yet', 'The sign-in helper is not running', 'The provider rejected the API key', or 'Could not reach the provider') and an " +
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
-      "reads '* Manually added', and they survive refreshes and re-logins). System One (TypeSafe) " +
-      "is offered as a provider type; it answers fixed named questions and is used only for the " +
-      "Trail Marker focus judgment and the story and email sorting questions, not chat: its models are " +
-      "offered only in the Classifier row and its card has no Set as default button. The " +
+      "reads '* Manually added', and they survive refreshes and re-logins). A decision model (the " +
+      "System One provider kind) is offered as three presets: Jev (TypeSafe), Clef (Cloudflare) and " +
+      "Any compatible service. Jev asks for an optional address and an API key; Clef asks for a " +
+      "Cloudflare account ID and API token and builds the address from them; Any compatible " +
+      "service asks for an address and an API key, stays addable more than once, and is named for " +
+      "its address host (for example Decision model (openrouter.ai)). A decision " +
+      "model answers fixed named questions and is used only for the Trail Marker focus judgment " +
+      "and the story and email sorting questions, not chat: its models are offered only in the " +
+      "Classifier row and its card has no Set as default button. A model added by hand on a " +
+      "decision model starts with the JSON capability and the Economy tier. When a decision-model " +
+      "service has no model list, its Test line says the service does not list its models, so the " +
+      "key could not be checked, and points to adding one by hand. The " +
       "Classifier row also sets the model " +
       "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
       "one is chosen it says Trail Marker's app and window titles also go to that model, or for " +
-      "a System One model that they go to TypeSafe, which also answers News, Sports and email " +
+      "a decision model that they go to the chosen service (TypeSafe for Jev), which also answers " +
+      "News, Sports and email " +
       "sorting questions. " +
       "Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
@@ -308,7 +318,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "message still goes to the main model. Once a model is chosen, a line " +
       "under the row says story details, saved story preferences and each email's subject, " +
       "sender, dates and text go to that model first and to the main model if it does not " +
-      "answer. For a System One model the line instead says it answers the News, Sports and " +
+      "answer. For a decision model the line instead says it answers the News, Sports and " +
       "email sorting questions with a yes or no, that each email's subject, sender, dates and " +
       "text go there too, and that the main model still handles other sorting work. When a " +
       "hosted model is chosen and the Chat gate is Shadow or On, the row also says eligible " +

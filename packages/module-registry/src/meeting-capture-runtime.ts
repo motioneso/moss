@@ -1,11 +1,21 @@
-import { createConfiguredTranscription, type ActiveModulesResolver } from "@moss/ai";
+import {
+  ConfiguredTranscriptionError,
+  createConfiguredTranscription,
+  type ActiveModulesResolver
+} from "@moss/ai";
 import type { DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import type { MeetingCaptureDependencies } from "@moss/meetings";
 
 export type MeetingCaptureAuthorization = Pick<
   MeetingCaptureDependencies,
-  "resolveBrowser" | "resolveCompanion" | "assertBinding" | "device" | "trustedOrigins"
+  | "resolveBrowser"
+  | "resolveCompanion"
+  | "resolveRecording"
+  | "assertRecordingBinding"
+  | "assertBinding"
+  | "device"
+  | "trustedOrigins"
 >;
 
 /** Auth proves device/session identity; Meetings owns its own narrowly approved grant. */
@@ -34,6 +44,25 @@ export function createMeetingCaptureRuntime(deps: {
         throw new HttpError(404, "Meetings unavailable");
     },
     processingAvailability: transcription.availability,
-    transcribe: transcription.transcribe
+    transcribe: transcription.transcribe,
+    describeProcessingFailure(error) {
+      if (!(error instanceof ConfiguredTranscriptionError)) return null;
+      return {
+        code:
+          error.code === "unavailable" || error.code === "route-changed"
+            ? "meeting_capture_processing_unavailable"
+            : "meeting_capture_processing_failed",
+        reason: error.reason,
+        stage: error.stage,
+        retryable: error.retryable,
+        ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
+        ...(typeof error.httpStatus === "number" &&
+        Number.isInteger(error.httpStatus) &&
+        error.httpStatus >= 100 &&
+        error.httpStatus <= 599
+          ? { httpStatus: error.httpStatus }
+          : {})
+      };
+    }
   };
 }

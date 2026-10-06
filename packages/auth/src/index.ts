@@ -32,12 +32,26 @@ import {
   createCompanionPairingService,
   type CompanionPairingService
 } from "./companion-pairing.js";
+import {
+  createRecordingCapabilitiesService,
+  type RecordingCapabilitiesService
+} from "./recording-capabilities.js";
+export {
+  createRecordingCapabilitiesService,
+  RecordingCapabilityError,
+  type RecordingCapabilitiesService,
+  type RecordingCapabilityContext
+} from "./recording-capabilities.js";
 import { readBearerToken, toWebHeaders } from "./headers.js";
 import { resolveAuthOriginConfig } from "./runtime-config.js";
 import { createMeSessionsService, type MeSessionsRuntimeService } from "./session-service.js";
 
 import { createSessionBindingsService, type SessionBindingsService } from "./session-bindings.js";
-export { createSessionBindingsService, type SessionBindingsService } from "./session-bindings.js";
+export {
+  createSessionBindingsService,
+  SessionBindingError,
+  type SessionBindingsService
+} from "./session-bindings.js";
 
 const { Pool } = pg;
 
@@ -131,6 +145,7 @@ export interface MossAuthRuntime {
   readonly companionDevices: CompanionDevicesService;
   /** Fresh cookie-session/device binding checks for separately approved capabilities. */
   readonly sessionBindings: SessionBindingsService;
+  readonly recordingCapabilities: RecordingCapabilitiesService;
   readonly close: () => Promise<void>;
 }
 
@@ -236,6 +251,10 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     companionPairing: createCompanionPairingService({ pool }),
     companionDevices: createCompanionDevicesService({ pool }),
     sessionBindings: createSessionBindingsService({ pool, auth }),
+    recordingCapabilities: createRecordingCapabilitiesService({
+      pool,
+      companionDevices: createCompanionDevicesService({ pool })
+    }),
     verifySelfPassword: async ({ actorUserId, password }) => {
       // Scope strictly to the actor's own credential row. provider_id='credential'
       // AND a non-null password define "this account owns a password credential"

@@ -63,3 +63,5 @@ export {
 } from "./adapters/transcript-reader.js";
 
 export * from "./configured-transcription.js";
+
+export * from "./transcription-errors.js";

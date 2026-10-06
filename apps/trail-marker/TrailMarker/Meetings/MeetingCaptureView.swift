@@ -17,14 +17,20 @@ struct MeetingCaptureView: View {
                 Text(host.sourceDescription).font(.callout).foregroundStyle(.secondary)
             }
             Divider()
-            if host.canPrepare {
-                Text("Preparing requests microphone permission and approval for this meeting. Recording begins only after you choose sources and press Record in Moss.")
-                    .font(.callout).fixedSize(horizontal: false, vertical: true)
-                Button("Prepare this meeting") { host.prepareFromUserClick() }
-                    .buttonStyle(.borderedProminent)
+            if let output = host.outputMessage {
+                Text(output).font(.callout).foregroundStyle(.secondary)
+            }
+            if let connectivity = host.connectivityMessage {
+                Text(connectivity).font(.callout).foregroundStyle(.secondary)
+            }
+            if let backlog = host.backlogMessage {
+                Text(backlog).font(.callout).foregroundStyle(.secondary)
+            }
+            if let processing = host.processingMessage {
+                Text(processing).font(.callout).foregroundStyle(.secondary)
             }
             HStack(spacing: TrailMarkerTokens.Spacing.related) {
-                Button(host.phase == .paused ? "Resume in Moss" : "Record in Moss") { host.openMeetingInBrowser() }
+                Button(host.phase == .paused ? "Resume in Moss" : "Open meeting in Moss") { host.openMeetingInBrowser() }
                     .disabled(host.activation == nil || host.phase == .recording || host.phase == .stopping)
                 Button("Pause") { host.pauseFromUserClick() }.disabled(host.phase != .recording)
                 Button("Stop", role: .destructive) { host.stopFromUserClick() }.disabled(!host.canStop)
@@ -45,9 +51,7 @@ struct MeetingCaptureView: View {
     private var status: String {
         switch host.phase {
         case .unprepared: return "Not recording"
-        case .preparing: return "Preparing this Mac"
-        case .awaitingApproval: return "Waiting for meeting approval"
-        case .ready: return "Ready for Record in Moss"
+        case .ready: return "Ready for Start meeting in Moss"
         case .recording: return "Recording"
         case .paused: return "Paused"
         case .stopping: return "Finishing captured audio"
@@ -88,7 +92,7 @@ final class MeetingCaptureStatusItem: NSObject {
         pause.isEnabled = phase == .recording
         menu.addItem(pause)
         let stop = action("Stop recording", #selector(stopCapture))
-        stop.isEnabled = [.recording, .paused, .stopping].contains(phase) || cleanup
+        stop.isEnabled = host.canStop
         menu.addItem(stop)
         item.menu = menu
     }

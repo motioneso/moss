@@ -1,3 +1,5 @@
+import { MEETING_RECORDING_NOTICE } from "@moss/shared";
+import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { randomUUID } from "node:crypto";
 import type { DataContextDb } from "@moss/db";
 import {
@@ -117,6 +119,31 @@ export const meetingExportTables = [
     derived: []
   },
   {
+    key: "capture_connections",
+    table: "meeting_capture_connections",
+    columns: [
+      "device_id",
+      "owner_user_id",
+      "device_name",
+      "inventory_json",
+      "last_seen_at",
+      "expires_at"
+    ],
+    derived: ["connection_id", "verifier_hash", "capability_revision", "revision"]
+  },
+  {
+    key: "capture_start_cancellations",
+    table: "meeting_capture_start_cancellations",
+    columns: ["meeting_id", "owner_user_id", "request_key", "created_at"],
+    derived: ["device_id", "connection_id"]
+  },
+  {
+    key: "recording_notices",
+    table: "meeting_recording_notices",
+    columns: ["owner_user_id", "policy_version", "acknowledged_at"],
+    derived: []
+  },
+  {
     key: "capture_grants",
     table: "meeting_capture_grants",
     columns: [
@@ -126,10 +153,21 @@ export const meetingExportTables = [
       "device_name",
       "status",
       "state_json",
+      "notice_policy_version",
       "created_at",
       "expires_at"
     ],
-    derived: ["credential_hash", "verifier_hash", "session_id", "device_id"]
+    derived: [
+      "credential_hash",
+      "verifier_hash",
+      "session_id",
+      "device_id",
+      "connection_id",
+      "capability_revision",
+      "claim_expires_at",
+      "start_request_key",
+      "start_fingerprint"
+    ]
   }
 ] as const;
 
@@ -418,6 +456,16 @@ export async function seedMeetingAccountExport(
       updatedAt: "2026-10-04T12:00:00.123Z"
     });
   }
+  await new MeetingRecordingNoticeRepository().acknowledge(
+    db,
+    MEETING_RECORDING_NOTICE.policyVersion
+  );
+  await sql`INSERT INTO app.meeting_capture_connections (device_id,connection_id,device_name,verifier_hash,capability_revision,inventory_json,last_seen_at,expires_at) VALUES (${randomUUID()}::uuid,${randomUUID()}::uuid,${marker + " connection"},${"0".repeat(64)},1,'{}',now(),now()+interval '1 hour')`.execute(
+    db.db
+  );
+  await sql`INSERT INTO app.meeting_capture_start_cancellations (meeting_id,request_key,device_id,connection_id) VALUES (${meeting.id}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid)`.execute(
+    db.db
+  );
   await sql`INSERT INTO app.meeting_capture_grants
     (meeting_id,device_id,device_name,verifier_hash,status,state_json,expires_at)
     VALUES (${meeting.id}::uuid,${randomUUID()}::uuid,${marker + " synthetic Mac"},${"0".repeat(64)},'revoked',

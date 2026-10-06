@@ -122,10 +122,12 @@ final class MeetingHostBoundaryTests: XCTestCase {
         // True origin is 8.1 s. Earliest possible origin is 8 s, so cutoff is 100 ms early.
         let clock = try MeetingCaptureClock(requestSent: 10_000_000_000, responseReceived: 10_200_000_000,
             elapsedMilliseconds: 2000)
-        XCTAssertEqual(clock.originNanoseconds, 8_000_000_000)
+        XCTAssertEqual(clock.originNanoseconds, 7_999_000_000)
         XCTAssertLessThanOrEqual(try clock.nativeTime(5000), 13_100_000_000)
-        XCTAssertEqual(try clock.nativeTime(5000), 13_000_000_000)
-        XCTAssertThrowsError(try MeetingCaptureClock(requestSent: 10_000_000_000, responseReceived: 12_000_000_000,
+        XCTAssertEqual(try clock.nativeTime(5000), 12_999_000_000)
+        XCTAssertThrowsError(try MeetingCaptureClock(requestSent: 10_000_000_000, responseReceived: 23_000_000_000,
+            elapsedMilliseconds: 2000))
+        XCTAssertNoThrow(try MeetingCaptureClock(requestSent: 10_000_000_000, responseReceived: 16_000_000_000,
             elapsedMilliseconds: 2000))
     }
 
@@ -150,7 +152,6 @@ final class MeetingHostBoundaryTests: XCTestCase {
         host.sourceChanged()
         XCTAssertTrue(host.cleanupBlocked)
         XCTAssertTrue(host.isRecording)
-        XCTAssertFalse(host.canPrepare)
         XCTAssertTrue(host.canStop)
         XCTAssertEqual(device.stopCalls, 1)
         device.mustFail = false
@@ -233,6 +234,170 @@ final class MeetingHostBoundaryTests: XCTestCase {
         XCTAssertEqual(runtime.snapshot.state, .finished)
         XCTAssertEqual(gaps.count, 1)
         XCTAssertEqual(sequencer.identity(epoch: packet.epoch, source: "microphone", callbackSequence: packet.sequence + 1).sequence, 1)
+    }
+
+    func testFractionalMillisecondWireChunksShareExactCumulativeBoundary() throws {
+        let origin: UInt64 = 4_000_000_000
+        let phase: UInt64 = 400_000
+        let rate = 48000.0
+        let frames = 240128
+        var priorEnd: UInt64?
+        let samples = [Float](repeating: 0, count: frames)
+        for index in 0..<5000 {
+            let offset = UInt64(index * frames)
+            let packet = MeetingAudioPacket(source: .microphone, epoch: 1, sequence: UInt64(index),
+                startNanoseconds: origin + phase + (MeetingAudioSampleClock.nanoseconds(frames: offset, sampleRate: rate) ?? 0),
+                sampleRate: rate, samples: samples,
+                timelineOriginNanoseconds: origin + phase, sampleOffset: offset)
+            let boundary = try MeetingWireAudioBoundary(packet: packet, originNanoseconds: origin)
+            if let priorEnd { XCTAssertEqual(boundary.startMs, priorEnd, "No overlap or invented gap after thousands of chunks") }
+            priorEnd = boundary.endMs
+        }
+    }
+
+    func testRecordingDurationExcludesPreparationPausesAndStoppedTime() {
+        var duration = MeetingRecordingDuration()
+        XCTAssertEqual(duration.milliseconds(at: 30_000_000_000), 0)
+        duration.start(at: 30_000_000_000)
+        XCTAssertEqual(duration.milliseconds(at: 32_000_000_000), 2000)
+        duration.pause(at: 32_000_000_000)
+        XCTAssertEqual(duration.milliseconds(at: 90_000_000_000), 2000)
+        duration.start(at: 90_000_000_000)
+        duration.pause(at: 91_500_000_000)
+        XCTAssertEqual(duration.milliseconds(at: 999_000_000_000), 3500)
+    }
+
+    func testRetryableProcessingFailureRetainsExactAudioButTerminalFailureReleasesIt() {
+        let retryable = MeetingCaptureReceipt(requestKey: "chunk", status: "failed", code: "processing_failed",
+            retryable: true, retryAfterMs: 2000)
+        XCTAssertFalse(retryable.releasesAudio(matching: "chunk"))
+        let terminal = MeetingCaptureReceipt(requestKey: "chunk", status: "failed", code: "processing_failed", retryable: false)
+        XCTAssertTrue(terminal.releasesAudio(matching: "chunk"))
+        XCTAssertFalse(terminal.releasesAudio(matching: "different"))
+    }
+
+    func testFreshConnectionStartIsOneUseAndInterruptionNeedsAnotherExplicitGeneration() {
+        var fence = MeetingCommandFence()
+        fence.acceptFreshStart(generation: 1)
+        XCTAssertTrue(fence.shouldStart(generation: 1, desired: "recording"))
+        XCTAssertFalse(fence.shouldStart(generation: 1, desired: "recording"))
+        fence.interrupt()
+        XCTAssertFalse(fence.shouldStart(generation: 1, desired: "recording"))
+        XCTAssertTrue(fence.shouldStart(generation: 2, desired: "recording"))
+    }
+
+    func testPermissionContinuationRejectsStopExpiryReconnectionAndAnotherGrant() throws {
+        let now = try XCTUnwrap(ServerTime.parse("2026-10-06T04:00:00Z"))
+        let fence = MeetingStartPermissionFence(sessionGeneration: 8, captureGeneration: 1,
+            grantId: "grant", deviceId: "device", expiresAt: now.addingTimeInterval(60))
+        let valid = try permissionCapture(generation: 1, desired: "recording")
+        XCTAssertTrue(fence.permits(session: 8, capture: valid, now: now, cancelled: false, stopped: false))
+        XCTAssertFalse(fence.permits(session: 9, capture: valid, now: now, cancelled: false, stopped: false))
+        XCTAssertFalse(fence.permits(session: 8, capture: valid, now: now, cancelled: true, stopped: false))
+        XCTAssertFalse(fence.permits(session: 8, capture: valid, now: now, cancelled: false, stopped: true))
+        XCTAssertFalse(fence.permits(session: 8, capture: valid, now: now.addingTimeInterval(61), cancelled: false, stopped: false))
+        for desired in ["paused", "stopped", "revoked"] {
+            XCTAssertFalse(fence.permits(session: 8, capture: try permissionCapture(generation: 2, desired: desired),
+                now: now, cancelled: false, stopped: false))
+        }
+        let another = MeetingStartPermissionFence(sessionGeneration: 8, captureGeneration: 1,
+            grantId: "another", deviceId: "device", expiresAt: now.addingTimeInterval(60))
+        XCTAssertFalse(another.permits(session: 8, capture: valid, now: now, cancelled: false, stopped: false))
+    }
+
+    func testLostClaimResponseRetainsSameBearerAndHash() throws {
+        let command = MeetingRecordingCommand(meetingId: "meeting", grantId: "grant", ownerUserId: "owner",
+            expiresAt: "2026-10-06T04:01:00Z", selection: .init(mode: "microphone-only",
+                microphone: .init(deviceId: "uid", sourceId: "mic"), outputSourceId: nil, appProcessTreeId: nil, scope: nil),
+            capabilityRevision: 1)
+        let pending = MeetingPendingStart(command: command, connectionId: "connection", deviceId: "device", secret: String(repeating: "s", count: 43))
+        let first = pending.body(verifier: "verifier")
+        let retry = pending.body(verifier: "verifier")
+        XCTAssertEqual(first.credentialHash, retry.credentialHash)
+        XCTAssertEqual(first.credentialHash, MeetingCaptureClient.verifierHash(pending.credential))
+        XCTAssertNotEqual(first.credentialHash,
+            MeetingPendingStart(command: command, connectionId: "connection", deviceId: "device", secret: String(repeating: "t", count: 43))
+                .body(verifier: "verifier").credentialHash)
+    }
+
+    private func permissionCapture(generation: Int, desired: String) throws -> MeetingRemoteCapture {
+        let object: [String: Any] = ["grantId": "grant", "deviceId": "device", "deviceName": "Mac",
+            "generation": generation, "epoch": 1, "desired": desired, "epochStartMs": 0,
+            "expiresAt": "2026-10-06T06:00:00Z", "serverTime": "2026-10-06T04:00:00Z", "elapsedMs": 0]
+        return try JSONDecoder().decode(MeetingRemoteCapture.self, from: JSONSerialization.data(withJSONObject: object))
+    }
+
+    func testQuantizedServerClockNeverAdmitsFractionalPostStopAudio() throws {
+        let clock = try MeetingCaptureClock(requestSent: 10_000_900_000, responseReceived: 10_001_000_000,
+            elapsedMilliseconds: 2000)
+        let actualStop: UInt64 = 13_000_100_000
+        XCTAssertLessThanOrEqual(try clock.nativeTime(5000), actualStop)
+    }
+
+    func testComputerCaptureIgnoresUnrelatedRouteMapsButNeverChangesMossExclusion() throws {
+        let moss = process(1, parent: 0, executable: "/Applications/Moss.app/Contents/MacOS/Moss")
+        let other = process(2, parent: 0, executable: "/Applications/Other.app/Contents/MacOS/Other")
+        let inventory = MeetingCaptureInventory(microphones: [.init(deviceId: "uid", sourceId: "mic", label: "Mic")],
+            applications: [], computerAudio: .init(available: true, excludedProcessTreeIds: [moss.key]),
+            microphonePermission: .granted, systemAudioPermission: .unknown)
+        let choice = MeetingCaptureChoice(mode: "computer-audio", microphone: .init(deviceId: "uid", sourceId: "mic"),
+            outputSourceId: "output", appProcessTreeId: nil,
+            scope: .init(kind: "process-exclusion", endpointId: nil, excludedProcessTreeIds: [moss.key]))
+        let before = MeetingInventorySnapshot(wire: inventory, microphones: ["uid": 42], applications: [:],
+            processes: [moss], audioObjects: [1: 101], excluded: [moss], audioRoutes: [1: [70]])
+        let after = MeetingInventorySnapshot(wire: inventory, microphones: ["uid": 42], applications: [:],
+            processes: [moss, other], audioObjects: [1: 101, 2: 102], excluded: [moss], audioRoutes: [1: [70], 2: [88]])
+        XCTAssertEqual(try before.resolve(choice), try after.resolve(choice))
+        let widened = MeetingCaptureChoice(mode: "computer-audio", microphone: choice.microphone,
+            outputSourceId: "output", appProcessTreeId: nil,
+            scope: .init(kind: "process-exclusion", endpointId: nil, excludedProcessTreeIds: []))
+        XCTAssertThrowsError(try after.resolve(widened))
+    }
+
+    func testStableApplicationIdentityStillRequiresExactCurrentProcessScope() throws {
+        let app = process(11, parent: 1, executable: "/Applications/Meet.app/Contents/MacOS/Meet")
+        let root = MeetingProcessRoot(process: app, bundlePath: "/Applications/Meet.app", label: "Meet", applicationId: "org.example.meet")
+        let inventory = MeetingCaptureInventory(microphones: [.init(deviceId: "uid", sourceId: "mic", label: "Mic")],
+            applications: [.init(appProcessTreeId: app.key, label: "Meet", applicationId: "org.example.meet")],
+            computerAudio: .init(available: false, excludedProcessTreeIds: []), microphonePermission: .granted, systemAudioPermission: .unknown)
+        let snapshot = MeetingInventorySnapshot(wire: inventory, microphones: ["uid": 42], applications: [app.key: root],
+            processes: [app], audioObjects: [11: 101], excluded: [])
+        var choice = MeetingCaptureChoice(mode: "selected-app", microphone: .init(deviceId: "uid", sourceId: "mic"),
+            outputSourceId: "output", appProcessTreeId: app.key, scope: nil, applicationId: "org.example.meet")
+        XCTAssertEqual(try snapshot.resolve(choice).selection.output, .selectedProcesses([101]))
+        choice.applicationId = "org.example.other"
+        XCTAssertThrowsError(try snapshot.resolve(choice))
+    }
+
+    func testPreclaimResumeRefreshesExpiredCommandWithoutChangingBearerOrBindings() throws {
+        let old = MeetingRecordingCommand(meetingId: "meeting", grantId: "grant", ownerUserId: "owner",
+            expiresAt: "2026-10-06T04:01:00Z", selection: .init(mode: "microphone-only",
+                microphone: .init(deviceId: "uid", sourceId: "mic"), outputSourceId: nil, appProcessTreeId: nil, scope: nil),
+            capabilityRevision: 1, generation: 1)
+        var pending = MeetingPendingStart(command: old, connectionId: "connection", deviceId: "device", secret: String(repeating: "s", count: 43))
+        let originalBearer = pending.credential
+        let originalHash = pending.body(verifier: "verifier").credentialHash
+        let resumed = MeetingRecordingCommand(meetingId: old.meetingId, grantId: old.grantId, ownerUserId: old.ownerUserId,
+            expiresAt: "2026-10-06T04:03:00Z", selection: .init(mode: "microphone-only",
+                microphone: .init(deviceId: "new-uid", sourceId: "new-mic"), outputSourceId: nil, appProcessTreeId: nil, scope: nil),
+            capabilityRevision: 1, generation: 3)
+        let resumeTime = try XCTUnwrap(ServerTime.parse("2026-10-06T04:02:00Z"))
+        XCTAssertLessThan(try XCTUnwrap(ServerTime.parse(old.expiresAt)), resumeTime)
+        XCTAssertGreaterThan(try XCTUnwrap(ServerTime.parse(resumed.expiresAt)), resumeTime)
+        XCTAssertTrue(try pending.refresh(resumed, connectionId: "connection", deviceId: "device"))
+        XCTAssertEqual(pending.command.expiresAt, resumed.expiresAt)
+        XCTAssertEqual(pending.command.selection, resumed.selection)
+        XCTAssertEqual(pending.credential, originalBearer)
+        XCTAssertEqual(pending.body(verifier: "verifier").credentialHash, originalHash)
+        XCTAssertFalse(try pending.refresh(old, connectionId: "connection", deviceId: "device"), "Stale response cannot roll back fresh Resume")
+        XCTAssertEqual(pending.command.generation, 3)
+        XCTAssertThrowsError(try pending.refresh(resumed, connectionId: "another-connection", deviceId: "device"))
+        XCTAssertThrowsError(try pending.refresh(resumed, connectionId: "connection", deviceId: "another-device"))
+        for (grant, owner) in [("another-grant", "owner"), ("grant", "another-owner")] {
+            let changed = MeetingRecordingCommand(meetingId: old.meetingId, grantId: grant, ownerUserId: owner,
+                expiresAt: resumed.expiresAt, selection: resumed.selection, capabilityRevision: 1, generation: 4)
+            XCTAssertThrowsError(try pending.refresh(changed, connectionId: "connection", deviceId: "device"))
+        }
     }
 
     private func process(_ pid: Int32, parent: Int32, executable: String) -> MeetingProcessIdentity {

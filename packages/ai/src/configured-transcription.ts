@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpApiAdapter } from "./adapters/http-api.js";
+import {
+  TranscriptionTransportError,
+  type TranscriptionFailureDescription,
+  type TranscriptionFailureReason,
+  type TranscriptionFailureStage
+} from "./transcription-errors.js";
 import { parseAiApiKeyCredential } from "./credentials.js";
 import { createAiSecretCipher, type AiSecretCipher } from "./crypto.js";
 import {
@@ -9,10 +15,34 @@ import {
   type AiProviderConfigSafeRow
 } from "./repository.js";
 
-export class ConfiguredTranscriptionError extends Error {
-  constructor(readonly code: "unavailable" | "route-changed" | "failed" | "interrupted") {
+export class ConfiguredTranscriptionError extends Error implements TranscriptionFailureDescription {
+  readonly reason: TranscriptionFailureReason;
+  readonly stage: TranscriptionFailureStage;
+  readonly retryable: boolean;
+  readonly retryAfterMs?: number;
+  readonly httpStatus?: number;
+
+  constructor(
+    readonly code: "unavailable" | "route-changed" | "failed" | "interrupted",
+    failure?: TranscriptionFailureDescription
+  ) {
     super(`Configured transcription ${code}`);
     this.name = "ConfiguredTranscriptionError";
+    this.reason =
+      failure?.reason ??
+      (code === "unavailable"
+        ? "configuration-unavailable"
+        : code === "route-changed"
+          ? "route-changed"
+          : code === "interrupted"
+            ? "cancelled"
+            : "unknown");
+    this.stage =
+      failure?.stage ??
+      (code === "unavailable" || code === "route-changed" ? "configuration" : "dispatch");
+    this.retryable = failure?.retryable ?? false;
+    if (failure?.retryAfterMs !== undefined) this.retryAfterMs = failure.retryAfterMs;
+    if (failure?.httpStatus !== undefined) this.httpStatus = failure.httpStatus;
   }
 }
 
@@ -125,12 +155,23 @@ export function createConfiguredTranscription(deps: {
       actor: AccessContext,
       input: ConfiguredTranscriptionInput
     ): Promise<ConfiguredTranscriptionResult> {
-      const signal = AbortSignal.any([input.signal, AbortSignal.timeout(30000)]);
+      const deadline = AbortSignal.timeout(30000);
+      const signal = AbortSignal.any([input.signal, deadline]);
+      const abortFailure = () =>
+        input.signal.aborted
+          ? new ConfiguredTranscriptionError("interrupted")
+          : new ConfiguredTranscriptionError(
+              "failed",
+              new TranscriptionTransportError("provider-timeout", "dispatch")
+            );
       let removeAbort: () => void = () => undefined;
       try {
         signal.throwIfAborted();
         if (input.audio.byteLength === 0 || input.audio.byteLength > 3840044)
-          throw new ConfiguredTranscriptionError("failed");
+          throw new ConfiguredTranscriptionError(
+            "failed",
+            new TranscriptionTransportError("invalid-audio", "validation")
+          );
         const selected = await deps.dataContext.withDataContext(actor, resolveSealed);
         if (selected.modelRoute !== input.expectedModelRoute)
           throw new ConfiguredTranscriptionError("route-changed");
@@ -145,7 +186,13 @@ export function createConfiguredTranscription(deps: {
             input.dispatch(
               () => {
                 signal.throwIfAborted();
-                return (deps.fetch ?? globalThis.fetch)(url, { ...options, redirect: "error" });
+                return (deps.fetch ?? globalThis.fetch)(url, {
+                  ...options,
+                  redirect: "error"
+                }).catch(() => {
+                  if (signal.aborted) throw signal.reason;
+                  throw new TranscriptionTransportError("provider-network", "dispatch");
+                });
               },
               async (db) => {
                 signal.throwIfAborted();
@@ -157,7 +204,7 @@ export function createConfiguredTranscription(deps: {
             )
         });
         const aborted = new Promise<never>((_resolve, reject) => {
-          const onAbort = () => reject(new ConfiguredTranscriptionError("interrupted"));
+          const onAbort = () => reject(abortFailure());
           signal.addEventListener("abort", onAbort, { once: true });
           removeAbort = () => signal.removeEventListener("abort", onAbort);
           if (signal.aborted) onAbort();
@@ -179,7 +226,11 @@ export function createConfiguredTranscription(deps: {
         if (current.fingerprint !== selected.fingerprint)
           throw new ConfiguredTranscriptionError("route-changed");
         signal.throwIfAborted();
-        if (!result.segments) throw new ConfiguredTranscriptionError("failed");
+        if (!result.segments)
+          throw new ConfiguredTranscriptionError(
+            "failed",
+            new TranscriptionTransportError("provider-response-invalid", "validation")
+          );
         return {
           modelRoute: selected.modelRoute,
           segments: result.segments.map((segment) => ({
@@ -189,8 +240,10 @@ export function createConfiguredTranscription(deps: {
           }))
         };
       } catch (error) {
-        if (signal.aborted) throw new ConfiguredTranscriptionError("interrupted");
+        if (signal.aborted) throw abortFailure();
         if (error instanceof ConfiguredTranscriptionError) throw error;
+        if (error instanceof TranscriptionTransportError)
+          throw new ConfiguredTranscriptionError("failed", error);
         // Do not release raw provider/credential/parser errors to the caller or logs.
         throw new ConfiguredTranscriptionError("failed");
       } finally {

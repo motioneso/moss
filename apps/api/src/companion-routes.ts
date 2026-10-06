@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PgBoss } from "pg-boss";
+import { registerCompanionRecordingRoutes } from "./companion-recording-routes.js";
 
 import { redactSecrets } from "@moss/ai";
 import { CompanionAuthError, type CompanionContext, type MossAuthRuntime } from "@moss/auth";
@@ -124,6 +125,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
   const { authRuntime, dataContext, focus, boss } = deps;
   const pairing = authRuntime.companionPairing;
   const devices = authRuntime.companionDevices;
+  registerCompanionRecordingRoutes(server, authRuntime);
   const backtrack = new BacktrackRepository();
 
   /** Decision 1: the instance switch alone, with no preferences read — the cheap half of state. */
@@ -232,18 +234,43 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
     }
   );
 
-  server.post<{ Body: { code: string; decision: "approve" | "deny" } }>(
+  server.post<{ Body: { code: string; decision: "approve" | "deny"; recordingPolicyVersion?: 1 } }>(
     "/api/companion/pair/decide",
     { schema: decidePairAttemptRouteSchema },
     async (request, reply) => {
       const actorUserId = await requireBrowserActor(request, reply, true);
       if (!actorUserId) return reply;
 
+      // Recording capability is a separate permission: never grant it through a legacy bearer.
+      const summary = await pairing.summarize({ approvalCode: request.body.code });
+      let browserSessionId: string | undefined;
+      if (summary?.recordingPolicyVersion === 1) {
+        try {
+          const browser = await authRuntime.sessionBindings.resolveBrowser({
+            headers: request.headers,
+            requestId: request.id
+          });
+          if (browser.actorUserId !== actorUserId) throw new Error("Unavailable");
+          browserSessionId = browser.sessionId;
+        } catch {
+          return reply.code(401).send({
+            error: "Sign in to approve this connection",
+            code: "recording_approval_required"
+          });
+        }
+        if (request.body.decision === "approve" && request.body.recordingPolicyVersion !== 1)
+          return reply.code(400).send({
+            error: "Review the recording connection permission",
+            code: "recording_policy_required"
+          });
+      }
       // The approving account comes from the session, never from the body.
       const result = await pairing.decide({
         approvalCode: request.body.code,
         decision: request.body.decision,
-        actorUserId
+        actorUserId,
+        browserSessionId,
+        recordingPolicyVersion: request.body.recordingPolicyVersion
       });
 
       if (result.ok) return { status: result.decision === "approve" ? "approved" : "denied" };

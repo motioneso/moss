@@ -7,6 +7,7 @@ import { Button, Card } from "@moss/ui";
 import { COMPANION_PRODUCT_NAME, type PairAttemptSummaryResponse } from "@moss/shared";
 
 import { decideCompanionPairAttempt, getCompanionPairAttempt } from "../api/client";
+import { RECORDING_CAPABILITY_DISCLOSURE } from "./recording-capabilities.js";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 
@@ -59,7 +60,14 @@ export function LinkTrailMarkerPage() {
   });
 
   const decide = useMutation({
-    mutationFn: (decision: "approve" | "deny") => decideCompanionPairAttempt({ code, decision }),
+    mutationFn: (decision: "approve" | "deny") =>
+      decideCompanionPairAttempt({
+        code,
+        decision,
+        ...(attemptQuery.data?.recordingPolicyVersion === 1
+          ? { recordingPolicyVersion: 1 as const }
+          : {})
+      }),
     onSuccess: (result) => setDecided(result.status)
   });
 
@@ -92,8 +100,8 @@ export function LinkTrailMarkerPage() {
 
         {decided === "approved" ? (
           <p>
-            <strong>{deviceName}</strong> is linked. You can close this page, and sign the Mac out
-            any time from Settings, under Active sessions.
+            <strong>{deviceName}</strong> is linked. Keep using this tab to start a meeting when
+            you’re ready. You can sign the Mac out any time from Settings, under Active sessions.
           </p>
         ) : null}
 
@@ -122,6 +130,9 @@ export function LinkTrailMarkerPage() {
                 <span>It never gets your password or your browser session.</span>
               </div>
             </div>
+            {attemptQuery.data?.recordingPolicyVersion === 1 ? (
+              <p>{RECORDING_CAPABILITY_DISCLOSURE} Connecting never starts recording.</p>
+            ) : null}
             <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
               <Button
                 variant="primary"

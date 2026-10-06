@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
 import type {
@@ -7,16 +7,15 @@ import type {
   MeetingTranscriptSnapshotResponse,
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
-  MeetingCaptureLink,
-  MeetingCaptureRedeemResult,
-  MeetingCaptureState
+  MeetingCaptureState,
+  MeetingRecordingNoticeStatus
 } from "@moss/shared";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { requireUatBaseURL, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 import {
-  CAPTURE_DEVICE_NAME,
   nativePost,
   pairCaptureFixture,
+  connectCaptureFixture,
   startCaptureNativeFixture
 } from "./meeting-capture-native-fixture.js";
 import {
@@ -67,7 +66,7 @@ function clip(
   };
 }
 
-test("explicit capture approval, recording, transcript, Pause, Stop cutoff and revoke use real Moss routes (#2981)", async ({
+test("shared connection, single Start, recording controls, transcript and Stop→New recovery use real Moss routes (#2981)", async ({
   page
 }) => {
   test.setTimeout(180000);
@@ -80,6 +79,7 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
   const pinPath = `/api/admin/users/${UAT_ADMIN_ID}/ai-pin`;
   let meetingId: string | undefined;
   let deviceId: string | undefined;
+  let secondMeetingId: string | undefined;
   let providerId: string | undefined;
   let modelId: string | undefined;
   let native: ReturnType<typeof startCaptureNativeFixture> | undefined;
@@ -135,93 +135,76 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
     modelId = (await model.json()).model.id as string;
     expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
 
+    const openPages = page.context().pages().length;
+    const paired = await pairCaptureFixture(page, baseURL);
+    deviceId = paired.device.id;
+    const connection = await connectCaptureFixture(baseURL, paired);
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     const title = `Synthetic capture meeting ${randomUUID()}`;
-    await page.getByLabel("Meeting title", { exact: true }).fill(title);
+    const titleInput = page.getByLabel("Meeting title (optional)", { exact: true });
+    await titleInput.pressSequentially(title, { delay: 0 });
+    await expect(titleInput).toHaveValue(title);
+    await page.getByLabel("Recording device", { exact: true }).selectOption(deviceId);
     await page.getByRole("radio", { name: /^Microphone only/ }).click();
+    await page.getByLabel("Microphone", { exact: true }).selectOption("synthetic-device");
+    const noticeResponse = await page.request.get("/api/meetings/recording-notice");
+    expect(noticeResponse.status()).toBe(200);
+    const notice = (await noticeResponse.json()) as MeetingRecordingNoticeStatus;
+    if (notice.acknowledgement?.policyVersion !== notice.currentNotice.policyVersion) {
+      await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
+      const acknowledged = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/meetings/recording-notice") &&
+          response.request().method() === "PUT"
+      );
+      // The design-system switch hides its native checkbox; the label is the clickable surface.
+      const noticeSwitch = page.getByRole("checkbox", { name: "Recording notice", exact: true });
+      await page.locator("label.jds-switch", { has: noticeSwitch }).click();
+      const saved = await acknowledged;
+      expect(saved.status()).toBe(200);
+      expect(saved.request().postDataJSON()).toEqual({
+        policyVersion: notice.currentNotice.policyVersion
+      });
+      expect(
+        ((await saved.json()) as MeetingRecordingNoticeStatus).acknowledgement?.policyVersion
+      ).toBe(notice.currentNotice.policyVersion);
+    }
+    await expect(page.getByRole("checkbox", { name: "Recording notice", exact: true })).toHaveCount(
+      0
+    );
+    await connection.refresh();
     const created = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
     );
-    await page.getByRole("button", { name: "Create draft", exact: true }).click();
+    const started = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/capture/start") && response.request().method() === "POST"
+    );
+    await page.getByRole("button", { name: "Start meeting", exact: true }).click();
     const createdResponse = await created;
     expect(createdResponse.status()).toBe(201);
     meetingId = (await createdResponse.json()).meeting.id as string;
     const path = `/api/meetings/records/${meetingId}`;
-    const panel = page.getByRole("region", { name: "Meeting capture", exact: true });
-    await expect(panel).toContainText("Trail Marker not connected");
-    const handoff = new URL(
-      (await panel
-        .getByRole("link", { name: "Open Trail Marker", exact: true })
-        .getAttribute("href"))!
-    );
-    expect(handoff.protocol).toBe("moss-meeting:");
-    expect([...handoff.searchParams.keys()]).toEqual(["instance", "meetingId"]);
-    expect(handoff.searchParams.get("meetingId")).toBe(meetingId);
-    expect(handoff.searchParams.get("instance")).toBe(new URL(baseURL).origin);
-
-    const paired = await pairCaptureFixture(page, baseURL);
-    deviceId = paired.device.id;
-    const verifier = randomBytes(32).toString("base64url");
-    const linked = await nativePost(baseURL, "/api/meetings/capture/link", paired.credential, {
-      meetingId,
-      verifierHash: createHash("sha256").update(verifier).digest("hex")
-    });
-    expect(linked.status).toBe(200);
-    const link = (await linked.json()) as MeetingCaptureLink;
-    expect(link).toMatchObject({ meetingId, deviceId });
-    const redeemBody = { meetingId, challengeId: link.challengeId, verifier };
-    const pending = await nativePost(
-      baseURL,
-      "/api/meetings/capture/redeem",
-      paired.credential,
-      redeemBody
-    );
-    expect(await pending.json()).toEqual({ status: "pending" });
-    await expect(panel).toContainText(`Allow ${CAPTURE_DEVICE_NAME} to capture “${title}”?`);
-    await expect(panel).toContainText(deviceId);
-    await expect(panel.getByRole("button", { name: "Record", exact: true })).toHaveCount(0);
-    const approved = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`${path}/capture/approve`) && response.request().method() === "POST"
-    );
-    await panel.getByRole("button", { name: "Approve this device", exact: true }).click();
-    expect((await approved).status()).toBe(200);
-    const redeemed = await nativePost(
-      baseURL,
-      "/api/meetings/capture/redeem",
-      paired.credential,
-      redeemBody
-    );
-    expect(redeemed.status).toBe(200);
-    const grant = (await redeemed.json()) as MeetingCaptureRedeemResult;
-    if (grant.status !== "issued") throw new Error("Synthetic meeting grant was not issued");
-    native = startCaptureNativeFixture(baseURL, grant.credential, meetingId, grant.grantId);
-    await expect(panel.getByRole("status").filter({ hasText: /^Connected$/ })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Record", exact: true })).toBeDisabled();
-    await panel.getByLabel("Microphone", { exact: true }).selectOption("synthetic-device");
-    const notice = page.getByRole("checkbox", {
-      name: "Participants have been notified and recording is permitted",
-      exact: true
-    });
-    // `has` is evaluated inside each label; keep its checkbox locator root-relative.
-    await panel.locator("label.jds-switch").filter({ has: notice }).click();
-    await expect(notice).toBeChecked();
-    await expect(panel.getByRole("button", { name: "Record", exact: true })).toBeEnabled();
-    const recording = await controlFromUi(page, "Record", path);
-    expect(recording.input).toMatchObject({
-      grantId: grant.grantId,
-      command: "record",
-      expectedGeneration: 0,
-      noticeAcknowledged: true,
+    const startResponse = await started;
+    expect(startResponse.status()).toBe(200);
+    expect(startResponse.request().postDataJSON()).not.toHaveProperty("noticeAcknowledged");
+    expect(startResponse.request().postDataJSON()).toMatchObject({
+      deviceId,
+      connectionId: connection.connectionId,
       selection: {
         mode: "microphone-only",
         microphone: { deviceId: "synthetic-device", sourceId: "synthetic-mic" }
       }
     });
-    await expect(panel.getByRole("status").filter({ hasText: /^Starting…$/ })).toBeVisible();
+    const recording = (await startResponse.json()) as { capture: MeetingCaptureState };
+    const grant = await connection.claim(meetingId);
+    native = startCaptureNativeFixture(baseURL, grant.credential, meetingId, grant.grantId);
+    const panel = page.getByRole("region", { name: "Meeting capture", exact: true });
+    await expect(panel).toContainText("Starting…");
     native.acknowledge(recording.capture, "recording");
     await expect(panel.getByRole("status").filter({ hasText: /^Recording$/ })).toBeVisible();
+    expect(page.context().pages()).toHaveLength(openPages);
     await expect
       .poll(() => native!.latest()?.elapsedMs ?? 0)
       .toBeGreaterThan(recording.capture.epochStartMs + 200);
@@ -255,6 +238,14 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
       transcriptRevision: 1
     });
 
+    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
+    const strip = page.getByRole("complementary", {
+      name: "Active meeting recording",
+      exact: true
+    });
+    await expect(strip.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await expect(strip.getByRole("button", { name: "Stop and review", exact: true })).toBeEnabled();
+    await strip.getByRole("link", { name: title, exact: true }).click();
     const pause = await controlFromUi(page, "Pause", path);
     await expect(panel.getByRole("status").filter({ hasText: /^Pausing…$/ })).toBeVisible();
     const deniedDuringPause = await nativePost(
@@ -323,8 +314,9 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
       retained.snapshot.segments.every((segment: { endMs: number }) => segment.endMs <= cutoff)
     ).toBe(true);
     await expect(panel.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
-    await controlFromUi(page, "Disconnect device", path);
-    await expect.poll(() => native!.status()).toBe(401);
+    native.finalize();
+    await expect.poll(() => native!.latest()?.finalization).toBe("complete");
+    expect(native.status()).toBe(200);
     expect(
       (
         await nativePost(baseURL, "/api/meetings/capture/audio", grant.credential, {
@@ -333,7 +325,52 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
           sequence: 2
         })
       ).status
-    ).toBe(401);
+    ).toBe(409);
+    await native.close();
+    await connection.refresh();
+    await panel.getByRole("link", { name: "New meeting", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "Retained transcript", exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Generated PCM microphone · Output not captured", { exact: true })
+    ).toBeVisible();
+    const createdAgain = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
+    );
+    const startedAgain = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/capture/start") && response.request().method() === "POST"
+    );
+    await expect(page.getByRole("checkbox", { name: "Recording notice", exact: true })).toHaveCount(
+      0
+    );
+    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Start meeting", exact: true }).click();
+    secondMeetingId = (await (await createdAgain).json()).meeting.id as string;
+    const nextResponse = await startedAgain;
+    expect(nextResponse.status()).toBe(200);
+    const nextCapture = ((await nextResponse.json()) as { capture: MeetingCaptureState }).capture;
+    const nextGrant = await connection.claim(secondMeetingId);
+    expect(nextGrant.grantId).not.toBe(grant.grantId);
+    native = startCaptureNativeFixture(
+      baseURL,
+      nextGrant.credential,
+      secondMeetingId,
+      nextGrant.grantId
+    );
+    native.acknowledge(nextCapture, "recording");
+    await expect(panel).toContainText("Recording");
+    const stoppedAgain = await controlFromUi(
+      page,
+      "Stop and review",
+      `/api/meetings/records/${secondMeetingId}`
+    );
+    native.acknowledge(stoppedAgain.capture, "stopped");
+    native.finalize();
+    await expect.poll(() => native!.latest()?.finalization).toBe("complete");
+    expect(native.status()).toBe(200);
     const evidence = await exec("docker", [
       "exec",
       fixtureName,
@@ -347,11 +384,15 @@ test("explicit capture approval, recording, transcript, Pause, Stop cutoff and r
     expect(observations).toHaveLength(2);
     expect(observations.every((item) => item.generatedPcm && item.timestampsRequested)).toBe(true);
     console.log(
-      "MEETINGS_CAPTURE_UAT real UI/API: exact device approval; explicit microphone selection and notice; native generation acknowledgments; generated PCM through disclosed HTTP ASR; timestamped retained transcript; duplicate audio idempotent; Pause rejects dispatch; Stop immutable cutoff and pre-cutoff final flush; revoke rejects next device request. Synthetic transport only, not live Mac capture proof."
+      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; rapid title entry; one Start with explicit remembered microphone; persistent controls during History navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop → New → Start succeeds with remembered sources and the same server-stored account recording acknowledgement, with no per-meeting checkbox. Synthetic transport only, not live Mac capture proof."
     );
   } finally {
     try {
       await native?.close();
+      if (secondMeetingId)
+        expect
+          .soft((await page.request.delete(`/api/meetings/records/${secondMeetingId}`)).status())
+          .toBe(204);
       if (meetingId)
         expect
           .soft((await page.request.delete(`/api/meetings/records/${meetingId}`)).status())

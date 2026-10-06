@@ -1,3 +1,5 @@
+import { MEETING_RECORDING_NOTICE } from "@moss/shared";
+import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -23,6 +25,7 @@ import {
   MeetingCaptureService,
   type MeetingCaptureDependencies
 } from "../../packages/meetings/src/capture-service.js";
+import { MeetingCaptureConnectionRepository } from "../../packages/meetings/src/capture-connection-repository.js";
 import { MeetingTranscriptRepository } from "../../packages/meetings/src/transcript-repository.js";
 const owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const meetingId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -95,6 +98,34 @@ function audio(): MeetingCaptureAudioInput {
   };
 }
 describe("native capture bounded domain", () => {
+  it.each([undefined, false])(
+    "rejects an internal recording transition without its verified notice flag (%s)",
+    (notice) => {
+      const value = state();
+      const input = {
+        ...command("record", 0),
+        noticeAcknowledged: notice
+      } as MeetingCaptureControlInput;
+      expect(() => applyCaptureControl(value, input, origin, "route")).toThrow();
+      expect(value.desired).toBe("idle");
+      expect(value.epochs).toEqual([]);
+    }
+  );
+  it("requires an internally verified notice flag for Resume but not Pause/Stop", () => {
+    const value = recording();
+    applyCaptureControl(value, command("pause", 1), at(2000));
+    expect(() =>
+      applyCaptureControl(
+        value,
+        { ...command("record", 2), noticeAcknowledged: undefined },
+        at(3000),
+        "route"
+      )
+    ).toThrow();
+    expect(value.desired).toBe("paused");
+    applyCaptureControl(value, command("stop", 2), at(3000));
+    expect(value.desired).toBe("stopped");
+  });
   it("retains exact gap replay, rejects changed IDs, and pauses visibly at its bounded cap", () => {
     const value = recording();
     const gap = {
@@ -176,23 +207,37 @@ describe("native capture bounded domain", () => {
   });
   it("expires a silent lease without resuming from a stale observed generation", () => {
     const value = recording();
-    expireCaptureLease(value, at(12001));
+    expireCaptureLease(value, at(32001));
     expect(value.desired).toBe("paused");
     expect(value.generation).toBe(2);
-    expect(() => assertCaptureAudioAdmission(value, audio(), at(13000))).toThrow();
-    expect(() => applyCaptureControl(value, command("record", 2), at(13000))).toThrow();
+    expect(() => assertCaptureAudioAdmission(value, audio(), at(33000))).toThrow();
+    expect(() => applyCaptureControl(value, command("record", 2), at(33000))).toThrow();
   });
-  it("freezes lease cutoff at last contact plus10seconds even on a next-day read", () => {
+  it("freezes lease cutoff at last contact plus30seconds even on a next-day read", () => {
     const value = recording();
     expireCaptureLease(value, at(86400000));
-    expect(value.epochs[0]?.endMs).toBe(12000);
-    expect(value.gaps.map((gap) => [gap.startMs, gap.endMs])).toEqual([[2000, 12000]]);
+    expect(value.epochs[0]?.endMs).toBe(32000);
+    expect(value.gaps.map((gap) => [gap.startMs, gap.endMs])).toEqual([[2000, 32000]]);
     expireCaptureLease(value, at(172800000));
-    expect(value.epochs[0]?.endMs).toBe(12000);
+    expect(value.epochs[0]?.endMs).toBe(32000);
     expect(value.gaps).toHaveLength(1);
     const short = recording();
     expireCaptureLease(short, at(86400000), at(5000));
     expect(short.epochs[0]?.endMs).toBe(5000);
+  });
+  it("admits retained pre-pause audio only after explicit acknowledged Resume and within its age bound", () => {
+    const value = recording();
+    const clip = audio();
+    applyCaptureControl(value, command("pause", 1), at(2000));
+    expect(() => assertCaptureAudioAdmission(value, clip, at(3000))).toThrow();
+    value.lastSeenAt = at(3000).toISOString();
+    applyCaptureControl(value, command("record", 2), at(3000), "route");
+    expect(() => assertCaptureAudioAdmission(value, clip, at(4000))).toThrow();
+    value.observed = { generation: 3, phase: "recording" };
+    value.lastSeenAt = at(4000).toISOString();
+    expect(assertCaptureAudioAdmission(value, clip, at(4000)).epoch).toBe(1);
+    value.lastSeenAt = at(62000).toISOString();
+    expect(() => assertCaptureAudioAdmission(value, clip, at(62000))).toThrow();
   });
   it("does not broaden a selected app or silently change computer exclusions", () => {
     const value = state();
@@ -243,6 +288,8 @@ function fixture() {
     credential_hash: createHash("sha256").update(credential).digest("hex"),
     session_id: randomUUID(),
     status: "active",
+    connection_id: deviceId,
+    capability_revision: 1,
     created_at: origin,
     expires_at: at(7200000),
     state_json: JSON.stringify(value)
@@ -250,6 +297,7 @@ function fixture() {
   const repository = new MeetingCaptureRepository();
   const receipts = new Map<string, CaptureReceipt>();
   vi.spyOn(repository, "reconcileExpiredAudio").mockResolvedValue();
+  vi.spyOn(repository, "hasPendingAudio").mockResolvedValue(false);
   vi.spyOn(repository, "lockMeeting").mockResolvedValue();
   vi.spyOn(repository, "grant").mockImplementation(async () => grant);
   vi.spyOn(repository, "save").mockImplementation(async (_db, _grant, next) => {
@@ -309,6 +357,7 @@ function fixture() {
     },
     resolveBrowser: vi.fn(),
     resolveCompanion: vi.fn(),
+    assertRecordingBinding: vi.fn(async () => ({ expiresAt: at(7200000) })),
     assertBinding: vi.fn(async () => {
       expect(active).toBeLessThanOrEqual(1);
     }),
@@ -326,10 +375,36 @@ function fixture() {
     trustedOrigins: ["https://moss.example"],
     now: () => at(2000)
   };
-  const service = new MeetingCaptureService(deps, repository, transcript);
+  const connections = new MeetingCaptureConnectionRepository();
+  vi.spyOn(connections, "lock").mockResolvedValue();
+  vi.spyOn(connections, "connection").mockImplementation(async () => ({
+    owner_user_id: owner,
+    device_id: deviceId,
+    connection_id: deviceId,
+    device_name: "Mac",
+    verifier_hash: grant.verifier_hash,
+    capability_revision: 1,
+    revision: 1,
+    inventory_json: JSON.stringify(inventory),
+    last_seen_at: at(2000),
+    expires_at: at(7200000)
+  }));
+  const notices = new MeetingRecordingNoticeRepository();
+  vi.spyOn(notices, "get").mockResolvedValue({
+    currentNotice: MEETING_RECORDING_NOTICE,
+    acknowledgement: {
+      policyVersion: MEETING_RECORDING_NOTICE.policyVersion,
+      acknowledgedAt: origin.toISOString()
+    }
+  });
+  vi.spyOn(repository, "bindNotice").mockImplementation(async (_db, row, version) => {
+    row.notice_policy_version = version;
+  });
+  const service = new MeetingCaptureService(deps, repository, transcript, connections, notices);
   return {
     deps,
     service,
+    notices,
     grant,
     ingest,
     repository,
@@ -339,6 +414,47 @@ function fixture() {
   };
 }
 describe("capture service authorization and dispatch", () => {
+  it("rejects an unacknowledged record replay before reading its old receipt", async () => {
+    const f = fixture();
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    const resume = command("record", 2);
+    await f.service.browserControl(f.browser, meetingId, resume);
+    const receiptReads = vi.mocked(f.repository.receipt).mock.calls.length;
+    vi.mocked(f.notices.get).mockResolvedValue({
+      currentNotice: MEETING_RECORDING_NOTICE,
+      acknowledgement: { policyVersion: "older-text", acknowledgedAt: origin.toISOString() }
+    });
+    await expect(f.service.browserControl(f.browser, meetingId, resume)).rejects.toMatchObject({
+      code: "meeting_capture_notice_required",
+      httpStatus: 409
+    });
+    expect(f.repository.receipt).toHaveBeenCalledTimes(receiptReads);
+    expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
+  });
+  it("requires current stored acknowledgement for Resume but keeps Pause and Stop independent", async () => {
+    const f = fixture();
+    vi.mocked(f.notices.get).mockResolvedValue({
+      currentNotice: MEETING_RECORDING_NOTICE,
+      acknowledgement: null
+    });
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    expect(f.notices.get).not.toHaveBeenCalled();
+    await expect(
+      f.service.browserControl(f.browser, meetingId, command("record", 2))
+    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
+    await f.service.browserControl(f.browser, meetingId, command("stop", 2));
+    expect(f.notices.get).toHaveBeenCalledOnce();
+  });
+  it("resumes without per-request notice after current account acknowledgement", async () => {
+    const f = fixture();
+    f.grant.notice_policy_version = null;
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    await f.service.browserControl(f.browser, meetingId, {
+      ...command("record", 2),
+      noticeAcknowledged: undefined
+    });
+    expect(f.grant.notice_policy_version).toBe(MEETING_RECORDING_NOTICE.policyVersion);
+  });
   it("keeps safe Stop acknowledgements and bounded final flush available after the gap cap", async () => {
     const f = fixture();
     const value = recording();
@@ -430,62 +546,6 @@ describe("capture service authorization and dispatch", () => {
       expect(f.deps.transcribe).not.toHaveBeenCalled();
     }
   );
-  it.each(["approved link", "approved grant"] as const)(
-    "rejects another device of the same owner at the %s even with the correct verifier",
-    async (boundary) => {
-      const f = fixture();
-      const otherDeviceId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
-      const verifier = "v".repeat(43);
-      f.grant.status = "approved";
-      f.grant.verifier_hash = createHash("sha256").update(verifier).digest("hex");
-      const link = {
-        id: grantId,
-        meeting_id: meetingId,
-        owner_user_id: owner,
-        device_id: boundary === "approved link" ? deviceId : otherDeviceId,
-        device_name: "Synthetic approved Mac",
-        verifier_hash: f.grant.verifier_hash,
-        status: "approved" as const,
-        created_at: origin,
-        expires_at: at(600000)
-      };
-      vi.spyOn(f.repository, "link").mockImplementation(async () => link);
-      vi.spyOn(f.repository, "grants").mockResolvedValue([]);
-      vi.spyOn(f.repository, "revokeExpired").mockResolvedValue();
-      const activate = vi.spyOn(f.repository, "activate").mockResolvedValue();
-      vi.mocked(f.deps.resolveCompanion).mockResolvedValue({
-        actorUserId: owner,
-        deviceId: otherDeviceId,
-        requestId: "wrong-device"
-      });
-      const input = { meetingId, challengeId: grantId, verifier };
-      await expect(
-        f.service.redeem(
-          { authorization: "Bearer tm1_synthetic_other_device" },
-          "wrong-device",
-          input
-        )
-      ).rejects.toMatchObject({ code: "meeting_capture_unavailable" });
-      expect(activate).not.toHaveBeenCalled();
-      expect(f.deps.assertBinding).not.toHaveBeenCalled();
-      expect(f.repository.grant).toHaveBeenCalledTimes(boundary === "approved link" ? 0 : 1);
-      // Positive control: the same owner/verifier can redeem when both stored device scopes match.
-      link.device_id = deviceId;
-      vi.mocked(f.deps.resolveCompanion).mockResolvedValue({
-        actorUserId: owner,
-        deviceId,
-        requestId: "approved-device"
-      });
-      expect(
-        await f.service.redeem(
-          { authorization: "Bearer tm1_synthetic_approved_device" },
-          "approved-device",
-          input
-        )
-      ).toMatchObject({ status: "issued", grantId });
-      expect(activate).toHaveBeenCalledOnce();
-    }
-  );
   it.each(["pause", "revoke"] as const)(
     "blocks provider initiation after %s wins while adapter prepares",
     async (operation) => {
@@ -534,7 +594,7 @@ describe("capture service authorization and dispatch", () => {
       }
     });
     vi.mocked(f.deps.assertBinding).mockImplementation(async () => {
-      if (revoked) throw Error("deleted during lock wait");
+      if (revoked) throw Object.assign(Error("deleted during lock wait"), { httpStatus: 403 });
     });
     const initiate = vi.fn(async () => ({ segments: [], modelRoute: "route" }));
     vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, input) =>
@@ -570,7 +630,8 @@ describe("capture service authorization and dispatch", () => {
         }
       });
       vi.mocked(f.deps.assertBinding).mockImplementation(async () => {
-        if (revoked) throw Error("deleted during final result lock wait");
+        if (revoked)
+          throw Object.assign(Error("deleted during final result lock wait"), { httpStatus: 403 });
       });
       vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, input) =>
         input.dispatch(async () => {
@@ -594,7 +655,9 @@ describe("capture service authorization and dispatch", () => {
     const f = fixture();
     vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, input) =>
       input.dispatch(async () => {
-        vi.mocked(f.deps.assertBinding).mockRejectedValue(Error("revoked"));
+        vi.mocked(f.deps.assertBinding).mockRejectedValue(
+          Object.assign(Error("revoked"), { httpStatus: 403 })
+        );
         return { segments: [{ startMs: 0, endMs: 500, text: "private" }], modelRoute: "route" };
       })
     );
@@ -609,6 +672,108 @@ describe("capture service authorization and dispatch", () => {
         grantId: randomUUID()
       })
     ).rejects.toThrow();
+    expect(f.repository.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("capture processing stays independent", () => {
+  it("retries a transient same-key clip without pausing capture or inventing a gap", async () => {
+    const f = fixture(),
+      clip = audio();
+    vi.mocked(f.deps.transcribe).mockRejectedValueOnce(new Error("synthetic transport outage"));
+    Object.assign(f.deps, {
+      describeProcessingFailure: () => ({
+        code: "meeting_capture_processing_failed",
+        reason: "provider-network",
+        stage: "dispatch",
+        retryable: true,
+        retryAfterMs: 1000
+      })
+    });
+    vi.spyOn(f.repository, "retry").mockImplementation(async (_db, _grant, receipt) => {
+      receipt.result_json = null;
+      return true;
+    });
+    const delayed = await f.service.audio(f.headers, "delay", clip);
+    expect(delayed).toMatchObject({
+      status: "failed",
+      reason: "provider-network",
+      retryable: true
+    });
+    expect(JSON.parse(f.grant.state_json!)).toMatchObject({
+      desired: "recording",
+      gaps: [],
+      processing: { status: "delayed" }
+    });
+    expect(await f.service.audio(f.headers, "retry", clip)).toMatchObject({ status: "saved" });
+    expect(f.deps.transcribe).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(f.grant.state_json!)).toMatchObject({
+      desired: "recording",
+      gaps: [],
+      processing: { status: "ready" },
+      transcriptRevision: 1
+    });
+  });
+  it("labels transcript persistence separately and does not expose thrown private data", async () => {
+    const f = fixture();
+    f.ingest.mockRejectedValueOnce(new Error("private transcript provider secret"));
+    const receipt = await f.service.audio(f.headers, "persistence", audio());
+    expect(receipt).toMatchObject({
+      status: "failed",
+      reason: "transcript-persistence",
+      stage: "persistence",
+      retryable: true
+    });
+    expect(JSON.stringify([...f.receipts.values()])).not.toContain(
+      "private transcript provider secret"
+    );
+    expect(JSON.parse(f.grant.state_json!).desired).toBe("recording");
+  });
+  it("classifies a transcript version conflict as retryable persistence rather than revoked capture", async () => {
+    const f = fixture();
+    f.ingest.mockResolvedValueOnce({
+      status: "conflict",
+      receipt: { version: 1, cursor: 1, transcriptRevision: 1, stopCutoffMs: null }
+    });
+    expect(await f.service.audio(f.headers, "conflict", audio())).toMatchObject({
+      status: "failed",
+      reason: "transcript-conflict",
+      stage: "persistence",
+      retryable: true,
+      retryAfterMs: 250
+    });
+    expect(JSON.parse(f.grant.state_json!).desired).toBe("recording");
+  });
+  it("replays a committed Resume after processing readiness becomes unavailable", async () => {
+    const f = fixture();
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    const resume = command("record", 2);
+    const resumed = await f.service.browserControl(f.browser, meetingId, resume);
+    vi.mocked(f.deps.processingAvailability).mockRejectedValue(
+      new Error("synthetic unavailable route")
+    );
+    expect(await f.service.browserControl(f.browser, meetingId, resume)).toEqual(resumed);
+    expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
+  });
+  it("does not misreport a transient auth storage outage as revocation", async () => {
+    const f = fixture();
+    vi.mocked(f.deps.assertBinding).mockRejectedValue(
+      new Error("synthetic auth storage unavailable")
+    );
+    await expect(f.service.audio(f.headers, "outage", audio())).rejects.toMatchObject({
+      httpStatus: 503
+    });
+    expect(f.deps.transcribe).not.toHaveBeenCalled();
+    expect(JSON.parse(f.grant.state_json!).desired).toBe("recording");
+  });
+  it("reads unchanged browser state without repeatedly rewriting it", async () => {
+    const f = fixture();
+    vi.spyOn(f.repository, "grants").mockResolvedValue([f.grant]);
+    await f.service.browserStatus(f.browser, meetingId);
+    vi.mocked(f.repository.save).mockClear();
+    const first = await f.service.browserStatus(f.browser, meetingId),
+      second = await f.service.browserStatus(f.browser, meetingId);
+    expect(second.revision).toBe(first.revision);
     expect(f.repository.save).not.toHaveBeenCalled();
   });
 });

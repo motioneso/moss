@@ -3,7 +3,11 @@ import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react
 import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@moss/module-web-sdk";
-import type { MeetingHistoryItem, MeetingRecord } from "@moss/shared";
+import {
+  MEETING_RECORDING_NOTICE,
+  type MeetingHistoryItem,
+  type MeetingRecord
+} from "@moss/shared";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { historyItem } from "./fixtures/meeting-history.js";
@@ -146,6 +150,12 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
+      if (path === "/api/meetings/recording-notice")
+        return new Response(
+          JSON.stringify({ currentNotice: MEETING_RECORDING_NOTICE, acknowledgement: null })
+        );
+      if (path === "/api/meetings/capture/devices")
+        return new Response(JSON.stringify({ devices: [], processingReady: false }));
       if (path.endsWith("/capture"))
         return new Response(
           JSON.stringify({ pendingLinks: [], capture: null, processingReady: false })

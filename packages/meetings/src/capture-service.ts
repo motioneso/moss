@@ -1,15 +1,17 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
+import { captureAuthorizationError } from "./capture-authorization.js";
+import { captureMetadataJson } from "./capture-metadata.js";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import { isUuid, type AccessContext, type DataContextDb, type DataContextRunner } from "@moss/db";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureAudioReceipt,
+  MeetingCaptureCancelStartInput,
+  MeetingCaptureCancelStartResult,
+  MeetingCaptureProcessingFailure,
   MeetingCaptureBrowserStatus,
   MeetingCaptureControlInput,
-  MeetingCaptureLink,
-  MeetingCaptureLinkInput,
-  MeetingCaptureRedeemInput,
-  MeetingCaptureRedeemResult,
   MeetingCaptureState,
   MeetingCaptureStatusInput,
   MeetingTranscriptSource
@@ -28,9 +30,10 @@ import {
   captureState,
   captureView,
   MeetingCaptureRepository,
-  type CaptureGrant,
-  type CaptureLink
+  type CaptureGrant
 } from "./capture-repository.js";
+import { CaptureProcessingError, captureProcessingFailure } from "./capture-processing.js";
+import { MeetingCaptureConnectionRepository } from "./capture-connection-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 
 export type MeetingCaptureTranscriber = (
@@ -56,7 +59,21 @@ export interface CaptureBrowserBinding extends AccessContext {
 export interface CaptureCompanionBinding extends AccessContext {
   readonly deviceId: string;
 }
+export interface CaptureRecordingBinding extends CaptureCompanionBinding {
+  readonly capabilityRevision: number;
+  readonly expiresAt: Date;
+}
 export interface MeetingCaptureDependencies {
+  readonly resolveRecording?: (input: {
+    headers: IncomingHttpHeaders;
+    requestId: string;
+  }) => Promise<CaptureRecordingBinding>;
+  readonly assertRecordingBinding?: (input: {
+    actorUserId: string;
+    deviceId: string;
+    capabilityRevision: number;
+  }) => Promise<{ expiresAt: Date }>;
+  readonly describeProcessingFailure?: (error: unknown) => MeetingCaptureProcessingFailure | null;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly resolveBrowser: (input: {
     headers: IncomingHttpHeaders;
@@ -101,7 +118,9 @@ export class MeetingCaptureService {
   constructor(
     private readonly deps: MeetingCaptureDependencies,
     private readonly repository = new MeetingCaptureRepository(),
-    private readonly transcript = new MeetingTranscriptRepository()
+    private readonly transcript = new MeetingTranscriptRepository(),
+    private readonly connections = new MeetingCaptureConnectionRepository(),
+    private readonly notices = new MeetingRecordingNoticeRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
   }
@@ -119,23 +138,34 @@ export class MeetingCaptureService {
     let actor: CaptureBrowserBinding;
     try {
       actor = await this.deps.resolveBrowser({ headers, requestId });
-    } catch {
-      throw new MeetingCaptureError();
+    } catch (error) {
+      throw captureAuthorizationError(error);
     }
     await this.deps.assertModuleAvailable(actor);
     return actor;
   }
   /** Uses the independent auth pool; safe while the capture transaction holds its lock. */
   private async liveBinding(grant: CaptureGrant, actor: AccessContext) {
-    if (!grant.session_id) throw new MeetingCaptureError();
+    if (
+      !grant.session_id ||
+      !grant.capability_revision ||
+      !grant.connection_id ||
+      !this.deps.assertRecordingBinding
+    )
+      throw new MeetingCaptureError();
     try {
       await this.deps.assertBinding({
         actorUserId: actor.actorUserId,
         sessionId: grant.session_id,
         deviceId: grant.device_id
       });
-    } catch {
-      throw new MeetingCaptureError();
+      await this.deps.assertRecordingBinding({
+        actorUserId: actor.actorUserId,
+        deviceId: grant.device_id,
+        capabilityRevision: grant.capability_revision
+      });
+    } catch (error) {
+      throw captureAuthorizationError(error);
     }
   }
   private async preflight(grant: CaptureGrant, actor: AccessContext) {
@@ -152,141 +182,6 @@ export class MeetingCaptureService {
     )
       throw new MeetingCaptureError();
     return grant;
-  }
-  private async companion(headers: IncomingHttpHeaders, requestId: string) {
-    if (headers.cookie) throw new MeetingCaptureError();
-    try {
-      return await this.deps.resolveCompanion({ headers, requestId });
-    } catch {
-      throw new MeetingCaptureError();
-    }
-  }
-  async link(
-    headers: IncomingHttpHeaders,
-    requestId: string,
-    input: MeetingCaptureLinkInput
-  ): Promise<MeetingCaptureLink> {
-    const actor = await this.companion(headers, requestId);
-    await this.deps.assertModuleAvailable(actor);
-    const device = await this.deps.device(actor);
-    return this.deps.dataContext.withDataContext(actor, async (db) => {
-      const grant = await this.repository.createLink(db, {
-        meetingId: input.meetingId,
-        deviceId: actor.deviceId,
-        deviceName: device.displayName,
-        verifierHash: input.verifierHash,
-        expiresAt: new Date(this.now().getTime() + 600000)
-      });
-      return {
-        challengeId: grant.id,
-        meetingId: grant.meeting_id,
-        deviceId: grant.device_id,
-        expiresAt: grant.expires_at.toISOString()
-      };
-    });
-  }
-  private validLink(link: CaptureLink | null, meetingId: string, deviceId?: string) {
-    if (
-      !link ||
-      link.meeting_id !== meetingId ||
-      (deviceId && link.device_id !== deviceId) ||
-      link.expires_at <= this.now()
-    )
-      throw new MeetingCaptureError();
-    return link;
-  }
-  async approve(actor: CaptureBrowserBinding, meetingId: string, challengeId: string) {
-    const link = this.validLink(
-      await this.deps.dataContext.withDataContext(actor, (db) =>
-        this.repository.link(db, challengeId)
-      ),
-      meetingId
-    );
-    const device = await this.deps.device({
-      actorUserId: actor.actorUserId,
-      deviceId: link.device_id
-    });
-    const expiresAt = new Date(
-      Math.min(
-        this.now().getTime() + 7200000,
-        actor.expiresAt.getTime(),
-        device.expiresAt.getTime()
-      )
-    );
-    await this.deps.dataContext.withDataContext(actor, async (db) => {
-      await this.repository.lockMeeting(db, meetingId);
-      const current = this.validLink(await this.repository.link(db, challengeId, true), meetingId);
-      const existing = await this.repository.grant(db, challengeId);
-      if (existing?.session_id === actor.sessionId && existing.status === "approved") return;
-      if (current.status !== "pending") throw new MeetingCaptureError();
-      if ((await this.repository.grants(db, meetingId)).length >= 20)
-        throw new MeetingCaptureError("meeting_capture_limit", 413);
-      await this.repository.approve(db, current, actor.sessionId, expiresAt);
-    });
-    return { approved: true as const };
-  }
-  async redeem(
-    headers: IncomingHttpHeaders,
-    requestId: string,
-    input: MeetingCaptureRedeemInput
-  ): Promise<MeetingCaptureRedeemResult> {
-    const actor = await this.companion(headers, requestId);
-    const prove = (grant: CaptureGrant | null) => {
-      const row = this.valid(grant, input.meetingId, actor.deviceId);
-      if (
-        !matches(input.verifier, row.verifier_hash) ||
-        this.now().getTime() - row.created_at.getTime() > 600000 ||
-        !["pending", "approved"].includes(row.status)
-      )
-        throw new MeetingCaptureError();
-      return row;
-    };
-    const link = this.validLink(
-      await this.deps.dataContext.withDataContext(actor, (db) =>
-        this.repository.link(db, input.challengeId)
-      ),
-      input.meetingId,
-      actor.deviceId
-    );
-    if (!matches(input.verifier, link.verifier_hash)) throw new MeetingCaptureError();
-    if (link.status === "pending") return { status: "pending" };
-    const initial = prove(
-      await this.deps.dataContext.withDataContext(actor, (db) =>
-        this.repository.grant(db, input.challengeId)
-      )
-    );
-    if (initial.status === "pending") return { status: "pending" };
-    await this.preflight(initial, actor);
-    return this.deps.dataContext.withDataContext(actor, async (db) => {
-      await this.repository.lockMeeting(db, input.meetingId);
-      const grant = prove(await this.repository.grant(db, input.challengeId, true));
-      await this.repository.revokeExpired(db, input.meetingId, this.now());
-      if (
-        (await this.repository.grants(db, input.meetingId)).some((row) => row.status === "active")
-      )
-        throw new MeetingCaptureError("meeting_capture_busy", 409);
-      const credential = `mm1_${actor.actorUserId}.${grant.id}.${randomBytes(32).toString("base64url")}`;
-      const state: CaptureStoredState = {
-        gaps: [],
-        gapLimitReached: false,
-        generation: 0,
-        desired: "idle",
-        originAt: this.now().toISOString(),
-        epochs: [],
-        stopCutoffMs: null,
-        finalizationDeadline: null,
-        inventory: null,
-        observed: null,
-        lastSeenAt: null
-      };
-      await this.repository.activate(db, grant, hash(credential), state);
-      return {
-        status: "issued",
-        credential,
-        grantId: grant.id,
-        expiresAt: grant.expires_at.toISOString()
-      };
-    });
   }
   private async authenticate(
     headers: IncomingHttpHeaders,
@@ -309,20 +204,36 @@ export class MeetingCaptureService {
       ),
       meetingId
     );
-    if (grant.status !== "active" || !matches(credential, grant.credential_hash))
+    if (
+      !["active", "finalizing", "complete"].includes(grant.status) ||
+      !matches(credential, grant.credential_hash)
+    )
       throw new MeetingCaptureError();
     await this.preflight(grant, actor);
     return { actor, grant, credential };
   }
   private async locked(db: DataContextDb, proof: NativeProof): Promise<CaptureGrant> {
+    await this.connections.lock(db, proof.grant.device_id);
     await this.repository.lockMeeting(db, proof.grant.meeting_id);
     const grant = this.valid(
       await this.repository.grant(db, proof.grant.id, true),
       proof.grant.meeting_id,
       proof.grant.device_id
     );
-    if (grant.status !== "active" || !matches(proof.credential, grant.credential_hash))
+    if (
+      !["active", "finalizing", "complete"].includes(grant.status) ||
+      !matches(proof.credential, grant.credential_hash)
+    )
       throw new MeetingCaptureError();
+    const connection = await this.connections.connection(db, grant.device_id);
+    if (
+      !connection ||
+      connection.connection_id !== grant.connection_id ||
+      connection.capability_revision !== grant.capability_revision ||
+      connection.verifier_hash !== grant.verifier_hash
+    )
+      throw new MeetingCaptureError();
+    await this.liveBinding(grant, proof.actor);
     return grant;
   }
   async status(headers: IncomingHttpHeaders, requestId: string, input: MeetingCaptureStatusInput) {
@@ -330,6 +241,7 @@ export class MeetingCaptureService {
     return this.deps.dataContext.withDataContext(proof.actor, async (db) => {
       const grant = await this.locked(db, proof);
       const state = captureState(grant);
+      const previousRevision = captureView(grant, state, this.now()).revision;
       await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
       expireCaptureLease(state, this.now(), grant.expires_at);
       if (input.observed.generation > state.generation)
@@ -359,9 +271,30 @@ export class MeetingCaptureService {
         // Keep the loss warning without hiding a current-generation safe stop acknowledgement.
         state.observed = { ...input.observed, errorCode: "meeting_capture_limit" };
       }
+      if (
+        input.recordedDurationMs !== undefined &&
+        input.observed.generation === state.generation
+      ) {
+        if (
+          !Number.isSafeInteger(input.recordedDurationMs) ||
+          input.recordedDurationMs < (state.recordedDurationMs ?? 0) ||
+          input.recordedDurationMs > this.now().getTime() - Date.parse(state.originAt)
+        )
+          throw new MeetingCaptureError("meeting_capture_invalid_input", 400);
+        state.recordedDurationMs = input.recordedDurationMs;
+      }
+      if (
+        input.finalized &&
+        state.desired === "stopped" &&
+        input.observed.phase === "stopped" &&
+        input.observed.generation === state.generation &&
+        !(await this.repository.hasPendingAudio(db, grant.id))
+      )
+        state.finalized = true;
       state.lastSeenAt = this.now().toISOString();
       await this.repository.save(db, grant, state);
-      return { capture: captureView(grant, state, this.now()) };
+      const capture = captureView(grant, state, this.now());
+      return { capture, changed: capture.revision !== previousRevision };
     });
   }
   async browserStatus(
@@ -371,7 +304,7 @@ export class MeetingCaptureService {
     const result = await this.deps.dataContext.withDataContext(actor, async (db) => {
       await this.repository.lockMeeting(db, meetingId);
       const grants = await this.repository.grants(db, meetingId);
-      const links = await this.repository.links(db, meetingId);
+      await this.deps.assertBinding({ actorUserId: actor.actorUserId, sessionId: actor.sessionId });
       const grant =
         grants.find((row) => row.status === "active") ??
         grants.find((row) => row.state_json !== null);
@@ -379,30 +312,66 @@ export class MeetingCaptureService {
       if (grant?.state_json) {
         const state = captureState(grant);
         await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
-        expireCaptureLease(state, this.now(), grant.expires_at);
+        if (grant.status === "approved") {
+          if (
+            state.desired !== "paused" &&
+            (!grant.claim_expires_at || grant.claim_expires_at <= this.now())
+          )
+            state.desired = "revoked";
+        } else expireCaptureLease(state, this.now(), grant.expires_at);
+        if (["active", "approved", "finalizing"].includes(grant.status)) {
+          try {
+            await this.liveBinding(grant, actor);
+          } catch (error) {
+            if (error instanceof MeetingCaptureError && error.httpStatus === 401)
+              state.desired = "revoked";
+            else throw error;
+          }
+        }
         if (grant.expires_at <= this.now() || grant.status === "revoked") state.desired = "revoked";
-        await this.repository.save(db, grant, state);
+        if (
+          state.desired === "stopped" &&
+          state.finalizationDeadline !== null &&
+          this.now().getTime() >= Date.parse(state.finalizationDeadline)
+        )
+          state.finalized = true;
+        const head = await this.repository.transcriptHead(db, meetingId);
+        state.transcriptRevision = head.transcript_revision;
+        if (JSON.stringify(state) !== grant.state_json)
+          await this.repository.save(db, grant, state);
+        if (grant.status === "approved") {
+          const connection = await this.connections.connection(db, grant.device_id);
+          if (
+            connection &&
+            connection.connection_id === grant.connection_id &&
+            connection.capability_revision === grant.capability_revision
+          ) {
+            state.inventory = JSON.parse(connection.inventory_json) as typeof state.inventory;
+            state.lastSeenAt = connection.last_seen_at.toISOString();
+          }
+        }
         capture = captureView(grant, state, this.now());
       }
       return {
         capture,
-        pendingLinks: links.map((row) => ({
-          challengeId: row.id,
-          meetingId,
-          deviceId: row.device_id,
-          deviceName: row.device_name,
-          expiresAt: row.expires_at.toISOString()
-        }))
+        pendingLinks: []
       };
     });
     const processing = await this.deps.processingAvailability(actor);
-    return { ...result, processingReady: processing.ready };
+    return {
+      ...result,
+      processingReady: processing.ready,
+      revision: result.capture?.revision ?? "none",
+      retryAfterMs: 1000
+    };
   }
   async browserControl(
     actor: CaptureBrowserBinding,
     meetingId: string,
     input: MeetingCaptureControlInput
   ) {
+    if (input.command === "record")
+      await this.deps.dataContext.withDataContext(actor, (db) => this.notices.requireCurrent(db));
     const grant = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.repository.grant(db, input.grantId)
     );
@@ -422,6 +391,30 @@ export class MeetingCaptureService {
     const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);
     return this.control(proof.actor, input.grantId, input.meetingId, input, proof);
   }
+  private async controlGrant(
+    db: DataContextDb,
+    actor: AccessContext,
+    grantId: string,
+    meetingId: string,
+    input: MeetingCaptureControlInput,
+    proof?: NativeProof
+  ) {
+    const initial = proof?.grant ?? (await this.repository.grant(db, grantId));
+    if (!initial) throw new MeetingCaptureError();
+    await this.connections.lock(db, initial.device_id);
+    await this.repository.lockMeeting(db, meetingId);
+    const grant = proof
+      ? await this.locked(db, proof)
+      : await this.repository.grant(db, grantId, true);
+    if (!grant || grant.meeting_id !== meetingId || grant.id !== input.grantId)
+      throw new MeetingCaptureError();
+    if (input.command !== "revoke") {
+      this.valid(grant, meetingId);
+      await this.liveBinding(grant, actor);
+    }
+    if (input.command === "record") await this.notices.requireCurrent(db);
+    return grant;
+  }
   private async control(
     actor: AccessContext,
     grantId: string,
@@ -429,52 +422,70 @@ export class MeetingCaptureService {
     input: MeetingCaptureControlInput,
     proof?: NativeProof
   ) {
-    const processing =
-      input.command === "record" ? await this.deps.processingAvailability(actor) : null;
-    if (input.command === "record" && (!processing?.ready || !processing.modelRoute))
-      throw new MeetingCaptureError("meeting_capture_processing_unavailable", 503);
     const fingerprint = hash(
-      JSON.stringify({
+      captureMetadataJson({
         expectedGeneration: input.expectedGeneration,
         command: input.command,
-        selection: input.selection ?? null,
-        noticeAcknowledged: input.noticeAcknowledged ?? false
+        selection: input.selection ?? null
       })
     );
+    if (input.command === "record") {
+      const replay = await this.deps.dataContext.withDataContext(actor, async (db) => {
+        const grant = await this.controlGrant(db, actor, grantId, meetingId, input, proof);
+        const prior = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
+        return prior?.result_json
+          ? { capture: captureView(grant, captureState(grant), this.now()) }
+          : null;
+      });
+      if (replay) return replay;
+    }
+    const processing =
+      input.command === "record"
+        ? await this.deps.processingAvailability(actor).catch(() => null)
+        : null;
     return this.deps.dataContext.withDataContext(actor, async (db) => {
-      await this.repository.lockMeeting(db, meetingId);
-      const grant = proof
-        ? await this.locked(db, proof)
-        : await this.repository.grant(db, grantId, true);
-      if (!grant || grant.meeting_id !== meetingId || grant.id !== input.grantId)
-        throw new MeetingCaptureError();
-      if (input.command !== "revoke") this.valid(grant, meetingId);
+      const grant = await this.controlGrant(db, actor, grantId, meetingId, input, proof);
       const previous = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
       if (previous?.result_json)
-        return JSON.parse(previous.result_json) as { capture: MeetingCaptureState };
+        return { capture: captureView(grant, captureState(grant), this.now()) };
+      if (input.command === "record" && (!processing?.ready || !processing.modelRoute))
+        throw new MeetingCaptureError("meeting_capture_processing_unavailable", 503);
       const state = captureState(grant);
       await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
-      expireCaptureLease(state, this.now(), grant.expires_at);
-      applyCaptureControl(state, input, this.now(), processing?.modelRoute ?? "");
-      await this.repository.save(db, grant, state);
-      if (input.command === "stop") {
-        const head = await this.repository.transcriptHead(db, meetingId);
-        if (head.version > 0 && head.stop_cutoff_ms === null) {
-          const retained = await this.transcript.snapshotWithSources(db, meetingId, {
-            maxSegments: 1,
-            maxCharacters: 1
-          });
-          if (retained)
-            await this.transcript.ingest(db, {
-              meetingId,
-              requestKey: input.requestKey,
-              expectedVersion: head.version,
-              sources: retained.sources,
-              events: [],
-              stopCutoffMs: state.stopCutoffMs
-            });
-        }
+      if (grant.status !== "approved") expireCaptureLease(state, this.now(), grant.expires_at);
+      if (grant.status === "approved" && input.command === "record") {
+        const connection = await this.connections.connection(db, grant.device_id);
+        if (!connection || connection.connection_id !== grant.connection_id)
+          throw new MeetingCaptureError();
+        state.inventory = JSON.parse(connection.inventory_json) as typeof state.inventory;
+        state.lastSeenAt = connection.last_seen_at.toISOString();
       }
+      if (input.command === "record")
+        await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
+      applyCaptureControl(
+        state,
+        input.command === "record" ? { ...input, noticeAcknowledged: true } : input,
+        this.now(),
+        processing?.modelRoute ?? ""
+      );
+      if (grant.status === "approved" && input.command === "record")
+        await this.repository.renewClaim(
+          db,
+          grant,
+          new Date(Math.min(this.now().getTime() + 60000, grant.expires_at.getTime()))
+        );
+      if (grant.status === "approved" && !grant.credential_hash) {
+        state.observed =
+          input.command === "record"
+            ? null
+            : {
+                generation: state.generation,
+                phase: input.command === "pause" ? "paused" : "stopped"
+              };
+      }
+      await this.repository.save(db, grant, state);
+      if (input.command === "stop")
+        await this.stopTranscript(db, meetingId, input.requestKey, state);
       const result = { capture: captureView(grant, state, this.now()) };
       await this.repository.reserve(db, grant.id, {
         requestKey: input.requestKey,
@@ -484,6 +495,69 @@ export class MeetingCaptureService {
         result
       });
       return result;
+    });
+  }
+  private async stopTranscript(
+    db: DataContextDb,
+    meetingId: string,
+    requestKey: string,
+    state: CaptureStoredState
+  ) {
+    const head = await this.repository.transcriptHead(db, meetingId);
+    if (head.version > 0 && head.stop_cutoff_ms === null) {
+      const retained = await this.transcript.snapshotWithSources(db, meetingId, {
+        maxSegments: 1,
+        maxCharacters: 1
+      });
+      if (retained)
+        await this.transcript.ingest(db, {
+          meetingId,
+          requestKey: requestKey,
+          expectedVersion: head.version,
+          sources: retained.sources,
+          events: [],
+          stopCutoffMs: state.stopCutoffMs
+        });
+    }
+  }
+  async cancelStart(
+    actor: CaptureBrowserBinding,
+    meetingId: string,
+    input: MeetingCaptureCancelStartInput
+  ): Promise<MeetingCaptureCancelStartResult> {
+    return this.deps.dataContext.withDataContext(actor, async (db) => {
+      await this.connections.lock(db, input.deviceId);
+      await this.repository.lockMeeting(db, meetingId);
+      await this.deps.assertBinding({ actorUserId: actor.actorUserId, sessionId: actor.sessionId });
+      const grant = await this.connections.byRequest(db, input.requestKey);
+      if (
+        grant &&
+        (grant.meeting_id !== meetingId ||
+          grant.device_id !== input.deviceId ||
+          grant.connection_id !== input.connectionId)
+      )
+        throw new MeetingCaptureError("meeting_capture_conflict", 409);
+      await this.connections.cancel(db, meetingId, input);
+      if (!grant) return { cancelled: true, capture: null };
+      const state = captureState(grant);
+      if (grant.status === "revoked") state.desired = "revoked";
+      else if (state.desired !== "stopped")
+        applyCaptureControl(
+          state,
+          {
+            grantId: grant.id,
+            requestKey: input.requestKey,
+            expectedGeneration: state.generation,
+            command: "stop"
+          },
+          this.now()
+        );
+      if (!grant.credential_hash && state.desired === "stopped")
+        state.observed = { generation: state.generation, phase: "stopped" };
+      await this.repository.save(db, grant, state);
+      if (state.desired === "stopped")
+        await this.stopTranscript(db, meetingId, input.requestKey, state);
+      return { cancelled: true, capture: captureView(grant, state, this.now()) };
     });
   }
   async audio(
@@ -497,19 +571,35 @@ export class MeetingCaptureService {
       const grant = await this.locked(db, proof);
       await this.repository.reconcileExpiredAudio(db, grant, captureState(grant), this.now());
       const prior = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
-      if (prior)
-        return {
-          result: prior.result_json
-            ? { ...(JSON.parse(prior.result_json) as MeetingCaptureAudioReceipt), replayed: true }
-            : { requestKey: input.requestKey, status: "pending" as const }
-        };
+      if (prior) {
+        if (!prior.result_json)
+          return { result: { requestKey: input.requestKey, status: "pending" as const } };
+        const result = JSON.parse(prior.result_json) as MeetingCaptureAudioReceipt;
+        if (!result.retryable || !(await this.repository.retry(db, grant.id, prior, this.now())))
+          return {
+            result: {
+              ...result,
+              replayed: true,
+              retryAfterMs: prior.retry_at
+                ? Math.max(0, prior.retry_at.getTime() - this.now().getTime())
+                : result.retryAfterMs
+            }
+          };
+        const state = captureState(grant);
+        const epoch = assertCaptureAudioAdmission(state, input, this.now());
+        return { modelRoute: epoch.modelRoute };
+      }
       const state = captureState(grant);
       await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
       const epoch = assertCaptureAudioAdmission(state, input, this.now());
       await this.repository.admitAudio(db, grant, input, fingerprint);
       return { modelRoute: epoch.modelRoute };
     });
-    if (reservation.result) return reservation.result;
+    if (reservation.result) {
+      pcm.fill(0);
+      return reservation.result;
+    }
+    let processingStage: "dispatch" | "validation" | "persistence" = "dispatch";
     try {
       // Module availability stays outside app transactions; auth-only binding is repeated at dispatch.
       await this.preflight(proof.grant, proof.actor);
@@ -547,13 +637,22 @@ export class MeetingCaptureService {
           dispatch
         })
       );
+      processingStage = "validation";
       if (
         !dispatched ||
         signal.aborted ||
         generated.modelRoute !== reservation.modelRoute ||
         generated.segments.length > 100
       )
-        throw new MeetingCaptureError("meeting_capture_processing_failed", 502);
+        throw new CaptureProcessingError({
+          code: "meeting_capture_processing_failed",
+          reason:
+            generated.modelRoute !== reservation.modelRoute
+              ? "route-changed"
+              : "provider-response-invalid",
+          stage: "validation",
+          retryable: false
+        });
       let characters = 0;
       for (const segment of generated.segments) {
         characters += segment.text.length;
@@ -567,9 +666,15 @@ export class MeetingCaptureService {
           segment.text.includes("\0") ||
           characters > 64000
         )
-          throw new MeetingCaptureError("meeting_capture_processing_failed", 502);
+          throw new CaptureProcessingError({
+            code: "meeting_capture_processing_failed",
+            reason: "timestamp-or-content-invalid",
+            stage: "validation",
+            retryable: false
+          });
       }
       await this.preflight(proof.grant, proof.actor);
+      processingStage = "persistence";
       return await this.deps.dataContext.withDataContext(proof.actor, async (db) => {
         const grant = await this.locked(db, proof);
         await this.liveBinding(grant, proof.actor);
@@ -581,6 +686,9 @@ export class MeetingCaptureService {
         );
         if (
           !epoch ||
+          state.finalized ||
+          (state.finalizationDeadline !== null &&
+            this.now().getTime() > Date.parse(state.finalizationDeadline)) ||
           (epoch.endMs !== null && input.endMs > epoch.endMs) ||
           (state.stopCutoffMs !== null && input.endMs > state.stopCutoffMs)
         )
@@ -639,21 +747,35 @@ export class MeetingCaptureService {
           stopCutoffMs: state.stopCutoffMs ?? head.stop_cutoff_ms
         });
         if (saved.status !== "saved")
-          throw new MeetingCaptureError("meeting_capture_conflict", 409);
+          throw new CaptureProcessingError({
+            code: "meeting_capture_processing_failed",
+            reason: "transcript-conflict",
+            stage: "persistence",
+            retryable: true,
+            retryAfterMs: 250
+          });
         const result: MeetingCaptureAudioReceipt = {
           requestKey: input.requestKey,
           status: "saved",
           transcriptRevision: saved.receipt.transcriptRevision,
           replayed: false
         };
-        await this.repository.finish(db, grant.id, result);
+        state.transcriptRevision = saved.receipt.transcriptRevision;
+        state.processing = { status: "ready" };
+        await this.repository.save(db, grant, state);
+        await this.repository.finish(db, grant.id, result, this.now());
         return result;
       });
-    } catch {
+    } catch (error) {
+      const failure = captureProcessingFailure(
+        error,
+        processingStage,
+        this.deps.describeProcessingFailure
+      );
       const result: MeetingCaptureAudioReceipt = {
         requestKey: input.requestKey,
         status: "failed",
-        code: "meeting_capture_processing_failed"
+        ...failure
       };
       // Revoked/deleted authorization suppresses even failure receipts from native callers.
       await this.preflight(proof.grant, proof.actor);
@@ -666,21 +788,35 @@ export class MeetingCaptureService {
           return JSON.parse(previous.result_json) as MeetingCaptureAudioReceipt;
         const state = captureState(grant);
         await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
-        retainCaptureGap(
-          state,
-          {
-            id: randomUUID(),
-            sourceId: input.sourceId,
-            epoch: input.epoch,
-            startMs: input.startMs,
-            endMs: input.endMs,
-            reason: "processing-failed"
-          },
-          this.now()
-        );
+        const retryable =
+          failure.retryable &&
+          (previous?.attempts ?? 1) < 4 &&
+          this.now().getTime() - (previous?.created_at.getTime() ?? 0) < 60000;
+        const finalResult = { ...result, retryable };
+        state.processing = {
+          status: "delayed",
+          reason: failure.reason,
+          stage: failure.stage,
+          retryable,
+          ...(failure.httpStatus === undefined ? {} : { httpStatus: failure.httpStatus }),
+          ...(retryable ? { retryAfterMs: failure.retryAfterMs ?? 1000 } : {})
+        };
+        if (!retryable)
+          retainCaptureGap(
+            state,
+            {
+              id: input.requestKey,
+              sourceId: input.sourceId,
+              epoch: input.epoch,
+              startMs: input.startMs,
+              endMs: input.endMs,
+              reason: "processing-failed"
+            },
+            this.now()
+          );
         await this.repository.save(db, grant, state);
-        await this.repository.finish(db, grant.id, result);
-        return result;
+        await this.repository.finish(db, grant.id, finalResult, this.now());
+        return finalResult;
       });
     } finally {
       pcm.fill(0);

@@ -31,6 +31,10 @@ jobs:
         working-directory: apps/trail-marker
         run: xcodegen generate
 
+      - name: Verify bounded audio mailbox concurrency and negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-audio-portable.py
+
       - name: Verify tap UID ownership in the installed Apple SDK
         run: |
           python3 - <<'PY'

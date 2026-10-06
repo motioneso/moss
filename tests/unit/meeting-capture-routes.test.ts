@@ -1,7 +1,11 @@
 import Fastify, { type FastifyRequest } from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { registerMeetingCaptureRoutes } from "../../packages/meetings/src/capture-routes.js";
-import type { MeetingCaptureDependencies } from "../../packages/meetings/src/capture-service.js";
+import {
+  MeetingCaptureService,
+  type MeetingCaptureDependencies
+} from "../../packages/meetings/src/capture-service.js";
+import { MeetingCaptureConnectionService } from "../../packages/meetings/src/capture-connection-service.js";
 const meetingId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function dependencies(): MeetingCaptureDependencies {
   return {
@@ -40,10 +44,10 @@ describe("capture route credential boundaries", () => {
     registerMeetingCaptureRoutes(server, dependencies());
     try {
       await server.ready();
-      expect(limits.get("/api/meetings/capture/link")?.max).toBe(20);
+      expect(limits.get("/api/meetings/capture/connection")?.max).toBe(120);
       expect(limits.get("/api/meetings/capture/status")?.max).toBe(600);
       expect(limits.get("/api/meetings/capture/audio")?.max).toBe(120);
-      expect(limits.size).toBe(8);
+      expect(limits.size).toBe(12);
       for (const limiter of limits.values())
         expect(
           limiter.keyGenerator({
@@ -121,9 +125,9 @@ describe("capture route credential boundaries", () => {
     try {
       const response = await server.inject({
         method: "POST",
-        url: "/api/meetings/capture/link",
+        url: "/api/meetings/capture/connection",
         headers: { authorization: "Bearer tm1_synthetic" },
-        payload: { meetingId, verifierHash: "not-a-sha256-digest" }
+        payload: { connectionId: meetingId, verifierHash: "not-a-sha256-digest" }
       });
       expect(response.statusCode).toBe(400);
       expect(deps.resolveCompanion).not.toHaveBeenCalled();
@@ -139,4 +143,168 @@ describe("capture route credential boundaries", () => {
       await server.close();
     }
   });
+});
+
+describe("capture source envelope regression", () => {
+  it.each([
+    { mode: "microphone-only", microphone: { deviceId: "mic", sourceId: "mic" } },
+    {
+      mode: "selected-app",
+      microphone: { deviceId: "mic", sourceId: "mic" },
+      outputSourceId: "output",
+      appProcessTreeId: "app"
+    },
+    {
+      mode: "computer-audio",
+      microphone: { deviceId: "mic", sourceId: "mic" },
+      outputSourceId: "output",
+      scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+    }
+  ])("preserves the exact $mode body with Fastify default AJV", async (selection) => {
+    const server = Fastify();
+    const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
+      actorUserId: meetingId,
+      sessionId: meetingId,
+      expiresAt: new Date("2027-01-01")
+    });
+    const control = vi
+      .spyOn(MeetingCaptureService.prototype, "browserControl")
+      .mockImplementation(async (_actor, _meetingId, input) => ({ capture: input as never }));
+    registerMeetingCaptureRoutes(server, dependencies());
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/api/meetings/records/${meetingId}/capture/control`,
+        payload: {
+          grantId: meetingId,
+          requestKey: meetingId,
+          expectedGeneration: 0,
+          command: "record",
+          noticeAcknowledged: true,
+          selection
+        }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(control.mock.calls[0]?.[2].selection).toEqual(selection);
+    } finally {
+      browser.mockRestore();
+      control.mockRestore();
+      await server.close();
+    }
+  });
+});
+
+describe("exact capture source branch guards", () => {
+  it.each([
+    {
+      mode: "microphone-only",
+      microphone: { deviceId: "mic", sourceId: "mic" },
+      outputSourceId: "hidden"
+    },
+    {
+      mode: "selected-app",
+      microphone: { deviceId: "mic", sourceId: "mic" },
+      outputSourceId: "output",
+      appProcessTreeId: "app",
+      scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+    }
+  ])("rejects mixed branch metadata before identity resolution", async (selection) => {
+    const server = Fastify(),
+      deps = dependencies();
+    registerMeetingCaptureRoutes(server, deps);
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/api/meetings/records/${meetingId}/capture/control`,
+        payload: {
+          grantId: meetingId,
+          requestKey: meetingId,
+          expectedGeneration: 0,
+          command: "record",
+          noticeAcknowledged: true,
+          selection
+        }
+      });
+      expect(response.statusCode).toBe(400);
+      expect(deps.resolveBrowser).not.toHaveBeenCalled();
+    } finally {
+      await server.close();
+    }
+  });
+  it("does not expose obsolete per-meeting approval or legacy tm1 redemption", async () => {
+    const server = Fastify();
+    registerMeetingCaptureRoutes(server, dependencies());
+    try {
+      for (const route of [
+        "/api/meetings/capture/link",
+        "/api/meetings/capture/redeem",
+        `/api/meetings/records/${meetingId}/capture/approve`
+      ])
+        expect(
+          (
+            await server.inject({
+              method: "POST",
+              url: route,
+              payload: {},
+              headers: { authorization: "Bearer tm1_legacy" }
+            })
+          ).statusCode
+        ).toBe(404);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe("recording notice route boundary", () => {
+  it.each(["start", "control"])(
+    "allows %s without a per-request notice and leaves current account enforcement to the service",
+    async (kind) => {
+      const server = Fastify();
+      const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
+        actorUserId: meetingId,
+        sessionId: meetingId,
+        expiresAt: new Date("2027-01-01")
+      });
+      const start = vi
+        .spyOn(MeetingCaptureConnectionService.prototype, "start")
+        .mockResolvedValue({ capture: {} as never });
+      const control = vi
+        .spyOn(MeetingCaptureService.prototype, "browserControl")
+        .mockResolvedValue({ capture: {} as never });
+      registerMeetingCaptureRoutes(server, dependencies());
+      const common = {
+        requestKey: meetingId,
+        selection: { mode: "microphone-only", microphone: { deviceId: "mic", sourceId: "mic" } }
+      };
+      const payload =
+        kind === "start"
+          ? { ...common, deviceId: meetingId, connectionId: meetingId, expectedRevision: 1 }
+          : { ...common, grantId: meetingId, expectedGeneration: 0, command: "record" };
+      try {
+        for (const notice of [false, "true"]) {
+          const response = await server.inject({
+            method: "POST",
+            url: `/api/meetings/records/${meetingId}/capture/${kind}`,
+            payload: { ...payload, ...(notice === undefined ? {} : { noticeAcknowledged: notice }) }
+          });
+          expect(response.statusCode).toBe(400);
+        }
+        expect(start).not.toHaveBeenCalled();
+        expect(control).not.toHaveBeenCalled();
+        const accepted = await server.inject({
+          method: "POST",
+          url: `/api/meetings/records/${meetingId}/capture/${kind}`,
+          payload
+        });
+        expect(accepted.statusCode).toBe(200);
+        expect(kind === "start" ? start : control).toHaveBeenCalledOnce();
+      } finally {
+        browser.mockRestore();
+        start.mockRestore();
+        control.mockRestore();
+        await server.close();
+      }
+    }
+  );
 });

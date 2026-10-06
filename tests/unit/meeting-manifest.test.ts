@@ -50,7 +50,10 @@ describe("meetings composition", () => {
       "app.meeting_export_requests",
       "app.meeting_capture_links",
       "app.meeting_capture_grants",
-      "app.meeting_capture_receipts"
+      "app.meeting_capture_receipts",
+      "app.meeting_capture_connections",
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_recording_notices"
     ]);
     const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
     expect(chat?.database?.migrations).toEqual(
@@ -68,13 +71,18 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
-      "POST /api/meetings/capture/link",
-      "POST /api/meetings/capture/redeem",
+      "GET /api/meetings/recording-notice",
+      "PUT /api/meetings/recording-notice",
+      "POST /api/meetings/capture/connection",
+      "POST /api/meetings/capture/commands",
+      "POST /api/meetings/capture/claim",
+      "GET /api/meetings/capture/devices",
+      "POST /api/meetings/records/:id/capture/cancel-start",
       "POST /api/meetings/capture/status",
       "POST /api/meetings/capture/control",
       "POST /api/meetings/capture/audio",
       "GET /api/meetings/records/:id/capture",
-      "POST /api/meetings/records/:id/capture/approve",
+      "POST /api/meetings/records/:id/capture/start",
       "POST /api/meetings/records/:id/capture/control",
       "POST /api/meetings/history/search",
       "GET /api/meetings/history/:id",
@@ -97,6 +105,7 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.recording_notice",
       "transcribe.meeting",
       "meetings.native_capture",
       "meetings.account_export",

@@ -1,45 +1,29 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { Badge, Button, ButtonLink, Indicator, Note, SectionHead } from "@moss/ui";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button, SectionHead } from "@moss/ui";
+import { randomUuid } from "@moss/module-web-sdk";
 import type { MeetingCaptureState, MeetingRecord } from "@moss/shared";
-import { captureKeys, getCaptureStatus } from "./capture-client.js";
+import { captureKeys } from "./capture-client.js";
 import { CAPTURE_MODES } from "./capture-modes.js";
+import { captureAcknowledged, captureStopped } from "./capture-presentation.js";
 import {
-  captureAcknowledged,
-  captureConnected,
-  captureSelection,
-  captureStatusLabel
-} from "./capture-presentation.js";
-import { useCaptureSession } from "./capture-session.js";
+  effectiveCaptureChoice,
+  useCaptureSession,
+  startMeetingCapture,
+  type ActiveCapture
+} from "./capture-session.js";
 import { CaptureGaps } from "./capture-gaps.js";
 import { CaptureSources } from "./capture-sources.js";
-import { isMeetingAccessDenied, meetingKeys } from "./client.js";
-import { transcriptTime } from "./meeting-transcript.js";
+import { isMeetingAccessDenied } from "./client.js";
+import { useCaptureStatus } from "./capture-status.js";
+import { CaptureControls } from "./capture-controls.js";
+import { CaptureNotice } from "./capture-notice.js";
+import { isRecordingNoticeAcknowledged, useRecordingNotice } from "./recording-notice.js";
+import { CaptureReady } from "./capture-ready.js";
+import { useReadyCapture } from "./capture-choice.js";
+export { captureQueryOptions } from "./capture-status.js";
 
-export function captureQueryOptions(id: string) {
-  return {
-    queryKey: captureKeys.status(id),
-    queryFn: async ({ signal, client }: { signal: AbortSignal; client: QueryClient }) => {
-      try {
-        return await getCaptureStatus(id, signal);
-      } catch (error) {
-        if (!signal.aborted && isMeetingAccessDenied(error)) {
-          client.removeQueries({ queryKey: captureKeys.session(id), exact: true });
-          void client.invalidateQueries({ queryKey: meetingKeys.record(id), exact: true });
-        }
-        throw error;
-      }
-    },
-    retry: false as const,
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnWindowFocus: "always" as const
-  };
-}
-export function captureHandoffUrl(origin: string, meetingId: string): string {
-  return `moss-meeting://capture?${new URLSearchParams({ instance: origin, meetingId })}`;
-}
 function CaptureScope({ capture }: { readonly capture: MeetingCaptureState }) {
   const selection = capture.selection;
   if (!selection) return null;
@@ -55,7 +39,7 @@ function CaptureScope({ capture }: { readonly capture: MeetingCaptureState }) {
   return (
     <div className="meetings-section">
       <span className="jds-label">
-        {CAPTURE_MODES.find((mode) => mode.value === selection.mode)?.label}
+        {capture.deviceName} · {CAPTURE_MODES.find((mode) => mode.value === selection.mode)?.label}
       </span>
       <span className="jds-hint">
         {microphone?.label ?? "Selected microphone unavailable"} ·{" "}
@@ -63,15 +47,62 @@ function CaptureScope({ capture }: { readonly capture: MeetingCaptureState }) {
           ? "Output not captured"
           : selection.mode === "selected-app"
             ? (application?.label ?? "Selected app unavailable")
-            : "Computer audio, excluding Trail Marker and native Moss apps"}
+            : "Computer audio, including other apps and notifications"}
       </span>
-      {selection.mode === "computer-audio" ? (
-        <Note variant="practical">Other apps, media, and notifications can be recorded.</Note>
-      ) : null}
     </div>
   );
 }
-
+function StartExistingMeeting({ meeting }: { readonly meeting: MeetingRecord }) {
+  const ready = useReadyCapture();
+  const notice = useRecordingNotice();
+  const client = useQueryClient();
+  const session = useCaptureSession(meeting.id);
+  const canStart =
+    notice.acknowledged &&
+    !!ready.device &&
+    !ready.device.busy &&
+    !!ready.selection &&
+    ready.devices.data?.processingReady === true &&
+    !ready.devices.isError &&
+    !session.state.operation;
+  return (
+    <>
+      <CaptureReady
+        devices={ready.devices.data?.devices ?? []}
+        deviceId={ready.deviceId}
+        choice={ready.choice}
+        onDevice={ready.onDevice}
+        onChoice={ready.onChoice}
+        unavailable={ready.devices.isError}
+      />
+      <CaptureNotice disabled={session.state.operation?.phase === "sending"} />
+      <Button
+        disabled={!canStart}
+        onClick={() => {
+          if (
+            !canStart ||
+            !isRecordingNoticeAcknowledged(client) ||
+            !ready.device ||
+            !ready.selection
+          )
+            return;
+          session.updateChoice(ready.choice);
+          void startMeetingCapture(client, meeting.id, meeting.title, {
+            deviceId: ready.device.deviceId,
+            connectionId: ready.device.connectionId,
+            expectedRevision: ready.device.revision,
+            selection: ready.selection,
+            requestKey: randomUuid()
+          }).then((started) => {
+            if (started) void ready.remember().catch(() => undefined);
+          });
+        }}
+      >
+        Start meeting
+      </Button>
+    </>
+  );
+}
 export function CapturePanel({
   meeting,
   onLiveChange
@@ -79,87 +110,33 @@ export function CapturePanel({
   readonly meeting: MeetingRecord;
   readonly onLiveChange: (active: boolean) => void;
 }) {
+  const query = useCaptureStatus(meeting.id);
   const session = useCaptureSession(meeting.id);
-  const query = useQuery({
-    ...captureQueryOptions(meeting.id),
-    refetchInterval: session.state.operation?.phase === "sending" ? false : 1000,
-    refetchIntervalInBackground: true
-  });
   const client = useQueryClient();
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const [changing, setChanging] = useState(false);
   const accessDenied = isMeetingAccessDenied(query.error);
-  const data = accessDenied ? undefined : query.data;
-  const capture = data?.capture;
-  const {
-    bindGrant,
-    state: { grantId: choiceGrantId }
-  } = session;
-  useEffect(() => {
-    if (capture && choiceGrantId !== capture.grantId) bindGrant(capture.grantId);
-  }, [capture, choiceGrantId, bindGrant]);
-  const serverNow = capture
-    ? Date.parse(capture.serverTime) + Math.max(0, now - query.dataUpdatedAt)
-    : now;
-  const connected = !!capture && !query.isError && captureConnected(capture, serverNow);
-  const acknowledged = !!capture && captureAcknowledged(capture);
-  const stopped = capture?.desired === "stopped" && acknowledged;
+  const capture = accessDenied ? undefined : query.data?.capture;
+  const stopped = captureStopped(capture);
   const revoked = capture?.desired === "revoked";
-  const pendingRecord =
-    session.state.operation?.request.kind === "control" &&
-    session.state.operation.request.input.command === "record";
-  const live = pendingRecord || (!!capture && !stopped && !revoked && capture.desired !== "idle");
-  const processing =
-    !!capture?.finalizationDeadline && Date.parse(capture.finalizationDeadline) > serverNow;
+  const live =
+    !!session.state.operation || (!!capture && capture.desired !== "idle" && !stopped && !revoked);
   useEffect(() => {
     onLiveChange(live);
   }, [live, onLiveChange]);
   useEffect(() => {
-    if (!live || typeof window === "undefined") return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [live]);
-  useEffect(() => {
-    if (!live && !processing) return;
-    const refresh = () => {
-      void client.invalidateQueries({ queryKey: meetingKeys.transcript(meeting.id), exact: true });
-    };
-    refresh();
-    const timer = setInterval(refresh, 2000);
-    return () => clearInterval(timer);
-  }, [client, meeting.id, live, processing]);
-  const choice = session.state.choice;
-  const selection = captureSelection(choice, capture?.inventory ?? null);
-  const busy = session.state.operation !== null;
-  const canChoose =
-    !!capture &&
-    choiceGrantId === capture.grantId &&
-    !busy &&
-    connected &&
-    (capture.desired === "idle" || capture.desired === "paused") &&
-    acknowledged;
-  const canRecord = canChoose && !!selection && choice.notice && data?.processingReady === true;
-  const handoff =
-    typeof window !== "undefined" && window.location?.origin
-      ? captureHandoffUrl(window.location.origin, meeting.id)
-      : null;
-  const label = query.isPending
-    ? "Checking connection…"
-    : query.isError
-      ? "Capture status unconfirmed"
-      : capture
-        ? captureStatusLabel(capture, connected)
-        : "Trail Marker not connected";
+    if (live && !accessDenied)
+      client.setQueryData<ActiveCapture>(captureKeys.active, {
+        meetingId: meeting.id,
+        title: meeting.title
+      });
+  }, [client, meeting.id, meeting.title, live, accessDenied]);
   return (
     <section className="meetings-section" aria-label="Meeting capture">
-      <SectionHead number="01" title={live ? "Live meeting" : "Check the sources"} rule />
+      <SectionHead
+        number="01"
+        title={live ? "Live meeting" : stopped ? "Meeting ended" : "Your recording sources"}
+        rule
+      />
       {query.isPending ? (
         <p role="status" className="jds-hint">
           Checking Trail Marker…
@@ -169,192 +146,82 @@ export function CapturePanel({
         <p role="alert" className="jds-hint jds-hint--error">
           {accessDenied
             ? "Capture access is unavailable. Sign in again or return to meeting history."
-            : "Couldn’t confirm capture status. Check Trail Marker on your Mac before recording or closing it."}
+            : "Connection unconfirmed. Your source choice is kept. Trail Marker’s local Pause and Stop remain available."}
         </p>
       ) : null}
-      <div className="meetings-actions">
-        <span role="status">
-          <Indicator
-            status={connected ? (live ? "drift" : "ready") : "idle"}
-            live={connected && capture?.observed?.phase === "recording"}
-            label={label}
-          />
-        </span>
-        {capture ? (
-          <>
-            <span className="jds-hint">{capture.deviceName}</span>
-            <span className="jds-label">
-              {transcriptTime(capture.stopCutoffMs ?? capture.elapsedMs)}
-            </span>
-          </>
-        ) : null}
-      </div>
-      {capture ? <CaptureScope capture={capture} /> : null}
-      {capture ? <CaptureGaps capture={capture} /> : null}
-      {!accessDenied && (!capture || !connected || revoked) ? (
-        <div className="meetings-section">
-          <p className="jds-hint">
-            Open Trail Marker on a supported Mac and choose Prepare this meeting. Approve that
-            device here before recording.
-          </p>
-          <div className="meetings-actions">
-            {handoff ? (
-              <ButtonLink href={handoff} variant="secondary">
-                Open Trail Marker
-              </ButtonLink>
-            ) : null}
-            <Button variant="link" onClick={() => void query.refetch()}>
-              Refresh capture status
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {data?.pendingLinks
-        .filter((link) => Date.parse(link.expiresAt) > now)
-        .map((link) => (
-          <Note key={link.challengeId} variant="practical">
-            <div className="meetings-section">
-              <span>
-                Allow {link.deviceName} to capture “{meeting.title}”?
-              </span>
-              <span className="jds-hint">
-                Device: {link.deviceId}. This approval is for this meeting. Recording starts only
-                after you choose Record.
-              </span>
-              <div className="meetings-actions">
-                <Button disabled={busy} onClick={() => void session.approve(link.challengeId)}>
-                  Approve this device
-                </Button>
-              </div>
-            </div>
-          </Note>
-        ))}
-      {canChoose && capture.inventory ? (
-        <CaptureSources
-          inventory={capture.inventory}
-          choice={choice}
-          onChange={session.updateChoice}
+      {!accessDenied ? (
+        <CaptureControls
+          id={meeting.id}
+          capture={capture}
+          unavailable={query.isError}
+          updatedAt={query.dataUpdatedAt}
+          processingReady={query.data?.processingReady}
         />
       ) : null}
-      {data && !data.processingReady ? (
+      {capture ? (
+        <>
+          <CaptureScope capture={capture} />
+          <Button variant="link" onClick={() => setChanging((value) => !value)}>
+            {changing ? "Done changing sources" : "Change"}
+          </Button>
+          {changing && capture.inventory ? (
+            <>
+              {(capture.desired === "paused" || capture.desired === "idle") &&
+              captureAcknowledged(capture) ? (
+                <CaptureSources
+                  inventory={capture.inventory}
+                  choice={effectiveCaptureChoice(session.state, capture)}
+                  onChange={session.updateChoice}
+                />
+              ) : null}
+              <p className="jds-hint">
+                {capture.desired === "paused"
+                  ? "Choose sources, then explicitly resume recording."
+                  : stopped
+                    ? "Start a new meeting to choose different sources."
+                    : "Pause recording before changing sources."}
+              </p>
+            </>
+          ) : null}
+          <CaptureGaps capture={capture} />
+        </>
+      ) : null}
+      {!accessDenied && !capture && !query.isPending ? (
+        <StartExistingMeeting meeting={meeting} />
+      ) : null}
+      {query.data && !query.data.processingReady ? (
         <p role="status" className="jds-hint">
           Transcription unavailable. Check{" "}
           <Link to="/settings?section=aiproviders">AI providers</Link>.
         </p>
       ) : null}
-      {capture && !stopped && !revoked ? (
-        <div className="meetings-actions">
-          {capture.desired === "idle" || capture.desired === "paused" ? (
-            <Button
-              disabled={!canRecord}
-              onClick={() => {
-                if (!canRecord || !selection) return;
-                void session.control({
-                  grantId: capture.grantId,
-                  command: "record",
-                  expectedGeneration: capture.generation,
-                  selection,
-                  noticeAcknowledged: true
-                });
-              }}
-            >
-              {capture.desired === "paused" ? "Resume" : "Record"}
-            </Button>
-          ) : null}
-          {capture.desired === "recording" ? (
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                void session.control({
-                  grantId: capture.grantId,
-                  command: "pause",
-                  expectedGeneration: capture.generation
-                })
-              }
-            >
-              Pause
-            </Button>
-          ) : null}
-          {capture.desired !== "idle" ? (
-            <Button
-              disabled={busy || capture.desired === "stopped"}
-              onClick={() =>
-                void session.control({
-                  grantId: capture.grantId,
-                  command: "stop",
-                  expectedGeneration: capture.generation
-                })
-              }
-            >
-              Stop and review
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-      {capture && !acknowledged && capture.desired !== "idle" && !revoked ? (
-        <p role="status" className="jds-hint">
-          Waiting for Trail Marker to confirm. Check its recording indicator; capture may still be
-          active.
-        </p>
-      ) : null}
-      {revoked ? (
-        <p role="status" className="jds-hint">
-          Check Trail Marker’s indicator to confirm capture has stopped.
+      {capture?.observed?.phase === "error" ? (
+        <p role="alert" className="jds-hint jds-hint--error">
+          Capture interrupted. Check your selected sources in Trail Marker, then pause and
+          explicitly resume. Sources never switch automatically.
         </p>
       ) : null}
       {stopped ? (
         <p role="status" className="jds-hint">
-          {processing
-            ? "Capture stopped. Final transcript chunks may still arrive."
-            : "Capture stopped. Review the retained transcript below."}
+          {capture?.finalization === "pending"
+            ? "Capture stopped. Finishing the retained transcript."
+            : capture && !captureAcknowledged(capture)
+              ? "Recording authorization has ended. Check Trail Marker’s local Stop; you can review this meeting or start a new one."
+              : "Capture stopped. Review your transcript or start a new meeting."}
         </p>
       ) : null}
       {live ? (
         <p className="jds-hint">
-          Trail Marker’s menu-bar indicator stays available when you leave this page. Use it to
-          check or stop recording. Signing out ends the connection.
+          Recording controls stay available as you browse Moss. Trail Marker’s menu also has local
+          Pause and Stop.
         </p>
       ) : null}
-      {capture?.observed?.phase === "error" ? (
-        <p role="alert" className="jds-hint jds-hint--error">
-          Check the selected sources and permissions in Trail Marker. Capture will not switch
-          sources automatically.
-        </p>
-      ) : null}
-      {session.state.error ? (
-        <p role="alert" className="jds-hint jds-hint--error">
-          {session.state.error}
-        </p>
-      ) : null}
-      {session.state.operation?.phase === "sending" ? (
-        <p role="status" className="jds-hint">
-          Sending command…
-        </p>
-      ) : null}
-      {session.state.operation?.phase === "retry" ? (
-        <div className="meetings-actions">
-          <Button onClick={session.retry}>Retry capture command</Button>
-        </div>
-      ) : null}
-      {capture && !revoked ? (
-        <div className="meetings-actions">
-          <Button
-            variant="quiet"
-            disabled={busy}
-            onClick={() =>
-              void session.control({
-                grantId: capture.grantId,
-                command: "revoke",
-                expectedGeneration: capture.generation
-              })
-            }
-          >
-            {live ? "Stop and disconnect device" : "Disconnect device"}
-          </Button>
-          <Badge tone="neutral">Source labels only</Badge>
-        </div>
-      ) : null}
+      <div className="meetings-actions">
+        <Button variant="link" onClick={query.refresh}>
+          Refresh capture status
+        </Button>
+        {stopped || revoked ? <Link to="/meetings">New meeting</Link> : null}
+      </div>
     </section>
   );
 }

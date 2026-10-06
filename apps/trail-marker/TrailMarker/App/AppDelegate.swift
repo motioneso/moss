@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         meetingStatusItem = MeetingCaptureStatusItem(host: meetings, showControls: { [weak self] in self?.showMeetingControls() })
         permissions.refresh()
         connection.start()
+        meetings.startConnection()
         focus.start()
         backtrack.start()
         backtrackUploader.sendingAllowed = { [weak self] in self?.backtrack.allowsSending ?? false }
@@ -110,7 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard meetings.terminate(reason: "Meeting capture ended.") else {
+        guard meetings.shutdown(reason: "Meeting capture ended.") else {
             showMeetingControls()
             return .terminateCancel
         }
@@ -151,7 +152,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .linkCompleted(identity, credential: credential, generation: self.connection.currentGeneration)
                 )
             },
-            onFinished: { [weak self] in self?.closeOnboarding() }
+            onFinished: { [weak self] in self?.closeOnboarding() },
+            onRecordingApproved: { [weak self] identity, proof in
+                try self?.connection.storeRecordingProof(proof, for: identity)
+            }
         )
         let view = OnboardingFlow(viewModel: viewModel, permissions: permissions)
         let hosting = NSHostingController(rootView: view)

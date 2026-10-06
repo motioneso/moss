@@ -6,6 +6,7 @@ enum MeetingAudioFailure: Error, Equatable {
     case invalidFormat
     case invalidTimestamp
     case bufferFull
+    case leaseExpired
     case deviceFailure(operation: String, status: Int32)
     case invalidTransition
     case cleanupFailed
@@ -15,7 +16,24 @@ enum MeetingAudioFailure: Error, Equatable {
 /// samples before returning, never retain pointers; failure reporting must also be nonblocking.
 protocol MeetingAudioReceiving: AnyObject {
     func receive(hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int, sampleAt: (Int) -> Float)
+    func receive(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double,
+                 frameCount: Int, sampleAt: (Int) -> Float)
+    func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int)
     func fail(_ failure: MeetingAudioFailure)
+    func setScopeVerificationPending(_ pending: Bool)
+}
+
+extension MeetingAudioReceiving {
+    func setScopeVerificationPending(_ pending: Bool) {}
+    // Compatibility for synthetic receivers. Native adapters always provide the hardware sample clock.
+    func receive(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double,
+                 frameCount: Int, sampleAt: (Int) -> Float) {
+        receive(hostTimeNanoseconds: hostTimeNanoseconds, sampleRate: sampleRate,
+                frameCount: frameCount, sampleAt: sampleAt)
+    }
+    func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
+        fail(.invalidTimestamp)
+    }
 }
 
 /// Constructors never open devices. The orchestrator serializes start/stop; callbacks use the receiver.
@@ -56,6 +74,19 @@ struct MeetingNativeSelection: Equatable {
     }
 }
 
+/// Cumulative integer boundaries avoid a fresh fractional rounding error per callback/chunk.
+enum MeetingAudioSampleClock {
+    static func nanoseconds(frames: UInt64, sampleRate: Double) -> UInt64? {
+        guard sampleRate.isFinite, (8000...192000).contains(sampleRate), sampleRate.rounded() == sampleRate else { return nil }
+        let rate = UInt64(sampleRate)
+        let seconds = frames / rate
+        guard seconds <= UInt64.max / 1_000_000_000 else { return nil }
+        let fraction = ((frames % rate) * 1_000_000_000 + rate - 1) / rate
+        let (result, overflow) = (seconds * 1_000_000_000).addingReportingOverflow(fraction)
+        return overflow ? nil : result
+    }
+}
+
 struct MeetingAudioPacket: Equatable {
     let source: MeetingAudioSource
     let epoch: UInt64
@@ -63,13 +94,31 @@ struct MeetingAudioPacket: Equatable {
     let startNanoseconds: UInt64
     let sampleRate: Double
     let samples: [Float]
+    let timelineOriginNanoseconds: UInt64
+    let sampleOffset: UInt64
+
+    init(source: MeetingAudioSource, epoch: UInt64, sequence: UInt64, startNanoseconds: UInt64,
+         sampleRate: Double, samples: [Float], timelineOriginNanoseconds: UInt64? = nil, sampleOffset: UInt64 = 0) {
+        self.source = source
+        self.epoch = epoch
+        self.sequence = sequence
+        self.startNanoseconds = startNanoseconds
+        self.sampleRate = sampleRate
+        self.samples = samples
+        self.timelineOriginNanoseconds = timelineOriginNanoseconds ?? startNanoseconds
+        self.sampleOffset = sampleOffset
+    }
 
     var endNanoseconds: UInt64 {
-        startNanoseconds + UInt64((Double(samples.count) * 1_000_000_000 / sampleRate).rounded(.up))
+        let (frames, overflow) = sampleOffset.addingReportingOverflow(UInt64(samples.count))
+        guard !overflow, let duration = MeetingAudioSampleClock.nanoseconds(frames: frames, sampleRate: sampleRate) else { return UInt64.max }
+        let (end, endOverflow) = timelineOriginNanoseconds.addingReportingOverflow(duration)
+        return endOverflow ? UInt64.max : end
     }
 }
 
 enum MeetingAudioGapReason: Equatable {
+    case callbackContention
     case paused
     case expired
     case bufferFull
@@ -103,4 +152,16 @@ final class MeetingAudioAtomicState {
         MeetingAudioAtomicCompareExchange(word, expected, desired)
     }
     deinit { MeetingAudioAtomicDestroy(word) }
+}
+
+/// Shared by a runtime's rings. Updating a lease never opens a closed ring or resumes capture.
+final class MeetingAudioLease {
+    private let value: OpaquePointer
+    init(deadline: UInt64 = UInt64.max) {
+        guard let value = MeetingAudioDeadlineCreate(deadline) else { preconditionFailure("Audio lease allocation failed") }
+        self.value = value
+    }
+    var deadline: UInt64 { MeetingAudioDeadlineLoad(value) }
+    func update(deadline: UInt64) { MeetingAudioDeadlineStore(value, deadline) }
+    deinit { MeetingAudioDeadlineDestroy(value) }
 }

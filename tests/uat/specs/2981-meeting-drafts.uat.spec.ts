@@ -11,7 +11,7 @@ export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 // Real browser + API only. Never run against a personal database; deletes only this test's draft.
 // This spec is not evidence until executed through the isolated UAT provisioner.
-test("Meetings draft setup, notes, history, defaults and deletion use the real backend (#2981)", async ({
+test("Meetings optional-title draft setup, notes, history and deletion use the real backend (#2981)", async ({
   page
 }) => {
   test.setTimeout(120_000);
@@ -30,48 +30,16 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
   const notesText = "Unsent notes retained through navigation.\nSecond line.\nThird line.";
   try {
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Set up your meeting" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "New meeting" })).toBeVisible();
     await expect(page.getByRole("main")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
     await expect(
-      page.getByText("connect Trail Marker on your Mac", { exact: false })
+      page.getByText("Connect Trail Marker once for Meetings and Backtrack", { exact: false })
     ).toBeVisible();
-    await page.getByRole("radio", { name: /^Microphone and selected app/ }).click();
-    const defaultControl = page.getByRole("checkbox", {
-      name: "Use this capture mode as my default"
-    });
-    await expect(defaultControl).toBeEnabled();
-    // The shared switch's input is deliberately zero-sized; click its visible label/track.
-    // This uses the real control without forcing a hidden element or changing DOM state.
-    const defaultLabel = page.locator("label.jds-switch").filter({ has: defaultControl });
-    if (await defaultControl.isChecked()) {
-      const [clearResponse] = await Promise.all([
-        page.waitForResponse(
-          (response) =>
-            response.url().endsWith("/api/meetings/preferences") &&
-            response.request().method() === "PUT"
-        ),
-        defaultLabel.click()
-      ]);
-      expect(clearResponse.status()).toBe(200);
-      await expect(defaultControl).not.toBeChecked();
-      await expect(defaultControl).toBeEnabled();
-    }
-    const [defaultResponse] = await Promise.all([
-      page.waitForResponse(
-        (response) =>
-          response.url().endsWith("/api/meetings/preferences") &&
-          response.request().method() === "PUT"
-      ),
-      defaultLabel.click()
-    ]);
-    expect(defaultResponse.status()).toBe(200);
-    await expect(defaultControl).toBeChecked();
-    expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual({
-      defaultCaptureMode: "selected-app"
-    });
-
-    await page.getByLabel("Meeting title", { exact: true }).fill(title);
+    await page
+      .getByLabel("Meeting title (optional)", { exact: true })
+      .pressSequentially(title, { delay: 0 });
+    await expect(page.getByLabel("Meeting title (optional)", { exact: true })).toHaveValue(title);
     const createResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
@@ -87,7 +55,8 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     await expect(page.getByRole("button", { name: "Ask Moss", exact: true })).toBeDisabled();
     await page.getByRole("tab", { name: /^My notes/ }).click();
     const notes = page.getByLabel("Personal notes", { exact: true });
-    await notes.fill(notesText);
+    await notes.pressSequentially(notesText, { delay: 0 });
+    await expect(notes).toHaveValue(notesText);
     await expect(page.getByRole("tab", { name: "My notes", exact: true })).toHaveText("My notes");
     await page.locator(".jds-usermenu__trigger").click();
     await page.getByRole("button", { name: "Log out", exact: true }).click();
