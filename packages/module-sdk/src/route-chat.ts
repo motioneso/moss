@@ -96,3 +96,28 @@ export interface RouteCatalogHolder {
   /** Once; a second call throws. */
   set(catalog: RouteCatalog): void;
 }
+
+/**
+ * Raw path characters the app may dispatch: RFC 3986 path characters only. Backslashes,
+ * whitespace and control characters are refused because WHATWG URL parsing rewrites or strips
+ * them, so the router would see a different path than the catalog authorized.
+ */
+const CANONICAL_PATH_CHARS = /^[A-Za-z0-9\-._~!$&'()*+,;=:@%/]+$/;
+
+/**
+ * Returns the path unchanged when the router will dispatch exactly what the catalog matched,
+ * or null when parsing could rewrite it. Callers authorize and dispatch this same string.
+ */
+export function canonicalAppPath(path: string): string | null {
+  if (!path.startsWith("/") || path.startsWith("//") || !CANONICAL_PATH_CHARS.test(path)) {
+    return null;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(path, "http://app.invalid");
+  } catch {
+    return null;
+  }
+  if (parsed.origin !== "http://app.invalid" || parsed.search || parsed.hash) return null;
+  return parsed.pathname === path ? path : null;
+}

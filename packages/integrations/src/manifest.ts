@@ -27,7 +27,11 @@ export const integrationsModuleManifest = {
       path: "/api/integrations",
       chat: { access: "blocked", blockedBecause: "secrets" }
     },
-    { method: "GET", path: "/api/integrations/:id", chat: { access: "read" } },
+    {
+      method: "GET",
+      path: "/api/integrations/:id",
+      chat: { access: "blocked", blockedBecause: "self_authority" }
+    },
     {
       method: "PATCH",
       path: "/api/integrations/:id",

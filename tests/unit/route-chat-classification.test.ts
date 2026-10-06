@@ -51,7 +51,7 @@ const EXPECTED: readonly string[] = [
   "settings GET /api/me/notes-source read user_authored",
   "settings GET /api/me/notes-source/directories read",
   "settings PUT /api/me/notes-source blocked prompt_shaping",
-  "settings GET /api/me/notes-last-sync read user_authored",
+  "settings GET /api/me/notes-last-sync read",
   "settings GET /api/me/sessions read",
   "settings DELETE /api/me/sessions/others blocked identity_auth_registration",
   "settings DELETE /api/me/sessions/:id blocked identity_auth_registration",
@@ -85,10 +85,10 @@ const EXPECTED: readonly string[] = [
   "settings PATCH /api/me/modules/:id blocked self_authority",
   "settings GET /api/me/yolo blocked self_authority",
   "settings PUT /api/me/yolo blocked self_authority",
-  "settings GET /api/settings/me/data-export read user_authored",
+  "settings GET /api/settings/me/data-export blocked data_scope_consent",
   "settings POST /api/me/export blocked external_effect",
-  "settings GET /api/me/export/status/:jobId read user_authored",
-  "settings GET /api/me/export/download/:jobId read user_authored",
+  "settings GET /api/me/export/status/:jobId read",
+  "settings GET /api/me/export/download/:jobId blocked data_scope_consent",
   "settings POST /api/onboarding/provider-check blocked identity_auth_registration",
   "settings POST /api/onboarding/provider-install blocked secrets",
   "settings POST /api/onboarding/provider-login/begin blocked secrets",
@@ -114,7 +114,7 @@ const EXPECTED: readonly string[] = [
   "connectors POST /api/connectors/imap/test-connection blocked secrets",
   "integrations GET /api/integrations read",
   "integrations POST /api/integrations blocked secrets",
-  "integrations GET /api/integrations/:id read",
+  "integrations GET /api/integrations/:id blocked self_authority",
   "integrations PATCH /api/integrations/:id blocked secrets",
   "integrations POST /api/integrations/:id/refresh blocked external_effect",
   "integrations DELETE /api/integrations/:id blocked external_effect",
@@ -123,9 +123,9 @@ const EXPECTED: readonly string[] = [
   "integrations POST /api/integrations/:id/classifier/sort blocked self_authority",
   "integrations PUT /api/integrations/:id/classifier/send-without-asking blocked self_authority",
   "notifications GET /api/notifications read",
-  "notifications PATCH /api/notifications/:id/read write user_authored",
+  "notifications PATCH /api/notifications/:id/read write",
   "notifications PATCH /api/notifications/read-all write user_authored",
-  "notifications GET /api/notifications/push/config read",
+  "notifications GET /api/notifications/push/config blocked secrets",
   "notifications POST /api/notifications/push/subscriptions blocked secrets",
   "notifications DELETE /api/notifications/push/subscriptions/:id destructive user_authored",
   "ai GET /api/ai/summary read",
@@ -138,7 +138,7 @@ const EXPECTED: readonly string[] = [
   "ai POST /api/ai/providers/:id/discover-models blocked external_effect",
   "ai GET /api/ai/providers/:id/models/discover blocked external_effect",
   "ai POST /api/ai/providers/:id/models/refresh blocked external_effect",
-  "ai GET /api/ai/models read",
+  "ai GET /api/ai/models blocked external_effect",
   "ai POST /api/ai/models blocked assistant_brain",
   "ai PATCH /api/ai/models/:id blocked assistant_brain",
   "ai DELETE /api/ai/models/:id blocked assistant_brain",
@@ -211,10 +211,10 @@ const EXPECTED: readonly string[] = [
   "chat PATCH /api/chat/skills/:id/enabled blocked prompt_shaping",
   "chat DELETE /api/chat/skills/:id blocked prompt_shaping",
   "chat POST /api/chat/skills/import blocked prompt_shaping",
-  "usefulness-feedback POST /api/me/usefulness-feedback write user_authored",
-  "usefulness-feedback GET /api/me/usefulness-feedback read user_authored",
-  "usefulness-feedback PATCH /api/me/usefulness-feedback/:id write user_authored",
-  "usefulness-feedback POST /api/me/usefulness-feedback/:id/undo write user_authored",
+  "usefulness-feedback POST /api/me/usefulness-feedback write",
+  "usefulness-feedback GET /api/me/usefulness-feedback read",
+  "usefulness-feedback PATCH /api/me/usefulness-feedback/:id write",
+  "usefulness-feedback POST /api/me/usefulness-feedback/:id/undo write",
   "proactive-monitoring GET /api/me/proactive-cards read",
   "proactive-monitoring POST /api/me/proactive-cards/refresh blocked external_effect",
   "workflows GET /api/workflows/runs read",
@@ -226,7 +226,10 @@ const EXPECTED: readonly string[] = [
   "backtrack DELETE /api/backtrack/segments destructive user_authored"
 ];
 
-/** July surfaces Moss must never reach, each with the category it is blocked under. */
+/**
+ * Surfaces Moss must never reach, each with the category it is blocked under: the July
+ * families, plus account exports (they bypass Wellness consent) and GETs with side effects.
+ */
 const NAMED_BLOCKED: readonly (readonly [string, string, string])[] = [
   ["PATCH", "/api/ai/action-policy/:moduleId/:actionFamilyId", "self_authority"],
   ["GET", "/api/me/persona", "prompt_shaping"],
@@ -246,7 +249,12 @@ const NAMED_BLOCKED: readonly (readonly [string, string, string])[] = [
   ["PUT", "/api/me/notes-source", "prompt_shaping"],
   ["PUT", "/api/ai/voice-endpoint", "secrets"],
   ["POST", "/api/ai/terminal/password", "secrets"],
-  ["POST", "/api/ai/terminal/ticket", "secrets"]
+  ["POST", "/api/ai/terminal/ticket", "secrets"],
+  ["GET", "/api/settings/me/data-export", "data_scope_consent"],
+  ["GET", "/api/me/export/download/:jobId", "data_scope_consent"],
+  ["GET", "/api/ai/models", "external_effect"],
+  ["GET", "/api/integrations/:id", "self_authority"],
+  ["GET", "/api/notifications/push/config", "secrets"]
 ];
 
 function sliceManifests() {

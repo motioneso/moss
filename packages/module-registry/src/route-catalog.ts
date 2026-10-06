@@ -1,14 +1,15 @@
-import type {
-  CapturedRouteSchema,
-  CatalogRoute,
-  CatalogRouteInputShape,
-  ChatContentClass,
-  ModuleRouteManifest,
-  MossModuleManifest,
-  RouteCatalog,
-  RouteCatalogHolder,
-  RouteChatPolicy,
-  SelfOperationExclusionCategory
+import {
+  canonicalAppPath,
+  type CapturedRouteSchema,
+  type CatalogRoute,
+  type CatalogRouteInputShape,
+  type ChatContentClass,
+  type ModuleRouteManifest,
+  type MossModuleManifest,
+  type RouteCatalog,
+  type RouteCatalogHolder,
+  type RouteChatPolicy,
+  type SelfOperationExclusionCategory
 } from "@moss/module-sdk";
 
 import { routeKey } from "./route-guard.js";
@@ -86,6 +87,10 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
   },
   { pattern: /^\/api\/workflows\/approvals\/[^/]+\/resolve$/, category: "self_authority" },
 
+  {
+    pattern: /^\/api\/(settings\/me\/data-export|me\/export\/download\/[^/]+)$/,
+    category: "data_scope_consent"
+  },
   {
     pattern: /^\/api\/ai\/action-policy(\/|$)/,
     category: "self_authority",
@@ -506,9 +511,18 @@ function searchTokens(route: CatalogRoute): ReadonlySet<string> {
   ]);
 }
 
+/** A decoded parameter must not carry a separator, a backslash or a control character. */
+function hasPathSyntax(value: string): boolean {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (char === "/" || char === "\\" || code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 /** Splits a concrete path the way the router will see it, or null when it could route elsewhere. */
 function concreteSegments(concretePath: string): string[] | null {
-  if (!concretePath.startsWith("/") || /[?#]/.test(concretePath)) return null;
+  if (canonicalAppPath(concretePath) === null) return null;
   const raw = concretePath.slice(1).split("/");
   const decoded: string[] = [];
   for (const segment of raw) {
@@ -519,7 +533,7 @@ function concreteSegments(concretePath: string): string[] | null {
     } catch {
       return null;
     }
-    if (value === "." || value === ".." || value.includes("/")) return null;
+    if (value === "." || value === ".." || hasPathSyntax(value)) return null;
     decoded.push(value);
   }
   return decoded;

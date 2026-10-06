@@ -270,7 +270,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/me/notes-last-sync",
-      chat: { access: "read", content: "user_authored" },
+      chat: { access: "read" },
       permissionId: "settings.view"
     },
     {
@@ -476,7 +476,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/settings/me/data-export",
-      chat: { access: "read", content: "user_authored" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       permissionId: "settings.view"
     },
     {
@@ -488,13 +488,13 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/me/export/status/:jobId",
-      chat: { access: "read", content: "user_authored" },
+      chat: { access: "read" },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/export/download/:jobId",
-      chat: { access: "read", content: "user_authored" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       permissionId: "settings.view"
     },
     {

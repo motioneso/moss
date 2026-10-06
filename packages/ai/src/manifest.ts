@@ -430,7 +430,7 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/models",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listAiConfiguredModelsResponseSchema,
       permissionId: "ai.view"
     },

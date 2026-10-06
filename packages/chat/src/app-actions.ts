@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 
-import type { RouteCatalog, RouteCatalogHolder, ToolContext } from "@moss/module-sdk";
+import {
+  canonicalAppPath,
+  type RouteCatalog,
+  type RouteCatalogHolder,
+  type ToolContext
+} from "@moss/module-sdk";
 import { ACT_AS_GRANT_HEADER, type ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 /**
@@ -21,6 +26,14 @@ export interface AppActionsService {
   call(input: AppActionCallInput, ctx: ToolContext): Promise<{ status: number; body: unknown }>;
 }
 
+/** The router could read the path differently from the catalog, so the call is refused. */
+export class AppActionPathError extends Error {
+  readonly code = "non_canonical_path";
+  constructor() {
+    super("App action path is not canonical");
+  }
+}
+
 /** The route catalog is filled in `onReady`; a call before then is refused. */
 export class AppActionNotReadyError extends Error {
   readonly code = "not_ready";
@@ -39,6 +52,8 @@ export function createAppActionsService(deps: {
     catalog: () => deps.catalog.get(),
     async call(input, ctx) {
       if (!deps.catalog.get()) throw new AppActionNotReadyError();
+      const path = canonicalAppPath(input.path);
+      if (path === null) throw new AppActionPathError();
 
       const grant = deps.grants.mint({
         actorUserId: ctx.actorUserId,
@@ -54,7 +69,7 @@ export function createAppActionsService(deps: {
 
       const response = await deps.server.inject({
         method: input.method,
-        url: input.path,
+        url: path,
         ...(input.query ? { query: input.query } : {}),
         headers,
         ...(hasBody ? { payload: JSON.stringify(input.body) } : {})

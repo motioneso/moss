@@ -55,7 +55,7 @@ export const usefulnessFeedbackModuleManifest = {
       chat: {
         access: "write",
         title: "Tell Moss whether something was useful",
-        content: "user_authored"
+        content: "outside"
       },
       requestSchema: createUsefulnessFeedbackRequestSchema,
       responseSchema: createUsefulnessFeedbackResponseSchema,
@@ -64,14 +64,14 @@ export const usefulnessFeedbackModuleManifest = {
     {
       method: "GET",
       path: "/api/me/usefulness-feedback",
-      chat: { access: "read", content: "user_authored" },
+      chat: { access: "read", content: "outside" },
       responseSchema: listUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
     },
     {
       method: "PATCH",
       path: "/api/me/usefulness-feedback/:id",
-      chat: { access: "write", title: "Change your usefulness feedback", content: "user_authored" },
+      chat: { access: "write", title: "Change your usefulness feedback", content: "outside" },
       requestSchema: updateUsefulnessFeedbackReasonRequestSchema,
       responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
@@ -79,7 +79,7 @@ export const usefulnessFeedbackModuleManifest = {
     {
       method: "POST",
       path: "/api/me/usefulness-feedback/:id/undo",
-      chat: { access: "write", title: "Undo your usefulness feedback", content: "user_authored" },
+      chat: { access: "write", title: "Undo your usefulness feedback", content: "outside" },
       responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
     }

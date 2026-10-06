@@ -235,7 +235,7 @@ export const notificationsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/notifications/:id/read",
-      chat: { access: "write", title: "Mark a notification as read", content: "user_authored" },
+      chat: { access: "write", title: "Mark a notification as read", content: "outside" },
       responseSchema: markNotificationReadResponseSchema,
       permissionId: "notifications.update"
     },
@@ -249,7 +249,7 @@ export const notificationsModuleManifest = {
     {
       method: "GET",
       path: "/api/notifications/push/config",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "secrets" },
       responseSchema: pushConfigResponseSchema,
       permissionId: "notifications.view"
     },
