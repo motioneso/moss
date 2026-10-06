@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en" data-color-mode="dark" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Meetings, minimal - mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6v12l10-6z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+</svg>
+
+<div class="review">
+  <strong>Meetings, minimal</strong>
+  <a href="#s1">1 List</a><a href="#s2">2 One-time setup</a><a href="#s3">3 New meeting</a><a href="#s4">4 Recording</a>
+  <a href="#s5">5 After</a><a href="#s6">6 Settings</a><a href="#s7">7 Phone</a><a href="README.md">Notes</a><a href="critique.md">Critique</a>
+  <button type="button" onclick="var h=document.documentElement,d=h.dataset.colorMode==='dark'?'light':'dark';h.dataset.colorMode=d;h.dataset.theme=d==='dark'?'dark':'';">Light / dark</button>
+</div>
+
+<!-- 1 -->
+<div class="cap" id="s1"><b>1. Meetings list</b>One primary button. New meeting opens screen 3 straight away. If setup has never run, it opens screen 2 first, once.</div>
+<div class="app"><nav class="rail" data-rail></nav>
+  <div class="work"><div class="top"><span class="top__title">Meetings</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="main">
+      <div class="list-head"><h1>Meetings</h1>
+        <div class="end"><span class="search"><svg class="i"><use href="#i-search"/></svg>Search meetings and transcripts</span>
+          <span class="btn btn--primary"><svg class="i"><use href="#i-plus"/></svg>New meeting</span></div></div>
+      <div>
+        <div class="daylabel">This week</div>
+        <div class="mrow"><span class="mrow__when">Today, 9:30</span><div><div class="mrow__title">Launch review</div><div class="mrow__gist">Launch moves to the 14th; Priya owns the pricing page; open question on the beta waitlist.</div></div><span class="mrow__len">42 min</span></div>
+        <div class="mrow"><span class="mrow__when">Mon, 14:00</span><div><div class="mrow__title">Weekly planning</div><div class="mrow__gist">Three carry-overs from last week, hiring loop for the support role, offsite dates.</div></div><span class="mrow__len">31 min</span></div>
+        <div class="mrow"><span class="mrow__when">Mon, 10:15</span><div><div class="mrow__title">Untitled meeting</div><div class="mrow__gist">Short call about the invoice export; follow up with finance on Thursday.</div></div><span class="mrow__len">9 min</span></div>
+        <div class="daylabel">Last week</div>
+        <div class="mrow"><span class="mrow__when">Thu, 16:00</span><div><div class="mrow__title">Design crit: onboarding</div><div class="mrow__gist">Cut the welcome tour to two steps; keep the sample data; revisit empty states.</div></div><span class="mrow__len">55 min</span></div>
+        <div class="mrow"><span class="mrow__when">Tue, 11:00</span><div><div class="mrow__title">Vendor call</div><div class="mrow__gist">Renewal quote is 12% higher; ask for a two-year term.</div></div><span class="mrow__len">24 min</span></div>
+      </div>
+    </div></div></div>
+
+<!-- 2 -->
+<div class="cap" id="s2"><b>2. One-time setup, after installing Meetings</b>Shown once: after install, or on the first New meeting if it was skipped. Every answer is pre-filled with the default; most people press Finish. Nothing here is ever asked again per meeting.</div>
+<div class="app"><nav class="rail" data-rail></nav>
+  <div class="work"><div class="top"><span class="top__title">Meetings</span><span class="top__sub">Set up once</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="setup">
+      <div>
+        <h1>Set up Meetings</h1>
+        <p class="lede">Three things, once. After this, a meeting is New meeting, then Start.</p>
+
+        <div class="sec"><div><div class="sec__head"><span class="sec__num">01</span><h2 class="sec__title">Your Mac</h2></div><p class="sec__why">Moss listens through the Trail Marker app on your Mac.</p></div>
+          <div class="rows">
+            <div class="row"><div class="row__main">Studio MacBook<span class="row__sub">Trail Marker 1.4, linked just now</span></div><div class="row__end"><span class="ok"><svg class="i"><use href="#i-check"/></svg>Linked</span></div></div>
+          </div></div>
+
+        <div class="sec"><div><div class="sec__head"><span class="sec__num">02</span><h2 class="sec__title">Ready to record</h2></div><p class="sec__why">macOS asks once. Moss checks again before every recording and tells you if one was turned off.</p></div>
+          <div class="rows">
+            <div class="row"><div class="row__main">Microphone<span class="row__sub">Your voice, or the room</span></div><div class="row__end"><span class="ok"><svg class="i"><use href="#i-check"/></svg>Allowed</span></div></div>
+            <div class="row"><div class="row__main">Computer audio<span class="row__sub"><span class="need">Not allowed yet.</span> Needed to hear the other people on a call</span></div><div class="row__end"><span class="btn">Open System Settings</span><span class="btn btn--ghost">Check again</span></div></div>
+            <div class="row"><div class="row__main">Transcripts and summaries<span class="row__sub">Uses the models in Settings, AI providers</span></div><div class="row__end"><span class="ok"><svg class="i"><use href="#i-check"/></svg>Ready</span></div></div>
+          </div></div>
+
+        <div class="sec"><div><div class="sec__head"><span class="sec__num">03</span><h2 class="sec__title">Defaults</h2></div><p class="sec__why">Used for every meeting. Change them any time in Settings, Meetings.</p></div>
+          <div class="rows">
+            <div class="row"><span class="radio is-on"></span><div class="row__main">Microphone and computer audio<span class="row__sub">Best for calls. Recommended.</span></div></div>
+            <div class="row"><span class="radio"></span><div class="row__main">Microphone and one app<span class="row__sub">Only the meeting app you pick, such as Zoom</span></div></div>
+            <div class="row"><span class="radio"></span><div class="row__main">Microphone only<span class="row__sub">In-person meetings</span></div></div>
+            <div class="row"><div class="row__main">Microphone</div><div class="row__end"><span class="select">System default<svg class="i"><use href="#i-down"/></svg></span></div></div>
+            <div class="row"><div class="row__main">Write a summary when I stop<span class="row__sub">Summary and suggested tasks appear next to your notes</span></div><div class="row__end"><span class="switch is-on"></span></div></div>
+            <div class="row"><span class="radio is-on" style="border-radius:4px"></span><div class="row__main">I will tell people when I am recording<span class="row__sub">Asked once here, instead of a checkbox before every meeting</span></div></div>
+          </div></div>
+
+        <div class="foot"><span class="btn btn--primary">Finish setup</span><span class="hint">You can skip computer audio for now; Moss records your microphone until it is allowed.</span></div>
+      </div>
+      <div class="aside"><b>What Moss keeps</b>The transcript and your notes, private to you. Summaries use the AI model you chose in Settings.</div>
+    </div></div></div>
+
+<!-- 3 -->
+<div class="cap" id="s3"><b>3. New meeting: open, not recording</b>New meeting lands here. Nothing records until Start. The title is optional and editable in place. One quiet line says what Start will use, with a link to change the default; no per-meeting choices.</div>
+<div class="app"><nav class="rail" data-rail></nav>
+  <div class="work"><div class="top"><span class="top__title">Meetings</span><span class="top__sub">Tue Oct 6</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="main">
+      <div class="mhead"><h1 class="mhead__title is-empty">Untitled meeting</h1><span class="mhead__when">Today, 9:30</span>
+        <div class="mhead__end"><span class="hint">Microphone and computer audio. <span class="link">Change</span></span><span class="btn btn--primary"><svg class="i"><use href="#i-mic"/></svg>Start</span><span class="btn btn--ghost btn--icon"><svg class="i"><use href="#i-more"/></svg></span></div></div>
+      <div class="split">
+        <div class="pane"><div class="pane__head">Transcript</div><div class="empty"><b>Nothing recorded yet</b>Press Start when the meeting begins.</div></div>
+        <div class="pane"><div class="pane__head">Notes</div><div class="notes"><span class="ph">Jot down anything. Notes save as you type and stay with the transcript.</span></div></div>
+      </div>
+    </div></div></div>
+
+<!-- 4 -->
+<div class="cap" id="s4"><b>4. Recording, chat docked</b>Start became one small pill: time, pause, stop. The transcript streams on the left; notes stay on the right. The chat is the normal Moss drawer, docked as on any page; the meeting chip is the only difference, and answers point back into the transcript.</div>
+<div class="app"><nav class="rail" data-rail></nav>
+  <div class="work work--chat"><div class="top"><span class="top__title">Meetings</span><span class="top__sub">Tue Oct 6</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="main">
+      <div class="mhead"><h1 class="mhead__title">Launch review</h1>
+        <div class="mhead__end"><span class="rec"><span class="rec__dot"></span><span class="rec__time">18:42</span><span class="rec__btn" title="Pause"><svg class="i"><use href="#i-pause"/></svg></span><span class="rec__btn rec__btn--stop" title="Stop"><svg class="i"><use href="#i-stop"/></svg></span></span><span class="btn btn--ghost btn--icon"><svg class="i"><use href="#i-more"/></svg></span></div></div>
+      <div class="split">
+        <div class="pane"><div class="pane__head">Transcript</div>
+          <div class="tx">
+            <div class="tx__line"><span class="tx__t">15:02</span><div><span class="tx__who">Call audio</span><p>So the build is green, but the pricing page still has the old tiers. I don't want to launch with that.</p></div></div>
+            <div class="tx__line"><span class="tx__t">15:40</span><div><span class="tx__who">You</span><p>Agreed. <mark>Let's move the launch to the 14th</mark> and give the page a proper pass.</p></div></div>
+            <div class="tx__line"><span class="tx__t">16:05</span><div><span class="tx__who">Call audio</span><p>Priya can own the pricing page. I'll handle the announcement draft.</p></div></div>
+            <div class="tx__line"><span class="tx__t">17:20</span><div><span class="tx__who">You</span><p>What about the beta waitlist? Do we email them before or after?</p></div></div>
+            <div class="tx__line"><span class="tx__t">17:58</span><div><span class="tx__who">Call audio</span><p>Before, I think. A day ahead, so they feel first in line.</p></div></div>
+            <div class="tx__line is-live"><span class="tx__t">18:40</span><div><span class="tx__who">You</span><p>Okay, let's write that down and check with support on the volume they can handle...</p></div></div>
+          </div></div>
+        <div class="pane"><div class="pane__head">Notes<span class="saved">Saved</span></div>
+          <div class="notes"><ul><li>Launch moves to the 14th</li><li>Priya: pricing page</li><li>Waitlist email a day before launch?</li><li>Ask support about volume</li></ul></div></div>
+      </div>
+    </div>
+    <aside class="chat"><div class="chat__head"><span class="chat__name">Moss</span><svg class="i"><use href="#i-edit"/></svg><svg class="i"><use href="#i-expand"/></svg><svg class="i"><use href="#i-more"/></svg><svg class="i"><use href="#i-x"/></svg></div>
+      <div class="chat__body">
+        <span class="chip"><svg class="i" style="width:14px;height:14px"><use href="#i-mic"/></svg>About this meeting</span>
+        <div class="msg-me">What did we decide about the launch date?</div>
+        <div class="msg-moss"><p>You agreed to move the launch to the 14th so the pricing page gets a proper pass. <span class="cite">15:40</span></p><p>Priya owns the pricing page; the announcement draft is being handled on the call side. <span class="cite">16:05</span></p></div>
+      </div>
+      <div class="chat__foot"><div class="composer">Ask about this meeting...</div></div>
+    </aside></div></div>
+
+<!-- 5 -->
+<div class="cap" id="s5"><b>5. After the meeting</b>Same page, same layout. Stop leaves a quiet "Ended" status and a Resume button for a meeting that restarts. The summary appears as a second tab next to Notes, written automatically (a default). Export, rewrite and delete sit in the menu, shown open here. Chat closed: the page widens to the full width.</div>
+<div class="app"><nav class="rail" data-rail></nav>
+  <div class="work"><div class="top"><span class="top__title">Meetings</span><span class="top__sub">Tue Oct 6</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="main">
+      <div class="mhead"><h1 class="mhead__title">Launch review</h1><span class="mhead__when">Today, 9:30 to 10:12</span>
+        <div class="mhead__end"><span class="ended">Ended, 42 min</span><span class="btn"><svg class="i"><use href="#i-mic"/></svg>Resume</span>
+          <span class="rel"><span class="btn btn--ghost btn--icon"><svg class="i"><use href="#i-more"/></svg></span>
+            <div class="menu"><div>Search transcript</div><div>Rewrite summary</div><div>Earlier versions</div><div>Save to vault</div><div>Copy as Markdown</div><div class="danger">Delete meeting</div></div></span></div></div>
+      <div class="split">
+        <div class="pane"><div class="pane__head">Transcript</div>
+          <div class="tx">
+            <div class="tx__line"><span class="tx__t">00:12</span><div><span class="tx__who">You</span><p>Okay, I think everyone's here. Quick one today, mostly about whether we're ready for the launch next week.</p></div></div>
+            <div class="tx__line"><span class="tx__t">00:31</span><div><span class="tx__who">Call audio</span><p>Short answer: engineering is ready, marketing isn't quite. The pricing page is the blocker.</p></div></div>
+            <div class="tx__line"><span class="tx__t">15:02</span><div><span class="tx__who">Call audio</span><p>So the build is green, but the pricing page still has the old tiers. I don't want to launch with that.</p></div></div>
+            <div class="tx__line"><span class="tx__t">15:40</span><div><span class="tx__who">You</span><p>Agreed. Let's move the launch to the 14th and give the page a proper pass.</p></div></div>
+            <div class="tx__line"><span class="tx__t">16:05</span><div><span class="tx__who">Call audio</span><p>Priya can own the pricing page. I'll handle the announcement draft.</p></div></div>
+            <div class="tx__line"><span class="tx__t">17:20</span><div><span class="tx__who">You</span><p>What about the beta waitlist? Do we email them before or after?</p></div></div>
+          </div></div>
+        <div class="pane"><div class="pane__head"><span class="tabs"><span>Notes</span><span class="is-on">Summary</span></span></div>
+          <div class="notes">
+            <h4>Decisions</h4><ul><li>Launch moves to the 14th. <span class="cite">15:40</span></li><li>Pricing page gets a full pass first.</li></ul>
+            <h4>Open questions</h4><ul><li>Email the beta waitlist a day before launch?</li></ul>
+            <h4>Suggested tasks</h4>
+            <div class="task">Priya: update the pricing page tiers<span class="btn">Add to Tasks</span></div>
+            <div class="task">Ask support what launch volume they can handle<span class="btn">Add to Tasks</span></div>
+          </div></div>
+      </div>
+    </div></div></div>
+
+<!-- 6 -->
+<div class="cap" id="s6"><b>6. Settings, Meetings</b>Where the one-time answers live afterwards. Same rows as setup, plus the summary style and Run setup again. This is the only place recording choices can change.</div>
+<div class="app"><nav class="rail" data-rail></nav>
+  <div class="work"><div class="top"><span class="top__title">Settings</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="setup" style="grid-template-columns:minmax(0,1fr)">
+      <div>
+        <h1>Meetings</h1><p class="lede">Used every time you press Start.</p>
+        <div class="sec"><div><div class="sec__head"><span class="sec__num">01</span><h2 class="sec__title">Your Mac</h2></div></div>
+          <div class="rows"><div class="row"><div class="row__main">Studio MacBook<span class="row__sub">Microphone allowed, computer audio allowed</span></div><div class="row__end"><span class="btn btn--ghost">Unlink</span><span class="btn">Run setup again</span></div></div></div></div>
+        <div class="sec"><div><div class="sec__head"><span class="sec__num">02</span><h2 class="sec__title">Recording</h2></div></div>
+          <div class="rows">
+            <div class="row"><div class="row__main">Listen to</div><div class="row__end"><span class="select">Microphone and computer audio<svg class="i"><use href="#i-down"/></svg></span></div></div>
+            <div class="row"><div class="row__main">Microphone</div><div class="row__end"><span class="select">System default<svg class="i"><use href="#i-down"/></svg></span></div></div>
+            <div class="row"><div class="row__main">Recording notice<span class="row__sub">You agreed to tell people when you record, Oct 6</span></div><div class="row__end"><span class="btn btn--ghost">Review</span></div></div>
+          </div></div>
+        <div class="sec"><div><div class="sec__head"><span class="sec__num">03</span><h2 class="sec__title">After a meeting</h2></div></div>
+          <div class="rows">
+            <div class="row"><div class="row__main">Write a summary when I stop</div><div class="row__end"><span class="switch is-on"></span></div></div>
+            <div class="row"><div class="row__main">Summary style</div><div class="row__end"><span class="select">Decisions, questions, tasks<svg class="i"><use href="#i-down"/></svg></span></div></div>
+          </div></div>
+      </div>
+    </div></div></div>
+
+<!-- 7 -->
+<div class="cap" id="s7"><b>7. Phone</b>Transcript and Notes become two tabs. The record control sits at the bottom, in thumb reach. Chat stays the normal drawer, opened from the top bar.</div>
+<div class="phones">
+  <div class="app app--phone"><div class="work"><div class="top"><svg class="i"><use href="#i-back"/></svg><span class="top__title">Meetings</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="main"><div class="mhead" style="border:0;padding:0"><h1 class="mhead__title is-empty">Untitled meeting</h1></div><span class="hint">Microphone and computer audio. <span class="link">Change</span></span></div>
+    <div><div class="ptabs"><span class="is-on">Transcript</span><span>Notes</span></div><div class="empty" style="padding:var(--space-12) var(--space-4)"><b>Nothing recorded yet</b>Press Start when the meeting begins.</div></div>
+    <div class="dock"><span class="btn btn--primary" style="height:48px;padding:0 var(--space-8)"><svg class="i"><use href="#i-mic"/></svg>Start</span></div></div></div>
+  <div class="app app--phone"><div class="work"><div class="top"><svg class="i"><use href="#i-back"/></svg><span class="top__title">Meetings</span><span class="top__chat" data-chatbtn></span></div>
+    <div class="main"><div class="mhead" style="border:0;padding:0"><h1 class="mhead__title">Launch review</h1></div></div>
+    <div><div class="ptabs"><span class="is-on">Transcript</span><span>Notes</span></div>
+      <div class="main"><div class="tx">
+        <div class="tx__line"><span class="tx__t">15:40</span><div><span class="tx__who">You</span><p>Agreed. Let's move the launch to the 14th and give the page a proper pass.</p></div></div>
+        <div class="tx__line"><span class="tx__t">16:05</span><div><span class="tx__who">Call audio</span><p>Priya can own the pricing page. I'll handle the announcement draft.</p></div></div>
+        <div class="tx__line is-live"><span class="tx__t">18:40</span><div><span class="tx__who">You</span><p>Okay, let's write that down and check with support...</p></div></div>
+      </div></div></div>
+    <div class="dock"><span class="rec"><span class="rec__dot"></span><span class="rec__time">18:42</span><span class="rec__btn"><svg class="i"><use href="#i-pause"/></svg></span><span class="rec__btn rec__btn--stop"><svg class="i"><use href="#i-stop"/></svg></span></span></div></div></div>
+</div>
+<div style="height:120px"></div>
+
+<script>
+  var rail = '<div class="rail__brand">Moss</div>' +
+    '<div class="rail__item">Today</div><div class="rail__item">The Workshop</div>' +
+    '<div class="rail__label">Plan</div><div class="rail__item">Tasks</div><div class="rail__item">Calendar</div><div class="rail__item is-on">Meetings</div>' +
+    '<div class="rail__label">Your world</div><div class="rail__item">News</div><div class="rail__item">Sports</div><div class="rail__item">Wellness</div>';
+  document.querySelectorAll("[data-rail]").forEach(function (el) { el.innerHTML = rail; });
+  document.querySelectorAll("[data-chatbtn]").forEach(function (el) { el.innerHTML = '<svg class="i"><use href="#i-chat"/></svg>'; });
+</script>
+</body>
+</html>
