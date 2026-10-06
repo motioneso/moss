@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Choose your decision model.** You can now use Cloudflare's Clef, or any service compatible with Jev, to sort mail and judge focus. [PR #3059](https://github.com/motioneso/moss/pull/3059)
 - **Meeting drafts, notes and data export.** Create meeting drafts, keep personal notes, find meetings in History and include retained meeting data in your account export; recording is not available yet. [PR #2982](https://github.com/motioneso/moss/pull/2982)
 
 #### Changed
