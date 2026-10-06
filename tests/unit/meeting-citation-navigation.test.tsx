@@ -77,6 +77,8 @@ async function flush() {
         expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
         expect(JSON.stringify(renderer.toJSON())).not.toContain(meeting.title);
       }
+      if (!denied)
+        expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(1);
       expect(JSON.stringify(renderer.toJSON())).not.toMatch(
         /Loading (?:your draft|transcript|summaries|referenced text)|Refreshing meeting/
       );
@@ -99,12 +101,7 @@ async function mount() {
   await flush();
 }
 function transcriptText() {
-  return JSON.stringify(
-    renderer.root
-      .findByProps({ "aria-label": "Retained transcript" })
-      .findAllByType("p")
-      .map((node) => node.children)
-  );
+  return JSON.stringify(renderer.toJSON());
 }
 async function openCitation(end = 6) {
   await act(async () => {
@@ -132,6 +129,27 @@ beforeEach(() => {
       if (url.pathname === "/api/me/locale")
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
+        );
+      if (url.pathname === "/api/meetings/preferences")
+        return new Response(
+          JSON.stringify({
+            defaultCaptureMode: null,
+            rememberedSource: null,
+            summarizeOnStop: true,
+            summaryTemplateId: "general",
+            setupCompletedAt: meeting.createdAt
+          })
+        );
+      if (url.pathname === "/api/meetings/recording-notice")
+        return new Response(
+          JSON.stringify({
+            currentNotice: { policyVersion: "v1", text: "Notice" },
+            acknowledgement: null
+          })
+        );
+      if (url.pathname.endsWith("/capture"))
+        return new Response(
+          JSON.stringify({ capture: null, pendingLinks: [], processingReady: false })
         );
       if (url.pathname.endsWith("/outputs"))
         return new Response(
@@ -178,14 +196,8 @@ describe("same-meeting citation navigation (real query lifecycle, unit HTTP fixt
     await openCitation();
     expect(latestReads).toBeGreaterThan(before);
     expect(transcriptText()).toContain("MAPLE");
-    expect(
-      JSON.stringify(
-        renderer.root
-          .findByProps({ "aria-label": "Transcript evidence" })
-          .findAllByType("span")
-          .map((node) => node.children)
-      )
-    ).toContain("ORCHID");
+    expect(renderer.root.findByProps({ id: `meeting-reference-${meeting.id}` })).toBeDefined();
+    expect(transcriptText()).toContain("ORCHID");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Keep my unsaved notes"
     );
@@ -207,24 +219,19 @@ describe("same-meeting citation navigation (real query lifecycle, unit HTTP fixt
     expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
     expect(client.getQueryData(meetingKeys.editor(meeting.id))).toBeUndefined();
   });
-  it("refreshes the latest cache without replacing an explicitly selected historical revision", async () => {
+  it("keeps cited old text beside later current revisions", async () => {
     latest = 2;
     await mount();
-    await act(async () =>
-      renderer.root
-        .findAllByType("button")
-        .find((node) => node.children.join("") === "Previous revision")!
-        .props.onClick()
-    );
-    await flush();
-    expect(transcriptText()).toContain("ORCHID");
-    latest = 3;
     await openCitation();
+    expect(transcriptText()).toContain("ORCHID");
+    expect(transcriptText()).toContain("MAPLE");
+    latest = 3;
+    await openCitation(5);
     expect(
       client.getQueryData<MeetingTranscriptSnapshotResponse>(meetingKeys.transcript(meeting.id))
         ?.snapshot.transcriptRevision
     ).toBe(3);
-    expect(transcriptText()).toContain("ORCHID");
-    expect(transcriptText()).not.toContain("CEDAR");
+    expect(transcriptText()).toContain("ORCHI");
+    expect(transcriptText()).toContain("CEDAR");
   });
 });

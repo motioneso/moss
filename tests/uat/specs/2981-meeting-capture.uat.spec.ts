@@ -1,3 +1,4 @@
+import { assertMinimalMeetingWorkspace } from "./meeting-minimal-ui.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -8,7 +9,9 @@ import type {
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
   MeetingCaptureState,
-  MeetingRecordingNoticeStatus
+  MeetingRecordingNoticeStatus,
+  MeetingOutputsResponse,
+  MeetingCapturePreferences
 } from "@moss/shared";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { requireUatBaseURL, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
@@ -69,7 +72,7 @@ function clip(
 test("shared connection, single Start, recording controls, transcript and Stopâ†’New recovery use real Moss routes (#2981)", async ({
   page
 }) => {
-  test.setTimeout(180000);
+  test.setTimeout(300_000);
   const project = requireUatProjectName();
   if (!project.startsWith("uat-")) throw new Error("Use the isolated UAT provisioner");
   if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
@@ -84,6 +87,18 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
   let modelId: string | undefined;
   let native: ReturnType<typeof startCaptureNativeFixture> | undefined;
   await signInUatAdmin(page);
+  const preferencesResponse = await page.request.get("/api/meetings/preferences");
+  expect(preferencesResponse.status()).toBe(200);
+  const originalPreferences = (await preferencesResponse.json()) as MeetingCapturePreferences;
+  expect(originalPreferences).toMatchObject({
+    setupCompletedAt: null,
+    summarizeOnStop: true,
+    summaryTemplateId: "general"
+  });
+  let startRequests = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/capture/start")) startRequests += 1;
+  });
   const priorPin = await page.request.get(pinPath);
   expect(priorPin.status()).toBe(200);
   const { pin } = (await priorPin.json()) as {
@@ -141,17 +156,34 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     const connection = await connectCaptureFixture(baseURL, paired);
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     const title = `Synthetic capture meeting ${randomUUID()}`;
-    const titleInput = page.getByLabel("Meeting title (optional)", { exact: true });
-    await titleInput.pressSequentially(title, { delay: 0 });
-    await expect(titleInput).toHaveValue(title);
-    await page.getByLabel("Recording device", { exact: true }).selectOption(deviceId);
+    await page.getByRole("button", { name: "New meeting", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Set up Meetings", exact: true })).toBeVisible();
+    expect(startRequests).toBe(0);
+    await page.getByLabel("Recording Mac", { exact: true }).selectOption(deviceId);
     await page.getByRole("radio", { name: /^Microphone only/ }).click();
     await page.getByLabel("Microphone", { exact: true }).selectOption("synthetic-device");
+    await expect(
+      page.getByRole("checkbox", { name: "Write a summary when I stop", exact: true })
+    ).toBeChecked();
+    await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
+    for (const mode of ["light", "dark"]) {
+      await page.evaluate((mode) => {
+        document.documentElement.dataset.colorMode = mode;
+      }, mode);
+      const radio = page.getByRole("radio", { name: /^Microphone only/ });
+      const bounds = await radio.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.width).toBeLessThan(32);
+      expect(bounds!.height).toBeLessThan(32);
+    }
+    await page.evaluate(() => {
+      delete document.documentElement.dataset.colorMode;
+    });
     const noticeResponse = await page.request.get("/api/meetings/recording-notice");
     expect(noticeResponse.status()).toBe(200);
     const notice = (await noticeResponse.json()) as MeetingRecordingNoticeStatus;
     if (notice.acknowledgement?.policyVersion !== notice.currentNotice.policyVersion) {
-      await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Finish setup", exact: true })).toBeDisabled();
       const acknowledged = page.waitForResponse(
         (response) =>
           response.url().endsWith("/api/meetings/recording-notice") &&
@@ -177,33 +209,78 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
       (response) =>
         response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
     );
-    const started = page.waitForResponse(
+    const preferencesSaved = page.waitForResponse(
       (response) =>
-        response.url().endsWith("/capture/start") && response.request().method() === "POST"
+        response.url().endsWith("/api/meetings/preferences") &&
+        response.request().method() === "PUT"
     );
-    await page.getByRole("button", { name: "Start meeting", exact: true }).click();
+    await page.getByRole("button", { name: "Finish setup", exact: true }).click();
+    const preferencesResult = await preferencesSaved;
+    expect(preferencesResult.status()).toBe(200);
+    expect(preferencesResult.request().postDataJSON()).toMatchObject({
+      completeSetup: true,
+      summarizeOnStop: true,
+      summaryTemplateId: "general",
+      rememberedSource: { deviceId, mode: "microphone-only", microphoneId: "synthetic-device" }
+    });
+    const savedPreferences = (await preferencesResult.json()) as MeetingCapturePreferences;
+    expect(savedPreferences.setupCompletedAt).toEqual(expect.any(String));
     const createdResponse = await created;
     expect(createdResponse.status()).toBe(201);
-    meetingId = (await createdResponse.json()).meeting.id as string;
+    const newMeeting = (await createdResponse.json()).meeting;
+    meetingId = newMeeting.id as string;
+    expect(newMeeting.title).toBe("Untitled meeting");
     const path = `/api/meetings/records/${meetingId}`;
+    await expect(page).toHaveURL(new RegExp(`id=${meetingId}`));
+    await assertMinimalMeetingWorkspace(page);
+    expect(startRequests).toBe(0);
+    expect((await (await page.request.get(`${path}/capture`)).json()).capture).toBeNull();
+    await page.getByRole("button", { name: "Edit meeting title", exact: true }).click();
+    const titleInput = page.getByLabel("Meeting title", { exact: true });
+    await titleInput.fill("");
+    await titleInput.pressSequentially(title, { delay: 0 });
+    await expect(titleInput).toHaveValue(title);
+    const renamed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`${path}/title`) && response.request().method() === "PUT"
+    );
+    await titleInput.press("Enter");
+    expect((await renamed).status()).toBe(200);
+    const notes = page.getByRole("textbox", { name: "Notes", exact: true });
+    const savedNotes = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`${path}/notes`) && response.request().method() === "PUT"
+    );
+    await notes.fill("Keep these notes visible when I start recording.");
+    expect((await savedNotes).status()).toBe(200);
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
+    await connection.refresh();
+    const started = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`${path}/capture/start`) && response.request().method() === "POST"
+    );
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     const startResponse = await started;
     expect(startResponse.status()).toBe(200);
-    expect(startResponse.request().postDataJSON()).not.toHaveProperty("noticeAcknowledged");
-    expect(startResponse.request().postDataJSON()).toMatchObject({
+    expect(startResponse.request().postDataJSON()).toEqual({ requestKey: expect.any(String) });
+    expect(startRequests).toBe(1);
+    const recording = (await startResponse.json()) as { capture: MeetingCaptureState };
+    expect(recording.capture).toMatchObject({
       deviceId,
-      connectionId: connection.connectionId,
       selection: {
         mode: "microphone-only",
         microphone: { deviceId: "synthetic-device", sourceId: "synthetic-mic" }
       }
     });
-    const recording = (await startResponse.json()) as { capture: MeetingCaptureState };
+    await expect(notes).toBeVisible();
+    await expect(notes).toBeEditable();
+    await expect(notes).toHaveValue("Keep these notes visible when I start recording.");
     const grant = await connection.claim(meetingId);
     native = startCaptureNativeFixture(baseURL, grant.credential, meetingId, grant.grantId);
-    const panel = page.getByRole("region", { name: "Meeting capture", exact: true });
-    await expect(panel).toContainText("Startingâ€¦");
+    const panel = page.getByRole("region", { name: "Meeting recording", exact: true });
+    await expect(panel.getByLabel("Startingâ€¦", { exact: true })).toBeVisible();
     native.acknowledge(recording.capture, "recording");
-    await expect(panel.getByRole("status").filter({ hasText: /^Recording$/ })).toBeVisible();
+    await expect(panel.getByLabel("Recording", { exact: true })).toBeVisible();
     expect(page.context().pages()).toHaveLength(openPages);
     await expect
       .poll(() => native!.latest()?.elapsedMs ?? 0)
@@ -222,10 +299,10 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     );
     expect(audio.status).toBe(200);
     expect(await audio.json()).toMatchObject({ status: "saved", transcriptRevision: 1 });
-    const transcript = page.getByRole("region", { name: "Retained transcript", exact: true });
+    const transcript = page.getByRole("region", { name: "Transcript", exact: true });
     await expect(transcript).toContainText(CAPTURE_FIXTURE_TEXT);
-    await expect(transcript).toContainText("Generated PCM microphone");
-    await expect(transcript).toContainText("Source labels only");
+    await expect(transcript).toContainText("You");
+    await expect(transcript).not.toContainText("Source labels only");
     const replayed = await nativePost(
       baseURL,
       "/api/meetings/capture/audio",
@@ -238,16 +315,20 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
       transcriptRevision: 1
     });
 
-    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
-    const strip = page.getByRole("complementary", {
-      name: "Active meeting recording",
+    await page.getByRole("button", { name: "Meetings", exact: true }).click();
+    const strip = page.getByRole("link", {
+      name: `Return to meeting: ${title}, Recording`,
       exact: true
     });
-    await expect(strip.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    await expect(strip.getByRole("button", { name: "Stop and review", exact: true })).toBeEnabled();
-    await strip.getByRole("link", { name: title, exact: true }).click();
+    await expect(strip).toBeVisible();
+    await expect(strip).toContainText(/\d+:\d{2}/);
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+    await expect(page.locator(".meetings-recording-indicator")).toBeVisible();
+    await strip.click();
+    await expect(notes).toHaveValue("Keep these notes visible when I start recording.");
     const pause = await controlFromUi(page, "Pause", path);
-    await expect(panel.getByRole("status").filter({ hasText: /^Pausingâ€¦$/ })).toBeVisible();
+    await expect(panel.getByLabel("Pausingâ€¦", { exact: true })).toBeVisible();
     const deniedDuringPause = await nativePost(
       baseURL,
       "/api/meetings/capture/audio",
@@ -256,20 +337,20 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     );
     expect(deniedDuringPause.status).toBe(409);
     native.acknowledge(pause.capture, "paused");
-    await expect(panel.getByRole("status").filter({ hasText: /^Paused$/ })).toBeVisible();
+    await expect(panel.getByLabel("Paused", { exact: true })).toBeVisible();
     const resumed = await controlFromUi(page, "Resume", path);
     expect(resumed.capture.epoch).toBe(recording.capture.epoch + 1);
     native.acknowledge(resumed.capture, "recording");
-    await expect(panel.getByRole("status").filter({ hasText: /^Recording$/ })).toBeVisible();
+    await expect(panel.getByLabel("Recording", { exact: true })).toBeVisible();
     await expect
       .poll(() => native!.latest()?.elapsedMs ?? 0)
       .toBeGreaterThan(resumed.capture.epochStartMs + 200);
-    const stopped = await controlFromUi(page, "Stop and review", path);
+    const stopped = await controlFromUi(page, "Stop", path);
     expect(stopped.capture.stopCutoffMs).not.toBeNull();
     const cutoff = stopped.capture.stopCutoffMs!;
-    await expect(panel.getByRole("status").filter({ hasText: /^Stoppingâ€¦$/ })).toBeVisible();
+    await expect(panel.getByLabel("Stoppingâ€¦", { exact: true })).toBeVisible();
     native.acknowledge(stopped.capture, "stopped");
-    await expect(panel.getByRole("status").filter({ hasText: /^Stopped$/ })).toBeVisible();
+    await expect(panel).toContainText("Ended");
     const finalClip = clip(meetingId, resumed.capture, cutoff - 100, cutoff);
     const finalAudio = await nativePost(
       baseURL,
@@ -326,31 +407,77 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
         })
       ).status
     ).toBe(409);
+    await expect
+      .poll(
+        async () => {
+          const response = await page.request.get(`${path}/outputs`);
+          expect(response.status()).toBe(200);
+          return ((await response.json()) as MeetingOutputsResponse).automaticSummary;
+        },
+        { timeout: 130_000, intervals: [1000, 2000] }
+      )
+      .toMatchObject({ status: "failed", code: "meeting_output_route_unavailable" });
+    // Transcription-only fixture cannot summarize. Failure must be honest and actionable.
+    await page.getByRole("tab", { name: "Summary", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "Summary and actions", exact: true })
+    ).toContainText("Use Rewrite summary to try again.");
     await native.close();
     await connection.refresh();
     await panel.getByRole("link", { name: "New meeting", exact: true }).click();
-    await expect(
-      page.getByRole("region", { name: "Retained transcript", exact: true })
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("Generated PCM microphone Â· Output not captured", { exact: true })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Transcript", exact: true })).toHaveCount(0);
+    await expect(strip).toHaveCount(0);
+    await expect(page.locator(".meetings-recording-indicator")).toHaveCount(0);
+    // Change only the real persisted summary default in Settings, with source defaults retained.
+    await page.goto("/settings?section=modules&module=meetings");
+    await expect(page.getByRole("button", { name: "Run setup again", exact: true })).toBeVisible();
+    const summarySwitch = page.getByRole("checkbox", {
+      name: "Write a summary when I stop",
+      exact: true
+    });
+    await expect(summarySwitch).toBeChecked();
+    await page.locator("label.jds-switch", { has: summarySwitch }).click();
+    const disabledSummary = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/meetings/preferences") &&
+        response.request().method() === "PUT"
+    );
+    await page.getByRole("button", { name: "Save settings", exact: true }).click();
+    const settingsResult = await disabledSummary;
+    expect(settingsResult.status()).toBe(200);
+    expect(settingsResult.request().postDataJSON()).toEqual({ summarizeOnStop: false });
+    expect((await settingsResult.json()).rememberedSource).toEqual(
+      savedPreferences.rememberedSource
+    );
+    await page.getByRole("link", { name: "Meetings", exact: true }).click();
     const createdAgain = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
     );
+    await page.getByRole("button", { name: "New meeting", exact: true }).click();
+    const nextMeeting = await createdAgain;
+    expect(nextMeeting.status()).toBe(201);
+    secondMeetingId = (await nextMeeting.json()).meeting.id as string;
+    await expect(page).toHaveURL(new RegExp(`id=${secondMeetingId}`));
+    await assertMinimalMeetingWorkspace(page);
+    expect(startRequests).toBe(1);
+    expect(
+      (await (await page.request.get(`/api/meetings/records/${secondMeetingId}/capture`)).json())
+        .capture
+    ).toBeNull();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
+    await connection.refresh();
     const startedAgain = page.waitForResponse(
       (response) =>
-        response.url().endsWith("/capture/start") && response.request().method() === "POST"
+        response.url().endsWith(`/api/meetings/records/${secondMeetingId}/capture/start`) &&
+        response.request().method() === "POST"
     );
-    await expect(page.getByRole("checkbox", { name: "Recording notice", exact: true })).toHaveCount(
-      0
-    );
-    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeEnabled();
-    await page.getByRole("button", { name: "Start meeting", exact: true }).click();
-    secondMeetingId = (await (await createdAgain).json()).meeting.id as string;
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     const nextResponse = await startedAgain;
     expect(nextResponse.status()).toBe(200);
+    expect(nextResponse.request().postDataJSON()).toEqual({ requestKey: expect.any(String) });
+    expect(startRequests).toBe(2);
     const nextCapture = ((await nextResponse.json()) as { capture: MeetingCaptureState }).capture;
     const nextGrant = await connection.claim(secondMeetingId);
     expect(nextGrant.grantId).not.toBe(grant.grantId);
@@ -361,16 +488,44 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
       nextGrant.grantId
     );
     native.acknowledge(nextCapture, "recording");
-    await expect(panel).toContainText("Recording");
+    await expect(panel.getByLabel("Recording", { exact: true })).toBeVisible();
+    await expect
+      .poll(() => native!.latest()?.elapsedMs ?? 0)
+      .toBeGreaterThan(nextCapture.epochStartMs + 200);
+    const offAudio = await nativePost(
+      baseURL,
+      "/api/meetings/capture/audio",
+      nextGrant.credential,
+      clip(secondMeetingId, nextCapture, nextCapture.epochStartMs, nextCapture.epochStartMs + 200)
+    );
+    expect(offAudio.status).toBe(200);
+    expect(await offAudio.json()).toMatchObject({ status: "saved", transcriptRevision: 1 });
+    await expect(transcript).toContainText(CAPTURE_FIXTURE_TEXT);
+
     const stoppedAgain = await controlFromUi(
       page,
-      "Stop and review",
+      "Stop",
       `/api/meetings/records/${secondMeetingId}`
     );
     native.acknowledge(stoppedAgain.capture, "stopped");
     native.finalize();
     await expect.poll(() => native!.latest()?.finalization).toBe("complete");
     expect(native.status()).toBe(200);
+    await expect
+      .poll(
+        async () => {
+          const response = await page.request.get(
+            `/api/meetings/records/${secondMeetingId}/outputs`
+          );
+          expect(response.status()).toBe(200);
+          const outputs = (await response.json()) as MeetingOutputsResponse;
+          expect(outputs.artifacts).toEqual([]);
+          return outputs.automaticSummary;
+        },
+        { timeout: 130_000, intervals: [1000, 2000] }
+      )
+      .toMatchObject({ status: "skipped", code: "setting-off" });
+    await expect(panel.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
     const evidence = await exec("docker", [
       "exec",
       fixtureName,
@@ -381,10 +536,10 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     const { observations } = JSON.parse(evidence.stdout) as {
       observations: { generatedPcm: boolean; timestampsRequested: boolean }[];
     };
-    expect(observations).toHaveLength(2);
+    expect(observations).toHaveLength(3);
     expect(observations.every((item) => item.generatedPcm && item.timestampsRequested)).toBe(true);
     console.log(
-      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; rapid title entry; one Start with explicit remembered microphone; persistent controls during History navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop â†’ New â†’ Start succeeds with remembered sources and the same server-stored account recording acknowledgement, with no per-meeting checkbox. Synthetic transport only, not live Mac capture proof."
+      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; one-time settings and notice; New opens Untitled meeting without capture; rapid inline title entry; notes retained through explicit source-free Start; timer-only return link during list navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop â†’ New â†’ Start succeeds with remembered sources and the same server-stored account recording acknowledgement, with no per-meeting checkbox; summary route failure reported and Settings off yields skipped worker receipt. Synthetic transport only, not live Mac capture proof."
     );
   } finally {
     try {
@@ -412,6 +567,22 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
             ).status()
           )
           .toBe(200);
+      // Restore editable defaults only. Completion and notice records belong to the
+      // isolated fixture and are removed by its teardown, never forged through PUT.
+      expect
+        .soft(
+          (
+            await page.request.put("/api/meetings/preferences", {
+              data: {
+                defaultCaptureMode: originalPreferences.defaultCaptureMode,
+                rememberedSource: originalPreferences.rememberedSource,
+                summarizeOnStop: originalPreferences.summarizeOnStop,
+                summaryTemplateId: originalPreferences.summaryTemplateId
+              }
+            })
+          ).status()
+        )
+        .toBe(200);
       if (modelId)
         expect.soft((await page.request.delete(`/api/ai/models/${modelId}`)).status()).toBe(200);
       if (providerId)

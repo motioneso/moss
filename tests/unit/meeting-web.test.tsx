@@ -47,21 +47,16 @@ describe("Meetings draft screen", () => {
     );
     expect(found.contributions.meetings).toContain("@moss/meetings/web");
   });
-  it("offers an optional title and one Start with a shared connection remedy", () => {
-    const html = render("/meetings", (client) =>
-      client.setQueryData(meetingKeys.preferences, { defaultCaptureMode: null })
-    );
-    expect(html).toContain("Meeting title (optional)");
-    expect(html).toContain("Connect Trail Marker once for Meetings and Backtrack");
-    expect(html).toContain("Connecting doesn’t start recording");
-    expect(html).toContain("/settings?section=profile");
-    expect(html).toMatch(/disabled=""[^>]*>Start meeting/);
+  it("opens on a minimal list with one New meeting action", () => {
+    const html = render("/meetings");
+    expect(html).toContain("New meeting");
+    expect(html).not.toContain("Meeting title (optional)");
     expect(html).not.toContain("Prepare this meeting");
-    expect(html).toContain("Checking the recording notice");
+    expect(html).not.toContain("Start meeting");
   });
   it("distinguishes loading from empty history", () => {
     const loading = render("/meetings?view=history");
-    expect(loading).toContain("Searching your meetings");
+    expect(loading).toContain("Loading meetings");
     expect(loading).not.toContain("Your first draft");
     const empty = render("/meetings?view=history", (client) =>
       client.setQueryData(historyKeys.search("", "all"), {
@@ -69,8 +64,8 @@ describe("Meetings draft screen", () => {
         pageParams: [undefined]
       })
     );
-    expect(empty).toContain("Your first draft starts here");
-    expect(empty).not.toContain("Searching your meetings");
+    expect(empty).toContain("No meetings yet. Start with New meeting.");
+    expect(empty).not.toContain("Loading meetings");
   });
   it("shows factual history columns and server search", () => {
     const html = render("/meetings?view=history", (client) =>
@@ -81,19 +76,20 @@ describe("Meetings draft screen", () => {
     );
     expect(html).toContain("Design review");
     expect(html).toContain("Search meetings");
-    expect(html).toContain("Processing");
-    expect(html).toContain("Capture");
-    expect(html).toContain("Unavailable");
+    expect(html).not.toContain("Processing");
+    expect(html).not.toContain("Capture");
+    expect(html).not.toContain("Unavailable");
     expect(html).not.toContain("Saved to vault");
   });
-  it("opens real notes and explicitly disables meeting chat", () => {
+  it("opens transcript and notes without a separate Ask Moss button", () => {
     const html = render(`/meetings?id=${meeting.id}`, (client) =>
       client.setQueryData(meetingKeys.record(meeting.id), { meeting })
     );
     expect(html).toContain("Design review");
     expect(html).toContain("First notes");
-    expect(html).toContain("Ask Moss needs an available transcript");
-    expect(html).toMatch(/disabled=""[^>]*aria-describedby="meeting-chat-unavailable"/);
+    expect(html).not.toContain("Ask Moss");
+    expect(html).toContain("Transcript");
+    expect(html).toContain("Personal notes");
   });
 });
 

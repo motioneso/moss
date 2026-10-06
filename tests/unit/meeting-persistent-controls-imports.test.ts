@@ -26,15 +26,14 @@ describe("Meetings persistent controls entry", () => {
     expect(
       imports.filter((file) => file.endsWith(".tsx") && !file.startsWith("packages/ui/"))
     ).toEqual([
-      "packages/meetings/src/web/capture-controls.tsx",
-      "packages/meetings/src/web/capture-notice.tsx",
       "packages/meetings/src/web/capture-strip.tsx",
       "packages/meetings/src/web/persistent-controls.tsx"
     ]);
     expect(imports.filter((file) => file.endsWith(".css"))).toEqual([
       "packages/meetings/src/web/capture-controls.css"
     ]);
-    expect(imports).toContain("packages/meetings/src/web/capture-session.ts");
+    expect(imports).not.toContain("packages/meetings/src/web/capture-controls.tsx");
+    expect(imports).not.toContain("packages/meetings/src/web/capture-notice.tsx");
     expect(imports).toContain("packages/meetings/src/web/transcript-time.ts");
     // Sanity: the old full entry really does reach the screen and broad stylesheet.
     const fullEntryImports = await runtimeImports("index.tsx");

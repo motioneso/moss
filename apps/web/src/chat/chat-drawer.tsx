@@ -70,6 +70,7 @@ const PHONE_QUERY = "(max-width: 720px)";
 export function ChatDrawer(props: {
   readonly meetingContext?: MeetingChatSelection & { readonly title: string };
   readonly onMeetingUnavailable?: () => void;
+  readonly onRemoveMeetingContext?: () => void;
   readonly open: boolean;
   readonly onClose: () => void;
   readonly records: readonly TranscriptRecord[];
@@ -738,8 +739,14 @@ export function ChatDrawer(props: {
 
       {props.meetingContext ? (
         <div className="chatd__head">
-          <Chip onRemove={props.onClose} removeLabel="Clear meeting selection">
-            {props.meetingContext.title}
+          <Chip
+            onRemove={props.onRemoveMeetingContext ?? props.onClose}
+            removeLabel="Remove meeting context"
+          >
+            About this meeting
+            {props.meetingContext.title !== "About this meeting" ? (
+              <span className="jds-sr-only">: {props.meetingContext.title}</span>
+            ) : null}
           </Chip>
         </div>
       ) : null}
@@ -881,11 +888,10 @@ export function ChatDrawer(props: {
       </div>
 
       {props.meetingContext ? (
-        <p className="jds-hint">
-          Each question uses the current transcript. Include context in follow-up questions.
-        </p>
+        <p className="jds-hint">Uses the transcript so far and your saved notes.</p>
       ) : null}
       <Composer
+        placeholder={props.meetingContext ? "Ask about this meeting…" : undefined}
         textOnly={Boolean(props.meetingContext)}
         modelSelector={
           <ChatModelPill

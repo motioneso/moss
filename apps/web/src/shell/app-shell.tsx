@@ -2,6 +2,7 @@ import { useSignOutGuard } from "./use-sign-out-guard";
 import { hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { SignOutConfirmation } from "./sign-out-confirmation";
 import { randomUuid, validMeetingChatInput, type OpenMeetingChatInput } from "@moss/module-web-sdk";
+import { meetingIdOnRoute } from "./meeting-route-context";
 import { MeetingChatDrawer } from "../chat/meeting-chat-drawer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu, MessageSquare } from "lucide-react";
@@ -106,18 +107,59 @@ export function AppShell(props: AppShellProps) {
       return next;
     });
   };
-  const [meetingSelection, setMeetingSelection] = useState<
-    (OpenMeetingChatInput & { selectionId: string }) | null
+  const [explicitMeetingSelection, setMeetingSelection] = useState<
+    (OpenMeetingChatInput & { selectionId: string; route: string; actor: string }) | null
   >(null);
-  const openMeetingChat = useCallback((input: OpenMeetingChatInput) => {
-    if (!validMeetingChatInput(input)) return;
-    setMeetingSelection({ ...input, selectionId: randomUuid() });
-    setChatOpen(true);
-    setModuleDraft(undefined);
-  }, []);
+  const routeMeetingId = meetingIdOnRoute(location.pathname, location.search);
+  const [dismissedMeetingId, setDismissedMeetingId] = useState<string | null>(null);
+  const routeSelection = useMemo(
+    () =>
+      routeMeetingId
+        ? {
+            meetingId: routeMeetingId,
+            title: "About this meeting",
+            selectionId: randomUuid()
+          }
+        : null,
+    [routeMeetingId, props.me.user.id]
+  );
+  const routeIdentity = `${location.pathname}:${routeMeetingId ?? ""}`;
+  const meetingSelection =
+    explicitMeetingSelection?.route === routeIdentity &&
+    explicitMeetingSelection.actor === props.me.user.id
+      ? explicitMeetingSelection
+      : dismissedMeetingId === routeMeetingId
+        ? null
+        : routeSelection;
+  useEffect(() => {
+    setMeetingSelection(null);
+    setDismissedMeetingId(null);
+  }, [routeMeetingId, props.me.user.id]);
+  const openMeetingChat = useCallback(
+    (input: OpenMeetingChatInput) => {
+      if (!validMeetingChatInput(input)) return;
+      setDismissedMeetingId(null);
+      setMeetingSelection({
+        ...input,
+        selectionId: randomUuid(),
+        route: routeIdentity,
+        actor: props.me.user.id
+      });
+      setChatOpen(true);
+      setModuleDraft(undefined);
+    },
+    [routeIdentity, props.me.user.id]
+  );
+  const currentMeetingSelection = useRef(meetingSelection);
+  currentMeetingSelection.current = meetingSelection;
   const clearMeetingChat = useCallback(
     (meetingId: string) => {
-      if (meetingSelection?.meetingId !== meetingId) return;
+      if (
+        currentMeetingSelection.current !== meetingSelection ||
+        meetingSelection?.meetingId !== meetingId
+      )
+        return;
+      setDismissedMeetingId(meetingId);
       setMeetingSelection(null);
       setChatOpen(false);
     },
@@ -128,11 +170,15 @@ export function AppShell(props: AppShellProps) {
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
   const [focusActionRequestId, setFocusActionRequestId] = useState<string | null>(null);
   const embeddedComposerRef = useRef<((draft: string) => void) | null>(null);
-  const openChatWith = useCallback((prompt: string) => {
-    setMeetingSelection(null);
-    setChatOpen(true);
-    void sendChatTurn(prompt);
-  }, []);
+  const openChatWith = useCallback(
+    (prompt: string) => {
+      setDismissedMeetingId(routeMeetingId);
+      setMeetingSelection(null);
+      setChatOpen(true);
+      void sendChatTurn(prompt);
+    },
+    [routeMeetingId]
+  );
   const openChat = useCallback(() => {
     setMeetingSelection(null);
     setChatOpen(true);
@@ -140,16 +186,20 @@ export function AppShell(props: AppShellProps) {
   // #916 — open the drawer with a module-authored draft the user edits + submits (NEVER auto-sent;
   // contrast openChatWith, which sends). Direct setState in an event handler is correct here — this
   // is NOT a render-phase updater, so it is not the StrictMode double-fire trap #368 warned about.
-  const openAssistantWithDraft = useCallback((draft: string) => {
-    setMeetingSelection(null);
-    const embeddedComposer = embeddedComposerRef.current;
-    if (embeddedComposer) {
-      embeddedComposer(draft);
-      return;
-    }
-    setModuleDraft(draft);
-    setChatOpen(true);
-  }, []);
+  const openAssistantWithDraft = useCallback(
+    (draft: string) => {
+      setDismissedMeetingId(routeMeetingId);
+      setMeetingSelection(null);
+      const embeddedComposer = embeddedComposerRef.current;
+      if (embeddedComposer) {
+        embeddedComposer(draft);
+        return;
+      }
+      setModuleDraft(draft);
+      setChatOpen(true);
+    },
+    [routeMeetingId]
+  );
   // #1284 — which module surface (if any) currently owns the shell's one chat stream. A module
   // claims one via assistantSurface.setSurfaceKey (handle.ts's module-level store, #1196/#1232's
   // "one external route mounts at a time" is what makes a single subscribable value sufficient
@@ -408,6 +458,10 @@ export function AppShell(props: AppShellProps) {
       <MeetingChatDrawer
         key={meetingSelection.selectionId}
         selection={meetingSelection}
+        onRemoveContext={() => {
+          setDismissedMeetingId(meetingSelection.meetingId);
+          setMeetingSelection(null);
+        }}
         docked={dockChat}
         expanded={expanded}
         onToggleExpanded={dockChat && !phoneWindow ? () => setChatExpanded((v) => !v) : undefined}
@@ -493,6 +547,7 @@ export function AppShell(props: AppShellProps) {
             />
 
             <div className="topbar-actions">
+              <ModulePersistentControls disabledModuleIds={props.disabledModuleIds ?? []} />
               <TrailMoreButton />
               <button
                 aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
@@ -501,8 +556,8 @@ export function AppShell(props: AppShellProps) {
                 title={assistantName ? `Ask ${assistantName}` : "Open chat"}
                 type="button"
                 onClick={() => {
-                  setMeetingSelection(null);
-                  setChatOpen((open) => !open);
+                  if (chatOpen) setChatOpen(false);
+                  else openChat();
                 }}
               >
                 <MessageSquare size={19} aria-hidden="true" />
@@ -510,7 +565,6 @@ export function AppShell(props: AppShellProps) {
             </div>
           </header>
 
-          <ModulePersistentControls disabledModuleIds={props.disabledModuleIds ?? []} />
           <div
             className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""} ${expanded ? "workspace-body--expanded" : ""}`}
           >

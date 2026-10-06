@@ -18,6 +18,7 @@ function isAccessDenied(error: unknown): boolean {
 export function MeetingChatDrawer(props: {
   readonly selection: MeetingChatSelection & { readonly title: string };
   readonly onClose: () => void;
+  readonly onRemoveContext?: () => void;
   readonly isFounder: boolean;
   readonly docked?: boolean;
   readonly expanded?: boolean;
@@ -106,6 +107,7 @@ export function MeetingChatDrawer(props: {
       isFounder={props.isFounder}
       surface={surface}
       meetingContext={selection}
+      onRemoveMeetingContext={props.onRemoveContext}
       onMeetingUnavailable={() => setUnavailable(true)}
     />
   );

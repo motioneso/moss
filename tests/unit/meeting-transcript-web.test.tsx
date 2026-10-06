@@ -8,10 +8,7 @@ import {
   TranscriptTimeline
 } from "../../packages/meetings/src/web/meeting-transcript.js";
 import { transcriptTime } from "../../packages/meetings/src/web/transcript-time.js";
-import {
-  parseTranscriptEvidence,
-  TranscriptEvidence
-} from "../../packages/meetings/src/web/transcript-evidence.js";
+import { parseTranscriptEvidence } from "../../packages/meetings/src/web/transcript-evidence.js";
 import {
   getMeetingTranscript,
   getMeetingTranscriptEvidence,
@@ -62,13 +59,11 @@ afterEach(() => vi.unstubAllGlobals());
 describe("retained transcript review", () => {
   it("renders source labels, limits, revisions and escaped text without inferred people", () => {
     const html = renderToString(<TranscriptTimeline {...fixture} />).replaceAll("<!-- -->", "");
-    expect(html).toContain("Desk microphone");
-    expect(html).toContain("Source labels only");
-    expect(html).toContain("0:01–0:02");
+    expect(html).toContain("You");
+    expect(html).toContain("0:01");
     expect(html).not.toContain("Epoch ");
-    expect(html).toContain("Provisional");
-    expect(html).toContain("Corrected");
-    expect(html).toContain("segments omitted");
+    expect(html).toContain("Still being finalised");
+    expect(html).toContain("lines are outside");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("anonymous-1");
     expect(html).not.toContain("<script>");
@@ -85,7 +80,9 @@ describe("retained transcript review", () => {
       .setState({ status: "error", error: new ApiError(403, "Forbidden") });
     const html = renderToString(
       <QueryClientProvider client={client}>
-        <MeetingTranscript meetingId="meeting" revision={undefined} onRevisionChange={() => {}} />
+        <MemoryRouter>
+          <MeetingTranscript meetingId="meeting" />
+        </MemoryRouter>
       </QueryClientProvider>
     );
     expect(html).toContain("Transcript access is unavailable");
@@ -110,14 +107,14 @@ describe("retained transcript review", () => {
       renderToString(
         <QueryClientProvider client={client}>
           <MemoryRouter initialEntries={[`/meetings?id=meeting&${query}`]}>
-            <TranscriptEvidence meetingId="meeting" />
+            <MeetingTranscript meetingId="meeting" />
           </MemoryRouter>
         </QueryClientProvider>
       );
     expect(render(search)).toContain("This transcript reference is unavailable");
     expect(render(search)).not.toContain("private old text");
     expect(render("segmentId=s1&segmentRevision=-1")).toContain(
-      "This transcript reference is invalid"
+      "This transcript reference is unavailable"
     );
     client.clear();
   });

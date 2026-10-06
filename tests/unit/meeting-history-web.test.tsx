@@ -2,12 +2,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "@moss/module-web-sdk";
-import {
-  MEETING_RECORDING_NOTICE,
-  type MeetingHistoryItem,
-  type MeetingRecord
-} from "@moss/shared";
+import { MEETING_RECORDING_NOTICE, type MeetingRecord } from "@moss/shared";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { historyItem } from "./fixtures/meeting-history.js";
@@ -74,7 +69,6 @@ interface FocusNode {
   focus: () => void;
   contains: (node: FocusNode | null) => boolean;
 }
-let activeNode: FocusNode | null = null;
 const searchFocus = vi.fn();
 function Location() {
   location = useLocation().search;
@@ -109,7 +103,6 @@ async function mount() {
           const node: FocusNode = {
             region,
             focus: () => {
-              activeNode = node;
               if (isSearch) searchFocus();
             },
             contains: (candidate) => candidate?.region === region
@@ -136,12 +129,15 @@ function html() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  activeNode = null;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
-    matchMedia: () => ({ matches: false })
+    matchMedia: () => ({
+      matches: false,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    })
   });
   vi.stubGlobal(
     "fetch",
@@ -153,6 +149,16 @@ beforeEach(() => {
       if (path === "/api/meetings/recording-notice")
         return new Response(
           JSON.stringify({ currentNotice: MEETING_RECORDING_NOTICE, acknowledgement: null })
+        );
+      if (path === "/api/meetings/preferences")
+        return new Response(
+          JSON.stringify({
+            defaultCaptureMode: null,
+            rememberedSource: null,
+            summarizeOnStop: true,
+            summaryTemplateId: "general",
+            setupCompletedAt: record.createdAt
+          })
         );
       if (path === "/api/meetings/capture/devices")
         return new Response(JSON.stringify({ devices: [], processingReady: false }));
@@ -187,65 +193,54 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-describe("History selection and search (unit transport stubs, not live proof)", () => {
-  it("renders factual rail metadata and uses existing meeting chat without opening review", async () => {
+describe("minimal meeting list (synthetic transport, not live proof)", () => {
+  function row(id: string) {
+    return renderer.root
+      .findAllByType("button")
+      .find(
+        (node) =>
+          String(node.props.className).includes("meetings-history-row") &&
+          node
+            .findAllByType("span")
+            .some(
+              (span) => span.children.join("") === (id === first.id ? first.title : second.title)
+            )
+      )!;
+  }
+  it("shows summary gist and duration with direct one-click navigation", async () => {
     await mount();
-    expect(html()).toContain("Transcript span ");
-    expect(html()).toContain("0:01–0:05");
-    expect(html()).toContain("1 final · 1 provisional");
-    expect(html()).toContain("2 to review");
-    expect(html()).toContain("Search indexing queued");
-    expect(html()).toContain("Accepted suggestions");
-    expect(html()).not.toContain("Indexed");
-    expect(html()).not.toContain("Open note");
-    await click("Synthetic review");
-    expect(location).toContain("view=history");
-    expect(location).not.toContain("?id=");
-    await click("Ask Moss");
-    expect(chat.openMeetingChat).toHaveBeenCalledWith({ meetingId: first.id, title: first.title });
-    await click("Other synthetic review");
-    expect(button("Ask Moss").props.disabled).toBe(true);
-    expect(html()).not.toContain("Declared desk source");
+    expect(html()).not.toContain("Capture unavailable");
+    expect(html()).not.toContain("Open review");
+    expect(historyApi.getMeetingHistoryItem).not.toHaveBeenCalled();
+    await act(async () => row(first.id).props.onClick());
+    await flush();
+    expect(location).toBe(`?id=${first.id}`);
+    expect(html()).toContain("Personal notes");
+    expect(chat.openMeetingChat).not.toHaveBeenCalled();
   });
-  it("keeps search in session memory through review/back, and resets selection on filter changes", async () => {
+  it("keeps search in signed-in memory through direct meeting navigation and Back", async () => {
     await mount();
     await act(async () =>
       renderer.root
         .findByProps({ id: "meeting-history-search" })
-        .props.onChange({ target: { value: "private cedar" } })
+        .props.onChange({ target: { value: "release" } })
     );
     await flush(275);
     await flush();
     expect(historyApi.searchMeetingHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ query: "private cedar", filter: "all" }),
+      expect.objectContaining({ query: "release", filter: "all" }),
       expect.any(AbortSignal)
     );
-    expect(location).not.toContain("private");
-    await click("Synthetic review");
-    await click("Open review");
-    expect(location).toContain(`id=${first.id}`);
-    await click("View meeting history");
-    expect(renderer.root.findByProps({ id: "meeting-history-search" }).props.value).toBe(
-      "private cedar"
-    );
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-history-filter" })
-        .props.onChange({ target: { value: "needs-review" } })
-    );
+    await act(async () => row(first.id).props.onClick());
     await flush();
-    expect(location).toContain("state=needs-review");
-    expect(location).not.toContain("selected=");
-    expect(historyApi.searchMeetingHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        query: "private cedar",
-        filter: "needs-review",
-        before: undefined
-      }),
-      expect.any(AbortSignal)
-    );
+    await click("Meetings");
+    expect(renderer.root.findByProps({ id: "meeting-history-search" }).props.value).toBe("release");
+    expect(location).not.toContain("release");
+    await act(async () => navigate(-1));
+    await flush();
+    expect(location).toBe(`?id=${first.id}`);
   });
-  it("uses the authoritative cursor even when a page has fewer than thirty rows", async () => {
+  it("uses authoritative pagination cursor even for a short page", async () => {
     const cursor = { id: first.id, createdAt: first.createdAt };
     vi.mocked(historyApi.searchMeetingHistory)
       .mockResolvedValueOnce({ meetings: [first], nextCursor: cursor })
@@ -256,173 +251,29 @@ describe("History selection and search (unit transport stubs, not live proof)", 
       expect.objectContaining({ before: cursor }),
       expect.any(AbortSignal)
     );
-    expect(button("Other synthetic review")).toBeDefined();
+    expect(row(second.id)).toBeDefined();
     expect(button("Load older meetings")).toBeUndefined();
   });
-  it("does not redirect a delayed selected-item response into a newer selection", async () => {
-    let finish!: (value: { meeting: MeetingHistoryItem }) => void;
-    vi.mocked(historyApi.getMeetingHistoryItem).mockImplementation((id) =>
-      id === first.id
-        ? new Promise((resolve) => {
-            finish = resolve;
-          })
-        : Promise.resolve({ meeting: second })
-    );
-    await mount();
-    await click("Other synthetic review");
-    await act(async () => finish({ meeting: first }));
-    await flush();
-    expect(html()).not.toContain("Declared desk source");
-    expect(button("Ask Moss").props.disabled).toBe(true);
-    expect(location).toContain(`selected=${second.id}`);
-  });
-  it("suppresses known-denied metadata and selected chat on revalidation", async () => {
-    await mount();
-    await click("Synthetic review");
-    vi.mocked(historyApi.getMeetingHistoryItem).mockRejectedValue(
-      new ApiError(404, "Unavailable", "meeting_not_found")
-    );
-    await act(async () =>
-      client.refetchQueries({ queryKey: historyApi.historyKeys.item(first.id) })
-    );
-    await flush();
-    expect(html()).toContain("This meeting is unavailable");
-    expect(html()).not.toContain("Declared desk source");
-    expect(button("Synthetic review")).toBeUndefined();
-    expect(button("Ask Moss")).toBeUndefined();
-    expect(chat.clearMeetingChat).toHaveBeenCalledWith(first.id);
-  });
-  it("moves focus out of hidden mobile panels on browser Back and Forward", async () => {
-    vi.stubGlobal("window", {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      matchMedia: () => ({ matches: true })
-    });
-    vi.stubGlobal("document", {
-      get activeElement() {
-        return activeNode;
-      }
-    });
-    await mount();
-    await click("Synthetic review");
-    expect(activeNode?.region).toBe("rail");
-    await act(async () => navigate(-1));
-    await flush();
-    expect(activeNode?.region).toBe("results");
-    await act(async () => navigate(1));
-    await flush();
-    expect(activeNode?.region).toBe("rail");
-  });
-  it("keeps an authorization failure visible when the narrow detail pane was selected", async () => {
-    await mount();
-    await click("Synthetic review");
-    vi.mocked(historyApi.searchMeetingHistory).mockRejectedValue(
-      new ApiError(403, "Unavailable", "module_unavailable")
-    );
-    await act(async () => client.refetchQueries({ queryKey: historyApi.historyKeys.lists }));
-    await flush();
-    expect(html()).toContain("Meeting history is unavailable");
-    expect(html()).not.toContain("meetings-history--detail");
-    expect(button("Retry loading history")).toBeDefined();
-    expect(html()).not.toContain("Declared desk source");
-  });
-  it("clears auto-selected chat immediately when a list denial removes all visible rows", async () => {
-    await mount();
-    expect(location).not.toContain("selected=");
-    await click("Ask Moss");
-    expect(chat.openMeetingChat).toHaveBeenCalledWith({ meetingId: first.id, title: first.title });
-    vi.mocked(historyApi.searchMeetingHistory).mockRejectedValue(
-      new ApiError(403, "Unavailable", "module_unavailable")
-    );
-    await act(async () => client.refetchQueries({ queryKey: historyApi.historyKeys.lists }));
-    await flush();
-    expect(chat.clearMeetingChat).toHaveBeenCalledWith(first.id);
-    expect(html()).not.toContain("Declared desk source");
-    expect(button("Ask Moss")).toBeUndefined();
-  });
-  it("returns focus to search when the selected row became unavailable", async () => {
-    await mount();
-    await click("Synthetic review");
-    vi.mocked(historyApi.getMeetingHistoryItem).mockRejectedValue(
-      new ApiError(404, "Unavailable", "meeting_not_found")
-    );
-    await act(async () =>
-      client.refetchQueries({ queryKey: historyApi.historyKeys.item(first.id) })
-    );
-    await flush();
-    expect(button("Synthetic review")).toBeUndefined();
-    await click("Back to results");
-    expect(searchFocus).toHaveBeenCalledOnce();
-    expect(location).toContain("panel=results");
-  });
-  it("discards other cached searches and late reads after a global list denial", async () => {
-    await mount();
-    let lateSuccess!: (value: Awaited<ReturnType<typeof historyApi.searchMeetingHistory>>) => void;
-    let rejectCurrent!: (error: Error) => void;
-    vi.mocked(historyApi.searchMeetingHistory)
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          lateSuccess = resolve;
-        })
-      )
-      .mockRejectedValueOnce(new ApiError(403, "Unavailable", "module_unavailable"))
-      .mockReturnValueOnce(
-        new Promise((_resolve, reject) => {
-          rejectCurrent = reject;
-        })
-      );
-    await act(async () => {
-      void client.refetchQueries({
-        queryKey: historyApi.historyKeys.search("", "all"),
-        exact: true
-      });
-    });
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-history-filter" })
-        .props.onChange({ target: { value: "needs-review" } })
-    );
-    await flush();
-    expect(html()).toContain("Meeting history is unavailable");
-    expect(client.getQueryData(historyApi.historyKeys.search("", "all"))).toBeUndefined();
-    await act(async () => lateSuccess({ meetings: [first], nextCursor: null }));
-    await flush();
-    expect(client.getQueryData(historyApi.historyKeys.search("", "all"))).toBeUndefined();
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-history-filter" })
-        .props.onChange({ target: { value: "all" } })
-    );
-    await flush();
-    expect(button("Synthetic review")).toBeUndefined();
-    expect(html()).not.toContain("Declared desk source");
-    await act(async () => rejectCurrent(new ApiError(401, "Unavailable", "unauthenticated")));
-    await flush();
-    expect(html()).toContain("Meeting history is unavailable");
-  });
-  it("labels paused offline queries and resumes them when connectivity returns", async () => {
+  it("resumes offline search after connectivity returns", async () => {
     onlineManager.setOnline(false);
     try {
       await mount();
       expect(historyApi.searchMeetingHistory).not.toHaveBeenCalled();
       expect(html()).toContain("Search will continue when you reconnect");
-      expect(html()).not.toContain("Couldn’t load meeting history");
       await act(async () => onlineManager.setOnline(true));
       await flush();
-      await flush();
-      expect(historyApi.searchMeetingHistory).toHaveBeenCalledOnce();
-      expect(button("Synthetic review")).toBeDefined();
-      expect(html()).not.toContain("Search will continue when you reconnect");
+      expect(row(first.id)).toBeDefined();
     } finally {
       onlineManager.setOnline(true);
     }
   });
-  it("keeps filters mounted and retries a transient list failure without inventing an empty history", async () => {
+  it("keeps search visible through a transient error and retries without a fake empty state", async () => {
     vi.mocked(historyApi.searchMeetingHistory).mockRejectedValueOnce(new Error("offline"));
     await mount();
-    expect(html()).toContain("Couldn’t load meeting history");
-    expect(html()).not.toContain("Your first draft starts here");
-    await click("Retry loading history");
-    expect(button("Synthetic review")).toBeDefined();
+    expect(html()).toContain("Couldn’t load meetings");
+    expect(html()).not.toContain("No meetings yet");
+    expect(renderer.root.findByProps({ id: "meeting-history-search" })).toBeDefined();
+    await click("Try again");
+    expect(row(first.id)).toBeDefined();
   });
 });

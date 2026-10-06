@@ -1,99 +1,102 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { openMeetingChat } from "./meeting-minimal-ui.js";
 
 /** Real rendered DOM assertions only; no screenshots or network interception. */
 export async function assertMeetingReviewLayout(page: Page): Promise<void> {
-  for (const width of [1600, 1180, 390, 375]) {
+  for (const width of [1600, 1440, 1180, 390, 375]) {
     await page.setViewportSize({ width, height: 1000 });
-    await expect(page.getByRole("tablist", { name: "Meeting review sections" })).toBeVisible();
-    const summary = page.getByRole("tab", { name: "Summary and actions", exact: true });
-    await summary.focus();
-    await summary.press("End");
-    const notes = page.getByRole("tab", { name: /^My notes/ });
-    await expect(notes).toBeFocused();
-    await expect(notes).toHaveAttribute("aria-selected", "true");
-    await assertPanelGeometry(page);
-    const notesWidths = await page
-      .getByLabel("Personal notes", { exact: true })
-      .evaluate((input) => ({
-        input: input.getBoundingClientRect().width,
-        panel: input.closest('[role="tabpanel"]')!.getBoundingClientRect().width
-      }));
-    expect(notesWidths.input).toBeGreaterThanOrEqual(notesWidths.panel - 2);
-    await notes.press("Home");
-    await expect(summary).toBeFocused();
-    await expect(summary).toHaveAttribute("aria-selected", "true");
-    await assertPanelGeometry(page);
+    const tabs = page.getByRole("tablist", { name: "Meeting sections", exact: true });
+    await expect(tabs).toBeVisible();
+    const minimumFont = await tabs
+      .getByRole("tab")
+      .evaluateAll((elements) =>
+        Math.min(...elements.map((element) => parseFloat(getComputedStyle(element).fontSize)))
+      );
+    expect(minimumFont).toBeGreaterThanOrEqual(11);
+    const notes = page.getByRole("tab", { name: "Notes", exact: true });
+    await notes.click();
+    await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toBeVisible();
+    const geometry = await page.locator(".meetings-workspace").evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const transcript = element
+        .querySelector('[aria-label="Transcript"]')
+        ?.getBoundingClientRect();
+      const panel = element
+        .querySelector('[role="tabpanel"]:not([hidden])')!
+        .getBoundingClientRect();
+      const tabs = element.querySelector('[role="tablist"]')!.getBoundingClientRect();
+      const notes = element.querySelector("textarea")!.getBoundingClientRect();
+      const outer = element.closest(".meetings-page")!.getBoundingClientRect();
+      return {
+        left: bounds.left,
+        right: bounds.right,
+        width: bounds.width,
+        outerWidth: outer.width,
+        panelLeft: panel.left,
+        panelRight: panel.right,
+        panelTop: panel.top,
+        panelWidth: panel.width,
+        tabsBottom: tabs.bottom,
+        notesWidth: notes.width,
+        transcriptLeft: transcript?.left,
+        transcriptRight: transcript?.right,
+        transcriptWidth: transcript?.width
+      };
+    });
+    expect(geometry.width).toBeGreaterThanOrEqual(geometry.outerWidth - 2);
+    expect(geometry.panelTop).toBeGreaterThanOrEqual(geometry.tabsBottom - 1);
+    expect(geometry.notesWidth).toBeGreaterThanOrEqual(geometry.panelWidth - 2);
+    expect(geometry.panelRight).toBeCloseTo(geometry.right, 0);
+    if (width > 760) {
+      await expect(page.getByRole("region", { name: "Transcript", exact: true })).toBeVisible();
+      await expect(page.getByRole("tab", { name: "Transcript", exact: true })).toHaveCount(0);
+      expect(geometry.transcriptLeft).toBeCloseTo(geometry.left, 0);
+      expect(geometry.transcriptRight).toBeLessThan(geometry.panelLeft);
+      expect(geometry.transcriptWidth! / geometry.panelWidth).toBeCloseTo(1.35, 1);
+    } else {
+      expect(geometry.panelWidth).toBeGreaterThanOrEqual(geometry.width - 2);
+      await notes.focus();
+      await notes.press("Home");
+      const transcriptTab = page.getByRole("tab", { name: "Transcript", exact: true });
+      await expect(transcriptTab).toBeFocused();
+      await expect(transcriptTab).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("region", { name: "Transcript", exact: true })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toBeHidden();
+      const controls = page.getByRole("region", { name: "Meeting recording", exact: true });
+      const primary = controls.locator(":scope > .jds-btn, :scope > .jds-control-pill");
+      if (await primary.count()) {
+        await expect(primary).toHaveCSS("position", "fixed");
+        const box = await primary.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.y + box!.height).toBeLessThanOrEqual(1000);
+        expect(box!.y).toBeGreaterThan(850);
+      }
+    }
+    if (width === 390) {
+      await openMeetingChat(page);
+      await expect(page.locator(".chatd")).toBeVisible();
+      await expect(page.locator(".chatd--docked")).toHaveCount(0);
+      await page.getByRole("button", { name: "Close chat", exact: true }).click();
+    }
     await expect
-      .poll(async () =>
-        page.evaluate(() => ({
-          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          body: document.querySelector(".meetings-body")!.getBoundingClientRect().width,
-          page: document.querySelector(".meetings-page")!.getBoundingClientRect().width
-        }))
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        )
       )
-      .toMatchObject({ overflow: 0 });
-    const widths = await page.evaluate(() => ({
-      body: document.querySelector(".meetings-body")!.getBoundingClientRect().width,
-      page: document.querySelector(".meetings-page")!.getBoundingClientRect().width
-    }));
-    expect(widths.body).toBeGreaterThan(widths.page - 40);
+      .toBe(0);
   }
-  for (const theme of [
-    { mode: "light", park: "forest" },
-    { mode: "dark", park: "forest" },
-    { mode: "light", park: "teal" }
-  ]) {
-    await page.evaluate((theme) => {
-      document.documentElement.dataset.colorMode = theme.mode;
-      document.documentElement.dataset.theme = theme.park;
-    }, theme);
-    await expect(page.getByRole("tab", { name: "Summary and actions", exact: true })).toBeVisible();
-    const metrics = await page
-      .getByRole("tab", { name: "Summary and actions", exact: true })
-      .evaluate((element) => {
-        const style = getComputedStyle(element);
-        return {
-          fontSize: parseFloat(style.fontSize),
-          color: style.color,
-          outlineStyle: style.outlineStyle
-        };
-      });
-    expect(metrics.fontSize).toBeGreaterThanOrEqual(11);
-    expect(metrics.color).not.toBe("rgba(0, 0, 0, 0)");
-    expect(metrics.outlineStyle).not.toBe("none");
-  }
-  await page.evaluate(() => {
-    delete document.documentElement.dataset.colorMode;
-    delete document.documentElement.dataset.theme;
-  });
   await page.setViewportSize({ width: 1440, height: 1000 });
-}
-
-/** Catch a horizontal tab-root collision even when the page itself does not overflow. */
-async function assertPanelGeometry(page: Page): Promise<void> {
-  const panel = page.getByRole("tabpanel");
-  await expect(panel).toBeVisible();
-  const geometry = await panel.evaluate((element) => {
-    const panel = element.getBoundingClientRect();
-    const tabs = element.parentElement!.querySelector('[role="tablist"]')!.getBoundingClientRect();
-    const body = element.closest(".meetings-body")!.getBoundingClientRect();
-    return {
-      tabBottom: tabs.bottom,
-      panelTop: panel.top,
-      panelWidth: panel.width,
-      bodyWidth: body.width
-    };
-  });
-  expect(geometry.panelTop).toBeGreaterThanOrEqual(geometry.tabBottom - 1);
-  expect(geometry.panelWidth).toBeGreaterThanOrEqual(geometry.bodyWidth - 2);
+  await page.getByRole("tab", { name: "Notes", exact: true }).click();
+  await assertMeetingTextContrast(page, page.getByRole("tab", { name: "Notes", exact: true }));
 }
 
 export async function assertProvisionalContrast(page: Page): Promise<void> {
-  const badge = page
-    .getByRole("region", { name: "Retained transcript", exact: true })
-    .locator(".jds-badge")
-    .filter({ hasText: /^Provisional$/ });
-  await assertMeetingTextContrast(page, badge);
+  const text = page
+    .getByRole("region", { name: "Transcript", exact: true })
+    .locator(".meetings-transcript-turn--live .meetings-transcript-text")
+    .first();
+  await assertMeetingTextContrast(page, text);
 }
 
 export async function assertMeetingTextContrast(page: Page, badge: Locator): Promise<void> {

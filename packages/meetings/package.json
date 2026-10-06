@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./web": "./src/web/index.tsx",
+    "./settings": "./src/web/meeting-settings.tsx",
     "./web/persistent-controls": "./src/web/persistent-controls.tsx"
   },
   "scripts": {
@@ -23,7 +24,8 @@
     "fastify": "^5.6.2",
     "kysely": "^0.29.2",
     "react": "^19.0.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "@moss/jobs": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0"

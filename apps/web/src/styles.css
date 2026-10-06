@@ -131,7 +131,20 @@ label {
   font-weight: var(--weight-strong);
 }
 
-input,
+input:where(
+  :not(
+    [type="checkbox"],
+    [type="radio"],
+    [type="range"],
+    [type="color"],
+    [type="button"],
+    [type="submit"],
+    [type="reset"],
+    [type="image"],
+    [type="file"],
+    [type="hidden"]
+  )
+),
 select,
 textarea {
   width: 100%;
@@ -408,7 +421,7 @@ button {
   height: 19px;
 }
 
-.module-link span {
+.module-link > .module-link__label {
   flex: 1;
   min-width: 0;
   overflow: hidden;

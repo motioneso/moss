@@ -26,7 +26,8 @@ export const meetingsModuleManifest = {
       "sql/0283_meeting_account_export.sql",
       "sql/0284_meeting_capture.sql",
       "sql/0288_meeting_recording_connections.sql",
-      "sql/0290_meeting_recording_notice.sql"
+      "sql/0290_meeting_recording_notice.sql",
+      "sql/0292_meeting_minimal.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -44,23 +45,24 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_receipts",
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
-      "app.meeting_recording_notices"
+      "app.meeting_recording_notices",
+      "app.meeting_stop_summaries"
     ]
   },
   permissions: [
     {
       id: "meetings.read",
-      label: "Read meeting drafts",
+      label: "Read meetings",
       description:
-        "Read the signed-in person's meeting drafts, personal notes, and retained transcript evidence.",
+        "Read the signed-in person's meetings, personal notes, and retained transcript evidence.",
       scope: "user",
       actions: ["view"]
     },
     {
       id: "meetings.write",
-      label: "Manage meeting drafts",
+      label: "Manage meetings",
       description:
-        "Create and delete drafts, save personal notes with version checks, manage capture defaults, and ingest transcript text.",
+        "Create and delete meetings, save personal notes with version checks, manage capture defaults, and ingest transcript text.",
       scope: "user",
       actions: ["create", "update", "delete"]
     }
@@ -77,7 +79,22 @@ export const meetingsModuleManifest = {
       permissionId: "meetings.read"
     }
   ],
+  settings: [
+    {
+      id: "meetings.module-settings",
+      label: "Meetings",
+      description:
+        "Choose your Mac and exact audio sources, review the recording notice, and set summary style and automatic summaries. Run setup again here.",
+      path: "/settings?section=modules&module=meetings",
+      scope: "user",
+      permissionId: "meetings.write",
+      entry: "./settings"
+    }
+  ],
+  jobs: [{ queueName: "meetings.stop-summary", metadataOnly: true }],
   routes: [
+    { method: "PUT", path: "/api/meetings/records/:id/title", permissionId: "meetings.write" },
+    { method: "GET", path: "/api/meetings/output-availability", permissionId: "meetings.read" },
     { method: "GET", path: "/api/meetings/recording-notice", permissionId: "meetings.read" },
     { method: "PUT", path: "/api/meetings/recording-notice", permissionId: "meetings.write" },
     { method: "POST", path: "/api/meetings/capture/connection", permissionId: "meetings.write" },
@@ -141,6 +158,16 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.setup",
+      description:
+        "Set up your Mac connection, audio sources, recording notice and summary defaults once, or continue with notes without a recorder. Finish setup saves preferences only. Linking, creating and opening never record."
+    },
+    {
+      id: "meetings.automatic_summary",
+      description:
+        "Automatic summaries are on by default and can be switched off in Settings. Stop queues one bounded attempt after the meaningful transcript is finalized. Failures stay visible; Rewrite summary explicitly retries with the configured model."
+    },
+    {
       id: "meetings.recording_notice",
       description:
         "Acknowledge the recording notice once per account. Start and Resume check the server-stored current version and bind it to the grant. Only a version change asks again; Pause, Stop and cancellation stay available.",
@@ -170,14 +197,14 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Connect Mac once, remember exact sources, acknowledge the notice once per account, then Start. No broader fallback. Persistent Pause/Stop; Stop finalizes within 60 seconds. Windows unavailable.",
+        "Link your Mac once and save sources in Settings. New meeting opens ready; only Start records. Pause and Stop stay on the meeting page. A nav dot and return timer show recording elsewhere. Windows capture is unavailable.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The selected microphone or app changed or disconnected. Review Change and explicitly select an available source; Moss never broadens capture automatically."
+            "The selected microphone or app changed or disconnected. Review Settings → Meetings and explicitly select an available source; Moss never broadens capture automatically."
         },
         {
           code: "meeting_capture_processing_failed",
@@ -235,7 +262,7 @@ export const meetingsModuleManifest = {
           id: "meetings.connect_recorder",
           path: "/meetings",
           description:
-            "Connect Trail Marker in Settings and approve its recording capability once. Open New meeting, review the remembered named sources or choose Change, then Start."
+            "Connect Trail Marker in Settings and approve its recording capability once. Open New meeting, review the named sources (change them in Settings → Meetings), then Start."
         },
         {
           id: "meetings.configure_transcription",
@@ -253,7 +280,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.history",
       description:
-        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs a connected Mac with one-time recording capability approval. Receipts do not verify current Tasks or vault files.",
+        "The Meetings list searches titles, notes and transcripts. Rows grouped by week open the meeting directly and show the latest summary excerpt and acknowledged recording length when available.",
       errors: [
         {
           code: "meeting_history_access_denied",
@@ -389,6 +416,12 @@ export const meetingsModuleManifest = {
             "Tasks is unavailable for this owner. Enable Tasks in module settings before accepting this candidate."
         },
         {
+          code: "meeting_output_queue_unavailable",
+          class: "transient",
+          description:
+            "Recording stopped, but its summary could not be queued. Review the finalized transcript and use Rewrite summary for a new explicit attempt."
+        },
+        {
           code: "meeting_output_interrupted",
           class: "transient",
           description:
@@ -505,33 +538,39 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read retained transcripts with source labels, timestamps, revision and provisional status, and omitted counts. Refresh manually or inspect previous/latest revisions. Recording requires an explicitly approved native Mac recorder."
+        "Read live transcript timestamps and source labels beside notes, with inline missing-audio ranges. On phones they become tabs. Chat timestamp links scroll to exact evidence; older cited text remains identifiable."
     },
     {
       id: "meetings.capture_default",
       description:
-        "Remember the explicitly selected Mac, microphone UID, capture mode and stable app identity. Change reviews exact sources; a missing source never chooses a broader fallback. Use the once-approved companion connection and one explicit Start."
+        "One-time setup and Settings → Meetings save the exact Mac, named microphone, mode and optional app. Start and Resume validate saved sources against current inventory; missing or ambiguous sources never broaden capture."
     },
     {
       id: "meetings.notes_recovery",
       description:
-        "Unsaved notes survive signed-in app navigation in memory. Save before closing or signing out. On a version conflict, compare current saved notes before explicitly rebasing your edits."
+        "Notes autosave and remain in signed-in memory across navigation. Failed saves can retry the same request. Conflicts keep edits and show saved notes before an explicit Keep my version choice. Unsaved work warns before sign-out."
     },
     {
       id: "meetings.delete_draft",
       description:
-        "Permanently delete a draft, personal notes, retained transcript revisions and meeting chat, generated outputs and candidates after confirmation; accepted Tasks remain. Cancellation preserves unsaved edits; deletion cannot be undone."
+        "Delete meeting in the overflow menu permanently removes its notes, transcript, chat and summaries after confirmation. Accepted Tasks and vault copies remain. Cancel keeps unsaved edits."
     },
     {
       id: "meetings.draft_records",
       description:
-        "Review Summary and actions, Transcript and My notes. Search titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native Mac recording needs device approval and explicit sources.",
+        "Rename meetings inline; Notes and Summary sit beside the transcript. Overflow offers search, rewrite, versions, vault export, Markdown copy and deletion. Add to Tasks is owner review; possible duplicates appear inline.",
       errors: [
         {
           code: "meeting_request_conflict",
           class: "validation",
           description:
             "A request key was already used with different input. Use a new key for a new change."
+        },
+        {
+          code: "meeting_title_conflict",
+          class: "transient",
+          description:
+            "The title changed elsewhere. Your draft is kept; review the current title before choosing to keep your version or load the saved title."
         },
         {
           code: "meeting_notes_conflict",
@@ -543,12 +582,12 @@ export const meetingsModuleManifest = {
           code: "meeting_invalid_input",
           class: "validation",
           description:
-            "The meeting draft or notes exceed the allowed size or contain invalid fields. Correct the input and retry."
+            "The meeting or notes exceed the allowed size or contain invalid fields. Correct the input and retry."
         },
         {
           code: "meeting_not_found",
           class: "validation",
-          description: "This meeting draft is unavailable to the signed-in person."
+          description: "This meeting is unavailable to the signed-in person."
         }
       ]
     }
@@ -577,7 +616,8 @@ export const meetingsModuleManifest = {
           table: "app.meeting_capture_start_cancellations",
           countPredicate: "owner_user_id = $1::uuid"
         },
-        { table: "app.meeting_recording_notices", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_recording_notices", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

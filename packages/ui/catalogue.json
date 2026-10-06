@@ -215,6 +215,15 @@
       "flags": [{ "prop": "disabled", "optional": true }]
     },
     {
+      "name": "control-pill",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/control-pill.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["ControlPill"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "day-cell",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/day-cell.tsx", "type": "registry:ui" }],
@@ -326,6 +335,15 @@
       "files": [{ "path": "packages/ui/src/held-banner.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["HeldBanner"],
+      "options": [],
+      "flags": []
+    },
+    {
+      "name": "highlight",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/highlight.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Highlight"],
       "options": [],
       "flags": []
     },

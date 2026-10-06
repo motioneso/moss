@@ -62,6 +62,7 @@ import {
  */
 export function Composer(props: {
   readonly textOnly?: boolean;
+  readonly placeholder?: string;
   readonly modelSelector?: React.ReactNode;
   readonly readOnly: boolean;
   readonly isFounder: boolean;
@@ -490,9 +491,11 @@ export function Composer(props: {
                 ? "Chat locked — model unavailable"
                 : props.readOnly
                   ? "Read-only history"
-                  : assistantName
-                    ? `Message ${assistantName}…`
-                    : "Message…"
+                  : props.placeholder
+                    ? props.placeholder
+                    : assistantName
+                      ? `Message ${assistantName}…`
+                      : "Message…"
             }
             rows={1}
             value={text}

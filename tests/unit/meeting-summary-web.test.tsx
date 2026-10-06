@@ -9,6 +9,7 @@ import type {
   MeetingOutputArtifact,
   MeetingRecord
 } from "@moss/shared";
+import { meetingKeys } from "../../packages/meetings/src/web/client.js";
 import { MeetingSummary } from "../../packages/meetings/src/web/meeting-summary.js";
 import { exportStatus } from "../../packages/meetings/src/web/meeting-vault-export.js";
 import { invalidateOutputAccess } from "../../packages/meetings/src/web/output-access.js";
@@ -122,6 +123,7 @@ async function mount() {
       <QueryClientProvider client={client}>
         <MemoryRouter>
           <MeetingSummary
+            tool="rewrite"
             meeting={meeting}
             transcriptRevision={0}
             sourceLoading={false}
@@ -133,19 +135,18 @@ async function mount() {
   });
   await flush();
 }
-async function toggle(label: string) {
-  await act(async () => {
-    renderer.root
-      .findAllByType("input")
-      .find((node) => node.props["aria-label"] === label)!
-      .props.onChange({ target: { checked: true } });
-  });
-  await flush();
-}
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  client.setQueryDefaults(meetingKeys.preferences, { staleTime: Infinity });
+  client.setQueryData(meetingKeys.preferences, {
+    defaultCaptureMode: null,
+    rememberedSource: null,
+    summarizeOnStop: true,
+    summaryTemplateId: "general",
+    setupCompletedAt: null
+  });
   vi.mocked(api.getMeetingOutputs).mockResolvedValue({
     artifacts: [artifact],
     candidates: [candidate],
@@ -174,6 +175,46 @@ afterEach(async () => {
   onlineManager.setOnline(true);
   vi.unstubAllGlobals();
 });
+describe("summary title refresh", () => {
+  it("refreshes the record and history once when automatic output is saved", async () => {
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await mount();
+    invalidate.mockClear();
+    const saved = {
+      ...client.getQueryData<Awaited<ReturnType<typeof api.getMeetingOutputs>>>(
+        api.outputKeys.list(meeting.id)
+      )!,
+      automaticSummary: {
+        status: "saved" as const,
+        requestKey: "automatic-request",
+        expiresAt: null
+      }
+    };
+    await act(async () => {
+      client.setQueryData(api.outputKeys.list(meeting.id), saved);
+    });
+    await flush();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: meetingKeys.record(meeting.id) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: meetingKeys.history });
+    invalidate.mockClear();
+    await act(async () => {
+      client.setQueryData(api.outputKeys.list(meeting.id), { ...saved });
+    });
+    await flush();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the current record after an explicit summary succeeds", async () => {
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await mount();
+    await chooseTemplate();
+    invalidate.mockClear();
+    await click("Rewrite summary");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: meetingKeys.record(meeting.id) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: meetingKeys.history });
+  });
+});
+
 describe("meeting summary owner review", () => {
   it.each([true, false])(
     "blocks generation with no supported model and offers role-aware recovery: admin=%s",
@@ -193,9 +234,9 @@ describe("meeting summary owner review", () => {
       );
       await mount();
       await chooseTemplate();
-      expect(button("Generate summary").props.disabled).toBe(true);
+      expect(button("Write summary").props.disabled).toBe(true);
       // Also guard stale/programmatic handlers instead of relying only on the HTML attribute.
-      await click("Generate summary");
+      await click("Write summary");
       expect(api.generateMeetingOutput).not.toHaveBeenCalled();
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).toContain("No supported summary model is available.");
@@ -221,17 +262,17 @@ describe("meeting summary owner review", () => {
     );
     await mount();
     await chooseTemplate();
-    expect(button("Generate summary").props.disabled).toBe(true);
+    expect(button("Write summary").props.disabled).toBe(true);
     vi.mocked(api.getMeetingOutputs).mockResolvedValue({
       ...response,
       generationAvailability: "available"
     });
     await click("Refresh summaries");
-    expect(button("Generate summary").props.disabled).toBe(false);
+    expect(button("Write summary").props.disabled).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain(
       "No supported summary model is available."
     );
-    await click("Generate summary");
+    await click("Write summary");
     expect(api.generateMeetingOutput).toHaveBeenCalledWith(
       meeting.id,
       expect.objectContaining({ expectedTranscriptRevision: 0, expectedNotesRevision: 1 })
@@ -243,7 +284,7 @@ describe("meeting summary owner review", () => {
     async (refresh) => {
       await mount();
       await chooseTemplate();
-      expect(button("Generate new version").props.disabled).toBe(false);
+      expect(button("Rewrite summary").props.disabled).toBe(false);
       if (refresh === "offline") onlineManager.setOnline(false);
       else if (refresh === "pending")
         vi.mocked(api.getMeetingOutputs).mockImplementationOnce(() => new Promise(() => {}));
@@ -258,10 +299,10 @@ describe("meeting summary owner review", () => {
           generationAvailability: "check-failed"
         });
       await click("Refresh summaries");
-      expect(button("Generate new version").props.disabled).toBe(true);
-      await click("Generate new version");
+      expect(button("Rewrite summary").props.disabled).toBe(true);
+      await click("Rewrite summary");
       expect(api.generateMeetingOutput).not.toHaveBeenCalled();
-      expect(button("Edit this version")).toBeDefined();
+      expect(button("Edit summary")).toBeDefined();
       expect(JSON.stringify(renderer.toJSON())).toContain(
         refresh === "pending" || refresh === "offline"
           ? "Checking summary model availability"
@@ -277,7 +318,7 @@ describe("meeting summary owner review", () => {
     });
     await mount();
     await chooseTemplate();
-    await click("Generate new version");
+    await click("Rewrite summary");
     const first = vi.mocked(api.generateMeetingOutput).mock.calls[0]![1];
     vi.mocked(api.getMeetingOutputs).mockResolvedValue({
       artifacts: [artifact],
@@ -316,7 +357,7 @@ describe("meeting summary owner review", () => {
       );
       await mount();
       await chooseTemplate();
-      await click("Generate new version");
+      await click("Rewrite summary");
       await flush();
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).toContain("API-key model with summarization and structured-output support");
@@ -355,7 +396,7 @@ describe("meeting summary owner review", () => {
       );
       await mount();
       await chooseTemplate();
-      await click("Generate new version");
+      await click("Rewrite summary");
       await flush();
       const links = renderer.root
         .findAllByType(Link)
@@ -386,7 +427,7 @@ describe("meeting summary owner review", () => {
       vi.stubGlobal("fetch", fetch);
       await mount();
       await chooseTemplate();
-      await click("Generate new version");
+      await click("Rewrite summary");
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).not.toContain(code);
       expect(rendered).toContain("Generation failed. Review the saved inputs");
@@ -405,26 +446,26 @@ describe("meeting summary owner review", () => {
     );
     await mount();
     await chooseTemplate();
-    await click("Generate new version");
+    await click("Rewrite summary");
     await flush();
     expect(JSON.stringify(renderer.toJSON())).toContain(
       "The summary model configuration changed during generation"
     );
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Private credentials rotated");
     expect(button("Check or retry generation")).toBeUndefined();
-    await click("Generate new version");
+    await click("Rewrite summary");
     const calls = vi.mocked(api.generateMeetingOutput).mock.calls;
     expect(calls[1]![1].requestKey).not.toBe(calls[0]![1].requestKey);
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Contact an instance admin");
   });
 
-  it("requires explicit template selection and renders source text without remote markup", async () => {
+  it("uses the configured summary style and renders source text without remote markup", async () => {
     await mount();
-    expect(button("Generate new version").props.disabled).toBe(true);
+    expect(button("Rewrite summary").props.disabled).toBe(false);
     expect(renderer.root.findAllByType("img")).toHaveLength(0);
     expect(JSON.stringify(renderer.toJSON())).toContain("next Friday");
     await chooseTemplate();
-    await click("Generate new version");
+    await click("Rewrite summary");
     expect(api.generateMeetingOutput).toHaveBeenCalledWith(
       meeting.id,
       expect.objectContaining({
@@ -438,11 +479,8 @@ describe("meeting summary owner review", () => {
   });
   it("requires owner and possible-match review; never resolves a relative date", async () => {
     await mount();
-    expect(button("Accept Task").props.disabled).toBe(true);
-    await toggle("Create in my Tasks after owner review");
-    expect(button("Accept Task").props.disabled).toBe(true);
-    await toggle("Create a separate Task despite possible matches");
-    await click("Accept Task");
+    expect(button("Add to Tasks").props.disabled).toBe(false);
+    await click("Add to Tasks");
     expect(api.reviewMeetingAction).toHaveBeenCalledWith(
       meeting.id,
       candidate.id,
@@ -461,9 +499,7 @@ describe("meeting summary owner review", () => {
   it("retries an uncertain acceptance using its frozen original request", async () => {
     vi.mocked(api.reviewMeetingAction).mockRejectedValueOnce(new Error("offline"));
     await mount();
-    await toggle("Create in my Tasks after owner review");
-    await toggle("Create a separate Task despite possible matches");
-    await click("Accept Task");
+    await click("Add to Tasks");
     const first = vi.mocked(api.reviewMeetingAction).mock.calls[0]![2];
     expect(renderer.root.findByProps({ id: "action-candidate" }).props.disabled).toBe(true);
     await click("Retry review");
@@ -471,7 +507,7 @@ describe("meeting summary owner review", () => {
   });
   it("manual editing creates a new version with preserved evidence", async () => {
     await mount();
-    await click("Edit this version");
+    await click("Edit summary");
     await act(async () =>
       renderer.root
         .findByProps({ id: "output-overview" })
@@ -521,9 +557,7 @@ describe("meeting summary owner review", () => {
   it("hides private content immediately after a mutation access denial", async () => {
     vi.mocked(api.reviewMeetingAction).mockRejectedValue(new ApiError(403, "Denied"));
     await mount();
-    await toggle("Create in my Tasks after owner review");
-    await toggle("Create a separate Task despite possible matches");
-    await click("Accept Task");
+    await click("Add to Tasks");
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Review readiness");
     expect(JSON.stringify(renderer.toJSON())).toContain("access is unavailable");
   });
@@ -550,7 +584,7 @@ describe("meeting summary owner review", () => {
 
   it("preserves manual edits while navigating away and back", async () => {
     await mount();
-    await click("Edit this version");
+    await click("Edit summary");
     await act(async () =>
       renderer.root
         .findByProps({ id: "output-overview" })
@@ -559,7 +593,7 @@ describe("meeting summary owner review", () => {
     await flush();
     await act(async () => renderer.unmount());
     await mount();
-    await click("Edit this version");
+    await click("Edit summary");
     expect(renderer.root.findByProps({ id: "output-overview" }).props.value).toBe("Unsaved review");
   });
 
@@ -569,11 +603,11 @@ describe("meeting summary owner review", () => {
       .mockRejectedValueOnce(new ApiError(422, "Failed"));
     await mount();
     await chooseTemplate();
-    await click("Generate new version");
+    await click("Rewrite summary");
     await click("Check or retry generation");
     const calls = vi.mocked(api.generateMeetingOutput).mock.calls;
     expect(calls[1]![1]).toEqual(calls[0]![1]);
-    await click("Generate new version");
+    await click("Rewrite summary");
     expect(calls[2]![1].requestKey).not.toBe(calls[0]![1].requestKey);
   });
 
@@ -614,11 +648,11 @@ describe("meeting summary owner review", () => {
             ? "Accepted"
             : "Dismissed"
       );
-      expect(button("Accept Task")).toBeUndefined();
+      expect(button("Add to Tasks")).toBeUndefined();
       await act(async () => finish({ artifact }));
       await flush();
-      if (reviewState === "pending") expect(button("Accept Task").props.disabled).toBe(true);
-      else expect(button("Accept Task")).toBeUndefined();
+      if (reviewState === "pending") expect(button("Add to Tasks").props.disabled).toBe(false);
+      else expect(button("Add to Tasks")).toBeUndefined();
       if (reviewState === "accepted")
         expect(JSON.stringify(renderer.toJSON())).toContain("Accepted");
       if (reviewState === "dismissed")
@@ -644,7 +678,7 @@ describe("meeting summary owner review", () => {
     });
     await mount();
     expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(1);
-    expect(button("Edit this version").props.disabled).not.toBe(true);
+    expect(button("Edit summary").props.disabled).not.toBe(true);
     expect(api.getMeetingOutputArtifact).not.toHaveBeenCalled();
   });
 
@@ -672,7 +706,7 @@ describe("meeting summary owner review", () => {
     await act(async () => renderer.unmount());
     await mount();
     expect(client.getQueryData(["meetings", "output-denied", meeting.id])).toBe(false);
-    expect(button("Accept Task")).toBeDefined();
+    expect(button("Add to Tasks")).toBeDefined();
   });
 
   it("does not revive an old acceptance after a fresh authorized session replaces it", async () => {
@@ -684,9 +718,7 @@ describe("meeting summary owner review", () => {
         })
     );
     await mount();
-    await toggle("Create in my Tasks after owner review");
-    await toggle("Create a separate Task despite possible matches");
-    await click("Accept Task");
+    await click("Add to Tasks");
     await act(async () => invalidateOutputAccess(client, meeting.id));
     await act(async () => renderer.unmount());
     await mount();
@@ -694,7 +726,7 @@ describe("meeting summary owner review", () => {
       finish({ ...candidate, reviewState: "accepted", acceptedTaskId: "late-task" })
     );
     await flush();
-    expect(button("Accept Task")).toBeDefined();
+    expect(button("Add to Tasks")).toBeDefined();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("late-task");
   });
 
@@ -717,7 +749,7 @@ describe("meeting summary owner review", () => {
 
   it("keeps manual editor state mounted through summary refetch and registers unsaved edits", async () => {
     await mount();
-    await click("Edit this version");
+    await click("Edit summary");
     await act(async () =>
       renderer.root
         .findByProps({ id: "output-overview" })
@@ -753,7 +785,7 @@ describe("meeting summary owner review", () => {
   });
   it("pins visible unsaved edits when a newer head arrives and lets the owner reopen kept edits", async () => {
     await mount();
-    await click("Edit this version");
+    await click("Edit summary");
     await act(async () =>
       renderer.root
         .findByProps({ id: "output-overview" })
@@ -836,9 +868,7 @@ describe("meeting summary owner review", () => {
         .props.onChange({ target: { value: "My reviewed Task title" } })
     );
     await flush();
-    await toggle("Create in my Tasks after owner review");
-    await toggle("Create a separate Task despite possible matches");
-    await click("Accept Task");
+    await click("Add to Tasks");
     expect(JSON.stringify(renderer.toJSON())).toContain(
       "Created as: My reviewed Task title · Accepted"
     );
@@ -846,7 +876,7 @@ describe("meeting summary owner review", () => {
 
   it("selects its own generated result after closing a clean editor, then selects its own saved edit", async () => {
     await mount();
-    await click("Edit this version");
+    await click("Edit summary");
     await click("Close editor");
     await chooseTemplate();
     const generated = { ...artifact, id: "generated-2", version: 2 };
@@ -862,10 +892,10 @@ describe("meeting summary owner review", () => {
       generationAvailability: "available" as const,
       templates: [{ id: "general", version: 1, name: "General meeting" }]
     });
-    await click("Generate new version");
+    await click("Rewrite summary");
     expect(renderer.root.findByProps({ id: "meeting-output-version" }).props.value).toBe(2);
     expect(renderer.root.findAllByProps({ id: "output-overview" })).toHaveLength(0);
-    await click("Edit this version");
+    await click("Edit summary");
     await act(async () =>
       renderer.root
         .findByProps({ id: "output-overview" })
@@ -904,8 +934,8 @@ describe("meeting summary owner review", () => {
           finish = resolve;
         })
     );
-    await click("Generate new version");
-    await click("Edit this version");
+    await click("Rewrite summary");
+    await click("Edit summary");
     await act(async () =>
       renderer.root
         .findByProps({ id: "output-overview" })

@@ -1,108 +1,21 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { Button, SectionHead } from "@moss/ui";
-import { randomUuid } from "@moss/module-web-sdk";
-import type { MeetingCaptureState, MeetingRecord } from "@moss/shared";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError, randomUuid } from "@moss/module-web-sdk";
+import { Button, Dialog } from "@moss/ui";
+import type { MeetingRecord } from "@moss/shared";
 import { captureKeys } from "./capture-client.js";
 import { CAPTURE_MODES } from "./capture-modes.js";
-import { captureAcknowledged, captureStopped } from "./capture-presentation.js";
-import {
-  effectiveCaptureChoice,
-  useCaptureSession,
-  startMeetingCapture,
-  type ActiveCapture
-} from "./capture-session.js";
-import { CaptureGaps } from "./capture-gaps.js";
-import { CaptureSources } from "./capture-sources.js";
-import { isMeetingAccessDenied } from "./client.js";
+import { captureStopped } from "./capture-presentation.js";
+import { useCaptureSession, startMeetingCapture, type ActiveCapture } from "./capture-session.js";
+import { getMeetingPreferences, isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { useCaptureStatus } from "./capture-status.js";
 import { CaptureControls } from "./capture-controls.js";
 import { CaptureNotice } from "./capture-notice.js";
-import { isRecordingNoticeAcknowledged, useRecordingNotice } from "./recording-notice.js";
-import { CaptureReady } from "./capture-ready.js";
-import { useReadyCapture } from "./capture-choice.js";
+import { useRecordingNotice, isRecordingNoticeAcknowledged } from "./recording-notice.js";
+import { useSessionDraft } from "./session-draft.js";
 export { captureQueryOptions } from "./capture-status.js";
-
-function CaptureScope({ capture }: { readonly capture: MeetingCaptureState }) {
-  const selection = capture.selection;
-  if (!selection) return null;
-  const microphone = capture.inventory?.microphones.find(
-    (item) => item.deviceId === selection.microphone.deviceId
-  );
-  const application =
-    selection.mode === "selected-app"
-      ? capture.inventory?.applications.find(
-          (item) => item.appProcessTreeId === selection.appProcessTreeId
-        )
-      : null;
-  return (
-    <div className="meetings-section">
-      <span className="jds-label">
-        {capture.deviceName} · {CAPTURE_MODES.find((mode) => mode.value === selection.mode)?.label}
-      </span>
-      <span className="jds-hint">
-        {microphone?.label ?? "Selected microphone unavailable"} ·{" "}
-        {selection.mode === "microphone-only"
-          ? "Output not captured"
-          : selection.mode === "selected-app"
-            ? (application?.label ?? "Selected app unavailable")
-            : "Computer audio, including other apps and notifications"}
-      </span>
-    </div>
-  );
-}
-function StartExistingMeeting({ meeting }: { readonly meeting: MeetingRecord }) {
-  const ready = useReadyCapture();
-  const notice = useRecordingNotice();
-  const client = useQueryClient();
-  const session = useCaptureSession(meeting.id);
-  const canStart =
-    notice.acknowledged &&
-    !!ready.device &&
-    !ready.device.busy &&
-    !!ready.selection &&
-    ready.devices.data?.processingReady === true &&
-    !ready.devices.isError &&
-    !session.state.operation;
-  return (
-    <>
-      <CaptureReady
-        devices={ready.devices.data?.devices ?? []}
-        deviceId={ready.deviceId}
-        choice={ready.choice}
-        onDevice={ready.onDevice}
-        onChoice={ready.onChoice}
-        unavailable={ready.devices.isError}
-      />
-      <CaptureNotice disabled={session.state.operation?.phase === "sending"} />
-      <Button
-        disabled={!canStart}
-        onClick={() => {
-          if (
-            !canStart ||
-            !isRecordingNoticeAcknowledged(client) ||
-            !ready.device ||
-            !ready.selection
-          )
-            return;
-          session.updateChoice(ready.choice);
-          void startMeetingCapture(client, meeting.id, meeting.title, {
-            deviceId: ready.device.deviceId,
-            connectionId: ready.device.connectionId,
-            expectedRevision: ready.device.revision,
-            selection: ready.selection,
-            requestKey: randomUuid()
-          }).then((started) => {
-            if (started) void ready.remember().catch(() => undefined);
-          });
-        }}
-      >
-        Start meeting
-      </Button>
-    </>
-  );
-}
+const settingsPath = "/settings?section=modules&module=meetings";
 export function CapturePanel({
   meeting,
   onLiveChange
@@ -110,118 +23,227 @@ export function CapturePanel({
   readonly meeting: MeetingRecord;
   readonly onLiveChange: (active: boolean) => void;
 }) {
-  const query = useCaptureStatus(meeting.id);
-  const session = useCaptureSession(meeting.id);
-  const client = useQueryClient();
-  const [changing, setChanging] = useState(false);
-  const accessDenied = isMeetingAccessDenied(query.error);
-  const capture = accessDenied ? undefined : query.data?.capture;
-  const stopped = captureStopped(capture);
-  const revoked = capture?.desired === "revoked";
+  const navigate = useNavigate();
+  const query = useCaptureStatus(meeting.id),
+    session = useCaptureSession(meeting.id),
+    client = useQueryClient();
+  const preferences = useQuery({
+    queryKey: meetingKeys.preferences,
+    queryFn: getMeetingPreferences,
+    retry: false
+  });
+  const notice = useRecordingNotice();
+  const pending = useSessionDraft<{ action: "start" | "resume" | null }>(
+    ["meetings", "notice-action", meeting.id],
+    () => ({ action: null })
+  );
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const cancelNotice = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!noticeOpen || typeof document === "undefined") return;
+    const previous = document.activeElement;
+    cancelNotice.current?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        pending.update(() => ({ action: null }));
+        setNoticeOpen(false);
+      }
+      if (event.key !== "Tab") return;
+      const choices = cancelNotice.current
+        ?.closest('[role="dialog"]')
+        ?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input:not(:disabled), a[href], textarea:not(:disabled)"
+        );
+      const first = choices?.[0],
+        last = choices?.[choices.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, [noticeOpen, pending.update]);
+  const denied =
+    isMeetingAccessDenied(query.error) &&
+    !(query.error instanceof ApiError && query.error.status === 404);
+  const capture = denied ? undefined : query.data?.capture;
+  const stopped = captureStopped(capture),
+    revoked = capture?.desired === "revoked";
   const live =
     !!session.state.operation || (!!capture && capture.desired !== "idle" && !stopped && !revoked);
+  useEffect(() => onLiveChange(live), [live, onLiveChange]);
   useEffect(() => {
-    onLiveChange(live);
-  }, [live, onLiveChange]);
-  useEffect(() => {
-    if (live && !accessDenied)
+    if (live && !denied)
       client.setQueryData<ActiveCapture>(captureKeys.active, {
         meetingId: meeting.id,
         title: meeting.title
       });
-  }, [client, meeting.id, meeting.title, live, accessDenied]);
+  }, [client, meeting.id, meeting.title, live, denied]);
+  const request = (action: "start" | "resume") => {
+    if (!pending.currentSession() || denied) return;
+    if (!isRecordingNoticeAcknowledged(client)) {
+      pending.update(() => ({ action }));
+      setNoticeOpen(true);
+      return;
+    }
+    pending.update(() => ({ action: null }));
+    setNoticeOpen(false);
+    if (action === "start")
+      void startMeetingCapture(client, meeting.id, meeting.title, { requestKey: randomUuid() });
+    else if (capture?.desired === "paused")
+      void session.control({
+        grantId: capture.grantId,
+        command: "record",
+        expectedGeneration: capture.generation
+      });
+  };
+  const source = preferences.data?.rememberedSource;
+  const paused = capture?.desired === "paused";
+  const savedMicrophone = capture?.inventory?.microphones.find(
+    (item) => item.deviceId === source?.microphoneId
+  )?.label;
+  const savedApp = capture?.inventory?.applications.find(
+    (item) => item.applicationId === source?.applicationId
+  )?.label;
+  const sourceSummary = source
+    ? [
+        CAPTURE_MODES.find((mode) => mode.value === source.mode)?.label,
+        ...(paused && savedMicrophone ? [savedMicrophone] : []),
+        ...(paused && source.mode === "selected-app" && savedApp ? [savedApp] : [])
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "Complete your meeting setup";
+  const status = denied
+    ? "Recording access is unavailable. Use Trail Marker’s local Stop, then sign in again."
+    : query.error instanceof ApiError && query.error.status === 404
+      ? "Recording isn’t available on this server yet."
+      : query.isError
+        ? "Couldn’t confirm the recorder connection."
+        : (session.state.error ??
+          (revoked
+            ? "The recording connection ended. Run setup again."
+            : capture?.observed?.phase === "error"
+              ? "Recording was interrupted. Check your Mac and sources."
+              : query.data?.processingReady === false
+                ? "Transcription isn’t available. Check AI providers."
+                : capture?.processing?.status === "delayed"
+                  ? "Transcription is delayed. Recording continues."
+                  : capture?.finalization === "pending"
+                    ? "Still being finalised"
+                    : null));
   return (
-    <section className="meetings-section" aria-label="Meeting capture">
-      <SectionHead
-        number="01"
-        title={live ? "Live meeting" : stopped ? "Meeting ended" : "Your recording sources"}
-        rule
-      />
-      {query.isPending ? (
-        <p role="status" className="jds-hint">
-          Checking Trail Marker…
-        </p>
-      ) : null}
-      {query.isError ? (
-        <p role="alert" className="jds-hint jds-hint--error">
-          {accessDenied
-            ? "Capture access is unavailable. Sign in again or return to meeting history."
-            : "Connection unconfirmed. Your source choice is kept. Trail Marker’s local Pause and Stop remain available."}
-        </p>
-      ) : null}
-      {!accessDenied ? (
+    <section className="meetings-capture" aria-label="Meeting recording">
+      {!capture && !session.state.operation ? (
+        <Button
+          disabled={
+            denied ||
+            query.isPending ||
+            query.isError ||
+            preferences.isPending ||
+            preferences.isError ||
+            notice.query.isPending
+          }
+          onClick={() =>
+            source && preferences.data?.setupCompletedAt ? request("start") : navigate(settingsPath)
+          }
+        >
+          Start
+        </Button>
+      ) : (
         <CaptureControls
           id={meeting.id}
           capture={capture}
           unavailable={query.isError}
           updatedAt={query.dataUpdatedAt}
           processingReady={query.data?.processingReady}
+          onResume={() => request("resume")}
         />
-      ) : null}
-      {capture ? (
-        <>
-          <CaptureScope capture={capture} />
-          <Button variant="link" onClick={() => setChanging((value) => !value)}>
-            {changing ? "Done changing sources" : "Change"}
-          </Button>
-          {changing && capture.inventory ? (
-            <>
-              {(capture.desired === "paused" || capture.desired === "idle") &&
-              captureAcknowledged(capture) ? (
-                <CaptureSources
-                  inventory={capture.inventory}
-                  choice={effectiveCaptureChoice(session.state, capture)}
-                  onChange={session.updateChoice}
-                />
-              ) : null}
-              <p className="jds-hint">
-                {capture.desired === "paused"
-                  ? "Choose sources, then explicitly resume recording."
-                  : stopped
-                    ? "Start a new meeting to choose different sources."
-                    : "Pause recording before changing sources."}
-              </p>
-            </>
-          ) : null}
-          <CaptureGaps capture={capture} />
-        </>
-      ) : null}
-      {!accessDenied && !capture && !query.isPending ? (
-        <StartExistingMeeting meeting={meeting} />
-      ) : null}
-      {query.data && !query.data.processingReady ? (
-        <p role="status" className="jds-hint">
-          Transcription unavailable. Check{" "}
-          <Link to="/settings?section=aiproviders">AI providers</Link>.
-        </p>
-      ) : null}
-      {capture?.observed?.phase === "error" ? (
-        <p role="alert" className="jds-hint jds-hint--error">
-          Capture interrupted. Check your selected sources in Trail Marker, then pause and
-          explicitly resume. Sources never switch automatically.
-        </p>
-      ) : null}
-      {stopped ? (
-        <p role="status" className="jds-hint">
-          {capture?.finalization === "pending"
-            ? "Capture stopped. Finishing the retained transcript."
-            : capture && !captureAcknowledged(capture)
-              ? "Recording authorization has ended. Check Trail Marker’s local Stop; you can review this meeting or start a new one."
-              : "Capture stopped. Review your transcript or start a new meeting."}
-        </p>
-      ) : null}
-      {live ? (
+      )}
+      {(!live && !stopped && !revoked) || paused ? (
         <p className="jds-hint">
-          Recording controls stay available as you browse Moss. Trail Marker’s menu also has local
-          Pause and Stop.
+          {paused ? "Resume will use: " : ""}
+          {sourceSummary}. <Link to={settingsPath}>Change</Link>
         </p>
       ) : null}
-      <div className="meetings-actions">
-        <Button variant="link" onClick={query.refresh}>
-          Refresh capture status
-        </Button>
-        {stopped || revoked ? <Link to="/meetings">New meeting</Link> : null}
-      </div>
+      {status ? (
+        <p className="jds-hint" role="status">
+          {status}{" "}
+          {session.state.operation?.phase === "retry" ? (
+            <Button
+              variant="link"
+              disabled={
+                (session.state.operation.retryAt ?? 0) > Date.now() ||
+                ((session.state.operation.request.kind === "start" ||
+                  (session.state.operation.request.kind === "control" &&
+                    session.state.operation.request.input.command === "record")) &&
+                  !notice.acknowledged)
+              }
+              onClick={session.retry}
+            >
+              Try again
+            </Button>
+          ) : query.isError ? (
+            <Button variant="link" onClick={query.refresh}>
+              Check again
+            </Button>
+          ) : !stopped ? (
+            <Link
+              to={
+                query.data?.processingReady === false
+                  ? "/settings?section=aiproviders"
+                  : settingsPath
+              }
+            >
+              Review setup
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+      {stopped ? <Link to="/meetings">New meeting</Link> : null}
+      {noticeOpen ? (
+        <Dialog
+          title={<span id="meeting-recording-notice-title">Recording notice</span>}
+          aria-labelledby="meeting-recording-notice-title"
+          onClose={() => {
+            pending.update(() => ({ action: null }));
+            setNoticeOpen(false);
+          }}
+          footer={
+            <>
+              <Button
+                ref={cancelNotice}
+                variant="secondary"
+                onClick={() => {
+                  pending.update(() => ({ action: null }));
+                  setNoticeOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!notice.acknowledged || !pending.data.action}
+                onClick={() => {
+                  const action = pending.data.action;
+                  if (action) request(action);
+                }}
+              >
+                Continue
+              </Button>
+            </>
+          }
+        >
+          <CaptureNotice />
+        </Dialog>
+      ) : null}
     </section>
   );
 }

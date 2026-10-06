@@ -33,6 +33,8 @@ on:
       - "tests/uat/specs/2981-meeting-*.uat.spec.ts"
       - "tests/uat/specs/meeting-capture-native-fixture.ts"
       - "tests/uat/specs/meeting-history-layout.ts"
+      - "tests/uat/specs/meeting-review-layout.ts"
+      - "tests/uat/specs/meeting-minimal-ui.ts"
       - "tests/uat/fixtures/meeting-*.ts"
       - "apps/web/src/app-route-metadata.ts"
       - "apps/web/src/shell/nav-icons.ts"

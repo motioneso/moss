@@ -408,9 +408,7 @@ export function useCaptureSession(id: string) {
           await send(client, id, {
             kind: "cancel-start",
             input: {
-              requestKey: start.requestKey,
-              deviceId: start.deviceId,
-              connectionId: start.connectionId
+              requestKey: start.requestKey
             }
           });
           return;

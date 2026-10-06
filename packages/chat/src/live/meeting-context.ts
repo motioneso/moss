@@ -17,7 +17,13 @@ export interface MeetingContextSource {
     access: AccessContext,
     meetingId: string,
     query: string
-  ): Promise<MeetingTranscriptSnapshot | null>;
+  ): Promise<
+    | (MeetingTranscriptSnapshot & {
+        readonly personalNotes?: string;
+        readonly notesRevision?: number;
+      })
+    | null
+  >;
   isAvailable(access: AccessContext, meetingId: string): Promise<boolean>;
   evidence(
     access: AccessContext,
@@ -27,7 +33,7 @@ export interface MeetingContextSource {
 
 export class MeetingContextUnavailableError extends Error {
   constructor() {
-    super("The selected meeting transcript is unavailable.");
+    super("The selected meeting is unavailable.");
     this.name = "MeetingContextUnavailableError";
   }
 }
@@ -35,6 +41,7 @@ export class MeetingContextUnavailableError extends Error {
 export interface BoundMeetingContext extends StoredMeetingChatContext {
   /** Untrusted, escaped evidence. Never use this as a system prompt or action authority. */
   readonly evidenceBlock: string;
+  readonly hasEvidence: boolean;
 }
 
 const MAX_EVIDENCE_SEGMENTS = 8;
@@ -58,8 +65,9 @@ export class MeetingContextService {
     )
       throw new MeetingContextUnavailableError();
 
+    const notes = (snapshot.personalNotes ?? "").slice(0, 4_000);
     const selected: MeetingTranscriptSegment[] = [];
-    let characters = 0;
+    let characters = notes.length;
     for (const segment of snapshot.segments) {
       if (segment.text.length === 0) continue;
       if (selected.length >= MAX_EVIDENCE_SEGMENTS) break;
@@ -93,18 +101,23 @@ export class MeetingContextService {
       cutoffMs: snapshot.cutoffMs,
       throughMs: selected.length ? Math.max(...selected.map((segment) => segment.endMs)) : null,
       containsProvisional: selected.some((segment) => segment.finality === "provisional"),
-      omittedSegments: snapshot.omittedSegments + snapshot.segments.length - selected.length
+      omittedSegments: snapshot.omittedSegments + snapshot.segments.length - selected.length,
+      notesRevision: snapshot.notesRevision ?? 0,
+      notesCharacters: notes.length,
+      notesTruncated: (snapshot.personalNotes?.length ?? 0) > notes.length
     });
     const payload = JSON.stringify({
       coverage,
+      personalNotes: notes,
       evidence: selected.map((segment, index) => ({ ...citations[index], text: segment.text }))
     });
     return Object.freeze({
       ownerUserId: access.actorUserId,
       coverage,
       citations,
+      hasEvidence: notes.trim().length > 0 || citations.length > 0,
       evidenceBlock: [
-        '<external_source type="meeting_transcript">',
+        '<external_source type="meeting_transcript_and_notes">',
         sanitizeExternalData(neutralizeSeedFraming(payload)),
         "</external_source>"
       ].join("\n")

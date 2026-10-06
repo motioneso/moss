@@ -41,6 +41,10 @@ export interface MeetingChatCoverage extends MeetingChatSelection {
   readonly throughMs: number | null;
   readonly containsProvisional: boolean;
   readonly omittedSegments: number;
+  /** Present on answers including saved personal notes; older answers have transcript only. */
+  readonly notesRevision?: number;
+  readonly notesCharacters?: number;
+  readonly notesTruncated?: boolean;
 }
 
 export interface MeetingChatCitation extends MeetingTranscriptEvidence {

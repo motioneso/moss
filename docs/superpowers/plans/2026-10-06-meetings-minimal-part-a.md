@@ -64,3 +64,53 @@ Add 0292 to the foundation schema catalog and all affected lifecycle/export fixt
 Make explicit-path local commits. Coordinate remote publication with the parent before pushing.
 Open a new draft PR targeting `feat/2981-native-meeting-capture`; do not modify or merge #3077.
 The release note is Category Changed, Title Simpler meetings, with a plain-English description.
+
+## Implementation and offline verification (2026-10-06)
+
+Implemented Part A on the published base above. The live recording capability and account notice
+remain the base services. A person can continue first-use setup with notes when no recorder is
+available; this does not mark recording setup complete. Capture requires an explicit Start.
+Sources are exact named microphone/app choices because the current native inventory does not
+identify a system-default microphone. Settings changes apply to the next Start or Resume; the
+paused page displays the sources Resume will use. A stopped meeting remains ended.
+
+Stop persists summary intent and metadata-only queue work transactionally through the existing
+job adapter. An enqueue savepoint prevents an optional queue failure from undoing Stop. The
+worker waits for finalization or its bounded cutoff, reserves the existing output request before
+model dispatch, and preserves its replay, evidence-revision and current configured-model checks.
+Unavailable, skipped and interrupted outcomes remain visible. The summary title refreshes the
+open workspace; neither Stop/status replay nor opening a page creates another generation.
+
+Offline checks on the assembled implementation:
+
+- 67 Meetings, shell and module-loader suites: 901 tests passed. After the final Markdown-copy
+  access-loss fix and test type annotations, the affected seven-suite privacy/citation group
+  passed 123 tests, including clipboard payload assertions for 401/403/404.
+- All six TypeScript configurations passed: root, tests, web, and the three external modules.
+- Full ESLint and Prettier, file-size, design-token, UI-class, migrated-section, UI-catalogue,
+  persisted-locale, development-password, package-dependency, migration and app-map checks passed.
+  The password audit covers the working files only, not old public history or credential rotation.
+- Migration audit found no local/base collision. A separate read-only review of all six open PRs
+  confirmed 0292 remains unclaimed; their reserved migration numbers are recorded above.
+- Hosted UAT source discovers eight tests across six Meetings specs. These exercise actual Moss
+  routes/UI with explicitly synthetic recorder, transcript and model fixtures. They were not run
+  in this executor.
+
+Observed red-to-green regressions include delayed title save/refetch/reset, rapid typing,
+post-navigation title completion, title-cache deletion/access loss, stale source details after
+access denial, exact-microphone selection, finalization-before-summary dispatch, optional queue
+failure preserving Stop, concurrent claim/Stop versus cancellation, native capture timestamp
+identifiers, removed chat context on reopen, stale chat callbacks across route/account changes,
+and denied transcript bytes in Markdown and clipboard output. Protection-removal probes for
+source selection and finalization were restored and their focused suites rerun successfully.
+
+Authored isolated database integration coverage includes worker-role execution and owner RLS,
+metadata-only transactional queue rollback, the real Stop/finalized-status lifecycle, queue
+failure, concurrent claim/cancel locks, title CAS/create replay, notes-only chat ownership, and
+0292 two-owner upgrade/backfill/rollback plus lifecycle export. None ran locally: Docker and the
+required isolated verify-gate database are unavailable. No live database was used instead.
+
+The browser cannot launch in this executor because Chromium's socket operation is denied.
+There is no assembled visual, live Mac/device/permission/audio or real-provider proof here.
+This remains code-complete, unverified until hosted checks and the owner-controlled live-path
+acceptance are recorded. Both existing Today e2e specs are unchanged. Part B has not started.

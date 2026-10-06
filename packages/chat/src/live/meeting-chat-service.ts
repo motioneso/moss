@@ -48,7 +48,7 @@ export function meetingSourceCards(context: StoredMeetingChatContext): AnswerSou
   return context.citations.map((citation) => ({
     supportId: citation.supportId,
     sourceKind: "meeting",
-    sourceLabel: `${Math.floor(citation.startMs / 60_000)}:${String(Math.floor(citation.startMs / 1000) % 60).padStart(2, "0")}${citation.finality === "provisional" ? " (provisional)" : ""}`,
+    sourceLabel: `${Math.floor(citation.startMs / 60_000)}:${String(Math.floor(citation.startMs / 1000) % 60).padStart(2, "0")}${citation.finality === "provisional" ? " (still being finalised)" : ""}`,
     title: `Transcript revision ${citation.segmentRevision}`,
     state: "unverified_context",
     canDereference: true
@@ -83,10 +83,10 @@ export class MeetingChatService {
     };
     try {
       const context = await this.deps.context.bind(access, selection, question);
-      if (!context.citations.length)
+      if (!context.hasEvidence)
         throw new MeetingChatError(
           "meeting_chat_failed",
-          "No usable transcript evidence fits this question’s size limit."
+          "Add notes or wait for transcript text before asking about this meeting."
         );
       const generation = await this.deps.prepareGeneration(access);
       const threadId = await this.deps.captureThread(access, surface);

@@ -607,7 +607,10 @@ const chatMessageSchema = {
         cutoffMs: { type: "integer" },
         throughMs: { anyOf: [{ type: "integer" }, { type: "null" }] },
         containsProvisional: { type: "boolean" },
-        omittedSegments: { type: "integer" }
+        omittedSegments: { type: "integer" },
+        notesRevision: { type: "integer" },
+        notesCharacters: { type: "integer" },
+        notesTruncated: { type: "boolean" }
       }
     }
   }

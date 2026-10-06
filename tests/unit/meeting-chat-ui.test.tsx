@@ -128,6 +128,21 @@ function json(value: unknown, status = 200) {
     headers: { "content-type": "application/json" }
   });
 }
+it("accepts native capture segment identifiers and rejects malformed evidence routes", () => {
+  const path = (segmentId: string) =>
+    `/meetings?id=${meetingId}&segmentId=${encodeURIComponent(segmentId)}&segmentRevision=1&startCharacter=0&endCharacter=12`;
+  expect(validMeetingEvidencePath(path(`${meetingId}:0`))).toBe(true);
+  expect(validMeetingEvidencePath(path(" "))).toBe(false);
+  expect(validMeetingEvidencePath(path("a".repeat(257)))).toBe(false);
+  expect(validMeetingEvidencePath(`${path(`${meetingId}:0`)}&id=${meetingId}`)).toBe(false);
+  expect(validMeetingEvidencePath(`${path(`${meetingId}:0`)}&segmentId=other`)).toBe(false);
+  expect(
+    validMeetingEvidencePath(path("native").replace("segmentRevision=1", "segmentRevision=0"))
+  ).toBe(false);
+  expect(
+    validMeetingEvidencePath(path("native").replace("endCharacter=12", "endCharacter=0"))
+  ).toBe(false);
+});
 it("opens through the browser-safe host bridge without submitting a turn", () => {
   const openMeetingChat = vi.fn();
   setMeetingChatHook(() => ({ openMeetingChat, clearMeetingChat: () => {} }));
@@ -533,7 +548,7 @@ it("keeps legacy meeting history inert even without coverage metadata", async ()
 });
 
 it("dereferences a citation and opens the pinned range", async () => {
-  const deepLinkPath = `/meetings?id=${meetingId}&segmentId=${meetingId}&segmentRevision=4&startCharacter=3&endCharacter=12`;
+  const deepLinkPath = `/meetings?id=${meetingId}&segmentId=${encodeURIComponent(`${meetingId}:0`)}&segmentRevision=4&startCharacter=3&endCharacter=12`;
   fetchMock.mockImplementation(async () => json({ deepLinkPath }));
   vi.stubGlobal("fetch", fetchMock);
   const locations: string[] = [];
