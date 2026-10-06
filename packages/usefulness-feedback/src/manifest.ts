@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   createUsefulnessFeedbackRequestSchema,
+  createUsefulnessFeedbackSignalRequestSchema,
   createUsefulnessFeedbackResponseSchema,
   listUsefulnessFeedbackResponseSchema,
   updateUsefulnessFeedbackReasonRequestSchema
@@ -48,15 +49,42 @@ export const usefulnessFeedbackModuleManifest = {
       actions: ["create", "view", "update"]
     }
   ],
+  features: [
+    {
+      id: "usefulness-feedback.record-only",
+      description:
+        "Moss can record usefulness signals for your chat messages, briefings and proactive cards " +
+        "without removing tasks or events, creating memories, dismissing cards or refreshing feeds.",
+      errors: [
+        {
+          code: "usefulness-feedback.effectful-action",
+          class: "validation",
+          description:
+            "This feedback action cannot be recorded through chat without its UI effects."
+        }
+      ]
+    },
+    {
+      id: "usefulness-feedback.ui-actions",
+      description:
+        "Use the existing feedback menus to remove briefing follow-through, remember content, " +
+        "dismiss proactive cards or change News and Sports preferences. Reason edits and undo " +
+        "also stay in the UI because they can refresh a feed."
+    }
+  ],
   routes: [
     {
       method: "POST",
+      path: "/api/me/usefulness-feedback/signals",
+      chat: { access: "write", title: "Record a usefulness feedback signal", content: "outside" },
+      requestSchema: createUsefulnessFeedbackSignalRequestSchema,
+      responseSchema: createUsefulnessFeedbackResponseSchema,
+      permissionId: "usefulness-feedback.manage"
+    },
+    {
+      method: "POST",
       path: "/api/me/usefulness-feedback",
-      chat: {
-        access: "write",
-        title: "Tell Moss whether something was useful",
-        content: "outside"
-      },
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createUsefulnessFeedbackRequestSchema,
       responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
@@ -71,7 +99,7 @@ export const usefulnessFeedbackModuleManifest = {
     {
       method: "PATCH",
       path: "/api/me/usefulness-feedback/:id",
-      chat: { access: "write", title: "Change your usefulness feedback", content: "outside" },
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: updateUsefulnessFeedbackReasonRequestSchema,
       responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
@@ -79,7 +107,7 @@ export const usefulnessFeedbackModuleManifest = {
     {
       method: "POST",
       path: "/api/me/usefulness-feedback/:id/undo",
-      chat: { access: "write", title: "Undo your usefulness feedback", content: "outside" },
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
     }

@@ -210,6 +210,26 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
 
 /** Routes doing what an excluded tool family does that no path rule covers. Slices 3 and 4. */
 export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
+  // The original UI actions can remove calendar follow-through, dismiss cards, create memory
+  // candidates or enqueue feed refreshes. The separate /signals route records only safe pairs.
+  {
+    method: "POST",
+    path: "/api/me/usefulness-feedback",
+    category: "external_effect",
+    julyPrefixes: []
+  },
+  {
+    method: "PATCH",
+    path: "/api/me/usefulness-feedback/:id",
+    category: "external_effect",
+    julyPrefixes: []
+  },
+  {
+    method: "POST",
+    path: "/api/me/usefulness-feedback/:id/undo",
+    category: "external_effect",
+    julyPrefixes: []
+  },
   {
     method: "POST",
     path: "/api/connectors/google/authorize",

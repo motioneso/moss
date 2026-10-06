@@ -843,7 +843,7 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 
 - **Modules:** settings (71), ai (44), chat (39), connectors (15), integrations (10),
   notifications (6), backtrack (3), workflows (4), proactive-monitoring (2), usefulness-feedback
-  (4).
+  (5 after the record-only route correction in 8.6).
 - **Files:** each module's `src/manifest.ts`: `chatDefaults` plus per-route `chat` blocks, titles,
   `target` resolvers for destructive routes with a path parameter (in the owning module, under
   `src/chat-targets.ts`), `coveredBy` where a dedicated tool does the job.
@@ -1211,3 +1211,38 @@ Re-check of `febc962aa`. Nine of ten findings fixed. Three new items, all accept
 | Q-1 | Outside agents fetch and search the web, and run approved shell, with nothing recorded; only read asks tainted           | `acp/src/permissions.ts:13-19,259-263`; `acp/src/tool-table.ts:48`; `acp-permission.ts:101,256-276,399`                                                                                                                              | Record by family on every allowed read, web or shell ask, at both allow exits; 1.9 widened, with taint from launch as the fallback. Decision 2.21; 1.4 row p; 4.6; slice 7                                                            |
 | Q-2 | The July walk passes a rule on one route in the rule's own module, so most families rest on the hand table               | `self-operation.ts:43-53`; `tasks/src/manifest.ts:487`; `settings/src/manifest.ts:212,267,277,374`; `chat/src/manifest.ts:293,298`; `ai/src/manifest.ts:498,515,520`; `news/src/manifest.ts:285-305`; `wellness/src/manifest.ts:127` | Walk per prefix across all modules; path patterns for each listed family, writes-only where reading is harmless; list renamed `JULY_PREFIXES_WITHOUT_ROUTES`; routes named in slice 3 and 4 tests. Decision 2.22; 4.2; slices 1, 3, 4 |
 | Q-3 | Write responses default to `outside`, so the first change on a clean thread taints it and Run B asks on every later task | decision 2.12; 4.1 route type; 1.4 row l; section 7 Run B                                                                                                                                                                            | Write routes and tools that only echo the user's own record declare `user_authored`; slice 7 test of two writes in a row on a clean thread. Decision 2.12; 4.1; slices 3, 4, 5, 7                                                     |
+
+### 8.6 Feedback boundary correction on PR #3071 (2026-10-06)
+
+The original feedback create route is not a record-only write: a verified briefing item's
+`not_useful` action can archive its follow-through task and delete its Google calendar event.
+Story preference creation, reason edits and undo can enqueue a News refresh. The existing UI
+routes and clients retain those behaviors, but create, reason edit and undo are now chat-blocked
+as `external_effect`, independently pinned in the manifest and named catalog exclusion table.
+The feedback list remains `read` with `outside` content.
+
+A separate `POST /api/me/usefulness-feedback/signals` is `write` with `outside` content. Its
+shared request schema and runtime parser use the same positive allowlist of target, surface and
+kind combinations. It rejects briefing-item `not_useful`, all `remember_this`, proactive-card
+`dismiss`, and News/Sports story preferences before entering the data context or looking up an
+existing signal. Merely omitting their effects would poison deduplication: the real UI action
+could later find that row and skip its required cleanup. No client-controlled bypass flag exists.
+The route receives only target verification, scoped data access and signal lookup/create
+operations; the cleanup, card, memory and refresh dependencies remain on the original UI routes.
+Target verification and response serialization are shared focused helpers.
+
+Verification: the tests were written first and failed against the old code (42 failures, two
+passes). The expanded signal suite then passed 48 tests, including every allowed pair, unsafe
+rejections, owner checks, request-schema parity, repeated safe input, and a rejected-signal then
+real-UI cleanup regression. It exercises the real cleanup and News-refresh adapters with mocked
+archive, calendar-delete and queue boundaries, and checks memory/card/provider spies. Existing
+UI actions still exercise their effects. Negative controls failed as expected when removing the
+runtime allowlist (11 failures), forced catalog exclusions (three), manifest blocks (three), and
+owner check (one); every mutation was restored byte-for-byte. The final restored-code run passed
+146 tests across 12 unit suites, including existing feedback UI, catalog and app-map checks.
+Scoped ESLint, formatting and diff checks passed. Full static-check outcomes are recorded with
+the PR's verification results.
+
+Database-backed integration, the full foundation gate and real-UI/live-provider proof have not
+run in this environment. This correction remains code-complete, unverified under the live-path
+gate; it is not evidence that the PR is ready to merge.
