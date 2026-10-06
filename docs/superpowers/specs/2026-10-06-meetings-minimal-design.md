@@ -241,6 +241,152 @@ brief does not claim the new model is equivalent. Before build:
 - A security review signs off the link design. Tests that assert revoke or expiry must be seen
   failing with the protection removed.
 
+### Link design sign-off
+
+Reviewed 2026-10-06 against PR 3056, branch `feat/2981-native-meeting-capture`, head `af5082279`.
+Design review only; no code was run.
+
+#### 0. The brief reads a superseded head
+
+- "Current flow, per meeting" and "Recording notice" describe `28a5a6beb`. Commit `d15ce4506`
+  already replaced per-meeting device approval with a one-time recording capability, and
+  `packages/meetings/sql/0288_meeting_recording_connections.sql` revokes every legacy per-meeting
+  grant. At `af5082279` the Mac needs no "Prepare this meeting" click.
+- Most of the proposed link is therefore built. This sign-off covers the model at `af5082279` plus
+  the controls in 4.
+- Regression. At `af5082279`, `POST /api/meetings/records/:id/capture/start` takes no notice
+  acknowledgement, the server checks none, and the web UI shows no notice. The `28a5a6beb` check in
+  `capture-domain.ts` is gone. Control R8 restores it; it is a blocker, not a tidy-up.
+
+#### 1. Current model at `af5082279`
+
+| Layer                | Secret                                                     | Mac storage                                                                                           | Server storage                                                                                      | Lifetime                                                                      | Revoke                                                                                                               |
+| -------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Device link          | `tm1_` + 32 random bytes, bearer                           | Keychain generic password, service `com.moss.trailmarker`, `AfterFirstUnlockThisDeviceOnly`           | sha256 in `app.companion_devices.credential_hash`; only `jarvis_auth_runtime` has a grant           | 90 d inactivity, slid on every authenticated call; 365 d absolute             | Delete the row: Mac sign-out (`/api/companion/logout`), browser Sessions revoke, sign out everywhere, account delete |
+| Recording capability | 43-char random proof, header `x-moss-recording-proof`      | Keychain service `com.moss.trailmarker.meeting-recording`, keyed by instance origin, this-device-only | sha256 in `app.companion_recording_capabilities.proof_hash` with `revision`; auth-runtime only      | No own expiry; bounded by the device row                                      | `POST /api/companion/recording-capability/revoke` bumps `revision` (API only, no button); device delete cascades     |
+| Recorder connection  | Random `connectionId` and verifier per app launch          | Memory only (`MeetingRecordingConnection.swift`)                                                      | Verifier sha256 in `app.meeting_capture_connections`, owner RLS                                     | 30 s lease from last register; one row per owner and device                   | A new `connectionId` revokes every non-complete grant on that device                                                 |
+| Per-meeting grant    | `mm1_<owner>.<grant>.<secret>`, minted by the Mac at claim | Memory only; no disk write in `Meetings/`                                                             | sha256 in `app.meeting_capture_grants.credential_hash`, owner RLS; worker export columns exclude it | Claim 60 s; lease 30 s; `min(now + 2 h, browser session, device, connection)` | Grant `revoked`; any failed live check on the next native call                                                       |
+
+- Capability approval needs a live cookie session. It happens once, inside pairing
+  (`recording_proof_hash` on `app.companion_pair_attempts`, `companion-pairing.ts`) or through
+  attempt and decide (`packages/auth/src/recording-capabilities.ts`).
+- Scope separation. `tm1_` alone reaches companion routes only. Recording routes need `tm1_` plus
+  the proof. Capture status, audio and control need `mm1_`. Native routes reject any cookie;
+  browser routes reject any `Authorization` header and require a trusted `Origin` on mutation.
+- Start (`capture-connection-service.ts`) checks the cookie session, that the actor owns the device,
+  a live connection at the expected revision, and the capability revision. It writes the grant bound
+  to that browser `session_id`, the capability revision and the connection verifier.
+- Every status, audio and control call re-runs `liveBinding` (`capture-service.ts`). It checks the
+  starting browser session, the device row and the capability revision.
+- Transport is a Mac long-poll. Trail Marker re-registers every 10 s and calls
+  `POST /api/meetings/capture/commands` with `waitMs` 10 000 (server cap 20 000). Start wakes the
+  waiter. Nothing connects in to the Mac, and nothing is pushed.
+- The Mac shows `MeetingCaptureStatusItem`, a menu bar item "● Meeting" with Pause and Stop, in
+  every phase except unprepared and stopped. A remote Start raises no notification and no window.
+- On 401 or 403 the Mac terminates capture (`MeetingCaptureHost.swift`, `poll`).
+- Logs. `apps/api/src/recording-logger-options.ts` redacts the proof header, `verifier`,
+  `pcmBase64` and `recordingProof`. The Fastify 5.8.5 default request serializer logs method, URL,
+  host and peer address, never headers, so `tm1_` and `mm1_` do not reach request logs. Not
+  verified for every handler-level log call.
+- Capture enqueues no pg-boss job. Worker export grants on capture tables exclude verifier hash,
+  credential hash, session id and start keys (`0284`, `0288`).
+
+#### 2. Proposed link
+
+- No new credential type. After linking, the Mac holds `tm1_` and the recording proof, both in the
+  Keychain, this-device-only. The server holds sha256 digests only, readable by the auth runtime
+  role only.
+- Linking requests the recording capability in the same browser approval. Pairing already carries
+  `recording_proof_hash` for this.
+- Start is one browser request. The server fills the selection from saved preferences, validates it
+  against the connection's latest inventory, and creates the grant. The Mac's long-poll returns the
+  command, the Mac claims it with its in-memory verifier and a fresh `mm1_` hash, and capture starts.
+  The Mac asks no question.
+- Lifetime: device 90 d inactivity and 365 d absolute, unchanged. Recording capability adds a 90 d
+  re-confirmation (R9).
+
+#### 3. Threats
+
+| Threat                                      | What it can do                                                                                                                                                                                                                                                                                                         | Answer                                                                                                                                                                                                                                      |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stolen `tm1_` and proof, copied off the Mac | From anywhere, register as that Mac's recorder, take the next Start and upload chosen audio into that meeting, or kill a live recording by registering a new connection. Cannot read transcripts, notes or other meetings; the command carries ids and the selection only. Cannot make the real Mac record.            | Unlink revokes both at once (R1, R2). Settings shows last contact. Code execution on the Mac is out of scope; it can open the microphone without Moss. Residual: no hardware-bound key. A Secure Enclave key is a follow-up, not a blocker. |
+| Mac left signed in, or sold                 | Polling slides the 90 d window, so the link lives up to 365 d. The owner's next Start records whatever room that Mac is in.                                                                                                                                                                                            | Unlink from Settings or the Mac (R1, R2). Capability lapses 90 d after the last Start, not the last poll (R9). Settings lists each Mac with last contact.                                                                                   |
+| Stolen browser session presses Start        | Records the room of any linked, connected Mac for up to 2 h. Today the only signs are the menu bar item and the OS microphone indicator.                                                                                                                                                                               | Grant is bound to that session; revoking it stops capture (R5). Notification and on-screen panel on every remote Start (R6). Per-account Start limit (R10).                                                                                 |
+| Second user on the same Moss install        | None found. Device rows are per user and auth-runtime only. Start asserts the actor owns the device. Connections, grants and receipts are owner RLS with no admin bypass. `mm1_` names its owner, and RLS then hides any other owner's grant.                                                                          | Holds. Test it (T6).                                                                                                                                                                                                                        |
+| Replay of an old Start                      | None found. `requestKey` is unique per owner and fingerprinted over meeting, session and body. A cancellation fence persists. Claim needs the current connection's in-memory verifier within 60 s. One active grant per meeting and per connection. A meeting with captured audio or a transcript refuses a new Start. | Holds. Test it (T7).                                                                                                                                                                                                                        |
+| Mac records with no visible sign            | The menu bar item can be hidden by menu bar overflow behind the camera notch or by a menu bar manager. The OS microphone indicator is macOS behaviour, not app code, and is not verified here.                                                                                                                         | R6 adds a notification and a panel that cannot be closed while recording.                                                                                                                                                                   |
+
+#### 4. Required controls
+
+- R1 Unlink from Moss. Settings, Meetings, Unlink deletes the `app.companion_devices` row in one
+  transaction. The next native call with that Mac's `tm1_`, proof or `mm1_` returns 401 or 403.
+  No audio chunk received after the commit is stored.
+- R2 Unlink from the Mac. Trail Marker calls `/api/companion/logout`, then deletes the `tm1_` and
+  proof Keychain items. If the server is unreachable it keeps retrying and says "Not unlinked yet";
+  it never reports unlinked before the server confirms. Server effect equals R1.
+- R3 Live session on unlink. Within one lease (30 s) the server marks the grant revoked, the Mac
+  stops capture and drops unsent audio, and the meeting page says the recording stopped because the
+  Mac was unlinked. Audio stored before the unlink stays in the meeting. Applies to capability
+  revoke and device delete alike. Grants have no foreign key to `app.companion_devices`, so the
+  meetings module must settle them on a failed live check; auth must not write meetings tables.
+- R4 Per-meeting lease unchanged. One grant per Start; claim within 60 s; lease 30 s; hard cap
+  2 h; bounded by browser session, device and connection expiry. Every status, audio and control
+  call re-runs `liveBinding`.
+- R5 Session binding. The grant stays bound to the starting browser session. Signing that session
+  out, or "sign out everywhere else", stops capture within 30 s.
+- R6 Visible on the Mac. On every accepted Start, Trail Marker posts a notification ("Moss started
+  recording a meeting") with a Stop action, and shows a small non-activating panel with elapsed
+  time and Stop. The panel can collapse but not close while recording. The menu bar item stays for
+  the whole session. If notification permission is denied, the panel still shows.
+- R7 No on-Mac confirmation. A confirm click would undo the one-click Start Ben asked for, and it
+  does not stop the stolen-session case once a person is at the Mac anyway. Visibility (R6) plus
+  revoke (R1, R5) is the control.
+- R8 Notice binding. Start fails with a prerequisite error unless the stored acknowledgement's
+  `policyVersion` equals the current notice version. The grant records the bound version. The
+  client no longer sends `noticeAcknowledged`.
+- R9 Re-confirmation. The recording capability lapses 90 d after its last Start; polling and
+  heartbeats do not extend it. Re-confirm through the existing attempt and decide flow with a fresh
+  proof. Device expiry stays 90 d inactivity and 365 d absolute.
+- R10 Rate limits. Keep the existing per-IP limits (Start 60/min, claim 60/min, connection and
+  commands 120/min, capability decide and revoke 20/min). Add a per-account limit on Start of
+  10/min and 60/h, returning 429 with `Retry-After`.
+- R11 Secrets never escape. `tm1_`, the proof, the verifier and `mm1_` never reach logs, pg-boss
+  payloads, user exports, AI prompts or frontend responses. Add `req.headers.authorization` to the
+  recording redact paths as defence in depth.
+- R12 Revoke surfaces. Settings, Meetings has Unlink (R1) and a recording-only switch-off that
+  calls the existing capability revoke. Trail Marker has Unlink (R2).
+- R13 Saved defaults only. Start never captures a source outside the saved selection. If a saved
+  microphone or app is missing from the current inventory, Start fails with a prerequisite error;
+  it does not substitute a source silently.
+
+#### 5. Tests
+
+Integration tests run against the real auth services, not the `reapprove` fake in
+`tests/integration/meeting-capture.test.ts`. "Fail" means the test must be seen failing with the
+named protection removed, recorded on the build PR.
+
+| #   | Test                                                                                                             | Level       | Must fail when removed                  |
+| --- | ---------------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------------- |
+| T1  | Unlink from Moss mid-recording: next status and audio return 401/403; no chunk stored after commit               | Integration | Device check in `liveBinding`           |
+| T2  | Mac logout mid-recording: same result as T1                                                                      | Integration | Device check in `liveBinding`           |
+| T3  | Capability revoke mid-recording: grant revoked within one lease; audio refused                                   | Integration | Capability revision check               |
+| T4  | Starting browser session signed out: capture stops; audio refused                                                | Integration | Session check in `liveBinding`          |
+| T5  | Claim after 60 s, call after 30 s lease, call after 2 h cap: all refused                                         | Integration | Each expiry comparison                  |
+| T6  | User B cannot list, Start, claim or send audio for user A's Mac or grant; admin cannot either                    | Integration | Device owner check in Start; RLS policy |
+| T7  | Same `requestKey` with a changed body is 409; old Start after a new connection cannot be claimed                 | Integration | Fingerprint check; verifier check       |
+| T8  | Start with a missing or stale notice acknowledgement returns the prerequisite error                              | Integration | Notice version check                    |
+| T9  | Capability lapses 90 d after last Start while polling continues                                                  | Integration | Lapse comparison                        |
+| T10 | Eleventh Start in a minute from one account returns 429                                                          | Integration | Per-account limiter                     |
+| T11 | Full start, record, stop: captured log stream and user export contain no `tm1_`, `mm1_`, proof or verifier       | Integration | Redact path; export column grant        |
+| T12 | `acceptStart` posts the notification and shows the panel; panel cannot close while recording                     | Mac unit    | Panel and notification call             |
+| T13 | Mac Unlink calls logout before deleting Keychain items, and keeps them while logout fails                        | Mac unit    | Ordering                                |
+| T14 | Live path on a real linked Mac: Start shows notification and panel; Unlink in Settings stops capture within 30 s | Live, on PR | Not applicable                          |
+
+#### 6. Verdict
+
+Signed off with the controls above. Every control is required before the build PR merges; R1, R3,
+R5, R6 and R8 change the trust model most and are the first a reviewer checks.
+
 ## Shared fix
 
 The capture-mode radios render as 347x40 white discs because the global rule
