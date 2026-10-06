@@ -6,6 +6,11 @@ import type {
   MossModuleManifest,
   RouteChatPolicy
 } from "@moss/module-sdk";
+import {
+  meetingCapturePreferencesSchema,
+  putWeatherUnitRouteSchema,
+  updateTaskPreferencesRequestSchema
+} from "@moss/shared";
 
 import { getBuiltInModuleManifests } from "../../packages/module-registry/src/index.js";
 import {
@@ -423,5 +428,44 @@ describe("real manifests", () => {
         .filter((r) => !declaring.has(r.moduleId))
         .every((r) => r.policy.access === "blocked")
     ).toBe(true);
+  });
+
+  // #3065 live run: a user names the value they want, not the route. The route's own input
+  // schema carries those values, so search must reach them.
+  it("finds a route by a field name or enum value from its captured schema", () => {
+    const catalog = buildRouteCatalog(getBuiltInModuleManifests(), [
+      { method: "PUT", url: "/api/meetings/preferences", body: meetingCapturePreferencesSchema },
+      { method: "PUT", url: "/api/me/weather-unit", body: putWeatherUnitRouteSchema.body },
+      { method: "PATCH", url: "/api/tasks/preferences", body: updateTaskPreferencesRequestSchema }
+    ]);
+    const first = (query: string) => {
+      const hit = catalog.search(query, 3)[0];
+      return hit ? `${hit.method} ${hit.path}` : null;
+    };
+    expect(first("microphone only")).toBe("PUT /api/meetings/preferences");
+    expect(first("capture mode")).toBe("PUT /api/meetings/preferences");
+    expect(first("imperial")).toBe("PUT /api/me/weather-unit");
+    expect(first("matrix")).toBe("PATCH /api/tasks/preferences");
+  });
+
+  it("ranks a title or path word above a word found only in an input schema", () => {
+    const m = manifest("settings", [
+      route("PUT", "/api/me/colors", write("Change accent")),
+      route("PUT", "/api/me/themes/active", write("Switch your theme"))
+    ]);
+    const catalog = buildRouteCatalog(
+      [m],
+      [
+        {
+          method: "PUT",
+          url: "/api/me/colors",
+          body: { type: "object", properties: { theme: { type: "string" } } }
+        }
+      ]
+    );
+    expect(catalog.search("theme", 2).map((r) => r.path)).toEqual([
+      "/api/me/themes/active",
+      "/api/me/colors"
+    ]);
   });
 });

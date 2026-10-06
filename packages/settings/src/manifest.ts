@@ -722,7 +722,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       name: "app.findAction",
       description:
-        "Find app actions by plain words. Returns routes, input shapes, blocked reasons and dedicated tools. Prefer a named dedicated tool when coveredBy is present.",
+        'Find how to change or do anything in the app: settings, preferences, themes, views, units, notifications, projects, any screen or button. Search plain words, such as "weather units". Returns routes, input shapes, blocked reasons and dedicated tools; prefer the dedicated tool named in coveredBy. Run the result with app.callAction.',
       permissionId: "settings.view",
       risk: "read",
       content: "user_authored",
@@ -747,7 +747,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       name: "app.callAction",
       description:
-        "Call a discovered app route as the signed-in user. Fill path parameters in path; send query and body separately. Blocked routes are refused, consent is checked, and destructive actions require approval. Returns HTTP status and body.",
+        "Do it in the app for the user: change, set, switch, update, turn on or off, rename, mark read, accept, create or apply anything app.findAction found. Runs as the signed-in user. Fill path parameters in path; send query and body separately. Blocked routes are refused, consent is checked, and destructive actions require approval. Returns HTTP status and body.",
       permissionId: "settings.write",
       safeErrors: true,
       risk: "write",

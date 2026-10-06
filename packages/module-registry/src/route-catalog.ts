@@ -120,6 +120,55 @@ function searchTokens(route: CatalogRoute): ReadonlySet<string> {
   ]);
 }
 
+const SCHEMA_WALK_DEPTH = 6;
+const SCHEMA_COMBINERS = ["anyOf", "oneOf", "allOf"] as const;
+
+function camelWords(text: string): string[] {
+  return words(text.replace(/([a-z0-9])([A-Z])/g, "$1 $2"));
+}
+
+/** Field names and string enum or const values, so a user's value word finds its route. */
+function collectSchemaTokens(schema: unknown, into: Set<string>, depth: number): void {
+  if (depth > SCHEMA_WALK_DEPTH || schema === null || typeof schema !== "object") return;
+  if (Array.isArray(schema)) {
+    for (const item of schema) collectSchemaTokens(item, into, depth + 1);
+    return;
+  }
+  const node = schema as Record<string, unknown>;
+  const values = [...(Array.isArray(node.enum) ? node.enum : []), node.const];
+  for (const value of values) {
+    if (typeof value === "string") camelWords(value).forEach((word) => into.add(word));
+  }
+  if (node.properties !== null && typeof node.properties === "object") {
+    for (const [key, child] of Object.entries(node.properties)) {
+      camelWords(key).forEach((word) => into.add(word));
+      collectSchemaTokens(child, into, depth + 1);
+    }
+  }
+  collectSchemaTokens(node.items, into, depth + 1);
+  for (const combiner of SCHEMA_COMBINERS) collectSchemaTokens(node[combiner], into, depth + 1);
+}
+
+function inputShapeTokens(route: CatalogRoute): ReadonlySet<string> {
+  const tokens = new Set<string>();
+  const shape = route.inputShape;
+  if (!shape) return tokens;
+  for (const part of [shape.body, shape.querystring, shape.params]) {
+    collectSchemaTokens(part, tokens, 0);
+  }
+  return tokens;
+}
+
+/** A title, path or module word counts double a word found only in the input shape. */
+function searchScore(route: CatalogRoute, wanted: readonly string[]): number {
+  const primary = searchTokens(route);
+  const secondary = inputShapeTokens(route);
+  return wanted.reduce(
+    (score, word) => score + (primary.has(word) ? 2 : secondary.has(word) ? 1 : 0),
+    0
+  );
+}
+
 /** A decoded parameter must not carry a separator, a backslash or a control character. */
 function hasPathSyntax(value: string): boolean {
   for (const char of value) {
@@ -236,10 +285,7 @@ export function buildRouteCatalog(
       if (wanted.length === 0) return [];
       return routes
         .filter((route) => !pathRuleBlocked.has(route))
-        .map((route, order) => {
-          const tokens = searchTokens(route);
-          return { route, order, score: wanted.filter((word) => tokens.has(word)).length };
-        })
+        .map((route, order) => ({ route, order, score: searchScore(route, wanted) }))
         .filter((hit) => hit.score > 0)
         .sort((a, b) => b.score - a.score || a.order - b.order)
         .slice(0, limit)

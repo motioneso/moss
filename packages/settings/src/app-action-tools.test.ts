@@ -352,6 +352,40 @@ describe("app action declarations", () => {
     });
   });
 
+  // #3065 live run: the Claude engine finds tools by searching their descriptions, and plain
+  // requests ("switch my theme", "mark notifications read") never reached either action tool.
+  it("describes the find and call tools in the words a user asks with", () => {
+    const description = (name: string) =>
+      settingsModuleManifest.assistantTools?.find((tool) => tool.name === name)?.description ?? "";
+    const find = description("app.findAction").toLowerCase();
+    const call = description("app.callAction").toLowerCase();
+    for (const word of [
+      "change",
+      "settings",
+      "preferences",
+      "screen",
+      "button",
+      "app.callaction"
+    ]) {
+      expect(find, word).toContain(word);
+    }
+    for (const word of [
+      "change",
+      "set",
+      "switch",
+      "update",
+      "turn on or off",
+      "rename",
+      "mark",
+      "accept",
+      "create",
+      "apply",
+      "app.findaction"
+    ]) {
+      expect(call, word).toContain(word);
+    }
+  });
+
   it("marks dedicated own-record and status-only writes user_authored", () => {
     for (const name of [
       "settings.themeMode.set",

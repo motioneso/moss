@@ -8,6 +8,7 @@ import {
   type ChatSurface
 } from "../../packages/chat/src/live/chat-surface.js";
 import {
+  MOSS_PERSONA_APP_ACTIONS,
   MOSS_PERSONA_APP_MAP,
   MOSS_PERSONA_BASE,
   MOSS_PERSONA_INTEGRATION_RESULT_TRUST,
@@ -35,6 +36,42 @@ describe("MOSS_PERSONA_APP_MAP", () => {
 
   it("still names the Moss product", () => {
     expect(MOSS_PERSONA_APP_MAP).toContain("Moss app");
+  });
+});
+
+// #3065 live run: asked to switch a theme or mark notifications read, Moss searched the map,
+// found nothing, and said it did not know or told the user to click it. The map rule governs
+// claims about the app; it must not stop Moss from finding and calling an app action.
+describe("MOSS_PERSONA_APP_ACTIONS", () => {
+  it("names both action tools and sends change requests to them", () => {
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("app.findAction");
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("app.callAction");
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("ToolSearch");
+    expect(MOSS_PERSONA_APP_ACTIONS).toMatch(/asks you to change, set, switch, turn on or off/);
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("Never tell the user to do it themselves");
+  });
+
+  it("limits the map's don't-know answer to questions about the app", () => {
+    expect(MOSS_PERSONA_APP_MAP).not.toContain("If the map has no matching declaration, say:");
+    expect(MOSS_PERSONA_APP_MAP).toContain("for such a question, say: I don't know");
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("it never stops you from looking for an action");
+  });
+
+  it("is in the drawer prompt after the app map and absent from module surfaces", async () => {
+    const drawerPrompt = await composePrompt(
+      { assistantName: "Alfred", personaText: "" },
+      DEFAULT_CHAT_SURFACE
+    );
+    const modulePrompt = await composePrompt(
+      { assistantName: "Alfred", personaText: "" },
+      MODULE_SURFACE
+    );
+
+    expect(drawerPrompt).toContain(MOSS_PERSONA_APP_ACTIONS);
+    expect(drawerPrompt.indexOf(MOSS_PERSONA_APP_ACTIONS)).toBeGreaterThan(
+      drawerPrompt.indexOf(MOSS_PERSONA_APP_MAP)
+    );
+    expect(modulePrompt).not.toContain("app.findAction");
   });
 });
 
