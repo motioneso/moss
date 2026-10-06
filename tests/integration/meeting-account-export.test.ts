@@ -450,13 +450,24 @@ describe("Meetings export worker grants and owner RLS", () => {
     }
 
     it(`owner assertion fails when ${table} worker policy is weakened, then rollback restores it`, async () => {
-      const policy = `${table}_export_worker`;
+      const { policy, roles, cmd } =
+        table === "meeting_stop_summaries"
+          ? {
+              policy: "meeting_stop_summaries_owner",
+              roles: ["jarvis_app_runtime", "jarvis_worker_runtime"],
+              cmd: "ALL"
+            }
+          : {
+              policy: `${table}_export_worker`,
+              roles: ["jarvis_worker_runtime"],
+              cmd: "SELECT"
+            };
       const before = await sql<{ qual: string; roles: string[]; cmd: string }>`
         SELECT qual, roles::text[] AS roles, cmd FROM pg_policies
         WHERE schemaname = 'app' AND tablename = ${table} AND policyname = ${policy}
       `.execute(bootstrapDb);
       expect(before.rows).toHaveLength(1);
-      expect(before.rows[0]).toMatchObject({ roles: ["jarvis_worker_runtime"], cmd: "SELECT" });
+      expect(before.rows[0]).toMatchObject({ roles, cmd });
       await expect(
         bootstrapDb.transaction().execute(async (transaction) => {
           await sql`ALTER POLICY ${sql.id(policy)} ON ${sql.table(`app.${table}`)} USING (true)`.execute(

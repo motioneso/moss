@@ -154,3 +154,25 @@ The earlier 901-test build validation above is historical. Hosted UAT and isolat
 integration reruns are still required for this repair. Neither ran locally; the Docker and browser
 restrictions remain. Structural CSS checks are not live visual proof. No Mac/device/audio or
 real-provider acceptance occurred, and Part B remains paused until this correction is published.
+
+## Account-export policy fixture correction (2026-10-06)
+
+Hosted integration found that the policy-removal negative control inferred
+`meeting_stop_summaries_export_worker`, which does not exist. Migration 0292 defines
+`meeting_stop_summaries_owner` for `ALL` commands and both app and worker runtime roles.
+The fixture now asserts that exact name, role list and command; the other twelve export tables
+retain their worker-only `SELECT` policy expectations. The owner-isolation failure assertion,
+transaction rollback restoration and `ENABLE`/`FORCE ROW LEVEL SECURITY` checks are unchanged.
+No applied migration or production code changes.
+
+This failure already appeared on `bef8e89f` in integration shard 4, job `112388037857`, at
+16:50:03 UTC before the job was later cancelled. Neither the test nor migration 0292 changed
+between that head and `5cd2550e`; this is an existing fixture omission, not a regression from
+the intervening review repair. Cancelled shard status is not evidence that its tests passed.
+
+Offline validation: the existing account-export and migration unit suites passed all 11 tests;
+scoped ESLint and Prettier passed. A read-only source audit matched all thirteen expected policy
+names, role lists and commands to their migration declarations. Root and test TypeScript checks
+passed sequentially with a 4 GB heap. Database integration and its policy-removal negative control were not run locally:
+Docker and the required isolated verify-gate database remain unavailable. Hosted verification
+of the corrected control is still required.
