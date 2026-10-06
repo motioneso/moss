@@ -380,6 +380,32 @@ cannot establish clean Run B. The kill gate awaits his ruling, rather than being
 provider/live-dev results are still outstanding, and Phase 1 remains unverified for completion or
 merge.
 
+### Pending memory suggestions (Ben, 2026-10-06)
+
+Kill-gate task 6 ("Accept a suggested memory") failed live. Moss could not find the pending
+suggestion, because the only list of suggestions was the memory dashboard, which stays blocked
+for retained-content consent. The accept route was a plain `write`, so it would have run without a
+card on a clean conversation. Moss saved a duplicate memory instead.
+
+Ben ruled: **Moss in chat may see the user's own pending memory suggestions and accept one, with an
+approval card every time it accepts.** No outside-content or taint change is part of this ruling.
+
+- `GET /api/memory/candidates` is a new `read` route. It returns the actor's own pending
+  suggestions (owner-only under RLS, newest 50) as display text only: ID, title, summary, record
+  kind, provenance and creation time. It never returns episode or source references.
+- `POST /api/memory/candidates/:id/accept` is `destructive`, so it always asks, including under
+  YOLO. Its target resolver reads the actor's own pending suggestion and puts its full text on
+  the card. A suggestion that is not the actor's, or is no longer pending, is refused before any
+  card.
+- Accept treats a missing request body as empty, so a plain chat call succeeds on its first
+  approved card.
+- Reject and suppress stay `write` and gain the same target resolver, so their cards name the
+  suggestion when they ask.
+- A "Remember this" suggestion stores its text as `excerpt`. Titles, summaries and the accepted
+  fact now use that excerpt; before, they fell back to "Memory candidate".
+- Retained-source recall and the dashboard stay blocked. The new list carries suggestion text
+  without a Wellness provenance marker, which the ruling accepts for the user's own suggestions.
+
 ### Approval card
 
 The card renders from the record, never from model text, because injected content could make a

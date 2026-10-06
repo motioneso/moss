@@ -1778,3 +1778,34 @@ Verification covers exact-owner/foreign/unknown listings, authentic integration 
 add-on adapters, classifier token mismatch, public DTO non-disclosure, current-hash rescan/mutation,
 legacy and upgrade attribution, and listing followed by each outside output path. Guard-removal
 controls must fail for the relevant rule. New DB cases run in hosted CI, not an unisolated local DB.
+
+### 8.15 Pending memory suggestions from chat (2026-10-06)
+
+Live kill-gate task 6 failed: the dashboard (the only list of pending suggestions) is a
+retained-content consent block, and accept was a `write` that runs unasked on a clean conversation.
+Ben ruled that Moss may list the actor's own pending suggestions and accept one, with an approval
+card on every accept. He dropped outside-content and taint work from this change.
+
+- New `GET /api/memory/candidates` (`read`, `memory.view`): owner-scoped `listPending`, limit 50,
+  projected by `pendingCandidateItem` to ID, title, summary, record kind, provenance and creation
+  time. No episode or source references.
+- Accept is `destructive` with `memoryCandidateTarget`, which selects the actor's own pending row
+  under the data context and labels the card with its full text. Unknown, foreign or resolved IDs
+  return `unknown_route` before any card. Reject and suppress stay `write` with the same target.
+- Accept treats a missing body as `{}` in `preValidation`. A bodyless chat call otherwise failed
+  schema validation after the card was approved, so a retry would show a second card.
+- `candidate-labels.ts` replaces the dashboard's private label helpers and reads the manual
+  `excerpt`, so a "Remember this" suggestion is listed, labelled and accepted as its own text.
+- The memory manifest's `memory.chat_app_actions` and `memory.candidate_review` features describe
+  the new ability for the app map.
+- The inventory is now 102 reads, 50 writes, 19 destructive operations and 224 blocks (395 total).
+
+Verification: unit tests run the real catalog, manifest, target resolver and confirmation flow
+under YOLO (list runs without a card; accept waits for approval, calls once after confirmation,
+and does nothing after rejection; a non-pending or foreign ID is refused before a card).
+Reclassing accept as `write` turns three of them red. Integration tests cover the owner-only list,
+exactly-once acceptance through the app-action path, rejection with no grant minted, a foreign
+suggestion refused before a card, and a manual suggestion accepted as its excerpt.
+
+The dashboard accept service reads, remembers, then marks promoted without a pending-status check
+on the update, so two concurrent accepts could each create a fact. Sequential repeats are refused.
