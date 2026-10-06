@@ -63,6 +63,7 @@ describe("usefulness feedback foundation", () => {
       "app.story_relevance_answer_cache"
     ]);
     expect(registration?.manifest.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "POST /api/me/usefulness-feedback/signals",
       "POST /api/me/usefulness-feedback",
       "GET /api/me/usefulness-feedback",
       "PATCH /api/me/usefulness-feedback/:id",
