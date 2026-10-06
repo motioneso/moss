@@ -44,7 +44,7 @@ export const FEEDS_EXPECTED_ROWS: readonly string[] = [
   "sports POST /api/sports/sources/:id/retry blocked external_effect",
   "sports POST /api/sports/sources/:id/rebuild/preview blocked external_effect",
   "sports PATCH /api/sports/sources/:id/rebuild blocked external_effect",
-  "sports DELETE /api/sports/sources/:id destructive user_authored",
+  "sports DELETE /api/sports/sources/:id destructive",
   "sports DELETE /api/sports/sources/:id/photos destructive",
   "sports GET /api/sports/sources/:sourceId/icon read outbound",
   "sports GET /api/sports/headlines/:headlineId/photo blocked external_effect"

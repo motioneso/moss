@@ -189,6 +189,81 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
 
 /** Routes doing what an excluded tool family does that no path rule covers. Slices 3 and 4. */
 export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
+  {
+    method: "GET",
+    path: "/api/chat/memory/facts",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "GET",
+    path: "/api/chat/memory/corrections",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "GET",
+    path: "/api/chat/messages/:messageId/provenance",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+
+  {
+    method: "GET",
+    path: "/api/memory/graph/recall",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "GET",
+    path: "/api/memory/graph/core",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "GET",
+    path: "/api/memory/dashboard",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "POST",
+    path: "/api/memory/graph/facts/:id/confirm",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "POST",
+    path: "/api/memory/graph/facts/:id/correct",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "POST",
+    path: "/api/memory/graph/facts/:id/status",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "POST",
+    path: "/api/memory/graph/facts/:id/mark-stale",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  { method: "GET", path: "/api/chat/threads", category: "data_scope_consent", julyPrefixes: [] },
+  {
+    method: "GET",
+    path: "/api/chat/threads/:id/messages",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+
+  {
+    method: "PATCH",
+    path: "/api/tasks/:id",
+    category: "external_effect",
+    julyPrefixes: []
+  },
   // Slice 4: audited hidden effects, withheld content and approval-target promises.
   {
     method: "GET",

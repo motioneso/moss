@@ -366,7 +366,8 @@ export const tasksModuleManifest = {
     {
       method: "PATCH",
       path: "/api/tasks/:id",
-      chat: { access: "write", title: "Update task", coveredBy: "tasks.update" },
+      // Status changes also train email triage and can suppress future suggested tasks.
+      chat: { access: "blocked", blockedBecause: "external_effect", coveredBy: "tasks.update" },
       requestSchema: updateTaskRequestSchema,
       responseSchema: updateTaskResponseSchema,
       permissionId: "tasks.update"

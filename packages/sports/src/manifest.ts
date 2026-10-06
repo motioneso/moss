@@ -128,7 +128,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.chat_app_actions",
       description:
-        "From chat, read sports data and manage follows, ESPN coverage, and standings preferences. Removing follows, sources, or photo instructions asks first. Source discovery and feed authorization stay outside app actions."
+        "Built-in Sports routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
     },
     {
       // #2956: the Activity history line title for this module's structured calls.
@@ -417,7 +417,7 @@ export const sportsModuleManifest = {
       chat: {
         access: "destructive",
         title: "Remove sports news source",
-        content: "user_authored",
+        content: "outside",
         target: sportsSourceTarget
       },
       responseSchema: deleteSportsCustomSourceSchema,

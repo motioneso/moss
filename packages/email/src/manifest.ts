@@ -71,7 +71,7 @@ export const emailModuleManifest = {
     {
       id: "email.chat_app_actions",
       description:
-        "Chat can read cached mail and its settings. Auto-send and automatic task-creation controls stay in Email settings; chat cannot grant itself those powers."
+        "Built-in Email routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
     },
     {
       id: "email.skip-sign-in-code-emails",

@@ -12,7 +12,7 @@ export const SCHEDULING_EXPECTED_ROWS: readonly string[] = [
   "tasks POST /api/tasks blocked external_effect",
   "tasks POST /api/tasks/search/interpret blocked external_effect",
   "tasks GET /api/tasks/:id read",
-  "tasks PATCH /api/tasks/:id write",
+  "tasks PATCH /api/tasks/:id blocked external_effect",
   "tasks POST /api/tasks/:id/activity write user_authored",
   "tasks POST /api/tasks/:id/deferred-status blocked external_effect",
   "tasks POST /api/tasks/:id/tags write",
@@ -71,6 +71,7 @@ export const SCHEDULING_EXPECTED_ROWS: readonly string[] = [
 export const SCHEDULING_NAMED_BLOCKED: readonly (readonly [string, string, string])[] = [
   ["GET", "/api/tasks", "external_effect"],
   ["POST", "/api/tasks", "external_effect"],
+  ["PATCH", "/api/tasks/:id", "external_effect"],
   ["POST", "/api/tasks/search/interpret", "external_effect"],
   ["POST", "/api/tasks/:id/deferred-status", "external_effect"],
   ["GET", "/api/tasks/lists", "external_effect"],

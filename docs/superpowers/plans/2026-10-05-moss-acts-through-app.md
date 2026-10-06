@@ -1311,3 +1311,46 @@ Local database integration and the foundation gate cannot run here because Docke
 the database-backed route-guard regression is included for hosted CI. No live provider, real
 recording or user credential was used. Slices 5–8 and real-UI/live-path proof remain outstanding;
 these route classifications alone do not complete phase 1 or authorize merging.
+
+### 8.8 Independent slice 4 review corrections (2026-10-06)
+
+These corrections land separately before slice 5. The initial hosted slice-4 run passed all four
+integration shards, static/browser checks, both Compose smokes and Meetings acceptance, but failed
+three unit tests. The boot probe now stubs only the unrelated generated app-map artifact loader,
+so it boots the real API without a prebuilt `dist` artifact. Its no-I/O driver accepts the optional
+`chat.persistent_pool_cap` lookup on machines with a multiplexer. The Meetings exact feature-list
+fixture includes the new metadata entry. No timeout was increased and no production loader changed.
+
+`PATCH /api/tasks/:id` is independently blocked as `external_effect`: changing suggested email
+statuses trains triage and can suppress future tasks; completing/archiving parents also affects
+subtasks and recurring tasks. The dedicated task tools remain separate. Memory status changes
+can hide a fact just like superseding it, so they cannot be ordinary writes. They are now blocked
+for the stronger derived-consent reason below; supersede/delete still require target approval.
+Meeting deletion explicitly names linked Moss chats; transcript ingestion explicitly says it can
+correct retained text. Source-derived Sports/Memory destructive previews are outside content,
+not user-authored labels. Slice 5 must render them as quoted plain data, never instructions.
+
+The original seven `chat_app_actions` app-map entries now describe classification metadata and
+explicitly say generic tools are not wired yet. They do not claim new usable chat capabilities at
+this commit. Slice 5 must update these descriptions and cover every newly callable module when
+its tools are actually wired.
+
+Wellness revocation has an existing cross-module limitation: previously retained conversation,
+correction, support and memory text has no Wellness provenance marker to filter when consent is
+turned off. The correction does not migrate history or claim the existing UI/automatic-recall
+behavior is fixed. It prevents another generic entry point: both saved thread reads, legacy
+memory facts/corrections and message provenance are blocked, as are Memory graph recall/core,
+dashboard and confirm/correct/status/mark-stale responses. These twelve exact routes have
+independent `data_scope_consent` exclusions until an approved provenance-aware projection exists.
+This deliberately reduces generic capability even with Wellness consent on.
+
+Precision: graph recall/core and the four hydrated fact-write responses contain source excerpts;
+the Memory dashboard projects derived fact/candidate summaries and source labels rather than
+serializing those raw excerpts. Both are unfiltered retained-content surfaces, but they are not
+the same payload. Receipt-only memory mutations remain classified separately. No private source
+content was read or exported during this audit.
+
+After these corrections the 393-route inventory is 102 reads, 52 writes, 17 destructive operations
+and 222 blocks. Catalog tests pin all twelve aggregate exclusions independently of manifest
+labels. Refusal-before-dispatch/grant tests belong to the slice-5 gateway wiring and must cover
+these aliases before that code is published. The PR remains draft, with no live-path proof.

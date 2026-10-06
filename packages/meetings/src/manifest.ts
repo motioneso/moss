@@ -129,7 +129,7 @@ export const meetingsModuleManifest = {
       path: "/api/meetings/records/:id/transcript",
       chat: {
         access: "write",
-        title: "Add retained meeting transcript text",
+        title: "Add or correct retained meeting transcript text",
         content: "user_authored"
       },
       permissionId: "meetings.write"
@@ -167,7 +167,7 @@ export const meetingsModuleManifest = {
       path: "/api/meetings/records/:id",
       chat: {
         access: "destructive",
-        title: "Delete a meeting and its retained records",
+        title: "Delete meeting, retained records and linked Moss chats",
         content: "user_authored",
         target: meetingRecordTarget
       },
@@ -202,7 +202,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.chat_app_actions",
       description:
-        "Chat can read retained meetings and save drafts, notes, transcript text and summary edits. Generation, export and action approval stay in Meetings; deletion requires the exact meeting target."
+        "Built-in Meetings routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
     },
     {
       id: "meetings.account_export",

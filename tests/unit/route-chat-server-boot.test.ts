@@ -15,7 +15,26 @@ import type { MossDatabase } from "@moss/db";
 import type { MossAuthRuntime } from "@moss/auth";
 import type { PgBoss } from "@moss/jobs";
 import type { RouteChatPolicy } from "@moss/module-sdk";
+import type { AppMapArtifact } from "@moss/shared";
+import type * as AppMapModule from "../../packages/settings/src/app-map.js";
 import { createApiServer } from "../../apps/api/src/server.js";
+
+// Fresh unit CI intentionally has no built dist/app-map.json. Only replace that unrelated
+// artifact loader; all real route registration and onReady assertions remain in this probe.
+vi.mock("../../packages/settings/src/app-map.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof AppMapModule>();
+  const artifact: AppMapArtifact = {
+    schemaVersion: 1,
+    build: { version: "test", buildId: "route-chat-boot" },
+    screens: [],
+    settings: [],
+    features: [],
+    errors: [],
+    remediations: [],
+    narrative: { authoritative: false, markdown: "" }
+  };
+  return { ...actual, loadAppMap: () => artifact };
+});
 
 /** Boot the real server with an in-memory driver; no database connection can be opened. */
 async function bootProbe(chat?: RouteChatPolicy) {
@@ -25,9 +44,11 @@ async function bootProbe(chat?: RouteChatPolicy) {
       queries.push(query);
       if (
         query.sql === 'select "value" from "app"."instance_settings" where "key" = $1' &&
-        ["chat.multiplexer", "chat.persistent_runtime.enabled"].includes(
-          String(query.parameters[0])
-        )
+        [
+          "chat.multiplexer",
+          "chat.persistent_runtime.enabled",
+          "chat.persistent_pool_cap"
+        ].includes(String(query.parameters[0]))
       )
         return { rows: [] };
       throw new Error("Unexpected SQL in the isolated boot probe");
@@ -109,9 +130,11 @@ describe("real API route-chat boot guard", () => {
       );
       expect(
         probe.queries.every((query) =>
-          ["chat.multiplexer", "chat.persistent_runtime.enabled"].includes(
-            String(query.parameters[0])
-          )
+          [
+            "chat.multiplexer",
+            "chat.persistent_runtime.enabled",
+            "chat.persistent_pool_cap"
+          ].includes(String(query.parameters[0]))
         )
       ).toBe(true);
     } finally {
@@ -124,9 +147,11 @@ describe("real API route-chat boot guard", () => {
       await probe.server.ready();
       expect(
         probe.queries.every((query) =>
-          ["chat.multiplexer", "chat.persistent_runtime.enabled"].includes(
-            String(query.parameters[0])
-          )
+          [
+            "chat.multiplexer",
+            "chat.persistent_runtime.enabled",
+            "chat.persistent_pool_cap"
+          ].includes(String(query.parameters[0]))
         )
       ).toBe(true);
     } finally {

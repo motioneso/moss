@@ -113,7 +113,6 @@ describe("feed route chat classification", () => {
     const ownRecords = routes.filter((route) => route.chat?.content === "user_authored");
     expect(ownRecords.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       "DELETE /api/sports/follows/:id",
-      "DELETE /api/sports/sources/:id",
       "GET /api/news/prefs",
       "PUT /api/sports/sources/espn/coverage"
     ]);

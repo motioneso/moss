@@ -519,7 +519,7 @@ export const newsModuleManifest = {
     {
       id: "news.chat_app_actions",
       description:
-        "From chat, read the News catalog and saved preferences. Credentials, source previews, feed refreshes, and scheduling changes stay outside app actions."
+        "Built-in News routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
     },
     {
       // #2956: the Activity history line title for this module's structured calls.

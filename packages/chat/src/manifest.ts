@@ -258,14 +258,14 @@ export const chatModuleManifest = {
     {
       method: "GET",
       path: "/api/chat/threads",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listChatThreadsResponseSchema,
       permissionId: "chat.view"
     },
     {
       method: "GET",
       path: "/api/chat/threads/:id/messages",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listChatThreadMessagesResponseSchema,
       permissionId: "chat.view"
     },
@@ -383,13 +383,13 @@ export const chatModuleManifest = {
     {
       method: "GET",
       path: "/api/chat/memory/facts",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       permissionId: "chat.view"
     },
     {
       method: "GET",
       path: "/api/chat/memory/corrections",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listMemoryCorrectionsResponseSchema,
       permissionId: "chat.view"
     },
@@ -451,7 +451,7 @@ export const chatModuleManifest = {
     {
       method: "GET",
       path: "/api/chat/messages/:messageId/provenance",
-      chat: { access: "read" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       permissionId: "chat.view"
     },
     {

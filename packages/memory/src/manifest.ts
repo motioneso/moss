@@ -114,14 +114,19 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/memory/graph/recall",
-      chat: { access: "read", content: "outside", coveredBy: "memory.recall" },
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        content: "outside",
+        coveredBy: "memory.recall"
+      },
       responseSchema: getMemoryGraphRecallRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "GET",
       path: "/api/memory/graph/core",
-      chat: { access: "read", content: "outside" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent", content: "outside" },
       responseSchema: getMemoryGraphCoreRouteSchema.response[200],
       permissionId: "memory.view"
     },
@@ -155,7 +160,8 @@ export const memoryModuleManifest: MossModuleManifest = {
       method: "POST",
       path: "/api/memory/graph/facts/:id/confirm",
       chat: {
-        access: "destructive",
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
         title: "Confirm memory and supersede conflicts",
         content: "outside",
         target: memoryFactResolutionTarget
@@ -167,7 +173,8 @@ export const memoryModuleManifest: MossModuleManifest = {
       method: "POST",
       path: "/api/memory/graph/facts/:id/correct",
       chat: {
-        access: "destructive",
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
         title: "Replace memory and supersede conflicts",
         content: "outside",
         target: memoryFactResolutionTarget
@@ -178,14 +185,25 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/status",
-      chat: { access: "write", title: "Change memory fact status", content: "outside" },
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Change memory visibility",
+        content: "outside",
+        target: memoryFactTarget
+      },
       requestSchema: postMemoryGraphStatusRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/mark-stale",
-      chat: { access: "write", title: "Mark memory fact stale", content: "outside" },
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Mark memory fact stale",
+        content: "outside"
+      },
       requestSchema: postMemoryGraphMarkStaleRouteSchema.body,
       permissionId: "memory.manage"
     },
@@ -195,7 +213,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Supersede memory fact",
-        content: "user_authored",
+        content: "outside",
         target: memoryFactTarget
       },
       requestSchema: postMemoryGraphSupersedeRouteSchema.body,
@@ -207,7 +225,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Forget memory fact",
-        content: "user_authored",
+        content: "outside",
         target: memoryFactTarget,
         coveredBy: "memory.forget"
       },
@@ -216,7 +234,7 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/memory/dashboard",
-      chat: { access: "read", content: "outside" },
+      chat: { access: "blocked", blockedBecause: "data_scope_consent", content: "outside" },
       responseSchema: getMemoryDashboardRouteSchema.response[200],
       permissionId: "memory.view"
     },
@@ -261,7 +279,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Delete memory entity",
-        content: "user_authored",
+        content: "outside",
         target: memoryEntityTarget
       },
       permissionId: "memory.manage"
